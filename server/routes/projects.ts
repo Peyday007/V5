@@ -1,0 +1,330 @@
+/**
+ * Project-level API.
+ *
+ * This is where the user's core question — "what should I do next?" — is
+ * answered, and where documents enter the platform. Every mutating route ends
+ * with `recomputeProject`, so the response already carries the state the UI
+ * needs to re-render and nobody has to remember to refresh anything.
+ */
+import { Router } from 'express';
+import type {
+  DocumentType,
+  ImportResult,
+  ProjectStatus,
+  ReconcileIssue,
+  VersionPolicy,
+} from '../domain/types.ts';
+import { DEFAULT_VERSION_POLICY, DOCUMENT_TYPES, PROJECT_STATUSES } from '../domain/types.ts';
+import { isValidVersion, normalizeVersion } from '../domain/version.ts';
+import { listDocuments } from '../repos/documents.ts';
+import { listEvents } from '../repos/events.ts';
+import { listLayers } from '../repos/layers.ts';
+import { listProjects, updateProject } from '../repos/projects.ts';
+import { listRuns } from '../repos/runs.ts';
+import { importFile, resolveImport } from '../services/importer.ts';
+import { buildPlan } from '../services/planner.ts';
+import { applyReconcileFix, scanAndReconcile } from '../services/reconcile.ts';
+import { recomputeProject } from '../services/stateEngine.ts';
+import { writeProjectState } from '../services/runtimeState.ts';
+import {
+  badRequest,
+  bodyOf,
+  handler,
+  optionalEnum,
+  optionalInteger,
+  optionalRecord,
+  optionalString,
+  nullableString,
+  pathId,
+  queryOf,
+  requireLayerOfProject,
+  requireProject,
+  requiredString,
+  uploadManyFiles,
+  uploadedFiles,
+} from './helpers.ts';
+
+export const projectsRouter = Router();
+
+/** The four states scan & reconcile can report; kept in sync with ReconcileIssue. */
+const RECONCILE_KINDS: readonly ReconcileIssue['kind'][] = [
+  'UNREGISTERED_FILE',
+  'MISSING_PHYSICAL_FILE',
+  'CHECKSUM_CHANGED',
+  'ORPHANED_DOCUMENT',
+];
+
+/** Versions are parsed, not trusted: `v1g` is fine, `chapter two` is a 400. */
+function parseVersion(value: unknown, field: string): string | undefined {
+  const raw = optionalString(value, field);
+  if (raw === undefined) return undefined;
+  if (!isValidVersion(raw)) {
+    throw badRequest(
+      `"${raw}" is not a version this project understands. Expected something like v1, v1G or v3.1.`,
+    );
+  }
+  return normalizeVersion(raw);
+}
+
+/**
+ * A partial version policy merged onto the project's current one, so a client
+ * can change the synthesis version without restating the whole policy.
+ */
+function mergeVersionPolicy(value: unknown, current: VersionPolicy): VersionPolicy | undefined {
+  const patch = optionalRecord(value, 'versionPolicy');
+  if (patch === undefined) return undefined;
+  const base: VersionPolicy = { ...DEFAULT_VERSION_POLICY, ...current };
+
+  const foundationVersion = parseVersion(patch['foundationVersion'], 'versionPolicy.foundationVersion');
+  const synthesisVersion = parseVersion(patch['synthesisVersion'], 'versionPolicy.synthesisVersion');
+  const branch = optionalString(patch['expansionStartBranch'], 'versionPolicy.expansionStartBranch');
+  if (branch !== undefined && !/^[A-Za-z]{1,2}$/.test(branch)) {
+    throw badRequest(
+      `"${branch}" is not a valid expansion start branch. Expected one or two letters, e.g. B.`,
+    );
+  }
+  const synthesisWave = optionalInteger(patch['synthesisWave'], 'versionPolicy.synthesisWave', {
+    min: 1,
+    max: 99,
+  });
+  const maxAutoRedos = optionalInteger(patch['maxAutoRedos'], 'versionPolicy.maxAutoRedos', {
+    min: 0,
+    max: 20,
+  });
+
+  return {
+    foundationVersion: foundationVersion ?? base.foundationVersion,
+    expansionStartBranch: branch ? branch.toUpperCase() : base.expansionStartBranch,
+    synthesisVersion: synthesisVersion ?? base.synthesisVersion,
+    synthesisWave: synthesisWave ?? base.synthesisWave,
+    maxAutoRedos: maxAutoRedos ?? base.maxAutoRedos,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Reads
+// ---------------------------------------------------------------------------
+
+projectsRouter.get(
+  '/',
+  handler(() => ({ projects: listProjects() })),
+);
+
+projectsRouter.get(
+  '/:projectId',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    // One planner pass produces both the buckets and the per-layer snapshots,
+    // so the two can never disagree inside a single response.
+    const plan = buildPlan(project.id);
+    return { project, layers: listLayers(project.id), state: plan.layers, plan };
+  }),
+);
+
+projectsRouter.get(
+  '/:projectId/plan',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    return { plan: buildPlan(project.id) };
+  }),
+);
+
+projectsRouter.get(
+  '/:projectId/next-action',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    const plan = buildPlan(project.id);
+    return { action: plan.nextBestAction, text: plan.nextBestActionText };
+  }),
+);
+
+projectsRouter.get(
+  '/:projectId/events',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    const limit = optionalInteger(queryOf(req)['limit'], 'limit', { min: 1, max: 2000 }) ?? 200;
+    return { events: listEvents(project.id, limit) };
+  }),
+);
+
+projectsRouter.get(
+  '/:projectId/documents',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    return { documents: listDocuments(project.id) };
+  }),
+);
+
+projectsRouter.get(
+  '/:projectId/runs',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    return { runs: listRuns(project.id) };
+  }),
+);
+
+projectsRouter.get(
+  '/:projectId/runtime-state',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    // Regenerated rather than read back: the endpoint and the file on disk must
+    // agree, and a stale snapshot is exactly the failure mode this file exists
+    // to prevent.
+    return writeProjectState(project.id);
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Mutations
+// ---------------------------------------------------------------------------
+
+projectsRouter.patch(
+  '/:projectId',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const name = optionalString(body['name'], 'name');
+    const description = 'description' in body ? nullableString(body['description'], 'description') : undefined;
+    const northStar = 'northStar' in body ? nullableString(body['northStar'], 'northStar') : undefined;
+    const currentWave = optionalInteger(body['currentWave'], 'currentWave', { min: 1, max: 99 });
+    const status = optionalEnum<ProjectStatus>(body['status'], PROJECT_STATUSES, 'status');
+    const versionPolicy = mergeVersionPolicy(body['versionPolicy'], project.versionPolicy);
+    const settings = optionalRecord(body['settings'], 'settings');
+
+    const updated =
+      updateProject(project.id, {
+        name,
+        description,
+        northStar,
+        currentWave,
+        status,
+        versionPolicy,
+        settings,
+      }) ?? project;
+
+    // A changed version policy changes what every layer is waiting for.
+    recomputeProject(updated.id);
+    return { project: requireProject(updated.id) };
+  }),
+);
+
+projectsRouter.post(
+  '/:projectId/recompute',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    recomputeProject(project.id);
+    return { plan: buildPlan(project.id) };
+  }),
+);
+
+projectsRouter.post(
+  '/:projectId/reconcile',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    return { report: scanAndReconcile(project.id) };
+  }),
+);
+
+projectsRouter.post(
+  '/:projectId/reconcile/fix',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const kind = optionalEnum<ReconcileIssue['kind']>(body['kind'], RECONCILE_KINDS, 'kind');
+    if (!kind) {
+      throw badRequest(`"kind" is required. Expected one of: ${RECONCILE_KINDS.join(', ')}.`);
+    }
+
+    const layerId = optionalString(body['layerId'], 'layerId');
+    if (layerId) requireLayerOfProject(layerId, project.id);
+
+    const outcome = applyReconcileFix({
+      projectId: project.id,
+      kind,
+      path: optionalString(body['path'], 'path') ?? null,
+      documentId: optionalString(body['documentId'], 'documentId') ?? null,
+      layerId: layerId ?? null,
+      version: parseVersion(body['version'], 'version') ?? null,
+      documentType: optionalEnum<DocumentType>(body['documentType'], DOCUMENT_TYPES, 'documentType') ?? null,
+    });
+
+    recomputeProject(project.id);
+    return {
+      ok: outcome.ok,
+      message: outcome.message,
+      report: outcome.report,
+      plan: buildPlan(project.id),
+    };
+  }),
+);
+
+projectsRouter.post(
+  '/:projectId/import/resolve',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const relativePath = requiredString(body['relativePath'], 'relativePath');
+    const layer = requireLayerOfProject(requiredString(body['layerId'], 'layerId'), project.id);
+    const version = parseVersion(body['version'], 'version');
+    if (!version) throw badRequest('"version" is required to file a document, e.g. v1G.');
+    const documentType = optionalEnum<DocumentType>(
+      body['documentType'],
+      DOCUMENT_TYPES,
+      'documentType',
+    );
+    if (!documentType) {
+      throw badRequest(`"documentType" is required. Expected one of: ${DOCUMENT_TYPES.join(', ')}.`);
+    }
+
+    const result = resolveImport({
+      projectId: project.id,
+      relativePath,
+      layerId: layer.id,
+      version,
+      documentType,
+      notes: nullableString(body['notes'], 'notes') ?? null,
+    });
+
+    recomputeProject(project.id);
+    return { result, plan: buildPlan(project.id) };
+  }),
+);
+
+projectsRouter.post(
+  '/:projectId/import',
+  uploadManyFiles,
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    const files = uploadedFiles(req);
+    if (files.length === 0) {
+      throw badRequest(
+        'No files were uploaded. Send them as multipart/form-data under the field name "files".',
+      );
+    }
+
+    const body = bodyOf(req);
+    const layerIdField = optionalString(body['layerId'], 'layerId');
+    const layer = layerIdField ? requireLayerOfProject(layerIdField, project.id) : null;
+    const version = parseVersion(body['version'], 'version') ?? null;
+    const documentType =
+      optionalEnum<DocumentType>(body['documentType'], DOCUMENT_TYPES, 'documentType') ?? null;
+
+    // Every file is stored even when it cannot be filed confidently (invariant 8:
+    // storing is not registering), so one ambiguous name never loses an upload.
+    const results: ImportResult[] = files.map((file) =>
+      importFile({
+        projectId: project.id,
+        originalFilename: file.originalname,
+        contents: file.buffer,
+        layerId: layer?.id ?? null,
+        version,
+        documentType,
+      }),
+    );
+
+    recomputeProject(project.id);
+    return { results, plan: buildPlan(project.id) };
+  }),
+);

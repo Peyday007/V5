@@ -6,7 +6,8 @@
  * recompute, then serve. Nothing here reaches into server internals.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { spawn, type ChildProcessByStdio } from 'node:child_process';
+import type { Readable } from 'node:stream';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,7 +17,8 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = 5399 + Math.floor(Math.random() * 120);
 const BASE = `http://127.0.0.1:${PORT}`;
 
-let server: ChildProcessWithoutNullStreams;
+// stdin is 'ignore', so only stdout and stderr are streams.
+let server: ChildProcessByStdio<null, Readable, Readable>;
 let dataDir: string;
 let projectId: string;
 let serverLog = '';
@@ -58,7 +60,15 @@ beforeAll(async () => {
     [path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), path.join(REPO_ROOT, 'server', 'index.ts')],
     {
       cwd: REPO_ROOT,
-      env: { ...process.env, BRAIN_DATA_DIR: dataDir, PORT: String(PORT), NODE_ENV: 'test' },
+      env: {
+        ...process.env,
+        // tests/setup.ts pins BRAIN_DB_PATH for this process; the child must derive
+        // its own path from its own data root instead of inheriting ours.
+        BRAIN_DB_PATH: undefined,
+        BRAIN_DATA_DIR: dataDir,
+        PORT: String(PORT),
+        NODE_ENV: 'test',
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
