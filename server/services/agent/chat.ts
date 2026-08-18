@@ -143,15 +143,19 @@ function detectIntent(content: string): Intent {
   ) {
     return 'ADD_FILE';
   }
-  if (/\b(freeze|frozen)\b/.test(lower)) return 'FREEZE_LAYER';
-  if (/\b(redo|re-?run|retry)\b|\btry again\b/.test(lower)) return 'REDO';
-  if (/\bprompts?\b/.test(lower)) return 'COMPILE_PROMPT';
-  if (/\baudit(ed|ing)?\b/.test(lower)) return 'AUDIT_LAYER';
+  // A question is never a command. "Is World Model ready to freeze?" must report
+  // readiness, not freeze the layer, and "What should I do next?" must not create
+  // a run. Every intent below this line changes state, so a question falls
+  // through to the read-only branches that answer it instead.
+  if (!isQuestion && /\b(freeze|frozen)\b/.test(lower)) return 'FREEZE_LAYER';
+  if (!isQuestion && /\b(redo|re-?run|retry)\b|\btry again\b/.test(lower)) return 'REDO';
+  if (!isQuestion && /\bprompts?\b/.test(lower)) return 'COMPILE_PROMPT';
+  if (!isQuestion && /\baudit(ed|ing)?\b/.test(lower)) return 'AUDIT_LAYER';
   if (/\b(scan|reconcile|re-?sync)\b/.test(lower)) return 'RECONCILE';
   if (/\b(missing|gap|gaps|incomplete|outstanding|blocked|blocking)\b/.test(lower)) {
     return 'WHAT_IS_MISSING';
   }
-  if (/\b(run|do|start|execute|begin|kick off)\b[^.?!]*\bnext\b/.test(lower)) return 'RUN_NEXT';
+  if (!isQuestion && /\b(run|do|start|execute|begin|kick off)\b[^.?!]*\bnext\b/.test(lower)) return 'RUN_NEXT';
   if (/\bnext\b|what should i do|where (am i|are we)|what now/.test(lower)) return 'NEXT_ACTION';
   if (/\bruns?\b|\battempts?\b/.test(lower) && /\b(list|show|which|what|any|open|active)\b/.test(lower)) {
     return 'LIST_RUNS';
@@ -163,6 +167,10 @@ function detectIntent(content: string): Intent {
     return 'LIST_DOCUMENTS';
   }
   if (/\b(status|state|how is|how'?s|where is|tell me about|show me)\b/.test(lower)) {
+    return 'LAYER_STATUS';
+  }
+  // A question we suppressed above still deserves the layer's real state as its answer.
+  if (isQuestion && /\b(freeze|frozen|redo|audit(ed|ing)?|prompts?)\b/.test(lower)) {
     return 'LAYER_STATUS';
   }
   return 'HELP';

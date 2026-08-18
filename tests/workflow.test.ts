@@ -24,6 +24,7 @@ import { handleChatMessage, getChatHistory } from '../server/services/agent/chat
 import { runTool, resolveLayerReference } from '../server/services/agent/tools.ts';
 import { readProjectState } from '../server/services/runtimeState.ts';
 import { listDocumentsByLayer } from '../server/repos/documents.ts';
+import { listRuns } from '../server/repos/runs.ts';
 
 let fixture: TestProject;
 
@@ -165,6 +166,42 @@ describe('chat reads state instead of remembering it', () => {
     expect(messages.some((m) => m.role === 'ASSISTANT')).toBe(true);
     // Invariant 12: the local database is the record, not a provider thread.
     expect(messages.some((m) => m.role === 'TOOL')).toBe(true);
+  });
+
+  it('never changes state in answer to a question', () => {
+    // A question is not a command. Chat must not take an irreversible action
+    // because the user asked about it.
+    drop('World Model v3.1.pdf');
+    drop('Discovery Logic v1.pdf');
+    const world = fixture.layerByName('World Model');
+
+    const questions = [
+      'Is World Model ready to freeze?',
+      'Should I redo Discovery Logic v1?',
+      'What should I do next?',
+      'Which prompt would Discovery Logic need?',
+      'Do I need to audit Discovery Logic?',
+    ];
+    for (const question of questions) {
+      const turn = handleChatMessage({ projectId: fixture.project.id, content: question });
+      expect(turn.assistantMessage.content.length, question).toBeGreaterThan(0);
+    }
+
+    expect(computeLayerState(world.id).status).not.toBe('FROZEN');
+    // No question may have created a run.
+    expect(listRuns(fixture.project.id)).toHaveLength(0);
+  });
+
+  it('still acts on a plainly worded command', () => {
+    drop('World Model v3.1.pdf');
+    const world = fixture.layerByName('World Model');
+
+    handleChatMessage({ projectId: fixture.project.id, content: 'Freeze World Model.' });
+    expect(computeLayerState(world.id).status).toBe('FROZEN');
+
+    drop('Discovery Logic v1.pdf');
+    handleChatMessage({ projectId: fixture.project.id, content: 'Audit Discovery Logic.' });
+    expect(listRuns(fixture.project.id).length).toBeGreaterThan(0);
   });
 
   it('resolves loose layer references the way a person would type them', () => {
