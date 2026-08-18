@@ -16,7 +16,7 @@ import {
 import { buildPlan, calculateNextAction } from '../server/services/planner.ts';
 import { compilePrompt } from '../server/services/promptCompiler.ts';
 import { prepareSynthesis, DependencyError } from '../server/services/synthesis.ts';
-import { recordAudit } from '../server/services/auditEngine.ts';
+import { normalizeAuditResult, parseAuditJson, recordAudit } from '../server/services/auditEngine.ts';
 import { canAutoRedo, createRedoRun } from '../server/services/redoEngine.ts';
 import { freezeLayer, reopenLayer } from '../server/services/freeze.ts';
 import { writeProjectState, readProjectState } from '../server/services/runtimeState.ts';
@@ -211,6 +211,14 @@ describe('synthesis', () => {
     expect(prepared.run.requiredAttachments).toHaveLength(7);
   });
 
+  it('refuses outright on a layer with nothing to consolidate', () => {
+    // "0 / 0 READY" is technically ready and completely meaningless.
+    expect(() => prepareSynthesis({ layerId: fixture.layerByName('Taxonomy').id }))
+      .toThrow(/no completed research/i);
+    expect(() => prepareSynthesis({ layerId: fixture.layerByName('Taxonomy').id, override: true }))
+      .toThrow(/no completed research/i);
+  });
+
   it('records the reason when the user overrides the warning', () => {
     for (const v of FULL_PACKET.slice(0, 6)) addDocument(fixture, 'Discovery Logic', v);
     const layer = fixture.layerByName('Discovery Logic');
@@ -223,6 +231,45 @@ describe('synthesis', () => {
     });
     expect(prepared.run.dependencyOverride).toBe(true);
     expect(prepared.dependencies.ready).toBe(false);
+  });
+});
+
+describe('audit verdict coercion', () => {
+  const ctx = () => ({ projectId: fixture.project.id, layerId: fixture.layerByName('Taxonomy').id });
+
+  it('accepts the canonical verdicts and common aliases', () => {
+    expect(normalizeAuditResult({ verdict: 'PASS' }, ctx()).verdict).toBe('PASS');
+    expect(normalizeAuditResult({ verdict: 'ready for synthesis' as never }, ctx()).verdict)
+      .toBe('READY_FOR_SYNTHESIS');
+  });
+
+  it('never reads a negated verdict as its own opposite', () => {
+    // "not ready for synthesis" contains "ready for synthesis"; treating that as
+    // approval would advance a layer the audit had just rejected.
+    for (const raw of [
+      'not ready for synthesis',
+      'NOT READY_TO_FREEZE',
+      'no pass',
+      'definitely not ready for synthesis',
+      'failed audit',
+    ]) {
+      expect(normalizeAuditResult({ verdict: raw as never }, ctx()).verdict, raw)
+        .toBe('MORE_RESEARCH');
+    }
+  });
+
+  it('parses fenced model JSON without inverting it', () => {
+    const parsed = parseAuditJson('```json\n{"verdict":"not ready for synthesis","summary":"x"}\n```');
+    expect(parsed?.verdict).toBe('MORE_RESEARCH');
+  });
+
+  it('always produces the structured arrays, even from a bare verdict', () => {
+    const result = normalizeAuditResult({ verdict: 'PATCH' }, ctx());
+    expect(result.failures).toEqual([]);
+    expect(result.missingDocuments).toEqual([]);
+    expect(result.requiredResearchRuns).toEqual([]);
+    expect(result.requiredPatches).toEqual([]);
+    expect(result.nextAction.length).toBeGreaterThan(0);
   });
 });
 

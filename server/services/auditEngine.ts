@@ -153,6 +153,13 @@ const VERDICT_ALIASES: Record<string, AuditVerdict> = {
   STOP: 'BLOCKED',
 };
 
+/**
+ * A negation anywhere in the verdict text disqualifies substring matching.
+ * "not ready for synthesis" contains "READY_FOR_SYNTHESIS", and matching it
+ * would invert a rejection into an approval that the engine then acts on.
+ */
+const NEGATION_RE = /(^|_)(NOT|NO|NEVER|CANNOT|CANT|WONT|ISNT|AINT|WITHOUT|FAIL|FAILS|FAILED|UNREADY)(_|$)/;
+
 /** Coerce anything the model said into one of the nine canonical verdicts. */
 function coerceVerdict(value: unknown): AuditVerdict {
   const key = String(value ?? '')
@@ -163,6 +170,9 @@ function coerceVerdict(value: unknown): AuditVerdict {
   if (!key) return 'MORE_RESEARCH';
   const exact = VERDICT_ALIASES[key];
   if (exact) return exact;
+  // Only an exact alias may express a positive verdict. Anything negated falls
+  // back to the safe default rather than being read as its own opposite.
+  if (NEGATION_RE.test(key)) return 'MORE_RESEARCH';
   // "the verdict is needs more research" still has to land somewhere sensible:
   // the longest alias contained in the text wins.
   let best: AuditVerdict | null = null;

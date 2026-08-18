@@ -81,6 +81,15 @@ export function prepareSynthesis(input: PrepareSynthesisInput): SynthesisPrepara
   // 1. Validate the whole packet first — nothing is written until it passes.
   const requiredDocuments = defaultRequiredDocuments(project.id, layer.id, 'SYNTHESIS');
   const dependencies = checkCanonicalNames(project.id, requiredDocuments);
+  // An empty packet reports "0 / 0 READY", which is technically ready and
+  // completely meaningless: there is nothing to consolidate. Refuse outright,
+  // because no override can conjure source material that does not exist.
+  if (requiredDocuments.length === 0) {
+    throw new Error(
+      `Cannot synthesise ${layer.name}: the layer has no completed research to consolidate. ` +
+        `Import or produce its foundation and expansion documents first.`,
+    );
+  }
   if (!dependencies.ready && !override) throw new DependencyError(dependencies);
 
   const targetVersion =
