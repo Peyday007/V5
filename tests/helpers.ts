@@ -20,9 +20,14 @@ export interface TestProject {
   layerByName(name: string): Layer;
 }
 
-/** Fresh database + seeded Deal Dispatch project. Call in beforeEach. */
+/**
+ * Fresh database AND a fresh document tree. Both have to be reset together: the
+ * project slug is stable, so leaving files behind would make the next test's
+ * reconciliation see them as unregistered.
+ */
 export function freshProject(): TestProject {
   closeDatabase();
+  fs.rmSync(path.join(DATA_ROOT, 'projects'), { recursive: true, force: true });
   const dbPath = path.join(DATA_ROOT, `test-${Math.random().toString(36).slice(2)}.db`);
   initDatabase({ dbPath });
   const { project, layers } = seedDealDispatch();
