@@ -301,6 +301,57 @@ describe('audit, redo and freeze', () => {
   });
 });
 
+describe('blockages clear themselves', () => {
+  it('stops blocking once the document a MISSING_DEPENDENCY audit named arrives', () => {
+    addDocument(fixture, 'Discovery Logic', 'v1');
+    const layer = fixture.layerByName('Discovery Logic');
+
+    recordAudit({
+      projectId: fixture.project.id,
+      layerId: layer.id,
+      result: {
+        verdict: 'MISSING_DEPENDENCY',
+        summary: 'Needs the v1B sibling before it can be judged.',
+        missingDocuments: ['Discovery Logic v1B'],
+      },
+    });
+    expect(computeLayerState(layer.id).status).toBe('BLOCKED');
+
+    // Spec section 18: uploading the missing dependency is what unblocks the
+    // work — the user should not have to re-run the audit to clear the flag.
+    addDocument(fixture, 'Discovery Logic', 'v1B');
+    recomputeProject(fixture.project.id);
+
+    const after = computeLayerState(layer.id);
+    expect(after.missingDependencies).toEqual([]);
+    expect(after.status).not.toBe('BLOCKED');
+  });
+
+  it('keeps blocking when the audit named nothing to resolve', () => {
+    addDocument(fixture, 'Qualification Logic', 'v1');
+    const layer = fixture.layerByName('Qualification Logic');
+    recordAudit({
+      projectId: fixture.project.id,
+      layerId: layer.id,
+      result: { verdict: 'BLOCKED', summary: 'Waiting on a decision about scope.' },
+    });
+    recomputeProject(fixture.project.id);
+    // Nothing was named, so nothing can arrive to clear it — a human must act.
+    expect(computeLayerState(layer.id).status).toBe('BLOCKED');
+  });
+
+  it('keeps a reopened layer reopened across a recompute', () => {
+    for (const v of ['v1', 'v1B']) addDocument(fixture, 'World Model', v);
+    const canonical = addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
+    const layer = fixture.layerByName('World Model');
+    freezeLayer(layer.id, canonical.id);
+
+    expect(reopenLayer(layer.id, 'cross-layer contradiction').status).toBe('REOPENED');
+    recomputeProject(fixture.project.id);
+    expect(computeLayerState(layer.id).status).toBe('REOPENED');
+  });
+});
+
 describe('planner', () => {
   it('names the blocking document and is deterministic', () => {
     for (const v of FULL_PACKET.slice(0, 6)) addDocument(fixture, 'Discovery Logic', v);

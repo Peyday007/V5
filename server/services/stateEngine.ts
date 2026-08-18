@@ -114,6 +114,8 @@ function deriveStatus(input: {
   missingVersions: string[];
   currentVersion: string | null;
   missingDependencyItems: DependencyCheckItem[];
+  /** How many documents a MISSING_DEPENDENCY/BLOCKED audit actually named. */
+  auditNamedDocumentCount: number;
   frozenCanonical: Document | null;
   latestVerdict: AuditVerdict | null;
   latestAuditNextVersion: string | null;
@@ -129,6 +131,7 @@ function deriveStatus(input: {
     missingVersions,
     currentVersion,
     missingDependencyItems,
+    auditNamedDocumentCount,
     frozenCanonical,
     latestVerdict,
     latestAuditNextVersion,
@@ -208,7 +211,14 @@ function deriveStatus(input: {
   }
 
   // 7. Missing inputs (invariant 4): never let synthesis proceed on a hole.
-  const blockedByAudit = latestVerdict === 'MISSING_DEPENDENCY' || latestVerdict === 'BLOCKED';
+  // A blocking verdict names the documents it wants. Once every one of them has
+  // arrived the layer must move on by itself — spec section 18: uploading the
+  // missing dependency is what unblocks the work, not re-running the audit. A
+  // verdict that named nothing has no automatic resolution, so it keeps blocking
+  // until a human acts.
+  const blockedByAudit =
+    (latestVerdict === 'MISSING_DEPENDENCY' || latestVerdict === 'BLOCKED') &&
+    (auditNamedDocumentCount === 0 || missingDependencyItems.length > 0);
   if (blockedByAudit || missingDependencyItems.length > 0) {
     const names = unique(missingDependencyItems.map((item) => item.canonicalName));
     const first = missingDependencyItems[0] ?? null;
@@ -380,12 +390,15 @@ function deriveLayer(layerId: string): LayerDerivation {
   // An audit that declared the layer blocked names the documents it wanted.
   // They are re-checked against reality rather than trusted, so a document that
   // has since been imported does not keep the layer blocked.
+  let auditNamedDocumentCount = 0;
   if (latestAudit && (latestAudit.verdict === 'MISSING_DEPENDENCY' || latestAudit.verdict === 'BLOCKED')) {
     const named = unique(
       latestAudit.findings
         .filter((finding) => finding.findingType === 'MISSING_DOCUMENT')
-        .map((finding) => finding.content.trim()),
+        .map((finding) => finding.content.trim())
+        .filter((content) => content.length > 0),
     );
+    auditNamedDocumentCount = named.length;
     if (named.length > 0) collect(checkCanonicalNames(layer.projectId, named).items);
   }
 
@@ -400,6 +413,7 @@ function deriveLayer(layerId: string): LayerDerivation {
     missingVersions,
     currentVersion,
     missingDependencyItems,
+    auditNamedDocumentCount,
     frozenCanonical,
     latestVerdict: latestAudit?.verdict ?? null,
     latestAuditNextVersion: latestAudit?.nextVersion ?? null,
