@@ -469,7 +469,8 @@ export function handleChatMessage(input: {
         conversationId: conversation.id,
         role: 'TOOL',
         content: result.text,
-        metadata: { tool: name, args, ok: result.ok, data: result.data },
+        // Both keys: the transcript is read by the UI as well as by tests.
+        metadata: { tool: name, name, args, ok: result.ok, data: result.data },
       });
       return result;
     },
