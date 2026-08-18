@@ -36,7 +36,7 @@ import {
 import { getDb } from '../db/database.ts';
 import { getLatestAuditForDocument, getLatestAuditForLayer } from '../repos/audits.ts';
 import { listDocuments, listDocumentsByLayer, updateDocument } from '../repos/documents.ts';
-import { recordEvent } from '../repos/events.ts';
+import { listEventsByLayer, recordEvent } from '../repos/events.ts';
 import { getLayer, listLayers, updateLayer, type UpdateLayerInput } from '../repos/layers.ts';
 import { getProject, updateProject } from '../repos/projects.ts';
 import { listRunsByLayer } from '../repos/runs.ts';
@@ -116,6 +116,8 @@ function deriveStatus(input: {
   missingDependencyItems: DependencyCheckItem[];
   /** How many documents a MISSING_DEPENDENCY/BLOCKED audit actually named. */
   auditNamedDocumentCount: number;
+  /** Set while a reopen is still the most recent thing to happen to the layer. */
+  reopenedPending: boolean;
   frozenCanonical: Document | null;
   latestVerdict: AuditVerdict | null;
   latestAuditNextVersion: string | null;
@@ -132,6 +134,7 @@ function deriveStatus(input: {
     currentVersion,
     missingDependencyItems,
     auditNamedDocumentCount,
+    reopenedPending,
     frozenCanonical,
     latestVerdict,
     latestAuditNextVersion,
@@ -160,6 +163,18 @@ function deriveStatus(input: {
       reason: `Canonical document ${frozenCanonical.canonicalName} is frozen.`,
       nextAction: `Nothing to do — ${layerName} is frozen at ${frozenCanonical.version}.`,
       nextVersion: null,
+    };
+  }
+
+  // 2b. A reopen that nothing has happened since. Derived, not pinned: it lapses
+  // by itself the moment a run, an audit or a new document arrives, so the
+  // derivation engine is never switched off (section 4).
+  if (reopenedPending) {
+    return {
+      status: 'REOPENED',
+      reason: `${layerName} was reopened and no research has happened since.`,
+      nextAction: `Decide what ${layerName} needs now that it is reopened.`,
+      nextVersion: nextExpansion,
     };
   }
 
@@ -402,6 +417,20 @@ function deriveLayer(layerId: string): LayerDerivation {
     if (named.length > 0) collect(checkCanonicalNames(layer.projectId, named).items);
   }
 
+  // A reopen stands only until real work resumes. Comparing it against the
+  // newest run, audit and document means the state clears itself rather than
+  // needing a human to unpin it.
+  const reopenedAt =
+    listEventsByLayer(layerId, 50).find((event) => event.eventType === 'LAYER_REOPENED')?.createdAt ??
+    null;
+  const latestActivityAt = [
+    ...runs.map((run) => run.createdAt),
+    ...(latestAudit ? [latestAudit.createdAt] : []),
+    ...documents.map((document) => document.createdAt),
+  ].reduce<string | null>((max, at) => (max === null || at > max ? at : max), null);
+  const reopenedPending =
+    reopenedAt !== null && (latestActivityAt === null || reopenedAt > latestActivityAt);
+
   const derived = deriveStatus({
     layer,
     policy,
@@ -414,6 +443,7 @@ function deriveLayer(layerId: string): LayerDerivation {
     currentVersion,
     missingDependencyItems,
     auditNamedDocumentCount,
+    reopenedPending,
     frozenCanonical,
     latestVerdict: latestAudit?.verdict ?? null,
     latestAuditNextVersion: latestAudit?.nextVersion ?? null,

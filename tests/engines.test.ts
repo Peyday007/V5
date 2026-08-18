@@ -387,7 +387,45 @@ describe('blockages clear themselves', () => {
     expect(computeLayerState(layer.id).status).toBe('BLOCKED');
   });
 
-  it('keeps a reopened layer reopened across a recompute', () => {
+  it('gives a reopened layer its source packet back so it can be re-synthesised', () => {
+    for (const v of ['v1', 'v1B', 'v1C']) addDocument(fixture, 'World Model', v);
+    const canonical = addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
+    const layer = fixture.layerByName('World Model');
+    freezeLayer(layer.id, canonical.id);
+    expect(listDocumentsByLayer(layer.id).filter((d) => d.status === 'SUPERSEDED')).toHaveLength(3);
+
+    reopenLayer(layer.id, 'cross-layer audit found a contradiction');
+    recomputeProject(fixture.project.id);
+
+    // The provenance is usable again — otherwise the layer dead-ends: its own
+    // registered, on-disk documents would report as missing forever.
+    const restored = listDocumentsByLayer(layer.id);
+    expect(restored.filter((d) => d.status === 'SUPERSEDED')).toHaveLength(0);
+    expect(restored.every((d) => !d.frozen)).toBe(true);
+    expect(() => prepareSynthesis({ layerId: layer.id })).not.toThrow();
+  });
+
+  it('lets a reopen lapse once work resumes, instead of pinning the layer', () => {
+    for (const v of ['v1', 'v1B']) addDocument(fixture, 'World Model', v);
+    const canonical = addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
+    const layer = fixture.layerByName('World Model');
+    freezeLayer(layer.id, canonical.id);
+    reopenLayer(layer.id, 'contradiction');
+    recomputeProject(fixture.project.id);
+
+    // Derived, never pinned — a pin would mask every later audit forever.
+    expect(computeLayerState(layer.id).statusSource).toBe('DERIVED');
+
+    recordAudit({
+      projectId: fixture.project.id,
+      layerId: layer.id,
+      result: { verdict: 'READY_FOR_SYNTHESIS', summary: 'Rework holds up.' },
+    });
+    recomputeProject(fixture.project.id);
+    expect(computeLayerState(layer.id).status).toBe('SYNTHESIS_READY');
+  });
+
+  it('keeps a reopened layer reopened until something happens', () => {
     for (const v of ['v1', 'v1B']) addDocument(fixture, 'World Model', v);
     const canonical = addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
     const layer = fixture.layerByName('World Model');

@@ -175,21 +175,39 @@ export function reopenLayer(layerId: string, reason: string): LayerStateSnapshot
 
   const db = getDb();
   db.transaction(() => {
+    // Freezing marks the provenance SUPERSEDED and the canonical document
+    // FROZEN. Reopening has to undo both, or the layer's own source packet stays
+    // unusable and it can never be re-synthesised — the packet would report
+    // "1 / 4 READY" for documents that are registered and sitting on disk.
+    const canonicalId = layer.canonicalDocumentId;
     const thawed: string[] = [];
     for (const document of listDocumentsByLayer(layerId)) {
-      if (!document.frozen && document.status !== 'FROZEN') continue;
+      const wasFrozen = document.frozen || document.status === 'FROZEN';
+      // Exactly the documents this freeze pushed aside — identified by the
+      // successor link the freeze wrote — not every superseded row in the layer.
+      const supersededByThisFreeze =
+        document.status === 'SUPERSEDED' &&
+        canonicalId !== null &&
+        document.supersededByDocumentId === canonicalId;
+      if (!wasFrozen && !supersededByThisFreeze) continue;
       updateDocument(document.id, {
-        frozen: false,
-        status: document.status === 'FROZEN' ? 'COMPLETE' : document.status,
+        status: 'COMPLETE',
+        ...(wasFrozen ? { frozen: false, isCanonical: false } : {}),
+        ...(supersededByThisFreeze ? { supersededByDocumentId: null } : {}),
       });
       thawed.push(document.canonicalName);
     }
 
+    // Status stays DERIVED. Pinning it would freeze the derivation engine on
+    // REOPENED for good, masking every later audit and blockage, and the UI has
+    // no control to release a pin. REOPENED is derived instead, and lapses by
+    // itself as soon as real work resumes.
     updateLayer(layerId, {
       status: 'REOPENED',
-      statusSource: 'MANUAL',
-      manualStatus: 'REOPENED',
-      manualStatusReason: reasonText,
+      statusSource: 'DERIVED',
+      manualStatus: null,
+      manualStatusReason: null,
+      canonicalDocumentId: null,
     });
 
     recordEvent({
