@@ -85,9 +85,12 @@ function ensureMigrationTable(db: SqliteDriver): void {
  * Copy the database file aside before the first schema change is applied to an
  * existing database. Cheap insurance; only taken when there is something to lose.
  */
-function backupDatabase(databasePath: string): string | null {
+function backupDatabase(db: SqliteDriver, databasePath: string): string | null {
   try {
     if (!fs.existsSync(databasePath) || fs.statSync(databasePath).size === 0) return null;
+    // In WAL mode the newest committed pages may live only in the -wal sidecar, so a
+    // plain file copy would silently back up a stale database. Fold the WAL in first.
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     fs.mkdirSync(BACKUP_ROOT, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const target = path.join(BACKUP_ROOT, `brain-${stamp}.db`);
@@ -131,7 +134,7 @@ export function runMigrations(
   const pending = files.filter((f) => !appliedByVersion.has(f.version));
   let backupPath: string | null = null;
   if (pending.length > 0 && appliedRows.length > 0) {
-    backupPath = backupDatabase(databasePath);
+    backupPath = backupDatabase(db, databasePath);
   }
 
   const applied: MigrationReport['applied'] = [];

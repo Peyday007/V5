@@ -45,6 +45,8 @@ interface StatementLike {
   run(...params: SqlValue[]): { changes: number | bigint; lastInsertRowid: number | bigint };
 }
 
+const DDL_RE = /\b(create|alter|drop|reindex|vacuum)\b/i;
+
 interface DatabaseLike {
   exec(sql: string): void;
   prepare(sql: string): StatementLike;
@@ -76,8 +78,9 @@ class CachingDriver implements SqliteDriver {
   }
 
   exec(sql: string): void {
-    // DDL can invalidate prepared statements; drop the cache defensively.
-    this.#cache.clear();
+    // Only DDL can invalidate prepared statements. Clearing on every exec would
+    // also throw the cache away on each BEGIN/COMMIT, which bulk imports pay for.
+    if (DDL_RE.test(sql)) this.#cache.clear();
     this.#db.exec(sql);
   }
 
