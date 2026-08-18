@@ -1,0 +1,15 @@
+node_modules/
+client/dist/
+dist/
+data/brain.db
+data/brain.db-wal
+data/brain.db-shm
+data/backups/
+data/projects/
+data/runtime/
+data/tmp/
+.env
+.env.local
+*.log
+.DS_Store
+.vitest/
