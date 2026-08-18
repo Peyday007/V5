@@ -174,6 +174,14 @@ function coerceVerdict(value: unknown): AuditVerdict {
   // Only an exact alias may express a positive verdict. Anything negated falls
   // back to the safe default rather than being read as its own opposite.
   if (NEGATION_RE.test(key)) return 'MORE_RESEARCH';
+  // Text naming several different verdicts is a menu, not a decision — the
+  // prompt template literally lists all nine. Picking the longest match there
+  // manufactures an approval nobody gave.
+  const named = new Set<AuditVerdict>();
+  for (const [alias, verdict] of Object.entries(VERDICT_ALIASES)) {
+    if (key.includes(alias)) named.add(verdict);
+  }
+  if (named.size > 1) return 'MORE_RESEARCH';
   // "the verdict is needs more research" still has to land somewhere sensible:
   // the longest alias contained in the text wins.
   let best: AuditVerdict | null = null;
@@ -352,18 +360,25 @@ function jsonCandidates(text: string): string[] {
   if (!trimmed) return [];
   const candidates: string[] = [];
   const fenced = /```[A-Za-z0-9_+-]*[ \t]*\r?\n([\s\S]*?)```/g;
+  const fencedBodies: string[] = [];
   let match = fenced.exec(trimmed);
   while (match !== null) {
     const body = match[1]?.trim();
-    if (body) candidates.push(body);
+    if (body) fencedBodies.push(body);
     match = fenced.exec(trimmed);
   }
+  // Last fence first. Both audit prompts ask the model to END its reply with the
+  // JSON object, so when a reply contains several blocks the last one is the
+  // answer and the earlier ones are usually the platform's own template being
+  // echoed back — storing that placeholder as the audit of record is worse than
+  // failing to parse at all.
+  candidates.push(...fencedBodies.reverse());
   // A reply that opened a fence and never closed it is still worth reading.
   const unterminated = /```[A-Za-z0-9_+-]*[ \t]*\r?\n([\s\S]*)$/.exec(trimmed);
   const tail = unterminated?.[1]?.trim();
   if (tail && !candidates.includes(tail)) candidates.push(tail);
   candidates.push(trimmed);
-  candidates.push(...braceCandidates(trimmed));
+  candidates.push(...braceCandidates(trimmed).reverse());
   return candidates;
 }
 

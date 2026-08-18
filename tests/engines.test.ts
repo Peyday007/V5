@@ -262,6 +262,42 @@ describe('audit verdict coercion', () => {
     }
   });
 
+  it('reads the LAST fenced block, not an echoed template', () => {
+    // Both audit prompts ask the model to end its reply with the JSON object. A
+    // model that quotes the platform's own template first must not have that
+    // placeholder stored as the audit of record.
+    const template = JSON.stringify({
+      verdict: 'PASS | KEEP | PATCH | REDO | MISSING_DEPENDENCY | MORE_RESEARCH | READY_FOR_SYNTHESIS | READY_TO_FREEZE | BLOCKED',
+      summary: 'one short paragraph',
+      failures: ['each concrete failure, one per entry'],
+    });
+    const real = JSON.stringify({
+      verdict: 'REDO',
+      summary: 'Section 3 is a stub; redo required.',
+      failures: ['section 3 is a placeholder'],
+    });
+    const reply = [
+      'Here is the shape I was asked for:',
+      '```json',
+      template,
+      '```',
+      'And here is my actual verdict:',
+      '```json',
+      real,
+      '```',
+    ].join('\n');
+
+    const parsed = parseAuditJson(reply);
+    expect(parsed?.verdict).toBe('REDO');
+    expect(parsed?.summary).toContain('stub');
+  });
+
+  it('refuses a verdict string that names several verdicts at once', () => {
+    // The template's verdict field lists all nine; that is a menu, not a decision.
+    const menu = 'PASS | KEEP | REDO | READY_FOR_SYNTHESIS | BLOCKED';
+    expect(normalizeAuditResult({ verdict: menu as never }, ctx()).verdict).toBe('MORE_RESEARCH');
+  });
+
   it('parses fenced model JSON without inverting it', () => {
     const parsed = parseAuditJson('```json\n{"verdict":"not ready for synthesis","summary":"x"}\n```');
     expect(parsed?.verdict).toBe('MORE_RESEARCH');

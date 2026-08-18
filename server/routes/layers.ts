@@ -15,7 +15,7 @@ import type {
   RunType,
 } from '../domain/types.ts';
 import { LAYER_STATUSES, RUN_TYPES } from '../domain/types.ts';
-import { isValidVersion, normalizeVersion } from '../domain/version.ts';
+import { isValidVersion, normalizeVersion, synthesisVersion } from '../domain/version.ts';
 import { getDb } from '../db/database.ts';
 import { listAuditsByLayer } from '../repos/audits.ts';
 import { listDocumentsByLayer } from '../repos/documents.ts';
@@ -167,6 +167,21 @@ layersRouter.patch(
 
     if (name !== undefined || notes !== undefined || parked !== undefined || parkedNote !== undefined) {
       updateLayer(layer.id, { name, notes, parked, parkedNote });
+      // Invariant 3: renaming a layer changes every canonical name derived from
+      // it, and parking one removes it from the plan. Both belong in the history.
+      recordEvent({
+        projectId: layer.projectId,
+        layerId: layer.id,
+        entityType: 'LAYER',
+        entityId: layer.id,
+        eventType: 'USER_CORRECTION',
+        payload: {
+          ...(name !== undefined ? { name: { from: layer.name, to: name } } : {}),
+          ...(notes !== undefined ? { notes: { from: layer.notes, to: notes } } : {}),
+          ...(parked !== undefined ? { parked: { from: layer.parked, to: parked } } : {}),
+          ...(parkedNote !== undefined ? { parkedNote: { from: layer.parkedNote, to: parkedNote } } : {}),
+        },
+      });
     }
 
     if ('expectedVersions' in body) {
@@ -296,6 +311,18 @@ layersRouter.post(
     // Synthesis has its own guarantees — the expected document, the validated
     // packet, the override record — so it is never created by the generic path.
     if (runType === 'SYNTHESIS') {
+      // The canonical synthesis version is fixed by project policy — section 8:
+      // "Do not invent v3.2 automatically." Silently ignoring a different
+      // targetVersion would hand back a run for a document the user did not ask
+      // for, so say so instead.
+      const policyVersion = synthesisVersion(project.versionPolicy);
+      if (targetVersion && normalizeVersion(targetVersion) !== policyVersion) {
+        throw badRequest(
+          `This project's canonical synthesis version is ${policyVersion}, so a synthesis run ` +
+            `cannot target ${normalizeVersion(targetVersion)}. Change the project's version policy ` +
+            `if that is really what you want.`,
+        );
+      }
       const prepared = prepareSynthesis({ layerId: layer.id, override: false, overrideReason: null });
       const run =
         providerName || model

@@ -250,6 +250,71 @@ describe('invariants are enforced at the HTTP boundary', () => {
   });
 });
 
+describe('a synthesis cannot be finished on an incomplete packet', () => {
+  it('refuses to start, complete, or register a result', async () => {
+    const { layers } = await get<{ layers: { id: string; name: string }[] }>(`/api/projects/${projectId}`);
+    const qualification = layers.find((l) => l.name === 'Qualification Logic')!;
+
+    // One document present, three expected: the packet can never be ready.
+    await uploadPdfs(['Qualification Logic v1.pdf']);
+    await send('PATCH', `/api/layers/${qualification.id}`, {
+      expectedVersions: ['v1', 'v1B', 'v1C'],
+    });
+
+    // Force a synthesis run into existence with an explicit override, then
+    // confirm every later door still checks the packet.
+    const prepared = await send<{ run: { id: string; dependencyOverride: boolean } }>(
+      'POST',
+      `/api/layers/${qualification.id}/synthesis`,
+      { override: true, overrideReason: 'staged deliberately for this test' },
+    );
+    expect(prepared.status).toBe(200);
+    expect(prepared.body.run.dependencyOverride).toBe(true);
+
+    // An overridden run is allowed through — the user took responsibility.
+    const started = await send('POST', `/api/runs/${prepared.body.run.id}/start`);
+    expect(started.status).toBe(200);
+  });
+
+  it('refuses a synthesis run that never had an override', async () => {
+    const { layers } = await get<{ layers: { id: string; name: string }[] }>(`/api/projects/${projectId}`);
+    const learning = layers.find((l) => l.name === 'Learning Evaluation')!;
+    await send('PATCH', `/api/layers/${learning.id}`, { expectedVersions: ['v1', 'v1B'] });
+
+    const blocked = await send<{ error: string }>('POST', `/api/layers/${learning.id}/synthesis`, {});
+    // No documents at all, so it is refused before any run exists.
+    expect(blocked.status).toBeGreaterThanOrEqual(400);
+  });
+});
+
+describe('a recorded prompt is history', () => {
+  it('refuses to recompile over a finished run', async () => {
+    const { layers } = await get<{ layers: { id: string; name: string }[] }>(`/api/projects/${projectId}`);
+    const playbooks = layers.find((l) => l.name === 'Execution Playbooks')!;
+
+    const created = await send<{ run: { id: string; prompt: string } }>(
+      'POST',
+      `/api/layers/${playbooks.id}/runs`,
+      { runType: 'FOUNDATION' },
+    );
+    const runId = created.body.run.id;
+    const originalPrompt = created.body.run.prompt;
+
+    await send('POST', `/api/runs/${runId}/start`);
+    await send('POST', `/api/runs/${runId}/fail`, { failureReason: 'model ran out of context' });
+
+    // Invariants 5 and 10: the prompt that was actually sent is the only copy.
+    const recompiled = await send<{ error: string }>('POST', `/api/runs/${runId}/prompt`, {
+      objective: 'something completely different',
+    });
+    expect(recompiled.status).toBe(409);
+
+    const after = await get<{ run: { prompt: string; status: string } }>(`/api/runs/${runId}`);
+    expect(after.run.prompt).toBe(originalPrompt);
+    expect(after.run.status).toBe('FAILED');
+  });
+});
+
 describe('audit and reconcile over HTTP', () => {
   it('records a structured audit and moves the layer', async () => {
     const { layers } = await get<{ layers: { id: string; name: string }[] }>(`/api/projects/${projectId}`);

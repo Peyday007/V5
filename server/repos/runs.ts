@@ -114,28 +114,46 @@ export function listActiveRuns(projectId: string): ResearchRun[] {
     .map(mapRun);
 }
 
-/** Full redo lineage for a run, oldest attempt first. */
+/**
+ * Every run in a redo lineage, oldest attempt first.
+ *
+ * Descends through ALL children, not just the first. Re-auditing the same failed
+ * parent creates sibling redos, and following only one branch made
+ * `countRedoAttempts` return 1 forever — the max_auto_redos cap could then be
+ * bypassed indefinitely by auditing the parent again, which the UI's run picker
+ * makes a single click.
+ */
 export function getRunLineage(runId: string): ResearchRun[] {
-  const lineage: ResearchRun[] = [];
-  let current = getRun(runId);
-  const guard = new Set<string>();
-  while (current && !guard.has(current.id)) {
-    guard.add(current.id);
-    lineage.unshift(current);
-    current = current.parentRunId ? getRun(current.parentRunId) : null;
+  const start = getRun(runId);
+  if (!start) return [];
+
+  // Climb to the root of the lineage first.
+  let root = start;
+  const climbed = new Set<string>([root.id]);
+  while (root.parentRunId) {
+    const parent = getRun(root.parentRunId);
+    if (!parent || climbed.has(parent.id)) break;
+    climbed.add(parent.id);
+    root = parent;
   }
-  // Walk forward through children too.
-  let tail = lineage.at(-1);
-  while (tail) {
-    const child = getDb().get<ResearchRunRow>(
-      'SELECT * FROM research_runs WHERE parent_run_id = ? ORDER BY attempt_number LIMIT 1',
-      [tail.id],
+
+  // Then walk the whole tree beneath it, breadth-first.
+  const db = getDb();
+  const seen = new Set<string>([root.id]);
+  const lineage: ResearchRun[] = [root];
+  const queue: string[] = [root.id];
+  while (queue.length > 0 && lineage.length < 500) {
+    const currentId = queue.shift()!;
+    const children = db.all<ResearchRunRow>(
+      'SELECT * FROM research_runs WHERE parent_run_id = ? ORDER BY attempt_number, created_at',
+      [currentId],
     );
-    if (!child || guard.has(child.id)) break;
-    guard.add(child.id);
-    const mapped = mapRun(child);
-    lineage.push(mapped);
-    tail = mapped;
+    for (const row of children) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      lineage.push(mapRun(row));
+      queue.push(row.id);
+    }
   }
   return lineage;
 }

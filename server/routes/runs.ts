@@ -183,6 +183,9 @@ runsRouter.patch(
   }),
 );
 
+/** Statuses whose recorded prompt is still a working draft rather than history. */
+const RECOMPILABLE_RUN_STATUSES = new Set<RunStatus>(['PLANNED', 'READY', 'BLOCKED']);
+
 runsRouter.post(
   '/:runId/prompt',
   handler((req) => {
@@ -209,6 +212,18 @@ runsRouter.post(
     });
 
     const dependencies = getDb().transaction(() => {
+      // Invariants 5 and 10: a started run's prompt is the record of what was
+      // actually sent, and it is the only copy. Recompiling over a FAILED or
+      // COMPLETE run would destroy the evidence a redo is supposed to preserve.
+      if (!RECOMPILABLE_RUN_STATUSES.has(run.status)) {
+        throw conflict(
+          `Run ${run.id} is ${run.status}, so its recorded prompt is history and cannot be ` +
+            `rewritten. Create a redo instead — it carries the corrected prompt and keeps this ` +
+            `attempt intact.`,
+          { runId: run.id, status: run.status },
+        );
+      }
+
       updateRun(run.id, {
         targetVersion: compiled.targetVersion,
         prompt: compiled.prompt,
@@ -222,10 +237,7 @@ runsRouter.post(
           run.runType === 'AUDIT' || run.runType === 'CROSS_LAYER_AUDIT' ? 'AUDIT_INPUT' : 'SOURCE_PACKET',
       });
       const check = checkRunDependencies(run.id);
-      // Only a run that has not started yet may be re-flagged READY/BLOCKED.
-      if (run.status === 'PLANNED' || run.status === 'READY' || run.status === 'BLOCKED') {
-        updateRun(run.id, { status: check.ready ? 'READY' : 'BLOCKED' });
-      }
+      updateRun(run.id, { status: check.ready ? 'READY' : 'BLOCKED' });
       recordEvent({
         projectId: project.id,
         layerId: layer.id,
@@ -247,23 +259,29 @@ runsRouter.post(
   }),
 );
 
+/**
+ * Invariant 4, enforced at every door into a synthesis rather than only at
+ * `/start`. Finishing a run registers the canonical v3.1 artifact and makes the
+ * layer freezable, so completing one on a packet the platform knows is
+ * incomplete is the same violation as starting it — just later and harder to see.
+ */
+function assertSynthesisPacketComplete(run: ResearchRun, verb: string): void {
+  if (run.runType !== 'SYNTHESIS' || run.dependencyOverride) return;
+  const check = checkRunDependencies(run.id);
+  if (check.ready) return;
+  throw conflict(
+    `This synthesis cannot ${verb}: its source packet is ${check.summary}. ` +
+      `Missing: ${check.missing.join(', ') || 'none'}. ` +
+      `Import the missing documents, or re-create the synthesis with an explicit override.`,
+    check,
+  );
+}
+
 runsRouter.post(
   '/:runId/start',
   handler((req) => {
     const run = requireRun(pathId(req, 'runId'));
-
-    // Invariant 4: a synthesis never starts on an incomplete packet unless the
-    // user recorded an explicit override when it was prepared.
-    if (run.runType === 'SYNTHESIS' && !run.dependencyOverride) {
-      const check = checkRunDependencies(run.id);
-      if (!check.ready) {
-        throw conflict(
-          `This synthesis cannot start: its source packet is ${check.summary}. ` +
-            `Missing: ${check.missing.join(', ') || 'none'}.`,
-          check,
-        );
-      }
-    }
+    assertSynthesisPacketComplete(run, 'start');
 
     const now = nowIso();
     updateRun(run.id, { status: 'RUNNING', startedAt: run.startedAt ?? now });
@@ -285,6 +303,7 @@ runsRouter.post(
   '/:runId/complete',
   handler((req) => {
     const run = requireRun(pathId(req, 'runId'));
+    assertSynthesisPacketComplete(run, 'be completed');
     const body = bodyOf(req);
     const resultText = 'resultText' in body ? nullableString(body['resultText'], 'resultText') : undefined;
 
@@ -419,6 +438,7 @@ runsRouter.post(
   uploadOneFile,
   handler((req) => {
     const run = requireRun(pathId(req, 'runId'));
+    assertSynthesisPacketComplete(run, 'register its result');
     const layer = layerOfRun(run);
     const project = projectOfLayer(layer);
     const file = uploadedFile(req);
