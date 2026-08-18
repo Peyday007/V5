@@ -219,6 +219,11 @@ function fail(text: string, data: unknown = null): ToolResult {
   return { ok: false, data, text };
 }
 
+/** "a EXPANSION run" reads badly enough to be worth four lines. */
+function article(word: string): string {
+  return /^[AEIOU]/i.test(word) ? 'an' : 'a';
+}
+
 function unique(values: string[]): string[] {
   return [...new Set(values.filter((value) => value.trim().length > 0))];
 }
@@ -1075,7 +1080,10 @@ function compileOntoRun(
   });
   setRunDependencies(run.id, compiled.requiredAttachments);
   const dependencies = checkRunDependencies(run.id);
-  updateRun(run.id, { status: dependencies.ready ? 'READY' : 'BLOCKED' });
+  // A synthesis with nothing to consolidate is not "ready", it is premature —
+  // invariant 4 in the direction the dependency checker cannot see.
+  const emptySynthesis = runType === 'SYNTHESIS' && dependencies.items.length === 0;
+  updateRun(run.id, { status: dependencies.ready && !emptySynthesis ? 'READY' : 'BLOCKED' });
 
   if (!existing) {
     recordEvent({
@@ -1124,10 +1132,13 @@ function compileOntoRun(
 
 function renderRunData(data: RunData, layerName: string, lead: string): string {
   const lines = [lead, renderRunHeader(data.run, layerName), renderDependencies(data.dependencies)];
-  if (!data.dependencies.ready) {
+  if (data.run.status === 'BLOCKED') {
     lines.push(
-      'This run is BLOCKED: its source packet is incomplete. Complete the packet, or override ' +
-        'deliberately, before running the prompt.',
+      data.dependencies.items.length === 0
+        ? 'This run is BLOCKED: there is nothing registered for it to consume yet. The prompt is ' +
+          'recorded, but do not run it until the source documents exist.'
+        : 'This run is BLOCKED: its source packet is incomplete. Complete the packet, or override ' +
+          'deliberately, before running the prompt.',
     );
   }
   lines.push(...renderPromptBlock(data.run));
@@ -1160,7 +1171,7 @@ const createRunTool: ToolDefinition = {
     const data = compileOntoRun(project, layer, runType, args, null);
     return ok(
       data,
-      renderRunData(data, layer.name, `Created a ${runType} run on ${layer.name}.`),
+      renderRunData(data, layer.name, `Created ${article(runType)} ${runType} run on ${layer.name}.`),
     );
   },
 };
@@ -1273,7 +1284,7 @@ const compilePromptTool: ToolDefinition = {
     const data = compileOntoRun(project, layer, runType, args, null);
     return ok(
       data,
-      renderRunData(data, layer.name, `Compiled a ${runType} prompt for ${layer.name}.`),
+      renderRunData(data, layer.name, `Compiled ${article(runType)} ${runType} prompt for ${layer.name}.`),
     );
   },
 };

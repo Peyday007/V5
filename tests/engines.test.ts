@@ -319,6 +319,22 @@ describe('planner', () => {
     expect(again.now.map((i) => i.layerId)).toEqual(plan.now.map((i) => i.layerId));
   });
 
+  it('names the same document as the layer row does', () => {
+    // Regression: the planner used to target the highest version while the state
+    // engine targeted the first unaudited one, so the two panes disagreed.
+    addDocument(fixture, 'World Model', 'v1');
+    addDocument(fixture, 'World Model', 'v1B');
+    recomputeProject(fixture.project.id);
+
+    const state = computeLayerState(fixture.layerByName('World Model').id);
+    expect(state.status).toBe('AUDIT_READY');
+
+    const plan = buildPlan(fixture.project.id);
+    const item = [...plan.now, ...plan.next].find((i) => i.layerName === 'World Model');
+    expect(item?.title).toBe(state.nextAction);
+    expect(item?.targetVersion).toBe(state.nextVersion);
+  });
+
   it('puts a frozen layer in LATER with nothing to do', () => {
     const canonical = addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
     freezeLayer(fixture.layerByName('World Model').id, canonical.id);

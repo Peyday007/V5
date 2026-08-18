@@ -329,8 +329,9 @@ function handleCompilePrompt(turn: Turn): string[] {
 
 function handleLayerStatus(turn: Turn): string[] {
   const target = layerArgs(turn.projectId, turn.content);
+  // get_layer_state already lists the layer's documents, so one call answers this.
   if (!target) return [turn.invoke('get_project_state').text];
-  return [turn.invoke('get_layer_state', target).text, turn.invoke('list_documents', target).text];
+  return [turn.invoke('get_layer_state', target).text];
 }
 
 function handleListDocuments(turn: Turn): string[] {
@@ -475,9 +476,11 @@ export function handleChatMessage(input: {
   };
 
   const blocks = route(intent, turn).filter((block) => block.trim().length > 0);
+  // Provenance line: every claim above is traceable to a query made in this turn.
   const footer =
     toolCalls.length > 0
-      ? `— answered from ${toolCalls.length} live tool call(s): ${[...new Set(toolCalls.map((call) => call.name))].join(', ')}.`
+      ? `— answered from ${toolCalls.length} live tool call${toolCalls.length === 1 ? '' : 's'}: ` +
+        `${[...new Set(toolCalls.map((call) => call.name))].join(', ')}.`
       : '— nothing was read or changed.';
 
   const assistantMessage = addMessage({

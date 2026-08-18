@@ -291,7 +291,10 @@ function classify(input: {
     }
 
     case 'AUDIT_READY': {
-      const target = snapshot.currentVersion ?? latestUsableVersion(documents);
+      // The state engine picked the *first unaudited* document, which is not the
+      // same as the highest version — prefer its answer so the layer row and the
+      // planner never name different documents.
+      const target = snapshot.nextVersion ?? snapshot.currentVersion ?? latestUsableVersion(documents);
       return {
         placement: 'ACTIONABLE',
         priority: PRIORITY.AUDIT,
@@ -304,7 +307,7 @@ function classify(input: {
     }
 
     case 'AUDITING': {
-      const target = snapshot.currentVersion ?? latestUsableVersion(documents);
+      const target = snapshot.nextVersion ?? snapshot.currentVersion ?? latestUsableVersion(documents);
       if (running.length > 0 && !auditPending) {
         return {
           placement: 'WAITING',
