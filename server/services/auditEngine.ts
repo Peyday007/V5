@@ -53,6 +53,7 @@ import { getProject } from '../repos/projects.ts';
 import { createRun, getRun, listRunsByLayer, updateRun } from '../repos/runs.ts';
 import { nowIso } from '../repos/util.ts';
 import { checkCanonicalNames, setRunDependencies } from './dependencies.ts';
+import { freezeLayer } from './freeze.ts';
 import { compilePrompt, defaultRequiredDocuments, defaultTargetVersion } from './promptCompiler.ts';
 import { canAutoRedo, createRedoRun } from './redoEngine.ts';
 import { computeLayerState, recomputeProject } from './stateEngine.ts';
@@ -732,9 +733,24 @@ function applyConsequences(context: ConsequenceContext): ConsequenceOutcome {
       break;
     }
     case 'READY_TO_FREEZE': {
-      notes.push(
-        `${layer.name} is eligible to freeze${result.nextVersion ? ` at ${result.nextVersion}` : ''}.`,
-      );
+      // Sections 4, 14 (step 8) and 18 all say the same thing: a synthesis that
+      // passes its final audit freezes the layer. Doing it here is what keeps
+      // the promise that the event changing reality updates the database — the
+      // alternative is the user remembering to press FREEZE afterwards.
+      try {
+        freezeLayer(layer.id);
+        notes.push(
+          `${layer.name} passed its final audit and is now frozen` +
+            `${result.nextVersion ? ` at ${result.nextVersion}` : ''}.`,
+        );
+      } catch (error) {
+        // Invariant 6: no frozen layer without a canonical artifact. If there is
+        // none the audit still stands; the layer simply waits for the document.
+        notes.push(
+          `${layer.name} is eligible to freeze${result.nextVersion ? ` at ${result.nextVersion}` : ''}, ` +
+            `but it cannot be frozen yet: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       break;
     }
     case 'MISSING_DEPENDENCY':

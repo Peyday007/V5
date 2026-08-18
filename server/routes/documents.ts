@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Router } from 'express';
-import type { DocumentStatus, DocumentType } from '../domain/types.ts';
+import type { Document, DocumentStatus, DocumentType } from '../domain/types.ts';
 import { DOCUMENT_STATUSES, DOCUMENT_TYPES } from '../domain/types.ts';
 import type { UpdateDocumentInput } from '../repos/documents.ts';
 import { buildNames } from '../domain/naming.ts';
@@ -19,12 +19,12 @@ import {
   listDependenciesForDocument,
   listDependentsOfCanonicalName,
 } from '../repos/dependencies.ts';
-import { updateDocument } from '../repos/documents.ts';
+import { findDocumentByCanonicalName, updateDocument } from '../repos/documents.ts';
 import { listEventsByEntity, recordEvent } from '../repos/events.ts';
 import { getLayer } from '../repos/layers.ts';
 import { buildPlan } from '../services/planner.ts';
 import { recomputeProject } from '../services/stateEngine.ts';
-import { absolutePathFor, relocateFile } from '../services/storage.ts';
+import { absolutePathFor, layerSlugFromPath, relocateFile } from '../services/storage.ts';
 import {
   badRequest,
   bodyOf,
@@ -138,6 +138,11 @@ documentsRouter.patch(
 
     const patch: UpdateDocumentInput = { documentType, status, notes };
 
+    // Set when the artifact has already been moved, so a failed database write
+    // can put it back instead of stranding it.
+    let movedFrom: string | null = null;
+    let movedTo: string | null = null;
+
     if (identityChanged) {
       const layer = layerId ? requireLayerOfProject(layerId, project.id) : null;
       patch.layerId = layerId;
@@ -152,9 +157,24 @@ documentsRouter.patch(
         patch.canonicalName = names.canonicalName;
         patch.conversationTitle = names.conversationTitle;
 
+        // (project_id, canonical_name) is UNIQUE. Check it BEFORE touching the
+        // filesystem: moving first and letting the insert fail left the file
+        // renamed under the new layer while the row still pointed at the old
+        // path, manufacturing exactly the inconsistency invariants 8 and 9 exist
+        // to prevent.
+        const clash = findDocumentByCanonicalName(project.id, names.canonicalName);
+        if (clash && clash.id !== document.id) {
+          throw conflict(
+            `"${names.canonicalName}" already exists in this project, so ${document.canonicalName} ` +
+              `cannot be renamed to it. Supersede or correct the existing document first.`,
+            { conflictingDocumentId: clash.id },
+          );
+        }
+
         // Move the file so the folder tree keeps matching the database rather
         // than leaving the artifact filed under the layer it just left.
         if (document.filesystemPath) {
+          const previousPath = document.filesystemPath;
           try {
             const stored = relocateFile(
               document.filesystemPath,
@@ -167,6 +187,8 @@ documentsRouter.patch(
             patch.fileSize = stored.size;
             patch.fileHash = stored.hash;
             patch.fileMissing = false;
+            movedFrom = previousPath;
+            movedTo = stored.relativePath;
           } catch {
             // The file is already gone; the recompute below records that as an
             // inconsistency instead of failing the correction.
@@ -176,7 +198,26 @@ documentsRouter.patch(
       }
     }
 
-    const updated = updateDocument(document.id, patch) ?? document;
+    let updated: Document;
+    try {
+      updated = updateDocument(document.id, patch) ?? document;
+    } catch (error) {
+      // The row did not change, so put the artifact back where the row still
+      // says it is rather than leaving the two disagreeing.
+      if (movedFrom && movedTo) {
+        try {
+          relocateFile(
+            movedTo,
+            project.slug,
+            layerSlugFromPath(project.slug, movedFrom),
+            path.basename(movedFrom),
+          );
+        } catch {
+          // Best effort; a reconcile scan reports whatever is left over.
+        }
+      }
+      throw error;
+    }
     recordEvent({
       projectId: project.id,
       layerId: updated.layerId,

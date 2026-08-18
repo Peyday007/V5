@@ -5,7 +5,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { addDocument, deletePhysicalFile, freshProject, teardown, type TestProject } from './helpers.ts';
-import { checkCanonicalNames, setRunDependencies, checkRunDependencies } from '../server/services/dependencies.ts';
+import {
+  checkCanonicalNames,
+  checkRunDependencies,
+  setRunDependencies,
+} from '../server/services/dependencies.ts';
 import {
   computeLayerState,
   deriveLayerExpectationsFromDocuments,
@@ -434,6 +438,66 @@ describe('blockages clear themselves', () => {
     expect(reopenLayer(layer.id, 'cross-layer contradiction').status).toBe('REOPENED');
     recomputeProject(fixture.project.id);
     expect(computeLayerState(layer.id).status).toBe('REOPENED');
+  });
+});
+
+describe('waiting runs follow their packet', () => {
+  it('moves a run from BLOCKED to READY when the missing document arrives', () => {
+    const layer = fixture.layerByName('Taxonomy');
+    const run = failedRun(layer.id);
+    updateRun(run.id, { status: 'BLOCKED' });
+    setRunDependencies(run.id, ['Monetization Logic v1']);
+    recomputeProject(fixture.project.id);
+    expect(getRun(run.id)?.status).toBe('BLOCKED');
+
+    addDocument(fixture, 'Monetization Logic', 'v1');
+    recomputeProject(fixture.project.id);
+
+    // Section 18: no "now go update the database" step.
+    expect(checkRunDependencies(run.id).ready).toBe(true);
+    expect(getRun(run.id)?.status).toBe('READY');
+  });
+
+  it("leaves a finished run's status alone", () => {
+    const layer = fixture.layerByName('Taxonomy');
+    const run = failedRun(layer.id);
+    setRunDependencies(run.id, ['Monetization Logic v1']);
+    recomputeProject(fixture.project.id);
+    // History is not rewritten by a recompute.
+    expect(getRun(run.id)?.status).toBe('FAILED');
+  });
+});
+
+describe('a passing final audit freezes the layer', () => {
+  it('freezes automatically when the canonical document exists', () => {
+    for (const v of ['v1', 'v1B']) addDocument(fixture, 'Decision Routing Rules', v);
+    addDocument(fixture, 'Decision Routing Rules', 'v3.1', { documentType: 'SYNTHESIS' });
+    const layer = fixture.layerByName('Decision Routing Rules');
+
+    const outcome = recordAudit({
+      projectId: fixture.project.id,
+      layerId: layer.id,
+      result: { verdict: 'READY_TO_FREEZE', summary: 'The synthesis holds up.' },
+    });
+
+    // Sections 4, 14 and 18 all state this transition is automatic.
+    expect(outcome.layerState.status).toBe('FROZEN');
+    expect(computeLayerState(layer.id).canonicalName).toBe('Decision Routing Rules v3.1');
+  });
+
+  it('records the audit but does not freeze without a canonical artifact', () => {
+    addDocument(fixture, 'Learning Evaluation', 'v1');
+    const layer = fixture.layerByName('Learning Evaluation');
+
+    const outcome = recordAudit({
+      projectId: fixture.project.id,
+      layerId: layer.id,
+      result: { verdict: 'READY_TO_FREEZE', summary: 'Looks done.' },
+    });
+
+    // Invariant 6 still holds: the audit stands, the freeze waits.
+    expect(outcome.audit.verdict).toBe('READY_TO_FREEZE');
+    expect(computeLayerState(layer.id).status).not.toBe('FROZEN');
   });
 });
 

@@ -39,7 +39,7 @@ import { listDocuments, listDocumentsByLayer, updateDocument } from '../repos/do
 import { listEventsByLayer, recordEvent } from '../repos/events.ts';
 import { getLayer, listLayers, updateLayer, type UpdateLayerInput } from '../repos/layers.ts';
 import { getProject, updateProject } from '../repos/projects.ts';
-import { listRunsByLayer } from '../repos/runs.ts';
+import { listRuns, listRunsByLayer, updateRun } from '../repos/runs.ts';
 import {
   checkCanonicalNames,
   checkDocumentDependencies,
@@ -588,6 +588,50 @@ export function recomputeDocumentFileState(projectId: string): {
   });
 }
 
+/**
+ * Move waiting runs between BLOCKED and READY as their packets change.
+ *
+ * Run status was decided once, at creation. Importing the missing document
+ * therefore left the run showing BLOCKED next to a green "1 / 1 READY" packet
+ * until someone re-generated the prompt — exactly the "now go update the
+ * database" step section 18 says must not exist.
+ */
+export function recomputeRunReadiness(projectId: string): { unblocked: string[]; blocked: string[] } {
+  const unblocked: string[] = [];
+  const blocked: string[] = [];
+
+  for (const run of listRuns(projectId)) {
+    // Only runs that have not started yet; a finished run's status is history.
+    if (run.status !== 'BLOCKED' && run.status !== 'READY' && run.status !== 'PLANNED') continue;
+    const ready = run.dependencyOverride || checkRunDependencies(run.id).ready;
+
+    if (!ready && run.status !== 'BLOCKED') {
+      updateRun(run.id, { status: 'BLOCKED' });
+      blocked.push(run.id);
+      recordEvent({
+        projectId,
+        layerId: run.layerId,
+        entityType: 'RUN',
+        entityId: run.id,
+        eventType: 'DEPENDENCY_MISSING',
+        payload: { runId: run.id, targetVersion: run.targetVersion },
+      });
+    } else if (ready && run.status === 'BLOCKED') {
+      updateRun(run.id, { status: 'READY' });
+      unblocked.push(run.id);
+      recordEvent({
+        projectId,
+        layerId: run.layerId,
+        entityType: 'RUN',
+        entityId: run.id,
+        eventType: 'DEPENDENCY_RESOLVED',
+        payload: { runId: run.id, targetVersion: run.targetVersion },
+      });
+    }
+  }
+  return { unblocked, blocked };
+}
+
 /** Depth guard: the runtime-state writer reads derived state and must not recurse. */
 let recomputeDepth = 0;
 
@@ -604,6 +648,7 @@ export function recomputeProject(projectId: string): LayerStateSnapshot[] {
     const snapshots = db.transaction(() => {
       recomputeDocumentFileState(projectId);
       refreshProjectDependencies(projectId);
+      recomputeRunReadiness(projectId);
       const results = listLayers(projectId).map((layer) => recomputeLayer(layer.id));
 
       // The project's wave is the furthest any layer has reached, so the header

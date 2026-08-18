@@ -44,6 +44,14 @@ const PRIORITY = {
   /** A document row whose file vanished: nothing downstream can be trusted. */
   INCONSISTENT: 0,
   MISSING_DEPENDENCY: 10,
+  /**
+   * A declared expected document that is simply absent. It is a hole in the
+   * layer's own packet and blocks everything downstream of it, so it outranks
+   * routine work elsewhere — section 5's example board has exactly this shape and
+   * names "Run Discovery Logic v1G." as the one prominent next best action, with
+   * audits pending on two other layers.
+   */
+  MISSING_EXPECTED: 15,
   REDO: 20,
   AUDIT: 30,
   SYNTHESIS: 40,
@@ -380,13 +388,16 @@ function classify(input: {
       }
       return {
         placement: running.length > 0 ? 'WAITING' : 'ACTIONABLE',
-        priority: PRIORITY.EXPANSION,
+        priority: running.length > 0 ? PRIORITY.EXPANSION : PRIORITY.MISSING_EXPECTED,
         actionType: running.length > 0 ? 'WAIT' : actionForVersion(target, policy),
         title:
           running.length > 0
             ? `Import ${buildCanonicalName(name, target)} when the running ${name} research returns.`
             : `Run ${buildCanonicalName(name, target)}.`,
-        facts: [],
+        facts: [
+          `${snapshot.missingVersions.length} expected document(s) are still absent: ` +
+            `${snapshot.missingVersions.map((version) => buildCanonicalName(name, version)).join(', ')}.`,
+        ],
         targetVersion: target,
         missing: snapshot.missingVersions.map((version) => buildCanonicalName(name, version)),
       };
