@@ -361,11 +361,14 @@ export default function App(): JSX.Element {
             </div>
             <div className="pane__body">
               <LayerDetail
-                key={`${selectedLayerId ?? 'none'}:${layerReloadKey}`}
+                // Keyed on the layer alone: switching layers should reset the
+                // pane, but a refresh should only re-fetch it.
+                key={selectedLayerId ?? 'none'}
                 layerId={selectedLayerId}
                 layers={layers}
                 onChanged={handleLayerChanged}
                 onSelectLayer={handleSelectLayer}
+                reloadKey={layerReloadKey}
               />
             </div>
           </section>

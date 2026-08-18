@@ -180,8 +180,10 @@ export function LayerDetail(props: {
   layers: Layer[];
   onChanged(): void;
   onSelectLayer(id: string): void;
+  /** Bumped by a global refresh: re-fetch, but do not remount and lose UI state. */
+  reloadKey?: number;
 }): JSX.Element {
-  const { layerId, layers, onChanged, onSelectLayer } = props;
+  const { layerId, layers, onChanged, onSelectLayer, reloadKey } = props;
 
   const [detail, setDetail] = useState<LayerDetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -242,6 +244,16 @@ export function LayerDetail(props: {
   const reload = useCallback(async (): Promise<void> => {
     if (layerId) await load(layerId);
   }, [layerId, load]);
+
+  // A refresh elsewhere in the app re-fetches this pane's data. It deliberately
+  // does NOT remount: remounting threw away the open tab and any half-typed
+  // audit or prompt, and every chat message triggers a refresh.
+  const lastReloadKey = useRef(reloadKey);
+  useEffect(() => {
+    if (lastReloadKey.current === reloadKey) return;
+    lastReloadKey.current = reloadKey;
+    void reload();
+  }, [reloadKey, reload]);
 
   /** Every mutation ends the same way: re-read this layer, then the whole screen. */
   const perform = useCallback(

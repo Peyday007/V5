@@ -90,13 +90,22 @@ export interface ImportMeta {
 /** A failed HTTP call, carrying the status and whatever the server said. */
 export class ApiError extends Error {
   readonly status: number;
+  /** The server's `detail` payload — e.g. the DependencyCheckResult behind a 409. */
   readonly detail: unknown;
+  /** The whole error envelope, for the rare caller that needs more than `detail`. */
+  readonly body: unknown;
 
-  constructor(message: string, status: number, detail: unknown) {
+  constructor(message: string, status: number, body: unknown) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
-    this.detail = detail;
+    this.body = body;
+    // Errors are `{ error, detail? }`. Callers want the detail itself; handing
+    // them the envelope makes every structured-error branch silently dead.
+    this.detail =
+      body && typeof body === 'object' && 'detail' in body
+        ? (body as { detail: unknown }).detail
+        : body;
   }
 }
 

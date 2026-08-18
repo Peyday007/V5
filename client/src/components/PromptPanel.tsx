@@ -145,12 +145,23 @@ export function PromptPanel(props: { layerId: string; onChanged(): void }): JSX.
     return idle;
   };
 
+  /** `v1g`, `V1G` and `v1G` all name the same document. */
+  const normalizeForCompare = (value: string): string => value.trim().replace(/^v/i, 'v').toUpperCase();
+
   const createRun = useCallback(async (): Promise<void> => {
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const version = targetVersion.trim();
+      const typed = targetVersion.trim();
+      // The TARGET VERSION field does not recompile on its own, so the prompt on
+      // screen and the version about to be persisted can disagree. Recompile
+      // first when they do: the user must never create a run for a document
+      // other than the one they just read the prompt for.
+      if (typed && compiled && normalizeForCompare(typed) !== normalizeForCompare(compiled.targetVersion)) {
+        await generate(runType, typed);
+      }
+      const version = typed;
       const created = await Api.createRun(layerId, {
         runType,
         ...(version ? { targetVersion: version } : {}),
@@ -165,7 +176,7 @@ export function PromptPanel(props: { layerId: string; onChanged(): void }): JSX.
     } finally {
       setBusy(false);
     }
-  }, [layerId, runType, targetVersion, onChanged]);
+  }, [layerId, runType, targetVersion, compiled, generate, onChanged]);
 
   return (
     <div className="stack">
