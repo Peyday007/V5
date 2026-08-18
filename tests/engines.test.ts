@@ -20,7 +20,7 @@ import { recordAudit } from '../server/services/auditEngine.ts';
 import { canAutoRedo, createRedoRun } from '../server/services/redoEngine.ts';
 import { freezeLayer, reopenLayer } from '../server/services/freeze.ts';
 import { writeProjectState, readProjectState } from '../server/services/runtimeState.ts';
-import { createRun, getRun } from '../server/repos/runs.ts';
+import { createRun, getRun, updateRun } from '../server/repos/runs.ts';
 import { getDocument, listDocumentsByLayer } from '../server/repos/documents.ts';
 import { listEventsByLayer } from '../server/repos/events.ts';
 import { getLayer } from '../server/repos/layers.ts';
@@ -36,6 +36,8 @@ afterEach(() => {
 });
 
 const FULL_PACKET = ['v1', 'v1B', 'v1C', 'v1D', 'v1E', 'v1F', 'v1G'];
+/** The planner's audit priority; blockages must rank ahead of it. */
+const PRIORITY_AUDIT = 30;
 
 /** A persisted, already-failed expansion run so lineage tests have a parent. */
 function failedRun(layerId: string, documentId: string | null = null) {
@@ -333,6 +335,43 @@ describe('planner', () => {
     const item = [...plan.now, ...plan.next].find((i) => i.layerName === 'World Model');
     expect(item?.title).toBe(state.nextAction);
     expect(item?.targetVersion).toBe(state.nextVersion);
+  });
+
+  it('makes a real blockage the next best action, ahead of ordinary work', () => {
+    // The spec's example: Discovery Logic is BLOCKED missing v1G while another
+    // layer has an audit waiting, and the one prominent answer is about v1G.
+    for (const v of FULL_PACKET.slice(0, 6)) addDocument(fixture, 'Discovery Logic', v);
+    const layer = fixture.layerByName('Discovery Logic');
+    setLayerExpectations(layer.id, FULL_PACKET);
+    addDocument(fixture, 'World Model', 'v1');
+
+    // A run requiring the packet is what turns "v1G is expected" into
+    // "v1G is required". (An explicitly overridden run would not block, by design.)
+    const run = failedRun(layer.id);
+    updateRun(run.id, { status: 'PLANNED' });
+    setRunDependencies(run.id, FULL_PACKET.map((v) => `Discovery Logic ${v}`));
+    recomputeProject(fixture.project.id);
+
+    const state = computeLayerState(layer.id);
+    expect(state.status).toBe('BLOCKED');
+    expect(state.missingDependencies).toContain('Discovery Logic v1G');
+
+    const plan = buildPlan(fixture.project.id);
+    expect(plan.nextBestActionText).toContain('Discovery Logic v1G');
+    expect(plan.nextBestAction?.priority).toBeLessThan(PRIORITY_AUDIT);
+  });
+
+  it('prioritises an inconsistent file above all ordinary work', () => {
+    const document = addDocument(fixture, 'Discovery Logic', 'v1');
+    addDocument(fixture, 'World Model', 'v1');
+    deletePhysicalFile(document);
+    recomputeProject(fixture.project.id);
+
+    const plan = buildPlan(fixture.project.id);
+    // Invariant 9: nothing else about the project is safe to act on first.
+    expect(plan.nextBestAction?.actionType).toBe('RECONCILE');
+    expect(plan.nextBestActionText).toContain('Discovery Logic v1');
+    expect(plan.blocked.some((i) => i.actionType === 'RECONCILE')).toBe(true);
   });
 
   it('puts a frozen layer in LATER with nothing to do', () => {

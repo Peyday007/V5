@@ -156,7 +156,13 @@ export function buildPlan(projectId: string): PlannerResult {
 
   const now = nowEntries.map((entry) => entry.item);
   const next = nextEntries.map((entry) => entry.item);
-  const nextBestAction = now.at(0) ?? null;
+
+  // The single prominent answer considers blocked work too. A missing file or a
+  // missing dependency is something the user can act on right now, and it
+  // outranks ordinary research — the spec's own example makes "Discovery Logic
+  // is blocked on v1G" produce the next best action, not the audit elsewhere.
+  const nextBestAction =
+    [...blocked, ...actionable].sort(byPriorityThenLayer).at(0)?.item ?? null;
 
   return {
     projectId: project.id,
