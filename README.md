@@ -106,7 +106,8 @@ set to what you actually have, so completeness is measured against reality.
 
 If you ever move or delete files by hand, run **SCAN & RECONCILE**. It reports files on
 disk that nobody registered, database rows whose file disappeared, and checksum changes —
-each with a one-click fix. It never deletes anything of yours.
+each with a one-click fix. It never deletes anything of yours, and an inconsistency
+outranks every other piece of work in the planner until you resolve it.
 
 ---
 
@@ -130,13 +131,15 @@ each with a one-click fix. It never deletes anything of yours.
   action**, deterministic from state.
 - **Prompt compiler** — prompts composed from reusable sections, saved verbatim onto the
   run along with the exact required-attachment list.
-- **Audit engine** — structured verdicts and findings, never prose alone.
+- **Audit engine** — structured verdicts and findings, never prose alone; tolerant of
+  messy model output, and deliberately hard to trick into an approval nobody gave.
 - **Redo engine** — new run, new attempt number, lineage preserved, failed attempts never
   destroyed, capped at `maxAutoRedos` before a human is required.
-- **Synthesis engine** — packet validation, synthesis document and run creation, and a
-  hard refusal to run with missing dependencies unless you explicitly override.
-- **Freeze semantics** — canonical artifact required, earlier documents kept as
-  provenance, explicit reopen path.
+- **Synthesis engine** — packet validation at every door (start, complete, register), and
+  a hard refusal to run with missing dependencies unless you explicitly override.
+- **Freeze semantics** — a synthesis that passes its final audit freezes the layer
+  automatically; a canonical artifact is always required, earlier documents are kept as
+  provenance, and reopening restores the whole source packet so the layer can run again.
 - **Reconciliation** — database ↔ filesystem consistency with one-click fixes.
 - **Project-aware chat** — natural instructions ("What's next?", "Audit Discovery.",
   "Freeze World Model.") routed through tools that read live state. It cannot assert that
