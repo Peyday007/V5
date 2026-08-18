@@ -40,6 +40,7 @@ import { getLayer, listLayers, updateLayer, type UpdateLayerInput } from '../rep
 import { getProject } from '../repos/projects.ts';
 import { listRunsByLayer } from '../repos/runs.ts';
 import {
+  checkCanonicalNames,
   checkDocumentDependencies,
   checkRunDependencies,
   documentPresence,
@@ -89,6 +90,12 @@ function runSentence(layerName: string, version: string): string {
 
 function describeTarget(layerName: string, run: ResearchRun): string {
   return run.targetVersion ? buildCanonicalName(layerName, run.targetVersion) : layerName;
+}
+
+/** `EXPANSION` -> `an expansion`, so reasons read as sentences rather than enums. */
+function describeRunType(runType: string): string {
+  const words = runType.toLowerCase().replace(/_/g, ' ');
+  return `${'aeiou'.includes(words.charAt(0)) ? 'an' : 'a'} ${words}`;
 }
 
 /**
@@ -228,7 +235,7 @@ function deriveStatus(input: {
     const target = describeTarget(layerName, runningRun);
     return {
       status: 'RESEARCHING',
-      reason: `A ${runningRun.runType} run for ${target} is in progress.`,
+      reason: `There is ${describeRunType(runningRun.runType)} run in progress for ${target}.`,
       nextAction: `Wait for ${target} to finish, then import the report.`,
       nextVersion: runningRun.targetVersion,
     };
@@ -306,9 +313,11 @@ function deriveLayer(layerId: string): LayerDerivation {
   const runs = listRunsByLayer(layerId);
   const activeRuns = runs.filter((run) => ACTIVE_RUN_STATUSES.has(run.status));
 
-  const presentDocuments = documents.filter((document) => documentPresence(document).present);
+  // One stat per document: the filesystem is consulted, not assumed.
+  const presence = new Map(documents.map((document) => [document.id, documentPresence(document)]));
+  const presentDocuments = documents.filter((document) => presence.get(document.id)?.present === true);
   const inconsistentDocuments = documents
-    .filter((document) => documentPresence(document).fileMissing)
+    .filter((document) => presence.get(document.id)?.fileMissing === true)
     .map((document) => document.canonicalName);
 
   const presentVersions = sortVersions(
@@ -367,6 +376,18 @@ function deriveLayer(layerId: string): LayerDerivation {
   }
 
   const latestAudit = getLatestAuditForLayer(layerId);
+  // An audit that declared the layer blocked names the documents it wanted.
+  // They are re-checked against reality rather than trusted, so a document that
+  // has since been imported does not keep the layer blocked.
+  if (latestAudit && (latestAudit.verdict === 'MISSING_DEPENDENCY' || latestAudit.verdict === 'BLOCKED')) {
+    const named = unique(
+      latestAudit.findings
+        .filter((finding) => finding.findingType === 'MISSING_DOCUMENT')
+        .map((finding) => finding.content.trim()),
+    );
+    if (named.length > 0) collect(checkCanonicalNames(layer.projectId, named).items);
+  }
+
   const derived = deriveStatus({
     layer,
     policy,
