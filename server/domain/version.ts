@@ -8,7 +8,7 @@
  */
 import { DEFAULT_VERSION_POLICY, type ParsedVersion, type VersionPolicy } from './types.ts';
 
-const VERSION_RE = /^\s*v?(\d+)(?:\.(\d+))?\s*([A-Za-z]{1,3})?\s*$/;
+const VERSION_RE = /^\s*[vV]?(\d+)(?:\.(\d+))?\s*([A-Za-z]{1,3})?\s*$/;
 
 /** `A` → 1, `Z` → 26, `AA` → 27 (bijective base-26). `''` → 0. */
 export function branchToIndex(branch: string): number {
