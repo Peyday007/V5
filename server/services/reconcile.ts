@@ -49,11 +49,6 @@ function requireProject(projectId: string): ProjectHandle {
   return { id: project.id, slug: project.slug, name: project.name };
 }
 
-/** Documents that were planned but never produced legitimately have no file yet. */
-function expectsAFile(document: Document): boolean {
-  return document.filesystemPath !== null && document.filesystemPath.length > 0;
-}
-
 function unregisteredFileIssue(
   project: ProjectHandle,
   relativePath: string,
@@ -137,9 +132,11 @@ export function scanAndReconcile(projectId: string): ReconcileReport {
     if (document.filesystemPath) registeredPaths.add(document.filesystemPath);
 
     if (!document.layerId) issues.push(orphanIssue(project.id, document));
-    if (!expectsAFile(document)) continue;
 
-    const relativePath = document.filesystemPath as string;
+    // A document that was planned but not yet produced legitimately has no file.
+    const relativePath = document.filesystemPath;
+    if (!relativePath) continue;
+
     if (!fileExists(relativePath)) {
       issues.push(missingFileIssue(document));
       continue;

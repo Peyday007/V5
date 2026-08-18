@@ -108,7 +108,10 @@ function cleanFilename(filename: string): CleanedName {
 
 /** Remove every `v1`, `v1G`, `v3.1` token so only the layer words are left. */
 function stripVersionTokens(text: string): string {
-  return text.replace(/(^|\s)[vV]\d+(?:\.\d+)?[A-Za-z]{0,3}(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
+  return text
+    .replace(/(^|[\s([])[vV]\d+(?:\.\d+)?[A-Za-z]{0,3}(?=[\s)\]]|$)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 interface LayerScore {

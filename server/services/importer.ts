@@ -462,6 +462,11 @@ export function importFile(input: ImportFileInput): ImportResult {
   const confidentEnough =
     inference.confidence >= AUTO_REGISTER_CONFIDENCE && inference.layerId !== null && inference.version !== null;
 
+  // Four ways a file earns automatic filing: the caller specified it outright,
+  // the name alone was read confidently, the caller pinned the layer and the name
+  // supplied the version, or the caller pinned the version and the name clearly
+  // named a layer. Anything else is a guess, and guesses get confirmed by a human.
+  // (`layer`/`version` are re-tested below so TypeScript narrows them.)
   const canRegister =
     layer !== null &&
     version !== null &&
