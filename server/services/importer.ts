@@ -170,17 +170,78 @@ interface RegistrationInput {
 interface Registration {
   document: Document;
   superseded: Document | null;
+  /** The document was already expected (planned by a run) and this upload completed it. */
+  filled: boolean;
 }
 
 /**
- * Create the document row for an already-stored file, superseding (never
- * overwriting) any earlier document that owns the same canonical name.
- * Invariant 3: both the creation and the import are recorded as events.
+ * Create — or complete — the document row for an already-stored file.
+ *
+ * A canonical name is an address, so an upload that lands on one already in use
+ * has two honest outcomes. If the existing document is only *expected* (a run
+ * planned it and it has no file yet) this upload is the artifact it was waiting
+ * for, and the row is completed in place so the run keeps pointing at it. If the
+ * existing document already has a real file, that file and its history are kept
+ * and the new upload supersedes it. Nothing is ever overwritten either way.
+ * Invariant 3: every branch is recorded as an event.
  */
 function registerStoredDocument(input: RegistrationInput): Registration {
   const { project, layer, names, stored } = input;
   return getDb().transaction<Registration>(() => {
     const previous = findDocumentByCanonicalName(project.id, names.canonicalName);
+
+    if (previous && !(previous.filesystemPath && fileExists(previous.filesystemPath))) {
+      const filled =
+        updateDocument(previous.id, {
+          layerId: layer.id,
+          version: input.version,
+          versionSort: versionSortKey(input.version),
+          wave: waveForVersion(input.version, project.versionPolicy),
+          documentType: input.documentType,
+          status: 'COMPLETE',
+          filename: stored.filename,
+          filesystemPath: stored.relativePath,
+          fileSize: stored.size,
+          fileHash: stored.hash,
+          fileMissing: false,
+          conversationTitle: names.conversationTitle,
+          notes: input.notes ?? undefined,
+          importedAt: nowIso(),
+        }) ?? previous;
+
+      recordEvent({
+        projectId: project.id,
+        layerId: layer.id,
+        entityType: 'DOCUMENT',
+        entityId: filled.id,
+        eventType: 'DOCUMENT_COMPLETED',
+        payload: {
+          canonicalName: filled.canonicalName,
+          previousStatus: previous.status,
+          origin: input.origin,
+        },
+      });
+      recordEvent({
+        projectId: project.id,
+        layerId: layer.id,
+        entityType: 'DOCUMENT',
+        entityId: filled.id,
+        eventType: 'DOCUMENT_IMPORTED',
+        payload: {
+          canonicalName: filled.canonicalName,
+          originalFilename: input.originalFilename,
+          storedPath: stored.relativePath,
+          filename: stored.filename,
+          fileHash: stored.hash,
+          fileSize: stored.size,
+          origin: input.origin,
+          completedExpectedDocument: true,
+          registered: true,
+        },
+      });
+      return { document: filled, superseded: null, filled: true };
+    }
+
     let superseded: Document | null = null;
     if (previous) {
       superseded =
@@ -257,7 +318,7 @@ function registerStoredDocument(input: RegistrationInput): Registration {
       },
     });
 
-    return { document, superseded };
+    return { document, superseded, filled: false };
   });
 }
 
@@ -271,9 +332,10 @@ function recomputeAfterRegistration(projectId: string): void {
   recomputeProject(projectId);
 }
 
-function describeSupersede(superseded: Document | null): string {
-  return superseded
-    ? ` The previous version was kept as "${superseded.canonicalName}" — nothing was overwritten.`
+function describeRegistration(registration: Registration): string {
+  if (registration.filled) return ' It completed the document that was already expected here.';
+  return registration.superseded
+    ? ` The previous version was kept as "${registration.superseded.canonicalName}" — nothing was overwritten.`
     : '';
 }
 
@@ -485,7 +547,7 @@ export function importFile(input: ImportFileInput): ImportResult {
     filename: names.filename,
     contents: input.contents,
   });
-  const { document, superseded } = registerStoredDocument({
+  const registration = registerStoredDocument({
     project,
     layer,
     version,
@@ -496,6 +558,7 @@ export function importFile(input: ImportFileInput): ImportResult {
     origin: 'IMPORT',
     originalFilename,
   });
+  const document = registration.document;
   recomputeAfterRegistration(project.id);
 
   return result({
@@ -507,7 +570,7 @@ export function importFile(input: ImportFileInput): ImportResult {
     requiresConfirmation: false,
     message:
       `Filed as "${document.canonicalName}" in ${layer.name} (${stored.filename}).` +
-      describeSupersede(superseded),
+      describeRegistration(registration),
   });
 }
 
@@ -583,7 +646,7 @@ export function resolveImport(input: ResolveImportInput): ImportResult {
   }
 
   const stored = relocateFile(input.relativePath, project.slug, layer.slug, names.filename);
-  const { document, superseded } = registerStoredDocument({
+  const registration = registerStoredDocument({
     project,
     layer,
     version,
@@ -594,6 +657,7 @@ export function resolveImport(input: ResolveImportInput): ImportResult {
     origin: 'RESOLVE',
     originalFilename: filename,
   });
+  const document = registration.document;
   recomputeAfterRegistration(project.id);
 
   return result({
@@ -605,7 +669,7 @@ export function resolveImport(input: ResolveImportInput): ImportResult {
     requiresConfirmation: false,
     message:
       `Filed "${filename}" as "${document.canonicalName}" in ${layer.name} (${stored.filename}).` +
-      describeSupersede(superseded),
+      describeRegistration(registration),
   });
 }
 
@@ -725,7 +789,7 @@ export function registerExistingFile(input: RegisterExistingFileInput): ImportRe
         }
       : relocateFile(input.relativePath, project.slug, layer.slug, names.filename);
 
-  const { document, superseded } = registerStoredDocument({
+  const registration = registerStoredDocument({
     project,
     layer,
     version,
@@ -736,6 +800,7 @@ export function registerExistingFile(input: RegisterExistingFileInput): ImportRe
     origin: 'RECONCILE',
     originalFilename: filename,
   });
+  const document = registration.document;
   recomputeAfterRegistration(project.id);
 
   return result({
@@ -747,6 +812,6 @@ export function registerExistingFile(input: RegisterExistingFileInput): ImportRe
     requiresConfirmation: false,
     message:
       `Registered "${filename}" as "${document.canonicalName}" in ${layer.name}.` +
-      describeSupersede(superseded),
+      describeRegistration(registration),
   });
 }

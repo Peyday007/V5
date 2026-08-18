@@ -23,6 +23,8 @@ import { writeProjectState, readProjectState } from '../server/services/runtimeS
 import { createRun, getRun } from '../server/repos/runs.ts';
 import { getDocument, listDocumentsByLayer } from '../server/repos/documents.ts';
 import { listEventsByLayer } from '../server/repos/events.ts';
+import { getLayer } from '../server/repos/layers.ts';
+import { getProject } from '../server/repos/projects.ts';
 
 let fixture: TestProject;
 
@@ -326,6 +328,29 @@ describe('planner', () => {
     const item = plan.later.find((i) => i.layerName === 'World Model');
     expect(item).toBeDefined();
     expect(item?.actionType).toBe('NONE');
+  });
+});
+
+describe('waves advance on their own', () => {
+  it('moves the layer and the project forward as research progresses', () => {
+    const layer = fixture.layerByName('Taxonomy');
+
+    addDocument(fixture, 'Taxonomy', 'v1');
+    recomputeProject(fixture.project.id);
+    expect(getLayer(layer.id)?.currentWave).toBe(1);
+    expect(getProject(fixture.project.id)?.currentWave).toBe(1);
+
+    addDocument(fixture, 'Taxonomy', 'v1B');
+    recomputeProject(fixture.project.id);
+    expect(getLayer(layer.id)?.currentWave).toBe(2);
+    expect(getProject(fixture.project.id)?.currentWave).toBe(2);
+
+    addDocument(fixture, 'Taxonomy', 'v3.1', { documentType: 'SYNTHESIS' });
+    recomputeProject(fixture.project.id);
+    expect(getLayer(layer.id)?.currentWave).toBe(3);
+    // The project sits at the furthest wave any layer has reached.
+    expect(getProject(fixture.project.id)?.currentWave).toBe(3);
+    expect(getLayer(fixture.layerByName('World Model').id)?.currentWave).toBe(1);
   });
 });
 

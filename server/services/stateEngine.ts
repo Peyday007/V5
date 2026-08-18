@@ -31,13 +31,14 @@ import {
   normalizeVersion,
   sortVersions,
   synthesisVersion,
+  waveForVersion,
 } from '../domain/version.ts';
 import { getDb } from '../db/database.ts';
 import { getLatestAuditForDocument, getLatestAuditForLayer } from '../repos/audits.ts';
 import { listDocuments, listDocumentsByLayer, updateDocument } from '../repos/documents.ts';
 import { recordEvent } from '../repos/events.ts';
 import { getLayer, listLayers, updateLayer, type UpdateLayerInput } from '../repos/layers.ts';
-import { getProject } from '../repos/projects.ts';
+import { getProject, updateProject } from '../repos/projects.ts';
 import { listRunsByLayer } from '../repos/runs.ts';
 import {
   checkCanonicalNames,
@@ -462,10 +463,18 @@ export function recomputeLayer(layerId: string): LayerStateSnapshot {
     if (!before) throw new Error(`Cannot recompute layer: unknown layer ${layerId}`);
     const { snapshot, canonicalDocumentId } = deriveLayer(layerId);
 
+    // A layer's wave is simply where its furthest document sits: v1 is wave 1,
+    // sibling expansions wave 2, the canonical synthesis wave 3.
+    const policy = getProject(before.projectId)?.versionPolicy ?? DEFAULT_VERSION_POLICY;
+    const currentWave = snapshot.currentVersion
+      ? Math.max(1, waveForVersion(snapshot.currentVersion, policy))
+      : 1;
+
     const patch: UpdateLayerInput = {};
     if (before.status !== snapshot.status) patch.status = snapshot.status;
     if (before.currentVersion !== snapshot.currentVersion) patch.currentVersion = snapshot.currentVersion;
     if (before.canonicalDocumentId !== canonicalDocumentId) patch.canonicalDocumentId = canonicalDocumentId;
+    if (before.currentWave !== currentWave) patch.currentWave = currentWave;
     if (Object.keys(patch).length > 0) updateLayer(layerId, patch);
 
     if (before.status !== snapshot.status) {
@@ -551,7 +560,16 @@ export function recomputeProject(projectId: string): LayerStateSnapshot[] {
     const snapshots = db.transaction(() => {
       recomputeDocumentFileState(projectId);
       refreshProjectDependencies(projectId);
-      return listLayers(projectId).map((layer) => recomputeLayer(layer.id));
+      const results = listLayers(projectId).map((layer) => recomputeLayer(layer.id));
+
+      // The project's wave is the furthest any layer has reached, so the header
+      // advances on its own instead of being edited by hand.
+      const project = getProject(projectId);
+      if (project) {
+        const wave = listLayers(projectId).reduce((max, layer) => Math.max(max, layer.currentWave), 1);
+        if (project.currentWave !== wave) updateProject(projectId, { currentWave: wave });
+      }
+      return results;
     });
     if (recomputeDepth === 1) {
       try {
