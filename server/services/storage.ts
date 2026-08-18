@@ -63,6 +63,26 @@ export function absolutePathFor(relativePath: string): string {
   return resolved;
 }
 
+/**
+ * Confine a caller-supplied path to one project's documents tree.
+ *
+ * `absolutePathFor` only proves a path is somewhere under the data root — and
+ * the database, the runtime snapshot and the backups all live there too. Any
+ * endpoint that takes a path from the outside world and then MOVES or registers
+ * the file must use this instead, or a crafted `relativePath` of "brain.db"
+ * relocates the database into the documents tree and destroys the project.
+ */
+export function assertInsideProjectDocuments(projectSlug: string, relativePath: string): string {
+  const resolved = absolutePathFor(relativePath);
+  const root = path.resolve(documentsDir(projectSlug));
+  if (!resolved.startsWith(root + path.sep)) {
+    throw new Error(
+      `Refusing to touch "${relativePath}": it is not inside this project's documents folder.`,
+    );
+  }
+  return resolved;
+}
+
 export function fileExists(relativePath: string | null | undefined): boolean {
   if (!relativePath) return false;
   try {

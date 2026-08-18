@@ -40,6 +40,7 @@ import {
   relocateFile,
   storeFile,
   type StoredFile,
+  assertInsideProjectDocuments,
 } from './storage.ts';
 
 export interface ImportFileInput {
@@ -594,6 +595,10 @@ export function resolveImport(input: ResolveImportInput): ImportResult {
     throw new Error(`"${input.version}" is not a version this project understands.`);
   }
   const version = normalizeVersion(input.version);
+  // The caller supplies this path, and confirming an import MOVES the file.
+  // Confine it to the project's own documents tree so nothing outside it — the
+  // database included — can be relocated.
+  assertInsideProjectDocuments(project.slug, input.relativePath);
   if (!fileExists(input.relativePath)) {
     throw new Error(`There is no file at ${input.relativePath} to confirm.`);
   }
@@ -688,6 +693,8 @@ export function resolveImport(input: ResolveImportInput): ImportResult {
  */
 export function registerExistingFile(input: RegisterExistingFileInput): ImportResult {
   const project = requireProject(input.projectId);
+  // Same confinement as resolveImport: registering also relocates the file.
+  assertInsideProjectDocuments(project.slug, input.relativePath);
   if (!fileExists(input.relativePath)) {
     throw new Error(`There is no file at ${input.relativePath}.`);
   }
