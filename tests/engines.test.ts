@@ -537,6 +537,26 @@ describe('a passing final audit freezes the layer', () => {
   });
 });
 
+describe('a frozen layer is not immune to a missing file', () => {
+  it('reports BLOCKED, not "nothing to do", when the canonical artifact vanishes', () => {
+    for (const v of ['v1', 'v1B']) addDocument(fixture, 'World Model', v);
+    const canonical = addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
+    const layer = fixture.layerByName('World Model');
+    freezeLayer(layer.id, canonical.id);
+    expect(computeLayerState(layer.id).status).toBe('FROZEN');
+
+    deletePhysicalFile(canonical);
+    recomputeProject(fixture.project.id);
+
+    // Invariant 9 outranks the frozen shortcut: saying "nothing to do" while
+    // listing the document as inconsistent is a contradiction in one payload.
+    const state = computeLayerState(layer.id);
+    expect(state.inconsistentDocuments).toContain('World Model v3.1');
+    expect(state.status).toBe('BLOCKED');
+    expect(state.nextAction.toLowerCase()).toContain('restore');
+  });
+});
+
 describe('planner', () => {
   it('names the blocking document and is deterministic', () => {
     for (const v of FULL_PACKET.slice(0, 6)) addDocument(fixture, 'Discovery Logic', v);

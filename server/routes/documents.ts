@@ -151,6 +151,16 @@ documentsRouter.patch(
       patch.versionSort = versionSortKey(version);
       patch.wave = waveForVersion(version, project.versionPolicy);
 
+      // A document with no layer has no name to rebuild from, so accepting a new
+      // version would leave canonical_name pinned to the old one. Refuse rather
+      // than store a row whose name and version disagree.
+      if (!layer && !document.layerId) {
+        throw badRequest(
+          `${document.canonicalName} is not filed under a layer, so its version cannot be changed ` +
+            `on its own. Assign it to a layer in the same request.`,
+        );
+      }
+
       if (layer) {
         const extension = path.extname(document.filename ?? '');
         const names = buildNames(layer.name, version, extension.length > 0 ? extension : undefined);

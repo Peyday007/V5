@@ -118,6 +118,8 @@ function deriveStatus(input: {
   auditNamedDocumentCount: number;
   /** Set while a reopen is still the most recent thing to happen to the layer. */
   reopenedPending: boolean;
+  /** Canonical names whose row claims an artifact the filesystem does not have. */
+  inconsistentDocuments: string[];
   frozenCanonical: Document | null;
   latestVerdict: AuditVerdict | null;
   latestAuditNextVersion: string | null;
@@ -135,6 +137,7 @@ function deriveStatus(input: {
     missingDependencyItems,
     auditNamedDocumentCount,
     reopenedPending,
+    inconsistentDocuments,
     frozenCanonical,
     latestVerdict,
     latestAuditNextVersion,
@@ -156,7 +159,18 @@ function deriveStatus(input: {
     };
   }
 
-  // 2. A frozen canonical artifact ends the layer's lifecycle (invariant 6).
+  // 2. A frozen canonical artifact ends the layer's lifecycle (invariant 6) —
+  // but only while the artifact is actually there. Invariant 9 outranks it: a
+  // frozen layer whose canonical file vanished must not report "Nothing to do"
+  // in the same breath as listing the document as inconsistent.
+  if (frozenCanonical && inconsistentDocuments.includes(frozenCanonical.canonicalName)) {
+    return {
+      status: 'BLOCKED',
+      reason: `${frozenCanonical.canonicalName} is the frozen canonical document, but its file is missing.`,
+      nextAction: `Restore the file for ${frozenCanonical.canonicalName}, then run a reconcile scan.`,
+      nextVersion: null,
+    };
+  }
   if (frozenCanonical) {
     return {
       status: 'FROZEN',
@@ -444,6 +458,7 @@ function deriveLayer(layerId: string): LayerDerivation {
     missingDependencyItems,
     auditNamedDocumentCount,
     reopenedPending,
+    inconsistentDocuments,
     frozenCanonical,
     latestVerdict: latestAudit?.verdict ?? null,
     latestAuditNextVersion: latestAudit?.nextVersion ?? null,

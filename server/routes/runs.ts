@@ -167,6 +167,30 @@ runsRouter.patch(
         failedAt: status === 'FAILED' && !run.failedAt ? now : undefined,
       }) ?? run;
 
+    // Invariant 3 and 5: overwriting a failed run's recorded output or its
+    // failure reason is a correction to history, so it needs its own entry even
+    // when the status did not move.
+    const rewroteRecord =
+      ('resultText' in body && updated.resultText !== run.resultText) ||
+      ('failureReason' in body && updated.failureReason !== run.failureReason);
+    if (rewroteRecord) {
+      recordEvent({
+        projectId: run.projectId,
+        layerId: run.layerId,
+        entityType: 'RUN',
+        entityId: run.id,
+        eventType: 'USER_CORRECTION',
+        payload: {
+          ...('resultText' in body
+            ? { resultText: { fromLength: run.resultText?.length ?? 0, toLength: updated.resultText?.length ?? 0 } }
+            : {}),
+          ...('failureReason' in body
+            ? { failureReason: { from: run.failureReason, to: updated.failureReason } }
+            : {}),
+        },
+      });
+    }
+
     if (status && status !== run.status) {
       recordEvent({
         projectId: run.projectId,

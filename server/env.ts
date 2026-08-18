@@ -21,7 +21,17 @@ export const BACKUP_ROOT = path.join(DATA_ROOT, 'backups');
 export const TMP_ROOT = path.join(DATA_ROOT, 'tmp');
 export const PROJECT_STATE_FILE = path.join(RUNTIME_ROOT, 'project-state.json');
 
-export const PORT = Number(process.env.PORT ?? 5174);
+/**
+ * `??` does not catch an empty string, and `Number('')` is 0 — which binds a
+ * random ephemeral port while the banner cheerfully prints localhost:0 and the
+ * Vite proxy points nowhere. Treat anything unusable as "not set".
+ */
+function readPort(raw: string | undefined, fallback: number): number {
+  const value = Number((raw ?? '').trim());
+  return Number.isInteger(value) && value > 0 && value < 65536 ? value : fallback;
+}
+
+export const PORT = readPort(process.env.PORT, 5174);
 export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 /** Absolute path for a path stored relative to the data root. */

@@ -17,7 +17,7 @@ import type {
 import { DEFAULT_VERSION_POLICY, DOCUMENT_TYPES, PROJECT_STATUSES } from '../domain/types.ts';
 import { isValidVersion, normalizeVersion } from '../domain/version.ts';
 import { listDocuments } from '../repos/documents.ts';
-import { listEvents } from '../repos/events.ts';
+import { listEvents, recordEvent } from '../repos/events.ts';
 import { listLayers } from '../repos/layers.ts';
 import { listProjects, updateProject } from '../repos/projects.ts';
 import { listRuns } from '../repos/runs.ts';
@@ -202,6 +202,31 @@ projectsRouter.patch(
         versionPolicy,
         settings,
       }) ?? project;
+
+    // Invariant 3. The version policy in particular decides every layer's
+    // canonical target name and the redo cap, so changing it silently would
+    // leave the whole project reinterpreted with nothing in history saying why.
+    const changes: Record<string, unknown> = {};
+    if (name !== undefined) changes['name'] = { from: project.name, to: updated.name };
+    if (description !== undefined) {
+      changes['description'] = { from: project.description, to: updated.description };
+    }
+    if (northStar !== undefined) changes['northStar'] = { from: project.northStar, to: updated.northStar };
+    if (currentWave !== undefined) changes['currentWave'] = { from: project.currentWave, to: updated.currentWave };
+    if (status !== undefined) changes['status'] = { from: project.status, to: updated.status };
+    if (versionPolicy !== undefined) {
+      changes['versionPolicy'] = { from: project.versionPolicy, to: updated.versionPolicy };
+    }
+    if (settings !== undefined) changes['settings'] = { from: project.settings, to: updated.settings };
+    if (Object.keys(changes).length > 0) {
+      recordEvent({
+        projectId: project.id,
+        entityType: 'PROJECT',
+        entityId: project.id,
+        eventType: 'USER_CORRECTION',
+        payload: changes,
+      });
+    }
 
     // A changed version policy changes what every layer is waiting for.
     recomputeProject(updated.id);

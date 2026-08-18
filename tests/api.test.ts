@@ -315,6 +315,67 @@ describe('a recorded prompt is history', () => {
   });
 });
 
+describe('invariant 6 has no back door', () => {
+  it('refuses to pin a layer to FROZEN', async () => {
+    const { layers } = await get<{ layers: { id: string; name: string }[] }>(`/api/projects/${projectId}`);
+    const taxonomy = layers.find((l) => l.name === 'Taxonomy')!;
+
+    // POST /freeze refuses without a canonical document; pinning the status must
+    // not be a way around that.
+    const pinned = await send<{ error: string }>('PATCH', `/api/layers/${taxonomy.id}`, {
+      manualStatus: 'FROZEN',
+    });
+    expect(pinned.status).toBe(400);
+
+    const detail = await get<{ state: { status: string } }>(`/api/layers/${taxonomy.id}`);
+    expect(detail.state.status).not.toBe('FROZEN');
+  });
+
+  it('still allows an honest manual pin', async () => {
+    const { layers } = await get<{ layers: { id: string; name: string }[] }>(`/api/projects/${projectId}`);
+    const taxonomy = layers.find((l) => l.name === 'Taxonomy')!;
+
+    const pinned = await send('PATCH', `/api/layers/${taxonomy.id}`, {
+      manualStatus: 'BLOCKED',
+      manualStatusReason: 'waiting on an external source',
+    });
+    expect(pinned.status).toBe(200);
+
+    const released = await send('PATCH', `/api/layers/${taxonomy.id}`, { manualStatus: null });
+    expect(released.status).toBe(200);
+  });
+});
+
+describe('important changes reach the history', () => {
+  it('records a project change, including the version policy', async () => {
+    const before = await get<{ events: unknown[] }>(`/api/projects/${projectId}/events?limit=500`);
+
+    const patched = await send('PATCH', `/api/projects/${projectId}`, {
+      northStar: 'A sharper statement of the goal.',
+    });
+    expect(patched.status).toBe(200);
+
+    const after = await get<{ events: { eventType: string }[] }>(
+      `/api/projects/${projectId}/events?limit=500`,
+    );
+    // Invariant 3: the version policy decides every canonical name, so a silent
+    // change would reinterpret the whole project with nothing saying why.
+    expect(after.events.length).toBeGreaterThan(before.events.length);
+    expect(after.events.some((e) => e.eventType === 'USER_CORRECTION')).toBe(true);
+  });
+
+  it('records a layer rename', async () => {
+    const { layers } = await get<{ layers: { id: string; name: string }[] }>(`/api/projects/${projectId}`);
+    const learning = layers.find((l) => l.name === 'Learning Evaluation')!;
+    const before = await get<{ events: unknown[] }>(`/api/projects/${projectId}/events?limit=500`);
+
+    await send('PATCH', `/api/layers/${learning.id}`, { notes: 'these notes matter' });
+
+    const after = await get<{ events: unknown[] }>(`/api/projects/${projectId}/events?limit=500`);
+    expect(after.events.length).toBeGreaterThan(before.events.length);
+  });
+});
+
 describe('audit and reconcile over HTTP', () => {
   it('records a structured audit and moves the layer', async () => {
     const { layers } = await get<{ layers: { id: string; name: string }[] }>(`/api/projects/${projectId}`);

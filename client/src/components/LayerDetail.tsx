@@ -111,8 +111,10 @@ function DependencyChecklist(props: {
   result: DependencyCheckResult;
   layers: Layer[];
   onSelectLayer(layerId: string): void;
+  /** The layer already on screen — jumping to it would be a no-op. */
+  currentLayerId: string | null;
 }): JSX.Element {
-  const { result, layers, onSelectLayer } = props;
+  const { result, layers, onSelectLayer, currentLayerId } = props;
   if (result.items.length === 0) {
     return (
       <div className="empty">
@@ -141,7 +143,7 @@ function DependencyChecklist(props: {
               ) : (
                 <span className="small muted">{item.status ?? 'NOT REGISTERED'}</span>
               )}
-              {!item.present && owner ? (
+              {!item.present && owner && owner.id !== currentLayerId ? (
                 <button
                   type="button"
                   className="btn btn--small btn--ghost"
@@ -299,11 +301,14 @@ export function LayerDetail(props: {
   const runs = detail?.runs ?? [];
 
   /** The run whose persisted prompt the user is meant to be executing now. */
-  const activeRun = useMemo((): ResearchRun | null => {
-    const open = runs.find((run) => OPEN_RUN_STATUSES.has(run.status) && Boolean(run.prompt));
-    if (open) return open;
-    return runs.find((run) => Boolean(run.prompt)) ?? null;
-  }, [runs]);
+  // The EXECUTE card is a call to action, so it must only ever show a run there
+  // is still something to do with. Falling back to the newest run with a prompt
+  // put it on screen for COMPLETE and FAILED runs, next to an ACTIVE RUNS 0 pill.
+  const activeRun = useMemo(
+    (): ResearchRun | null =>
+      runs.find((run) => OPEN_RUN_STATUSES.has(run.status) && Boolean(run.prompt)) ?? null,
+    [runs],
+  );
 
   const freezeCandidates = useMemo(() => freezeCandidatesOf(documents), [documents]);
 
@@ -638,6 +643,7 @@ export function LayerDetail(props: {
             result={dependencies}
             layers={layers}
             onSelectLayer={onSelectLayer}
+            currentLayerId={layerId}
           />
         </div>
       ) : null}
@@ -806,6 +812,7 @@ export function LayerDetail(props: {
             <DependencyChecklist
               result={blocked.result}
               layers={layers}
+              currentLayerId={layerId}
               onSelectLayer={(id) => {
                 setBlocked(null);
                 setOverrideReason('');

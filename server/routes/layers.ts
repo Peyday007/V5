@@ -195,6 +195,15 @@ layersRouter.patch(
         setLayerManualStatus(layer.id, null);
       } else {
         const status = requiredEnum<LayerStatus>(raw, LAYER_STATUSES, 'manualStatus');
+        // Invariant 6: freezing is a claim that a canonical artifact exists, and
+        // POST /freeze refuses without one. Pinning the status would have been a
+        // way around that guard, persisting FROZEN on a layer with no documents.
+        if (status === 'FROZEN') {
+          throw badRequest(
+            'A layer cannot be pinned to FROZEN. Freeze it through POST /api/layers/:layerId/freeze, ' +
+              'which checks that a canonical document actually exists.',
+          );
+        }
         setLayerManualStatus(
           layer.id,
           status,
@@ -271,7 +280,9 @@ layersRouter.post(
 
     // An incomplete packet throws DependencyError, which the error middleware
     // turns into 409 + the full check result (invariant 4).
-    const prepared = prepareSynthesis({ layerId: layer.id, override, overrideReason });
+    const prepared = asInvariantViolation(() =>
+      prepareSynthesis({ layerId: layer.id, override, overrideReason }),
+    );
 
     recomputeProject(layer.projectId);
     return {

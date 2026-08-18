@@ -366,7 +366,22 @@ function handleRunInterrupted(turn: Turn): string[] {
   const target = layerArgs(turn.projectId, turn.content);
   const runs = turn.invoke('list_runs', { ...(target ?? {}), limit: 10 });
   const blocks = [runs.text];
-  const open = (runs.data as RunsData | null)?.runs.find((run) => run.active) ?? null;
+  const candidates = (runs.data as RunsData | null)?.runs.filter((run) => run.active) ?? [];
+
+  // "Rate limit ran out" marks a run FAILED. Without a layer to scope it, the
+  // newest open run in the WHOLE project would be chosen — quite possibly one
+  // the user was not talking about. Ask instead, the way every other
+  // state-changing handler refuses an unresolved reference.
+  if (!target && candidates.length > 1) {
+    blocks.push(
+      `There are ${candidates.length} open runs and you did not say which layer, so I marked ` +
+        'nothing as failed. Name the layer — for example "Discovery rate limit ran out."',
+    );
+    blocks.push(turn.invoke('calculate_next_action').text);
+    return blocks;
+  }
+
+  const open = candidates[0] ?? null;
 
   if (open) {
     blocks.push(
