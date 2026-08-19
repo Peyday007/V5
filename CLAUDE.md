@@ -103,6 +103,28 @@ There must be no workflow where the user has to remember "now go update the data
 11. No audit result stored only as prose — always the structured record too.
 12. No project state dependent on one chat transcript.
 
+## 8. Model prose never mutates project state.
+
+The dynamic audit engine (`server/services/audit/`) runs three separate roles —
+primary auditor, adversarial critic, final judge — and only the judge's
+**validated structured output** may reach `recordAudit`.
+
+- Enums are matched exactly. No substring matching, no negation handling, no
+  "closest verdict", no template placeholders, no inferred approval.
+- The judge's counts are cross-checked against the gaps it classified, and an
+  advancing verdict is refused outright while a foundational gap is open.
+- An invalid response, a provider error, a timeout or an unreadable artifact is
+  an **audit failure**: nothing is recorded and no state moves. The failure and
+  the raw response are still persisted, because a verdict you cannot trace is
+  not auditable.
+- `parseAuditJson` in `auditEngine.ts` is the older, forgiving path for audits a
+  human pastes in and reads first. `services/audit/schema.ts` is the path a
+  model's own output takes, and it is deliberately stricter. Do not merge them.
+
+Project-specific audit criteria live in `server/domain/auditProfile.ts`, one
+profile per project. Never scatter `if (layer === 'Discovery')` through pipeline
+logic — add to the profile instead.
+
 ---
 
 ## Repository map
@@ -120,6 +142,7 @@ server/
     types.ts            enums, row types, view types — the contract
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
+    auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
   services/
     storage.ts          filesystem document store
@@ -136,6 +159,11 @@ server/
     importer.ts         PDF import and registration
     reconcile.ts        scan & reconcile
     agent/              chat tools and the local intent router
+    audit/
+      context.ts        what an audit is allowed to see
+      prompts.ts        the primary / adversarial / judge prompts
+      schema.ts         zero-trust validation of model output
+      pipeline.ts       orchestration; the only path to a recorded verdict
   providers/            AIProvider abstraction: mock, Claude, OpenAI
   routes/               HTTP API
 client/                 React UI (three panes: layers / workflow / planner)

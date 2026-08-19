@@ -133,6 +133,11 @@ outranks every other piece of work in the planner until you resolve it.
   run along with the exact required-attachment list.
 - **Audit engine** — structured verdicts and findings, never prose alone; tolerant of
   messy model output, and deliberately hard to trick into an approval nobody gave.
+- **Dynamic audit engine** — one button runs a primary audit, an adversarial critique and
+  a final judge over a single artifact or a whole layer packet, against the project's own
+  criteria, and answers the questions that decide what happens next: is it actually good
+  enough, what is truly missing, does that gap belong here, does it require research, how
+  many runs remain, can we synthesise, can we freeze.
 - **Redo engine** — new run, new attempt number, lineage preserved, failed attempts never
   destroyed, capped at `maxAutoRedos` before a human is required.
 - **Synthesis engine** — packet validation at every door (start, complete, register), and
@@ -159,17 +164,54 @@ outranks every other piece of work in the planner until you resolve it.
 - Deliberately out of scope for this build: webhooks, cloud deployment, multi-user auth,
   vector search, RAG, billing, analytics.
 
+## The audit engine
+
+Click **AUDIT** on a document, or **AUDIT FULL LAYER PACKET** on a layer. Brain gathers the
+exact assignment, the artifact, the surrounding packet, prior findings and live dependency
+state, then runs three separate roles:
+
+```
+context -> PRIMARY (requirement, structural, boundary, dependency)
+        -> ADVERSARIAL (assume the primary was too generous)
+        -> JUDGE (one disposition, structured)
+        -> recordAudit -> state engine -> Master Planner
+```
+
+The answer leads with three lines — the verdict, how many research runs remain, and the one
+concrete next action — with gaps, patches, handoffs, adversarial findings, reasoning and
+the raw model responses behind expandable sections.
+
+Every issue is **classified**, because "more could be researched" and "more research is
+required" are different answers. Only `FOUNDATIONAL_GAP` and `TARGETED_RESEARCH_GAP` may
+hold a layer open; `OTHER_LAYER`, `IMPLEMENTATION_DETAIL`, `EMPIRICAL_TUNING`,
+`DOMAIN_PLUGIN`, `PATCH` and `OPTIONAL_IMPROVEMENT` never do.
+
+Model prose cannot move the project. Enums are matched exactly — no substring matching, no
+negation handling, no template placeholders, no inferred approval — the judge's counts are
+cross-checked against the gaps it classified, and an advancing verdict is refused while a
+foundational gap is open. An invalid response, a provider error or an unreadable artifact
+is an audit **failure**: nothing is recorded and nothing moves, though the failure and the
+raw response are kept so you can see why.
+
+Project criteria live in one profile (`server/domain/auditProfile.ts`). The Deal Dispatch
+profile carries G1–G14 and each of the eight layers' own criteria, including what each layer
+does **not** own — which is what lets the audit route a gap to its real owner instead of
+opening research in the wrong place.
+
+Without an API key the audit still runs, and deliberately declines to advance any layer it
+never actually read.
+
 ## Recommended next build step
 
-**Wire in real provider execution behind the run lifecycle**, starting with audits.
-Everything it needs already exists: runs persist their exact prompt and attachment list,
-`AIProvider.audit()` is defined, `parseAuditJson` already consumes structured verdicts,
-and `recordAudit` already applies the consequences. Making `POST /api/runs/:id/audit`
-optionally call the configured provider turns the current copy-paste loop into a one-click
-loop without changing a single stored shape.
+**Proper PDF text extraction.** The audit engine is now the sharpest tool in the box, and
+it is limited by what it can read: `extractReadableText` recovers text from uncompressed
+PDF content streams and returns nothing for compressed or scanned files, which the pipeline
+correctly treats as a blocked audit rather than a pass. Real extraction would let the
+auditor judge the whole corpus instead of the part it can currently see.
 
-After that, PDF text extraction on import is the highest-leverage addition, because it
-lets audits check a document's actual contents against the prompt that produced it.
+After that, **research execution through the provider** — `AIProvider.runResearch()` is
+already defined and every run already stores its exact prompt and attachment list, so
+running the research is the same shape of change the audit engine just made.
 
 ---
 
