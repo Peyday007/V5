@@ -145,6 +145,12 @@ outranks every other piece of work in the planner until you resolve it.
 - **Freeze semantics** — a synthesis that passes its final audit freezes the layer
   automatically; a canonical artifact is always required, earlier documents are kept as
   provenance, and reopening restores the whole source packet so the layer can run again.
+- **Document understanding** — PDF, DOCX, TXT, Markdown and pasted text read into pages
+  and ordered blocks with per-page quality signals, selective OCR for scanned pages, a
+  quality gate that blocks a document Brain cannot honestly claim to have read, and
+  append-only extraction runs so an old audit still resolves to the text it saw.
+- **Evidence and citations** — chunked with page and block anchors, searchable, and every
+  audit conclusion recorded with the passages it can be checked against.
 - **Reconciliation** — database ↔ filesystem consistency with one-click fixes.
 - **Project-aware chat** — natural instructions ("What's next?", "Audit Discovery.",
   "Freeze World Model.") routed through tools that read live state. It cannot assert that
@@ -159,8 +165,10 @@ outranks every other piece of work in the planner until you resolve it.
   tool you like and import the resulting PDF back in. `ClaudeProvider` and
   `OpenAIProvider` are real `fetch` adapters, but they are inert until you set
   `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` and `BRAIN_PROVIDER`.
-- **PDF text extraction.** Import reasons about filenames, not contents, so an audit
-  cannot yet read the document it is auditing.
+- **Structured findings.** The index over a document (claims, definitions, actors,
+  contradictions) needs a real provider, and Brain refuses to derive it from the mock —
+  an invented index is worse than none. Retrieval, citations and audits all work without
+  it.
 - Deliberately out of scope for this build: webhooks, cloud deployment, multi-user auth,
   vector search, RAG, billing, analytics.
 
@@ -201,17 +209,45 @@ opening research in the wrong place.
 Without an API key the audit still runs, and deliberately declines to advance any layer it
 never actually read.
 
+## Reading documents
+
+Drop in a PDF, DOCX, TXT or Markdown file and Brain reads it in the background, then tells
+you exactly what it managed to read:
+
+```
+READY  28/28 pages · 100% coverage · 22,642 chars   [REPROCESS] [VIEW EXTRACTED TEXT] [INDEX FINDINGS] [VIEW ORIGINAL]
+```
+
+Format is decided by the bytes, not the extension. PDF pages are reconstructed into reading
+order — columns found from the text items, then lines within each column — and repeated
+headers and footers are labelled as furniture rather than deleted. Pages with no text layer
+are sent to OCR if a local engine is installed; if none is, they are reported unreadable
+instead of passed on as empty content.
+
+Then the quality gate decides whether the reading can be trusted at all. Too few pages read,
+too little text, or too many replacement glyphs and the document is **BLOCKED**: it cannot
+be audited, synthesised or frozen until it is reprocessed or replaced. A packet with one
+blocked member cannot be audited either.
+
+Every block keeps its raw text beside its normalized text, its page, its character range and
+its extraction method, so nothing the cleanup does can be the only copy of the evidence.
+Reprocessing creates a **new** run and supersedes the old one, so an audit recorded last
+month still resolves to the text it actually read.
+
+Ask the evidence a question — from the audit panel, or `POST /api/layers/:id/evidence` — and
+you get passages with page anchors, plus the two lists that decide whether a gap is real:
+what was searched, and what could not be read. Every audit verdict records the passages
+behind it, retrieved from the text rather than quoted by the model, and each one resolves
+back to its source blocks.
+
 ## Recommended next build step
 
-**Proper PDF text extraction.** The audit engine is now the sharpest tool in the box, and
-it is limited by what it can read: `extractReadableText` recovers text from uncompressed
-PDF content streams and returns nothing for compressed or scanned files, which the pipeline
-correctly treats as a blocked audit rather than a pass. Real extraction would let the
-auditor judge the whole corpus instead of the part it can currently see.
+**Research execution through the provider.** `AIProvider.runResearch()` is already defined
+and every run already stores its exact prompt and attachment list, so running the research
+is the same shape of change the audit engine and the ingestion pipeline just made.
 
-After that, **research execution through the provider** — `AIProvider.runResearch()` is
-already defined and every run already stores its exact prompt and attachment list, so
-running the research is the same shape of change the audit engine just made.
+After that, **local OCR by default** — the adapter is in place and selective, but it shells
+out to tesseract, so a machine without it gets an honest refusal rather than a reading.
 
 ---
 

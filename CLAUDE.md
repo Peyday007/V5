@@ -125,6 +125,46 @@ Project-specific audit criteria live in `server/domain/auditProfile.ts`, one
 profile per project. Never scatter `if (layer === 'Discovery')` through pipeline
 logic — add to the profile instead.
 
+## 9. An audit reads extracted evidence, never raw bytes.
+
+A file on disk is not something Brain has read. `server/services/documents/`
+turns a stored file into an **extraction run**: pages, ordered blocks, raw text
+beside normalized text, a quality verdict, and chunks with page anchors.
+
+- Only a run that reached `READY` or `READY_WITH_WARNINGS` is evidence. A
+  `BLOCKED`, `FAILED` or `INTERRUPTED` document is something the auditor does
+  **not** have, and every code path must say so rather than treating an empty
+  extraction as an empty document.
+- One unreadable member blocks a whole packet audit. A layer verdict that
+  quietly skipped a document is the false confidence this engine exists to
+  prevent.
+- Extraction runs are append-only. Reprocessing creates a new run and marks the
+  old one superseded (`supersedePreviousRuns`), so an audit recorded months ago
+  still resolves to the text it actually read. Exactly one run is current.
+- OCR is an optional local capability, not an assumption. With no engine
+  installed, pages that need one are reported unreadable — never passed on as
+  empty content.
+- Normalization may only remove extraction artifacts. `raw_text` is kept beside
+  `normalized_text` on every block, so cleanup can never be the only copy of the
+  evidence.
+
+## 10. Every conclusion must resolve to a passage.
+
+`retrieveEvidence` answers a question from the extracted text and returns three
+things, all of which matter: the passages, the documents it searched, and the
+documents it could not read. An empty result over an unread document means "not
+read", not "not present" — and only Brain can tell those apart.
+
+- `recordAuditEvidence` attaches passages to each gap after a verdict is
+  recorded, retrieved from the text rather than quoted by the model. A citation
+  is therefore a fact about the document, not a claim about it.
+- Structured findings (`services/documents/findings.ts`) are an index over a
+  document, never a replacement for it. A finding whose quote cannot be located
+  in the extracted source is discarded, and the page number comes from the block
+  the quote was found in — never from the model.
+- Findings are never derived from the mock provider. Inventing an index is worse
+  than having none.
+
 ---
 
 ## Repository map
@@ -164,10 +204,25 @@ server/
       prompts.ts        the primary / adversarial / judge prompts
       schema.ts         zero-trust validation of model output
       pipeline.ts       orchestration; the only path to a recorded verdict
+      evidence.ts       the citation trail from a verdict back to passages
+    documents/
+      formats.ts        format detection by magic bytes, not extension
+      pdf.ts            columns -> lines -> blocks, plus quality signals
+      docx.ts           OOXML via mammoth, headings/lists/tables preserved
+      text.ts           plain text, Markdown and pasted text
+      ocr.ts            pluggable OCR adapter; absent is a stated fact
+      normalize.ts      artifact cleanup that keeps the raw text
+      quality.ts        the gate: READY / READY_WITH_WARNINGS / BLOCKED
+      chunker.ts        heading-aware chunks with page and block anchors
+      extraction.ts     the pipeline, and crash recovery
+      queue.ts          serial background extraction
+      retrieval.ts      passage search and citation resolution
+      findings.ts       the structured index, anchored to real quotes
   providers/            AIProvider abstraction: mock, Claude, OpenAI
   routes/               HTTP API
 client/                 React UI (three panes: layers / workflow / planner)
 tests/                  Vitest suites
+  fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```
 
