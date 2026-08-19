@@ -454,12 +454,48 @@ export interface ExtractionRunView {
   completedAt: string | null;
 }
 
+/** What OCR did to one page: the picture it read, and how sure it was. */
+export interface OcrPageView {
+  page: number;
+  ok: boolean;
+  imageHash: string | null;
+  width: number | null;
+  height: number | null;
+  dpi: number | null;
+  confidence: number | null;
+  durationMs: number | null;
+  blocks: number;
+  characters: number;
+  warnings: string[];
+}
+
+export interface OcrStatusView {
+  available: boolean;
+  engine: string;
+  engineVersion: string | null;
+  recognizerPath: string | null;
+  recognizerSource: string | null;
+  renderer: string | null;
+  rendererVersion: string | null;
+  rendererPath: string | null;
+  reason: string;
+  install: string[];
+  dpi: number;
+  language: string;
+  timeoutMs: number;
+  disabled: boolean;
+}
+
 export interface ExtractionView {
   document: Document;
   run: ExtractionRunView | null;
   history: ExtractionRunView[];
   quality: ExtractionQualityView | null;
-  ocr: { engine: string; available: boolean; reason: string };
+  ocrPages: OcrPageView[];
+  ocrEngine: string | null;
+  ocrEngineVersion: string | null;
+  ocrRendererVersion: string | null;
+  ocr: OcrStatusView;
 }
 
 export interface ExtractedTextView {

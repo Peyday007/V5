@@ -142,7 +142,7 @@ export function ExtractionPanel(props: { documentId: string; onChanged?: () => v
             {quality.pagesReadable}/{quality.pagesExpected} pages ·{' '}
             {Math.round(quality.coverageRatio * 100)}% coverage ·{' '}
             {quality.characterCount.toLocaleString()} chars
-            {quality.pagesOcr > 0 ? ` · ${quality.pagesOcr} OCR` : ''}
+            {quality.pagesOcr > 0 ? ` · ${quality.pagesOcr} page(s) by OCR` : ''}
             {quality.pagesFailed.length > 0 ? ` · failed ${quality.pagesFailed.join(', ')}` : ''}
           </span>
         ) : null}
@@ -192,8 +192,75 @@ export function ExtractionPanel(props: { documentId: string; onChanged?: () => v
         </ul>
       ) : null}
 
+      {/*
+        OCR is the one part of the pipeline that depends on the machine rather
+        than the file, so when a document needed it and could not have it, the
+        panel says why and exactly how to fix it — not just that the document is
+        blocked.
+      */}
       {view && !view.ocr.available && quality && quality.pagesOcr === 0 && quality.pagesFailed.length > 0 ? (
-        <div className="small muted">{view.ocr.reason}</div>
+        <div className="error">
+          <div className="small">
+            <strong>SCANNED PAGES COULD NOT BE READ.</strong> {view.ocr.reason}
+          </div>
+          {view.ocr.install.length > 0 ? (
+            <pre className="pre">{view.ocr.install.join('\n')}</pre>
+          ) : null}
+        </div>
+      ) : null}
+
+      {view && view.ocrPages.length > 0 ? (
+        <div className="card">
+          <div className="small muted">
+            OCR — {view.ocrEngine ?? 'unknown engine'}
+            {view.ocrEngineVersion ? ` (${view.ocrEngineVersion})` : ''}
+            {view.ocrRendererVersion ? ` via ${view.ocrRendererVersion}` : ''}. Every page below is a
+            reading of a picture of the page, not of the page itself.
+          </div>
+          <table className="table small">
+            <thead>
+              <tr>
+                <th>PAGE</th>
+                <th>READ</th>
+                <th>CONFIDENCE</th>
+                <th>IMAGE</th>
+                <th>BLOCKS</th>
+                <th>CHARS</th>
+                <th>TIME</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.ocrPages.map((page) => (
+                <tr key={page.page}>
+                  <td>{page.page}</td>
+                  <td>{page.ok ? 'yes' : 'no'}</td>
+                  <td className={page.confidence !== null && page.confidence < 0.6 ? 'bad' : ''}>
+                    {page.confidence === null ? 'not reported' : `${Math.round(page.confidence * 100)}%`}
+                  </td>
+                  <td className="mono">
+                    {page.width && page.height ? `${page.width}x${page.height}` : '—'}
+                    {page.dpi ? ` @${page.dpi}dpi` : ''}
+                    {page.imageHash ? ` ${page.imageHash.slice(0, 8)}` : ''}
+                  </td>
+                  <td>{page.blocks}</td>
+                  <td>{page.characters.toLocaleString()}</td>
+                  <td>{page.durationMs === null ? '—' : `${page.durationMs}ms`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {view.ocrPages.some((page) => page.warnings.length > 0) ? (
+            <ul className="checklist small">
+              {view.ocrPages.flatMap((page) =>
+                page.warnings.map((warning, index) => (
+                  <li key={`${page.page}-${index}`} className="muted">
+                    {warning}
+                  </li>
+                )),
+              )}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
 
       {error ? <div className="error small">{error}</div> : null}

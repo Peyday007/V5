@@ -22,6 +22,7 @@ import type {
   ExtractionRun,
   ExtractionRunRow,
   ExtractionStatus,
+  OcrPageRecord,
 } from '../domain/types.ts';
 import { fromBool, newId, nowIso, parseJson, toBool, toJson } from './util.ts';
 
@@ -48,6 +49,10 @@ export function mapExtractionRun(row: ExtractionRunRow): ExtractionRun {
     blockedReason: row.blocked_reason,
     error: row.error,
     supersededByRunId: row.superseded_by_run_id,
+    ocrEngine: row.ocr_engine,
+    ocrEngineVersion: row.ocr_engine_version,
+    ocrRendererVersion: row.ocr_renderer_version,
+    ocrPages: parseJson<OcrPageRecord[]>(row.ocr_pages, []),
     startedAt: row.started_at,
     completedAt: row.completed_at,
     createdAt: row.created_at,
@@ -194,6 +199,10 @@ export function updateExtractionRun(
     blockedReason?: string | null;
     error?: string | null;
     supersededByRunId?: string | null;
+    ocrEngine?: string | null;
+    ocrEngineVersion?: string | null;
+    ocrRendererVersion?: string | null;
+    ocrPages?: OcrPageRecord[];
     completedAt?: string | null;
   },
 ): ExtractionRun | null {
@@ -210,6 +219,10 @@ export function updateExtractionRun(
     blocked_reason: patch.blockedReason,
     error: patch.error,
     superseded_by_run_id: patch.supersededByRunId,
+    ocr_engine: patch.ocrEngine,
+    ocr_engine_version: patch.ocrEngineVersion,
+    ocr_renderer_version: patch.ocrRendererVersion,
+    ocr_pages: patch.ocrPages ? toJson(patch.ocrPages) : undefined,
     completed_at: patch.completedAt,
   };
   const keys = Object.keys(fields).filter((key) => fields[key] !== undefined);

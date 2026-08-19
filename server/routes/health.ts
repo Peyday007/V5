@@ -11,6 +11,7 @@ import { getDb, getMigrationReport } from '../db/database.ts';
 import { getSchemaVersion } from '../db/migrate.ts';
 import { DATA_ROOT, DB_PATH } from '../env.ts';
 import { defaultProviderName, listProviderStatuses } from '../providers/index.ts';
+import { ocrStatus } from '../services/documents/ocr.ts';
 import { handler } from './helpers.ts';
 
 export const healthRouter = Router();
@@ -28,6 +29,9 @@ healthRouter.get(
       dataRoot: DATA_ROOT,
       migrations,
       providers: listProviderStatuses(),
+      // Whether scanned pages can be read here, and if not, the exact one-time
+      // step that fixes it.
+      ocr: ocrStatus(),
     };
   }),
 );

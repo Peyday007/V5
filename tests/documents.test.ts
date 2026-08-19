@@ -237,6 +237,9 @@ class FakeOcrEngine implements OcrEngine {
   readonly name = 'fake-ocr';
   readonly available = true;
   readonly reason = 'scripted for tests';
+  readonly version = 'fake 1.0';
+  readonly rendererVersion = 'fake renderer 1.0';
+  readonly install: string[] = [];
   readonly requested: number[] = [];
 
   constructor(private readonly text: string) {}
@@ -270,9 +273,12 @@ describe('a scanned PDF', () => {
     expect(run.pagesReadable).toBe(0);
     expect(run.pagesFailed).toEqual([1, 2, 3]);
     expect(run.blockedReason).toMatch(/not enough to audit/i);
-    expect(run.warnings.some((warning) => /no local OCR engine is available/i.test(warning))).toBe(
-      true,
-    );
+    // The warning has to name the pages nobody read and say why, or a blocked
+    // document is just an unexplained refusal.
+    const scanned = run.warnings.find((warning) => /need OCR/i.test(warning));
+    expect(scanned).toBeTruthy();
+    expect(scanned).toMatch(/pages 1, 2, 3/);
+    expect(scanned).toMatch(/reported unreadable/i);
     expect(document.extractionStatus).toBe('BLOCKED');
   });
 

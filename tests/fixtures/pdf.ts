@@ -21,10 +21,29 @@ export interface FixtureTextItem {
   size?: number;
 }
 
+/** A JPEG drawn to fill the page — what a scanned page actually is. */
+export interface FixtureImage {
+  jpeg: Buffer;
+  width: number;
+  height: number;
+  /** Draw greyscale samples instead of RGB. */
+  grayscale?: boolean;
+}
+
 export interface FixturePage {
   items: FixtureTextItem[];
   width?: number;
   height?: number;
+  /** Present on a scanned page: the page picture, drawn beneath any text. */
+  image?: FixtureImage;
+  /** Page rotation in degrees, as a scanner that fed the sheet sideways would leave it. */
+  rotate?: 0 | 90 | 180 | 270;
+  /**
+   * Raw content-stream operators, drawn beneath the text. The escape hatch for
+   * fixtures that need marks rather than glyphs — a page of speckle standing in
+   * for a scan of something unreadable.
+   */
+  raw?: string;
 }
 
 export const PAGE_WIDTH = 612;
@@ -34,13 +53,20 @@ function escapeText(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 }
 
-function contentStream(page: FixturePage): string {
-  return page.items
+function contentStream(page: FixturePage, imageName: string | null): string {
+  const width = page.width ?? PAGE_WIDTH;
+  const height = page.height ?? PAGE_HEIGHT;
+  // The picture is laid down first and the text, if any, over it — the order a
+  // page with both a scan and a native text layer would have.
+  const picture = imageName ? `q ${width} 0 0 ${height} 0 0 cm /${imageName} Do Q` : '';
+  const marks = page.raw ?? '';
+  const text = page.items
     .map(
       (item) =>
         `BT /F1 ${item.size ?? 11} Tf 1 0 0 1 ${item.x} ${item.y} Tm (${escapeText(item.text)}) Tj ET`,
     )
     .join('\n');
+  return [picture, marks, text].filter((part) => part.length > 0).join('\n');
 }
 
 export interface BuildPdfOptions {
@@ -60,7 +86,9 @@ export function buildPdf(pages: FixturePage[], options: BuildPdfOptions = {}): B
   const firstPageObj = 3;
   const firstContentObj = firstPageObj + pageCount;
   const fontObj = firstContentObj + pageCount;
-  const infoObj = fontObj + 1;
+  const firstImageObj = fontObj + 1;
+  const imagePages = pages.map((page, index) => (page.image ? firstImageObj + index : null));
+  const infoObj = firstImageObj + pageCount;
   const encryptObj = infoObj + 1;
   const objectCount = options.encrypted ? encryptObj : infoObj;
 
@@ -80,12 +108,16 @@ export function buildPdf(pages: FixturePage[], options: BuildPdfOptions = {}): B
   pages.forEach((page, index) => {
     const width = page.width ?? PAGE_WIDTH;
     const height = page.height ?? PAGE_HEIGHT;
+    const imageObj = imagePages[index] ?? null;
+    const xobject = imageObj === null ? '' : ` /XObject << /Im0 ${imageObj} 0 R >>`;
+    const rotate = page.rotate ? ` /Rotate ${page.rotate}` : '';
     push(
       firstPageObj + index,
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] ` +
-        `/Resources << /Font << /F1 ${fontObj} 0 R >> >> /Contents ${firstContentObj + index} 0 R >>`,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}]${rotate} ` +
+        `/Resources << /Font << /F1 ${fontObj} 0 R >>${xobject} >> ` +
+        `/Contents ${firstContentObj + index} 0 R >>`,
     );
-    const stream = contentStream(page);
+    const stream = contentStream(page, imageObj === null ? null : 'Im0');
     push(
       firstContentObj + index,
       `<< /Length ${Buffer.byteLength(stream, 'latin1')} >>\nstream\n${stream}\nendstream`,
@@ -93,6 +125,21 @@ export function buildPdf(pages: FixturePage[], options: BuildPdfOptions = {}): B
   });
 
   push(fontObj, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+
+  // Scanned pages carry their picture as a JPEG image XObject, exactly as a
+  // scanner driver would write it: DCTDecode, no re-encoding by us.
+  pages.forEach((page, index) => {
+    const objectNumber = imagePages[index];
+    if (objectNumber === null || objectNumber === undefined || !page.image) return;
+    const image = page.image;
+    push(
+      objectNumber,
+      `<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} ` +
+        `/ColorSpace /Device${image.grayscale ? 'Gray' : 'RGB'} /BitsPerComponent 8 ` +
+        `/Filter /DCTDecode /Length ${image.jpeg.byteLength} >>\n` +
+        `stream\n${image.jpeg.toString('latin1')}\nendstream`,
+    );
+  });
   push(infoObj, `<< /Producer (${escapeText(options.producer ?? 'Brain test fixtures')}) >>`);
   if (options.encrypted) {
     // Deliberately unsatisfiable: the /U check cannot pass with an empty user

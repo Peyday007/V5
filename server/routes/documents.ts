@@ -26,7 +26,7 @@ import { buildPlan } from '../services/planner.ts';
 import { recomputeProject } from '../services/stateEngine.ts';
 import { getCurrentExtractionRun, listExtractionRuns } from '../repos/extraction.ts';
 import { enqueueExtraction } from '../services/documents/queue.ts';
-import { getOcrEngine } from '../services/documents/ocr.ts';
+import { ocrStatus } from '../services/documents/ocr.ts';
 import { readableText, resolveCitation } from '../services/documents/retrieval.ts';
 import {
   documentFindings,
@@ -343,7 +343,12 @@ function extractionView(documentId: string) {
           blockedReason: run.blockedReason,
         }
       : null,
-    ocr: { engine: getOcrEngine().name, available: getOcrEngine().available, reason: getOcrEngine().reason },
+    // What OCR did to this document, page by page, and what OCR can do here at all.
+    ocrPages: run?.ocrPages ?? [],
+    ocrEngine: run?.ocrEngine ?? null,
+    ocrEngineVersion: run?.ocrEngineVersion ?? null,
+    ocrRendererVersion: run?.ocrRendererVersion ?? null,
+    ocr: ocrStatus(),
   };
 }
 

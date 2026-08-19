@@ -28,6 +28,11 @@ export interface ExtractedBlock {
   bbox: [number, number, number, number] | null;
   /** Per-block problems, e.g. replacement glyphs. */
   warnings: string[];
+  /**
+   * How certain the reading is, 0..1. Native extraction is transcription, so it
+   * has no confidence to report; recognition does, and it must be visible.
+   */
+  confidence?: number | null;
 }
 
 export interface ExtractedPage {

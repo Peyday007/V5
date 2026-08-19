@@ -18,6 +18,7 @@ import type {
   ExtractionMethod,
   ExtractionQuality,
   ExtractionRun,
+  OcrPageRecord,
 } from '../../domain/types.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { getDocument, updateDocument } from '../../repos/documents.ts';
@@ -37,7 +38,7 @@ import { detectFormat } from './formats.ts';
 import { extractDocx, DocxUnreadableError } from './docx.ts';
 import { extractPdf, PdfUnreadableError, type ExtractedBlock, type ExtractedPage } from './pdf.ts';
 import { extractText } from './text.ts';
-import { getOcrEngine } from './ocr.ts';
+import { getOcrEngine, LOW_CONFIDENCE, type OcrPageResult } from './ocr.ts';
 import { normalizeBlockText } from './normalize.ts';
 import { assessExtraction, pagesNeedingOcr, PIPELINE_VERSION } from './quality.ts';
 import { planChunks } from './chunker.ts';
@@ -115,54 +116,151 @@ async function readPages(
   }
 }
 
-/** OCR the pages that need it, and fold the results back into the page list. */
+export interface OcrOutcome {
+  /** Pages OCR actually produced usable text for. */
+  ocrPages: number[];
+  warnings: string[];
+  /** Per-page provenance, including the pages OCR was asked for and failed. */
+  records: OcrPageRecord[];
+  engine: string | null;
+  engineVersion: string | null;
+  rendererVersion: string | null;
+}
+
+/**
+ * OCR the pages that need it, and fold the results back into the page list.
+ *
+ * Selective by construction: `pagesNeedingOcr` has already decided which pages
+ * carry no usable text layer, and only those are rendered. A readable page is
+ * never re-read merely because a different page in the same document is a scan.
+ */
 async function applyOcr(
   format: DocumentFormat,
   buffer: Buffer,
   pages: ExtractedPage[],
-): Promise<{ ocrPages: number[]; warnings: string[] }> {
-  if (format !== 'PDF') return { ocrPages: [], warnings: [] };
+): Promise<OcrOutcome> {
+  const none: OcrOutcome = {
+    ocrPages: [],
+    warnings: [],
+    records: [],
+    engine: null,
+    engineVersion: null,
+    rendererVersion: null,
+  };
+  if (format !== 'PDF') return none;
   const candidates = pagesNeedingOcr(pages);
-  if (candidates.length === 0) return { ocrPages: [], warnings: [] };
+  if (candidates.length === 0) return none;
 
   const engine = getOcrEngine();
   if (!engine.available) {
     return {
-      ocrPages: [],
+      ...none,
+      engine: engine.name,
       warnings: [
         `${candidates.length} page(s) appear to be scanned and need OCR (pages ` +
           `${candidates.join(', ')}). ${engine.reason}`,
       ],
+      // Recorded as attempted-and-unavailable, so the run says which pages were
+      // never read rather than leaving it to be inferred from a gap.
+      records: candidates.map((page) => ({
+        page,
+        ok: false,
+        imageHash: null,
+        width: null,
+        height: null,
+        dpi: null,
+        confidence: null,
+        durationMs: null,
+        blocks: 0,
+        characters: 0,
+        warnings: [engine.reason],
+      })),
     };
   }
 
   const results = await engine.recognizePages(buffer, candidates);
   const ocrPages: number[] = [];
   const warnings: string[] = [];
+  const records: OcrPageRecord[] = [];
 
   for (const result of results) {
     warnings.push(...result.warnings);
-    if (result.text.trim().length === 0) continue;
     const page = pages.find((entry) => entry.pageNumber === result.pageNumber);
-    if (!page) continue;
-    // OCR text replaces the empty native extraction for that page only, and is
-    // labelled so the auditor knows it is recognition rather than transcription.
-    page.blocks = result.text
-      .split(/\n{2,}/)
-      .map((paragraph) => paragraph.replace(/\s+/g, ' ').trim())
-      .filter((paragraph) => paragraph.length > 0)
-      .map<ExtractedBlock>((paragraph) => ({
-        pageNumber: result.pageNumber,
-        blockType: 'PARAGRAPH',
-        text: paragraph,
-        bbox: null,
-        warnings: ['Read by OCR; wording may contain recognition errors.'],
-      }));
-    page.characterCount = page.blocks.reduce((total, block) => total + block.text.length, 0);
-    page.signals.nearlyEmpty = page.characterCount < 40;
-    ocrPages.push(result.pageNumber);
+    const usable = page !== undefined && result.text.trim().length > 0;
+
+    if (usable) {
+      // OCR text replaces the empty native extraction for that page only, and is
+      // labelled so the auditor knows it is recognition rather than transcription.
+      const confidenceNote =
+        result.confidence !== null && result.confidence < LOW_CONFIDENCE
+          ? `Read by OCR at ${Math.round(result.confidence * 100)}% confidence; verify the wording against the original.`
+          : 'Read by OCR; wording may contain recognition errors.';
+
+      page.blocks = ocrBlocksFor(result, confidenceNote);
+      page.characterCount = page.blocks.reduce((total, block) => total + block.text.length, 0);
+      page.signals.nearlyEmpty = page.characterCount < 40;
+      ocrPages.push(result.pageNumber);
+    }
+
+    records.push({
+      page: result.pageNumber,
+      ok: usable,
+      imageHash: result.imageHash ?? null,
+      width: result.imageWidth ?? null,
+      height: result.imageHeight ?? null,
+      dpi: result.dpi ?? null,
+      confidence: result.confidence,
+      durationMs: result.durationMs ?? null,
+      blocks: usable ? (page?.blocks.length ?? 0) : 0,
+      characters: usable ? (page?.characterCount ?? 0) : 0,
+      warnings: result.warnings,
+    });
   }
-  return { ocrPages, warnings };
+
+  return {
+    ocrPages,
+    warnings,
+    records,
+    engine: engine.name,
+    engineVersion: engine.version,
+    rendererVersion: engine.rendererVersion,
+  };
+}
+
+/**
+ * Turn one OCR result into blocks.
+ *
+ * An engine that reports structure gives us its paragraphs, their bounding boxes
+ * and their confidence; one that only returns text gets split on blank lines.
+ * Either way every block says it was read by recognition.
+ */
+function ocrBlocksFor(result: OcrPageResult, note: string): ExtractedBlock[] {
+  if (result.blocks && result.blocks.length > 0) {
+    return result.blocks.map<ExtractedBlock>((block) => ({
+      pageNumber: result.pageNumber,
+      blockType: block.blockType,
+      text: block.text,
+      bbox: block.bbox,
+      confidence: block.confidence,
+      warnings: [
+        block.confidence !== null && block.confidence < LOW_CONFIDENCE
+          ? `Read by OCR at ${Math.round(block.confidence * 100)}% confidence; verify the wording against the original.`
+          : note,
+      ],
+    }));
+  }
+  return result.text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.replace(/\s+/g, ' ').trim())
+    .filter((paragraph) => paragraph.length > 0)
+    .map<ExtractedBlock>((paragraph) => ({
+      pageNumber: result.pageNumber,
+      blockType: 'PARAGRAPH',
+      text: paragraph,
+      bbox: null,
+      confidence: result.confidence,
+      warnings: [note],
+    }));
 }
 
 /**
@@ -246,6 +344,7 @@ export async function extractDocument(
     }
 
     let ocrPages: number[] = [];
+    let ocrRecords: OcrPageRecord[] = [];
     if (!blockedReason && pages.length > 0) {
       const needsOcr = pagesNeedingOcr(pages);
       if (needsOcr.length > 0) {
@@ -254,14 +353,25 @@ export async function extractDocument(
       }
       const ocr = await applyOcr(detection.format, buffer, pages);
       ocrPages = ocr.ocrPages;
+      ocrRecords = ocr.records;
       warnings.push(...ocr.warnings);
+      if (ocr.records.length > 0) {
+        // Written before the verdict: which engine read which rendered image is
+        // part of the evidence, not a footnote to a successful outcome.
+        updateExtractionRun(run.id, {
+          ocrEngine: ocr.engine,
+          ocrEngineVersion: ocr.engineVersion,
+          ocrRendererVersion: ocr.rendererVersion,
+          ocrPages: ocr.records,
+        });
+      }
     }
 
     updateExtractionRun(run.id, { status: 'INDEXING' });
     updateDocument(document.id, { extractionStatus: 'INDEXING' });
 
     const blocks = persistBlocks(run.id, document.id, pages, methodFor(detection.format), ocrPages);
-    const quality = assessExtraction({ pages, ocrPages, warnings, blockedReason });
+    const quality = assessExtraction({ pages, ocrPages, ocrRecords, warnings, blockedReason });
 
     if (blocks.length > 0) {
       const planned = planChunks(listBlocks(run.id));
@@ -341,7 +451,7 @@ function persistBlocks(
         charStart,
         charEnd,
         extractionMethod: ocr.has(page.pageNumber) ? 'OCR' : defaultMethod,
-        confidence: null,
+        confidence: block.confidence ?? null,
         warnings,
         contentHash: createHash('sha256').update(block.text).digest('hex').slice(0, 32),
         bbox: block.bbox,

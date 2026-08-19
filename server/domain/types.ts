@@ -533,6 +533,10 @@ export interface ExtractionRunRow {
   blocked_reason: string | null;
   error: string | null;
   superseded_by_run_id: string | null;
+  ocr_engine: string | null;
+  ocr_engine_version: string | null;
+  ocr_renderer_version: string | null;
+  ocr_pages: string;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
@@ -728,10 +732,36 @@ export interface ExtractionRun {
   blockedReason: string | null;
   error: string | null;
   supersededByRunId: string | null;
+  /** Which OCR engine read this document's scanned pages, if any. */
+  ocrEngine: string | null;
+  ocrEngineVersion: string | null;
+  ocrRendererVersion: string | null;
+  /** Per-page OCR provenance: what was rendered, read, and how certainly. */
+  ocrPages: OcrPageRecord[];
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * What OCR did to one page.
+ *
+ * `imageHash` is the identity of the picture that was actually read, which is
+ * what makes an OCR reading reproducible rather than merely plausible.
+ */
+export interface OcrPageRecord {
+  page: number;
+  ok: boolean;
+  imageHash: string | null;
+  width: number | null;
+  height: number | null;
+  dpi: number | null;
+  confidence: number | null;
+  durationMs: number | null;
+  blocks: number;
+  characters: number;
+  warnings: string[];
 }
 
 export interface DocumentBlock {

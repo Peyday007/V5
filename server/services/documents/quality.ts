@@ -8,7 +8,7 @@
  *
  * A BLOCKED document cannot be audited, synthesised or frozen.
  */
-import type { ExtractionQuality, ExtractionStatus } from '../../domain/types.ts';
+import type { ExtractionQuality, ExtractionStatus, OcrPageRecord } from '../../domain/types.ts';
 import type { ExtractedPage } from './pdf.ts';
 
 export const PIPELINE_VERSION = 'doc-understanding-1';
@@ -26,6 +26,17 @@ export const THRESHOLDS = {
   sparseTextLayerCharacters: 300,
   /** Share of pages carrying replacement glyphs that makes the text untrustworthy. */
   maxReplacementGlyphPageRatio: 0.2,
+  /** Below this, an OCR reading is reported as uncertain rather than presented as text. */
+  lowOcrConfidence: 0.6,
+  /**
+   * Below this, a recognised page is noise rather than text.
+   *
+   * Not a stylistic judgement: at this level tesseract is reporting that it does
+   * not believe its own output, and treating that as read content is precisely
+   * the false confidence the gate exists to prevent. Such a page counts as
+   * unreadable and goes through the ordinary coverage rule.
+   */
+  ocrConfidenceFloor: 0.35,
 } as const;
 
 export interface PageOutcome {
@@ -70,6 +81,8 @@ export interface AssessInput {
   pages: ExtractedPage[];
   /** Pages OCR actually produced text for. */
   ocrPages: number[];
+  /** Per-page OCR provenance, when any page was recognised. */
+  ocrRecords?: OcrPageRecord[];
   /** Warnings gathered during extraction (format-level, OCR-level). */
   warnings: string[];
   /** Set when the format itself could not be read at all. */
@@ -100,14 +113,27 @@ export function assessExtraction(input: AssessInput): ExtractionQuality {
     };
   }
 
+  // A recognised page Tesseract does not believe is not a page we have read.
+  const distrusted = new Set(
+    (input.ocrRecords ?? [])
+      .filter(
+        (record) =>
+          record.ok && record.confidence !== null && record.confidence < THRESHOLDS.ocrConfidenceFloor,
+      )
+      .map((record) => record.page),
+  );
+
   const readable: number[] = [];
   const failed: number[] = [];
   let characterCount = 0;
 
   for (const page of pages) {
     characterCount += page.characterCount;
-    if (page.characterCount >= THRESHOLDS.minPageCharacters) readable.push(page.pageNumber);
-    else failed.push(page.pageNumber);
+    if (page.characterCount >= THRESHOLDS.minPageCharacters && !distrusted.has(page.pageNumber)) {
+      readable.push(page.pageNumber);
+    } else {
+      failed.push(page.pageNumber);
+    }
   }
 
   const pagesExpected = pages.length;
@@ -136,6 +162,28 @@ export function assessExtraction(input: AssessInput): ExtractionQuality {
   if (ocrSet.size > 0) {
     warnings.push(`${ocrSet.size} page(s) were read by OCR and may contain recognition errors.`);
   }
+  if (distrusted.size > 0) {
+    warnings.push(
+      `Page(s) ${[...distrusted].sort((a, b) => a - b).join(', ')} were recognised with confidence ` +
+        `below ${Math.round(THRESHOLDS.ocrConfidenceFloor * 100)}%, which is too low to treat as text; ` +
+        'they are counted as unread.',
+    );
+  }
+  // Low but usable confidence never blocks on its own — it has to be visible.
+  const uncertain = (input.ocrRecords ?? []).filter(
+    (record) =>
+      record.ok &&
+      record.confidence !== null &&
+      record.confidence >= THRESHOLDS.ocrConfidenceFloor &&
+      record.confidence < THRESHOLDS.lowOcrConfidence,
+  );
+  if (uncertain.length > 0) {
+    warnings.push(
+      `OCR confidence is low on page(s) ` +
+        `${uncertain.map((record) => `${record.page} (${Math.round((record.confidence ?? 0) * 100)}%)`).join(', ')}; ` +
+        'check the wording against the original before relying on it.',
+    );
+  }
 
   let status: ExtractionStatus;
   let blockedReason: string | null = null;
@@ -150,10 +198,20 @@ export function assessExtraction(input: AssessInput): ExtractionQuality {
       'which is not enough to audit. The file may be a scan with no OCR available, or empty.';
   } else if (coverageRatio < THRESHOLDS.minCoverageRatio) {
     status = 'BLOCKED';
+    // Say which kind of unreadable it was. "0 of 1 pages could be read" on a
+    // page that plainly has words on it is the sort of message that sends
+    // someone hunting for a bug that is not there.
+    const distrustedHere = failed.filter((page) => distrusted.has(page));
+    const because =
+      distrustedHere.length === 0
+        ? ''
+        : ` Page(s) ${distrustedHere.join(', ')} were recognised, but at confidence below ` +
+          `${Math.round(THRESHOLDS.ocrConfidenceFloor * 100)}%, so the text cannot be trusted — ` +
+          'rescan them at a higher resolution.';
     blockedReason =
       `Only ${readable.length} of ${pagesExpected} pages could be read ` +
       `(${Math.round(coverageRatio * 100)}% coverage, ${Math.round(THRESHOLDS.minCoverageRatio * 100)}% required). ` +
-      `Unreadable pages: ${failed.join(', ')}.`;
+      `Unreadable pages: ${failed.join(', ')}.${because}`;
   } else if (glyphPages / pagesExpected > THRESHOLDS.maxReplacementGlyphPageRatio) {
     status = 'BLOCKED';
     blockedReason =

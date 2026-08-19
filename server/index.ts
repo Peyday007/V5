@@ -34,6 +34,7 @@ import { seedIfEmpty } from './seed.ts';
 import { writeProjectState } from './services/runtimeState.ts';
 import { recomputeProject } from './services/stateEngine.ts';
 import { recoverInterruptedExtractions } from './services/documents/extraction.ts';
+import { ocrStatus } from './services/documents/ocr.ts';
 import { queueUnreadDocuments } from './services/documents/queue.ts';
 
 /**
@@ -194,6 +195,22 @@ function logBanner(migrations: MigrationReport): void {
       : `  Migrations      up to date (${migrations.alreadyApplied} already applied)`,
   );
   if (migrations.backupPath) console.log(`  Backup          ${migrations.backupPath}`);
+
+  // The capability check happens at startup, not when the first scan arrives:
+  // finding out halfway through a fifty-page import that OCR was never going to
+  // work is the worst moment to learn it.
+  const ocr = ocrStatus();
+  console.log(
+    `  OCR             ${
+      ocr.available
+        ? `${ocr.engineVersion} + ${ocr.rendererVersion} at ${ocr.dpi} dpi (${ocr.language})`
+        : 'not available - scanned pages will be reported unreadable'
+    }`,
+  );
+  if (!ocr.available && !ocr.disabled) {
+    console.log('');
+    for (const step of ocr.install) console.log(`    ${step}`);
+  }
   console.log('');
 }
 
