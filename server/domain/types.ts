@@ -91,8 +91,66 @@ export const AUDIT_FINDING_TYPES = [
   'REQUIRED_RESEARCH_RUN',
   'REQUIRED_PATCH',
   'NEXT_ACTION',
+  /** A real issue this layer does not own; recorded instead of researched here. */
+  'OTHER_LAYER_HANDOFF',
+  /** An attack the adversarial pass raised, kept whether or not it was upheld. */
+  'ADVERSARIAL_FINDING',
 ] as const;
 export type AuditFindingType = (typeof AUDIT_FINDING_TYPES)[number];
+
+/**
+ * Every issue an audit raises is classified, because "more could be researched"
+ * and "more research is required" are different answers and only the second may
+ * hold a layer open.
+ */
+export const GAP_CLASSIFICATIONS = [
+  /** Missing concept that would materially weaken the layer. May justify research. */
+  'FOUNDATIONAL_GAP',
+  /** Architecture is sound but one bounded unknown needs a focused run first. */
+  'TARGETED_RESEARCH_GAP',
+  /** Evidence already suffices; correct it in synthesis, no new research. */
+  'PATCH',
+  /** Real, but another layer owns it. Record the handoff; do not research here. */
+  'OTHER_LAYER',
+  /** Matters when coding, not for the conceptual foundation. */
+  'IMPLEMENTATION_DETAIL',
+  /** Needs real-world data or calibration later; never holds research open. */
+  'EMPIRICAL_TUNING',
+  /** Global architecture is complete; specific domains get plug-ins later. */
+  'DOMAIN_PLUGIN',
+  /** Would improve quality but is not required for correctness. */
+  'OPTIONAL_IMPROVEMENT',
+  /** The criticism does not materially require action. */
+  'NO_GAP',
+] as const;
+export type GapClassification = (typeof GAP_CLASSIFICATIONS)[number];
+
+/** Classifications that may legitimately keep a layer open for more research. */
+export const RESEARCH_JUSTIFYING_GAPS: readonly GapClassification[] = [
+  'FOUNDATIONAL_GAP',
+  'TARGETED_RESEARCH_GAP',
+];
+
+export const AUDIT_MODES = ['SINGLE_DOCUMENT', 'LAYER_PACKET'] as const;
+export type AuditMode = (typeof AUDIT_MODES)[number];
+
+/** One model call in the pipeline. Separation of roles is the point. */
+export const AUDIT_PASS_KEYS = ['EXTRACTION', 'PRIMARY', 'ADVERSARIAL', 'JUDGE'] as const;
+export type AuditPassKey = (typeof AUDIT_PASS_KEYS)[number];
+
+/** How the requirement pass answers "did this do its assigned job?". */
+export const ASSIGNMENT_VERDICTS = ['YES', 'PARTIAL', 'NO'] as const;
+export type AssignmentVerdict = (typeof ASSIGNMENT_VERDICTS)[number];
+
+/** How a dependency-pass observation relates two artifacts. */
+export const CONSISTENCY_RELATIONS = [
+  'CONTRADICTION',
+  'REFINEMENT',
+  'SUPERSESSION',
+  'PARALLEL_DETAIL',
+  'FALSE_CONFLICT',
+] as const;
+export type ConsistencyRelation = (typeof CONSISTENCY_RELATIONS)[number];
 
 export const DEPENDENCY_TYPES = [
   'SOURCE_PACKET',
@@ -309,6 +367,13 @@ export interface AuditRow {
   source: string;
   raw: string;
   created_at: string;
+  mode: string;
+  profile_id: string | null;
+  foundational_gap_count: number;
+  targeted_research_runs_required: number;
+  audited_document_ids: string;
+  provider: string | null;
+  model: string | null;
 }
 
 export interface AuditFindingRow {
@@ -318,6 +383,41 @@ export interface AuditFindingRow {
   ordinal: number;
   content: string;
   payload: string;
+  created_at: string;
+}
+
+export interface AuditGapRow {
+  id: string;
+  audit_id: string;
+  ordinal: number;
+  classification: string;
+  title: string;
+  detail: string;
+  owning_layer_id: string | null;
+  owning_layer_name: string | null;
+  justification: string;
+  research_question: string | null;
+  expected_contribution: string | null;
+  source_pass: string;
+  created_at: string;
+}
+
+export interface AuditPassRow {
+  id: string;
+  audit_id: string | null;
+  pipeline_id: string;
+  project_id: string;
+  layer_id: string | null;
+  pass_key: string;
+  ordinal: number;
+  provider: string | null;
+  model: string | null;
+  prompt: string;
+  raw_response: string | null;
+  parsed: string;
+  ok: number;
+  error: string | null;
+  duration_ms: number | null;
   created_at: string;
 }
 
@@ -473,6 +573,41 @@ export interface AuditFinding {
   createdAt: string;
 }
 
+export interface AuditGap {
+  id: string;
+  auditId: string;
+  ordinal: number;
+  classification: GapClassification;
+  title: string;
+  detail: string;
+  owningLayerId: string | null;
+  owningLayerName: string | null;
+  justification: string;
+  researchQuestion: string | null;
+  expectedContribution: string | null;
+  sourcePass: AuditPassKey;
+  createdAt: string;
+}
+
+export interface AuditPass {
+  id: string;
+  auditId: string | null;
+  pipelineId: string;
+  projectId: string;
+  layerId: string | null;
+  passKey: AuditPassKey;
+  ordinal: number;
+  provider: string | null;
+  model: string | null;
+  prompt: string;
+  rawResponse: string | null;
+  parsed: unknown;
+  ok: boolean;
+  error: string | null;
+  durationMs: number | null;
+  createdAt: string;
+}
+
 export interface Audit {
   id: string;
   projectId: string;
@@ -490,6 +625,14 @@ export interface Audit {
   raw: Record<string, unknown>;
   createdAt: string;
   findings: AuditFinding[];
+  mode: AuditMode;
+  profileId: string | null;
+  foundationalGapCount: number;
+  targetedResearchRunsRequired: number;
+  auditedDocumentIds: string[];
+  provider: string | null;
+  model: string | null;
+  gaps: AuditGap[];
 }
 
 export interface Conversation {

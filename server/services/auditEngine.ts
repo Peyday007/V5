@@ -23,6 +23,8 @@ import type {
   ResearchRun,
   StructuredAuditResult,
   VersionPolicy,
+  AuditMode,
+  AuditFindingType,
 } from '../domain/types.ts';
 import { AUDIT_VERDICTS, DEFAULT_VERSION_POLICY } from '../domain/types.ts';
 import { buildCanonicalName, normalizeName } from '../domain/naming.ts';
@@ -35,7 +37,7 @@ import {
   synthesisVersion,
 } from '../domain/version.ts';
 import { getDb } from '../db/database.ts';
-import { createAudit } from '../repos/audits.ts';
+import { createAudit, type CreateAuditGapInput } from '../repos/audits.ts';
 import {
   createDependency,
   listDependenciesForDocument,
@@ -614,6 +616,15 @@ export interface RecordAuditInput {
   auditedDocumentId?: string | null;
   result: Partial<StructuredAuditResult> & { verdict: AuditVerdict };
   source?: string;
+  /** Set by the dynamic audit pipeline; hand-recorded audits leave these alone. */
+  mode?: AuditMode;
+  profileId?: string | null;
+  auditedDocumentIds?: string[];
+  provider?: string | null;
+  model?: string | null;
+  gaps?: CreateAuditGapInput[];
+  extraFindings?: { findingType: AuditFindingType; content: string; payload?: Record<string, unknown> }[];
+  pipelineId?: string | null;
 }
 
 export interface AuditOutcome {
@@ -863,6 +874,14 @@ export function recordAudit(input: RecordAuditInput): AuditOutcome {
       auditedDocumentId: auditedDocument?.id ?? null,
       result,
       source: input.source ?? 'MANUAL',
+      mode: input.mode ?? 'SINGLE_DOCUMENT',
+      profileId: input.profileId ?? null,
+      auditedDocumentIds: input.auditedDocumentIds,
+      provider: input.provider ?? null,
+      model: input.model ?? null,
+      gaps: input.gaps,
+      extraFindings: input.extraFindings,
+      pipelineId: input.pipelineId ?? null,
     });
 
     // An audit run that produced this verdict has done its job.

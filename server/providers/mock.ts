@@ -243,6 +243,18 @@ export class MockProvider implements AIProvider {
    * `parseAuditJson` consumes it without special-casing the mock.
    */
   async audit(request: AuditRequest): Promise<AuditResponse> {
+    // The dynamic audit pipeline stamps each prompt with its pass, because the
+    // three roles expect three different JSON shapes. Answer the right one.
+    const dynamicPass = /^BRAIN AUDIT PASS: (EXTRACTION|PRIMARY|ADVERSARIAL|JUDGE)/m.exec(
+      request.prompt,
+    )?.[1];
+    if (dynamicPass) {
+      return {
+        text: mockDynamicPass(dynamicPass, request),
+        externalResponseId: `mock_${dynamicPass.toLowerCase()}_${fingerprint(request.prompt, null).slice(0, 12)}`,
+      };
+    }
+
     const assessment = assess(request);
     const payload = {
       verdict: assessment.verdict,
@@ -272,4 +284,106 @@ export class MockProvider implements AIProvider {
       externalResponseId: `mock_audit_${fingerprint(request.prompt, request.documentText).slice(0, 16)}`,
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic audit passes
+// ---------------------------------------------------------------------------
+
+/**
+ * Offline stand-ins for the three audit roles.
+ *
+ * Without a model there is no architectural judgement to be had, and pretending
+ * otherwise would be worse than useless: an audit that always says PASS would
+ * quietly advance a layer nobody checked. So the mock judges only what can be
+ * checked mechanically — is there readable content, does the packet look
+ * complete, are dependencies satisfied — and where it cannot know, it declines
+ * to advance rather than approving.
+ */
+function mockDynamicPass(passKey: string, request: AuditRequest): string {
+  const prompt = request.prompt;
+  const unreadable = /\[NO READABLE CONTENT\]/.test(prompt);
+  const missingDeps = /^  Missing dependencies: (.+)$/m.exec(prompt)?.[1] ?? null;
+  const missingVersions = /^  Missing: (.+)$/m.exec(prompt)?.[1] ?? null;
+  const hasMissing = Boolean(missingDeps) || (missingVersions !== null && missingVersions !== 'none');
+  const isPacket = /^AUDIT MODE: LAYER_PACKET$/m.test(prompt);
+
+  if (passKey === 'EXTRACTION' || passKey === 'PRIMARY') {
+    const findings: string[] = [];
+    if (unreadable) findings.push('At least one artifact has no readable text, so its content could not be assessed.');
+    if (hasMissing) findings.push(`The packet is incomplete: ${missingDeps ?? missingVersions} is absent.`);
+    return fence({
+      assignment_satisfied: unreadable ? 'PARTIAL' : 'YES',
+      requirement_findings: findings,
+      structural_findings: [],
+      boundary_findings: [],
+      consistency_findings: [],
+      candidate_gaps: [],
+      notes:
+        'MOCK PROVIDER: no model is configured, so no architectural judgement was performed. ' +
+        'Only mechanical checks (readable content, packet completeness, dependency state) ran.',
+    });
+  }
+
+  if (passKey === 'ADVERSARIAL') {
+    const attacks = [
+      {
+        attack:
+          'No model performed a structural audit, so nothing has actually verified that the ' +
+          'architecture is strong enough to build on.',
+        assessment: 'VALID',
+        reasoning:
+          'A verdict produced without reading the work is not evidence. Configure a provider, or ' +
+          'record the audit by hand after reviewing it yourself.',
+      },
+    ];
+    return fence({
+      attacks,
+      strongest_reason_not_to_advance:
+        'The audit ran offline against the mock provider, so no architectural judgement exists.',
+    });
+  }
+
+  // JUDGE — decline to advance, and say plainly why.
+  if (hasMissing) {
+    const missing = (missingDeps ?? missingVersions ?? 'a required document').split(/,\s*/);
+    return fence({
+      verdict: 'BLOCKED',
+      summary:
+        'The packet is incomplete, so no verdict on its quality is possible yet. ' +
+        'This audit ran offline against the mock provider.',
+      gap_classifications: [],
+      required_patches: [],
+      other_layer_handoffs: [],
+      blocking_dependencies: missing,
+      synthesis_ready: false,
+      freeze_ready: false,
+      confidence: 0.2,
+      foundational_gap_count: 0,
+      targeted_research_runs_required: 0,
+      next_action: `Import ${missing[0]} before auditing this ${isPacket ? 'packet' : 'document'} again.`,
+    });
+  }
+
+  return fence({
+    verdict: 'PATCH',
+    summary:
+      'No AI provider is configured, so this audit performed mechanical checks only and no ' +
+      'architectural judgement. It deliberately does not advance the layer: set ANTHROPIC_API_KEY ' +
+      'or OPENAI_API_KEY and BRAIN_PROVIDER, or record an audit by hand after reviewing the work.',
+    gap_classifications: [],
+    required_patches: ['Re-run this audit with a configured AI provider, or record a human audit.'],
+    other_layer_handoffs: [],
+    blocking_dependencies: [],
+    synthesis_ready: false,
+    freeze_ready: false,
+    confidence: 0.1,
+    foundational_gap_count: 0,
+    targeted_research_runs_required: 0,
+    next_action: 'Configure an AI provider and re-run the audit, or record a human audit verdict.',
+  });
+}
+
+function fence(payload: unknown): string {
+  return ['```json', JSON.stringify(payload, null, 2), '```'].join('\n');
 }
