@@ -1529,3 +1529,35 @@ legend {
   padding-left: 10px;
   border-left: 2px solid var(--border);
 }
+
+/* ---------------------------------------------------------------------------
+   Dynamic audit result
+
+   Three lines carry the whole answer, so they are the only part that gets any
+   visual weight. Everything else lives in collapsed sections.
+   --------------------------------------------------------------------------- */
+.audit-headline {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line-strong, #2f3a4a);
+  border-left: 4px solid var(--accent, #4f8cc9);
+  background: var(--surface-2, #161c24);
+}
+
+.audit-headline__verdict {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.audit-headline__meta {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--text-muted, #8b97a8);
+}
+
+.audit-headline__next {
+  font-size: 14px;
+}

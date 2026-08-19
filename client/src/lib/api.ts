@@ -348,6 +348,140 @@ export const Api = {
   documentFileUrl(documentId: string): string {
     return `/api/documents/${enc(documentId)}/file`;
   },
+
+  /** One-click dynamic audit of a single research artifact. */
+  dynamicAuditDocument(documentId: string, body: unknown = {}): Promise<DynamicAuditResponse> {
+    return api(`/api/documents/${enc(documentId)}/dynamic-audit`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  dynamicAuditRun(runId: string, body: unknown = {}): Promise<DynamicAuditResponse> {
+    return api(`/api/runs/${enc(runId)}/dynamic-audit`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** The Wave-3 question: is this layer's whole packet ready? */
+  packetAudit(layerId: string, body: unknown = {}): Promise<DynamicAuditResponse> {
+    return api(`/api/layers/${enc(layerId)}/packet-audit`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Dynamic audit
+// ---------------------------------------------------------------------------
+
+export interface AuditHeadline {
+  verdict: string;
+  moreResearchRuns: number;
+  nextAction: string;
+  summary: string;
+}
+
+export interface AuditPassView {
+  id: string;
+  passKey: string;
+  ordinal: number;
+  provider: string | null;
+  model: string | null;
+  prompt: string;
+  rawResponse: string | null;
+  ok: boolean;
+  error: string | null;
+  durationMs: number | null;
+}
+
+export interface ResearchCandidateView {
+  layerId: string;
+  layerName: string;
+  title: string;
+  researchQuestion: string;
+  expectedContribution: string | null;
+  classification: string;
+}
+
+export interface DynamicAuditResponse {
+  audit: Audit;
+  state: LayerStateSnapshot;
+  plan: PlannerResult;
+  pipelineId: string;
+  passes: AuditPassView[];
+  researchCandidates: ResearchCandidateView[];
+  adversarial: { attacks: { attack: string; material: boolean; reasoning: string }[]; strongestReasonNotToAdvance: string };
+  primary: {
+    assignmentSatisfied: string;
+    requirementFindings: string[];
+    structuralFindings: string[];
+    boundaryFindings: string[];
+    consistencyFindings: { relation: string; detail: string }[];
+    notes: string;
+  };
+  headline: AuditHeadline;
+}
+
+export type AuditStreamEvent =
+  | { type: 'progress'; passKey: string; index: number; total: number; label: string }
+  | { type: 'result'; result: DynamicAuditResponse }
+  | { type: 'failed'; error: string; detail: unknown };
+
+/**
+ * Stream an audit, emitting one event per pass.
+ *
+ * The passes genuinely take time against a real provider, so the progress the
+ * user sees is the server's actual position rather than an animation.
+ */
+export async function streamAudit(
+  path: string,
+  onEvent: (event: AuditStreamEvent) => void,
+): Promise<void> {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  if (!response.body) throw new ApiError('The audit stream returned no body.', response.status, null);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let split = buffer.indexOf('\n\n');
+    while (split !== -1) {
+      const frame = buffer.slice(0, split);
+      buffer = buffer.slice(split + 2);
+      const eventName = /^event: (.+)$/m.exec(frame)?.[1]?.trim();
+      const dataLine = /^data: (.*)$/m.exec(frame)?.[1];
+      if (eventName && dataLine) {
+        const payload: unknown = JSON.parse(dataLine);
+        if (eventName === 'progress') {
+          onEvent({ type: 'progress', ...(payload as { passKey: string; index: number; total: number; label: string }) });
+        } else if (eventName === 'result') {
+          onEvent({ type: 'result', result: payload as DynamicAuditResponse });
+        } else if (eventName === 'failed') {
+          const failure = payload as { error: string; detail: unknown };
+          onEvent({ type: 'failed', error: failure.error, detail: failure.detail });
+        }
+      }
+      split = buffer.indexOf('\n\n');
+    }
+  }
+}
+
+export const auditStreamPaths = {
+  document: (documentId: string): string => `/api/documents/${enc(documentId)}/dynamic-audit/stream`,
+  run: (runId: string): string => `/api/runs/${enc(runId)}/dynamic-audit/stream`,
+  packet: (layerId: string): string => `/api/layers/${enc(layerId)}/packet-audit/stream`,
 };
 
 // ---------------------------------------------------------------------------

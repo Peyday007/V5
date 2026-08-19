@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Document, DocumentStatus, DocumentType } from '../../../server/domain/types.ts';
 import { Api, ApiError, api, copyToClipboard } from '../lib/api.ts';
+import { DynamicAuditPanel } from './DynamicAuditPanel.tsx';
 import { Badge } from './Badge.tsx';
 
 /** Declared here, not imported: the client never pulls a value out of the server. */
@@ -65,6 +66,7 @@ export function DocumentCard(props: { document: Document; onChanged(): void }): 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<'name' | 'failed' | null>(null);
+  const [auditOpen, setAuditOpen] = useState(false);
   const [version, setVersion] = useState(doc.version);
   const [documentType, setDocumentType] = useState<DocumentType>(doc.documentType);
   const [status, setStatus] = useState<DocumentStatus>(doc.status);
@@ -268,8 +270,30 @@ export function DocumentCard(props: { document: Document; onChanged(): void }): 
           <button type="button" className="btn btn--small" onClick={startEditing}>
             EDIT
           </button>
+          <button
+            type="button"
+            className="btn btn--small"
+            onClick={() => setAuditOpen((open) => !open)}
+            // Judging an artifact nobody can read would be inventing a verdict.
+            disabled={doc.fileMissing || !doc.filesystemPath}
+            title={
+              doc.fileMissing || !doc.filesystemPath
+                ? 'There is no readable file to audit.'
+                : 'Run the multi-pass audit on this document'
+            }
+          >
+            AUDIT
+          </button>
         </div>
       )}
+      {auditOpen ? (
+        <DynamicAuditPanel
+          kind="document"
+          targetId={doc.id}
+          label={`AUDIT ${doc.canonicalName.toUpperCase()}`}
+          onChanged={onChanged}
+        />
+      ) : null}
     </div>
   );
 }

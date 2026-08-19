@@ -25,6 +25,7 @@ import { Api, ApiError, copyToClipboard } from '../lib/api.ts';
 import { Badge, Pill } from './Badge.tsx';
 import { Modal } from './Modal.tsx';
 import { AuditPanel } from './AuditPanel.tsx';
+import { DynamicAuditPanel } from './DynamicAuditPanel.tsx';
 import { DocumentCard } from './DocumentCard.tsx';
 import { PromptPanel } from './PromptPanel.tsx';
 import { RunCard } from './RunCard.tsx';
@@ -630,7 +631,22 @@ export function LayerDetail(props: {
       ) : null}
 
       {tab === 'AUDITS' ? (
-        <AuditPanel layerId={layer.id} audits={audits} runs={runs} onChanged={childChanged} />
+        <div className="stack">
+          <div className="card">
+            <div className="small muted">
+              The Wave-3 question: taken together, is this layer&apos;s entire research packet
+              complete enough to synthesise or freeze? Runs a primary audit, an adversarial
+              critique and a final judge over every completed document in the layer.
+            </div>
+            <DynamicAuditPanel
+              kind="packet"
+              targetId={layer.id}
+              label="AUDIT FULL LAYER PACKET"
+              onChanged={childChanged}
+            />
+          </div>
+          <AuditPanel layerId={layer.id} audits={audits} runs={runs} onChanged={childChanged} />
+        </div>
       ) : null}
 
       {tab === 'DEPENDENCIES' ? (

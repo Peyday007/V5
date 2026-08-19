@@ -6,6 +6,7 @@
  * produce `{ error, detail? }` instead of an HTML stack trace.
  */
 import { Router } from 'express';
+import { auditsRouter } from './audits.ts';
 import { chatRouter } from './chat.ts';
 import { documentsRouter } from './documents.ts';
 import { healthRouter } from './health.ts';
@@ -18,6 +19,9 @@ export function createApiRouter(): Router {
   const router = Router();
 
   router.use(healthRouter);
+  // Audit routes carry their own prefixes (/runs/:id/..., /layers/:id/...),
+  // so they mount at the root ahead of the entity routers.
+  router.use(auditsRouter);
   router.use('/projects', projectsRouter);
   router.use('/layers', layersRouter);
   router.use('/runs', runsRouter);
