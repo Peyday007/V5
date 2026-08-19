@@ -20,11 +20,12 @@ import type {
 } from '../server/providers/types.ts';
 import { AuditFailure, runDynamicAudit } from '../server/services/audit/pipeline.ts';
 import { buildAuditContext } from '../server/services/audit/context.ts';
+import { extractDocument } from '../server/services/documents/extraction.ts';
 import { parseJudgePass, parsePrimaryPass } from '../server/services/audit/schema.ts';
 import { computeLayerState } from '../server/services/stateEngine.ts';
 import { buildPlan } from '../server/services/planner.ts';
 import { listAuditsByLayer, listPipelinePasses } from '../server/repos/audits.ts';
-import { getDocument } from '../server/repos/documents.ts';
+import { getDocument, updateDocument } from '../server/repos/documents.ts';
 import { handleChatMessage } from '../server/services/agent/chat.ts';
 import { getAuditProfile } from '../server/domain/auditProfile.ts';
 
@@ -124,11 +125,36 @@ class ScriptedProvider implements AIProvider {
   }
 }
 
-/** Audit one document with a scripted provider. */
-function auditDocument(layerName: string, version: string, script: Script) {
+/**
+ * Add a document and read it, because an audit now judges extracted evidence
+ * rather than raw bytes — an unread document is deliberately not auditable.
+ */
+async function addReadable(layerName: string, version: string, extra = '') {
   const document = addDocument(fixture, layerName, version, {
-    contents: `${layerName} ${version}\n\nSubstantive body text for the auditor to read.`,
+    // Long enough to clear the quality gate's "essentially empty" floor, because
+    // an audit of 170 characters is exactly what that floor exists to refuse.
+    contents: [
+      `${layerName} ${version}`,
+      '',
+      'This document sets out the architecture for its layer. It distinguishes the actors from',
+      'the roles they occupy, the rights they hold from the objects those rights attach to, and',
+      'the commitments they make from the obligations those commitments create.',
+      '',
+      'It describes how state changes over time: how a commitment becomes an obligation, how an',
+      'obligation is discharged by performance, and how consideration settles between the',
+      'parties. It represents uncertainty explicitly rather than converting it into fact, and it',
+      'records where each material claim came from.',
+      '',
+      extra,
+    ].join('\n'),
   });
+  await extractDocument(document.id);
+  return document;
+}
+
+/** Audit one document with a scripted provider. */
+async function auditDocument(layerName: string, version: string, script: Script) {
+  const document = await addReadable(layerName, version);
   return runDynamicAudit({
     mode: 'SINGLE_DOCUMENT',
     layerId: fixture.layerByName(layerName).id,
@@ -441,11 +467,7 @@ describe('missing dependency', () => {
 describe('full-layer packet audit', () => {
   it('reads every completed document and can clear the layer for synthesis', async () => {
     const packet = ['v1', 'v1B', 'v1C', 'v1D'];
-    for (const version of packet) {
-      addDocument(fixture, 'Decision Routing Rules', version, {
-        contents: `Decision Routing Rules ${version}\n\nRoute comparison, gates, tradeoffs, authority.`,
-      });
-    }
+    for (const version of packet) await addReadable('Decision Routing Rules', version);
     const layer = fixture.layerByName('Decision Routing Rules');
     const provider = new ScriptedProvider({
       judge: judge({
@@ -480,8 +502,9 @@ describe('full-layer packet audit', () => {
   });
 
   it('freezes the layer when the canonical synthesis passes its final audit', async () => {
-    for (const version of ['v1', 'v1B']) addDocument(fixture, 'Monetization Logic', version);
-    addDocument(fixture, 'Monetization Logic', 'v3.1', { documentType: 'SYNTHESIS' });
+    for (const version of ['v1', 'v1B']) await addReadable('Monetization Logic', version);
+    const canonical = await addReadable('Monetization Logic', 'v3.1');
+    updateDocument(canonical.id, { documentType: 'SYNTHESIS' });
     const layer = fixture.layerByName('Monetization Logic');
 
     const outcome = await runDynamicAudit({
@@ -505,7 +528,7 @@ describe('full-layer packet audit', () => {
 
 describe('zero-trust: invalid model output never moves the project', () => {
   async function expectNoStateChange(script: Script): Promise<void> {
-    const document = addDocument(fixture, 'Taxonomy', 'v1');
+    const document = await addReadable('Taxonomy', 'v1');
     const layer = fixture.layerByName('Taxonomy');
     const before = computeLayerState(layer.id).status;
 
@@ -591,7 +614,7 @@ describe('zero-trust: invalid model output never moves the project', () => {
   });
 
   it('keeps the raw response of a failed pass for debugging', async () => {
-    const document = addDocument(fixture, 'Taxonomy', 'v1');
+    const document = await addReadable('Taxonomy', 'v1');
     const layer = fixture.layerByName('Taxonomy');
     let failure: AuditFailure | null = null;
     try {
@@ -639,9 +662,7 @@ describe('question safety still holds', () => {
 
 describe('the audit context', () => {
   it('puts the exact assignment and the artifact in front of the auditor', async () => {
-    const document = addDocument(fixture, 'Discovery Logic', 'v1', {
-      contents: 'Discovery Logic v1\n\nDISTINCTIVE-MARKER-TEXT about open-web sensors.',
-    });
+    const document = await addReadable('Discovery Logic', 'v1', 'DISTINCTIVE-MARKER-TEXT about open-web sensors.');
     const provider = new ScriptedProvider({});
     await runDynamicAudit({
       mode: 'SINGLE_DOCUMENT',
@@ -662,12 +683,15 @@ describe('the audit context', () => {
     expect(primaryPrompt).toContain('G5');
   });
 
-  it('marks oversized material for staged extraction instead of dropping it', () => {
-    addDocument(fixture, 'Taxonomy', 'v1', { contents: 'x'.repeat(60_000) });
+  it('marks oversized material for staged extraction instead of dropping it', async () => {
+    const big = addDocument(fixture, 'Taxonomy', 'v1B', {
+      contents: Array.from({ length: 400 }, (_, i) => `Paragraph ${i} of a very long report.`).join('\n\n'),
+    });
+    await extractDocument(big.id);
     const context = buildAuditContext({
       mode: 'SINGLE_DOCUMENT',
       layerId: fixture.layerByName('Taxonomy').id,
-      documentId: addDocument(fixture, 'Taxonomy', 'v1B', { contents: 'y'.repeat(60_000) }).id,
+      documentId: big.id,
       contentBudget: 1_000,
     });
     expect(context.requiresStagedExtraction).toBe(true);

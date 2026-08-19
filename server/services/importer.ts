@@ -30,6 +30,7 @@ import { nowIso } from '../repos/util.ts';
 import { refreshProjectDependencies } from './dependencies.ts';
 import { AUTO_REGISTER_CONFIDENCE, inferForProjectFile, inferFromFilename } from './inference.ts';
 import { recomputeProject } from './stateEngine.ts';
+import { enqueueExtraction } from './documents/queue.ts';
 import {
   absolutePathFor,
   fileExists,
@@ -333,6 +334,17 @@ function recomputeAfterRegistration(projectId: string): void {
   recomputeProject(projectId);
 }
 
+/**
+ * Reading the document is queued rather than awaited: a fifty-page PDF takes
+ * seconds and OCR can take minutes, and the import response should not wait for
+ * either. The document reports QUEUED until the run finishes, so it is never
+ * mistaken for readable evidence in the meantime.
+ */
+function scheduleExtraction(documentId: string | null): void {
+  if (!documentId) return;
+  void enqueueExtraction(documentId);
+}
+
 function describeRegistration(registration: Registration): string {
   if (registration.filled) return ' It completed the document that was already expected here.';
   return registration.superseded
@@ -420,6 +432,7 @@ export function importFile(input: ImportFileInput): ImportResult {
       },
     });
     recomputeAfterRegistration(project.id);
+    scheduleExtraction(restored.id);
     return result({
       filename: originalFilename,
       storedPath: stored.relativePath,
@@ -566,6 +579,7 @@ export function importFile(input: ImportFileInput): ImportResult {
   });
   const document = registration.document;
   recomputeAfterRegistration(project.id);
+  scheduleExtraction(document.id);
 
   return result({
     filename: originalFilename,
@@ -669,6 +683,7 @@ export function resolveImport(input: ResolveImportInput): ImportResult {
   });
   const document = registration.document;
   recomputeAfterRegistration(project.id);
+  scheduleExtraction(document.id);
 
   return result({
     filename,
@@ -814,6 +829,7 @@ export function registerExistingFile(input: RegisterExistingFileInput): ImportRe
   });
   const document = registration.document;
   recomputeAfterRegistration(project.id);
+  scheduleExtraction(document.id);
 
   return result({
     filename,

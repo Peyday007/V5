@@ -10,7 +10,6 @@
  * oversized documents are marked as requiring a staged extraction pass, and the
  * link back to the original content is always preserved.
  */
-import fs from 'node:fs';
 import type {
   Audit,
   Document,
@@ -27,7 +26,9 @@ import { getLayer, listLayers } from '../../repos/layers.ts';
 import { getDocument, listDocumentsByLayer } from '../../repos/documents.ts';
 import { getRun, listRunsByLayer } from '../../repos/runs.ts';
 import { listAuditsByLayer } from '../../repos/audits.ts';
-import { absolutePathFor, fileExists } from '../storage.ts';
+import { fileExists } from '../storage.ts';
+import { getCurrentExtractionRun, listBlocks } from '../../repos/extraction.ts';
+import { isAuditable } from '../documents/quality.ts';
 import { checkCanonicalNames, checkRunDependencies } from '../dependencies.ts';
 import { computeLayerState } from '../stateEngine.ts';
 import { defaultRequiredDocuments } from '../promptCompiler.ts';
@@ -46,12 +47,19 @@ export interface ArtifactContent {
   status: string;
   /** Text actually available to the auditor. */
   text: string;
-  /** Full byte length on disk, so truncation is always visible. */
+  /** Full extracted length, so truncation is always visible. */
   fullLength: number;
   truncated: boolean;
-  /** Why there is no text: missing file, unreadable binary, or nothing registered. */
+  /** Why there is no text: missing file, unread document, or a blocked extraction. */
   unavailableReason: string | null;
   filesystemPath: string | null;
+  /** Which reading of the document this text came from. */
+  extractionRunId: string | null;
+  extractionStatus: string;
+  pageCount: number | null;
+  pagesOcr: number;
+  coverageRatio: number;
+  extractionWarnings: string[];
 }
 
 export interface AuditContext {
@@ -81,9 +89,53 @@ export interface AuditContext {
   /** True when the material exceeded budget and a staged extraction is required. */
   requiresStagedExtraction: boolean;
   contentBudget: number;
+  /** Proof of exactly what was read (section 14). */
+  manifest: EvidenceManifest;
 }
 
+/**
+ * The packet manifest: which files, versions, pages and extraction runs the
+ * audit actually consumed. Without it a packet verdict is an assertion; with it
+ * the user can check the auditor read what it claims to have read.
+ */
+export interface EvidenceManifest {
+  mode: 'SINGLE_DOCUMENT' | 'LAYER_PACKET';
+  layerName: string;
+  generatedAt: string;
+  documents: ManifestEntry[];
+  totalPages: number;
+  totalCharacters: number;
+  /** Documents that could not be read; a required one of these blocks the audit. */
+  unreadable: ManifestEntry[];
+  complete: boolean;
+}
+
+export interface ManifestEntry {
+  documentId: string | null;
+  canonicalName: string;
+  version: string;
+  documentType: string;
+  extractionRunId: string | null;
+  extractionStatus: string;
+  pages: number | null;
+  pagesOcr: number;
+  coverageRatio: number;
+  characters: number;
+  truncated: boolean;
+  warnings: string[];
+  unavailableReason: string | null;
+}
+
+/**
+ * The auditable text of a document, taken from its validated extraction run.
+ *
+ * The extraction pipeline has already decided whether this document can be read
+ * at all; the audit never re-derives that judgement, and never falls back to
+ * scraping bytes. A document that is not READY is evidence the auditor does not
+ * have, and it says so.
+ */
 function readDocumentText(document: Document, budget: number): ArtifactContent {
+  const run = getCurrentExtractionRun(document.id);
   const base = {
     documentId: document.id,
     canonicalName: document.canonicalName,
@@ -91,6 +143,12 @@ function readDocumentText(document: Document, budget: number): ArtifactContent {
     documentType: document.documentType,
     status: document.status,
     filesystemPath: document.filesystemPath,
+    extractionRunId: run?.id ?? null,
+    extractionStatus: run?.status ?? document.extractionStatus,
+    pageCount: run?.pagesExpected ?? document.pageCount ?? null,
+    pagesOcr: run?.pagesOcr ?? 0,
+    coverageRatio: run?.coverageRatio ?? 0,
+    extractionWarnings: run?.warnings ?? [],
   };
 
   if (!document.filesystemPath || !fileExists(document.filesystemPath)) {
@@ -105,33 +163,46 @@ function readDocumentText(document: Document, budget: number): ArtifactContent {
     };
   }
 
-  let raw: Buffer;
-  try {
-    raw = fs.readFileSync(absolutePathFor(document.filesystemPath));
-  } catch (error) {
+  if (!run) {
     return {
       ...base,
       text: '',
       fullLength: 0,
       truncated: false,
-      unavailableReason: `The file could not be read: ${error instanceof Error ? error.message : String(error)}`,
+      unavailableReason:
+        'This document has not been read yet — no extraction run exists. ' +
+        'It will be queued automatically; reprocess it if it stays unread.',
     };
   }
 
-  const text = extractReadableText(raw);
-  if (text.trim().length === 0) {
+  if (!isAuditable(run.status)) {
     return {
       ...base,
       text: '',
-      fullLength: raw.byteLength,
+      fullLength: 0,
       truncated: false,
-      // A PDF whose text cannot be extracted is a blocked audit, not a pass:
-      // judging an artifact nobody can read would be inventing a verdict.
+      // Section 16: no readable content is BLOCKED, never a verdict.
       unavailableReason:
-        'No readable text could be extracted from this file (it is probably a scanned or ' +
-        'image-only PDF). The audit cannot judge content it cannot read.',
+        run.blockedReason ??
+        `The document could not be read (extraction ${run.status}). The audit cannot judge ` +
+          'content it has not seen.',
     };
   }
+
+  const blocks = listBlocks(run.id).filter(
+    (block) => block.blockType !== 'PAGE_HEADER' && block.blockType !== 'PAGE_FOOTER',
+  );
+  // Page markers travel with the text so the auditor can cite a page number.
+  const parts: string[] = [];
+  let lastPage = -1;
+  for (const block of blocks) {
+    if (block.pageNumber !== lastPage) {
+      parts.push(`\n[page ${block.pageNumber}]`);
+      lastPage = block.pageNumber;
+    }
+    parts.push(block.normalizedText);
+  }
+  const text = parts.join('\n').trim();
 
   return {
     ...base,
@@ -140,34 +211,6 @@ function readDocumentText(document: Document, budget: number): ArtifactContent {
     truncated: text.length > budget,
     unavailableReason: null,
   };
-}
-
-/**
- * Pull readable text out of a stored artifact.
- *
- * Plain text and Markdown come through as-is. For PDFs this recovers the text
- * that sits uncompressed in content streams — enough for the auditor to work
- * with, and honest about failing when there is nothing recoverable. Full PDF
- * text extraction is a known gap, not a silent one.
- */
-export function extractReadableText(raw: Buffer): string {
-  const head = raw.subarray(0, 5).toString('latin1');
-  if (head !== '%PDF-') return raw.toString('utf8');
-
-  const latin = raw.toString('latin1');
-  const chunks: string[] = [];
-  // Text-showing operators: (literal) Tj / TJ arrays.
-  const showText = /\(((?:\\.|[^\\()])*)\)\s*(?:Tj|TJ|'|")/g;
-  let match = showText.exec(latin);
-  while (match !== null) {
-    const body = match[1];
-    if (body) chunks.push(body.replace(/\\([()\\])/g, '$1'));
-    match = showText.exec(latin);
-  }
-  if (chunks.length > 0) return chunks.join(' ').replace(/\s+/g, ' ').trim();
-
-  // Nothing extractable — usually a compressed stream. Say so rather than guess.
-  return '';
 }
 
 function toArtifact(document: Document, budget: number): ArtifactContent {
@@ -265,6 +308,8 @@ export function buildAuditContext(input: BuildAuditContextInput): AuditContext {
     artifacts.some((artifact) => artifact.truncated) ||
     artifacts.reduce((total, artifact) => total + artifact.fullLength, 0) > budget;
 
+  const manifest = buildManifest(input.mode, layer.name, artifacts);
+
   return {
     mode: input.mode,
     project,
@@ -286,6 +331,45 @@ export function buildAuditContext(input: BuildAuditContextInput): AuditContext {
     missingVersions: layerState.missingVersions,
     requiresStagedExtraction,
     contentBudget: budget,
+    manifest,
+  };
+}
+
+function manifestEntry(artifact: ArtifactContent): ManifestEntry {
+  return {
+    documentId: artifact.documentId,
+    canonicalName: artifact.canonicalName,
+    version: artifact.version,
+    documentType: artifact.documentType,
+    extractionRunId: artifact.extractionRunId,
+    extractionStatus: artifact.extractionStatus,
+    pages: artifact.pageCount,
+    pagesOcr: artifact.pagesOcr,
+    coverageRatio: artifact.coverageRatio,
+    characters: artifact.text.length,
+    truncated: artifact.truncated,
+    warnings: artifact.extractionWarnings,
+    unavailableReason: artifact.unavailableReason,
+  };
+}
+
+function buildManifest(
+  mode: 'SINGLE_DOCUMENT' | 'LAYER_PACKET',
+  layerName: string,
+  artifacts: ArtifactContent[],
+): EvidenceManifest {
+  const documents = artifacts.map(manifestEntry);
+  const unreadable = documents.filter((entry) => entry.unavailableReason !== null);
+  return {
+    mode,
+    layerName,
+    generatedAt: new Date().toISOString(),
+    documents,
+    totalPages: documents.reduce((total, entry) => total + (entry.pages ?? 0), 0),
+    totalCharacters: documents.reduce((total, entry) => total + entry.characters, 0),
+    unreadable,
+    // A packet with an unreadable member is not a complete reading of the layer.
+    complete: unreadable.length === 0 && documents.length > 0,
   };
 }
 

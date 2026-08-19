@@ -320,15 +320,28 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
     );
   }
 
-  // Section 20: missing readable content is a blocked audit, never a verdict.
+  // Section 16: no readable content is BLOCKED, never a verdict. For a packet
+  // (section 14) even ONE unreadable member blocks it — a layer verdict that
+  // quietly skipped a document is exactly the false confidence this engine exists
+  // to prevent.
   const unreadable = unreadableArtifacts(context);
-  if (unreadable.length === context.artifacts.length) {
-    throw new AuditFailure(
-      'CONTEXT',
-      pipelineId,
-      `The audit cannot read any of the artifacts it was asked to judge: ` +
-        unreadable.map((a) => `${a.canonicalName} (${a.unavailableReason})`).join('; '),
-    );
+  if (unreadable.length > 0) {
+    const blocksEverything =
+      input.mode === 'LAYER_PACKET' || unreadable.length === context.artifacts.length;
+    if (blocksEverything) {
+      const detail = unreadable
+        .map((artifact) => `${artifact.canonicalName} (${artifact.unavailableReason})`)
+        .join('; ');
+      throw new AuditFailure(
+        'CONTEXT',
+        pipelineId,
+        input.mode === 'LAYER_PACKET'
+          ? `The ${context.layer.name} packet cannot be audited: ${unreadable.length} of ` +
+            `${context.artifacts.length} document(s) could not be read — ${detail}. ` +
+            'Reprocess or replace them, then audit the packet again.'
+          : `The audit cannot read the artifact it was asked to judge: ${detail}`,
+      );
+    }
   }
 
   const provider = input.provider ?? getProvider(input.providerName);
@@ -399,6 +412,7 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
     provider: provider.name,
     model,
     pipelineId,
+    evidenceManifest: context.manifest,
     gaps: toGapInputs(judge.gapClassifications, context.project.id),
     extraFindings: [
       ...judge.otherLayerHandoffs.map((content) => ({

@@ -625,6 +625,8 @@ export interface RecordAuditInput {
   gaps?: CreateAuditGapInput[];
   extraFindings?: { findingType: AuditFindingType; content: string; payload?: Record<string, unknown> }[];
   pipelineId?: string | null;
+  /** Proof of what the audit read; stored so a verdict stays checkable. */
+  evidenceManifest?: unknown;
 }
 
 export interface AuditOutcome {
@@ -882,6 +884,7 @@ export function recordAudit(input: RecordAuditInput): AuditOutcome {
       gaps: input.gaps,
       extraFindings: input.extraFindings,
       pipelineId: input.pipelineId ?? null,
+      evidenceManifest: input.evidenceManifest,
     });
 
     // An audit run that produced this verdict has done its job.

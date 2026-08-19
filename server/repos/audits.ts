@@ -100,6 +100,7 @@ function mapAudit(row: AuditRow, findings: AuditFinding[]): Audit {
     provider: row.provider ?? null,
     model: row.model ?? null,
     gaps: loadGaps(row.id),
+    evidenceManifest: parseJson<Record<string, unknown>>(row.evidence_manifest, {}),
   };
 }
 
@@ -142,6 +143,7 @@ export interface CreateAuditInput {
   extraFindings?: { findingType: AuditFindingType; content: string; payload?: Record<string, unknown> }[];
   /** Pipeline whose recorded passes should be attached to this audit. */
   pipelineId?: string | null;
+  evidenceManifest?: unknown;
 }
 
 /**
@@ -165,8 +167,8 @@ export function createAudit(input: CreateAuditInput): Audit {
       `INSERT INTO audits (id, project_id, layer_id, run_id, audited_document_id, verdict, summary,
          confidence, synthesis_required, freeze_eligible, next_version, next_action, source, raw, created_at,
          mode, profile_id, foundational_gap_count, targeted_research_runs_required,
-         audited_document_ids, provider, model)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         audited_document_ids, provider, model, evidence_manifest)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, input.projectId, input.layerId, input.runId ?? null, input.auditedDocumentId ?? null,
         r.verdict, r.summary, r.confidence ?? null, fromBool(r.synthesisRequired),
         fromBool(r.freezeEligible), r.nextVersion ?? null, r.nextAction ?? null,
@@ -174,7 +176,7 @@ export function createAudit(input: CreateAuditInput): Audit {
         input.mode ?? 'SINGLE_DOCUMENT', input.profileId ?? null,
         foundationalGapCount, targetedResearchRuns,
         toJson(input.auditedDocumentIds ?? (input.auditedDocumentId ? [input.auditedDocumentId] : [])),
-        input.provider ?? null, input.model ?? null],
+        input.provider ?? null, input.model ?? null, toJson(input.evidenceManifest ?? {})],
     );
 
     gaps.forEach((gap, ordinal) => {

@@ -466,6 +466,7 @@ export interface AuditRow {
   audited_document_ids: string;
   provider: string | null;
   model: string | null;
+  evidence_manifest: string;
 }
 
 export interface AuditFindingRow {
@@ -914,6 +915,8 @@ export interface Audit {
   provider: string | null;
   model: string | null;
   gaps: AuditGap[];
+  /** Proof of exactly which documents, pages and extraction runs were read. */
+  evidenceManifest: Record<string, unknown>;
 }
 
 export interface Conversation {
