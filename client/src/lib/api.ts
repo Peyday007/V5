@@ -395,6 +395,15 @@ export const Api = {
     return api(`/api/documents/chunks/${enc(chunkId)}`);
   },
 
+  /** What research automation can do here, and the action that re-checks it. */
+  researchStatus(): Promise<{ status: ResearchProviderStatusView; default: string }> {
+    return api('/api/providers/status');
+  },
+
+  checkResearchConnection(): Promise<{ status: ResearchProviderStatusView; default: string }> {
+    return api('/api/providers/status/check', { method: 'POST' });
+  },
+
   /** Ask the evidence a question and get passages with page anchors back. */
   searchLayerEvidence(layerId: string, query: string): Promise<EvidenceSearchView> {
     return api(`/api/layers/${enc(layerId)}/evidence`, {
@@ -502,6 +511,25 @@ export interface ExtractedTextView {
   document: Document;
   run: ExtractionRunView;
   pages: { pageNumber: number; blocks: { blockType: string; text: string; method: string }[] }[];
+}
+
+/**
+ * What research automation can do on this machine (section 1).
+ *
+ * Four separate facts on purpose: each one maps to a different thing the user
+ * would have to do next, so collapsing them into "available" would throw away
+ * exactly the part that makes the setup card useful.
+ */
+export interface ResearchProviderStatusView {
+  provider: string;
+  installed: boolean;
+  authenticated: boolean;
+  automationReady: boolean;
+  version: string | null;
+  model: string | null;
+  quotaState: 'available' | 'limited' | 'exhausted' | 'unknown';
+  lastCheckedAt: string;
+  message: string;
 }
 
 export interface DocumentFindingView {

@@ -12,6 +12,7 @@ import { getSchemaVersion } from '../db/migrate.ts';
 import { DATA_ROOT, DB_PATH } from '../env.ts';
 import { defaultProviderName, listProviderStatuses } from '../providers/index.ts';
 import { ocrStatus } from '../services/documents/ocr.ts';
+import { antigravityStatus, recheckAntigravity } from '../providers/antigravity/runtime.ts';
 import { handler } from './helpers.ts';
 
 export const healthRouter = Router();
@@ -40,6 +41,33 @@ healthRouter.get(
   '/providers',
   handler(() => ({
     providers: listProviderStatuses(),
+    default: defaultProviderName(),
+  })),
+);
+
+/**
+ * What research automation can do on this machine, for the status chip and the
+ * setup card (section 1).
+ *
+ * Only the status contract crosses to the browser. The probe also learns local
+ * paths and raw CLI output, and neither is any of the browser's business.
+ */
+healthRouter.get(
+  '/providers/status',
+  handler(() => ({
+    status: antigravityStatus().status,
+    default: defaultProviderName(),
+  })),
+);
+
+/**
+ * Check connection. Re-probes rather than answering from the cached result,
+ * because the user pressing this has usually just changed something.
+ */
+healthRouter.post(
+  '/providers/status/check',
+  handler(() => ({
+    status: recheckAntigravity().status,
     default: defaultProviderName(),
   })),
 );

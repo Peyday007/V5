@@ -1567,3 +1567,72 @@ legend {
 .badge--warn { color: #e0b45c; border-color: #5c4a24; background: #201b12; }
 .badge--bad { color: #e07a7a; border-color: #5c2f2f; background: #201414; }
 .badge--muted { color: #8b97a8; border-color: #2f3a4a; background: #161c24; }
+
+/* ---------------------------------------------------------------------------
+   Research automation status (spec sections 1 and 7)
+
+   The chip has to be readable at a glance and honest at every state, so tone is
+   carried by the word as well as the colour — "SETUP REQUIRED" reads the same to
+   someone who cannot tell the amber from the green.
+   --------------------------------------------------------------------------- */
+
+.research-status { position: relative; margin-top: 4px; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.chip:hover { border-color: var(--border-strong); color: var(--fg-dim); }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.chip--ok    { border-color: var(--green); color: var(--green); }
+.chip--warn  { border-color: var(--amber); color: var(--amber); }
+.chip--bad   { border-color: var(--red);   color: var(--red); }
+.chip--muted { border-color: var(--border); color: var(--fg-muted); }
+
+.chip__action { opacity: 0.85; }
+.chip__caret { opacity: 0.6; }
+
+.research-drawer {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  width: min(30rem, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-3);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.setup-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setup-steps li {
+  display: grid;
+  grid-template-columns: 1.25rem 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.setup-steps__mark { font-family: var(--mono); color: var(--fg-muted); }
+.setup-steps__done .setup-steps__mark { color: var(--green); }
+.setup-steps__done strong { color: var(--fg-muted); font-weight: 400; }

@@ -9,6 +9,7 @@
 import type { PlannerResult, Project } from '../../../server/domain/types.ts';
 import type { HealthResponse } from '../lib/api.ts';
 import { Badge, Pill } from './Badge.tsx';
+import { ResearchStatus } from './ResearchStatus.tsx';
 
 /** Display order for the status roll-up; worst news first. */
 const STATUS_ORDER: readonly string[] = [
@@ -43,14 +44,16 @@ function countByStatus(plan: PlannerResult | null): { status: string; count: num
   return ordered;
 }
 
+/**
+ * The build facts only.
+ *
+ * Whether research automation works is no longer squeezed in here as
+ * `providers: mock` — a true statement nobody could act on. It has its own chip
+ * that says what to do about it.
+ */
 function healthLine(health: HealthResponse | null): string {
   if (!health) return 'server unreachable';
-  const providers = Array.isArray(health.providers) ? health.providers : [];
-  const available = providers.filter((provider) => provider.available).map((p) => p.name);
-  const providerText = available.length
-    ? `providers: ${available.join(', ')}`
-    : 'providers: none configured (copy/paste workflow)';
-  return `schema v${health.schemaVersion} · ${health.driver} · ${providerText}`;
+  return `schema v${health.schemaVersion} · ${health.driver}`;
 }
 
 export function TopBar(props: {
@@ -79,6 +82,7 @@ export function TopBar(props: {
         <div className="topbar__meta muted mono" title={health?.databasePath ?? ''}>
           {healthLine(health)}
         </div>
+        <ResearchStatus />
       </div>
 
       <div className="topbar__status row">

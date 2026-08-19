@@ -5,6 +5,7 @@
  * prompts, audits and freezes with zero credentials. A remote provider is an
  * optional accelerator that is selected explicitly — never a prerequisite.
  */
+import { AntigravityProvider } from './antigravity.ts';
 import { ClaudeProvider } from './claude.ts';
 import { MockProvider } from './mock.ts';
 import { OpenAIProvider } from './openai.ts';
@@ -13,11 +14,12 @@ import type { AIProvider, ProviderStatus } from './types.ts';
 export const MOCK_PROVIDER_NAME = 'mock';
 
 /** Canonical provider names, in the order the UI lists them. */
-export const PROVIDER_NAMES = ['mock', 'claude', 'openai'] as const;
+export const PROVIDER_NAMES = ['mock', 'antigravity', 'claude', 'openai'] as const;
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 
 const FACTORIES: Record<ProviderName, () => AIProvider> = {
   mock: () => new MockProvider(),
+  antigravity: () => new AntigravityProvider(),
   claude: () => new ClaudeProvider(),
   openai: () => new OpenAIProvider(),
 };
@@ -28,6 +30,10 @@ const ALIASES: Record<string, ProviderName> = {
   local: 'mock',
   offline: 'mock',
   none: 'mock',
+  antigravity: 'antigravity',
+  agy: 'antigravity',
+  google: 'antigravity',
+  gemini: 'antigravity',
   claude: 'claude',
   anthropic: 'claude',
   'claude-code': 'claude',

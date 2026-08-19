@@ -2,155 +2,46 @@
  * Finding the local OCR runtime (section 3).
  *
  * OCR needs two executables — a recogniser and something to turn a PDF page into
- * a picture — and the whole point of this module is that Brain finds them
- * itself. Asking a user to edit their global PATH before the application will
- * read a scan is exactly the kind of manual step this platform exists to remove.
- *
- * Discovery is deterministic and in a fixed order, so two runs on the same
- * machine always resolve the same binary:
- *
- *   1. an explicit path in the environment  (BRAIN_TESSERACT_PATH / BRAIN_PDF_RENDERER_PATH)
- *   2. the PATH, if the name resolves there
- *   3. the default install locations for this platform
+ * a picture — and Brain finds them itself rather than asking anyone to edit a
+ * PATH. The search order and the version-probe-as-capability-check live in
+ * `services/exec/discovery.ts`, shared with every other local tool Brain looks
+ * for; what belongs here is which names to try, where else to look, and what to
+ * tell the user when they are absent.
  *
  * Everything runs locally. There is no cloud OCR fallback and no upload of any
  * document to a third party — a scan that cannot be read here is reported
  * unreadable, never sent somewhere else to be read.
  */
-import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
 import path from 'node:path';
+import {
+  findExecutable,
+  platformInstallDirectories,
+  versionedDirectories,
+  WINDOWS,
+  type ExecutableProbe,
+} from '../exec/discovery.ts';
 
-export type ProbeSource = 'env' | 'path' | 'install-location';
+export type { ExecutableProbe, ProbeSource } from '../exec/discovery.ts';
+export { findExecutable } from '../exec/discovery.ts';
 
-export interface ExecutableProbe {
-  /** The logical tool: 'tesseract' or the page renderer. */
-  tool: string;
-  /** Absolute path, or the bare name when the PATH resolved it. */
-  command: string | null;
-  version: string | null;
-  source: ProbeSource | null;
-  /** Everything that was tried, so a failure can say where it looked. */
-  searched: string[];
-}
-
-const WINDOWS = process.platform === 'win32';
-const EXE = WINDOWS ? '.exe' : '';
-
-/** Directories a package manager or installer would have used, per platform. */
-function installDirectories(): string[] {
-  if (WINDOWS) {
-    const programFiles = process.env['ProgramFiles'] ?? 'C:\\Program Files';
-    const programFilesX86 = process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)';
-    const localAppData = process.env['LOCALAPPDATA'] ?? '';
-    return [
-      path.join(programFiles, 'Tesseract-OCR'),
-      path.join(programFilesX86, 'Tesseract-OCR'),
-      localAppData ? path.join(localAppData, 'Programs', 'Tesseract-OCR') : '',
-      path.join(programFiles, 'poppler', 'Library', 'bin'),
-      path.join(programFiles, 'poppler', 'bin'),
-      'C:\\poppler\\Library\\bin',
-      localAppData ? path.join(localAppData, 'Programs', 'poppler', 'Library', 'bin') : '',
-      // Poppler for Windows ships as poppler-<version>; take them newest first.
-      ...versionedPopplerDirectories([programFiles, 'C:\\']),
-    ].filter((entry) => entry.length > 0);
-  }
-  if (process.platform === 'darwin') {
-    return ['/opt/homebrew/bin', '/usr/local/bin', '/opt/local/bin'];
-  }
-  return ['/usr/bin', '/usr/local/bin', '/bin', '/snap/bin'];
-}
-
-/**
- * `C:\Program Files\poppler-24.08.0\Library\bin` and friends.
- *
- * Sorted descending so a newer release wins, and the sort is what makes the
- * choice deterministic rather than dependent on directory order.
- */
-function versionedPopplerDirectories(roots: string[]): string[] {
-  const found: string[] = [];
-  for (const root of roots) {
-    let entries: string[];
-    try {
-      entries = fs.readdirSync(root);
-    } catch {
-      continue;
-    }
-    const candidates = entries
-      .filter((entry) => /^poppler[-_]/i.test(entry))
-      .sort()
-      .reverse();
-    for (const candidate of candidates) {
-      found.push(path.join(root, candidate, 'Library', 'bin'));
-      found.push(path.join(root, candidate, 'bin'));
-    }
-  }
-  return found;
-}
-
-/** Ask a candidate for its version. Success here is the capability check. */
-function versionOf(command: string, args: string[] = ['--version']): string | null {
-  try {
-    const probe = spawnSync(command, args, { encoding: 'utf8', timeout: 10_000 });
-    // Some tools answer --version on stderr and exit 1; the output is the signal.
-    const output = `${probe.stdout ?? ''}${probe.stderr ?? ''}`.trim();
-    if (probe.error || output.length === 0) return null;
-    return output.split(/\r?\n/)[0]?.trim() ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Locate one executable, trying each source in order and recording every place
- * it looked so a missing dependency can be reported precisely.
- */
-export function findExecutable(input: {
-  tool: string;
-  names: string[];
-  envVar: string;
-  versionArgs?: string[];
-}): ExecutableProbe {
-  const searched: string[] = [];
-  const versionArgs = input.versionArgs ?? ['--version'];
-
-  const configured = (process.env[input.envVar] ?? '').trim();
-  if (configured.length > 0) {
-    searched.push(`${input.envVar}=${configured}`);
-    const version = versionOf(configured, versionArgs);
-    if (version) {
-      return { tool: input.tool, command: configured, version, source: 'env', searched };
-    }
-    // An explicit setting is authoritative, including when it is wrong. Falling
-    // back to some other binary on the PATH would mean the user configured one
-    // engine and Brain quietly used another — and the version it reported would
-    // not be the version that read their documents.
-    searched.push(`${input.envVar} is set but did not answer ${versionArgs.join(' ')}; not falling back`);
-    return { tool: input.tool, command: null, version: null, source: null, searched };
-  }
-
-  for (const name of input.names) {
-    const bare = `${name}${EXE}`;
-    searched.push(`PATH: ${bare}`);
-    const version = versionOf(bare, versionArgs);
-    if (version) {
-      return { tool: input.tool, command: bare, version, source: 'path', searched };
-    }
-  }
-
-  for (const directory of installDirectories()) {
-    for (const name of input.names) {
-      const candidate = path.join(directory, `${name}${EXE}`);
-      searched.push(candidate);
-      if (!fs.existsSync(candidate)) continue;
-      const version = versionOf(candidate, versionArgs);
-      if (version) {
-        return { tool: input.tool, command: candidate, version, source: 'install-location', searched };
-      }
-    }
-  }
-
-  return { tool: input.tool, command: null, version: null, source: null, searched };
+/** Where poppler and tesseract put themselves, beyond the platform defaults. */
+function ocrInstallDirectories(): string[] {
+  if (!WINDOWS) return [];
+  const roots = platformInstallDirectories();
+  const programFiles = process.env['ProgramFiles'] ?? 'C:\\Program Files';
+  const localAppData = process.env['LOCALAPPDATA'] ?? '';
+  return [
+    ...roots.map((root) => path.join(root, 'Tesseract-OCR')),
+    path.join(programFiles, 'poppler', 'Library', 'bin'),
+    path.join(programFiles, 'poppler', 'bin'),
+    'C:\\poppler\\Library\\bin',
+    localAppData ? path.join(localAppData, 'Programs', 'poppler', 'Library', 'bin') : '',
+    // Poppler for Windows ships as poppler-<version>; take them newest first.
+    ...versionedDirectories([programFiles, 'C:\\'], /^poppler[-_]/i, [
+      path.join('Library', 'bin'),
+      'bin',
+    ]),
+  ].filter((entry) => entry.length > 0);
 }
 
 export interface OcrRuntime {
@@ -252,6 +143,7 @@ export function probeOcrRuntime(): OcrRuntime {
     tool: 'tesseract',
     names: ['tesseract'],
     envVar: 'BRAIN_TESSERACT_PATH',
+    extraDirectories: ocrInstallDirectories(),
   });
   // pdftoppm is the primary; pdftocairo is the same package and an equally good
   // rasteriser, so a poppler build missing one still works.
@@ -260,6 +152,7 @@ export function probeOcrRuntime(): OcrRuntime {
     names: ['pdftoppm', 'pdftocairo'],
     envVar: 'BRAIN_PDF_RENDERER_PATH',
     versionArgs: ['-v'],
+    extraDirectories: ocrInstallDirectories(),
   });
 
   const missing = { tesseract: !recognizer.command, poppler: !renderer.command };
