@@ -243,6 +243,27 @@ function classify(input: {
     };
   }
 
+  // A document that is present but unreadable is the same class of problem one
+  // step later: the layer has the file and still has no evidence. Nothing else
+  // in the layer can proceed until it is readable, so it leads the plan with the
+  // specific action rather than a generic "resolve what is blocking this".
+  if (snapshot.unreadableDocuments.length > 0) {
+    const first = snapshot.unreadableDocuments[0] ?? name;
+    return {
+      placement: 'BLOCKED',
+      priority: PRIORITY.INCONSISTENT,
+      actionType: 'RECONCILE',
+      title: `Reprocess or replace ${first} — it could not be read.`,
+      facts: [
+        `${snapshot.unreadableDocuments.length} document(s) in ${name} are registered but unreadable: ` +
+          `${formatList(snapshot.unreadableDocuments)}.`,
+        'Open the document to see which pages failed and why, then reprocess it or import a better copy.',
+      ],
+      targetVersion: null,
+      missing: [...snapshot.unreadableDocuments],
+    };
+  }
+
   if (snapshot.status === 'PARKED') {
     return {
       placement: 'LATER',

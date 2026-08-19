@@ -16,6 +16,7 @@ import type {
   AuditVerdict,
   DependencyCheckItem,
   Document,
+  ExtractionStatus,
   Layer,
   LayerStateSnapshot,
   LayerStatus,
@@ -61,6 +62,18 @@ const ACTIVE_RUN_STATUSES: ReadonlySet<RunStatus> = new Set<RunStatus>([
 ]);
 
 /** Verdicts that send the layer back for more work rather than forward. */
+/**
+ * Extraction outcomes that mean "we do not have this document's contents".
+ *
+ * In-flight states are deliberately absent: a document still being read is not
+ * unreadable, it is unfinished, and it corrects itself within seconds.
+ */
+const UNREADABLE_EXTRACTION: ReadonlySet<ExtractionStatus> = new Set<ExtractionStatus>([
+  'BLOCKED',
+  'FAILED',
+  'INTERRUPTED',
+]);
+
 const MORE_RESEARCH_VERDICTS: ReadonlySet<AuditVerdict> = new Set<AuditVerdict>([
   'REDO',
   'MORE_RESEARCH',
@@ -120,6 +133,8 @@ function deriveStatus(input: {
   reopenedPending: boolean;
   /** Canonical names whose row claims an artifact the filesystem does not have. */
   inconsistentDocuments: string[];
+  /** Canonical names whose file is there but could not be read. */
+  unreadableDocuments: string[];
   frozenCanonical: Document | null;
   latestVerdict: AuditVerdict | null;
   latestAuditNextVersion: string | null;
@@ -138,6 +153,7 @@ function deriveStatus(input: {
     auditNamedDocumentCount,
     reopenedPending,
     inconsistentDocuments,
+    unreadableDocuments,
     frozenCanonical,
     latestVerdict,
     latestAuditNextVersion,
@@ -281,6 +297,23 @@ function deriveStatus(input: {
     };
   }
 
+  // 8b. A document Brain could not read is not evidence, so the layer is not
+  // ready for anything that depends on reading it. Without this the planner says
+  // "Audit Taxonomy v1" about a document the audit will refuse — sending the
+  // user to a dead end and making the layer badge a lie.
+  if (unreadableDocuments.length > 0) {
+    const names = unique(unreadableDocuments);
+    const first = names[0]!;
+    return {
+      status: 'BLOCKED',
+      reason:
+        `${names.length} document${names.length === 1 ? '' : 's'} in ${layerName} could not be read: ` +
+        `${names.join(', ')}. Until then there is no evidence to audit.`,
+      nextAction: `Reprocess or replace ${first} — it is registered but could not be read.`,
+      nextVersion: null,
+    };
+  }
+
   // 9. Finished, complete, and nobody has inspected it yet.
   const unaudited = presentDocuments.find(
     (document) => getLatestAuditForDocument(document.id) === null,
@@ -358,6 +391,12 @@ function deriveLayer(layerId: string): LayerDerivation {
   const presentDocuments = documents.filter((document) => presence.get(document.id)?.present === true);
   const inconsistentDocuments = documents
     .filter((document) => presence.get(document.id)?.fileMissing === true)
+    .map((document) => document.canonicalName);
+
+  // Present on disk but not readable. Distinct from a missing file, and just as
+  // disqualifying: the layer has the document, and still has no evidence from it.
+  const unreadableDocuments = presentDocuments
+    .filter((document) => UNREADABLE_EXTRACTION.has(document.extractionStatus))
     .map((document) => document.canonicalName);
 
   const presentVersions = sortVersions(
@@ -459,6 +498,7 @@ function deriveLayer(layerId: string): LayerDerivation {
     auditNamedDocumentCount,
     reopenedPending,
     inconsistentDocuments,
+    unreadableDocuments,
     frozenCanonical,
     latestVerdict: latestAudit?.verdict ?? null,
     latestAuditNextVersion: latestAudit?.nextVersion ?? null,
@@ -495,6 +535,7 @@ function deriveLayer(layerId: string): LayerDerivation {
     activeRunIds: activeRuns.map((run) => run.id),
     missingDependencies: missingDependencyItems.map((item) => item.canonicalName),
     inconsistentDocuments,
+    unreadableDocuments,
     latestAuditVerdict: latestAudit?.verdict ?? null,
     frozen: status === 'FROZEN',
     parked: layer.parked,

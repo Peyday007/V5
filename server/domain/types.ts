@@ -1084,6 +1084,8 @@ export interface LayerStateSnapshot {
   activeRunIds: string[];
   missingDependencies: string[];
   inconsistentDocuments: string[];
+  /** Documents that are registered and present, but could not be read. */
+  unreadableDocuments: string[];
   latestAuditVerdict: AuditVerdict | null;
   frozen: boolean;
   parked: boolean;

@@ -141,9 +141,19 @@ beside normalized text, a quality verdict, and chunks with page anchors.
 - Extraction runs are append-only. Reprocessing creates a new run and marks the
   old one superseded (`supersedePreviousRuns`), so an audit recorded months ago
   still resolves to the text it actually read. Exactly one run is current.
-- OCR is an optional local capability, not an assumption. With no engine
-  installed, pages that need one are reported unreadable — never passed on as
-  empty content.
+- OCR is a local capability Brain discovers, version-checks at startup and
+  reports. Only pages with no usable text layer are recognised, and a recognised
+  page carries its provenance: the engine, its version, the sha-256 of the exact
+  rendered image, the resolution, and a confidence per page and per block. With
+  no engine installed, pages that need one are reported unreadable — never passed
+  on as empty content, and never sent anywhere else to be read.
+- A recognised page below `ocrConfidenceFloor` counts as unread. Confidence is
+  evidence, so it gates: a document must not become READY merely because OCR
+  returned some characters.
+- A document that is registered and present but unreadable is not evidence, so
+  its layer is BLOCKED and the plan says to reprocess or replace it. A layer that
+  reads AUDIT_READY while its only document cannot be read is a lie the planner
+  must never tell.
 - Normalization may only remove extraction artifacts. `raw_text` is kept beside
   `normalized_text` on every block, so cleanup can never be the only copy of the
   evidence.
@@ -210,7 +220,8 @@ server/
       pdf.ts            columns -> lines -> blocks, plus quality signals
       docx.ts           OOXML via mammoth, headings/lists/tables preserved
       text.ts           plain text, Markdown and pasted text
-      ocr.ts            pluggable OCR adapter; absent is a stated fact
+      ocr.ts            recognition, per-block boxes and confidence
+      ocrRuntime.ts     deterministic discovery of the local OCR executables
       normalize.ts      artifact cleanup that keeps the raw text
       quality.ts        the gate: READY / READY_WITH_WARNINGS / BLOCKED
       chunker.ts        heading-aware chunks with page and block anchors

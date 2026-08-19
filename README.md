@@ -146,9 +146,12 @@ outranks every other piece of work in the planner until you resolve it.
   automatically; a canonical artifact is always required, earlier documents are kept as
   provenance, and reopening restores the whole source packet so the layer can run again.
 - **Document understanding** — PDF, DOCX, TXT, Markdown and pasted text read into pages
-  and ordered blocks with per-page quality signals, selective OCR for scanned pages, a
-  quality gate that blocks a document Brain cannot honestly claim to have read, and
-  append-only extraction runs so an old audit still resolves to the text it saw.
+  and ordered blocks with per-page quality signals, a quality gate that blocks a document
+  Brain cannot honestly claim to have read, and append-only extraction runs so an old
+  audit still resolves to the text it saw.
+- **Scanned documents** — a local OCR runtime Brain discovers and version-checks itself,
+  invoked only for the pages that need it, with the engine, the rendered image, the
+  resolution and the per-block confidence all recorded.
 - **Evidence and citations** — chunked with page and block anchors, searchable, and every
   audit conclusion recorded with the passages it can be checked against.
 - **Reconciliation** — database ↔ filesystem consistency with one-click fixes.
@@ -224,6 +227,59 @@ headers and footers are labelled as furniture rather than deleted. Pages with no
 are sent to OCR if a local engine is installed; if none is, they are reported unreadable
 instead of passed on as empty content.
 
+### Scanned documents
+
+Pages with no text layer are sent to OCR. Brain finds the tools itself — an
+explicit path in the environment first, then the `PATH`, then the default install
+locations for your platform — checks them at startup and prints what it found:
+
+```
+OCR             tesseract 5.3.4 + pdftoppm version 24.02.0 at 300 dpi (eng)
+```
+
+If they are missing it prints the exact one-time step instead, and every scanned
+page is reported unreadable rather than passed on as empty content:
+
+| Platform | One-time install |
+| --- | --- |
+| Windows | `winget install --id UB-Mannheim.TesseractOCR`, then unzip [poppler-windows](https://github.com/oschwartz10612/poppler-windows/releases) to `C:\Program Files\poppler` |
+| macOS | `brew install tesseract poppler` |
+| Debian/Ubuntu | `sudo apt-get install -y tesseract-ocr poppler-utils` |
+
+No PATH edit is needed — Brain looks in the default install directories. If yours
+are elsewhere, set `BRAIN_TESSERACT_PATH` and `BRAIN_PDF_RENDERER_PATH` and
+restart. An explicit path that does not work is reported as an error rather than
+quietly replaced by some other binary.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `BRAIN_OCR` | (unset) | `none` switches OCR off; scanned pages are then reported unreadable |
+| `BRAIN_TESSERACT_PATH` | (discovered) | Explicit path to the recogniser |
+| `BRAIN_PDF_RENDERER_PATH` | (discovered) | Explicit path to `pdftoppm` or `pdftocairo` |
+| `BRAIN_OCR_DPI` | `300` | Resolution the page is rendered at before recognition |
+| `BRAIN_OCR_LANG` | `eng` | Recognition language passed to Tesseract |
+| `BRAIN_OCR_TIMEOUT_MS` | `120000` | Per-page ceiling; a page that exceeds it is unreadable, not blank |
+
+Recognition is local. Nothing is uploaded to be read, and there is no cloud
+fallback: a page this machine cannot read is reported as one it cannot read.
+
+Every recognised page records what it was read from — the sha-256 of the exact
+rendered image, its size, the DPI, the confidence and how long it took — and every
+recognised block keeps its bounding box and its own confidence:
+
+```
+READY WITH WARNINGS  3/3 pages · 100% coverage · 1,698 chars · 3 page(s) by OCR
+
+OCR — tesseract-cli (tesseract 5.3.4) via pdftoppm version 24.02.0.
+PAGE  READ  CONFIDENCE  IMAGE                          BLOCKS  CHARS  TIME
+1     yes   96%         2550x3300 @300dpi 76726fbc     4       572    2705ms
+```
+
+Confidence is evidence, so it gates. Below 35% a page is counted as unread and
+goes through the ordinary coverage rule; between 35% and 60% the reading stands
+but the uncertainty is stated on the run, the block and the panel. A document
+does not become READY merely because OCR returned some characters.
+
 Then the quality gate decides whether the reading can be trusted at all. Too few pages read,
 too little text, or too many replacement glyphs and the document is **BLOCKED**: it cannot
 be audited, synthesised or frozen until it is reprocessed or replaced. A packet with one
@@ -246,8 +302,9 @@ back to its source blocks.
 and every run already stores its exact prompt and attachment list, so running the research
 is the same shape of change the audit engine and the ingestion pipeline just made.
 
-After that, **local OCR by default** — the adapter is in place and selective, but it shells
-out to tesseract, so a machine without it gets an honest refusal rather than a reading.
+After that, **more recognition languages** — the pipeline already passes `BRAIN_OCR_LANG`
+through, so a non-English corpus is a matter of installing the language data and setting
+one variable, not a change to the engine.
 
 ---
 

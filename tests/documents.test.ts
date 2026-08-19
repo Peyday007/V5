@@ -62,6 +62,7 @@ import { recordAuditEvidence } from '../server/services/audit/evidence.ts';
 import { listAuditEvidence } from '../server/repos/extraction.ts';
 import { recordAudit } from '../server/services/auditEngine.ts';
 import { computeLayerState } from '../server/services/stateEngine.ts';
+import { buildPlan } from '../server/services/planner.ts';
 
 let fixture: TestProject;
 
@@ -1311,12 +1312,28 @@ describe('a failed extraction', () => {
     const after = computeLayerState(layer.id);
     expect(getCurrentExtractionRun(document.id)!.status).toBe('BLOCKED');
 
-    // The layer did not advance, freeze, or acquire a canonical document.
-    expect(after.status).toBe(before.status);
+    // The layer did not advance, freeze, or acquire a verdict.
+    expect(before.status).toBe('AUDIT_READY');
+    expect(after.frozen).toBe(before.frozen);
     expect(after.canonicalName).toBe(before.canonicalName);
     expect(after.currentVersion).toBe(before.currentVersion);
-    expect(after.frozen).toBe(before.frozen);
     expect(after.missingVersions).toEqual(before.missingVersions);
+    expect(after.latestAuditVerdict).toBeNull();
+
+    // It went backwards, which is the honest direction: a document nobody could
+    // read is not something to audit, and the plan says so instead of sending
+    // the user to an audit that will refuse.
+    expect(after.status).toBe('BLOCKED');
+    expect(after.unreadableDocuments).toEqual([document.canonicalName]);
+    expect(after.nextAction).toMatch(/reprocess or replace/i);
+
+    // And the planner leads with that, rather than a generic "resolve what is
+    // blocking this layer" the user cannot act on.
+    const plan = buildPlan(fixture.project.id);
+    expect(plan.nextBestAction?.title).toMatch(/reprocess or replace/i);
+    expect(plan.nextBestAction?.title).toContain(document.canonicalName);
+    expect(plan.nextBestAction?.bucket).toBe('BLOCKED');
+    expect(plan.nextBestAction?.actionType).toBe('RECONCILE');
 
     // The only new events are about the document, never about the layer.
     const now = listEvents(fixture.project.id, 500);

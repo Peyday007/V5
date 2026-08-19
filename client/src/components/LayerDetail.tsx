@@ -474,6 +474,11 @@ export function LayerDetail(props: {
         {state.inconsistentDocuments.length > 0 ? (
           <Pill label="INCONSISTENT" value={state.inconsistentDocuments.length} tone="bad" />
         ) : null}
+        {/* Registered, present, and still not evidence — the one thing that has
+            to be fixed before anything else in this layer can proceed. */}
+        {state.unreadableDocuments.length > 0 ? (
+          <Pill label="UNREADABLE" value={state.unreadableDocuments.join(', ')} tone="bad" />
+        ) : null}
       </div>
 
       <div className="notice">
