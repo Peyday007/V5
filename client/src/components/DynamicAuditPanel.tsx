@@ -12,6 +12,7 @@ import {
   Api,
   auditStreamPaths,
   streamAudit,
+  type AuditEvidenceView,
   type AuditStreamEvent,
   type DynamicAuditResponse,
   type PacketManifestView,
@@ -32,7 +33,30 @@ function describeError(error: unknown): string {
 /** Classifications the profile says may keep a layer open. */
 const RESEARCH_GAPS = new Set(['FOUNDATIONAL_GAP', 'TARGETED_RESEARCH_GAP']);
 
-function GapList(props: { gaps: AuditGap[] }): JSX.Element | null {
+/**
+ * The passages a conclusion can be checked against.
+ *
+ * Retrieved from the extracted text rather than quoted by the model, so a
+ * citation here is a fact about the document, not a claim about it.
+ */
+function Citations(props: { evidence: AuditEvidenceView[] }): JSX.Element | null {
+  if (props.evidence.length === 0) return null;
+  return (
+    <div className="small">
+      {props.evidence.map((entry) => (
+        <div key={entry.id} className="muted">
+          <span className="mono">
+            {entry.documentLabel}
+            {entry.pageNumber === null ? '' : ` p${entry.pageNumber}`}
+          </span>{' '}
+          &ldquo;{entry.quote}&rdquo;
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GapList(props: { gaps: AuditGap[]; evidence: AuditEvidenceView[] }): JSX.Element | null {
   if (props.gaps.length === 0) return null;
   return (
     <ul className="checklist">
@@ -51,6 +75,7 @@ function GapList(props: { gaps: AuditGap[] }): JSX.Element | null {
             </div>
           ) : null}
           {gap.justification ? <div className="small muted">Why this class: {gap.justification}</div> : null}
+          <Citations evidence={props.evidence.filter((entry) => entry.gapId === gap.id)} />
         </li>
       ))}
     </ul>
@@ -138,6 +163,8 @@ export function DynamicAuditPanel(props: {
   const researchGaps = gaps.filter((gap) => RESEARCH_GAPS.has(gap.classification));
   const otherGaps = gaps.filter((gap) => !RESEARCH_GAPS.has(gap.classification));
   const handoffs = result?.audit.findings.filter((f) => f.findingType === 'OTHER_LAYER_HANDOFF') ?? [];
+  const evidence = result?.evidence ?? [];
+  const verdictEvidence = evidence.filter((entry) => entry.gapId === null);
   const attacks = result?.adversarial.attacks ?? [];
 
   return (
@@ -217,9 +244,18 @@ export function DynamicAuditPanel(props: {
           </div>
           <p className="small">{headline.summary}</p>
 
+          {verdictEvidence.length > 0 ? (
+            <Section title="EVIDENCE FOR THIS VERDICT" count={verdictEvidence.length}>
+              <p className="small muted">
+                Passages retrieved from the extracted text, not quoted by the model.
+              </p>
+              <Citations evidence={verdictEvidence} />
+            </Section>
+          ) : null}
+
           {researchGaps.length > 0 ? (
             <Section title="FOUNDATIONAL / TARGETED GAPS" count={researchGaps.length}>
-              <GapList gaps={researchGaps} />
+              <GapList gaps={researchGaps} evidence={evidence} />
             </Section>
           ) : null}
 
@@ -250,7 +286,7 @@ export function DynamicAuditPanel(props: {
 
           {otherGaps.length > 0 ? (
             <Section title="NON-BLOCKING CLASSIFICATIONS" count={otherGaps.length}>
-              <GapList gaps={otherGaps} />
+              <GapList gaps={otherGaps} evidence={evidence} />
             </Section>
           ) : null}
 

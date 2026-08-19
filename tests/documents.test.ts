@@ -58,6 +58,9 @@ import {
   FindingsExtractionError,
 } from '../server/services/documents/findings.ts';
 import { buildAuditContext } from '../server/services/audit/context.ts';
+import { recordAuditEvidence } from '../server/services/audit/evidence.ts';
+import { listAuditEvidence } from '../server/repos/extraction.ts';
+import { recordAudit } from '../server/services/auditEngine.ts';
 import { computeLayerState } from '../server/services/stateEngine.ts';
 
 let fixture: TestProject;
@@ -1165,6 +1168,102 @@ describe('evidence citations', () => {
     expect(resolved.blocks.map((block) => block.text).join(' ')).toContain(
       'Custody of a distressed asset transfers at the point of assignment',
     );
+  });
+
+  it('records a citation trail from an audit verdict back to real passages', async () => {
+    const { document, runId } = await importAndRead('World Model v1.pdf', multiPagePdf(4));
+
+    const outcome = recordAudit({
+      projectId: fixture.project.id,
+      layerId: document.layerId!,
+      auditedDocumentId: document.id,
+      auditedDocumentIds: [document.id],
+      source: 'TEST',
+      mode: 'SINGLE_DOCUMENT',
+      result: {
+        verdict: 'PATCH',
+        summary: 'Custody and claim priority are stated but the boundary is thin.',
+        failures: [],
+        missingDocuments: [],
+        requiredResearchRuns: [],
+        requiredPatches: ['State the boundary against Decision Routing Rules explicitly.'],
+        synthesisRequired: false,
+        freezeEligible: false,
+        nextVersion: null,
+        nextAction: 'Patch the boundary statement.',
+        confidence: 0.6,
+      },
+      gaps: [
+        {
+          classification: 'PATCH',
+          title: 'Custody and claim priority boundary',
+          detail: 'The layer describes custody transfer but not who may change it.',
+          justification: 'It belongs to this layer, so it is not a handoff.',
+          researchQuestion: 'When exactly is claim priority fixed relative to assignment?',
+          expectedContribution: null,
+          sourcePass: 'JUDGE',
+        },
+      ],
+    });
+
+    const written = recordAuditEvidence({
+      audit: outcome.audit,
+      documentIds: [document.id],
+      verdictQuery: 'custody claim priority boundary',
+    });
+    expect(written).toBeGreaterThan(0);
+
+    const evidence = listAuditEvidence(outcome.audit.id);
+    const gapId = outcome.audit.gaps[0]!.id;
+    const forGap = evidence.filter((entry) => entry.gapId === gapId);
+    expect(forGap.length).toBeGreaterThan(0);
+
+    for (const entry of forGap) {
+      expect(entry.extractionRunId).toBe(runId);
+      expect(entry.documentLabel).toBe(document.canonicalName);
+      expect(entry.pageNumber).not.toBeNull();
+      // Every citation resolves to real source text, which is the whole point.
+      const resolved = resolveCitation(entry.chunkId!)!;
+      expect(resolved.document.id).toBe(document.id);
+      expect(resolved.blocks.length).toBeGreaterThan(0);
+      const source = resolved.blocks.map((block) => block.text).join(' ');
+      const words = entry.quote.replace(/^…|…$/g, '').trim().split(/\s+/).slice(1, 6).join(' ');
+      expect(source).toContain(words);
+    }
+  });
+
+  it('cites nothing rather than something invented when no passage matches', async () => {
+    const { document } = await importAndRead('World Model v1.pdf', multiPagePdf(2));
+    const outcome = recordAudit({
+      projectId: fixture.project.id,
+      layerId: document.layerId!,
+      auditedDocumentId: document.id,
+      auditedDocumentIds: [document.id],
+      source: 'TEST',
+      mode: 'SINGLE_DOCUMENT',
+      result: {
+        verdict: 'PASS',
+        summary: 'Nothing to say.',
+        failures: [],
+        missingDocuments: [],
+        requiredResearchRuns: [],
+        requiredPatches: [],
+        synthesisRequired: false,
+        freezeEligible: false,
+        nextVersion: null,
+        nextAction: 'Continue.',
+        confidence: 0.9,
+      },
+      gaps: [],
+    });
+
+    const written = recordAuditEvidence({
+      audit: outcome.audit,
+      documentIds: [document.id],
+      verdictQuery: 'securitisation waterfall tranche subordination',
+    });
+    expect(written).toBe(0);
+    expect(listAuditEvidence(outcome.audit.id)).toHaveLength(0);
   });
 
   it('distinguishes "the document does not say this" from "I never read it"', async () => {

@@ -47,6 +47,15 @@ export function conflict(message: string, detail?: unknown): HttpError {
   return new HttpError(409, message, detail);
 }
 
+/**
+ * The request was understood and refused on its merits — an audit whose evidence
+ * could not be read, for instance. The detail carries the proof that nothing
+ * changed, so it must survive to the client.
+ */
+export function unprocessable(message: string, detail?: unknown): HttpError {
+  return new HttpError(422, message, detail);
+}
+
 export type RouteHandler = (req: Request, res: Response, next: NextFunction) => unknown;
 
 /**

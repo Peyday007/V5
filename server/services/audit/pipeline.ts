@@ -26,6 +26,7 @@ import { listLayers } from '../../repos/layers.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { recordAudit, type AuditOutcome } from '../auditEngine.ts';
 import { buildAuditContext, unreadableArtifacts, type AuditContext } from './context.ts';
+import { recordAuditEvidence } from './evidence.ts';
 import {
   buildAdversarialPrompt,
   buildExtractionPrompt,
@@ -427,6 +428,20 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
     ],
   });
 
+  // Attach the passages the verdict can be checked against. Annotation only:
+  // it never changes the verdict, and a failure to find a passage is not a
+  // failure of the audit.
+  let citations = 0;
+  try {
+    citations = recordAuditEvidence({
+      audit: outcome.audit,
+      documentIds: auditedDocumentIds,
+      verdictQuery: [judge.summary, judge.nextAction].join(' '),
+    });
+  } catch (error) {
+    console.error('[brain] could not record audit evidence:', error);
+  }
+
   recordEvent({
     projectId: context.project.id,
     layerId: context.layer.id,
@@ -440,6 +455,7 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
       foundationalGaps: judge.foundationalGapCount,
       targetedResearchRuns: judge.targetedResearchRunsRequired,
       pipelineId,
+      citations,
     },
   });
 

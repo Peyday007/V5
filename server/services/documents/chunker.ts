@@ -65,10 +65,13 @@ export function planChunks(blocks: DocumentBlock[], options: ChunkOptions = {}):
     const body = current.map((block) => block.normalizedText).join('\n\n');
 
     // Carry the tail of the previous chunk so a claim spanning the boundary is
-    // legible in both.
+    // legible in both. The tail starts at a word boundary: a chunk is what a
+    // citation quotes back to the user, and one that opens mid-word reads as a
+    // bug even when the text is right.
     const previous = chunks.at(-1);
-    const overlapText =
-      previous && overlapChars > 0 ? previous.text.slice(-overlapChars) : '';
+    const rawOverlap = previous && overlapChars > 0 ? previous.text.slice(-overlapChars) : '';
+    const boundary = rawOverlap.search(/\s/);
+    const overlapText = boundary === -1 ? '' : rawOverlap.slice(boundary + 1);
     const text = overlapText ? `${overlapText}\n\n${body}` : body;
 
     chunks.push({

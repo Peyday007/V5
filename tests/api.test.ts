@@ -437,3 +437,40 @@ describe('the event log', () => {
     expect(events.some((e) => e.eventType === 'AUDIT_COMPLETED')).toBe(true);
   });
 });
+
+describe('an audit that cannot read its evidence', () => {
+  it('is refused with the proof that nothing changed', async () => {
+    const { documents } = await get<{ documents: { id: string; canonicalName: string }[] }>(
+      `/api/projects/${projectId}/documents`,
+    );
+    const document = documents.find((d) => d.canonicalName === 'World Model v1')!;
+
+    // The uploads in this suite are PDF headers with no readable body, which is
+    // exactly the case the quality gate exists to catch. Reading runs in the
+    // background, so wait for the verdict rather than racing it.
+    type ExtractionResponse = { quality: { status: string; blockedReason: string | null } | null };
+    let extraction = await get<ExtractionResponse>(`/api/documents/${document.id}/extraction`);
+    const settled = new Set(['READY', 'READY_WITH_WARNINGS', 'BLOCKED', 'FAILED']);
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      if (extraction.quality && settled.has(extraction.quality.status)) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      extraction = await get<ExtractionResponse>(`/api/documents/${document.id}/extraction`);
+    }
+    expect(extraction.quality?.status).toBe('BLOCKED');
+    expect(extraction.quality?.blockedReason).toBeTruthy();
+
+    const refused = await send<{
+      error: string;
+      detail: { pass: string; stateChanged: boolean; passes: unknown[] };
+    }>('POST', `/api/documents/${document.id}/dynamic-audit`, {});
+
+    expect(refused.status).toBe(422);
+    expect(refused.body.error).toMatch(/cannot read the artifact/i);
+    // The detail is the whole point: a refusal that cannot prove it changed
+    // nothing is indistinguishable from a crash halfway through.
+    expect(refused.body.detail.pass).toBe('CONTEXT');
+    expect(refused.body.detail.stateChanged).toBe(false);
+    // And it was refused before any provider call, not after one.
+    expect(refused.body.detail.passes).toEqual([]);
+  });
+});

@@ -395,6 +395,21 @@ export const Api = {
     return api(`/api/documents/chunks/${enc(chunkId)}`);
   },
 
+  /** Ask the evidence a question and get passages with page anchors back. */
+  searchLayerEvidence(layerId: string, query: string): Promise<EvidenceSearchView> {
+    return api(`/api/layers/${enc(layerId)}/evidence`, {
+      method: 'POST',
+      body: JSON.stringify({ query }),
+    });
+  },
+
+  searchDocumentEvidence(documentId: string, query: string): Promise<EvidenceSearchView> {
+    return api(`/api/documents/${enc(documentId)}/evidence`, {
+      method: 'POST',
+      body: JSON.stringify({ query }),
+    });
+  },
+
   /** The structured index over a document, and the action that derives it. */
   findings(documentId: string): Promise<FindingsView> {
     return api(`/api/documents/${enc(documentId)}/findings`);
@@ -573,6 +588,39 @@ export interface DynamicAuditResponse {
     notes: string;
   };
   headline: AuditHeadline;
+  /** The citation trail: which passage each conclusion can be checked against. */
+  evidence: AuditEvidenceView[];
+}
+
+export interface AuditEvidenceView {
+  id: string;
+  auditId: string;
+  gapId: string | null;
+  documentId: string | null;
+  extractionRunId: string | null;
+  chunkId: string | null;
+  documentLabel: string;
+  pageNumber: number | null;
+  quote: string;
+  createdAt: string;
+}
+
+export interface EvidenceSearchView {
+  query: string;
+  passages: {
+    documentId: string;
+    documentLabel: string;
+    extractionRunId: string;
+    chunkId: string;
+    pageStart: number;
+    pageEnd: number;
+    headingPath: string[];
+    quote: string;
+    score: number;
+    fromOcr: boolean;
+  }[];
+  searched: { documentId: string; documentLabel: string; chunkCount: number }[];
+  unreadable: { documentId: string; documentLabel: string; reason: string }[];
 }
 
 export type AuditStreamEvent =

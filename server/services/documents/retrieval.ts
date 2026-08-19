@@ -97,8 +97,18 @@ function quoteFrom(chunk: DocumentChunk, terms: string[], maxChars: number): str
   }
   if (anchor === -1) return `${text.slice(0, maxChars)}…`;
 
-  const start = Math.max(0, anchor - Math.floor(maxChars / 3));
-  const end = Math.min(text.length, start + maxChars);
+  // Snap to word boundaries so the excerpt reads as a quotation rather than a
+  // byte range: a citation opening or closing mid-word looks like a defect.
+  let start = Math.max(0, anchor - Math.floor(maxChars / 3));
+  if (start > 0) {
+    const space = text.indexOf(' ', start);
+    start = space === -1 || space - start > 40 ? start : space + 1;
+  }
+  let end = Math.min(text.length, start + maxChars);
+  if (end < text.length) {
+    const space = text.lastIndexOf(' ', end);
+    if (space > start) end = space;
+  }
   const prefix = start > 0 ? '…' : '';
   const suffix = end < text.length ? '…' : '';
   return `${prefix}${text.slice(start, end).trim()}${suffix}`;

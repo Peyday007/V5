@@ -13,7 +13,9 @@ import { Router } from 'express';
 import type { Response } from 'express';
 import type { AuditMode } from '../domain/types.ts';
 import { getAudit, listAuditPasses, listPipelinePasses } from '../repos/audits.ts';
-import { getDocument } from '../repos/documents.ts';
+import { getDocument, listDocumentsByLayer } from '../repos/documents.ts';
+import { listAuditEvidence } from '../repos/extraction.ts';
+import { retrieveEvidence } from '../services/documents/retrieval.ts';
 import { getRun } from '../repos/runs.ts';
 import { buildPlan } from '../services/planner.ts';
 import { computeLayerState } from '../services/stateEngine.ts';
@@ -28,11 +30,14 @@ import {
   bodyOf,
   handler,
   notFound,
+  optionalInteger,
   optionalString,
   pathId,
+  requiredString,
   requireDocument,
   requireLayer,
   requireRun,
+  unprocessable,
 } from './helpers.ts';
 
 export const auditsRouter = Router();
@@ -50,6 +55,9 @@ function auditResponse(outcome: DynamicAuditOutcome) {
     researchCandidates: outcome.researchCandidates,
     adversarial: outcome.adversarial,
     primary: outcome.primary,
+    // What each conclusion can be checked against, gap by gap.
+    evidence: listAuditEvidence(audit.id),
+    manifest: outcome.context.manifest,
     headline: {
       verdict: audit.verdict,
       moreResearchRuns: audit.foundationalGapCount + audit.targetedResearchRunsRequired,
@@ -138,12 +146,11 @@ function auditHandler(resolve: (req: Parameters<typeof pathId>[0]) => AuditTarge
       return auditResponse(await runAudit(target, bodyOf(req)));
     } catch (error) {
       if (error instanceof AuditFailure) {
+        // A real HttpError, not an Error dressed up as one: only the former
+        // carries `detail` through the error middleware, and `detail` is where
+        // "nothing was changed" and the recorded passes live.
         const body = auditFailureBody(error);
-        throw Object.assign(new Error(body.error), {
-          name: 'HttpError',
-          status: 422,
-          detail: body.detail,
-        });
+        throw unprocessable(body.error, body.detail);
       }
       throw error;
     }
@@ -238,6 +245,40 @@ auditsRouter.get(
       layer: audit.layerId ? computeLayerState(audit.layerId) : null,
       documents: audit.auditedDocumentIds.map((id) => getDocument(id)).filter(Boolean),
       run: audit.runId ? getRun(audit.runId) : null,
+      // The citation trail: which passage each conclusion can be checked against.
+      evidence: listAuditEvidence(audit.id),
     };
+  }),
+);
+
+/**
+ * Ask the evidence a question (section 13).
+ *
+ * The answer distinguishes "the documents do not say this" from "those documents
+ * were never read" — a distinction the auditor cannot make for itself, and the
+ * one that decides whether a gap is real.
+ */
+auditsRouter.post(
+  '/layers/:layerId/evidence',
+  handler((req) => {
+    const layer = requireLayer(pathId(req, 'layerId'));
+    const body = bodyOf(req);
+    const query = requiredString(body['query'], 'query');
+    const limit = optionalInteger(body['limit'], 'limit', { min: 1, max: 25 }) ?? 5;
+    const documentIds = listDocumentsByLayer(layer.id)
+      .filter((document) => document.status === 'COMPLETE' || document.status === 'FROZEN')
+      .map((document) => document.id);
+    return { layer, query, ...retrieveEvidence({ documentIds, query, limit }) };
+  }),
+);
+
+auditsRouter.post(
+  '/documents/:documentId/evidence',
+  handler((req) => {
+    const document = requireDocument(pathId(req, 'documentId'));
+    const body = bodyOf(req);
+    const query = requiredString(body['query'], 'query');
+    const limit = optionalInteger(body['limit'], 'limit', { min: 1, max: 25 }) ?? 5;
+    return { document, query, ...retrieveEvidence({ documentIds: [document.id], query, limit }) };
   }),
 );
