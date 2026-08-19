@@ -18,6 +18,7 @@ import {
   setAntigravityProbe,
 } from '../server/providers/antigravity/runtime.ts';
 import { AntigravityProvider, AntigravityUnavailableError } from '../server/providers/antigravity.ts';
+import { readExecutionLog } from '../server/providers/antigravity/jobs.ts';
 import { getProvider, PROVIDER_NAMES } from '../server/providers/index.ts';
 
 let workDir: string;
@@ -269,7 +270,7 @@ describe('the Antigravity provider', () => {
     await expect(provider.chat({ messages: [] })).rejects.toBeInstanceOf(AntigravityUnavailableError);
   });
 
-  it('does not claim research capability before the orchestration exists', () => {
+  it('claims research only while it is genuinely connected', () => {
     const command = fakeAgy(
       agyScript({
         help: 'Usage: agy run --prompt <text> --non-interactive\n',
@@ -278,10 +279,223 @@ describe('the Antigravity provider', () => {
     );
     setEnv('BRAIN_ANTIGRAVITY_PATH', command);
 
-    const status = new AntigravityProvider().getStatus();
-    expect(status.available).toBe(true);
-    // Connected is not the same as able to do the staged work; claiming
-    // otherwise would put a Run Research button in front of nothing.
-    expect(status.capabilities.research).toBe(false);
+    const connected = new AntigravityProvider().getStatus();
+    expect(connected.available).toBe(true);
+    expect(connected.capabilities.research).toBe(true);
+    // Chat and audit still belong to providers that return structured output
+    // for them; claiming those here would put buttons in front of nothing.
+    expect(connected.capabilities.audit).toBe(false);
+    expect(connected.capabilities.chat).toBe(false);
+
+    // And the claim goes away with the connection, rather than lingering.
+    setEnv('BRAIN_ANTIGRAVITY_PATH', path.join(workDir, 'missing'));
+    expect(new AntigravityProvider().getStatus().capabilities.research).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Running a job safely (spec sections 2 and 9)
+// ---------------------------------------------------------------------------
+
+describe('running a research job', () => {
+  /** Point the provider at a fake CLI that behaves as the test dictates. */
+  function connectedAgy(behaviour: string): void {
+    const command = fakeAgy(`
+const args = process.argv.slice(2);
+if (args.includes('--version')) { process.stdout.write('antigravity 1.0.6\\n'); process.exit(0); }
+if (args[0] === '--help' || args[0] === 'help') {
+  process.stdout.write('Usage: agy -p <prompt> --non-interactive\\n');
+  process.exit(0);
+}
+if (args[0] === 'auth' || args[0] === 'account' || args[0] === 'whoami') {
+  process.stdout.write('Signed in as researcher@example.com\\n');
+  process.exit(0);
+}
+${behaviour}
+`);
+    setEnv('BRAIN_ANTIGRAVITY_PATH', command);
+  }
+
+  /** The fake reads stdin to completion, then answers. */
+  const echoPrompt = `
+let input = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (c) => { input += c; });
+process.stdin.on('end', () => {
+  process.stdout.write('REPORT FOR: ' + input.trim() + '\\n');
+  process.stdout.write('ARGV: ' + JSON.stringify(args) + '\\n');
+  process.exit(0);
+});
+`;
+
+  it('sends the prompt over stdin, never on the command line', async () => {
+    connectedAgy(echoPrompt);
+    const provider = new AntigravityProvider();
+
+    // A prompt carrying shell metacharacters. If any of this reached a shell,
+    // or were interpolated into the command, the test would not survive it.
+    const nasty = 'Investigate custody"; rm -rf / #  $(whoami) `id` && echo pwned';
+    const result = await provider.runResearch({
+      prompt: nasty,
+      requiredAttachments: [],
+      expectedConversationTitle: 'World Model v1',
+      expectedFilename: 'World Model v1.pdf',
+    });
+
+    expect(result.text).toContain(`REPORT FOR: ${nasty}`);
+    // The arguments the CLI actually received contain only the flags.
+    const argv = /ARGV: (\[.*\])/.exec(result.text)?.[1];
+    expect(argv).toBeTruthy();
+    const parsed = JSON.parse(argv!) as string[];
+    expect(parsed).toEqual(['-p']);
+    expect(parsed.join(' ')).not.toContain('rm -rf');
+  }, 30_000);
+
+  it('records the attempt for reproducibility, without leaking it to callers', async () => {
+    connectedAgy(echoPrompt);
+    const provider = new AntigravityProvider();
+    const result = await provider.runResearch(
+      {
+        prompt: 'Map the custody chain.',
+        requiredAttachments: [],
+        expectedConversationTitle: 't',
+        expectedFilename: 'f.pdf',
+      },
+      { runId: 'run_test_1' },
+    );
+
+    const log = readExecutionLog(result.externalResponseId!);
+    expect(log).toBeTruthy();
+    expect(log!.runId).toBe('run_test_1');
+    expect(log!.provider).toBe('antigravity');
+    expect(log!.providerVersion).toBe('antigravity 1.0.6');
+    expect(log!.outcome).toBe('COMPLETED');
+    expect(log!.exitCode).toBe(0);
+    expect(log!.promptDelivery).toBe('stdin');
+    // The prompt is identified by digest, so a report can be tied to exactly
+    // what produced it without the log becoming a second copy of the prompt.
+    expect(log!.promptSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(log)).not.toContain('Map the custody chain.');
+    expect(log!.durationMs).toBeGreaterThanOrEqual(0);
+  }, 30_000);
+
+  it('stops a tool that never returns, rather than hanging with it', async () => {
+    // The shape of antigravity-cli issue #318: reads stdin, then stalls forever.
+    connectedAgy(`
+process.stdin.resume();
+setTimeout(() => process.exit(0), 600000);
+`);
+    setEnv('BRAIN_ANTIGRAVITY_TIMEOUT_MS', '30000');
+    const provider = new AntigravityProvider();
+
+    const startedAt = Date.now();
+    await expect(
+      provider.runResearch({
+        prompt: 'x',
+        requiredAttachments: [],
+        expectedConversationTitle: 't',
+        expectedFilename: 'f.pdf',
+      }),
+    ).rejects.toMatchObject({ name: 'AntigravityRunError', outcome: 'TIMED_OUT' });
+    // The floor is the configured timeout; the ceiling proves it did not wait
+    // for the child's own ten-minute sleep.
+    expect(Date.now() - startedAt).toBeLessThan(60_000);
+  }, 90_000);
+
+  it('treats a clean exit with no report as a failure, not as research', async () => {
+    // Exit zero, nothing on stdout — the other shape the headless stall takes.
+    connectedAgy(`
+process.stdin.resume();
+process.stdin.on('end', () => process.exit(0));
+`);
+    const provider = new AntigravityProvider();
+
+    await expect(
+      provider.runResearch({
+        prompt: 'x',
+        requiredAttachments: [],
+        expectedConversationTitle: 't',
+        expectedFilename: 'f.pdf',
+      }),
+    ).rejects.toThrow(/without producing a report/i);
+  }, 30_000);
+
+  it('reports a tool that exits with an error, and records the exit code', async () => {
+    connectedAgy(`
+process.stdin.resume();
+process.stdin.on('end', () => { process.stderr.write('model unavailable\\n'); process.exit(4); });
+`);
+    const provider = new AntigravityProvider();
+
+    await expect(
+      provider.runResearch(
+        { prompt: 'x', requiredAttachments: [], expectedConversationTitle: 't', expectedFilename: 'f.pdf' },
+        { runId: 'run_fail' },
+      ),
+    ).rejects.toThrow(/exit code 4/i);
+  }, 30_000);
+
+  it('can be cancelled, and says nothing was recorded', async () => {
+    connectedAgy(`
+process.stdin.resume();
+setTimeout(() => process.exit(0), 600000);
+`);
+    const provider = new AntigravityProvider();
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 1_500);
+
+    await expect(
+      provider.runResearch(
+        { prompt: 'x', requiredAttachments: [], expectedConversationTitle: 't', expectedFilename: 'f.pdf' },
+        { signal: controller.signal },
+      ),
+    ).rejects.toMatchObject({ outcome: 'CANCELLED' });
+  }, 60_000);
+
+  it('runs one job at a time, queueing the rest', async () => {
+    // Each run records its own start and end; overlapping windows would mean
+    // two jobs competing for the same account and the same machine.
+    connectedAgy(`
+let input = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (c) => { input += c; });
+process.stdin.on('end', () => {
+  const started = Date.now();
+  setTimeout(() => {
+    process.stdout.write(JSON.stringify({ tag: input.trim(), started, ended: Date.now() }) + '\\n');
+    process.exit(0);
+  }, 700);
+});
+`);
+    const provider = new AntigravityProvider();
+    const run = (tag: string) =>
+      provider.runResearch({
+        prompt: tag,
+        requiredAttachments: [],
+        expectedConversationTitle: 't',
+        expectedFilename: 'f.pdf',
+      });
+
+    const results = await Promise.all([run('one'), run('two'), run('three')]);
+    const windows = results
+      .map((r) => JSON.parse(r.text.trim()) as { tag: string; started: number; ended: number })
+      .sort((a, b) => a.started - b.started);
+
+    for (let index = 1; index < windows.length; index += 1) {
+      expect(windows[index]!.started).toBeGreaterThanOrEqual(windows[index - 1]!.ended);
+    }
+  }, 90_000);
+
+  it('refuses before queueing when the tool is not usable', async () => {
+    setEnv('BRAIN_ANTIGRAVITY_PATH', path.join(workDir, 'missing'));
+    const provider = new AntigravityProvider();
+    await expect(
+      provider.runResearch({
+        prompt: 'x',
+        requiredAttachments: [],
+        expectedConversationTitle: 't',
+        expectedFilename: 'f.pdf',
+      }),
+    ).rejects.toBeInstanceOf(AntigravityUnavailableError);
   });
 });

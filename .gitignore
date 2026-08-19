@@ -8,6 +8,8 @@ data/backups/
 data/projects/
 data/runtime/
 data/tmp/
+# Research job working directories: prompts and raw tool output. Never committed.
+data/research-jobs/
 .env
 .env.local
 *.log
