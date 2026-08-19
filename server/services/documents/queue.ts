@@ -12,6 +12,7 @@
  *   - a crash leaves the run recoverable, never apparently ready (see
  *     `recoverInterruptedExtractions`).
  */
+import { getDb } from '../../db/database.ts';
 import { extractDocument, type ExtractionResult } from './extraction.ts';
 
 interface QueueEntry {
@@ -88,4 +89,22 @@ export function whenExtractionIdle(): Promise<void> {
 
 export function extractionQueueDepth(): number {
   return pending.length + inFlight.size;
+}
+
+/**
+ * Queue every document that has never been successfully read.
+ *
+ * Called at boot so a folder dropped in while the server was down, or a document
+ * whose extraction was interrupted, becomes auditable without the user having to
+ * ask. Documents already READY are left alone.
+ */
+export function queueUnreadDocuments(): number {
+  const rows = getDb().all<{ id: string }>(
+    `SELECT id FROM documents
+     WHERE filesystem_path IS NOT NULL
+       AND file_missing = 0
+       AND extraction_status NOT IN ('READY','READY_WITH_WARNINGS','BLOCKED')`,
+  );
+  for (const row of rows) void enqueueExtraction(row.id);
+  return rows.length;
 }

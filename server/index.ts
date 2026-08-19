@@ -33,6 +33,8 @@ import { createApiRouter } from './routes/index.ts';
 import { seedIfEmpty } from './seed.ts';
 import { writeProjectState } from './services/runtimeState.ts';
 import { recomputeProject } from './services/stateEngine.ts';
+import { recoverInterruptedExtractions } from './services/documents/extraction.ts';
+import { queueUnreadDocuments } from './services/documents/queue.ts';
 
 /**
  * `node:sqlite` prints an experimental-feature warning the moment it is loaded.
@@ -239,6 +241,22 @@ function main(): void {
   // First boot creates Deal Dispatch; later boots only backfill missing layers
   // and re-create the folder tree.
   seedIfEmpty();
+
+  // An extraction still marked in-flight was interrupted by a crash or a
+  // restart. Mark it so, before anything can mistake a half-read document for a
+  // readable one, and leave it available to reprocess.
+  const interrupted = recoverInterruptedExtractions();
+  if (interrupted > 0) {
+    console.log(
+      `  ${interrupted} extraction run(s) were interrupted by the last shutdown and are ` +
+        'marked INTERRUPTED. Reprocess those documents to read them.',
+    );
+  }
+
+  // Documents that have never been read are queued now, so a folder dropped in
+  // while the server was down becomes auditable without anyone asking.
+  const unread = queueUnreadDocuments();
+  if (unread > 0) console.log(`  reading ${unread} document(s) in the background`);
 
   // Derived state is rebuilt before the first request rather than lazily, so a
   // file deleted or added while the server was down is already accounted for.

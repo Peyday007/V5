@@ -39,6 +39,7 @@ import {
   setLayerManualStatus,
 } from '../services/stateEngine.ts';
 import { prepareSynthesis } from '../services/synthesis.ts';
+import { buildAuditContext } from '../services/audit/context.ts';
 import {
   asInvariantViolation,
   badRequest,
@@ -221,6 +222,26 @@ layersRouter.patch(
       layer: requireLayer(layer.id),
       state: computeLayerState(layer.id),
       plan: buildPlan(layer.projectId),
+    };
+  }),
+);
+
+/**
+ * The packet manifest, before the audit runs.
+ *
+ * Section 17: flag missing or blocked siblings BEFORE starting, so the user is
+ * not told at the end that the layer verdict was impossible all along.
+ */
+layersRouter.get(
+  '/:layerId/packet-manifest',
+  handler((req) => {
+    const layer = requireLayer(pathId(req, 'layerId'));
+    const context = buildAuditContext({ mode: 'LAYER_PACKET', layerId: layer.id });
+    return {
+      layer,
+      manifest: context.manifest,
+      dependencies: context.dependencies,
+      auditable: context.manifest.complete && context.artifacts.length > 0,
     };
   }),
 );

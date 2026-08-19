@@ -24,6 +24,10 @@ import { listEventsByEntity, recordEvent } from '../repos/events.ts';
 import { getLayer } from '../repos/layers.ts';
 import { buildPlan } from '../services/planner.ts';
 import { recomputeProject } from '../services/stateEngine.ts';
+import { getCurrentExtractionRun, listExtractionRuns } from '../repos/extraction.ts';
+import { enqueueExtraction } from '../services/documents/queue.ts';
+import { getOcrEngine } from '../services/documents/ocr.ts';
+import { readableText, resolveCitation } from '../services/documents/retrieval.ts';
 import { absolutePathFor, layerSlugFromPath, relocateFile } from '../services/storage.ts';
 import {
   badRequest,
@@ -307,5 +311,89 @@ documentsRouter.get(
     });
     stream.pipe(res);
     return undefined;
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Document understanding
+// ---------------------------------------------------------------------------
+
+/** What the import screen and the document card need to show. */
+function extractionView(documentId: string) {
+  const run = getCurrentExtractionRun(documentId);
+  return {
+    run,
+    history: listExtractionRuns(documentId),
+    quality: run
+      ? {
+          status: run.status,
+          pagesExpected: run.pagesExpected,
+          pagesReadable: run.pagesReadable,
+          pagesOcr: run.pagesOcr,
+          pagesFailed: run.pagesFailed,
+          characterCount: run.characterCount,
+          warnings: run.warnings,
+          coverageRatio: run.coverageRatio,
+          pipelineVersion: run.pipelineVersion,
+          blockedReason: run.blockedReason,
+        }
+      : null,
+    ocr: { engine: getOcrEngine().name, available: getOcrEngine().available, reason: getOcrEngine().reason },
+  };
+}
+
+documentsRouter.get(
+  '/:documentId/extraction',
+  handler((req) => {
+    const document = requireDocument(pathId(req, 'documentId'));
+    return { document, ...extractionView(document.id) };
+  }),
+);
+
+/** VIEW EXTRACTED TEXT: exactly what the auditor will read, page by page. */
+documentsRouter.get(
+  '/:documentId/text',
+  handler((req) => {
+    const document = requireDocument(pathId(req, 'documentId'));
+    const { run, pages } = readableText(document.id);
+    if (!run) {
+      throw notFound(
+        `${document.canonicalName} has not been read yet, so there is no extracted text to show.`,
+      );
+    }
+    return { document, run, pages };
+  }),
+);
+
+/**
+ * REPROCESS. Creates a NEW extraction run rather than editing the old one, so
+ * audits recorded against the previous reading keep resolving to what they saw.
+ */
+documentsRouter.post(
+  '/:documentId/reprocess',
+  handler(async (req) => {
+    const document = requireDocument(pathId(req, 'documentId'));
+    const result = await enqueueExtraction(document.id, { force: true });
+    recordEvent({
+      projectId: document.projectId,
+      layerId: document.layerId,
+      entityType: 'DOCUMENT',
+      entityId: document.id,
+      eventType: 'DOCUMENT_REPROCESSED',
+      payload: { runId: result.run.id, status: result.quality.status },
+    });
+    recomputeProject(document.projectId);
+    return { document: requireDocument(document.id), ...extractionView(document.id) };
+  }),
+);
+
+/** Follow a citation back to the passage it rests on. */
+documentsRouter.get(
+  '/chunks/:chunkId',
+  handler((req) => {
+    const chunkId = pathId(req, 'chunkId');
+    const resolved = resolveCitation(chunkId);
+    if (!resolved) throw notFound(`No stored passage with id ${chunkId}.`);
+    return resolved;
   }),
 );

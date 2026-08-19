@@ -1561,3 +1561,9 @@ legend {
 .audit-headline__next {
   font-size: 14px;
 }
+
+/* Extraction status tones, reused by the document and import panels. */
+.badge--ok { color: #7fd18b; border-color: #2f5c39; background: #122016; }
+.badge--warn { color: #e0b45c; border-color: #5c4a24; background: #201b12; }
+.badge--bad { color: #e07a7a; border-color: #5c2f2f; background: #201414; }
+.badge--muted { color: #8b97a8; border-color: #2f3a4a; background: #161c24; }

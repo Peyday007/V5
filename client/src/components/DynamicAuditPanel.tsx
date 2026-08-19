@@ -6,13 +6,15 @@
  * that produced those three lines is available behind collapsed sections, because
  * a verdict you cannot interrogate is not worth trusting.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { AuditGap } from '../../../server/domain/types.ts';
 import {
+  Api,
   auditStreamPaths,
   streamAudit,
   type AuditStreamEvent,
   type DynamicAuditResponse,
+  type PacketManifestView,
 } from '../lib/api.ts';
 
 export type AuditTargetKind = 'document' | 'run' | 'packet';
@@ -79,6 +81,24 @@ export function DynamicAuditPanel(props: {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [result, setResult] = useState<DynamicAuditResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [manifest, setManifest] = useState<PacketManifestView | null>(null);
+
+  // For a packet, show what would be read BEFORE anything runs: being told at the
+  // end that the verdict was impossible all along is the worst version of this.
+  useEffect(() => {
+    if (kind !== 'packet') return;
+    let cancelled = false;
+    void Api.packetManifest(targetId)
+      .then((value) => {
+        if (!cancelled) setManifest(value);
+      })
+      .catch(() => {
+        if (!cancelled) setManifest(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, targetId, result]);
 
   const run = useCallback(async (): Promise<void> => {
     setBusy(true);
@@ -122,8 +142,46 @@ export function DynamicAuditPanel(props: {
 
   return (
     <div className="stack">
+      {kind === 'packet' && manifest ? (
+        <div className={manifest.auditable ? 'card' : 'error'}>
+          <div className="small">
+            <strong>PACKET MANIFEST</strong> — {manifest.manifest.documents.length} document(s),{' '}
+            {manifest.manifest.totalPages} page(s),{' '}
+            {manifest.manifest.totalCharacters.toLocaleString()} characters.
+          </div>
+          <ul className="checklist small">
+            {manifest.manifest.documents.map((entry) => (
+              <li key={entry.documentId ?? entry.canonicalName}>
+                {entry.unavailableReason ? '✗' : '✓'} {entry.canonicalName}
+                <span className="muted">
+                  {' '}
+                  · {entry.extractionStatus}
+                  {entry.pages ? ` · ${entry.pages}p` : ''}
+                  {entry.pagesOcr > 0 ? ` · ${entry.pagesOcr} OCR` : ''}
+                  {entry.truncated ? ' · truncated' : ''}
+                </span>
+                {entry.unavailableReason ? (
+                  <div className="small muted">{entry.unavailableReason}</div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          {!manifest.auditable ? (
+            <div className="small">
+              <strong>This packet cannot be audited yet.</strong> Every document has to be readable
+              first — reprocess or replace the ones marked above.
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="row">
-        <button type="button" className="btn btn--primary" onClick={() => void run()} disabled={busy}>
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={() => void run()}
+          disabled={busy || (kind === 'packet' && manifest !== null && !manifest.auditable)}
+        >
           {busy ? 'AUDITING…' : label}
         </button>
         {progress ? (

@@ -371,7 +371,113 @@ export const Api = {
       body: JSON.stringify(body),
     });
   },
+
+  /** What a packet audit would read, before it runs. */
+  packetManifest(layerId: string): Promise<PacketManifestView> {
+    return api(`/api/layers/${enc(layerId)}/packet-manifest`);
+  },
+
+  /** How much of a document Brain has actually managed to read. */
+  extraction(documentId: string): Promise<ExtractionView> {
+    return api(`/api/documents/${enc(documentId)}/extraction`);
+  },
+
+  extractedText(documentId: string): Promise<ExtractedTextView> {
+    return api(`/api/documents/${enc(documentId)}/text`);
+  },
+
+  reprocess(documentId: string): Promise<ExtractionView> {
+    return api(`/api/documents/${enc(documentId)}/reprocess`, { method: 'POST' });
+  },
+
+  /** Follow a citation back to the passage it rests on. */
+  citation(chunkId: string): Promise<CitationView> {
+    return api(`/api/documents/chunks/${enc(chunkId)}`);
+  },
 };
+
+// ---------------------------------------------------------------------------
+// Document understanding
+// ---------------------------------------------------------------------------
+
+export interface ExtractionQualityView {
+  status: string;
+  pagesExpected: number;
+  pagesReadable: number;
+  pagesOcr: number;
+  pagesFailed: number[];
+  characterCount: number;
+  warnings: string[];
+  coverageRatio: number;
+  pipelineVersion: string;
+  blockedReason: string | null;
+}
+
+export interface ExtractionRunView {
+  id: string;
+  status: string;
+  detectedFormat: string | null;
+  pagesExpected: number;
+  pagesReadable: number;
+  pagesOcr: number;
+  coverageRatio: number;
+  warnings: string[];
+  blockedReason: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface ExtractionView {
+  document: Document;
+  run: ExtractionRunView | null;
+  history: ExtractionRunView[];
+  quality: ExtractionQualityView | null;
+  ocr: { engine: string; available: boolean; reason: string };
+}
+
+export interface ExtractedTextView {
+  document: Document;
+  run: ExtractionRunView;
+  pages: { pageNumber: number; blocks: { blockType: string; text: string; method: string }[] }[];
+}
+
+export interface ManifestEntryView {
+  documentId: string | null;
+  canonicalName: string;
+  version: string;
+  documentType: string;
+  extractionRunId: string | null;
+  extractionStatus: string;
+  pages: number | null;
+  pagesOcr: number;
+  coverageRatio: number;
+  characters: number;
+  truncated: boolean;
+  warnings: string[];
+  unavailableReason: string | null;
+}
+
+export interface PacketManifestView {
+  layer: Layer;
+  manifest: {
+    mode: string;
+    layerName: string;
+    generatedAt: string;
+    documents: ManifestEntryView[];
+    totalPages: number;
+    totalCharacters: number;
+    unreadable: ManifestEntryView[];
+    complete: boolean;
+  };
+  dependencies: DependencyCheckResult;
+  auditable: boolean;
+}
+
+export interface CitationView {
+  chunk: { id: string; pageStart: number; pageEnd: number; headingPath: string[] };
+  document: Document;
+  blocks: { pageNumber: number; blockType: string; text: string }[];
+}
 
 // ---------------------------------------------------------------------------
 // Dynamic audit

@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Document, DocumentStatus, DocumentType } from '../../../server/domain/types.ts';
 import { Api, ApiError, api, copyToClipboard } from '../lib/api.ts';
 import { DynamicAuditPanel } from './DynamicAuditPanel.tsx';
+import { ExtractionPanel } from './ExtractionPanel.tsx';
 import { Badge } from './Badge.tsx';
 
 /** Declared here, not imported: the client never pulls a value out of the server. */
@@ -286,6 +287,9 @@ export function DocumentCard(props: { document: Document; onChanged(): void }): 
           </button>
         </div>
       )}
+      {!doc.fileMissing && doc.filesystemPath ? (
+        <ExtractionPanel documentId={doc.id} onChanged={onChanged} />
+      ) : null}
       {auditOpen ? (
         <DynamicAuditPanel
           kind="document"
