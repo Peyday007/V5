@@ -10,6 +10,15 @@ import { DEFAULT_VERSION_POLICY, type ParsedVersion, type VersionPolicy } from '
 
 const VERSION_RE = /^\s*[vV]?(\d+)(?:\.(\d+))?\s*([A-Za-z]{1,3})?\s*$/;
 
+/**
+ * The same shape, unanchored, for finding versions mentioned inside prose.
+ *
+ * The leading `v` is required here where it is optional above: parsing a field
+ * that is known to hold a version can accept a bare "1", but scanning a
+ * paragraph cannot — every quantity in the text would match.
+ */
+export const VERSION_RE_SOURCE = 'v\\d+(?:\\.\\d+)?[A-Za-z]{0,3}';
+
 /** `A` → 1, `Z` → 26, `AA` → 27 (bijective base-26). `''` → 0. */
 export function branchToIndex(branch: string): number {
   let index = 0;

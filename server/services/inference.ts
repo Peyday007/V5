@@ -168,7 +168,14 @@ function scoreLayer(layer: Layer, candidateWords: string[]): LayerScore {
   return { score: 0, explanation: '' };
 }
 
-function unknownResult(reason: string): InferenceResult {
+/**
+ * The "nothing could be inferred" answer.
+ *
+ * Exported because a project-wide source legitimately has no layer to infer, and
+ * saying so with the same shape as a failed inference keeps one contract rather
+ * than two.
+ */
+export function unknownResult(reason: string): InferenceResult {
   return {
     layerId: null,
     layerName: null,

@@ -1,9 +1,11 @@
 import { getDb } from '../db/database.ts';
 import type {
+  ClassificationSource,
   Document,
   DocumentFormat,
   DocumentOrigin,
   DocumentRow,
+  DocumentScope,
   DocumentStatus,
   DocumentType,
   ExtractionStatus,
@@ -43,6 +45,12 @@ export function mapDocument(row: DocumentRow): Document {
     extractionRunId: row.extraction_run_id ?? null,
     pipelineVersion: row.pipeline_version ?? null,
     origin: (row.origin as DocumentOrigin | undefined) ?? 'UPLOAD',
+    scope: (row.scope as DocumentScope | null) ?? 'LAYER',
+    classificationSource: (row.classification_source as ClassificationSource | null) ?? null,
+    classificationConfidence:
+      row.classification_confidence === null || row.classification_confidence === undefined
+        ? null
+        : Number(row.classification_confidence),
   };
 }
 
@@ -157,6 +165,9 @@ export interface UpdateDocumentInput {
   extractionRunId?: string | null;
   pipelineVersion?: string | null;
   origin?: DocumentOrigin;
+  scope?: DocumentScope;
+  classificationSource?: ClassificationSource | null;
+  classificationConfidence?: number | null;
 }
 
 export function updateDocument(id: string, patch: UpdateDocumentInput): Document | null {
@@ -188,6 +199,9 @@ export function updateDocument(id: string, patch: UpdateDocumentInput): Document
     extraction_run_id: patch.extractionRunId,
     pipeline_version: patch.pipelineVersion,
     origin: patch.origin,
+    scope: patch.scope,
+    classification_source: patch.classificationSource,
+    classification_confidence: patch.classificationConfidence,
   });
   if (!clause) return getDocument(id);
   getDb().run(`UPDATE documents SET ${clause}, updated_at = ? WHERE id = ?`, [

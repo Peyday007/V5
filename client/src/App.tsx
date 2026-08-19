@@ -23,6 +23,7 @@ import type { HealthResponse } from './lib/api.ts';
 import { Api, ApiError } from './lib/api.ts';
 import { Pill } from './components/Badge.tsx';
 import { ImportPanel } from './components/ImportPanel.tsx';
+import { SourceReview } from './components/SourceReview.tsx';
 import { LayerDetail } from './components/LayerDetail.tsx';
 import { LayerList } from './components/LayerList.tsx';
 import { Modal } from './components/Modal.tsx';
@@ -97,6 +98,7 @@ export default function App(): JSX.Element {
   const [banner, setBanner] = useState<Banner | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const [reconcileReport, setReconcileReport] = useState<ReconcileReport | null>(null);
   const [layerReloadKey, setLayerReloadKey] = useState(0);
 
@@ -265,6 +267,7 @@ export default function App(): JSX.Element {
         plan={plan}
         health={health}
         onImport={() => setImportOpen(true)}
+        onSources={() => setSourcesOpen(true)}
         onWhatNext={() => void handleWhatNext()}
         onReconcile={() => void handleReconcile()}
         onRefresh={handleRefreshClick}
@@ -394,6 +397,14 @@ export default function App(): JSX.Element {
         layers={layers}
         open={importOpen}
         onClose={() => setImportOpen(false)}
+        onChanged={handleChanged}
+      />
+
+      <SourceReview
+        projectId={project?.id ?? null}
+        layers={layers}
+        open={sourcesOpen}
+        onClose={() => setSourcesOpen(false)}
         onChanged={handleChanged}
       />
 

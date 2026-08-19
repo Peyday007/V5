@@ -8,20 +8,34 @@
  */
 import { Router } from 'express';
 import type {
+  DocumentScope,
   DocumentType,
   ImportResult,
   ProjectStatus,
   ReconcileIssue,
   VersionPolicy,
 } from '../domain/types.ts';
-import { DEFAULT_VERSION_POLICY, DOCUMENT_TYPES, PROJECT_STATUSES } from '../domain/types.ts';
+import {
+  DEFAULT_VERSION_POLICY,
+  DOCUMENT_SCOPES,
+  DOCUMENT_TYPES,
+  PROJECT_STATUSES,
+} from '../domain/types.ts';
 import { isValidVersion, normalizeVersion } from '../domain/version.ts';
 import { listDocuments } from '../repos/documents.ts';
 import { listEvents, recordEvent } from '../repos/events.ts';
 import { listLayers } from '../repos/layers.ts';
 import { listProjects, updateProject } from '../repos/projects.ts';
 import { listRuns } from '../repos/runs.ts';
-import { importFile, resolveImport } from '../services/importer.ts';
+import {
+  importFile,
+  importProjectSource,
+  importProjectSourceFromFile,
+  resolveImport,
+} from '../services/importer.ts';
+import { resolveStoredFile } from '../services/storage.ts';
+import { toDataRelative } from '../env.ts';
+import { ingestSource } from '../services/sources/ingest.ts';
 import { buildPlan } from '../services/planner.ts';
 import { applyReconcileFix, scanAndReconcile } from '../services/reconcile.ts';
 import { recomputeProject } from '../services/stateEngine.ts';
@@ -314,6 +328,89 @@ projectsRouter.post(
 
     recomputeProject(project.id);
     return { result, plan: buildPlan(project.id) };
+  }),
+);
+
+/**
+ * Import a project-wide source: a transcript, a working log, anything that spans
+ * layers rather than belonging to one.
+ *
+ * Separate from the ordinary import because the question it asks is different.
+ * Ordinary import asks which layer this belongs to and stores the file
+ * unregistered when the filename cannot say. A project source has no single
+ * layer, so it is registered with none and read immediately; the layers it
+ * touches are proposed from its contents.
+ */
+projectsRouter.post(
+  '/:projectId/import-source',
+  uploadManyFiles,
+  handler(async (req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    const files = uploadedFiles(req);
+    if (files.length === 0) {
+      throw badRequest(
+        'No files were uploaded. Send them as multipart/form-data under the field name "files".',
+      );
+    }
+    const body = bodyOf(req);
+    const scope =
+      optionalEnum<DocumentScope>(body['scope'], DOCUMENT_SCOPES, 'scope') ??
+      'PROJECT_MASTER_TRANSCRIPT';
+
+    const results = [];
+    for (const file of files) {
+      const imported = importProjectSource({
+        projectId: project.id,
+        originalFilename: file.originalname,
+        contents: file.buffer,
+        scope,
+      });
+      // Reading it is the point; an import that only stored the file is the
+      // failure this endpoint exists to correct.
+      const report = imported.documentId
+        ? await ingestSource({ documentId: imported.documentId, scope })
+        : null;
+      results.push({ import: imported, report });
+    }
+
+    recomputeProject(project.id);
+    return { results, plan: buildPlan(project.id) };
+  }),
+);
+
+/**
+ * Read an already-stored file that was never registered.
+ *
+ * Requirement 14: everything sitting in `_unfiled` from before this existed can
+ * be picked up and understood without re-uploading it.
+ */
+projectsRouter.post(
+  '/:projectId/reprocess-unfiled',
+  handler(async (req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const relativePath = requiredString(body['relativePath'], 'relativePath');
+    const scope =
+      optionalEnum<DocumentScope>(body['scope'], DOCUMENT_SCOPES, 'scope') ??
+      'PROJECT_MASTER_TRANSCRIPT';
+
+    // Confinement: the same rule as every other path that takes one from a
+    // request. A stored file is inside this project's documents or it is not
+    // ours to read. The path is accepted in either of the two forms the user
+    // could reasonably have: from the data root, or from the documents folder.
+    const absolute = resolveStoredFile(project.slug, relativePath);
+
+    const imported = importProjectSourceFromFile({
+      projectId: project.id,
+      relativePath: toDataRelative(absolute),
+      scope,
+    });
+    const report = imported.documentId
+      ? await ingestSource({ documentId: imported.documentId, scope })
+      : null;
+
+    recomputeProject(project.id);
+    return { import: imported, report, plan: buildPlan(project.id) };
   }),
 );
 

@@ -600,6 +600,49 @@ samp {
   background: rgba(139, 152, 166, 0.1);
 }
 
+/* segment types and link decisions in the project-source review */
+.badge--accepted,
+.badge--completed_artifact,
+.badge--returned_research {
+  color: var(--green);
+  border-color: rgba(63, 185, 80, 0.5);
+  background: rgba(63, 185, 80, 0.14);
+}
+.badge--proposed,
+.badge--research_assignment,
+.badge--research_input {
+  color: var(--teal);
+  border-color: rgba(43, 179, 163, 0.5);
+  background: rgba(43, 179, 163, 0.14);
+}
+.badge--decision,
+.badge--revision {
+  color: var(--blue);
+  border-color: rgba(76, 141, 255, 0.5);
+  background: rgba(76, 141, 255, 0.14);
+}
+.badge--open_gap {
+  color: var(--orange);
+  border-color: rgba(232, 131, 74, 0.5);
+  background: rgba(232, 131, 74, 0.14);
+}
+.badge--excluded {
+  color: var(--red);
+  border-color: rgba(248, 81, 73, 0.5);
+  background: rgba(248, 81, 73, 0.14);
+}
+.badge--project_master_transcript,
+.badge--project_source,
+.badge--layer,
+.badge--conversation,
+.badge--attachment_ref,
+.badge--other,
+.badge--audit {
+  color: var(--grey);
+  border-color: rgba(139, 152, 166, 0.4);
+  background: rgba(139, 152, 166, 0.12);
+}
+
 /* ------------------------------------------------------------------- pills */
 
 .pill {
@@ -1028,7 +1071,8 @@ label {
   gap: 6px;
 }
 
-.field label {
+.field label,
+.field > span {
   white-space: nowrap;
 }
 

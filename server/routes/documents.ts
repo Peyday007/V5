@@ -33,6 +33,15 @@ import {
   extractDocumentFindings,
   FindingsExtractionError,
 } from '../services/documents/findings.ts';
+import { ingestSource } from '../services/sources/ingest.ts';
+import {
+  decideLink,
+  latestIngestionReport,
+  listLinks,
+  listSegments,
+} from '../repos/sources.ts';
+import { DOCUMENT_SCOPES, LINK_STATUSES, LINK_TYPES } from '../domain/types.ts';
+import type { DocumentScope, LinkStatus, LinkType } from '../domain/types.ts';
 import { absolutePathFor, layerSlugFromPath, relocateFile } from '../services/storage.ts';
 import {
   badRequest,
@@ -41,6 +50,7 @@ import {
   handler,
   nullableString,
   notFound,
+  optionalBoolean,
   optionalEnum,
   optionalString,
   pathId,
@@ -430,6 +440,74 @@ documentsRouter.post(
       }
       throw error;
     }
+  }),
+);
+
+/**
+ * Read a source properly: extract, segment, classify, propose links, report.
+ *
+ * Separate from extraction because it means something different. Extraction is
+ * "what does this file say"; ingestion is "what is this file about, and which
+ * parts of the project does it belong to".
+ */
+documentsRouter.post(
+  '/:documentId/ingest',
+  handler(async (req) => {
+    const document = requireDocument(pathId(req, 'documentId'));
+    const body = bodyOf(req);
+    const scope = optionalEnum<DocumentScope>(body['scope'], DOCUMENT_SCOPES, 'scope');
+    const report = await ingestSource({
+      documentId: document.id,
+      ...(scope ? { scope } : {}),
+      force: optionalBoolean(body['force'], 'force') ?? false,
+    });
+    return { document: requireDocument(document.id), report };
+  }),
+);
+
+/** The last ingestion report, its segments, and every proposed link. */
+documentsRouter.get(
+  '/:documentId/ingestion',
+  handler((req) => {
+    const document = requireDocument(pathId(req, 'documentId'));
+    return {
+      document,
+      report: latestIngestionReport(document.id),
+      segments: listSegments(document.id),
+      links: listLinks(document.id),
+    };
+  }),
+);
+
+/**
+ * Accept, change or exclude one proposed link.
+ *
+ * The review step is the point: classification proposes, a person decides, and
+ * nothing becomes layer evidence in between.
+ */
+documentsRouter.patch(
+  '/:documentId/links/:linkId',
+  handler((req) => {
+    const document = requireDocument(pathId(req, 'documentId'));
+    const linkId = pathId(req, 'linkId');
+    const body = bodyOf(req);
+
+    const status = optionalEnum<LinkStatus>(body['status'], LINK_STATUSES, 'status');
+    if (!status) throw badRequest('A "status" of PROPOSED, ACCEPTED or EXCLUDED is required.');
+    const linkType = optionalEnum<LinkType>(body['linkType'], LINK_TYPES, 'linkType');
+    const layerId = optionalString(body['layerId'], 'layerId');
+    if (layerId) requireLayerOfProject(layerId, document.projectId);
+    const version = nullableString(body['version'], 'version');
+
+    const updated = decideLink(linkId, {
+      status,
+      ...(linkType ? { linkType } : {}),
+      ...(layerId ? { layerId } : {}),
+      ...(version === undefined ? {} : { version }),
+    });
+    if (!updated) throw notFound(`No link with id ${linkId}.`);
+    recomputeProject(document.projectId);
+    return { link: updated, links: listLinks(document.id) };
   }),
 );
 

@@ -83,6 +83,38 @@ export function assertInsideProjectDocuments(projectSlug: string, relativePath: 
   return resolved;
 }
 
+/**
+ * The same confinement, forgiving about which root the caller counted from.
+ *
+ * Every stored path Brain hands out is relative to the data root
+ * (`projects/<slug>/documents/_unfiled/x.txt`), but somebody looking at the
+ * folder sees `_unfiled/x.txt` and types that. Both name the same file, so both
+ * are accepted — and both are then confined to this project's documents tree,
+ * which is the part that actually matters.
+ */
+export function resolveStoredFile(projectSlug: string, relativePath: string): string {
+  const trimmed = relativePath.replace(/^[\\/]+/, '');
+  try {
+    return assertInsideProjectDocuments(projectSlug, trimmed);
+  } catch (error) {
+    // The second reading is a convenience, so it has to earn its exception: it
+    // applies only when it names a file that is really there. Otherwise
+    // "brain.db" would stop being refused and start resolving to a documents
+    // path that does not exist, turning a clear refusal into a puzzling ENOENT.
+    const asDocumentsRelative = path.posix.join(
+      toDataRelative(documentsDir(projectSlug)),
+      trimmed.split(path.sep).join('/'),
+    );
+    try {
+      const resolved = assertInsideProjectDocuments(projectSlug, asDocumentsRelative);
+      if (fs.statSync(resolved).isFile()) return resolved;
+    } catch {
+      // Fall through: the caller's own path is what the refusal should name.
+    }
+    throw error;
+  }
+}
+
 export function fileExists(relativePath: string | null | undefined): boolean {
   if (!relativePath) return false;
   try {

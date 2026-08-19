@@ -23,7 +23,8 @@ import type {
   ResearchResponse,
 } from '../server/providers/types.ts';
 import { DATA_ROOT } from '../server/env.ts';
-import { importFile } from '../server/services/importer.ts';
+import { importFile, importProjectSource } from '../server/services/importer.ts';
+import { ingestSource } from '../server/services/sources/ingest.ts';
 import { storeFile } from '../server/services/storage.ts';
 import { createDocument, getDocument, updateDocument } from '../server/repos/documents.ts';
 import { listEvents, listEventsByEntity } from '../server/repos/events.ts';
@@ -34,6 +35,7 @@ import {
   listChunks,
   listDocumentFindings,
   listExtractionRuns,
+  supersedePreviousRuns,
 } from '../server/repos/extraction.ts';
 import { buildNames } from '../server/domain/naming.ts';
 import { versionSortKey, waveForVersion } from '../server/domain/version.ts';
@@ -603,6 +605,54 @@ describe('re-importing', () => {
     // The superseded run keeps its blocks, so an old audit still resolves.
     expect(listBlocks(runId).length).toBeGreaterThan(0);
     expect(getCurrentExtractionRun(document.id)!.id).toBe(reprocessed.run.id);
+  });
+
+  it('always leaves exactly one current reading, whatever order two readings finish in', async () => {
+    const { document, runId } = await importAndRead('World Model v1.pdf', multiPagePdf(3));
+
+    // The out-of-order case: an older run reaches its verdict after a newer one.
+    // Superseding "every other run" here would have the two cancel each other
+    // out and leave the document with no current reading at all.
+    const later = createExtractionRun({
+      documentId: document.id,
+      projectId: fixture.project.id,
+      pipelineVersion: 'test',
+      status: 'READY',
+    });
+    supersedePreviousRuns(document.id, later.id);
+    supersedePreviousRuns(document.id, runId);
+
+    const current = getCurrentExtractionRun(document.id);
+    expect(current).not.toBeNull();
+    expect(current!.id).toBe(later.id);
+    expect(listExtractionRuns(document.id).filter((run) => run.supersededByRunId === null))
+      .toHaveLength(1);
+  });
+
+  it('shares one reading when an ingest and an import ask for the same document at once', async () => {
+    const imported = importProjectSource({
+      projectId: fixture.project.id,
+      originalFilename: 'working notes.txt',
+      contents: Buffer.from(
+        'Working notes\n\n' +
+          'The World Model owns the actors and the objects, and custody transfers at the ' +
+          'point of assignment.\n\n' +
+          'Monetization Logic covers the pricing surfaces: subscription, per-seat and the ' +
+          'success fee on a closed deal.\n\n' +
+          'Routing reads the World Model rather than restating it.\n',
+      ),
+    });
+    // Deliberately not awaiting the queue first: this is the live sequence, where
+    // import has just scheduled the document and ingestion asks for it too.
+    const report = await ingestSource({
+      documentId: imported.documentId!,
+      scope: 'PROJECT_SOURCE',
+    });
+    await whenExtractionIdle();
+
+    expect(getCurrentExtractionRun(imported.documentId!)).not.toBeNull();
+    expect(report.extractionStatus).toMatch(/READY/);
+    expect(listExtractionRuns(imported.documentId!)).toHaveLength(1);
   });
 });
 

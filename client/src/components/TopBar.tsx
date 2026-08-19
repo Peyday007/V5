@@ -61,6 +61,7 @@ export function TopBar(props: {
   plan: PlannerResult | null;
   health: HealthResponse | null;
   onImport(): void;
+  onSources(): void;
   onWhatNext(): void;
   onReconcile(): void;
   onRefresh(): void;
@@ -103,6 +104,9 @@ export function TopBar(props: {
       <div className="topbar__actions row">
         <button type="button" className="btn btn--primary" onClick={props.onImport} disabled={disabled}>
           IMPORT DOCUMENT
+        </button>
+        <button type="button" className="btn" onClick={props.onSources} disabled={disabled}>
+          PROJECT SOURCES
         </button>
         <button type="button" className="btn btn--primary" onClick={props.onWhatNext} disabled={disabled}>
           WHAT NEXT?

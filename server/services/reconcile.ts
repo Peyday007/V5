@@ -131,7 +131,14 @@ export function scanAndReconcile(projectId: string): ReconcileReport {
   for (const document of documents) {
     if (document.filesystemPath) registeredPaths.add(document.filesystemPath);
 
-    if (!document.layerId) issues.push(orphanIssue(project.id, document));
+    // No layer is a fault only for a document that should have one. A
+    // project-wide source — a transcript, a working log — belongs to the project
+    // and is linked to several layers by review, so filing it under one would be
+    // the error. Reporting it as orphaned every time would train the user to
+    // ignore this report.
+    if (!document.layerId && (document.scope ?? 'LAYER') === 'LAYER') {
+      issues.push(orphanIssue(project.id, document));
+    }
 
     // A document that was planned but not yet produced legitimately has no file.
     const relativePath = document.filesystemPath;

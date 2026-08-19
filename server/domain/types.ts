@@ -272,6 +272,122 @@ export type DocumentFindingType = (typeof DOCUMENT_FINDING_TYPES)[number];
 export const DOCUMENT_ORIGINS = ['UPLOAD', 'FILESYSTEM', 'PASTED', 'RUN_RESULT'] as const;
 export type DocumentOrigin = (typeof DOCUMENT_ORIGINS)[number];
 
+/**
+ * What a document is to the project.
+ *
+ * Almost everything is a LAYER document: one report, about one layer. A master
+ * transcript is not — it spans layers, assignments, decisions and artifacts, and
+ * filing it under one layer would put most of its content under the wrong
+ * heading.
+ */
+export const DOCUMENT_SCOPES = ['LAYER', 'PROJECT_MASTER_TRANSCRIPT', 'PROJECT_SOURCE'] as const;
+export type DocumentScope = (typeof DOCUMENT_SCOPES)[number];
+
+/** How a document's layer was decided. A filename is a hint; content is understanding. */
+export const CLASSIFICATION_SOURCES = ['FILENAME', 'FOLDER', 'CONTENT', 'MANUAL'] as const;
+export type ClassificationSource = (typeof CLASSIFICATION_SOURCES)[number];
+
+export const SEGMENT_TYPES = [
+  'CONVERSATION',
+  'RESEARCH_ASSIGNMENT',
+  'RETURNED_RESEARCH',
+  'AUDIT',
+  'DECISION',
+  'REVISION',
+  'SUPERSEDED',
+  'OPEN_GAP',
+  'ATTACHMENT_REF',
+  'OTHER',
+] as const;
+export type SegmentType = (typeof SEGMENT_TYPES)[number];
+
+export const LINK_TYPES = ['REFERENCE', 'RESEARCH_INPUT', 'COMPLETED_ARTIFACT'] as const;
+export type LinkType = (typeof LINK_TYPES)[number];
+
+export const LINK_STATUSES = ['PROPOSED', 'ACCEPTED', 'EXCLUDED'] as const;
+export type LinkStatus = (typeof LINK_STATUSES)[number];
+
+export interface DocumentSegmentRow {
+  id: string;
+  document_id: string;
+  extraction_run_id: string;
+  segment_index: number;
+  segment_type: string;
+  title: string;
+  speaker: string | null;
+  timestamp_text: string | null;
+  block_start: number;
+  block_end: number;
+  char_start: number;
+  char_end: number;
+  text: string;
+  content_hash: string;
+  confidence: number;
+  rationale: string;
+  warnings: string;
+  created_at: string;
+}
+
+export interface DocumentSegment {
+  id: string;
+  documentId: string;
+  extractionRunId: string;
+  segmentIndex: number;
+  segmentType: SegmentType;
+  title: string;
+  speaker: string | null;
+  timestampText: string | null;
+  blockStart: number;
+  blockEnd: number;
+  charStart: number;
+  charEnd: number;
+  text: string;
+  contentHash: string;
+  /** How sure the classifier is, 0..1. Never presented as certainty. */
+  confidence: number;
+  rationale: string;
+  warnings: string[];
+  createdAt: string;
+}
+
+export interface SegmentLayerLinkRow {
+  id: string;
+  document_id: string;
+  segment_id: string | null;
+  layer_id: string;
+  version: string | null;
+  link_type: string;
+  confidence: number;
+  rationale: string;
+  status: string;
+  decided_at: string | null;
+  created_at: string;
+}
+
+export interface SegmentLayerLink {
+  id: string;
+  documentId: string;
+  /** Null for a whole-document link, as an ordinary imported file produces. */
+  segmentId: string | null;
+  layerId: string;
+  version: string | null;
+  linkType: LinkType;
+  confidence: number;
+  rationale: string;
+  status: LinkStatus;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+export interface IngestionReportRow {
+  id: string;
+  document_id: string;
+  extraction_run_id: string;
+  scope: string;
+  report: string;
+  created_at: string;
+}
+
 /** The machine-readable verdict every extraction run ends with (section 10). */
 export interface ExtractionQuality {
   status: ExtractionStatus;
@@ -397,6 +513,9 @@ export interface DocumentRow {
   extraction_run_id: string | null;
   pipeline_version: string | null;
   origin: string;
+  scope: string;
+  classification_source: string | null;
+  classification_confidence: number | null;
 }
 
 export interface ResearchRunRow {
@@ -712,6 +831,11 @@ export interface Document {
   extractionRunId: string | null;
   pipelineVersion: string | null;
   origin: DocumentOrigin;
+  /** LAYER for an ordinary report; a project scope for a source spanning layers. */
+  scope: DocumentScope;
+  /** How the layer was decided. A filename is a hint, never understanding. */
+  classificationSource: ClassificationSource | null;
+  classificationConfidence: number | null;
 }
 
 export interface ExtractionRun {

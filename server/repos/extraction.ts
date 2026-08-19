@@ -242,16 +242,30 @@ export function updateExtractionRun(
  * an audit resolves to, so the supersession is written down rather than inferred.
  */
 export function supersedePreviousRuns(documentId: string, currentRunId: string): number {
+  // "Previous" means previous. Superseding every other run would let two runs
+  // that finish in the wrong order supersede each other, and a document with
+  // both of its runs superseded has no current reading at all — the worst
+  // outcome available, since every caller then behaves as though the file was
+  // never read. Ordering matches getCurrentExtractionRun exactly.
+  const current = getDb().get<{ created_at: string; rowid: number }>(
+    'SELECT created_at, rowid FROM extraction_runs WHERE id = ?',
+    [currentRunId],
+  );
+  if (!current) return 0;
+
+  const olderThanCurrent =
+    'document_id = ? AND id <> ? AND superseded_by_run_id IS NULL ' +
+    'AND (created_at < ? OR (created_at = ? AND rowid < ?))';
+  const scope = [documentId, currentRunId, current.created_at, current.created_at, current.rowid];
+
   const stale = getDb().all<{ id: string }>(
-    `SELECT id FROM extraction_runs
-     WHERE document_id = ? AND id <> ? AND superseded_by_run_id IS NULL`,
-    [documentId, currentRunId],
+    `SELECT id FROM extraction_runs WHERE ${olderThanCurrent}`,
+    scope,
   );
   if (stale.length === 0) return 0;
   getDb().run(
-    `UPDATE extraction_runs SET superseded_by_run_id = ?, updated_at = ?
-     WHERE document_id = ? AND id <> ? AND superseded_by_run_id IS NULL`,
-    [currentRunId, nowIso(), documentId, currentRunId],
+    `UPDATE extraction_runs SET superseded_by_run_id = ?, updated_at = ? WHERE ${olderThanCurrent}`,
+    [currentRunId, nowIso(), ...scope],
   );
   return stale.length;
 }

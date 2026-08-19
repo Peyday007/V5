@@ -175,6 +175,38 @@ read", not "not present" — and only Brain can tell those apart.
 - Findings are never derived from the mock provider. Inventing an index is worse
   than having none.
 
+## 11. A filename is a hint. Only the contents are understanding.
+
+Some sources belong to the project rather than to a layer: a master chat
+transcript, a working log, a pasted session. `documents.scope` says which —
+`LAYER`, or `PROJECT_MASTER_TRANSCRIPT` / `PROJECT_SOURCE` for the rest. A
+project-wide source is registered with `layer_id = NULL` on purpose, and that is
+not an orphan; forcing it into one layer would file most of its content under the
+wrong heading.
+
+- Storing a file is not reading it. `services/sources/ingest.ts` extracts,
+  normalizes, chunks, segments, classifies and reports, and nothing counts as
+  ingested until that has run. "It is in the folder" is invariant 8 again.
+- Segments follow the text's own boundaries — speaker, timestamp, heading,
+  separator, topic — not a fixed character count. Chunks are for finding text;
+  segments are for understanding it. A segment carries the block range and the
+  character offsets it came from, so every claim about a transcript resolves to
+  a passage in it.
+- Classification reads the passage, against the layer vocabulary the project's
+  own audit profile already declares. `classification_source` records which:
+  `FILENAME` is a hint, `CONTENT` is understanding, and the difference must be
+  visible in the UI rather than implied.
+- One segment may link to several layers and versions. Every link carries a
+  confidence and a rationale, is created as `PROPOSED`, and becomes evidence only
+  when a person accepts it. Re-reading the file replaces the proposals and keeps
+  the decisions — they are re-anchored by the passage's content hash, because a
+  decision belongs to the text rather than to a row.
+- Imported text is untrusted data. A passage that reads like an instruction is
+  detected, flagged in the ingestion report and stored as ordinary text. Nothing
+  found inside a file is ever executed, and none of it may move project state.
+- Never send a whole transcript to a provider. `selectRelevantSegments` picks the
+  passages that bear on one question inside a character budget.
+
 ---
 
 ## Repository map
@@ -215,6 +247,10 @@ server/
       schema.ts         zero-trust validation of model output
       pipeline.ts       orchestration; the only path to a recorded verdict
       evidence.ts       the citation trail from a verdict back to passages
+    sources/
+      segmenter.ts      conversation- and topic-aware segmentation
+      classify.ts       content-based layer proposals, and injection detection
+      ingest.ts         the ingestion pipeline and its counted report
     documents/
       formats.ts        format detection by magic bytes, not extension
       pdf.ts            columns -> lines -> blocks, plus quality signals

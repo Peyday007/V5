@@ -13,7 +13,12 @@ import type {
   Conversation,
   DependencyCheckResult,
   Document,
+  DocumentScope,
+  DocumentSegment,
   ImportResult,
+  LinkStatus,
+  LinkType,
+  SegmentLayerLink,
   Layer,
   LayerStateSnapshot,
   Message,
@@ -24,10 +29,12 @@ import type {
   ReconcileReport,
   ResearchRun,
 } from '../../../server/domain/types.ts';
+import type { IngestionReport } from '../../../server/services/sources/ingest.ts';
 import type { ProviderStatus } from '../../../server/providers/types.ts';
 import type { ChatTurnResult } from '../../../server/services/agent/chat.ts';
 
-export type { ChatTurnResult, ProviderStatus, MigrationReport };
+export type { ChatTurnResult, ProviderStatus, MigrationReport, IngestionReport };
+export type { DocumentSegment, SegmentLayerLink, LinkStatus, LinkType, DocumentScope };
 
 // ---------------------------------------------------------------------------
 // Response shapes (the exact bodies documented in the HTTP contract)
@@ -214,6 +221,11 @@ export const Api = {
     );
   },
 
+  /** Every registered document in the project, layer-scoped and project-wide alike. */
+  projectDocuments(projectId: string): Promise<{ documents: Document[] }> {
+    return api<{ documents: Document[] }>(`/api/projects/${enc(projectId)}/documents`);
+  },
+
   events(projectId: string, limit?: number): Promise<{ events: ProjectEvent[] }> {
     return api<{ events: ProjectEvent[] }>(
       `/api/projects/${enc(projectId)}/events${query({ limit })}`,
@@ -390,6 +402,52 @@ export const Api = {
     return api(`/api/documents/${enc(documentId)}/reprocess`, { method: 'POST' });
   },
 
+  /** Import a project-wide source and read it in one step. */
+  importProjectSource(
+    projectId: string,
+    files: File[],
+    scope: DocumentScope = 'PROJECT_MASTER_TRANSCRIPT',
+  ): Promise<{ results: { import: ImportResult; report: IngestionReport | null }[] }> {
+    const form = new FormData();
+    for (const file of files) form.append('files', file, file.name);
+    form.append('scope', scope);
+    return api(`/api/projects/${enc(projectId)}/import-source`, { method: 'POST', body: form });
+  },
+
+  /** Read a file that was stored before this existed and never registered. */
+  reprocessUnfiled(
+    projectId: string,
+    relativePath: string,
+    scope: DocumentScope = 'PROJECT_MASTER_TRANSCRIPT',
+  ): Promise<{ import: ImportResult; report: IngestionReport | null }> {
+    return post(`/api/projects/${enc(projectId)}/reprocess-unfiled`, { relativePath, scope });
+  },
+
+  /** What a file was found to be about, and which parts of the project it touches. */
+  ingestion(documentId: string): Promise<IngestionView> {
+    return api(`/api/documents/${enc(documentId)}/ingestion`);
+  },
+
+  /** Read a source again: extract, segment, classify, propose. Decisions survive. */
+  ingest(
+    documentId: string,
+    body?: { scope?: DocumentScope; force?: boolean },
+  ): Promise<{ document: Document; report: IngestionReport }> {
+    return post(`/api/documents/${enc(documentId)}/ingest`, body ?? {});
+  },
+
+  /** Accept, redirect or exclude one proposed link. */
+  decideLink(
+    documentId: string,
+    linkId: string,
+    body: { status: LinkStatus; linkType?: LinkType; layerId?: string; version?: string | null },
+  ): Promise<{ link: SegmentLayerLink; links: SegmentLayerLink[] }> {
+    return api(`/api/documents/${enc(documentId)}/links/${enc(linkId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  },
+
   /** Follow a citation back to the passage it rests on. */
   citation(chunkId: string): Promise<CitationView> {
     return api(`/api/documents/chunks/${enc(chunkId)}`);
@@ -505,6 +563,14 @@ export interface ExtractionView {
   ocrEngineVersion: string | null;
   ocrRendererVersion: string | null;
   ocr: OcrStatusView;
+}
+
+/** The last ingestion of one source, with everything a reviewer needs on screen. */
+export interface IngestionView {
+  document: Document;
+  report: IngestionReport | null;
+  segments: DocumentSegment[];
+  links: SegmentLayerLink[];
 }
 
 export interface ExtractedTextView {

@@ -14,7 +14,11 @@ import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { registerExistingFile, resolveImport } from '../server/services/importer.ts';
 import { applyReconcileFix } from '../server/services/reconcile.ts';
 import { DATA_ROOT } from '../server/env.ts';
-import { assertInsideProjectDocuments, documentsDir } from '../server/services/storage.ts';
+import {
+  assertInsideProjectDocuments,
+  documentsDir,
+  resolveStoredFile,
+} from '../server/services/storage.ts';
 
 let fixture: TestProject;
 
@@ -34,6 +38,24 @@ describe('a caller-supplied path cannot escape the documents tree', () => {
       expect(() => assertInsideProjectDocuments(fixture.project.slug, relativePath), relativePath)
         .toThrow();
     }
+  });
+
+  it('accepts either root for a stored file, and still confines both', () => {
+    const documents = documentsDir(fixture.project.slug);
+    fs.mkdirSync(path.join(documents, '_unfiled'), { recursive: true });
+    const stored = path.join(documents, '_unfiled', 'notes.txt');
+    fs.writeFileSync(stored, 'text');
+
+    // What Brain hands out, and what somebody reading the folder would type.
+    const dataRelative = path.relative(DATA_ROOT, stored).split(path.sep).join('/');
+    expect(resolveStoredFile(fixture.project.slug, dataRelative)).toBe(stored);
+    expect(resolveStoredFile(fixture.project.slug, '_unfiled/notes.txt')).toBe(stored);
+
+    // Being forgiving about the root does not widen what is reachable.
+    for (const relativePath of OUTSIDE) {
+      expect(() => resolveStoredFile(fixture.project.slug, relativePath), relativePath).toThrow();
+    }
+    expect(() => resolveStoredFile(fixture.project.slug, '../../brain.db')).toThrow();
   });
 
   it('refuses to confirm an import of the database', () => {

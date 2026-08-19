@@ -15,7 +15,15 @@ import path from 'node:path';
 import { getDb } from '../db/database.ts';
 import { buildCanonicalName, buildNames, type CanonicalNames } from '../domain/naming.ts';
 import { isValidVersion, normalizeVersion, versionSortKey, waveForVersion } from '../domain/version.ts';
-import type { Document, DocumentType, ImportResult, InferenceResult, Layer, Project } from '../domain/types.ts';
+import type {
+  Document,
+  DocumentScope,
+  DocumentType,
+  ImportResult,
+  InferenceResult,
+  Layer,
+  Project,
+} from '../domain/types.ts';
 import {
   createDocument,
   findDocumentByCanonicalName,
@@ -28,9 +36,20 @@ import { getLayer } from '../repos/layers.ts';
 import { getProject } from '../repos/projects.ts';
 import { nowIso } from '../repos/util.ts';
 import { refreshProjectDependencies } from './dependencies.ts';
-import { AUTO_REGISTER_CONFIDENCE, inferForProjectFile, inferFromFilename } from './inference.ts';
+import {
+  AUTO_REGISTER_CONFIDENCE,
+  inferForProjectFile,
+  inferFromFilename,
+  unknownResult,
+} from './inference.ts';
 import { recomputeProject } from './stateEngine.ts';
 import { enqueueExtraction } from './documents/queue.ts';
+
+/** Where project-wide sources live, beside the per-layer folders. */
+export const PROJECT_SOURCES_FOLDER = '_project-sources';
+/** Project sources are not drafts of anything, so they sort outside versions. */
+export const PROJECT_SOURCE_VERSION = 'source';
+export const PROJECT_SOURCE_SORT = 'zzzz.source';
 import {
   absolutePathFor,
   fileExists,
@@ -361,6 +380,189 @@ function describeRegistration(registration: Registration): string {
  * the inference is confident enough; otherwise parks it in `_unfiled` and asks
  * for confirmation.
  */
+/**
+ * Register a file as a project-wide source rather than a layer document.
+ *
+ * The case this exists for is the master transcript. Ordinary import asks "which
+ * layer is this?" and stores the file unregistered when the filename cannot
+ * answer — which is how `conversation_transcript_best_effort.txt` ended up in
+ * `_unfiled` with nothing read. A project source has no single layer by
+ * definition, so it is registered with none, and the layers it touches are
+ * discovered from its contents and proposed as links afterwards.
+ *
+ * It still becomes a real document: one row, one file, one extraction run, the
+ * same provenance as everything else.
+ */
+export function importProjectSource(input: {
+  projectId: string;
+  originalFilename: string;
+  contents: Buffer;
+  scope?: DocumentScope;
+  notes?: string | null;
+}): ImportResult {
+  const project = requireProject(input.projectId);
+  const originalFilename = path.basename((input.originalFilename || '').trim() || 'source.txt');
+  const hash = hashBuffer(input.contents);
+
+  const duplicate = duplicateSource(project.id, originalFilename, hash);
+  if (duplicate) return duplicate;
+
+  const stored = storeFile({
+    projectSlug: project.slug,
+    layerSlug: PROJECT_SOURCES_FOLDER,
+    filename: originalFilename,
+    contents: input.contents,
+  });
+
+  return registerProjectSource({
+    project,
+    originalFilename,
+    stored,
+    scope: input.scope ?? 'PROJECT_MASTER_TRANSCRIPT',
+    notes: input.notes ?? null,
+  });
+}
+
+/**
+ * Adopt a file already sitting in the project tree as a project-wide source.
+ *
+ * The `_unfiled` case: a file was stored months ago and never registered, and
+ * now somebody wants it read. It is MOVED rather than copied, exactly as
+ * confirming an ordinary import does — the same bytes, under a folder that says
+ * what they are. Copying would leave two identical files on disk and a permanent
+ * "unregistered file" in every reconcile from then on.
+ */
+export function importProjectSourceFromFile(input: {
+  projectId: string;
+  relativePath: string;
+  scope?: DocumentScope;
+  notes?: string | null;
+}): ImportResult {
+  const project = requireProject(input.projectId);
+  // Adopting relocates the file, so the path is confined first — the data root
+  // also holds the database, the backups and the runtime snapshot.
+  assertInsideProjectDocuments(project.slug, input.relativePath);
+  if (!fileExists(input.relativePath)) {
+    throw new Error(`There is no file at ${input.relativePath} to read.`);
+  }
+
+  const originalFilename = path.basename(input.relativePath);
+
+  const existing = findDocumentByPath(input.relativePath);
+  if (existing) {
+    return result({
+      filename: originalFilename,
+      storedPath: input.relativePath,
+      inference: unknownResult('This file is already registered.'),
+      documentId: existing.id,
+      registered: false,
+      requiresConfirmation: false,
+      message: `"${originalFilename}" is already registered as ${existing.canonicalName}.`,
+      duplicateOfDocumentId: existing.id,
+    });
+  }
+
+  const hash = hashFile(absolutePathFor(input.relativePath));
+  const duplicate = duplicateSource(project.id, originalFilename, hash);
+  if (duplicate) return duplicate;
+
+  const stored = relocateFile(
+    input.relativePath,
+    project.slug,
+    PROJECT_SOURCES_FOLDER,
+    originalFilename,
+  );
+
+  return registerProjectSource({
+    project,
+    originalFilename,
+    stored,
+    scope: input.scope ?? 'PROJECT_MASTER_TRANSCRIPT',
+    notes: input.notes ?? null,
+  });
+}
+
+/** One file, one row: the same bytes are never registered twice. */
+function duplicateSource(projectId: string, filename: string, hash: string): ImportResult | null {
+  const duplicate = findDocumentByHash(projectId, hash);
+  if (!duplicate || !fileExists(duplicate.filesystemPath)) return null;
+  return result({
+    filename,
+    storedPath: duplicate.filesystemPath,
+    inference: unknownResult('This file is already registered as a project source.'),
+    documentId: duplicate.id,
+    registered: false,
+    requiresConfirmation: false,
+    message: `"${filename}" is already registered as ${duplicate.canonicalName}.`,
+    duplicateOfDocumentId: duplicate.id,
+  });
+}
+
+/** The row a project-wide source gets: no layer, and no place in the version order. */
+function registerProjectSource(input: {
+  project: Project;
+  originalFilename: string;
+  stored: StoredFile;
+  scope: DocumentScope;
+  notes: string | null;
+}): ImportResult {
+  const { project, stored } = input;
+
+  // A project source has no version in the layer sense — it is not the first or
+  // second draft of anything. It sorts outside the version ordering rather than
+  // pretending to a place inside it.
+  const document = createDocument({
+    projectId: project.id,
+    layerId: null,
+    canonicalName: input.originalFilename.replace(/\.[A-Za-z0-9]+$/, ''),
+    version: PROJECT_SOURCE_VERSION,
+    versionSort: PROJECT_SOURCE_SORT,
+    wave: null,
+    documentType: 'REFERENCE',
+    status: 'COMPLETE',
+    filename: stored.filename,
+    filesystemPath: stored.relativePath,
+    fileSize: stored.size,
+    fileHash: stored.hash,
+    conversationTitle: null,
+    origin: 'UPLOAD',
+    notes: input.notes,
+    importedAt: nowIso(),
+  });
+  updateDocument(document.id, { scope: input.scope });
+
+  recordEvent({
+    projectId: project.id,
+    layerId: null,
+    entityType: 'DOCUMENT',
+    entityId: document.id,
+    eventType: 'DOCUMENT_IMPORTED',
+    payload: {
+      scope: input.scope,
+      originalFilename: input.originalFilename,
+      fileHash: stored.hash,
+      registered: true,
+      projectSource: true,
+    },
+  });
+
+  void enqueueExtraction(document.id);
+
+  return result({
+    filename: input.originalFilename,
+    storedPath: stored.relativePath,
+    inference: unknownResult(
+      'Registered as a project-wide source. Its layers come from its contents, not its name.',
+    ),
+    documentId: document.id,
+    registered: true,
+    requiresConfirmation: false,
+    message:
+      `Registered "${input.originalFilename}" as a project source. Reading it now — the layers it ` +
+      'touches will be proposed from what is inside it.',
+  });
+}
+
 export function importFile(input: ImportFileInput): ImportResult {
   const project = requireProject(input.projectId);
   const originalFilename = path.basename((input.originalFilename || '').trim() || 'document.pdf');
