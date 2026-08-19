@@ -176,6 +176,9 @@ export const EVENT_TYPES = [
   'DOCUMENT_DELETED',
   'DOCUMENT_FILE_MISSING',
   'DOCUMENT_FILE_RESTORED',
+  'DOCUMENT_EXTRACTED',
+  'DOCUMENT_EXTRACTION_FAILED',
+  'DOCUMENT_REPROCESSED',
   'RUN_CREATED',
   'RUN_STARTED',
   'RUN_COMPLETED',
@@ -199,6 +202,88 @@ export const EVENT_TYPES = [
 export type EventType = (typeof EVENT_TYPES)[number];
 
 export type StatusSource = 'DERIVED' | 'MANUAL';
+
+// ---------------------------------------------------------------------------
+// Document understanding
+// ---------------------------------------------------------------------------
+
+/** What the bytes actually are, decided by magic number rather than extension. */
+export const DOCUMENT_FORMATS = [
+  'PDF',
+  'DOCX',
+  'TEXT',
+  'MARKDOWN',
+  'PASTED',
+  'UNSUPPORTED',
+] as const;
+export type DocumentFormat = (typeof DOCUMENT_FORMATS)[number];
+
+export const EXTRACTION_STATUSES = [
+  'QUEUED',
+  'EXTRACTING',
+  'OCR',
+  'INDEXING',
+  'READY',
+  'READY_WITH_WARNINGS',
+  'BLOCKED',
+  'FAILED',
+  /** A run that was interrupted mid-flight; recoverable, never mistaken for ready. */
+  'INTERRUPTED',
+] as const;
+export type ExtractionStatus = (typeof EXTRACTION_STATUSES)[number];
+
+/** Statuses a document may be audited from. Everything else is not evidence. */
+export const AUDITABLE_EXTRACTION_STATUSES: readonly ExtractionStatus[] = [
+  'READY',
+  'READY_WITH_WARNINGS',
+];
+
+export const EXTRACTION_METHODS = ['NATIVE', 'OCR', 'DOCX', 'TEXT', 'PASTED'] as const;
+export type ExtractionMethod = (typeof EXTRACTION_METHODS)[number];
+
+export const BLOCK_TYPES = [
+  'HEADING',
+  'PARAGRAPH',
+  'LIST_ITEM',
+  'TABLE',
+  'CAPTION',
+  'FOOTNOTE',
+  'CODE',
+  'PAGE_HEADER',
+  'PAGE_FOOTER',
+] as const;
+export type BlockType = (typeof BLOCK_TYPES)[number];
+
+export const DOCUMENT_FINDING_TYPES = [
+  'CLAIM',
+  'DEFINITION',
+  'COMPONENT',
+  'ACTOR',
+  'RELATIONSHIP',
+  'ASSUMPTION',
+  'EXCLUSION',
+  'REQUIREMENT_ANSWERED',
+  'OPEN_QUESTION',
+  'CONTRADICTION',
+] as const;
+export type DocumentFindingType = (typeof DOCUMENT_FINDING_TYPES)[number];
+
+export const DOCUMENT_ORIGINS = ['UPLOAD', 'FILESYSTEM', 'PASTED', 'RUN_RESULT'] as const;
+export type DocumentOrigin = (typeof DOCUMENT_ORIGINS)[number];
+
+/** The machine-readable verdict every extraction run ends with (section 10). */
+export interface ExtractionQuality {
+  status: ExtractionStatus;
+  pagesExpected: number;
+  pagesReadable: number;
+  pagesOcr: number;
+  pagesFailed: number[];
+  characterCount: number;
+  warnings: string[];
+  coverageRatio: number;
+  pipelineVersion: string;
+  blockedReason: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Versioning
@@ -304,6 +389,13 @@ export interface DocumentRow {
   imported_at: string | null;
   created_at: string;
   updated_at: string;
+  mime_type: string | null;
+  detected_format: string | null;
+  page_count: number | null;
+  extraction_status: string;
+  extraction_run_id: string | null;
+  pipeline_version: string | null;
+  origin: string;
 }
 
 export interface ResearchRunRow {
@@ -421,6 +513,97 @@ export interface AuditPassRow {
   created_at: string;
 }
 
+export interface ExtractionRunRow {
+  id: string;
+  document_id: string;
+  project_id: string;
+  status: string;
+  pipeline_version: string;
+  detected_format: string | null;
+  source_hash: string | null;
+  pages_expected: number;
+  pages_readable: number;
+  pages_ocr: number;
+  pages_failed: string;
+  character_count: number;
+  coverage_ratio: number;
+  warnings: string;
+  blocked_reason: string | null;
+  error: string | null;
+  superseded_by_run_id: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentBlockRow {
+  id: string;
+  extraction_run_id: string;
+  document_id: string;
+  page_number: number;
+  block_index: number;
+  block_type: string;
+  raw_text: string;
+  normalized_text: string;
+  char_start: number;
+  char_end: number;
+  extraction_method: string;
+  confidence: number | null;
+  warnings: string;
+  content_hash: string;
+  bbox: string | null;
+  created_at: string;
+}
+
+export interface DocumentChunkRow {
+  id: string;
+  extraction_run_id: string;
+  document_id: string;
+  chunk_index: number;
+  page_start: number;
+  page_end: number;
+  block_start: number;
+  block_end: number;
+  heading_path: string;
+  text: string;
+  char_count: number;
+  char_start: number;
+  char_end: number;
+  overlap_prev: number;
+  has_ocr: number;
+  content_hash: string;
+  created_at: string;
+}
+
+export interface DocumentFindingRow {
+  id: string;
+  extraction_run_id: string;
+  document_id: string;
+  chunk_id: string | null;
+  finding_type: string;
+  ordinal: number;
+  content: string;
+  evidence_page: number | null;
+  evidence_quote: string;
+  confidence: number | null;
+  source: string;
+  created_at: string;
+}
+
+export interface AuditEvidenceRow {
+  id: string;
+  audit_id: string;
+  gap_id: string | null;
+  document_id: string | null;
+  extraction_run_id: string | null;
+  chunk_id: string | null;
+  document_label: string;
+  page_number: number | null;
+  quote: string;
+  created_at: string;
+}
+
 export interface ConversationRow {
   id: string;
   project_id: string;
@@ -516,6 +699,104 @@ export interface Document {
   importedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  mimeType: string | null;
+  detectedFormat: DocumentFormat | null;
+  pageCount: number | null;
+  extractionStatus: ExtractionStatus;
+  extractionRunId: string | null;
+  pipelineVersion: string | null;
+  origin: DocumentOrigin;
+}
+
+export interface ExtractionRun {
+  id: string;
+  documentId: string;
+  projectId: string;
+  status: ExtractionStatus;
+  pipelineVersion: string;
+  detectedFormat: DocumentFormat | null;
+  sourceHash: string | null;
+  pagesExpected: number;
+  pagesReadable: number;
+  pagesOcr: number;
+  pagesFailed: number[];
+  characterCount: number;
+  coverageRatio: number;
+  warnings: string[];
+  blockedReason: string | null;
+  error: string | null;
+  supersededByRunId: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentBlock {
+  id: string;
+  extractionRunId: string;
+  documentId: string;
+  pageNumber: number;
+  blockIndex: number;
+  blockType: BlockType;
+  rawText: string;
+  normalizedText: string;
+  charStart: number;
+  charEnd: number;
+  extractionMethod: ExtractionMethod;
+  confidence: number | null;
+  warnings: string[];
+  contentHash: string;
+  bbox: [number, number, number, number] | null;
+  createdAt: string;
+}
+
+export interface DocumentChunk {
+  id: string;
+  extractionRunId: string;
+  documentId: string;
+  chunkIndex: number;
+  pageStart: number;
+  pageEnd: number;
+  blockStart: number;
+  blockEnd: number;
+  headingPath: string[];
+  text: string;
+  charCount: number;
+  charStart: number;
+  charEnd: number;
+  overlapPrev: number;
+  hasOcr: boolean;
+  contentHash: string;
+  createdAt: string;
+}
+
+export interface DocumentFinding {
+  id: string;
+  extractionRunId: string;
+  documentId: string;
+  chunkId: string | null;
+  findingType: DocumentFindingType;
+  ordinal: number;
+  content: string;
+  evidencePage: number | null;
+  evidenceQuote: string;
+  confidence: number | null;
+  source: string;
+  createdAt: string;
+}
+
+export interface AuditEvidence {
+  id: string;
+  auditId: string;
+  gapId: string | null;
+  documentId: string | null;
+  extractionRunId: string | null;
+  chunkId: string | null;
+  documentLabel: string;
+  pageNumber: number | null;
+  quote: string;
+  createdAt: string;
 }
 
 export interface ResearchRun {

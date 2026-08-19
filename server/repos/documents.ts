@@ -1,5 +1,13 @@
 import { getDb } from '../db/database.ts';
-import type { Document, DocumentRow, DocumentStatus, DocumentType } from '../domain/types.ts';
+import type {
+  Document,
+  DocumentFormat,
+  DocumentOrigin,
+  DocumentRow,
+  DocumentStatus,
+  DocumentType,
+  ExtractionStatus,
+} from '../domain/types.ts';
 import { buildUpdate, fromBool, newId, nowIso, toBool } from './util.ts';
 
 export function mapDocument(row: DocumentRow): Document {
@@ -28,6 +36,13 @@ export function mapDocument(row: DocumentRow): Document {
     importedAt: row.imported_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    mimeType: row.mime_type ?? null,
+    detectedFormat: (row.detected_format as DocumentFormat | null) ?? null,
+    pageCount: row.page_count === null || row.page_count === undefined ? null : Number(row.page_count),
+    extractionStatus: (row.extraction_status as ExtractionStatus | undefined) ?? 'QUEUED',
+    extractionRunId: row.extraction_run_id ?? null,
+    pipelineVersion: row.pipeline_version ?? null,
+    origin: (row.origin as DocumentOrigin | undefined) ?? 'UPLOAD',
   };
 }
 
@@ -50,6 +65,10 @@ export interface CreateDocumentInput {
   isCanonical?: boolean;
   notes?: string | null;
   importedAt?: string | null;
+  mimeType?: string | null;
+  detectedFormat?: DocumentFormat | null;
+  pageCount?: number | null;
+  origin?: DocumentOrigin;
 }
 
 export function createDocument(input: CreateDocumentInput): Document {
@@ -60,13 +79,15 @@ export function createDocument(input: CreateDocumentInput): Document {
     `INSERT INTO documents (id, project_id, layer_id, canonical_name, version, version_sort, wave,
        document_type, status, filename, filesystem_path, file_size, file_hash, file_missing,
        conversation_title, source_run_id, parent_document_id, is_canonical, frozen, notes,
-       imported_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+       imported_at, created_at, updated_at, mime_type, detected_format, page_count, origin)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, input.projectId, input.layerId, input.canonicalName, input.version, input.versionSort,
       input.wave ?? null, input.documentType, input.status ?? 'EXPECTED', input.filename ?? null,
       input.filesystemPath ?? null, input.fileSize ?? null, input.fileHash ?? null,
       input.conversationTitle ?? null, input.sourceRunId ?? null, input.parentDocumentId ?? null,
-      fromBool(input.isCanonical), input.notes ?? null, input.importedAt ?? null, ts, ts],
+      fromBool(input.isCanonical), input.notes ?? null, input.importedAt ?? null, ts, ts,
+      input.mimeType ?? null, input.detectedFormat ?? null, input.pageCount ?? null,
+      input.origin ?? 'UPLOAD'],
   );
   return getDocument(id)!;
 }
@@ -129,6 +150,13 @@ export interface UpdateDocumentInput {
   frozen?: boolean;
   notes?: string | null;
   importedAt?: string | null;
+  mimeType?: string | null;
+  detectedFormat?: DocumentFormat | null;
+  pageCount?: number | null;
+  extractionStatus?: ExtractionStatus;
+  extractionRunId?: string | null;
+  pipelineVersion?: string | null;
+  origin?: DocumentOrigin;
 }
 
 export function updateDocument(id: string, patch: UpdateDocumentInput): Document | null {
@@ -153,6 +181,13 @@ export function updateDocument(id: string, patch: UpdateDocumentInput): Document
     frozen: patch.frozen === undefined ? undefined : fromBool(patch.frozen),
     notes: patch.notes,
     imported_at: patch.importedAt,
+    mime_type: patch.mimeType,
+    detected_format: patch.detectedFormat,
+    page_count: patch.pageCount,
+    extraction_status: patch.extractionStatus,
+    extraction_run_id: patch.extractionRunId,
+    pipeline_version: patch.pipelineVersion,
+    origin: patch.origin,
   });
   if (!clause) return getDocument(id);
   getDb().run(`UPDATE documents SET ${clause}, updated_at = ? WHERE id = ?`, [
