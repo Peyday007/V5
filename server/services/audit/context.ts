@@ -107,6 +107,12 @@ export interface EvidenceManifest {
   totalCharacters: number;
   /** Documents that could not be read; a required one of these blocks the audit. */
   unreadable: ManifestEntry[];
+  /**
+   * Documents in the layer that were deliberately left out, and why. Today that
+   * is superseded versions. Naming them is what makes the manifest a complete
+   * account of the layer rather than only of what was read.
+   */
+  excluded: { canonicalName: string; version: string; reason: string }[];
   complete: boolean;
 }
 
@@ -250,11 +256,19 @@ export function buildAuditContext(input: BuildAuditContextInput): AuditContext {
     if (!document) throw new Error('Cannot audit: no document was identified for a single-document audit.');
     artifactDocuments = [document];
   } else {
-    // The packet is everything the layer has actually completed.
+    // The packet is what the layer currently stands on. A superseded document is
+    // provenance, not evidence: feeding a replaced version to the auditor makes
+    // it judge wording the layer has already moved past, and doubles the packet
+    // for no gain. They are listed on the manifest instead, so the exclusion is
+    // visible rather than silent.
     artifactDocuments = layerDocuments.filter(
-      (document) => document.status === 'COMPLETE' || document.status === 'FROZEN' || document.status === 'SUPERSEDED',
+      (document) => document.status === 'COMPLETE' || document.status === 'FROZEN',
     );
   }
+  const supersededDocuments =
+    input.mode === 'LAYER_PACKET'
+      ? layerDocuments.filter((document) => document.status === 'SUPERSEDED')
+      : [];
 
   const artifactIds = new Set(artifactDocuments.map((document) => document.id));
   const perDocumentBudget =
@@ -308,7 +322,7 @@ export function buildAuditContext(input: BuildAuditContextInput): AuditContext {
     artifacts.some((artifact) => artifact.truncated) ||
     artifacts.reduce((total, artifact) => total + artifact.fullLength, 0) > budget;
 
-  const manifest = buildManifest(input.mode, layer.name, artifacts);
+  const manifest = buildManifest(input.mode, layer.name, artifacts, supersededDocuments);
 
   return {
     mode: input.mode,
@@ -357,6 +371,7 @@ function buildManifest(
   mode: 'SINGLE_DOCUMENT' | 'LAYER_PACKET',
   layerName: string,
   artifacts: ArtifactContent[],
+  superseded: Document[],
 ): EvidenceManifest {
   const documents = artifacts.map(manifestEntry);
   const unreadable = documents.filter((entry) => entry.unavailableReason !== null);
@@ -368,6 +383,11 @@ function buildManifest(
     totalPages: documents.reduce((total, entry) => total + (entry.pages ?? 0), 0),
     totalCharacters: documents.reduce((total, entry) => total + entry.characters, 0),
     unreadable,
+    excluded: superseded.map((document) => ({
+      canonicalName: document.canonicalName,
+      version: document.version,
+      reason: 'Superseded by a later version; kept as provenance, not read as evidence.',
+    })),
     // A packet with an unreadable member is not a complete reading of the layer.
     complete: unreadable.length === 0 && documents.length > 0,
   };

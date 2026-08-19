@@ -166,6 +166,12 @@ export function DynamicAuditPanel(props: {
               </li>
             ))}
           </ul>
+          {manifest.manifest.excluded.length > 0 ? (
+            <div className="small muted">
+              Excluded as provenance:{' '}
+              {manifest.manifest.excluded.map((entry) => entry.canonicalName).join(', ')}
+            </div>
+          ) : null}
           {!manifest.auditable ? (
             <div className="small">
               <strong>This packet cannot be audited yet.</strong> Every document has to be readable

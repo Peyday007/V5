@@ -2,9 +2,10 @@
  * PDF extraction.
  *
  * pdfjs gives us positioned text items rather than paragraphs, so the work here
- * is reconstructing reading order: group items into lines by baseline, lines into
- * columns by x-position, columns left-to-right, and lines into blocks by vertical
- * gaps and font size.
+ * is reconstructing reading order: split the items into columns by finding the
+ * vertical gutter between them, group each column's items into lines by baseline,
+ * read columns left-to-right, and group lines into blocks by vertical gaps and
+ * font size.
  *
  * The important discipline is section 5: a non-empty extraction is NOT proof of
  * success. Every page carries the signals that let the quality gate decide
@@ -120,32 +121,47 @@ function buildLines(items: PdfTextItem[]): Line[] {
 }
 
 /**
- * Detect columns by looking for a vertical corridor with no text in it.
+ * Detect columns by looking for a vertical corridor with no text crossing it.
+ *
+ * This has to run on the raw text items, before lines are assembled: two columns
+ * share baselines, so grouping items into lines first merges the left column's
+ * "custody transfers at the point of" with the right column's "claim priority is
+ * therefore a" into one full-width line, and the gutter disappears at exactly the
+ * moment it matters. Columns first, then lines within a column.
  *
  * A two-column page read straight down the middle produces interleaved nonsense,
  * which is one of the failure modes section 5 names explicitly.
  */
-function detectColumns(lines: Line[], pageWidth: number): number[] {
-  if (lines.length < 6) return [0, pageWidth];
+function detectColumns(items: PdfTextItem[], pageWidth: number): number[] {
+  if (items.length < 8 || pageWidth <= 0) return [0, pageWidth];
 
   // Sample occupancy across the page in narrow bands.
   const bands = 60;
   const bandWidth = pageWidth / bands;
   const occupied = new Array<number>(bands).fill(0);
-  for (const line of lines) {
-    const from = Math.max(0, Math.floor(line.x0 / bandWidth));
-    const to = Math.min(bands - 1, Math.floor(line.x1 / bandWidth));
+  for (const item of items) {
+    const from = Math.max(0, Math.floor(item.x / bandWidth));
+    const to = Math.min(bands - 1, Math.floor((item.x + item.width) / bandWidth));
     for (let band = from; band <= to; band += 1) occupied[band] = (occupied[band] ?? 0) + 1;
   }
 
-  // A gutter is a run of empty bands away from the margins.
+  // A banner headline or a horizontal rule may straddle the gutter; one crossing
+  // item does not make a two-column page single-column.
+  const peak = Math.max(...occupied);
+  const quiet = peak >= 8 ? 1 : 0;
+
+  // A gutter is a run of quiet bands away from the margins. The loop runs one
+  // band past the right margin so a gutter reaching it still closes.
   const marginBands = Math.floor(bands * 0.15);
   let gutterStart = -1;
   let bestGutter: { start: number; end: number } | null = null;
-  for (let band = marginBands; band < bands - marginBands; band += 1) {
-    if ((occupied[band] ?? 0) === 0) {
+  for (let band = marginBands; band <= bands - marginBands; band += 1) {
+    const count = band < bands - marginBands ? (occupied[band] ?? 0) : Number.POSITIVE_INFINITY;
+    if (count <= quiet) {
       if (gutterStart === -1) gutterStart = band;
-    } else if (gutterStart !== -1) {
+      continue;
+    }
+    if (gutterStart !== -1) {
       const width = band - gutterStart;
       if (width >= 2 && (bestGutter === null || width > bestGutter.end - bestGutter.start)) {
         bestGutter = { start: gutterStart, end: band };
@@ -156,11 +172,16 @@ function detectColumns(lines: Line[], pageWidth: number): number[] {
   if (!bestGutter) return [0, pageWidth];
 
   const split = ((bestGutter.start + bestGutter.end) / 2) * bandWidth;
+  // A real gutter has substantial text on both sides of it. Anything else is a
+  // wide margin or an indented block, and splitting on it would invent a column.
+  const left = items.filter((item) => item.x + item.width / 2 < split).length;
+  const minimum = Math.max(2, Math.floor(items.length * 0.25));
+  if (left < minimum || items.length - left < minimum) return [0, pageWidth];
   return [0, split, pageWidth];
 }
 
-function assignColumn(line: Line, boundaries: number[]): number {
-  const centre = (line.x0 + line.x1) / 2;
+function columnOf(item: PdfTextItem, boundaries: number[]): number {
+  const centre = item.x + item.width / 2;
   for (let index = 0; index < boundaries.length - 1; index += 1) {
     if (centre >= (boundaries[index] ?? 0) && centre < (boundaries[index + 1] ?? Infinity)) {
       return index;
@@ -242,22 +263,24 @@ export function layoutPage(
   width: number,
   height: number,
 ): ExtractedPage {
-  const lines = buildLines(items);
-  const bodyHeight = medianHeight(lines);
-  const boundaries = detectColumns(lines, width);
+  const boundaries = detectColumns(items, width);
   const columnCount = boundaries.length - 1;
 
+  // Split the items into columns first, then reconstruct lines inside each one.
+  const columns: PdfTextItem[][] = Array.from({ length: columnCount }, () => []);
+  for (const item of items) {
+    (columns[columnOf(item, boundaries)] ?? columns[0] ?? []).push(item);
+  }
+  const columnLines = columns.map((columnItems) => buildLines(columnItems));
+  const bodyHeight = medianHeight(columnLines.flat());
+
   // Read each column top-to-bottom, columns left-to-right.
-  const ordered: Line[] = [];
-  for (let column = 0; column < columnCount; column += 1) {
-    ordered.push(
-      ...lines
-        .filter((line) => assignColumn(line, boundaries) === column)
-        .sort((a, b) => b.y - a.y || a.x0 - b.x0),
+  const blocks: ExtractedBlock[] = [];
+  for (const lines of columnLines) {
+    blocks.push(
+      ...buildBlocks([...lines].sort((a, b) => b.y - a.y || a.x0 - b.x0), pageNumber, bodyHeight),
     );
   }
-
-  const blocks = buildBlocks(ordered, pageNumber, bodyHeight);
   const characterCount = blocks.reduce((total, block) => total + block.text.length, 0);
   const area = Math.max(1, width * height);
 

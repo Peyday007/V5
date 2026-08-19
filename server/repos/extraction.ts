@@ -222,6 +222,28 @@ export function updateExtractionRun(
 }
 
 /**
+ * Point every other live run for a document at the one that just finished.
+ *
+ * "Current" has to mean exactly one run. Picking the newest by timestamp would
+ * leave two runs claiming to be current and let ordering decide which evidence
+ * an audit resolves to, so the supersession is written down rather than inferred.
+ */
+export function supersedePreviousRuns(documentId: string, currentRunId: string): number {
+  const stale = getDb().all<{ id: string }>(
+    `SELECT id FROM extraction_runs
+     WHERE document_id = ? AND id <> ? AND superseded_by_run_id IS NULL`,
+    [documentId, currentRunId],
+  );
+  if (stale.length === 0) return 0;
+  getDb().run(
+    `UPDATE extraction_runs SET superseded_by_run_id = ?, updated_at = ?
+     WHERE document_id = ? AND id <> ? AND superseded_by_run_id IS NULL`,
+    [currentRunId, nowIso(), documentId, currentRunId],
+  );
+  return stale.length;
+}
+
+/**
  * Runs left mid-flight by a crash. They are recoverable, and crucially they are
  * never mistaken for a document that was successfully read.
  */
@@ -377,6 +399,24 @@ export function insertFindings(
           finding.evidenceQuote ?? '', finding.confidence ?? null, finding.source ?? 'PROVIDER', ts],
       );
     }
+  });
+}
+
+/**
+ * Replace a run's findings in one transaction.
+ *
+ * Findings are an index over an immutable extraction run, so re-deriving them
+ * replaces the index wholesale rather than accumulating duplicates. Either the
+ * whole new set lands or the old set stays: a half-written index would make the
+ * auditor believe a document says less than it does.
+ */
+export function replaceFindings(
+  extractionRunId: string,
+  findings: Parameters<typeof insertFindings>[0],
+): void {
+  getDb().transaction(() => {
+    getDb().run('DELETE FROM document_findings WHERE extraction_run_id = ?', [extractionRunId]);
+    insertFindings(findings);
   });
 }
 

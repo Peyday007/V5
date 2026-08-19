@@ -28,6 +28,11 @@ import { getCurrentExtractionRun, listExtractionRuns } from '../repos/extraction
 import { enqueueExtraction } from '../services/documents/queue.ts';
 import { getOcrEngine } from '../services/documents/ocr.ts';
 import { readableText, resolveCitation } from '../services/documents/retrieval.ts';
+import {
+  documentFindings,
+  extractDocumentFindings,
+  FindingsExtractionError,
+} from '../services/documents/findings.ts';
 import { absolutePathFor, layerSlugFromPath, relocateFile } from '../services/storage.ts';
 import {
   badRequest,
@@ -384,6 +389,42 @@ documentsRouter.post(
     });
     recomputeProject(document.projectId);
     return { document: requireDocument(document.id), ...extractionView(document.id) };
+  }),
+);
+
+/**
+ * The structured index over a document (section 12).
+ *
+ * Deriving it needs a real provider, so it is an explicit action rather than
+ * part of import: a fabricated index would be worse than none. Failure records
+ * nothing, so the document's previous index survives a failed attempt.
+ */
+documentsRouter.get(
+  '/:documentId/findings',
+  handler((req) => {
+    const document = requireDocument(pathId(req, 'documentId'));
+    const run = getCurrentExtractionRun(document.id);
+    return { document, extractionRunId: run?.id ?? null, findings: documentFindings(document.id) };
+  }),
+);
+
+documentsRouter.post(
+  '/:documentId/findings',
+  handler(async (req) => {
+    const document = requireDocument(pathId(req, 'documentId'));
+    const body = bodyOf(req);
+    try {
+      return await extractDocumentFindings({
+        documentId: document.id,
+        providerName: optionalString(body['provider'], 'provider') ?? null,
+        model: optionalString(body['model'], 'model') ?? null,
+      });
+    } catch (error) {
+      if (error instanceof FindingsExtractionError) {
+        throw conflict(error.message, { documentId: document.id, chunkId: error.chunkId });
+      }
+      throw error;
+    }
   }),
 );
 

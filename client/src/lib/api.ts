@@ -394,6 +394,18 @@ export const Api = {
   citation(chunkId: string): Promise<CitationView> {
     return api(`/api/documents/chunks/${enc(chunkId)}`);
   },
+
+  /** The structured index over a document, and the action that derives it. */
+  findings(documentId: string): Promise<FindingsView> {
+    return api(`/api/documents/${enc(documentId)}/findings`);
+  },
+
+  extractFindings(documentId: string, provider?: string | null): Promise<FindingsResultView> {
+    return api(`/api/documents/${enc(documentId)}/findings`, {
+      method: 'POST',
+      body: JSON.stringify(provider ? { provider } : {}),
+    });
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -441,6 +453,37 @@ export interface ExtractedTextView {
   pages: { pageNumber: number; blocks: { blockType: string; text: string; method: string }[] }[];
 }
 
+export interface DocumentFindingView {
+  id: string;
+  extractionRunId: string;
+  documentId: string;
+  chunkId: string | null;
+  findingType: string;
+  ordinal: number;
+  content: string;
+  evidencePage: number | null;
+  evidenceQuote: string;
+  confidence: number | null;
+  source: string;
+  createdAt: string;
+}
+
+export interface FindingsView {
+  document: Document;
+  extractionRunId: string | null;
+  findings: DocumentFindingView[];
+}
+
+export interface FindingsResultView {
+  documentId: string;
+  extractionRunId: string;
+  provider: string;
+  chunksRead: number;
+  chunksSkipped: number;
+  findings: DocumentFindingView[];
+  rejected: { chunkIndex: number; content: string; reason: string }[];
+}
+
 export interface ManifestEntryView {
   documentId: string | null;
   canonicalName: string;
@@ -467,6 +510,7 @@ export interface PacketManifestView {
     totalPages: number;
     totalCharacters: number;
     unreadable: ManifestEntryView[];
+    excluded: { canonicalName: string; version: string; reason: string }[];
     complete: boolean;
   };
   dependencies: DependencyCheckResult;

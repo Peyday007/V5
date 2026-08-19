@@ -14,6 +14,12 @@ const SOFT_HYPHEN_BREAK = /([A-Za-z])[-\u00ad]\s+([a-z])/g;
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
 /** Zero-width and formatting characters some PDF producers emit between glyphs. */
 const INVISIBLES = /[\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060\ufeff]/g;
+/**
+ * A soft hyphen left inside a word, once line-break rejoining has had its turn.
+ * It is invisible on the page but splits the word for anything that searches the
+ * text, so "interme<shy>diation" would never match a query for "intermediation".
+ */
+const STRAY_SOFT_HYPHEN = /\u00ad/g;
 
 export interface NormalizationResult {
   text: string;
@@ -46,6 +52,12 @@ export function normalizeBlockText(raw: string): NormalizationResult {
   if (dehyphenated !== text) {
     text = dehyphenated;
     notes.push('rejoined hyphenated line breaks');
+  }
+  // Only after the line-break rule, which needs the character to decide where a
+  // word was split.
+  if (STRAY_SOFT_HYPHEN.test(text)) {
+    text = text.replace(STRAY_SOFT_HYPHEN, '');
+    notes.push('removed soft hyphens');
   }
 
   for (const [pattern, replacement] of LIGATURES) {

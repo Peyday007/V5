@@ -6,7 +6,12 @@
  * functional by design.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Api, type ExtractedTextView, type ExtractionView } from '../lib/api.ts';
+import {
+  Api,
+  type DocumentFindingView,
+  type ExtractedTextView,
+  type ExtractionView,
+} from '../lib/api.ts';
 
 /** Extraction states that are still moving, and therefore worth polling. */
 const IN_PROGRESS = new Set(['QUEUED', 'EXTRACTING', 'OCR', 'INDEXING']);
@@ -27,6 +32,8 @@ export function ExtractionPanel(props: { documentId: string; onChanged?: () => v
   const [view, setView] = useState<ExtractionView | null>(null);
   const [text, setText] = useState<ExtractedTextView | null>(null);
   const [showText, setShowText] = useState(false);
+  const [findings, setFindings] = useState<DocumentFindingView[]>([]);
+  const [findingsNote, setFindingsNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
@@ -37,6 +44,12 @@ export function ExtractionPanel(props: { documentId: string; onChanged?: () => v
       setError(null);
     } catch (err) {
       setError(describeError(err));
+    }
+    try {
+      setFindings((await Api.findings(documentId)).findings);
+    } catch {
+      // A document with no index yet is the normal case, not an error.
+      setFindings([]);
     }
   }, [documentId]);
 
@@ -71,6 +84,31 @@ export function ExtractionPanel(props: { documentId: string; onChanged?: () => v
       setBusy(false);
     }
   }, [documentId, onChanged]);
+
+  /**
+   * Deriving the index needs a real provider, so this is an explicit action. A
+   * failure is reported and changes nothing — the previous index survives.
+   */
+  const index = useCallback(async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    setFindingsNote(null);
+    try {
+      const result = await Api.extractFindings(documentId);
+      setFindings(result.findings);
+      setFindingsNote(
+        `${result.findings.length} finding(s) from ${result.chunksRead} passage(s) via ` +
+          `${result.provider}` +
+          (result.rejected.length > 0
+            ? `; ${result.rejected.length} discarded for quoting text that is not in the document`
+            : ''),
+      );
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [documentId]);
 
   const viewText = useCallback(async (): Promise<void> => {
     if (showText) {
@@ -119,6 +157,14 @@ export function ExtractionPanel(props: { documentId: string; onChanged?: () => v
         >
           {showText ? 'HIDE EXTRACTED TEXT' : 'VIEW EXTRACTED TEXT'}
         </button>
+        <button
+          type="button"
+          className="btn btn--small"
+          onClick={() => void index()}
+          disabled={busy || working || !quality || quality.blockedReason !== null}
+        >
+          {findings.length > 0 ? 'RE-INDEX' : 'INDEX FINDINGS'}
+        </button>
         <a
           className="btn btn--small"
           href={Api.documentFileUrl(documentId)}
@@ -151,6 +197,29 @@ export function ExtractionPanel(props: { documentId: string; onChanged?: () => v
       ) : null}
 
       {error ? <div className="error small">{error}</div> : null}
+
+      {findingsNote ? <div className="small muted">{findingsNote}</div> : null}
+
+      {findings.length > 0 ? (
+        <div className="card">
+          <div className="small muted">
+            STRUCTURED FINDINGS — an index over the document, not a replacement for it. Every
+            entry quotes the passage it came from.
+          </div>
+          <ul className="checklist small">
+            {findings.map((finding) => (
+              <li key={finding.id}>
+                <span className="badge badge--not_started">{finding.findingType}</span>{' '}
+                {finding.content}
+                <div className="small muted">
+                  {finding.evidencePage === null ? '' : `p${finding.evidencePage}: `}
+                  &ldquo;{finding.evidenceQuote}&rdquo;
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {showText && text ? (
         <div className="card">

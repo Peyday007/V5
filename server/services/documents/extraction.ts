@@ -28,6 +28,7 @@ import {
   insertChunks,
   listBlocks,
   listUnfinishedExtractionRuns,
+  supersedePreviousRuns,
   updateExtractionRun,
   type InsertBlockInput,
 } from '../../repos/extraction.ts';
@@ -205,11 +206,18 @@ export async function extractDocument(
     current.pipelineVersion === PIPELINE_VERSION &&
     (current.status === 'READY' || current.status === 'READY_WITH_WARNINGS' || current.status === 'BLOCKED')
   ) {
-    return {
-      run: current,
-      quality: qualityOf(current),
-      document,
-    };
+    // The reading still stands, so the document row is made to agree with it.
+    // Without this a row left saying INTERRUPTED by a crash recovery would stay
+    // that way forever, because re-reading correctly declines to do the work twice.
+    const reconciled =
+      document.extractionStatus === current.status && document.extractionRunId === current.id
+        ? document
+        : (updateDocument(document.id, {
+            extractionStatus: current.status,
+            extractionRunId: current.id,
+            pipelineVersion: current.pipelineVersion,
+          }) ?? document);
+    return { run: current, quality: qualityOf(current), document: reconciled };
   }
 
   const detection = detectFormat(document.filename ?? document.canonicalName, buffer);
@@ -381,10 +389,7 @@ function finish(
 
   // Supersede the previous run only now that this one has a verdict, so a failed
   // reprocess never leaves the document with no current evidence.
-  const previous = getCurrentExtractionRun(document.id);
-  if (previous && previous.id !== run.id) {
-    updateExtractionRun(previous.id, { supersededByRunId: run.id });
-  }
+  supersedePreviousRuns(document.id, run.id);
 
   const documentAfter =
     updateDocument(document.id, {
