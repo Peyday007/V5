@@ -49,7 +49,8 @@ import {
 } from '../services/research/queue.ts';
 import { applyReviewDecisions, buildReview } from '../services/research/review.ts';
 import { progressSnapshot } from '../services/research/progress.ts';
-import { listJobs } from '../repos/jobs.ts';
+import { getConnection, listJobs } from '../repos/jobs.ts';
+import { ocrStatus } from '../services/documents/ocr.ts';
 import {
   badRequest,
   bodyOf,
@@ -128,9 +129,61 @@ researchRouter.get(
       },
       worker: probe.status,
       providers: listProviderStatuses(),
+      // Three subsystems, three separate answers. Running the engine against a
+      // scripted provider proves the engine and proves nothing at all about the
+      // tool on this machine, so the two are never reported as one number.
+      subsystems: subsystemStatus(),
     };
   }),
 );
+
+/**
+ * What actually works here, said as three separate facts.
+ *
+ * The research engine can be READY while the real worker is UNVERIFIED, and
+ * that is the ordinary state of a machine that has not run a live job yet. A
+ * single "research: ready" would be true of the engine and false of the thing
+ * the user cares about, so the two never share a status.
+ */
+function subsystemStatus(): {
+  researchEngine: { status: string; detail: string };
+  archiveIngestion: { status: string; detail: string };
+  realAntigravityWorker: { status: string; detail: string };
+} {
+  const probe = antigravityStatus().status;
+  const connection = getConnection('antigravity');
+  const ocr = ocrStatus();
+
+  return {
+    researchEngine: {
+      status: 'READY',
+      detail:
+        'Fragmentation, the evidence gate, repair, reconciliation, synthesis and the audit all run ' +
+        'locally and are covered by the test suite.',
+    },
+    archiveIngestion: {
+      status: ocr.available ? 'READY' : 'INCOMPLETE',
+      detail: ocr.available
+        ? 'Folders of mixed documents are imported, extracted, classified and reconciled, and ' +
+          'scanned pages can be read here.'
+        : 'Import, extraction and classification work. Scanned pages cannot be read on this ' +
+          'machine, so a scanned document is reported unreadable rather than treated as empty.',
+    },
+    realAntigravityWorker: {
+      status: connection?.verifiedRunAt
+        ? 'VERIFIED'
+        : probe.installed && probe.authenticated && probe.automationReady
+          ? 'UNVERIFIED'
+          : 'BLOCKED',
+      detail: connection?.verifiedRunAt
+        ? `A real job ran here on ${connection.verifiedRunAt}. ${connection.verifiedRunDetail ?? ''}`.trim()
+        : probe.installed && probe.authenticated && probe.automationReady
+          ? 'The tool is installed, signed in and drivable, but no real job has run here yet. ' +
+            'Press Test Connection, or start a real assignment — nothing else makes this VERIFIED.'
+          : probe.message,
+    },
+  };
+}
 
 researchRouter.get(
   '/layers/:layerId/research',

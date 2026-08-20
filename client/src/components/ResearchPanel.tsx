@@ -328,18 +328,39 @@ export function ResearchPanel(props: {
         </div>
       ) : null}
 
-      {/* Two readiness answers, never merged into one optimistic light. */}
+      {/* Three subsystems, three answers, never merged into one optimistic
+          light. The engine can be ready while the real worker has never run a
+          job here, and that difference is the whole point. */}
       <div className="row wrap">
-        <Pill label="ENGINE" value="ready" tone="ok" />
         <Pill
-          label="WORKER"
-          value={workerReady ? (worker?.version ?? 'ready') : 'not ready'}
-          tone={workerReady ? 'ok' : 'warn'}
+          label="RESEARCH ENGINE"
+          value={(readiness?.subsystems?.researchEngine.status ?? 'READY').toLowerCase()}
+          tone="ok"
         />
-        {readiness ? (
-          <Pill label="QUEUE" value={readiness.orchestration.queueDepth} />
-        ) : null}
+        <Pill
+          label="ARCHIVE INGESTION"
+          value={(readiness?.subsystems?.archiveIngestion.status ?? 'READY').toLowerCase()}
+          tone={readiness?.subsystems?.archiveIngestion.status === 'READY' ? 'ok' : 'warn'}
+        />
+        <Pill
+          label="REAL WORKER"
+          value={(
+            readiness?.subsystems?.realAntigravityWorker.status ??
+            (workerReady ? 'UNVERIFIED' : 'BLOCKED')
+          ).toLowerCase()}
+          tone={
+            readiness?.subsystems?.realAntigravityWorker.status === 'VERIFIED'
+              ? 'ok'
+              : readiness?.subsystems?.realAntigravityWorker.status === 'BLOCKED'
+                ? 'bad'
+                : 'warn'
+          }
+        />
+        {readiness ? <Pill label="QUEUE" value={readiness.orchestration.queueDepth} /> : null}
       </div>
+      {readiness?.subsystems && readiness.subsystems.realAntigravityWorker.status !== 'VERIFIED' ? (
+        <div className="small muted">{readiness.subsystems.realAntigravityWorker.detail}</div>
+      ) : null}
       {worker && !workerReady ? <div className="warn small">{worker.message}</div> : null}
 
       {orchestration === null ? (

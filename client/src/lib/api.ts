@@ -711,6 +711,18 @@ export interface ResearchReadiness {
     message: string;
   };
   providers: ProviderStatus[];
+  /**
+   * Three subsystems, three separate answers.
+   *
+   * The engine being READY says nothing about whether the real worker has ever
+   * run a job on this machine, and the UI must never let one stand in for the
+   * other.
+   */
+  subsystems?: {
+    researchEngine: { status: string; detail: string };
+    archiveIngestion: { status: string; detail: string };
+    realAntigravityWorker: { status: string; detail: string };
+  };
 }
 
 export interface ExtractedTextView {

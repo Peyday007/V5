@@ -37,13 +37,17 @@ import {
 } from '../server/services/research/packet.ts';
 import { listRequirements } from '../server/repos/reconciliation.ts';
 import {
+  createJob,
+  getJob,
   jobFragmentOutcomes,
   jobsForFragment,
   listJobs,
   openQuotaPause,
+  updateJob,
 } from '../server/repos/jobs.ts';
 import {
   acceptedClaims,
+  createFragments,
   currentFragments,
   getOrchestration,
   listClaims,
@@ -1253,6 +1257,72 @@ describe('the job survives what happens to it', () => {
     const passes = listPasses(orchestration.id);
     expect(passes[0]!.status).toBe('FAILED');
     expect(passes[0]!.error).toMatch(/server stopped/i);
+  });
+
+  it('leaves a deliberate stop alone when the server comes back', async () => {
+    // A run waiting for approval and a run out of allowance both stopped on
+    // purpose. Recovery is for work that was interrupted, and treating a
+    // deliberate stop as a crash would restart research the user never
+    // approved, or spend an allowance that is not there.
+    const waiting = startResearch({
+      layerId: fixture.layerByName('World Model').id,
+      assignment: 'Waiting for a person.',
+      requireApproval: true,
+    });
+    updateOrchestration(waiting.id, { status: 'AWAITING_APPROVAL' });
+
+    const paused = startResearch({
+      layerId: fixture.layerByName('Taxonomy').id,
+      assignment: 'Out of allowance.',
+    });
+    updateOrchestration(paused.id, { status: 'PAUSED_QUOTA' });
+
+    expect(recoverInterruptedResearch()).toBe(0);
+    expect(getOrchestration(waiting.id)!.status).toBe('AWAITING_APPROVAL');
+    expect(getOrchestration(paused.id)!.status).toBe('PAUSED_QUOTA');
+  });
+
+  it('stops reporting a job as running once the process that owned it is gone', async () => {
+    const orchestration = startResearch({
+      layerId: fixture.layerByName('World Model').id,
+      assignment: 'Anything',
+    });
+    updateOrchestration(orchestration.id, { status: 'RESEARCHING' });
+    const [fragment] = createFragments([
+      {
+        orchestrationId: orchestration.id,
+        projectId: fixture.project.id,
+        layerId: fixture.layerByName('World Model').id,
+        fragmentIndex: 0,
+        fragmentKey: 'fragment-1',
+        question: 'q',
+        requiredEvidence: ['official statistics'],
+        acceptableSourceTypes: ['government dataset'],
+        excludedSourceTypes: [],
+        completionCriteria: ['a figure'],
+        dependsOn: [],
+        minIndependentSources: 2,
+        status: 'RUNNING',
+      },
+    ]);
+    const job = createJob({
+      orchestrationId: orchestration.id,
+      projectId: fixture.project.id,
+      rationale: 'One fragment.',
+      provider: 'mock',
+      fragmentIds: [fragment!.id],
+    });
+    updateJob(job.id, { status: 'RUNNING', startedAt: new Date().toISOString() });
+
+    expect(recoverInterruptedResearch()).toBe(1);
+
+    // An external process this instance has no handle on cannot be resumed and
+    // must not be left claiming to be running.
+    const after = getJob(job.id)!;
+    expect(after.status).toBe('FAILED');
+    expect(after.failureReason).toMatch(/never received it/i);
+    // The fragment goes back to the queue, so the work itself is not lost.
+    expect(currentFragments(orchestration.id)[0]!.status).toBe('QUEUED');
   });
 
   it('does not pay twice for a pass that already completed', async () => {
