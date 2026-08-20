@@ -48,6 +48,8 @@ import {
   resumeResearch,
 } from '../services/research/queue.ts';
 import { applyReviewDecisions, buildReview } from '../services/research/review.ts';
+import { progressSnapshot } from '../services/research/progress.ts';
+import { listJobs } from '../repos/jobs.ts';
 import {
   badRequest,
   bodyOf,
@@ -99,6 +101,10 @@ function orchestrationView(orchestrationId: string) {
     audit: orchestration.auditId ? getAudit(orchestration.auditId) : null,
     run: getRun(orchestration.runId),
     lineage: getOrchestrationLineage(orchestration.id),
+    jobs: listJobs(orchestration.id),
+    // The whole picture, read from persisted state rather than accumulated in
+    // the browser: a panel that survives a refresh, a reconnect and a restart.
+    progress: progressSnapshot(orchestration.id),
   };
 }
 

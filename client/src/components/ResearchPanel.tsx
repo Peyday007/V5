@@ -17,11 +17,14 @@ import type {
   GateResult,
   ResearchClaim,
   ResearchFragment,
+  ResearchPlanReview,
   ResearchReadiness,
   ResearchView,
 } from '../lib/api.ts';
 import { Api, ApiError } from '../lib/api.ts';
 import { Badge, Pill } from './Badge.tsx';
+import { ResearchProgress } from './ResearchProgress.tsx';
+import { ResearchReview } from './ResearchReview.tsx';
 
 function describeError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -195,6 +198,7 @@ export function ResearchPanel(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [review, setReview] = useState<ResearchPlanReview | null>(null);
   const streamRef = useRef<EventSource | null>(null);
 
   const closeStream = useCallback(() => {
@@ -208,7 +212,13 @@ export function ResearchPanel(props: {
       closeStream();
       const source = new EventSource(`/api/research/${encodeURIComponent(orchestrationId)}/stream`);
       source.addEventListener('state', (event) => {
-        setView(JSON.parse((event as MessageEvent<string>).data) as ResearchView);
+        const next = JSON.parse((event as MessageEvent<string>).data) as ResearchView;
+        setView(next);
+        // A run that stops for approval has planned everything and spent
+        // nothing; the review is what the user needs to see next.
+        if (next.orchestration.status === 'AWAITING_APPROVAL') {
+          void Api.researchReview(next.orchestration.id).then(setReview);
+        }
       });
       source.addEventListener('progress', (event) => {
         const progress = JSON.parse((event as MessageEvent<string>).data) as { message: string };
@@ -236,7 +246,10 @@ export function ResearchPanel(props: {
         const latest = jobs.orchestrations[0];
         if (latest) {
           setView(await Api.research(latest.id));
-          if (!['COMPLETE', 'CANCELLED', 'FAILED'].includes(latest.status)) watch(latest.id);
+          if (latest.status === 'AWAITING_APPROVAL') setReview(await Api.researchReview(latest.id));
+          if (!['COMPLETE', 'CANCELLED', 'FAILED', 'AWAITING_APPROVAL'].includes(latest.status)) {
+            watch(latest.id);
+          }
         } else {
           setView(null);
         }
@@ -264,6 +277,7 @@ export function ResearchPanel(props: {
       });
       setView(started);
       setAssignment('');
+      setReview(null);
       watch(started.orchestration.id);
       props.onChanged();
     } catch (err) {
@@ -407,6 +421,20 @@ export function ResearchPanel(props: {
           </div>
 
           {message ? <div className="notice small">{message}</div> : null}
+
+          {view?.progress ? <ResearchProgress progress={view.progress} /> : null}
+
+          {orchestration.status === 'AWAITING_APPROVAL' && review ? (
+            <ResearchReview
+              review={review}
+              onChanged={(next) => {
+                setReview(next);
+                void Api.research(orchestration.id).then(setView);
+                if (!next.approvalRequired) watch(orchestration.id);
+                props.onChanged();
+              }}
+            />
+          ) : null}
 
           <div className="row wrap">
             <Pill label="FRAGMENTS PLANNED" value={fragments.length} />

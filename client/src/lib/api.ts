@@ -20,6 +20,7 @@ import type {
   LinkType,
   ResearchClaim,
   ResearchFragment,
+  ResearchJob,
   ResearchOrchestration,
   ResearchPass,
   SegmentLayerLink,
@@ -35,13 +36,15 @@ import type {
 } from '../../../server/domain/types.ts';
 import type { IngestionReport } from '../../../server/services/sources/ingest.ts';
 import type { GateResult } from '../../../server/services/research/gate.ts';
+import type { ResearchProgressSnapshot } from '../../../server/services/research/progress.ts';
+import type { ResearchPlanReview, ReviewDecisions } from '../../../server/services/research/review.ts';
 import type { LedgerSummary } from '../../../server/services/research/sources.ts';
 import type { ProviderStatus } from '../../../server/providers/types.ts';
 import type { ChatTurnResult } from '../../../server/services/agent/chat.ts';
 
 export type { ChatTurnResult, ProviderStatus, MigrationReport, IngestionReport };
 export type { ResearchOrchestration, ResearchFragment, ResearchPass, ResearchClaim };
-export type { GateResult, LedgerSummary };
+export type { GateResult, LedgerSummary, ResearchProgressSnapshot, ResearchPlanReview, ReviewDecisions };
 export type { DocumentSegment, SegmentLayerLink, LinkStatus, LinkType, DocumentScope };
 
 // ---------------------------------------------------------------------------
@@ -490,6 +493,22 @@ export const Api = {
     return api(`/api/documents/chunks/${enc(chunkId)}`);
   },
 
+  /** What Brain proposes to research, before anything is spent on it. */
+  researchReview(orchestrationId: string): Promise<ResearchPlanReview> {
+    return api(`/api/research/${enc(orchestrationId)}/review`);
+  },
+
+  /** Approve the plan, or change it first. Approving is what starts the work. */
+  decideResearchReview(
+    orchestrationId: string,
+    decisions: ReviewDecisions,
+  ): Promise<{ review: ResearchPlanReview; applied: string[] }> {
+    return api(`/api/research/${enc(orchestrationId)}/review`, {
+      method: 'POST',
+      body: JSON.stringify(decisions),
+    });
+  },
+
   /** What research automation can do here, and the action that re-checks it. */
   researchStatus(): Promise<{ status: ResearchProviderStatusView; default: string }> {
     return api('/api/providers/status');
@@ -672,6 +691,9 @@ export interface ResearchView {
   audit: Audit | null;
   run: ResearchRun | null;
   lineage: ResearchOrchestration[];
+  jobs?: ResearchJob[];
+  /** The whole picture, from persisted state. Null before the run has any. */
+  progress?: ResearchProgressSnapshot | null;
   plan?: PlannerResult;
 }
 

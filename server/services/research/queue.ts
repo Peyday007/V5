@@ -26,6 +26,7 @@ import {
   updateOrchestration,
 } from '../../repos/research.ts';
 import { recordEvent } from '../../repos/events.ts';
+import { abandonRunningJobs, openQuotaPause, resolveQuotaPause } from '../../repos/jobs.ts';
 import {
   runOrchestration,
   ResearchCancelled,
@@ -227,6 +228,14 @@ export function recoverInterruptedResearch(): number {
       'The server stopped while this pass was running, so its result was never received.',
     );
 
+    // An external job this instance has no handle on cannot be resumed and must
+    // not be left claiming to be running.
+    const abandonedJobs = abandonRunningJobs(
+      orchestration.id,
+      'The server stopped while this job was running. Whatever the tool did, this instance never ' +
+        'received it, so nothing from it was recorded.',
+    );
+
     // A fragment caught mid-job goes back to the queue: its passes were
     // abandoned, and its next attempt starts from the last completed one.
     for (const fragment of currentFragments(orchestration.id)) {
@@ -251,7 +260,12 @@ export function recoverInterruptedResearch(): number {
       entityType: 'RUN',
       entityId: orchestration.runId,
       eventType: 'RESEARCH_BLOCKED',
-      payload: { orchestrationId: orchestration.id, recovered: true, abandonedPasses: closed },
+      payload: {
+        orchestrationId: orchestration.id,
+        recovered: true,
+        abandonedPasses: closed,
+        abandonedJobs,
+      },
     });
     recovered += 1;
   }
@@ -274,6 +288,12 @@ export function resumeResearch(
   if (orchestration.status === 'COMPLETE') {
     throw new Error('That research run already finished.');
   }
+  // A run picked up by hand closes any quota pause it was holding: the pause
+  // recorded why it stopped, and leaving it open would report a run as paused
+  // while it is running.
+  const pause = openQuotaPause(orchestrationId);
+  if (pause) resolveQuotaPause(pause.id);
+
   updateOrchestration(orchestrationId, {
     status: 'QUEUED',
     failureReason: null,

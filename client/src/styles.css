@@ -1743,3 +1743,13 @@ legend {
 .table--compact th,
 .table--compact td { padding: 4px 8px; vertical-align: top; }
 .table--compact th { width: 132px; white-space: nowrap; }
+
+/* ---------------------------------------------------------------------------
+   Research progress and the plan review
+   Persisted state, rendered plainly. Nothing here is an estimate.
+   --------------------------------------------------------------------------- */
+.research-progress { display: grid; gap: 6px; margin: 8px 0; }
+.research-review { display: grid; gap: 10px; margin: 10px 0; }
+.research-review h4 { margin: 0 0 4px; font-size: 12px; letter-spacing: 0.04em; }
+.review-list { margin: 4px 0; padding-left: 16px; display: grid; gap: 6px; }
+.review-list li { line-height: 1.4; }

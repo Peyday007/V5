@@ -194,6 +194,29 @@ export function recordFragmentOutcome(
   );
 }
 
+/**
+ * Close out jobs that were running when the server stopped.
+ *
+ * An external process Brain no longer has a handle on cannot be resumed and
+ * must not be reported as running: whatever it did or did not do, this instance
+ * did not receive it. The row stays, with the reason, so the history says what
+ * actually happened rather than pretending the job is still in flight.
+ */
+export function abandonRunningJobs(orchestrationId: string, reason: string): number {
+  const running = getDb().all<{ id: string }>(
+    "SELECT id FROM research_jobs WHERE orchestration_id = ? AND status = 'RUNNING'",
+    [orchestrationId],
+  );
+  if (running.length === 0) return 0;
+  const ts = nowIso();
+  getDb().run(
+    `UPDATE research_jobs SET status = 'FAILED', failure_reason = ?, completed_at = ?, updated_at = ?
+      WHERE orchestration_id = ? AND status = 'RUNNING'`,
+    [reason, ts, ts, orchestrationId],
+  );
+  return running.length;
+}
+
 /** Cancel every job still waiting; used when the assignment is cancelled. */
 export function cancelQueuedJobs(orchestrationId: string, reason: string): number {
   const pending = getDb().all<{ id: string }>(
