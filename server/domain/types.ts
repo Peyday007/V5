@@ -193,6 +193,8 @@ export const EVENT_TYPES = [
   'RESEARCH_CANCELLED',
   'RESEARCH_FAILED',
   'RESEARCH_COMPLETED',
+  'ARCHIVE_IMPORT_STARTED',
+  'ARCHIVE_IMPORT_COMPLETED',
   'AUDIT_COMPLETED',
   'LAYER_STATUS_CHANGED',
   'LAYER_EXPECTATIONS_CHANGED',
@@ -290,6 +292,33 @@ export type DocumentOrigin = (typeof DOCUMENT_ORIGINS)[number];
  */
 export const DOCUMENT_SCOPES = ['LAYER', 'PROJECT_MASTER_TRANSCRIPT', 'PROJECT_SOURCE'] as const;
 export type DocumentScope = (typeof DOCUMENT_SCOPES)[number];
+
+export const IMPORT_JOB_STATUSES = [
+  'DISCOVERING',
+  'QUEUED',
+  'RUNNING',
+  'PAUSED',
+  'CANCELLED',
+  'COMPLETE',
+  'FAILED',
+] as const;
+export type ImportJobStatus = (typeof IMPORT_JOB_STATUSES)[number];
+
+/** Where one discovered file got to. Every file ends in exactly one of these. */
+export const IMPORT_FILE_STATUSES = [
+  'DISCOVERED',
+  'QUEUED',
+  'EXTRACTING',
+  'OCR',
+  'REGISTERED',
+  'DUPLICATE',
+  'UNSUPPORTED',
+  'UNREADABLE',
+  'FAILED',
+  'NEEDS_REVIEW',
+  'SKIPPED',
+] as const;
+export type ImportFileStatus = (typeof IMPORT_FILE_STATUSES)[number];
 
 /** How a document's layer was decided. A filename is a hint; content is understanding. */
 export const CLASSIFICATION_SOURCES = ['FILENAME', 'FOLDER', 'CONTENT', 'MANUAL'] as const;
@@ -479,6 +508,59 @@ export interface IngestionReportRow {
   scope: string;
   report: string;
   created_at: string;
+}
+
+export interface ImportJobRow {
+  id: string;
+  project_id: string;
+  source_label: string;
+  root_path: string;
+  status: string;
+  scope: string;
+  discovered: number;
+  processed: number;
+  registered: number;
+  duplicates: number;
+  unsupported: number;
+  unreadable: number;
+  failed: number;
+  needs_review: number;
+  message: string | null;
+  cancel_reason: string | null;
+  heartbeat_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImportFileRow {
+  id: string;
+  job_id: string;
+  project_id: string;
+  absolute_path: string;
+  relative_path: string;
+  filename: string;
+  file_size: number | null;
+  file_hash: string | null;
+  detected_format: string | null;
+  source_modified_at: string | null;
+  status: string;
+  document_id: string | null;
+  duplicate_of_id: string | null;
+  extraction_status: string | null;
+  extraction_method: string | null;
+  pages: number | null;
+  ocr_pages: number | null;
+  detail: string | null;
+  warnings: string;
+  classification: string | null;
+  needs_confirmation: number;
+  attempts: number;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ResearchOrchestrationRow {
@@ -726,6 +808,9 @@ export interface DocumentRow {
   scope: string;
   classification_source: string | null;
   classification_confidence: number | null;
+  import_job_id: string | null;
+  source_path: string | null;
+  source_modified_at: string | null;
 }
 
 export interface ResearchRunRow {
@@ -1046,6 +1131,10 @@ export interface Document {
   /** How the layer was decided. A filename is a hint, never understanding. */
   classificationSource: ClassificationSource | null;
   classificationConfidence: number | null;
+  /** The folder import this came from, and where it sat in that folder. */
+  importJobId: string | null;
+  sourcePath: string | null;
+  sourceModifiedAt: string | null;
 }
 
 export interface ExtractionRun {
@@ -1192,6 +1281,60 @@ export interface ResearchRun {
   dependencyOverrideReason: string | null;
   externalResponseId: string | null;
   conversationId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One folder import, and the counted state of everything inside it. */
+export interface ImportJob {
+  id: string;
+  projectId: string;
+  sourceLabel: string;
+  rootPath: string;
+  status: ImportJobStatus;
+  scope: DocumentScope;
+  discovered: number;
+  processed: number;
+  registered: number;
+  duplicates: number;
+  unsupported: number;
+  unreadable: number;
+  failed: number;
+  needsReview: number;
+  message: string | null;
+  cancelReason: string | null;
+  heartbeatAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ImportFile {
+  id: string;
+  jobId: string;
+  projectId: string;
+  absolutePath: string;
+  relativePath: string;
+  filename: string;
+  fileSize: number | null;
+  fileHash: string | null;
+  detectedFormat: DocumentFormat | null;
+  sourceModifiedAt: string | null;
+  status: ImportFileStatus;
+  documentId: string | null;
+  duplicateOfId: string | null;
+  extractionStatus: ExtractionStatus | null;
+  extractionMethod: string | null;
+  pages: number | null;
+  ocrPages: number | null;
+  detail: string | null;
+  warnings: string[];
+  classification: unknown;
+  needsConfirmation: boolean;
+  attempts: number;
+  startedAt: string | null;
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

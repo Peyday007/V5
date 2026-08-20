@@ -31,6 +31,12 @@ import {
   currentFragments,
 } from '../repos/research.ts';
 import { buildPlan } from '../services/planner.ts';
+import {
+  cancelArchiveImport,
+  importReport,
+  resumeArchiveImport,
+  retryFailedFiles,
+} from '../services/archive/import.ts';
 import { summarize } from '../services/research/sources.ts';
 import { startResearch } from '../services/research/orchestrator.ts';
 import {
@@ -222,6 +228,56 @@ researchRouter.post(
     if (!orchestration) throw notFound(`No research run with id ${orchestrationId}.`);
     void resumeResearch(orchestrationId);
     return orchestrationView(orchestrationId);
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Archive imports
+//
+// Mounted here rather than under /projects because the job outlives the request
+// that started it: it is addressed by its own id from then on.
+// ---------------------------------------------------------------------------
+
+researchRouter.get(
+  '/imports/:jobId',
+  handler((req) => {
+    const report = importReport(pathId(req, 'jobId'));
+    if (!report) throw notFound(`No import job with id ${pathId(req, 'jobId')}.`);
+    return report;
+  }),
+);
+
+researchRouter.post(
+  '/imports/:jobId/resume',
+  handler((req) => {
+    const jobId = pathId(req, 'jobId');
+    const report = importReport(jobId);
+    if (!report) throw notFound(`No import job with id ${jobId}.`);
+    void resumeArchiveImport(jobId);
+    return importReport(jobId);
+  }),
+);
+
+researchRouter.post(
+  '/imports/:jobId/cancel',
+  handler((req) => {
+    const jobId = pathId(req, 'jobId');
+    const reason = optionalString(bodyOf(req)['reason'], 'reason') ?? 'Cancelled from the browser.';
+    const cancelled = cancelArchiveImport(jobId, reason);
+    if (!cancelled) throw notFound(`No import job with id ${jobId}.`);
+    return importReport(jobId);
+  }),
+);
+
+/** Try the files that failed, and only those. */
+researchRouter.post(
+  '/imports/:jobId/retry',
+  handler((req) => {
+    const jobId = pathId(req, 'jobId');
+    const report = importReport(jobId);
+    if (!report) throw notFound(`No import job with id ${jobId}.`);
+    void retryFailedFiles(jobId);
+    return importReport(jobId);
   }),
 );
 

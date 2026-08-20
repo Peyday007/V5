@@ -37,6 +37,7 @@ import { recoverInterruptedExtractions } from './services/documents/extraction.t
 import { ocrStatus } from './services/documents/ocr.ts';
 import { queueUnreadDocuments } from './services/documents/queue.ts';
 import { recoverInterruptedResearch } from './services/research/queue.ts';
+import { recoverInterruptedImports } from './services/archive/import.ts';
 
 /**
  * `node:sqlite` prints an experimental-feature warning the moment it is loaded.
@@ -280,6 +281,16 @@ function main(): void {
     console.log(
       `  ${interruptedResearch} research run(s) were interrupted by the last shutdown and are ` +
         'marked INTERRUPTED. Resume them to continue from the last completed pass.',
+    );
+  }
+
+  // A folder import interrupted by the shutdown is paused rather than left
+  // looking live. Nothing already imported is re-read when it resumes.
+  const pausedImports = recoverInterruptedImports();
+  if (pausedImports > 0) {
+    console.log(
+      `  ${pausedImports} archive import(s) were interrupted and are paused. Resume them to ` +
+        'continue with the files that were not reached.',
     );
   }
 

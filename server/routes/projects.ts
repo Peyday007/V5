@@ -36,6 +36,13 @@ import {
 import { resolveStoredFile } from '../services/storage.ts';
 import { toDataRelative } from '../env.ts';
 import { ingestSource } from '../services/sources/ingest.ts';
+import {
+  importReport,
+  processArchiveImport,
+  startArchiveImport,
+} from '../services/archive/import.ts';
+import { listImportJobs } from '../repos/imports.ts';
+import { optionalBoolean } from './helpers.ts';
 import { buildPlan } from '../services/planner.ts';
 import { applyReconcileFix, scanAndReconcile } from '../services/reconcile.ts';
 import { recomputeProject } from '../services/stateEngine.ts';
@@ -411,6 +418,40 @@ projectsRouter.post(
 
     recomputeProject(project.id);
     return { import: imported, report, plan: buildPlan(project.id) };
+  }),
+);
+
+/**
+ * Import an existing research archive from a folder on this machine.
+ *
+ * Discovery happens now and returns immediately; the reading happens on the
+ * job. A folder of forty documents takes minutes, and a request that waited for
+ * it would time out with the user unable to tell what had been imported.
+ */
+projectsRouter.post(
+  '/:projectId/archive-import',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const folder = requiredString(body['folder'], 'folder');
+    const scope = optionalEnum<DocumentScope>(body['scope'], DOCUMENT_SCOPES, 'scope');
+    const start = optionalBoolean(body['start'], 'start') ?? true;
+
+    const job = startArchiveImport({
+      projectId: project.id,
+      folder,
+      ...(scope ? { scope } : {}),
+    });
+    if (start && job.status === 'QUEUED') void processArchiveImport(job.id);
+    return importReport(job.id);
+  }),
+);
+
+projectsRouter.get(
+  '/:projectId/archive-imports',
+  handler((req) => {
+    const project = requireProject(pathId(req, 'projectId'));
+    return { jobs: listImportJobs(project.id) };
   }),
 );
 

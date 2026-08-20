@@ -51,6 +51,9 @@ export function mapDocument(row: DocumentRow): Document {
       row.classification_confidence === null || row.classification_confidence === undefined
         ? null
         : Number(row.classification_confidence),
+    importJobId: row.import_job_id ?? null,
+    sourcePath: row.source_path ?? null,
+    sourceModifiedAt: row.source_modified_at ?? null,
   };
 }
 
@@ -168,6 +171,9 @@ export interface UpdateDocumentInput {
   scope?: DocumentScope;
   classificationSource?: ClassificationSource | null;
   classificationConfidence?: number | null;
+  importJobId?: string | null;
+  sourcePath?: string | null;
+  sourceModifiedAt?: string | null;
 }
 
 export function updateDocument(id: string, patch: UpdateDocumentInput): Document | null {
@@ -202,6 +208,9 @@ export function updateDocument(id: string, patch: UpdateDocumentInput): Document
     scope: patch.scope,
     classification_source: patch.classificationSource,
     classification_confidence: patch.classificationConfidence,
+    import_job_id: patch.importJobId,
+    source_path: patch.sourcePath,
+    source_modified_at: patch.sourceModifiedAt,
   });
   if (!clause) return getDocument(id);
   getDb().run(`UPDATE documents SET ${clause}, updated_at = ? WHERE id = ?`, [
