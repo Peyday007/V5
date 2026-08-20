@@ -18,6 +18,10 @@ import type {
   ImportResult,
   LinkStatus,
   LinkType,
+  ResearchClaim,
+  ResearchFragment,
+  ResearchOrchestration,
+  ResearchPass,
   SegmentLayerLink,
   Layer,
   LayerStateSnapshot,
@@ -30,10 +34,14 @@ import type {
   ResearchRun,
 } from '../../../server/domain/types.ts';
 import type { IngestionReport } from '../../../server/services/sources/ingest.ts';
+import type { GateResult } from '../../../server/services/research/gate.ts';
+import type { LedgerSummary } from '../../../server/services/research/sources.ts';
 import type { ProviderStatus } from '../../../server/providers/types.ts';
 import type { ChatTurnResult } from '../../../server/services/agent/chat.ts';
 
 export type { ChatTurnResult, ProviderStatus, MigrationReport, IngestionReport };
+export type { ResearchOrchestration, ResearchFragment, ResearchPass, ResearchClaim };
+export type { GateResult, LedgerSummary };
 export type { DocumentSegment, SegmentLayerLink, LinkStatus, LinkType, DocumentScope };
 
 // ---------------------------------------------------------------------------
@@ -448,6 +456,35 @@ export const Api = {
     });
   },
 
+  /** Whether research can run here: the engine and the worker, answered separately. */
+  researchReadiness(): Promise<ResearchReadiness> {
+    return api('/api/research/readiness');
+  },
+
+  /** Start a staged research assignment. Returns as soon as it is queued. */
+  startResearch(
+    layerId: string,
+    body: { assignment: string; title?: string; provider?: string; model?: string },
+  ): Promise<ResearchView> {
+    return post(`/api/layers/${enc(layerId)}/research`, body);
+  },
+
+  layerResearch(layerId: string): Promise<{ orchestrations: ResearchOrchestration[] }> {
+    return api(`/api/layers/${enc(layerId)}/research`);
+  },
+
+  research(orchestrationId: string): Promise<ResearchView> {
+    return api(`/api/research/${enc(orchestrationId)}`);
+  },
+
+  cancelResearch(orchestrationId: string, reason?: string): Promise<ResearchView> {
+    return post(`/api/research/${enc(orchestrationId)}/cancel`, { reason });
+  },
+
+  resumeResearch(orchestrationId: string): Promise<ResearchView> {
+    return post(`/api/research/${enc(orchestrationId)}/resume`, {});
+  },
+
   /** Follow a citation back to the passage it rests on. */
   citation(chunkId: string): Promise<CitationView> {
     return api(`/api/documents/chunks/${enc(chunkId)}`);
@@ -571,6 +608,42 @@ export interface IngestionView {
   report: IngestionReport | null;
   segments: DocumentSegment[];
   links: SegmentLayerLink[];
+}
+
+/** One research assignment, everything about it, in one payload. */
+export interface ResearchView {
+  orchestration: ResearchOrchestration;
+  running: boolean;
+  /** Newest attempt per fragment — what the queue and the synthesis act on. */
+  fragments: ResearchFragment[];
+  /** Every attempt, including the failed ones: the repair history. */
+  attempts: ResearchFragment[];
+  passes: ResearchPass[];
+  claims: ResearchClaim[];
+  ledger: LedgerSummary;
+  fragmentsByStatus: Record<string, number>;
+  synthesisReady: boolean;
+  document: Document | null;
+  audit: Audit | null;
+  run: ResearchRun | null;
+  lineage: ResearchOrchestration[];
+  plan?: PlannerResult;
+}
+
+export interface ResearchReadiness {
+  orchestration: { ready: boolean; queueDepth: number; detail: string };
+  worker: {
+    provider: string;
+    installed: boolean;
+    authenticated: boolean;
+    automationReady: boolean;
+    version: string | null;
+    model: string | null;
+    quotaState: string;
+    lastCheckedAt: string;
+    message: string;
+  };
+  providers: ProviderStatus[];
 }
 
 export interface ExtractedTextView {

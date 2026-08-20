@@ -20,6 +20,16 @@ export interface ProviderStatus {
   reason: string;
   model: string | null;
   capabilities: { chat: boolean; research: boolean; audit: boolean };
+  /**
+   * True when what this provider returns is placeholder content rather than work.
+   *
+   * The mock is deliberately always available, which is what lets the platform
+   * boot, plan, compile prompts and verify naming with no credentials. That is a
+   * different thing from being able to do research, and staged research has to
+   * be able to tell the difference — a placeholder report filed as an audited
+   * artifact would be the worst outcome the platform can produce.
+   */
+  placeholder?: boolean;
 }
 
 export interface ResearchRequest {
@@ -34,6 +44,23 @@ export interface ResearchResponse {
   text: string;
   externalResponseId: string | null;
   model: string | null;
+}
+
+/**
+ * Controls a caller may pass to a research call.
+ *
+ * Optional on purpose: the orchestration engine needs cancellation, progress and
+ * a job identity from whatever worker it is driving, but a provider that cannot
+ * offer them is still a valid provider — it simply ignores the options. That is
+ * what keeps the engine independent of which tool is doing the research.
+ */
+export interface ResearchRunOptions {
+  /** Cancellation from the UI, or from a job being superseded. */
+  signal?: AbortSignal;
+  /** Called with each chunk of output, for live progress. */
+  onOutput?: (chunk: string) => void;
+  /** The run this job belongs to, so its working directory is traceable. */
+  runId?: string;
 }
 
 export interface AuditRequest {
@@ -61,7 +88,7 @@ export interface ChatResponse {
 export interface AIProvider {
   readonly name: string;
   chat(request: ChatRequest): Promise<ChatResponse>;
-  runResearch(request: ResearchRequest): Promise<ResearchResponse>;
+  runResearch(request: ResearchRequest, options?: ResearchRunOptions): Promise<ResearchResponse>;
   audit(request: AuditRequest): Promise<AuditResponse>;
   getStatus(): ProviderStatus;
 }

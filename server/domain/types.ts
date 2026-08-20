@@ -185,6 +185,14 @@ export const EVENT_TYPES = [
   'RUN_COMPLETED',
   'RUN_FAILED',
   'RUN_PROMPT_COMPILED',
+  'RESEARCH_QUEUED',
+  'RESEARCH_PLANNED',
+  'RESEARCH_FRAGMENT_ACCEPTED',
+  'RESEARCH_FRAGMENT_REJECTED',
+  'RESEARCH_BLOCKED',
+  'RESEARCH_CANCELLED',
+  'RESEARCH_FAILED',
+  'RESEARCH_COMPLETED',
   'AUDIT_COMPLETED',
   'LAYER_STATUS_CHANGED',
   'LAYER_EXPECTATIONS_CHANGED',
@@ -307,6 +315,91 @@ export type LinkType = (typeof LINK_TYPES)[number];
 export const LINK_STATUSES = ['PROPOSED', 'ACCEPTED', 'EXCLUDED'] as const;
 export type LinkStatus = (typeof LINK_STATUSES)[number];
 
+// ---------------------------------------------------------------------------
+// Staged research
+// ---------------------------------------------------------------------------
+
+/**
+ * The six passes of one research assignment.
+ *
+ * They are separate because they ask different things and fail differently. A
+ * plan that is wrong is cheap to correct; a synthesis built on an unchallenged
+ * broad scan is not. AUDIT is Brain's own three-role engine, not another
+ * provider call in disguise.
+ */
+export const RESEARCH_PASS_KEYS = [
+  'PLAN',
+  'BROAD_SCAN',
+  'TARGETED',
+  'ADVERSARIAL',
+  'VERIFICATION',
+  'SYNTHESIS',
+  'AUDIT',
+] as const;
+export type ResearchPassKey = (typeof RESEARCH_PASS_KEYS)[number];
+
+export const RESEARCH_PASS_STATUSES = ['RUNNING', 'COMPLETE', 'FAILED', 'CANCELLED'] as const;
+export type ResearchPassStatus = (typeof RESEARCH_PASS_STATUSES)[number];
+
+export const ORCHESTRATION_STATUSES = [
+  'QUEUED',
+  'PLANNING',
+  'RESEARCHING',
+  'SYNTHESIZING',
+  'AUDITING',
+  'AWAITING_REPAIR',
+  'COMPLETE',
+  'FAILED',
+  'CANCELLED',
+  'INTERRUPTED',
+  'NEEDS_HUMAN',
+] as const;
+export type OrchestrationStatus = (typeof ORCHESTRATION_STATUSES)[number];
+
+/**
+ * Where one fragment's own job has got to.
+ *
+ * ACCEPTED means it passed its evidence gate and its claims may be synthesized.
+ * BLOCKED is recoverable — a repair, a narrower question or a different search
+ * strategy may still land it. REJECTED is the end of that fragment's line, and
+ * its claims never enter a synthesis.
+ */
+export const FRAGMENT_STATUSES = [
+  'PLANNED',
+  'QUEUED',
+  'RUNNING',
+  'VALIDATING',
+  'ACCEPTED',
+  'BLOCKED',
+  'REJECTED',
+  'CANCELLED',
+  'NEEDS_HUMAN',
+] as const;
+export type FragmentStatus = (typeof FRAGMENT_STATUSES)[number];
+
+/** Does the evidence hold up? Separate from whether there is enough of it. */
+export const INTEGRITY_VERDICTS = ['PASS', 'FAIL'] as const;
+export type IntegrityVerdict = (typeof INTEGRITY_VERDICTS)[number];
+
+/** Does it actually answer the fragment's question, to the declared coverage? */
+export const SUFFICIENCY_VERDICTS = ['SUFFICIENT', 'INSUFFICIENT'] as const;
+export type SufficiencyVerdict = (typeof SUFFICIENCY_VERDICTS)[number];
+
+/** What later passes did to a claim. Silence is not agreement, so nothing defaults to SUPPORTED. */
+export const CONTRADICTION_STATES = ['UNCHALLENGED', 'SUPPORTED', 'CONTESTED', 'REFUTED'] as const;
+export type ContradictionState = (typeof CONTRADICTION_STATES)[number];
+
+/** Structural verdict on a claim's source. Only SOURCED counts as evidence. */
+export const CLAIM_VALIDATION_STATES = [
+  'SOURCED',
+  'NO_URL',
+  'INVALID_URL',
+  'UNSUPPORTED_SCHEME',
+  'LOCAL_ADDRESS',
+  'NO_EVIDENCE',
+] as const;
+export type ClaimValidationState = (typeof CLAIM_VALIDATION_STATES)[number];
+
 export interface DocumentSegmentRow {
   id: string;
   document_id: string;
@@ -385,6 +478,123 @@ export interface IngestionReportRow {
   extraction_run_id: string;
   scope: string;
   report: string;
+  created_at: string;
+}
+
+export interface ResearchOrchestrationRow {
+  id: string;
+  project_id: string;
+  layer_id: string;
+  run_id: string;
+  title: string;
+  assignment: string;
+  target_version: string | null;
+  provider: string;
+  model: string | null;
+  status: string;
+  current_pass: string | null;
+  attempt: number;
+  parent_orchestration_id: string | null;
+  repair_reason: string | null;
+  report_text: string | null;
+  document_id: string | null;
+  audit_id: string | null;
+  verdict: string | null;
+  queued_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  failed_at: string | null;
+  failure_reason: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  heartbeat_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResearchFragmentRow {
+  id: string;
+  orchestration_id: string;
+  project_id: string;
+  layer_id: string;
+  fragment_index: number;
+  fragment_key: string;
+  question: string;
+  geography: string | null;
+  timeframe: string | null;
+  population: string | null;
+  definitions: string | null;
+  required_evidence: string;
+  acceptable_source_types: string;
+  excluded_source_types: string;
+  completion_criteria: string;
+  depends_on: string;
+  min_independent_sources: number;
+  status: string;
+  attempt: number;
+  parent_fragment_id: string | null;
+  repair_reason: string | null;
+  repair_strategy: string | null;
+  integrity_verdict: string | null;
+  sufficiency_verdict: string | null;
+  verdict_detail: string | null;
+  blocked_reason: string | null;
+  queued_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  accepted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResearchPassRow {
+  id: string;
+  orchestration_id: string;
+  fragment_id: string | null;
+  pass_key: string;
+  ordinal: number;
+  attempt: number;
+  status: string;
+  provider: string;
+  model: string | null;
+  prompt: string;
+  prompt_sha256: string;
+  raw_response: string | null;
+  parsed: string | null;
+  error: string | null;
+  job_id: string | null;
+  started_at: string;
+  completed_at: string | null;
+  duration_ms: number | null;
+}
+
+export interface ResearchClaimRow {
+  id: string;
+  orchestration_id: string;
+  fragment_id: string | null;
+  pass_id: string | null;
+  pass_key: string;
+  claim: string;
+  source_url: string | null;
+  source_title: string | null;
+  source_publisher: string | null;
+  source_date: string | null;
+  evidence_excerpt: string | null;
+  evidence_locator: string | null;
+  evidence_lane: string | null;
+  retrieved_at: string | null;
+  confidence: number;
+  contradiction_state: string;
+  contradiction_note: string | null;
+  validation_state: string;
+  validation_detail: string | null;
+  sourced: number;
+  derived: number;
+  derived_from: string;
+  accepted: number;
+  rejection_reason: string | null;
+  scope_match: string | null;
+  content_hash: string;
   created_at: string;
 }
 
@@ -984,6 +1194,140 @@ export interface ResearchRun {
   conversationId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * One assignment being worked through, pass by pass.
+ *
+ * `status` is where the work is; `verdict` is what Brain's audit made of it.
+ * They are separate on purpose: a COMPLETE orchestration whose verdict was
+ * MORE_RESEARCH_REQUIRED did its job correctly and produced a report that did
+ * not pass, which is a different thing from a job that failed.
+ */
+export interface ResearchOrchestration {
+  id: string;
+  projectId: string;
+  layerId: string;
+  runId: string;
+  title: string;
+  assignment: string;
+  targetVersion: string | null;
+  provider: string;
+  model: string | null;
+  status: OrchestrationStatus;
+  currentPass: ResearchPassKey | null;
+  attempt: number;
+  parentOrchestrationId: string | null;
+  repairReason: string | null;
+  reportText: string | null;
+  documentId: string | null;
+  auditId: string | null;
+  verdict: string | null;
+  queuedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  failedAt: string | null;
+  failureReason: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  heartbeatAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One bounded piece of an assignment, with the boundaries that make its answer
+ * checkable and the bar it has to clear before any of it counts.
+ */
+export interface ResearchFragment {
+  id: string;
+  orchestrationId: string;
+  projectId: string;
+  layerId: string;
+  fragmentIndex: number;
+  fragmentKey: string;
+  question: string;
+  geography: string | null;
+  timeframe: string | null;
+  population: string | null;
+  definitions: string | null;
+  requiredEvidence: string[];
+  acceptableSourceTypes: string[];
+  excludedSourceTypes: string[];
+  completionCriteria: string[];
+  dependsOn: string[];
+  minIndependentSources: number;
+  status: FragmentStatus;
+  attempt: number;
+  parentFragmentId: string | null;
+  repairReason: string | null;
+  repairStrategy: string | null;
+  integrityVerdict: IntegrityVerdict | null;
+  sufficiencyVerdict: SufficiencyVerdict | null;
+  verdictDetail: unknown;
+  blockedReason: string | null;
+  queuedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  acceptedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ResearchPass {
+  id: string;
+  orchestrationId: string;
+  fragmentId: string | null;
+  passKey: ResearchPassKey;
+  ordinal: number;
+  attempt: number;
+  status: ResearchPassStatus;
+  provider: string;
+  model: string | null;
+  prompt: string;
+  promptSha256: string;
+  rawResponse: string | null;
+  parsed: unknown;
+  error: string | null;
+  jobId: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  durationMs: number | null;
+}
+
+export interface ResearchClaim {
+  id: string;
+  orchestrationId: string;
+  fragmentId: string | null;
+  passId: string | null;
+  passKey: ResearchPassKey;
+  claim: string;
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+  sourcePublisher: string | null;
+  sourceDate: string | null;
+  evidenceExcerpt: string | null;
+  evidenceLocator: string | null;
+  /** The fragment evidence lane it fills, if any. Coverage is counted per lane. */
+  evidenceLane: string | null;
+  retrievedAt: string | null;
+  confidence: number;
+  contradictionState: ContradictionState;
+  contradictionNote: string | null;
+  validationState: ClaimValidationState;
+  validationDetail: string | null;
+  /** False whenever the claim may not be cited as evidence. */
+  sourced: boolean;
+  /** A calculation or inference rather than something a source states. */
+  derived: boolean;
+  /** The claims it was derived from; all of them must themselves be accepted. */
+  derivedFrom: string[];
+  /** Only an accepted claim may enter a synthesis. */
+  accepted: boolean;
+  rejectionReason: string | null;
+  scopeMatch: unknown;
+  contentHash: string;
+  createdAt: string;
 }
 
 export interface Dependency {

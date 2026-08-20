@@ -53,13 +53,24 @@ const TEMPLATE_MARKERS = [
   '...',
 ];
 
-/** A value naming several enum members at once is a menu, not a decision. */
+/**
+ * A value naming several enum members at once is a menu, not a decision.
+ *
+ * A member that is merely a substring of another matched member does not count:
+ * "MISMATCH" contains "MATCH" by spelling, not by meaning, and reading that as
+ * two answers would reject a perfectly clear one. Only members that survive that
+ * test are treated as separately named.
+ */
 function namesMultipleMembers(value: string, members: readonly string[]): boolean {
   const upper = value.toUpperCase();
-  return members.filter((member) => upper.includes(member)).length > 1;
+  const matched = members.filter((member) => upper.includes(member));
+  const distinct = matched.filter(
+    (member) => !matched.some((other) => other !== member && other.includes(member)),
+  );
+  return distinct.length > 1;
 }
 
-function looksLikeTemplate(value: string): boolean {
+export function looksLikeTemplate(value: string): boolean {
   const lower = value.trim().toLowerCase();
   if (lower.length === 0) return true;
   return TEMPLATE_MARKERS.some((marker) => lower === marker || lower.includes(marker));
@@ -135,7 +146,18 @@ export function strictEnum<T extends string>(
   return { ok: true, value: found };
 }
 
-function stringField(value: unknown, field: string, options: { required?: boolean } = {}): ParseResult<string> {
+/*
+ * The validators below are the strict-parsing vocabulary, exported because the
+ * research passes parse model output under exactly the same rules. Sharing them
+ * is the point: two definitions of "a required string" would eventually disagree
+ * about what a model is allowed to get away with.
+ */
+
+export function stringField(
+  value: unknown,
+  field: string,
+  options: { required?: boolean } = {},
+): ParseResult<string> {
   if (value === undefined || value === null) {
     if (options.required) return { ok: false, error: `"${field}" is required.` };
     return { ok: true, value: '' };
@@ -151,7 +173,7 @@ function stringField(value: unknown, field: string, options: { required?: boolea
   return { ok: true, value: trimmed };
 }
 
-function stringArray(value: unknown, field: string): ParseResult<string[]> {
+export function stringArray(value: unknown, field: string): ParseResult<string[]> {
   if (value === undefined || value === null) return { ok: true, value: [] };
   if (!Array.isArray(value)) return { ok: false, error: `"${field}" must be an array of strings.` };
   const out: string[] = [];
@@ -164,7 +186,7 @@ function stringArray(value: unknown, field: string): ParseResult<string[]> {
   return { ok: true, value: out };
 }
 
-function booleanField(value: unknown, field: string): ParseResult<boolean> {
+export function booleanField(value: unknown, field: string): ParseResult<boolean> {
   if (value === undefined || value === null) return { ok: true, value: false };
   if (typeof value !== 'boolean') {
     // "true" as a string is a model being sloppy; accepting it is how inference
@@ -174,7 +196,7 @@ function booleanField(value: unknown, field: string): ParseResult<boolean> {
   return { ok: true, value };
 }
 
-function confidenceField(value: unknown): ParseResult<number | null> {
+export function confidenceField(value: unknown): ParseResult<number | null> {
   if (value === undefined || value === null) return { ok: true, value: null };
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return { ok: false, error: '"confidence" must be a number between 0 and 1.' };
@@ -183,7 +205,7 @@ function confidenceField(value: unknown): ParseResult<number | null> {
   return { ok: true, value };
 }
 
-function nonNegativeInteger(value: unknown, field: string): ParseResult<number> {
+export function nonNegativeInteger(value: unknown, field: string): ParseResult<number> {
   if (value === undefined || value === null) return { ok: true, value: 0 };
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
     return { ok: false, error: `"${field}" must be a non-negative integer.` };

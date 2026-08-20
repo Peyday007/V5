@@ -1,0 +1,688 @@
+/**
+ * Data access for staged research.
+ *
+ * Passes and claims are append-only. A retried pass is a new row; a claim that a
+ * later pass contradicts is updated in place only in its contradiction state,
+ * never in its text or its source — the point of a ledger is that what was
+ * claimed, and on what basis, cannot be quietly revised afterwards.
+ */
+import { getDb } from '../db/database.ts';
+import type {
+  ClaimValidationState,
+  ContradictionState,
+  FragmentStatus,
+  IntegrityVerdict,
+  OrchestrationStatus,
+  ResearchFragment,
+  ResearchFragmentRow,
+  SufficiencyVerdict,
+  ResearchClaim,
+  ResearchClaimRow,
+  ResearchOrchestration,
+  ResearchOrchestrationRow,
+  ResearchPass,
+  ResearchPassKey,
+  ResearchPassRow,
+  ResearchPassStatus,
+} from '../domain/types.ts';
+import { buildUpdate, fromBool, newId, nowIso, parseJson, toBool, toJson } from './util.ts';
+
+function mapOrchestration(row: ResearchOrchestrationRow): ResearchOrchestration {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    layerId: row.layer_id,
+    runId: row.run_id,
+    title: row.title,
+    assignment: row.assignment,
+    targetVersion: row.target_version,
+    provider: row.provider,
+    model: row.model,
+    status: row.status as OrchestrationStatus,
+    currentPass: (row.current_pass as ResearchPassKey | null) ?? null,
+    attempt: Number(row.attempt),
+    parentOrchestrationId: row.parent_orchestration_id,
+    repairReason: row.repair_reason,
+    reportText: row.report_text,
+    documentId: row.document_id,
+    auditId: row.audit_id,
+    verdict: row.verdict,
+    queuedAt: row.queued_at,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    failedAt: row.failed_at,
+    failureReason: row.failure_reason,
+    cancelledAt: row.cancelled_at,
+    cancelReason: row.cancel_reason,
+    heartbeatAt: row.heartbeat_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapFragment(row: ResearchFragmentRow): ResearchFragment {
+  return {
+    id: row.id,
+    orchestrationId: row.orchestration_id,
+    projectId: row.project_id,
+    layerId: row.layer_id,
+    fragmentIndex: Number(row.fragment_index),
+    fragmentKey: row.fragment_key,
+    question: row.question,
+    geography: row.geography,
+    timeframe: row.timeframe,
+    population: row.population,
+    definitions: row.definitions,
+    requiredEvidence: parseJson<string[]>(row.required_evidence, []),
+    acceptableSourceTypes: parseJson<string[]>(row.acceptable_source_types, []),
+    excludedSourceTypes: parseJson<string[]>(row.excluded_source_types, []),
+    completionCriteria: parseJson<string[]>(row.completion_criteria, []),
+    dependsOn: parseJson<string[]>(row.depends_on, []),
+    minIndependentSources: Number(row.min_independent_sources),
+    status: row.status as FragmentStatus,
+    attempt: Number(row.attempt),
+    parentFragmentId: row.parent_fragment_id,
+    repairReason: row.repair_reason,
+    repairStrategy: row.repair_strategy,
+    integrityVerdict: (row.integrity_verdict as IntegrityVerdict | null) ?? null,
+    sufficiencyVerdict: (row.sufficiency_verdict as SufficiencyVerdict | null) ?? null,
+    verdictDetail: parseJson<unknown>(row.verdict_detail, null),
+    blockedReason: row.blocked_reason,
+    queuedAt: row.queued_at,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    acceptedAt: row.accepted_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapPass(row: ResearchPassRow): ResearchPass {
+  return {
+    id: row.id,
+    orchestrationId: row.orchestration_id,
+    fragmentId: row.fragment_id,
+    passKey: row.pass_key as ResearchPassKey,
+    ordinal: Number(row.ordinal),
+    attempt: Number(row.attempt),
+    status: row.status as ResearchPassStatus,
+    provider: row.provider,
+    model: row.model,
+    prompt: row.prompt,
+    promptSha256: row.prompt_sha256,
+    rawResponse: row.raw_response,
+    parsed: parseJson<unknown>(row.parsed, null),
+    error: row.error,
+    jobId: row.job_id,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    durationMs: row.duration_ms === null ? null : Number(row.duration_ms),
+  };
+}
+
+function mapClaim(row: ResearchClaimRow): ResearchClaim {
+  return {
+    id: row.id,
+    orchestrationId: row.orchestration_id,
+    fragmentId: row.fragment_id,
+    passId: row.pass_id,
+    passKey: row.pass_key as ResearchPassKey,
+    claim: row.claim,
+    sourceUrl: row.source_url,
+    sourceTitle: row.source_title,
+    sourcePublisher: row.source_publisher,
+    sourceDate: row.source_date,
+    evidenceExcerpt: row.evidence_excerpt,
+    evidenceLocator: row.evidence_locator,
+    evidenceLane: row.evidence_lane,
+    retrievedAt: row.retrieved_at,
+    confidence: Number(row.confidence),
+    contradictionState: row.contradiction_state as ContradictionState,
+    contradictionNote: row.contradiction_note,
+    validationState: row.validation_state as ClaimValidationState,
+    validationDetail: row.validation_detail,
+    sourced: toBool(row.sourced),
+    derived: toBool(row.derived),
+    derivedFrom: parseJson<string[]>(row.derived_from, []),
+    accepted: toBool(row.accepted),
+    rejectionReason: row.rejection_reason,
+    scopeMatch: parseJson<unknown>(row.scope_match, null),
+    contentHash: row.content_hash,
+    createdAt: row.created_at,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Orchestrations
+// ---------------------------------------------------------------------------
+
+export interface CreateOrchestrationInput {
+  projectId: string;
+  layerId: string;
+  runId: string;
+  title: string;
+  assignment: string;
+  targetVersion?: string | null;
+  provider: string;
+  model?: string | null;
+  attempt?: number;
+  parentOrchestrationId?: string | null;
+  repairReason?: string | null;
+}
+
+export function createOrchestration(input: CreateOrchestrationInput): ResearchOrchestration {
+  const ts = nowIso();
+  const id = newId('orc');
+  getDb().run(
+    `INSERT INTO research_orchestrations (id, project_id, layer_id, run_id, title, assignment,
+       target_version, provider, model, status, attempt, parent_orchestration_id, repair_reason,
+       queued_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?, ?)`,
+    [id, input.projectId, input.layerId, input.runId, input.title, input.assignment,
+      input.targetVersion ?? null, input.provider, input.model ?? null, input.attempt ?? 1,
+      input.parentOrchestrationId ?? null, input.repairReason ?? null, ts, ts, ts],
+  );
+  return getOrchestration(id)!;
+}
+
+export function getOrchestration(id: string): ResearchOrchestration | null {
+  const row = getDb().get<ResearchOrchestrationRow>(
+    'SELECT * FROM research_orchestrations WHERE id = ?',
+    [id],
+  );
+  return row ? mapOrchestration(row) : null;
+}
+
+export function listOrchestrationsByLayer(layerId: string): ResearchOrchestration[] {
+  return getDb()
+    .all<ResearchOrchestrationRow>(
+      'SELECT * FROM research_orchestrations WHERE layer_id = ? ORDER BY created_at DESC',
+      [layerId],
+    )
+    .map(mapOrchestration);
+}
+
+export function listOrchestrationsByProject(projectId: string): ResearchOrchestration[] {
+  return getDb()
+    .all<ResearchOrchestrationRow>(
+      'SELECT * FROM research_orchestrations WHERE project_id = ? ORDER BY created_at DESC',
+      [projectId],
+    )
+    .map(mapOrchestration);
+}
+
+/** Everything not yet finished, oldest first — the queue's own order. */
+export function listPendingOrchestrations(): ResearchOrchestration[] {
+  return getDb()
+    .all<ResearchOrchestrationRow>(
+      `SELECT * FROM research_orchestrations
+       WHERE status IN ('QUEUED','PLANNING','RESEARCHING','SYNTHESIZING','AUDITING')
+       ORDER BY queued_at, rowid`,
+    )
+    .map(mapOrchestration);
+}
+
+/** Every attempt in one repair lineage, oldest first. */
+export function getOrchestrationLineage(id: string): ResearchOrchestration[] {
+  const start = getOrchestration(id);
+  if (!start) return [];
+
+  let root = start;
+  const climbed = new Set<string>([root.id]);
+  while (root.parentOrchestrationId) {
+    const parent = getOrchestration(root.parentOrchestrationId);
+    if (!parent || climbed.has(parent.id)) break;
+    climbed.add(parent.id);
+    root = parent;
+  }
+
+  const db = getDb();
+  const lineage: ResearchOrchestration[] = [root];
+  const queue: string[] = [root.id];
+  const seen = new Set<string>([root.id]);
+  while (queue.length > 0 && lineage.length < 200) {
+    const currentId = queue.shift()!;
+    const children = db.all<ResearchOrchestrationRow>(
+      'SELECT * FROM research_orchestrations WHERE parent_orchestration_id = ? ORDER BY attempt, created_at',
+      [currentId],
+    );
+    for (const row of children) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      lineage.push(mapOrchestration(row));
+      queue.push(row.id);
+    }
+  }
+  return lineage;
+}
+
+export interface UpdateOrchestrationInput {
+  status?: OrchestrationStatus;
+  currentPass?: ResearchPassKey | null;
+  reportText?: string | null;
+  documentId?: string | null;
+  auditId?: string | null;
+  verdict?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  failedAt?: string | null;
+  failureReason?: string | null;
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
+  heartbeatAt?: string | null;
+}
+
+export function updateOrchestration(
+  id: string,
+  patch: UpdateOrchestrationInput,
+): ResearchOrchestration | null {
+  const { clause, values } = buildUpdate({
+    status: patch.status,
+    current_pass: patch.currentPass,
+    report_text: patch.reportText,
+    document_id: patch.documentId,
+    audit_id: patch.auditId,
+    verdict: patch.verdict,
+    started_at: patch.startedAt,
+    completed_at: patch.completedAt,
+    failed_at: patch.failedAt,
+    failure_reason: patch.failureReason,
+    cancelled_at: patch.cancelledAt,
+    cancel_reason: patch.cancelReason,
+    heartbeat_at: patch.heartbeatAt,
+  });
+  if (!clause) return getOrchestration(id);
+  getDb().run(`UPDATE research_orchestrations SET ${clause}, updated_at = ? WHERE id = ?`, [
+    ...(values as never[]),
+    nowIso(),
+    id,
+  ]);
+  return getOrchestration(id);
+}
+
+/** Cheap liveness write, so a dead process is distinguishable from a slow one. */
+export function beat(id: string): void {
+  const ts = nowIso();
+  getDb().run('UPDATE research_orchestrations SET heartbeat_at = ?, updated_at = ? WHERE id = ?', [
+    ts,
+    ts,
+    id,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// Fragments
+// ---------------------------------------------------------------------------
+
+export interface CreateFragmentInput {
+  orchestrationId: string;
+  projectId: string;
+  layerId: string;
+  fragmentIndex: number;
+  fragmentKey: string;
+  question: string;
+  geography?: string | null;
+  timeframe?: string | null;
+  population?: string | null;
+  definitions?: string | null;
+  requiredEvidence: string[];
+  acceptableSourceTypes: string[];
+  excludedSourceTypes: string[];
+  completionCriteria: string[];
+  dependsOn: string[];
+  minIndependentSources: number;
+  attempt?: number;
+  parentFragmentId?: string | null;
+  repairReason?: string | null;
+  repairStrategy?: string | null;
+  status?: FragmentStatus;
+}
+
+export function createFragments(inputs: CreateFragmentInput[]): ResearchFragment[] {
+  if (inputs.length === 0) return [];
+  const db = getDb();
+  const ts = nowIso();
+  const ids: string[] = [];
+  db.transaction(() => {
+    for (const input of inputs) {
+      const id = newId('frg');
+      ids.push(id);
+      db.run(
+        `INSERT INTO research_fragments (id, orchestration_id, project_id, layer_id,
+           fragment_index, fragment_key, question, geography, timeframe, population, definitions,
+           required_evidence, acceptable_source_types, excluded_source_types, completion_criteria,
+           depends_on, min_independent_sources, status, attempt, parent_fragment_id,
+           repair_reason, repair_strategy, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, input.orchestrationId, input.projectId, input.layerId, input.fragmentIndex,
+          input.fragmentKey, input.question, input.geography ?? null, input.timeframe ?? null,
+          input.population ?? null, input.definitions ?? null, toJson(input.requiredEvidence),
+          toJson(input.acceptableSourceTypes), toJson(input.excludedSourceTypes),
+          toJson(input.completionCriteria), toJson(input.dependsOn), input.minIndependentSources,
+          input.status ?? 'PLANNED', input.attempt ?? 1, input.parentFragmentId ?? null,
+          input.repairReason ?? null, input.repairStrategy ?? null, ts, ts],
+      );
+    }
+  });
+  return ids.map((id) => getFragment(id)).filter((f): f is ResearchFragment => f !== null);
+}
+
+export function getFragment(id: string): ResearchFragment | null {
+  const row = getDb().get<ResearchFragmentRow>('SELECT * FROM research_fragments WHERE id = ?', [id]);
+  return row ? mapFragment(row) : null;
+}
+
+export function listFragments(orchestrationId: string): ResearchFragment[] {
+  return getDb()
+    .all<ResearchFragmentRow>(
+      'SELECT * FROM research_fragments WHERE orchestration_id = ? ORDER BY fragment_index, attempt, rowid',
+      [orchestrationId],
+    )
+    .map(mapFragment);
+}
+
+/**
+ * The live fragment for each key: the newest attempt, which is the one whose
+ * verdict counts. Earlier attempts stay in the table as failure history.
+ */
+export function currentFragments(orchestrationId: string): ResearchFragment[] {
+  const byKey = new Map<string, ResearchFragment>();
+  for (const fragment of listFragments(orchestrationId)) {
+    const existing = byKey.get(fragment.fragmentKey);
+    if (!existing || fragment.attempt >= existing.attempt) byKey.set(fragment.fragmentKey, fragment);
+  }
+  return [...byKey.values()].sort((a, b) => a.fragmentIndex - b.fragmentIndex);
+}
+
+export interface UpdateFragmentInput {
+  status?: FragmentStatus;
+  integrityVerdict?: IntegrityVerdict | null;
+  sufficiencyVerdict?: SufficiencyVerdict | null;
+  verdictDetail?: unknown;
+  blockedReason?: string | null;
+  queuedAt?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  acceptedAt?: string | null;
+}
+
+export function updateFragment(id: string, patch: UpdateFragmentInput): ResearchFragment | null {
+  const { clause, values } = buildUpdate({
+    status: patch.status,
+    integrity_verdict: patch.integrityVerdict,
+    sufficiency_verdict: patch.sufficiencyVerdict,
+    verdict_detail: patch.verdictDetail === undefined ? undefined : toJson(patch.verdictDetail),
+    blocked_reason: patch.blockedReason,
+    queued_at: patch.queuedAt,
+    started_at: patch.startedAt,
+    completed_at: patch.completedAt,
+    accepted_at: patch.acceptedAt,
+  });
+  if (!clause) return getFragment(id);
+  getDb().run(`UPDATE research_fragments SET ${clause}, updated_at = ? WHERE id = ?`, [
+    ...(values as never[]),
+    nowIso(),
+    id,
+  ]);
+  return getFragment(id);
+}
+
+// ---------------------------------------------------------------------------
+// Passes
+// ---------------------------------------------------------------------------
+
+export interface StartPassInput {
+  orchestrationId: string;
+  fragmentId?: string | null;
+  passKey: ResearchPassKey;
+  ordinal: number;
+  attempt?: number;
+  provider: string;
+  model?: string | null;
+  prompt: string;
+  promptSha256: string;
+}
+
+/** Written before the provider is called: an unanswered pass is still a fact. */
+export function startPass(input: StartPassInput): ResearchPass {
+  const id = newId('rps');
+  getDb().run(
+    `INSERT INTO research_passes (id, orchestration_id, fragment_id, pass_key, ordinal, attempt,
+       status, provider, model, prompt, prompt_sha256, started_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?, ?, ?)`,
+    [id, input.orchestrationId, input.fragmentId ?? null, input.passKey, input.ordinal,
+      input.attempt ?? 1, input.provider, input.model ?? null, input.prompt, input.promptSha256,
+      nowIso()],
+  );
+  return getPass(id)!;
+}
+
+export interface FinishPassInput {
+  status: ResearchPassStatus;
+  rawResponse?: string | null;
+  parsed?: unknown;
+  error?: string | null;
+  jobId?: string | null;
+  durationMs?: number | null;
+}
+
+export function finishPass(id: string, input: FinishPassInput): ResearchPass | null {
+  getDb().run(
+    `UPDATE research_passes
+        SET status = ?, raw_response = ?, parsed = ?, error = ?, job_id = ?,
+            completed_at = ?, duration_ms = ?
+      WHERE id = ?`,
+    [input.status, input.rawResponse ?? null,
+      input.parsed === undefined ? null : toJson(input.parsed), input.error ?? null,
+      input.jobId ?? null, nowIso(), input.durationMs ?? null, id],
+  );
+  return getPass(id);
+}
+
+export function getPass(id: string): ResearchPass | null {
+  const row = getDb().get<ResearchPassRow>('SELECT * FROM research_passes WHERE id = ?', [id]);
+  return row ? mapPass(row) : null;
+}
+
+export function listPasses(orchestrationId: string): ResearchPass[] {
+  return getDb()
+    .all<ResearchPassRow>(
+      'SELECT * FROM research_passes WHERE orchestration_id = ? ORDER BY ordinal, attempt, rowid',
+      [orchestrationId],
+    )
+    .map(mapPass);
+}
+
+/**
+ * The successful result of one pass, if it has one.
+ *
+ * This is what makes resumption possible: a pass that already completed is never
+ * asked again, on a resume or a repair.
+ */
+export function completedPass(
+  orchestrationId: string,
+  passKey: ResearchPassKey,
+  fragmentId: string | null = null,
+): ResearchPass | null {
+  const row = getDb().get<ResearchPassRow>(
+    `SELECT * FROM research_passes
+      WHERE orchestration_id = ? AND pass_key = ? AND status = 'COMPLETE'
+        AND fragment_id IS ?
+      ORDER BY attempt DESC, rowid DESC LIMIT 1`,
+    [orchestrationId, passKey, fragmentId],
+  );
+  return row ? mapPass(row) : null;
+}
+
+export function listPassesForFragment(fragmentId: string): ResearchPass[] {
+  return getDb()
+    .all<ResearchPassRow>(
+      'SELECT * FROM research_passes WHERE fragment_id = ? ORDER BY ordinal, attempt, rowid',
+      [fragmentId],
+    )
+    .map(mapPass);
+}
+
+/** Mark whatever was left running by a dead process, so nothing reads as in flight. */
+export function abandonRunningPasses(orchestrationId: string, error: string): number {
+  const running = getDb().all<{ id: string }>(
+    "SELECT id FROM research_passes WHERE orchestration_id = ? AND status = 'RUNNING'",
+    [orchestrationId],
+  );
+  if (running.length === 0) return 0;
+  getDb().run(
+    `UPDATE research_passes SET status = 'FAILED', error = ?, completed_at = ?
+      WHERE orchestration_id = ? AND status = 'RUNNING'`,
+    [error, nowIso(), orchestrationId],
+  );
+  return running.length;
+}
+
+// ---------------------------------------------------------------------------
+// Claims
+// ---------------------------------------------------------------------------
+
+export interface InsertClaimInput {
+  orchestrationId: string;
+  fragmentId: string | null;
+  passId: string | null;
+  passKey: ResearchPassKey;
+  claim: string;
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+  sourcePublisher: string | null;
+  sourceDate: string | null;
+  evidenceExcerpt: string | null;
+  evidenceLocator: string | null;
+  evidenceLane: string | null;
+  retrievedAt: string | null;
+  confidence: number;
+  contradictionState?: ContradictionState;
+  contradictionNote?: string | null;
+  validationState: ClaimValidationState;
+  validationDetail: string | null;
+  sourced: boolean;
+  derived?: boolean;
+  derivedFrom?: string[];
+  accepted?: boolean;
+  rejectionReason?: string | null;
+  scopeMatch?: unknown;
+  contentHash: string;
+}
+
+export function insertClaims(inputs: InsertClaimInput[]): ResearchClaim[] {
+  if (inputs.length === 0) return [];
+  const db = getDb();
+  const ts = nowIso();
+  const ids: string[] = [];
+  db.transaction(() => {
+    for (const input of inputs) {
+      const id = newId('clm');
+      ids.push(id);
+      db.run(
+        `INSERT INTO research_claims (id, orchestration_id, fragment_id, pass_id, pass_key, claim,
+           source_url, source_title, source_publisher, source_date, evidence_excerpt,
+           evidence_locator, evidence_lane, retrieved_at, confidence, contradiction_state,
+           contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
+           accepted, rejection_reason, scope_match, content_hash, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
+          input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
+          input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane, input.retrievedAt,
+          input.confidence,
+          input.contradictionState ?? 'UNCHALLENGED', input.contradictionNote ?? null,
+          input.validationState, input.validationDetail, fromBool(input.sourced),
+          fromBool(input.derived ?? false), toJson(input.derivedFrom ?? []),
+          fromBool(input.accepted ?? false), input.rejectionReason ?? null,
+          input.scopeMatch === undefined ? null : toJson(input.scopeMatch), input.contentHash, ts],
+      );
+    }
+  });
+  return ids.map((id) => getClaim(id)).filter((claim): claim is ResearchClaim => claim !== null);
+}
+
+export function getClaim(id: string): ResearchClaim | null {
+  const row = getDb().get<ResearchClaimRow>('SELECT * FROM research_claims WHERE id = ?', [id]);
+  return row ? mapClaim(row) : null;
+}
+
+export function listClaimsForFragment(fragmentId: string): ResearchClaim[] {
+  return getDb()
+    .all<ResearchClaimRow>(
+      'SELECT * FROM research_claims WHERE fragment_id = ? ORDER BY created_at, rowid',
+      [fragmentId],
+    )
+    .map(mapClaim);
+}
+
+/**
+ * The claims a synthesis is allowed to see.
+ *
+ * Accepted claims from accepted fragments, and nothing else. A rejected claim
+ * cannot re-enter through a later pass, which is the whole point of deciding
+ * acceptance at the fragment gate rather than at synthesis time.
+ */
+export function acceptedClaims(orchestrationId: string): ResearchClaim[] {
+  return getDb()
+    .all<ResearchClaimRow>(
+      `SELECT c.* FROM research_claims c
+         JOIN research_fragments f ON f.id = c.fragment_id
+        WHERE c.orchestration_id = ? AND c.accepted = 1 AND f.status = 'ACCEPTED'
+        ORDER BY f.fragment_index, c.created_at, c.rowid`,
+      [orchestrationId],
+    )
+    .map(mapClaim);
+}
+
+/**
+ * Resolve a claim's derivation references to real claim ids.
+ *
+ * The worker names its inputs however it likes — an index, a restatement — and
+ * those labels mean nothing to the gate. This is the one place they are turned
+ * into ids, immediately after the claims are stored and before anything is
+ * judged.
+ */
+export function updateClaimDerivedFrom(id: string, ids: string[]): ResearchClaim | null {
+  getDb().run('UPDATE research_claims SET derived_from = ? WHERE id = ?', [toJson(ids), id]);
+  return getClaim(id);
+}
+
+/** The gate's decision on one claim. Written once, when the fragment is judged. */
+export function decideClaim(
+  id: string,
+  input: { accepted: boolean; rejectionReason?: string | null; scopeMatch?: unknown },
+): ResearchClaim | null {
+  getDb().run(
+    'UPDATE research_claims SET accepted = ?, rejection_reason = ?, scope_match = ? WHERE id = ?',
+    [fromBool(input.accepted), input.rejectionReason ?? null,
+      input.scopeMatch === undefined ? null : toJson(input.scopeMatch), id],
+  );
+  return getClaim(id);
+}
+
+export function listClaims(orchestrationId: string): ResearchClaim[] {
+  return getDb()
+    .all<ResearchClaimRow>(
+      'SELECT * FROM research_claims WHERE orchestration_id = ? ORDER BY created_at, rowid',
+      [orchestrationId],
+    )
+    .map(mapClaim);
+}
+
+/**
+ * Record that a later pass challenged a claim.
+ *
+ * Only the contradiction state moves. The claim and its source stay exactly as
+ * first recorded — a ledger that lets an entry be rewritten proves nothing.
+ */
+export function markContradiction(
+  id: string,
+  state: ContradictionState,
+  note: string | null,
+): ResearchClaim | null {
+  getDb().run(
+    'UPDATE research_claims SET contradiction_state = ?, contradiction_note = ? WHERE id = ?',
+    [state, note, id],
+  );
+  return getClaim(id);
+}

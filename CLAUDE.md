@@ -207,6 +207,48 @@ wrong heading.
 - Never send a whole transcript to a provider. `selectRelevantSegments` picks the
   passages that bear on one question inside a character budget.
 
+## 12. Breadth comes from fragments. Correctness is enforced inside each one.
+
+One conversation is not responsible for a broad subject, and one giant prompt is
+not deep research. `services/research/` decomposes an assignment into 5–15
+bounded fragments, researches each as its own job, and lets only the fragments
+that clear their evidence gate contribute anything.
+
+- A fragment declares what it is: one bounded question, the evidence lanes it
+  needs, acceptable and excluded source types, its geography, timeframe,
+  population and definitions, completion criteria, the minimum independent
+  sources, and the fragments it depends on. Those declarations are what the gate
+  is applied against, so a fragment with none of them cannot be judged and is
+  refused at the planning pass.
+- Seven conditions decide whether a claim may be synthesized: a canonical source
+  URL; a source that directly supports it; the exact passage or locator; scope,
+  date, geography and definitions matching the fragment's; contradictions
+  resolved or explicitly retained; the fragment's lanes covered and its
+  independent-source minimum met; and any calculation resting on inputs that are
+  themselves accepted claims. `services/research/gate.ts` applies all seven.
+- Two of those are judgements only a reader of the source can make — whether it
+  supports the claim, and whether the scope lines up — so a separate verification
+  pass answers them per claim and Brain records the answer. Brain's part is to
+  insist the answer exists and to apply it without exception, never to infer it.
+- A rejected claim keeps its rejection reason forever, and a rejected fragment
+  contributes nothing at all. Acceptance is decided once, at the gate, so nothing
+  can re-enter through a later attempt's synthesis.
+- A failed fragment is repaired, narrowed, or re-run with a different search
+  strategy chosen from what actually failed — up to `MAX_FRAGMENT_ATTEMPTS`, and
+  every attempt stays in the table as failure history.
+- The synthesis reads the accepted ledgers only, and the filed report carries the
+  ledger inside it so every sentence resolves to a claim id, a URL and a passage.
+  Then the existing primary / adversarial / judge audit runs on the packet.
+- Every pass is written down before the provider is called and completed after
+  it, with the exact prompt, its sha-256 and the raw reply. That is what makes a
+  crash survivable: `recoverInterruptedResearch` closes what a dead process left
+  open, and a completed pass is never bought twice.
+- The engine's readiness and the worker's readiness are separate answers with
+  separate remedies, and the UI shows both. A provider that returns placeholder
+  content declares `placeholder: true` and is refused for staged research
+  outright — a report of invented citations is the worst thing this platform
+  could produce.
+
 ---
 
 ## Repository map
@@ -247,6 +289,13 @@ server/
       schema.ts         zero-trust validation of model output
       pipeline.ts       orchestration; the only path to a recorded verdict
       evidence.ts       the citation trail from a verdict back to passages
+    research/
+      schema.ts         zero-trust validation of every research pass
+      sources.ts        what makes a claim sourced; structural URL validation
+      gate.ts           the seven evidence conditions, applied per fragment
+      prompts.ts        plan / fragment / verification / synthesis prompts
+      orchestrator.ts   the assignment loop, and the only path to a filed report
+      queue.ts          one job at a time, cancellation, restart recovery
     sources/
       segmenter.ts      conversation- and topic-aware segmentation
       classify.ts       content-based layer proposals, and injection detection

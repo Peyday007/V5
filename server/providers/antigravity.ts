@@ -26,6 +26,7 @@ import type {
   ProviderStatus,
   ResearchRequest,
   ResearchResponse,
+  ResearchRunOptions,
 } from './types.ts';
 import { COPY_PROMPT_FALLBACK } from './types.ts';
 import { antigravityStatus, type AntigravityStatus } from './antigravity/runtime.ts';
@@ -99,15 +100,6 @@ function serialize<T>(work: () => Promise<T>): Promise<T> {
   return next;
 }
 
-export interface RunResearchOptions {
-  /** Cancellation from the UI. */
-  signal?: AbortSignal;
-  /** Called with each chunk of output, for live progress. */
-  onOutput?: (chunk: string) => void;
-  /** The run this job belongs to, so its working directory is traceable. */
-  runId?: string;
-}
-
 export class AntigravityProvider implements AIProvider {
   readonly name = 'antigravity';
 
@@ -147,7 +139,7 @@ export class AntigravityProvider implements AIProvider {
    */
   async runResearch(
     request: ResearchRequest,
-    options: RunResearchOptions = {},
+    options: ResearchRunOptions = {},
   ): Promise<ResearchResponse> {
     // Availability is checked before queueing: making someone wait behind
     // another job only to be told the tool is not installed is the wrong order.
@@ -157,7 +149,7 @@ export class AntigravityProvider implements AIProvider {
 
   async #runOne(
     request: ResearchRequest,
-    options: RunResearchOptions,
+    options: ResearchRunOptions,
   ): Promise<ResearchResponse> {
     const { status, command } = this.#require();
     const probe = antigravityStatus();

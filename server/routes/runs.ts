@@ -35,6 +35,11 @@ import { getProvider } from '../providers/index.ts';
 import { parseAuditJson, recordAudit } from '../services/auditEngine.ts';
 import { checkRunDependencies, setRunDependencies } from '../services/dependencies.ts';
 import { importFile } from '../services/importer.ts';
+import {
+  documentTypeForRun,
+  registerRunArtifact,
+  targetVersionForRun,
+} from '../services/runArtifacts.ts';
 import { buildPlan } from '../services/planner.ts';
 import { compilePrompt, defaultTargetVersion } from '../services/promptCompiler.ts';
 import { createRedoRun } from '../services/redoEngine.ts';
@@ -66,30 +71,6 @@ import {
 
 export const runsRouter = Router();
 
-/** Statuses from which "the artifact came back" means the run is finished. */
-const PENDING_RUN_STATUSES = new Set<RunStatus>(['PLANNED', 'READY', 'BLOCKED', 'RUNNING']);
-
-/** The kind of artifact each run type produces. */
-const DOCUMENT_TYPE_BY_RUN_TYPE: Record<RunType, DocumentType> = {
-  FOUNDATION: 'FOUNDATION',
-  EXPANSION: 'EXPANSION',
-  PATCH: 'PATCH',
-  AUDIT: 'AUDIT',
-  SYNTHESIS: 'SYNTHESIS',
-  REDO: 'EXPANSION',
-  CROSS_LAYER_AUDIT: 'AUDIT',
-};
-
-/** A redo produces whatever its original attempt was trying to produce. */
-function documentTypeForRun(run: ResearchRun): DocumentType {
-  let current: ResearchRun | null = run;
-  for (let hops = 0; current !== null && hops < 20; hops += 1) {
-    if (current.runType !== 'REDO') return DOCUMENT_TYPE_BY_RUN_TYPE[current.runType];
-    current = current.parentRunId ? getRun(current.parentRunId) : null;
-  }
-  return DOCUMENT_TYPE_BY_RUN_TYPE.REDO;
-}
-
 function parseVersion(value: unknown, field: string): string | undefined {
   const raw = optionalString(value, field);
   if (raw === undefined) return undefined;
@@ -107,12 +88,6 @@ function auditsForRun(run: ResearchRun): Audit[] {
 }
 
 /** The version this run is producing, falling back to what its type would target. */
-function targetVersionForRun(run: ResearchRun, layerId: string, projectId: string): string {
-  const declared = run.targetVersion?.trim();
-  if (declared && isValidVersion(declared)) return normalizeVersion(declared);
-  return normalizeVersion(defaultTargetVersion(projectId, layerId, run.runType));
-}
-
 // ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
@@ -470,53 +445,20 @@ runsRouter.post(
       throw badRequest('The uploaded file is empty, so there is nothing to register.');
     }
 
-    const version = targetVersionForRun(run, layer.id, project.id);
-    const documentType = documentTypeForRun(run);
-
-    // The importer owns the filename (section 10): whatever the model called its
-    // download, the stored file is named by the platform.
-    const imported = importFile({
-      projectId: project.id,
+    // The same filing path staged research uses: the platform owns the filename
+    // (invariant 4), and one registration completes the run either way.
+    const filed = registerRunArtifact({
+      run,
+      layer,
+      project,
       originalFilename: file.originalname,
       contents: file.buffer,
-      layerId: layer.id,
-      version,
-      documentType,
-      notes: `Returned by run ${run.id}.`,
     });
-    if (!imported.documentId) throw conflict(imported.message, imported);
-    const document =
-      updateDocument(imported.documentId, { sourceRunId: run.id, status: 'COMPLETE' }) ??
-      requireDocument(imported.documentId);
+    if (!filed.imported.documentId) throw conflict(filed.imported.message, filed.imported);
 
-    const finishes = PENDING_RUN_STATUSES.has(run.status);
-    const completedAt = nowIso();
-    updateRun(run.id, {
-      targetDocumentId: document.id,
-      status: finishes ? 'COMPLETE' : undefined,
-      completedAt: finishes ? completedAt : undefined,
-    });
-    if (finishes) {
-      recordEvent({
-        projectId: project.id,
-        layerId: layer.id,
-        entityType: 'RUN',
-        entityId: run.id,
-        eventType: 'RUN_COMPLETED',
-        payload: {
-          runType: run.runType,
-          documentId: document.id,
-          canonicalName: document.canonicalName,
-          storedPath: imported.storedPath,
-          completedAt,
-        },
-      });
-    }
-
-    recomputeProject(project.id);
     return {
       run: requireRun(run.id),
-      document: getDocument(document.id),
+      document: getDocument(filed.imported.documentId),
       plan: buildPlan(project.id),
     };
   }),

@@ -164,6 +164,9 @@ export class MockProvider implements AIProvider {
         'the same input always produces the same output.',
       model: MOCK_MODEL,
       capabilities: { chat: true, research: true, audit: true },
+      // Everything it returns is a placeholder, and it says so rather than
+      // letting a caller mistake its output for work that was actually done.
+      placeholder: true,
     };
   }
 

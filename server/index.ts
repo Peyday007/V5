@@ -36,6 +36,7 @@ import { recomputeProject } from './services/stateEngine.ts';
 import { recoverInterruptedExtractions } from './services/documents/extraction.ts';
 import { ocrStatus } from './services/documents/ocr.ts';
 import { queueUnreadDocuments } from './services/documents/queue.ts';
+import { recoverInterruptedResearch } from './services/research/queue.ts';
 
 /**
  * `node:sqlite` prints an experimental-feature warning the moment it is loaded.
@@ -267,6 +268,18 @@ function main(): void {
     console.log(
       `  ${interrupted} extraction run(s) were interrupted by the last shutdown and are ` +
         'marked INTERRUPTED. Reprocess those documents to read them.',
+    );
+  }
+
+  // Same rule for research: a job that says RESEARCHING with no process behind
+  // it is a lie, so it is closed as INTERRUPTED with its completed passes and
+  // accepted fragments intact. Nothing restarts on its own — research spends the
+  // user's quota, so resuming is their decision.
+  const interruptedResearch = recoverInterruptedResearch();
+  if (interruptedResearch > 0) {
+    console.log(
+      `  ${interruptedResearch} research run(s) were interrupted by the last shutdown and are ` +
+        'marked INTERRUPTED. Resume them to continue from the last completed pass.',
     );
   }
 

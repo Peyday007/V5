@@ -600,6 +600,52 @@ samp {
   background: rgba(139, 152, 166, 0.1);
 }
 
+/* research passes, fragment states and gate verdicts */
+.badge--sourced,
+.badge--sufficient,
+.badge--pass {
+  color: var(--green);
+  border-color: rgba(63, 185, 80, 0.5);
+  background: rgba(63, 185, 80, 0.14);
+}
+.badge--plan,
+.badge--broad_scan,
+.badge--targeted,
+.badge--verification,
+.badge--synthesis,
+.badge--planning,
+.badge--researching,
+.badge--synthesizing {
+  color: var(--teal);
+  border-color: rgba(43, 179, 163, 0.5);
+  background: rgba(43, 179, 163, 0.14);
+}
+.badge--validating,
+.badge--awaiting_repair,
+.badge--interrupted,
+.badge--needs_human,
+.badge--insufficient,
+.badge--contested {
+  color: var(--amber);
+  border-color: rgba(214, 161, 42, 0.5);
+  background: rgba(214, 161, 42, 0.14);
+}
+.badge--rejected,
+.badge--refuted,
+.badge--cancelled,
+.badge--fail {
+  color: var(--red);
+  border-color: rgba(248, 81, 73, 0.5);
+  background: rgba(248, 81, 73, 0.14);
+}
+.badge--queued,
+.badge--unchallenged,
+.badge--supported {
+  color: var(--grey);
+  border-color: rgba(139, 152, 166, 0.4);
+  background: rgba(139, 152, 166, 0.12);
+}
+
 /* segment types and link decisions in the project-source review */
 .badge--accepted,
 .badge--completed_artifact,

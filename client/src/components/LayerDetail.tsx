@@ -28,9 +28,10 @@ import { AuditPanel } from './AuditPanel.tsx';
 import { DynamicAuditPanel } from './DynamicAuditPanel.tsx';
 import { DocumentCard } from './DocumentCard.tsx';
 import { PromptPanel } from './PromptPanel.tsx';
+import { ResearchPanel } from './ResearchPanel.tsx';
 import { RunCard } from './RunCard.tsx';
 
-const TABS = ['DOCUMENTS', 'RUNS', 'AUDITS', 'DEPENDENCIES', 'HISTORY', 'PROMPT'] as const;
+const TABS = ['DOCUMENTS', 'RUNS', 'RESEARCH', 'AUDITS', 'DEPENDENCIES', 'HISTORY', 'PROMPT'] as const;
 type Tab = (typeof TABS)[number];
 
 /** A run in one of these states is still the thing the user is meant to run. */
@@ -672,6 +673,8 @@ export function LayerDetail(props: {
       {tab === 'HISTORY' ? (
         <HistoryTable events={events} />
       ) : null}
+
+      {tab === 'RESEARCH' ? <ResearchPanel layer={layer} onChanged={childChanged} /> : null}
 
       {tab === 'PROMPT' ? <PromptPanel layerId={layer.id} onChanged={childChanged} /> : null}
 
