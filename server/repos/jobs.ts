@@ -1,0 +1,364 @@
+/**
+ * Data access for job bundles, quota pauses and the provider connection.
+ *
+ * A job's membership is a separate table on purpose: a bundled fragment keeps
+ * its own claims, its own verdict and its own repair history, and only its
+ * execution is shared. Reading a job tells you which fragments rode along; it
+ * never merges what they found.
+ */
+import { getDb } from '../db/database.ts';
+import type {
+  JobKind,
+  JobStatus,
+  ProviderConnection,
+  ProviderConnectionRow,
+  ResearchJob,
+  ResearchJobRow,
+} from '../domain/types.ts';
+import { buildUpdate, fromBool, newId, nowIso, parseJson, toBool, toJson } from './util.ts';
+
+function mapJob(row: ResearchJobRow): ResearchJob {
+  return {
+    id: row.id,
+    orchestrationId: row.orchestration_id,
+    projectId: row.project_id,
+    rationale: row.rationale,
+    provider: row.provider,
+    model: row.model,
+    jobKind: row.job_kind as JobKind,
+    status: row.status as JobStatus,
+    priority: Number(row.priority),
+    externalJobId: row.external_job_id,
+    promptSha256: row.prompt_sha256,
+    promptBytes: row.prompt_bytes === null ? null : Number(row.prompt_bytes),
+    outputBytes: row.output_bytes === null ? null : Number(row.output_bytes),
+    durationMs: row.duration_ms === null ? null : Number(row.duration_ms),
+    failureReason: row.failure_reason,
+    queuedAt: row.queued_at,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    fragmentIds: getDb()
+      .all<{ fragment_id: string }>(
+        'SELECT fragment_id FROM research_job_fragments WHERE job_id = ? ORDER BY ordinal',
+        [row.id],
+      )
+      .map((entry) => entry.fragment_id),
+  };
+}
+
+export interface CreateJobInput {
+  orchestrationId: string;
+  projectId: string;
+  rationale: string;
+  provider: string;
+  model?: string | null;
+  jobKind?: JobKind;
+  priority?: number;
+  fragmentIds: string[];
+}
+
+export function createJob(input: CreateJobInput): ResearchJob {
+  const db = getDb();
+  const ts = nowIso();
+  const id = newId('job');
+  db.transaction(() => {
+    db.run(
+      `INSERT INTO research_jobs (id, orchestration_id, project_id, rationale, provider, model,
+         job_kind, status, priority, queued_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?)`,
+      [id, input.orchestrationId, input.projectId, input.rationale, input.provider,
+        input.model ?? null, input.jobKind ?? 'INVESTIGATION', input.priority ?? 5, ts, ts, ts],
+    );
+    for (const [ordinal, fragmentId] of input.fragmentIds.entries()) {
+      db.run(
+        `INSERT INTO research_job_fragments (job_id, fragment_id, ordinal) VALUES (?, ?, ?)`,
+        [id, fragmentId, ordinal],
+      );
+    }
+  });
+  return getJob(id)!;
+}
+
+export function getJob(id: string): ResearchJob | null {
+  const row = getDb().get<ResearchJobRow>('SELECT * FROM research_jobs WHERE id = ?', [id]);
+  return row ? mapJob(row) : null;
+}
+
+export function listJobs(orchestrationId: string): ResearchJob[] {
+  return getDb()
+    .all<ResearchJobRow>(
+      'SELECT * FROM research_jobs WHERE orchestration_id = ? ORDER BY priority, queued_at, rowid',
+      [orchestrationId],
+    )
+    .map(mapJob);
+}
+
+/** The next job to run: highest priority, then oldest. */
+export function nextQueuedJob(orchestrationId: string): ResearchJob | null {
+  const row = getDb().get<ResearchJobRow>(
+    `SELECT * FROM research_jobs WHERE orchestration_id = ? AND status = 'QUEUED'
+      ORDER BY priority, queued_at, rowid LIMIT 1`,
+    [orchestrationId],
+  );
+  return row ? mapJob(row) : null;
+}
+
+export function jobsForFragment(fragmentId: string): ResearchJob[] {
+  return getDb()
+    .all<ResearchJobRow>(
+      `SELECT j.* FROM research_jobs j
+         JOIN research_job_fragments f ON f.job_id = j.id
+        WHERE f.fragment_id = ? ORDER BY j.queued_at`,
+      [fragmentId],
+    )
+    .map(mapJob);
+}
+
+export interface JobFragmentOutcome {
+  fragmentId: string;
+  ordinal: number;
+  outcome: string | null;
+  detail: string | null;
+}
+
+/**
+ * What each fragment in a job got out of it.
+ *
+ * Per fragment, always: a job is one execution and never one verdict, so a
+ * bundle where three fragments cleared their gate and one did not reads as
+ * exactly that rather than as a failed job.
+ */
+export function jobFragmentOutcomes(jobId: string): JobFragmentOutcome[] {
+  return getDb()
+    .all<{ fragment_id: string; ordinal: number; outcome: string | null; detail: string | null }>(
+      `SELECT fragment_id, ordinal, outcome, detail FROM research_job_fragments
+        WHERE job_id = ? ORDER BY ordinal`,
+      [jobId],
+    )
+    .map((row) => ({
+      fragmentId: row.fragment_id,
+      ordinal: Number(row.ordinal),
+      outcome: row.outcome,
+      detail: row.detail,
+    }));
+}
+
+export function updateJob(
+  id: string,
+  patch: {
+    status?: JobStatus;
+    externalJobId?: string | null;
+    promptSha256?: string | null;
+    promptBytes?: number | null;
+    outputBytes?: number | null;
+    durationMs?: number | null;
+    failureReason?: string | null;
+    model?: string | null;
+    startedAt?: string | null;
+    completedAt?: string | null;
+  },
+): ResearchJob | null {
+  const { clause, values } = buildUpdate({
+    status: patch.status,
+    external_job_id: patch.externalJobId,
+    prompt_sha256: patch.promptSha256,
+    prompt_bytes: patch.promptBytes,
+    output_bytes: patch.outputBytes,
+    duration_ms: patch.durationMs,
+    failure_reason: patch.failureReason,
+    model: patch.model,
+    started_at: patch.startedAt,
+    completed_at: patch.completedAt,
+  });
+  if (!clause) return getJob(id);
+  getDb().run(`UPDATE research_jobs SET ${clause}, updated_at = ? WHERE id = ?`, [
+    ...(values as never[]),
+    nowIso(),
+    id,
+  ]);
+  return getJob(id);
+}
+
+/** What one fragment got out of a shared job. Separate per fragment, always. */
+export function recordFragmentOutcome(
+  jobId: string,
+  fragmentId: string,
+  outcome: string,
+  detail: string | null,
+): void {
+  getDb().run(
+    'UPDATE research_job_fragments SET outcome = ?, detail = ? WHERE job_id = ? AND fragment_id = ?',
+    [outcome, detail, jobId, fragmentId],
+  );
+}
+
+/** Cancel every job still waiting; used when the assignment is cancelled. */
+export function cancelQueuedJobs(orchestrationId: string, reason: string): number {
+  const pending = getDb().all<{ id: string }>(
+    "SELECT id FROM research_jobs WHERE orchestration_id = ? AND status IN ('QUEUED','RUNNING')",
+    [orchestrationId],
+  );
+  if (pending.length === 0) return 0;
+  getDb().run(
+    `UPDATE research_jobs SET status = 'CANCELLED', failure_reason = ?, updated_at = ?
+      WHERE orchestration_id = ? AND status IN ('QUEUED','RUNNING')`,
+    [reason, nowIso(), orchestrationId],
+  );
+  return pending.length;
+}
+
+// ---------------------------------------------------------------------------
+// Quota
+// ---------------------------------------------------------------------------
+
+export function recordQuotaPause(input: {
+  orchestrationId: string | null;
+  provider: string;
+  quotaState: string;
+  detail: string;
+  jobsCompleted: number;
+  jobsPending: number;
+}): string {
+  const id = newId('qta');
+  const ts = nowIso();
+  getDb().run(
+    `INSERT INTO quota_pauses (id, orchestration_id, provider, quota_state, detail,
+       jobs_completed, jobs_pending, paused_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, input.orchestrationId, input.provider, input.quotaState, input.detail,
+      input.jobsCompleted, input.jobsPending, ts, ts],
+  );
+  return id;
+}
+
+export function resolveQuotaPause(id: string): void {
+  getDb().run('UPDATE quota_pauses SET resumed_at = ? WHERE id = ?', [nowIso(), id]);
+}
+
+export function openQuotaPause(orchestrationId: string): { id: string; detail: string } | null {
+  const row = getDb().get<{ id: string; detail: string }>(
+    'SELECT id, detail FROM quota_pauses WHERE orchestration_id = ? AND resumed_at IS NULL ORDER BY paused_at DESC LIMIT 1',
+    [orchestrationId],
+  );
+  return row ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Provider connection
+// ---------------------------------------------------------------------------
+
+function mapConnection(row: ProviderConnectionRow): ProviderConnection {
+  return {
+    provider: row.provider,
+    installed: toBool(row.installed),
+    authenticated: toBool(row.authenticated),
+    automationReady: toBool(row.automation_ready),
+    executablePath: row.executable_path,
+    version: row.version,
+    model: row.model,
+    quotaState: row.quota_state,
+    message: row.message,
+    diagnostics: parseJson<unknown>(row.diagnostics, null),
+    lastCheckedAt: row.last_checked_at,
+    lastSuccessAt: row.last_success_at,
+    lastFailureAt: row.last_failure_at,
+    lastFailureReason: row.last_failure_reason,
+    paidOverageEnabled: toBool(row.paid_overage_enabled),
+    paidOverageNote: row.paid_overage_note,
+    paidOverageSetAt: row.paid_overage_set_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function getConnection(provider: string): ProviderConnection | null {
+  const row = getDb().get<ProviderConnectionRow>(
+    'SELECT * FROM provider_connections WHERE provider = ?',
+    [provider],
+  );
+  return row ? mapConnection(row) : null;
+}
+
+export interface SaveConnectionInput {
+  provider: string;
+  installed: boolean;
+  authenticated: boolean;
+  automationReady: boolean;
+  executablePath?: string | null;
+  version?: string | null;
+  model?: string | null;
+  quotaState?: string | null;
+  message?: string | null;
+  diagnostics?: unknown;
+  succeeded?: boolean;
+  failureReason?: string | null;
+}
+
+/** Record a connection test. Success and failure timestamps are both kept. */
+export function saveConnection(input: SaveConnectionInput): ProviderConnection {
+  const db = getDb();
+  const ts = nowIso();
+  const existing = getConnection(input.provider);
+
+  if (!existing) {
+    db.run(
+      `INSERT INTO provider_connections (provider, installed, authenticated, automation_ready,
+         executable_path, version, model, quota_state, message, diagnostics, last_checked_at,
+         last_success_at, last_failure_at, last_failure_reason, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [input.provider, fromBool(input.installed), fromBool(input.authenticated),
+        fromBool(input.automationReady), input.executablePath ?? null, input.version ?? null,
+        input.model ?? null, input.quotaState ?? null, input.message ?? null,
+        input.diagnostics === undefined ? null : toJson(input.diagnostics), ts,
+        input.succeeded ? ts : null, input.succeeded === false ? ts : null,
+        input.failureReason ?? null, ts, ts],
+    );
+    return getConnection(input.provider)!;
+  }
+
+  db.run(
+    `UPDATE provider_connections SET installed = ?, authenticated = ?, automation_ready = ?,
+       executable_path = ?, version = ?, model = ?, quota_state = ?, message = ?, diagnostics = ?,
+       last_checked_at = ?, last_success_at = ?, last_failure_at = ?, last_failure_reason = ?,
+       updated_at = ? WHERE provider = ?`,
+    [fromBool(input.installed), fromBool(input.authenticated), fromBool(input.automationReady),
+      input.executablePath ?? null, input.version ?? null, input.model ?? null,
+      input.quotaState ?? null, input.message ?? null,
+      input.diagnostics === undefined ? null : toJson(input.diagnostics), ts,
+      input.succeeded ? ts : existing.lastSuccessAt,
+      input.succeeded === false ? ts : existing.lastFailureAt,
+      input.succeeded === false ? (input.failureReason ?? null) : existing.lastFailureReason,
+      ts, input.provider],
+  );
+  return getConnection(input.provider)!;
+}
+
+/**
+ * Turn paid overages on or off.
+ *
+ * Always an explicit act, always recorded with when and why. Nothing else in the
+ * platform may set this.
+ */
+export function setPaidOverage(
+  provider: string,
+  enabled: boolean,
+  note: string | null,
+): ProviderConnection | null {
+  const existing = getConnection(provider);
+  if (!existing) {
+    saveConnection({
+      provider,
+      installed: false,
+      authenticated: false,
+      automationReady: false,
+    });
+  }
+  getDb().run(
+    `UPDATE provider_connections SET paid_overage_enabled = ?, paid_overage_note = ?,
+       paid_overage_set_at = ?, updated_at = ? WHERE provider = ?`,
+    [fromBool(enabled), note, nowIso(), nowIso(), provider],
+  );
+  return getConnection(provider);
+}

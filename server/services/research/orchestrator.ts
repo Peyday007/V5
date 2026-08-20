@@ -30,6 +30,7 @@ import type {
   ClaimType,
   Layer,
   Project,
+  ResearchJob,
   ResearchClaim,
   ResearchFragment,
   ResearchOrchestration,
@@ -71,16 +72,26 @@ import { isAuditable } from '../documents/quality.ts';
 import { registerRunArtifact, targetVersionForRun } from '../runArtifacts.ts';
 import { selectRelevantSegments } from '../sources/ingest.ts';
 import { applyGate, fragmentPasses, type GateResult } from './gate.ts';
+import { bundleFragments, modelFor, type Bundle } from './bundling.ts';
+import {
+  cancelQueuedJobs,
+  createJob,
+  recordFragmentOutcome,
+  updateJob,
+} from '../../repos/jobs.ts';
 import { dependenciesSettled, planDependencies, shouldSplit, splitFragment } from './splitting.ts';
 import {
+  buildBundledResearchPrompt,
   buildFragmentResearchPrompt,
+  type RepairContext,
   buildGoalPlanPrompt,
   buildSynthesisPrompt,
   buildVerificationPrompt,
 } from './prompts.ts';
 import {
+  parseBundledResearchPass,
   parseGoalPlan,
-  parseResearchPass,
+  type ResearchPassOutput,
   parseSynthesisPass,
   parseVerificationPass,
   type ParseResult,
@@ -572,61 +583,205 @@ function listAttempts(orchestrationId: string, fragmentKey: string): ResearchFra
   );
 }
 
-async function researchFragment(input: {
+/**
+ * Run one job and judge every fragment in it separately.
+ *
+ * The execution is shared; nothing else is. Each fragment's claims are stored
+ * against that fragment, verified against that fragment's brief, and gated by
+ * that fragment's standard — so one fragment failing inside a successful job is
+ * an ordinary outcome rather than a contamination.
+ */
+async function runBundle(input: {
   orchestration: ResearchOrchestration;
   project: Project;
   layer: Layer;
+  bundle: Bundle;
+  job: ResearchJob;
+  provider: AIProvider;
+  options: RunOrchestrationOptions;
+}): Promise<Map<string, GateResult>> {
+  const { orchestration, bundle, job, provider, options } = input;
+  const results = new Map<string, GateResult>();
+  const startedAt = Date.now();
+
+  for (const fragment of bundle.fragments) {
+    updateFragment(fragment.id, { status: 'RUNNING', startedAt: new Date().toISOString() });
+  }
+  updateJob(job.id, { status: 'RUNNING', startedAt: new Date().toISOString() });
+
+  const bundled = bundle.fragments.length > 1;
+  const passKey: ResearchPassKey = bundle.fragments[0]!.attempt > 1 ? 'TARGETED' : 'BROAD_SCAN';
+  const dependencies = bundle.fragments.flatMap((fragment) =>
+    dependencyClaims(orchestration.id, fragment),
+  );
+
+  // A repair carries its own failure history whether it runs alone or shares a
+  // job — the whole point of a repair is that the worker is told what failed.
+  const repairs = new Map<string, RepairContext>();
+  for (const fragment of bundle.fragments) {
+    if (fragment.attempt <= 1) continue;
+    repairs.set(fragment.fragmentKey, {
+      reason: fragment.repairReason ?? 'The previous attempt did not clear the evidence gate.',
+      strategy: fragment.repairStrategy ?? 'Search differently and narrow the question.',
+      rejected: rejectedHistory(orchestration.id, fragment.fragmentKey),
+    });
+  }
+
+  const prompt = bundled
+    ? buildBundledResearchPrompt({
+        project: input.project,
+        layer: input.layer,
+        fragments: bundle.fragments,
+        dependencyClaims: dependencies,
+        rationale: bundle.rationale,
+        repairs,
+      })
+    : buildFragmentResearchPrompt({
+        project: input.project,
+        layer: input.layer,
+        fragment: bundle.fragments[0]!,
+        dependencyClaims: dependencies,
+        repair: repairs.get(bundle.fragments[0]!.fragmentKey) ?? null,
+      });
+
+  const keys = bundle.fragments.map((fragment) => fragment.fragmentKey);
+
+  let research;
+  try {
+    research = await callProvider(
+      {
+        orchestration,
+        fragmentId: bundled ? null : bundle.fragments[0]!.id,
+        passKey,
+        ordinal: 2,
+        attempt: bundle.fragments[0]!.attempt,
+        prompt,
+        provider,
+        options,
+        expectedTitle: `${orchestration.title} — ${keys.join(', ')}`,
+        expectedFilename: `${keys[0]}.json`,
+      },
+      (text) => parseBundledResearchPass(text, keys),
+    );
+  } catch (error) {
+    if (error instanceof ResearchCancelled) {
+      updateJob(job.id, { status: 'CANCELLED', failureReason: error.message });
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    updateJob(job.id, {
+      status: 'FAILED',
+      failureReason: message,
+      completedAt: new Date().toISOString(),
+      durationMs: Date.now() - startedAt,
+    });
+    for (const fragment of bundle.fragments) {
+      recordFragmentOutcome(job.id, fragment.id, 'FAILED', message);
+      updateFragment(fragment.id, {
+        status: 'BLOCKED',
+        blockedReason: message,
+        completedAt: new Date().toISOString(),
+      });
+      results.set(fragment.id, failedGate(message));
+    }
+    return results;
+  }
+
+  updateJob(job.id, {
+    status: 'COMPLETE',
+    externalJobId: research.passId,
+    promptBytes: Buffer.byteLength(prompt),
+    outputBytes: Buffer.byteLength(research.raw),
+    durationMs: Date.now() - startedAt,
+    completedAt: new Date().toISOString(),
+  });
+
+  for (const fragment of bundle.fragments) {
+    const output = research.value.byFragment.get(fragment.fragmentKey) ?? {
+      claims: [],
+      searchQueries: [],
+      unresolved: [],
+      notes: '',
+    };
+    try {
+      const gate = await judgeFragment({
+        orchestration,
+        fragment,
+        job,
+        output,
+        passId: research.passId,
+        passKey,
+        provider,
+        options,
+      });
+      results.set(fragment.id, gate);
+      recordFragmentOutcome(
+        job.id,
+        fragment.id,
+        fragmentPasses(gate) ? 'ACCEPTED' : 'BLOCKED',
+        gate.reasons.join(' ') || null,
+      );
+    } catch (error) {
+      if (error instanceof ResearchCancelled) throw error;
+      // One fragment failing inside a shared job is that fragment's problem.
+      const message = error instanceof Error ? error.message : String(error);
+      updateFragment(fragment.id, {
+        status: 'BLOCKED',
+        blockedReason: message,
+        completedAt: new Date().toISOString(),
+      });
+      recordFragmentOutcome(job.id, fragment.id, 'FAILED', message);
+      results.set(fragment.id, failedGate(message));
+    }
+  }
+
+  return results;
+}
+
+function failedGate(message: string): GateResult {
+  return {
+    integrity: 'FAIL',
+    sufficiency: 'INSUFFICIENT',
+    claims: [],
+    acceptedClaims: 0,
+    rejectedClaims: 0,
+    independentSources: 0,
+    coverage: [],
+    duplicateSourceGroups: [],
+    failedConditions: [],
+    reasons: [message],
+    unresolvedGaps: [],
+  };
+}
+
+/**
+ * Store one fragment's claims, verify them, and apply its gate.
+ *
+ * Verification is per fragment even inside a bundle: the verifier is shown one
+ * fragment's brief and one fragment's ledger, because asking it to judge four
+ * ledgers at once is how claims get attributed to the wrong question.
+ */
+async function judgeFragment(input: {
+  orchestration: ResearchOrchestration;
   fragment: ResearchFragment;
+  job: ResearchJob;
+  output: ResearchPassOutput;
+  passId: string;
+  passKey: ResearchPassKey;
   provider: AIProvider;
   options: RunOrchestrationOptions;
 }): Promise<GateResult> {
-  const { orchestration, fragment, provider, options } = input;
-  const isRepair = fragment.attempt > 1;
-  const passKey: ResearchPassKey = isRepair ? 'TARGETED' : 'BROAD_SCAN';
+  const { orchestration, fragment, job, output, provider, options } = input;
 
-  updateFragment(fragment.id, { status: 'RUNNING', startedAt: new Date().toISOString() });
-
-  const prompt = buildFragmentResearchPrompt({
-    project: input.project,
-    layer: input.layer,
-    fragment,
-    dependencyClaims: dependencyClaims(orchestration.id, fragment),
-    repair: isRepair
-      ? {
-          reason: fragment.repairReason ?? 'The previous attempt did not clear the evidence gate.',
-          strategy: fragment.repairStrategy ?? 'Search differently and narrow the question.',
-          rejected: rejectedHistory(orchestration.id, fragment.fragmentKey),
-        }
-      : null,
-  });
-
-  const research = await callProvider(
-    {
-      orchestration,
-      fragmentId: fragment.id,
-      passKey,
-      ordinal: 2,
-      attempt: fragment.attempt,
-      prompt,
-      provider,
-      options,
-      expectedTitle: `${orchestration.title} — ${fragment.fragmentKey}`,
-      expectedFilename: `${fragment.fragmentKey}.json`,
-    },
-    parseResearchPass,
-  );
-
-  // Validate every source before anything is stored: what makes a claim
-  // sourced is decided by the same rule every time.
   const stored = insertClaims(
-    research.value.claims.map((claim) => {
+    output.claims.map((claim) => {
       const validated = validateClaim(claim);
       const claimType = (claim.claimType ?? 'SOURCED_FACT') as ClaimType;
       return {
         orchestrationId: orchestration.id,
         fragmentId: fragment.id,
-        passId: research.passId,
-        passKey,
+        passId: input.passId,
+        passKey: input.passKey,
         claim: claim.claim,
         claimType,
         sourceGroup: independenceGroup({
@@ -640,6 +795,7 @@ async function researchFragment(input: {
         population: fragment.population,
         definition: fragment.definitions,
         requirementIds: fragment.requirementIds,
+        jobId: job.id,
         sourceUrl: validated.normalizedUrl ?? claim.sourceUrl ?? null,
         sourceTitle: claim.sourceTitle ?? null,
         sourcePublisher: claim.sourcePublisher ?? null,
@@ -659,22 +815,19 @@ async function researchFragment(input: {
     }),
   );
 
-  // `derivedFrom` arrives as indexes or labels from the model; resolve them to
-  // real claim ids so the gate can check them. Anything unresolvable stays
-  // unresolvable, which is itself a rejection.
-  const byIndex = new Map<string, string>();
+  // Resolve derivation references from whatever the worker called them to real
+  // claim ids, so the gate can check that a calculation's inputs were accepted.
+  const byRef = new Map<string, string>();
   stored.forEach((claim, index) => {
-    byIndex.set(String(index), claim.id);
-    byIndex.set(claim.claim.trim().toLowerCase().slice(0, 80), claim.id);
+    byRef.set(String(index), claim.id);
+    byRef.set(claim.claim.trim().toLowerCase().slice(0, 80), claim.id);
   });
   for (const [index, claim] of stored.entries()) {
-    const source = research.value.claims[index];
+    const source = output.claims[index];
     if (!source || !source.derived || source.derivedFrom.length === 0) continue;
     const resolved = source.derivedFrom
-      .map((ref) => byIndex.get(ref.trim().toLowerCase().slice(0, 80)) ?? byIndex.get(ref.trim()))
+      .map((ref) => byRef.get(ref.trim().toLowerCase().slice(0, 80)) ?? byRef.get(ref.trim()))
       .filter((id): id is string => Boolean(id));
-    // Only the references that resolved are kept. One that did not is exactly
-    // the unsupported input the gate rejects the calculation for.
     updateClaimDerivedFrom(claim.id, resolved);
   }
 
@@ -697,8 +850,6 @@ async function researchFragment(input: {
     parseVerificationPass,
   );
 
-  // Record what verification did to each claim before judging: a contradiction
-  // is part of the ledger, not a transient input to a decision.
   const verdicts = new Map<
     string,
     { supportsClaim: boolean; scopeMatch: (typeof verification.value.claimVerdicts)[number]['scopeMatch']; note: string }
@@ -749,15 +900,31 @@ async function researchFragment(input: {
   return gate;
 }
 
-
 /**
- * The next fragment that can actually start.
+ * Every fragment that could start now, in dependency then priority order.
  *
- * A fragment waits for the fragments it declared a dependency on. One whose
- * dependency was rejected outright is not blocked forever — it runs without it,
- * because "the thing this needed could not be established" is a finding the
- * fragment should be allowed to report.
+ * The queue takes a batch rather than one at a time so compatible fragments can
+ * share a job. Order still comes from the dependency graph, so bundling never
+ * moves a fragment ahead of its own premise.
  */
+function runnableBatch(orchestrationId: string): ResearchFragment[] {
+  const fragments = currentFragments(orchestrationId);
+  const plan = planDependencies(fragments);
+  const byKey = new Map(fragments.map((fragment) => [fragment.fragmentKey, fragment]));
+
+  const ready: ResearchFragment[] = [];
+  for (const key of plan.order) {
+    const fragment = byKey.get(key);
+    if (!fragment) continue;
+    if (fragment.status !== 'QUEUED' && fragment.status !== 'PLANNED') continue;
+    if (dependenciesSettled(fragment, fragments)) ready.push(fragment);
+  }
+  if (ready.length > 0) return ready;
+
+  const single = nextRunnable(orchestrationId);
+  return single ? [single] : [];
+}
+
 function nextRunnable(orchestrationId: string): ResearchFragment | null {
   const fragments = currentFragments(orchestrationId);
   const plan = planDependencies(fragments);
@@ -924,8 +1091,8 @@ export async function runOrchestration(
 
     for (;;) {
       checkCancelled(loaded.id, options.signal);
-      const fragment = nextRunnable(loaded.id);
-      if (!fragment) break;
+      const ready = runnableBatch(loaded.id);
+      if (ready.length === 0) break;
       guard += 1;
       if (guard > ceiling) {
         throw new ResearchFailure(
@@ -935,64 +1102,63 @@ export async function runOrchestration(
         );
       }
 
+      // Compatible fragments ride in one job: same scope, same source types, no
+      // dependency between them. Their claims still come back separately.
+      const [bundle] = bundleFragments(ready);
+      if (!bundle) break;
+
+      const job = createJob({
+        orchestrationId: loaded.id,
+        projectId: project.id,
+        rationale: bundle.rationale,
+        provider: provider.name,
+        model: modelFor(bundle.jobKind, {
+          light: process.env['BRAIN_ANTIGRAVITY_LIGHT_MODEL'] ?? null,
+          strong: loaded.model,
+        }),
+        jobKind: bundle.jobKind,
+        priority: bundle.priority,
+        fragmentIds: bundle.fragments.map((fragment) => fragment.id),
+      });
+
       const settledCount = currentFragments(loaded.id).filter((entry) =>
         ['ACCEPTED', 'REJECTED', 'NEEDS_HUMAN'].includes(entry.status),
       ).length;
       options.onProgress?.({
         orchestrationId: loaded.id,
         phase: 'RESEARCHING',
-        passKey: fragment.attempt > 1 ? 'TARGETED' : 'BROAD_SCAN',
-        fragmentKey: fragment.fragmentKey,
+        passKey: bundle.fragments[0]!.attempt > 1 ? 'TARGETED' : 'BROAD_SCAN',
+        fragmentKey: bundle.fragments.map((fragment) => fragment.fragmentKey).join(', '),
         index: settledCount,
         total: currentFragments(loaded.id).length,
         message:
-          fragment.attempt > 1
-            ? `Repairing ${fragment.fragmentKey} (attempt ${fragment.attempt})`
-            : `Researching ${fragment.fragmentKey}`,
+          bundle.fragments.length > 1
+            ? `Researching ${bundle.fragments.length} fragments together: ${bundle.fragments
+                .map((fragment) => fragment.fragmentKey)
+                .join(', ')}`
+            : bundle.fragments[0]!.attempt > 1
+              ? `Repairing ${bundle.fragments[0]!.fragmentKey} (attempt ${bundle.fragments[0]!.attempt})`
+              : `Researching ${bundle.fragments[0]!.fragmentKey}`,
       });
 
-      let gate: GateResult;
-      try {
-        gate = await researchFragment({
-          orchestration: loaded,
-          project,
-          layer,
-          fragment,
-          provider,
-          options,
-        });
-      } catch (error) {
-        if (error instanceof ResearchCancelled) throw error;
-        // One fragment failing is not the assignment failing. It is recorded,
-        // repaired if there are attempts left, and the queue moves on.
-        const message = error instanceof Error ? error.message : String(error);
-        updateFragment(fragment.id, {
-          status: 'BLOCKED',
-          blockedReason: message,
-          completedAt: new Date().toISOString(),
-        });
-        const failedGate: GateResult = {
-          integrity: 'FAIL',
-          sufficiency: 'INSUFFICIENT',
-          claims: [],
-          acceptedClaims: 0,
-          rejectedClaims: 0,
-          independentSources: 0,
-          coverage: [],
-          duplicateSourceGroups: [],
-          failedConditions: [],
-          reasons: [message],
-          unresolvedGaps: [],
-        };
-        planRepair(loaded, getFragment(fragment.id) ?? fragment, failedGate);
-        continue;
-      }
+      const gates = await runBundle({
+        orchestration: loaded,
+        project,
+        layer,
+        bundle,
+        job,
+        provider,
+        options,
+      });
 
-      if (!fragmentPasses(gate)) {
+      for (const [fragmentId, gate] of gates) {
+        const current = getFragment(fragmentId);
+        if (!current) continue;
+        if (fragmentPasses(gate)) continue;
+
         // Splitting comes before repair: a fragment that is really two questions
         // would otherwise be repaired as a whole, re-researching the half that
         // already worked.
-        const current = getFragment(fragment.id) ?? fragment;
         const signal = shouldSplit(current, gate);
         if (signal && current.splitFromId === null) {
           updateFragment(current.id, {

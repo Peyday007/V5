@@ -28,6 +28,7 @@ import type {
 import { getDocument } from '../server/repos/documents.ts';
 import { listEventsByEntity } from '../server/repos/events.ts';
 import { getRun } from '../server/repos/runs.ts';
+import { jobFragmentOutcomes, jobsForFragment, listJobs } from '../server/repos/jobs.ts';
 import {
   acceptedClaims,
   currentFragments,
@@ -248,7 +249,14 @@ interface Script {
 /** A worker that answers whatever the prompt is asking for, from a script. */
 class ScriptedWorker implements AIProvider {
   readonly name = 'mock';
-  readonly calls: { kind: string; fragmentKey: string | null; prompt: string; title: string }[] = [];
+  readonly calls: {
+    kind: string;
+    /** The first fragment in the prompt; a bundled job carries several. */
+    fragmentKey: string | null;
+    fragmentKeys: string[];
+    prompt: string;
+    title: string;
+  }[] = [];
   readonly #script: Script;
   readonly #attempts = new Map<string, number>();
 
@@ -258,6 +266,11 @@ class ScriptedWorker implements AIProvider {
 
   #fragmentKey(prompt: string): string | null {
     return /^FRAGMENT: (\S+)$/m.exec(prompt)?.[1] ?? null;
+  }
+
+  /** Every fragment a bundled job carries, in order. */
+  #fragmentKeys(prompt: string): string[] {
+    return [...prompt.matchAll(/^FRAGMENT: (\S+)$/gm)].map((match) => match[1]!);
   }
 
   #kind(prompt: string): string {
@@ -273,6 +286,7 @@ class ScriptedWorker implements AIProvider {
     this.calls.push({
       kind,
       fragmentKey,
+      fragmentKeys: this.#fragmentKeys(request.prompt),
       prompt: request.prompt,
       title: request.expectedConversationTitle,
     });
@@ -282,25 +296,54 @@ class ScriptedWorker implements AIProvider {
     if (kind === 'PLAN') return this.#reply(this.#script.plan ?? plan(5));
     if (kind === 'SYNTHESIS') return this.#reply(this.#script.synthesis ?? synthesis());
 
-    const key = fragmentKey ?? 'unknown';
-    const counterKey = `${kind}:${key}`;
-    const attempt = (this.#attempts.get(counterKey) ?? 0) + 1;
-    this.#attempts.set(counterKey, attempt);
-
     const table = kind === 'RESEARCH' ? this.#script.claims : this.#script.verification;
+
+    // A bundled research job answers every fragment it carries, keyed — and each
+    // of them gets its own attempt counter, because a bundle is shared execution
+    // and never a shared history.
+    const keys = this.#fragmentKeys(request.prompt);
+    if (kind === 'RESEARCH' && keys.length > 1) {
+      return this.#reply({
+        fragments: keys.map((memberKey) => ({
+          fragmentKey: memberKey,
+          ...(this.#answer(kind, memberKey, table) as Record<string, unknown>),
+        })),
+      });
+    }
+
+    const key = fragmentKey ?? 'unknown';
     const scripted = table?.[key] ?? table?.['*'];
+    const attempt = this.#nextAttempt(kind, key);
     if (scripted) {
       const chosen = scripted[Math.min(attempt - 1, scripted.length - 1)];
       return this.#reply(chosen);
     }
-    return this.#reply(
-      kind === 'RESEARCH'
-        ? claims([
-            { claim: `Fact A for ${key}.` },
-            { claim: `Fact B for ${key}.`, url: 'https://www.census.gov/programs-surveys/susb.html' },
-          ])
-        : verification(2),
-    );
+    return this.#reply(this.#fallback(kind, key));
+  }
+
+  /** The attempt number this key is now on, counted per kind. */
+  #nextAttempt(kind: string, key: string): number {
+    const counterKey = `${kind}:${key}`;
+    const attempt = (this.#attempts.get(counterKey) ?? 0) + 1;
+    this.#attempts.set(counterKey, attempt);
+    return attempt;
+  }
+
+  /** One fragment's scripted answer, at whatever attempt it is on. */
+  #answer(kind: string, key: string, table: Record<string, unknown[]> | undefined): unknown {
+    const attempt = this.#nextAttempt(kind, key);
+    const scripted = table?.[key] ?? table?.['*'];
+    if (!scripted) return this.#fallback(kind, key);
+    return scripted[Math.min(attempt - 1, scripted.length - 1)];
+  }
+
+  #fallback(kind: string, key: string): unknown {
+    return kind === 'RESEARCH'
+      ? claims([
+          { claim: `Fact A for ${key}.` },
+          { claim: `Fact B for ${key}.`, url: 'https://www.census.gov/programs-surveys/susb.html' },
+        ])
+      : verification(2);
   }
 
   #reply(value: unknown): ResearchResponse {
@@ -366,10 +409,10 @@ describe('an assignment is decomposed before anything is researched', () => {
       expect(fragment.definitions).toContain('Outsourced SDR');
     }
 
-    // Each fragment is its own job, not one conversation carrying the subject.
-    const researchCalls = worker.calls.filter((call) => call.kind === 'RESEARCH');
-    expect(researchCalls).toHaveLength(fragments.length);
-    expect(new Set(researchCalls.map((call) => call.fragmentKey)).size).toBe(fragments.length);
+    // Every fragment is researched and verified on its own terms, whether or not
+    // it shared a job with others.
+    const verificationCalls = worker.calls.filter((call) => call.kind === 'VERIFICATION');
+    expect(new Set(verificationCalls.map((call) => call.fragmentKey)).size).toBe(fragments.length);
   });
 
   it('refuses a plan that restates the goal instead of analysing it', () => {
@@ -580,8 +623,11 @@ describe('a fragment that fails its gate', () => {
     expect(attempts[1]!.status).toBe('ACCEPTED');
 
     // The repair prompt told the worker what had failed and what not to repeat.
+    // The repair prompt is whichever job carried fragment-1 last — it may have
+    // ridden along with another fragment, which changes nothing about what it
+    // had to be told.
     const repairPrompt = worker.calls
-      .filter((call) => call.fragmentKey === 'fragment-1' && call.kind === 'RESEARCH')
+      .filter((call) => call.kind === 'RESEARCH' && call.fragmentKeys.includes('fragment-1'))
       .at(-1)!.prompt;
     expect(repairPrompt).toMatch(/THIS IS A REPAIR ATTEMPT/);
     expect(repairPrompt).toMatch(/WHY THE LAST ATTEMPT FAILED/);
@@ -643,6 +689,88 @@ describe('a fragment that fails its gate', () => {
     expect(fragments.filter((fragment) => fragment.status === 'ACCEPTED').length).toBeGreaterThan(0);
     expect(fragments.some((fragment) => fragment.status === 'REJECTED')).toBe(true);
     expect(outcome.documentId).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3b. Job bundling
+// ---------------------------------------------------------------------------
+
+describe('compatible fragments share one job', () => {
+  it('packs them into fewer jobs than fragments, losing none of them', async () => {
+    const { id } = await run({ plan: plan(6) });
+
+    const fragments = currentFragments(id);
+    const jobs = listJobs(id);
+    expect(jobs.length).toBeGreaterThan(0);
+    // Six fragments of one shared scope are not six conversations.
+    expect(jobs.length).toBeLessThan(fragments.length);
+    expect(jobs.some((job) => job.fragmentIds.length > 1)).toBe(true);
+
+    // Every fragment was executed exactly once, and the job says why it was
+    // packed the way it was.
+    const executed = jobs.flatMap((job) => job.fragmentIds);
+    expect(new Set(executed).size).toBe(executed.length);
+    for (const fragment of fragments) expect(executed).toContain(fragment.id);
+    for (const job of jobs) expect(job.rationale.length).toBeGreaterThan(0);
+  });
+
+  it('judges each fragment in a shared job on its own evidence', async () => {
+    const { id } = await run({
+      plan: plan(4),
+      claims: {
+        // One fragment in the bundle returns prose with no source at all.
+        'fragment-2': [claims([{ claim: 'Everyone knows this.', url: null }])],
+      },
+      verification: { 'fragment-2': [verification(1)] },
+    });
+
+    const fragments = currentFragments(id);
+    const failed = fragments.find((entry) => entry.fragmentKey === 'fragment-2')!;
+    const others = fragments.filter((entry) => entry.fragmentKey !== 'fragment-2');
+
+    expect(failed.status).not.toBe('ACCEPTED');
+    expect(failed.sufficiencyVerdict).toBe('INSUFFICIENT');
+    // Its neighbours in the same job are untouched by it.
+    for (const other of others) expect(other.status).toBe('ACCEPTED');
+
+    // The claim that failed belongs to the fragment that made it — on every one
+    // of its attempts — and none of it reached the fragments it rode with.
+    const mine = new Set(
+      listFragments(id)
+        .filter((entry) => entry.fragmentKey === 'fragment-2')
+        .map((entry) => entry.id),
+    );
+    const orphaned = listClaims(id).filter(
+      (claim) => claim.claim === 'Everyone knows this.' && (claim.fragmentId === null || !mine.has(claim.fragmentId)),
+    );
+    expect(orphaned).toHaveLength(0);
+  });
+
+  it('records a per-fragment outcome for a job that partly succeeded', async () => {
+    const { id } = await run({
+      plan: plan(4),
+      claims: { 'fragment-2': [claims([{ claim: 'Everyone knows this.', url: null }])] },
+      verification: { 'fragment-2': [verification(1)] },
+    });
+
+    const failed = listFragments(id).find(
+      (entry) => entry.fragmentKey === 'fragment-2' && entry.attempt === 1,
+    )!;
+    const job = jobsForFragment(failed.id)[0]!;
+    // The job itself ran fine. What differs is what each fragment got from it.
+    expect(job.status).toBe('COMPLETE');
+    expect(job.promptBytes).toBeGreaterThan(0);
+    expect(job.outputBytes).toBeGreaterThan(0);
+
+    const outcomes = jobFragmentOutcomes(job.id);
+    expect(outcomes.length).toBe(job.fragmentIds.length);
+    const mine = outcomes.find((entry) => entry.fragmentId === failed.id)!;
+    expect(mine.outcome).toBe('BLOCKED');
+    expect(mine.detail).toBeTruthy();
+    if (outcomes.length > 1) {
+      expect(outcomes.some((entry) => entry.outcome === 'ACCEPTED')).toBe(true);
+    }
   });
 });
 

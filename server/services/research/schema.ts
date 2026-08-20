@@ -588,6 +588,84 @@ export function parseResearchPass(text: string): ParseResult<ResearchPassOutput>
   };
 }
 
+/**
+ * A bundled job's output, keyed by fragment.
+ *
+ * Several fragments can share one execution, but never one answer: each returns
+ * its own claims under its own key so its evidence can be judged, accepted,
+ * rejected or repaired without touching the others. A reply that blends them is
+ * refused rather than untangled — untangling would mean guessing which claim
+ * belonged to which question, which is exactly the attribution error the whole
+ * ledger exists to prevent.
+ *
+ * The single-fragment shape is still accepted, because a job carrying one
+ * fragment has nothing to key.
+ */
+export interface BundledResearchOutput {
+  byFragment: Map<string, ResearchPassOutput>;
+}
+
+export function parseBundledResearchPass(
+  text: string,
+  fragmentKeys: string[],
+): ParseResult<BundledResearchOutput> {
+  const json = extractJsonObject(text);
+  if (!json.ok) return json;
+  const body = json.value;
+
+  // One fragment, or a reply in the plain shape: read it as that fragment's.
+  if (!Array.isArray(body['fragments'])) {
+    const single = parseResearchPass(text);
+    if (!single.ok) return single;
+    if (fragmentKeys.length > 1) {
+      return fail(
+        `This job carried ${fragmentKeys.length} fragments, so its reply must key the claims by ` +
+          'fragment. A single undifferentiated list cannot be attributed.',
+      );
+    }
+    return {
+      ok: true,
+      value: { byFragment: new Map([[fragmentKeys[0] ?? '', single.value]]) },
+    };
+  }
+
+  const rows = arrayOf(body['fragments'], 'fragments');
+  if (!rows.ok) return rows;
+
+  const byFragment = new Map<string, ResearchPassOutput>();
+  const known = new Set(fragmentKeys);
+  for (const [index, row] of rows.value.entries()) {
+    const key = stringField(row['fragmentKey'], `fragments[${index}].fragmentKey`, { required: true });
+    if (!key.ok) return key;
+    if (!known.has(key.value)) {
+      return fail(
+        `"fragments[${index}].fragmentKey" is "${key.value}", which was not one of the fragments ` +
+          `in this job (${fragmentKeys.join(', ')}).`,
+      );
+    }
+    if (byFragment.has(key.value)) {
+      return fail(`Fragment "${key.value}" was answered twice in one reply.`);
+    }
+
+    const parsed = parseResearchPass(JSON.stringify(row));
+    if (!parsed.ok) {
+      return fail(`fragments[${index}] (${key.value}): ${parsed.error}`);
+    }
+    byFragment.set(key.value, parsed.value);
+  }
+
+  const missing = fragmentKeys.filter((key) => !byFragment.has(key));
+  if (missing.length > 0) {
+    // A missing fragment is not an error in the others: it is recorded as that
+    // fragment producing nothing, which its own gate will judge.
+    for (const key of missing) {
+      byFragment.set(key, { claims: [], searchQueries: [], unresolved: [], notes: '' });
+    }
+  }
+
+  return { ok: true, value: { byFragment } };
+}
+
 // ---------------------------------------------------------------------------
 // Verification pass — does the evidence actually hold, and is there enough
 // ---------------------------------------------------------------------------

@@ -223,6 +223,131 @@ const EVIDENCE_RULES = [
   'dressing it up as evidence. Reporting that the evidence does not exist is a real answer.',
 ].join('\n');
 
+/**
+ * What a repair attempt has to be told: what failed, what to do differently, and
+ * what it must not simply return again.
+ */
+export interface RepairContext {
+  reason: string;
+  strategy: string;
+  rejected: { claim: string; why: string }[];
+}
+
+/**
+ * The repair instructions for one fragment.
+ *
+ * A repair that is not told what failed is just the same search run twice, so
+ * this block is never optional on a second attempt — including inside a bundle,
+ * where each fragment carries its own failure history and gets its own block.
+ */
+function repairBlock(repair: RepairContext, fragmentKey?: string): string {
+  return [
+    fragmentKey ? `THIS IS A REPAIR ATTEMPT FOR ${fragmentKey}.` : 'THIS IS A REPAIR ATTEMPT.',
+    `WHY THE LAST ATTEMPT FAILED: ${repair.reason}`,
+    `DO THIS DIFFERENTLY: ${repair.strategy}`,
+    repair.rejected.length > 0
+      ? [
+          'CLAIMS ALREADY REJECTED — do not return these again unless you have a different',
+          'source that actually supports them:',
+          ...repair.rejected.slice(0, 20).map((entry) => `  - ${entry.claim} — ${entry.why}`),
+        ].join('\n')
+      : '',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
+/**
+ * A job carrying several compatible fragments.
+ *
+ * The saving is real — one retrieval of the same sources answering four
+ * questions — but it only works while the answers come back separately, so the
+ * instruction to key them by fragment is stated as a hard requirement rather
+ * than a formatting preference.
+ */
+export function buildBundledResearchPrompt(input: {
+  project: Project;
+  layer: Layer;
+  fragments: ResearchFragment[];
+  dependencyClaims: { fragmentKey: string; claim: ResearchClaim }[];
+  rationale: string;
+  /** Per fragment key, for the fragments in this job that are being repaired. */
+  repairs?: Map<string, RepairContext>;
+}): string {
+  const first = input.fragments[0]!;
+  return [
+    `You are researching ${input.fragments.length} related evidence questions in one pass.`,
+    'They share a scope and a source ecosystem, which is why they are together — but they are',
+    'separate questions with separate answers, and their claims must come back separately.',
+    '',
+    layerContext(input.project, input.layer),
+    '',
+    'SHARED SCOPE',
+    [
+      first.geography ? `GEOGRAPHY: ${first.geography}` : null,
+      first.timeframe ? `TIMEFRAME: ${first.timeframe}` : null,
+      first.population ? `POPULATION: ${first.population}` : null,
+      first.definitions ? `DEFINITIONS: ${first.definitions}` : null,
+    ]
+      .filter((line): line is string => line !== null)
+      .join('\n'),
+    '',
+    'THE FRAGMENTS',
+    ...input.fragments.map((fragment) => {
+      const repair = input.repairs?.get(fragment.fragmentKey);
+      return `\n${fragmentBrief(fragment)}${repair ? `\n${repairBlock(repair, fragment.fragmentKey)}` : ''}`;
+    }),
+    '',
+    EVIDENCE_RULES,
+    input.dependencyClaims.length > 0
+      ? [
+          '',
+          'ESTABLISHED BY EARLIER FRAGMENTS (already evidenced; build on these, do not re-derive):',
+          ...input.dependencyClaims.map(
+            (entry) => `  - [${entry.fragmentKey}] ${entry.claim.claim} (${entry.claim.sourceUrl})`,
+          ),
+        ].join('\n')
+      : '',
+    '',
+    'Return every claim under the fragment it answers. A claim filed under the wrong fragment, or',
+    'a single undifferentiated list, cannot be attributed and the whole job is discarded.',
+    '',
+    jsonInstruction(
+      `{
+  "fragments": [
+    {
+      "fragmentKey": "one of the fragment keys above",
+      "searchQueries": ["what you actually searched"],
+      "claims": [
+        {
+          "claim": "one factual statement",
+          "evidenceLane": "one of that fragment's required evidence lanes",
+          "sourceUrl": "https://…",
+          "sourceTitle": "…",
+          "sourcePublisher": "…",
+          "sourceDate": "YYYY-MM-DD or YYYY",
+          "evidenceExcerpt": "the exact sentence or table cell from the source",
+          "evidenceLocator": "page/section/table identifier",
+          "retrievedAt": "YYYY-MM-DD",
+          "confidence": 0.0,
+          "claimType": "SOURCED_FACT | SELF_REPORT | QUOTATION | CALCULATION | INFERENCE | FORECAST | NEGATIVE_EXISTENCE",
+          "primarySource": false,
+          "searchedRepositories": [],
+          "derived": false,
+          "derivedFrom": []
+        }
+      ],
+      "unresolved": ["what you could not establish, and why"],
+      "notes": ""
+    }
+  ]
+}`,
+    ),
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
 export function buildFragmentResearchPrompt(input: {
   project: Project;
   layer: Layer;
@@ -230,7 +355,7 @@ export function buildFragmentResearchPrompt(input: {
   /** Accepted claims from fragments this one depends on. */
   dependencyClaims: { fragmentKey: string; claim: ResearchClaim }[];
   /** Set on a repair: what went wrong, and what to do differently. */
-  repair?: { reason: string; strategy: string; rejected: { claim: string; why: string }[] } | null;
+  repair?: RepairContext | null;
 }): string {
   const repair = input.repair;
   return [
@@ -250,21 +375,7 @@ export function buildFragmentResearchPrompt(input: {
           ),
         ].join('\n')
       : '',
-    repair
-      ? [
-          '',
-          'THIS IS A REPAIR ATTEMPT.',
-          `WHY THE LAST ATTEMPT FAILED: ${repair.reason}`,
-          `DO THIS DIFFERENTLY: ${repair.strategy}`,
-          repair.rejected.length > 0
-            ? [
-                'CLAIMS ALREADY REJECTED — do not return these again unless you have a different',
-                'source that actually supports them:',
-                ...repair.rejected.slice(0, 20).map((entry) => `  - ${entry.claim} — ${entry.why}`),
-              ].join('\n')
-            : '',
-        ].join('\n')
-      : '',
+    repair ? `\n${repairBlock(repair)}` : '',
     '',
     'Search, read the sources, and return the claims you can defend. For each claim quote the',
     'passage or name the table it came from, and say which evidence lane it fills.',

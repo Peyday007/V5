@@ -512,6 +512,20 @@ export const RECONCILIATION_OUTCOMES = [
 ] as const;
 export type ReconciliationOutcome = (typeof RECONCILIATION_OUTCOMES)[number];
 
+/** What a bundled job is for, which decides how much model it deserves. */
+export const JOB_KINDS = ['DISCOVERY', 'INVESTIGATION', 'VERIFICATION', 'SYNTHESIS'] as const;
+export type JobKind = (typeof JOB_KINDS)[number];
+
+export const JOB_STATUSES = [
+  'QUEUED',
+  'RUNNING',
+  'COMPLETE',
+  'FAILED',
+  'CANCELLED',
+  'PAUSED_QUOTA',
+] as const;
+export type JobStatus = (typeof JOB_STATUSES)[number];
+
 /** Does the evidence hold up? Separate from whether there is enough of it. */
 export const INTEGRITY_VERDICTS = ['PASS', 'FAIL'] as const;
 export type IntegrityVerdict = (typeof INTEGRITY_VERDICTS)[number];
@@ -766,6 +780,51 @@ export interface RequirementCoverageRow {
   needs_research: number;
   user_override: string | null;
   overridden_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResearchJobRow {
+  id: string;
+  orchestration_id: string;
+  project_id: string;
+  rationale: string;
+  provider: string;
+  model: string | null;
+  job_kind: string;
+  status: string;
+  priority: number;
+  external_job_id: string | null;
+  prompt_sha256: string | null;
+  prompt_bytes: number | null;
+  output_bytes: number | null;
+  duration_ms: number | null;
+  failure_reason: string | null;
+  queued_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProviderConnectionRow {
+  provider: string;
+  installed: number;
+  authenticated: number;
+  automation_ready: number;
+  executable_path: string | null;
+  version: string | null;
+  model: string | null;
+  quota_state: string | null;
+  message: string | null;
+  diagnostics: string | null;
+  last_checked_at: string | null;
+  last_success_at: string | null;
+  last_failure_at: string | null;
+  last_failure_reason: string | null;
+  paid_overage_enabled: number;
+  paid_overage_note: string | null;
+  paid_overage_set_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1677,6 +1736,61 @@ export interface RequirementCoverage {
   needsResearch: boolean;
   userOverride: string | null;
   overriddenAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One execution container, carrying one or more compatible fragments. */
+export interface ResearchJob {
+  id: string;
+  orchestrationId: string;
+  projectId: string;
+  rationale: string;
+  provider: string;
+  model: string | null;
+  jobKind: JobKind;
+  status: JobStatus;
+  priority: number;
+  externalJobId: string | null;
+  promptSha256: string | null;
+  promptBytes: number | null;
+  outputBytes: number | null;
+  durationMs: number | null;
+  failureReason: string | null;
+  queuedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** The fragments this job carries, each still independently judged. */
+  fragmentIds: string[];
+}
+
+/**
+ * What the last connection test found, and when the worker last really worked.
+ *
+ * "Connected" means a job ran, not that an executable exists — so the last
+ * success is tracked separately from the last check.
+ */
+export interface ProviderConnection {
+  provider: string;
+  installed: boolean;
+  authenticated: boolean;
+  automationReady: boolean;
+  executablePath: string | null;
+  version: string | null;
+  model: string | null;
+  quotaState: string | null;
+  message: string | null;
+  diagnostics: unknown;
+  lastCheckedAt: string | null;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  lastFailureReason: string | null;
+  /** Off unless the user turned it on. Spending money is never a default. */
+  paidOverageEnabled: boolean;
+  paidOverageNote: string | null;
+  paidOverageSetAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
