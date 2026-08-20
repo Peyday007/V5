@@ -245,6 +245,34 @@ describe('a repair plan', () => {
     expect(describeRepairPlan(plan)).toMatch(/unresolved contradiction to settle/i);
   });
 
+  it('narrows the question to the part evidence can actually support', () => {
+    // The ladder tries the searches that could still find the right measure
+    // first; when those are used up, narrowing is the honest response — answer
+    // the part a source states directly and say plainly what is not covered.
+    const first = buildRepairPlan({
+      fragment: fragment(),
+      gate: gate({ failedConditions: ['SCOPE_MATCH'] }),
+      history: [fragment()],
+      claims: [claim()],
+      splitRequired: false,
+      remainingBudget: 4,
+    });
+    const second = fragment({ id: 'frg_2', attempt: 2, repairPlan: first });
+
+    const narrowed = buildRepairPlan({
+      fragment: second,
+      gate: gate({ failedConditions: ['SCOPE_MATCH'] }),
+      history: [fragment(), second],
+      claims: [claim()],
+      splitRequired: false,
+      remainingBudget: 3,
+    });
+    expect(narrowed.strategies).toContain('NARROW_THE_CLAIM');
+    expect(narrowed.narrowerQuestion).toMatch(/only the part a published source states directly/i);
+    expect(narrowed.narrowerQuestion).toMatch(/United States, 2023/);
+    expect(describeRepairPlan(narrowed)).toMatch(/a narrower question worth answering/i);
+  });
+
   it('says to report the gap rather than try again once the budget is spent', () => {
     const plan = buildRepairPlan({
       fragment: fragment(),
