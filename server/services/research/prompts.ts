@@ -225,6 +225,9 @@ const EVIDENCE_RULES = [
   'a second genuinely independent source. Three outlets repeating one estimate are one source.',
   'Set primarySource to true only when the source is the body that produced the data.',
   '',
+  'A search results page is not a source, and neither is a redirect, a cache or a reader proxy:',
+  'cite the document itself, at an address anybody can open tomorrow.',
+  '',
   'A claim you cannot source is still worth reporting — put it in "unresolved" rather than',
   'dressing it up as evidence. Reporting that the evidence does not exist is a real answer.',
 ].join('\n');

@@ -54,6 +54,41 @@ function isLocalAddress(hostname: string): boolean {
   return !host.includes('.');
 }
 
+/**
+ * A page that lists sources rather than being one.
+ *
+ * A search-results URL cites the act of searching. It says nothing about what
+ * any source states, it renders differently for every reader, and it will not
+ * say the same thing tomorrow — so it is not evidence at any confidence.
+ */
+const SEARCH_PAGES = [
+  /^(?:www\.)?google\.[a-z.]+$/i,
+  /^(?:www\.)?bing\.com$/i,
+  /^(?:www\.)?duckduckgo\.com$/i,
+  /^search\.[a-z0-9-]+\.[a-z.]+$/i,
+  /^(?:www\.)?baidu\.com$/i,
+  /^(?:www\.)?ecosia\.org$/i,
+  /^(?:www\.)?startpage\.com$/i,
+];
+const SEARCH_PATHS = /^\/(?:search|s|url|imgres|maps\/search)\b/i;
+
+/**
+ * Something standing between the reader and the source.
+ *
+ * A grounding redirect, a cache, a reader proxy or a translation frame all
+ * resolve to a source for the tool that produced them and to nothing for
+ * anybody else once the session behind them expires. The claim has to name the
+ * source itself.
+ */
+const REDIRECTORS = [
+  /grounding-api-redirect/i,
+  /^vertexaisearch\.cloud\.google\.com$/i,
+  /^webcache\.googleusercontent\.com$/i,
+  /^translate\.google\.[a-z.]+$/i,
+  /^r\.jina\.ai$/i,
+  /^(?:www\.)?google\.[a-z.]+\/url$/i,
+];
+
 /** The claim's identity: its text, normalized for whitespace and case. */
 export function claimHash(claim: string): string {
   const normalized = claim.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -136,6 +171,40 @@ export function validateClaim(raw: RawClaim): ValidatedClaim {
       ...base,
       validationState: 'LOCAL_ADDRESS',
       validationDetail: `${parsed.hostname} is a local or private address, not a public source.`,
+      sourced: false,
+    };
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  if (
+    REDIRECTORS.some((pattern) => pattern.test(host) || pattern.test(`${host}${parsed.pathname}`)) ||
+    REDIRECTORS.some((pattern) => pattern.test(parsed.pathname))
+  ) {
+    return {
+      ...base,
+      normalizedUrl: normalizeUrl(parsed),
+      validationState: 'GROUNDING_REDIRECT',
+      validationDetail:
+        'That address redirects to the source rather than being it, and stops resolving once the ' +
+        'session behind it expires. Cite the page the redirect points at.',
+      sourced: false,
+    };
+  }
+
+  // A search engine's own domain is only a search when the address is one: a
+  // blog post on the same host is an ordinary page and stays citable.
+  const looksLikeQuery =
+    SEARCH_PATHS.test(parsed.pathname) ||
+    (parsed.pathname === '/' &&
+      ['q', 'query', 'p', 'search'].some((key) => parsed.searchParams.has(key)));
+  if (SEARCH_PAGES.some((pattern) => pattern.test(host)) && looksLikeQuery) {
+    return {
+      ...base,
+      normalizedUrl: normalizeUrl(parsed),
+      validationState: 'SEARCH_RESULT',
+      validationDetail:
+        'That is a search results page, not a source. It cites the act of searching and will not ' +
+        'say the same thing tomorrow. Cite the document the search found.',
       sourced: false,
     };
   }

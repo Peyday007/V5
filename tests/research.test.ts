@@ -572,6 +572,54 @@ describe('the evidence gate', () => {
     expect(validated.validationState).toBe('NO_EVIDENCE');
   });
 
+  it('rejects a search results page, which cites the act of searching', () => {
+    for (const url of [
+      'https://www.google.com/search?q=telemarketers+employment',
+      'https://www.bing.com/search?q=custody+transfer',
+      'https://duckduckgo.com/?q=x',
+      'https://www.google.com/url?q=https://www.bls.gov/oes/',
+    ]) {
+      const validated = validateClaim({
+        claim: 'x',
+        sourceUrl: url,
+        evidenceExcerpt: 'a passage',
+      });
+      expect(validated.sourced).toBe(false);
+      expect(['SEARCH_RESULT', 'GROUNDING_REDIRECT']).toContain(validated.validationState);
+    }
+  });
+
+  it('rejects a grounding redirect standing between the reader and the source', () => {
+    const validated = validateClaim({
+      claim: 'x',
+      sourceUrl:
+        'https://vertexaisearch.cloud.google.com/grounding-api-redirect/AbCdEf123456',
+      evidenceExcerpt: 'a passage',
+    });
+    expect(validated.sourced).toBe(false);
+    expect(validated.validationState).toBe('GROUNDING_REDIRECT');
+    expect(validated.validationDetail).toMatch(/stops resolving/i);
+
+    // A cache and a reader proxy are the same problem.
+    expect(
+      validateClaim({
+        claim: 'x',
+        sourceUrl: 'https://r.jina.ai/https://www.bls.gov/oes/',
+        evidenceExcerpt: 'a passage',
+      }).validationState,
+    ).toBe('GROUNDING_REDIRECT');
+  });
+
+  it('still accepts an ordinary page on a search company\'s own site', () => {
+    // The rule is about search-results pages, not about the hostname.
+    const validated = validateClaim({
+      claim: 'x',
+      sourceUrl: 'https://blog.google/technology/research/paper/',
+      evidenceExcerpt: 'a passage',
+    });
+    expect(validated.validationState).toBe('SOURCED');
+  });
+
   it('rejects sources nobody else can open', () => {
     expect(validateClaim({ claim: 'x', sourceUrl: 'file:///etc/passwd' }).validationState).toBe(
       'UNSUPPORTED_SCHEME',

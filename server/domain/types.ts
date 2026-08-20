@@ -601,6 +601,11 @@ export const CLAIM_VALIDATION_STATES = [
   'INVALID_URL',
   'UNSUPPORTED_SCHEME',
   'LOCAL_ADDRESS',
+  // A search results page is where you look for a source, not a source.
+  'SEARCH_RESULT',
+  // A grounding or caching redirect stands between the reader and the source,
+  // and stops resolving the moment the tool's session expires.
+  'GROUNDING_REDIRECT',
   'NO_EVIDENCE',
 ] as const;
 export type ClaimValidationState = (typeof CLAIM_VALIDATION_STATES)[number];
