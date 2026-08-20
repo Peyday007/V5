@@ -81,6 +81,7 @@ import { bundleFragments, modelFor, type Bundle } from './bundling.ts';
 import { executionOrder, quotaDecision, type QuotaDecision } from './quota.ts';
 import { planContradictionFragments, reconcileAcceptedFragment } from './replan.ts';
 import { buildRepairPlan, describeRepairPlan } from './repair.ts';
+import { modelDefaults } from '../providers/connection.ts';
 import {
   cancelQueuedJobs,
   createJob,
@@ -1147,9 +1148,11 @@ export async function runOrchestration(
         projectId: project.id,
         rationale: bundle.rationale,
         provider: provider.name,
+        // Which model this job deserves, from the user's own settings. The
+        // evidence bar does not move with it.
         model: modelFor(bundle.jobKind, {
-          light: process.env['BRAIN_ANTIGRAVITY_LIGHT_MODEL'] ?? null,
-          strong: loaded.model,
+          light: modelDefaults(provider.name).light,
+          strong: loaded.model ?? modelDefaults(provider.name).strong,
         }),
         jobKind: bundle.jobKind,
         priority: bundle.priority,

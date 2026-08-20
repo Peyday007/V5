@@ -12,6 +12,7 @@ import { documentsRouter } from './documents.ts';
 import { healthRouter } from './health.ts';
 import { layersRouter } from './layers.ts';
 import { projectsRouter } from './projects.ts';
+import { providersRouter } from './providers.ts';
 import { researchRouter } from './research.ts';
 import { runsRouter } from './runs.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
@@ -26,6 +27,8 @@ export function createApiRouter(): Router {
   // Research routes also carry their own prefixes (/layers/:id/research,
   // /research/:id), for the same reason.
   router.use(researchRouter);
+  // Provider connection routes carry their own /providers prefix.
+  router.use(providersRouter);
   router.use('/projects', projectsRouter);
   router.use('/layers', layersRouter);
   router.use('/runs', runsRouter);

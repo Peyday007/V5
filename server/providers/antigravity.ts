@@ -32,6 +32,7 @@ import { COPY_PROMPT_FALLBACK } from './types.ts';
 import { antigravityStatus, readQuotaDetail, type AntigravityStatus } from './antigravity/runtime.ts';
 import { runAntigravityJob, type JobResult } from './antigravity/process.ts';
 import { createJob, sha256, writeExecutionLog, type ExecutionLog } from './antigravity/jobs.ts';
+import { ptyEnabled } from './antigravity/pty.ts';
 
 /** Raised for anything Antigravity cannot currently do. Never a silent fallback. */
 export class AntigravityUnavailableError extends Error {
@@ -168,6 +169,8 @@ export class AntigravityProvider implements AIProvider {
       // The CLI has no documented prompt-file flag, so large prompts still go
       // over stdin rather than being guessed onto the command line.
       promptFileFlag: null,
+      // Only when the user switched it on and this machine has a helper.
+      pty: ptyEnabled(),
     });
 
     const log: ExecutionLog = {

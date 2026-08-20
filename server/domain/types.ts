@@ -875,6 +875,9 @@ export interface ProviderConnectionRow {
   paid_overage_enabled: number;
   paid_overage_note: string | null;
   paid_overage_set_at: string | null;
+  light_model: string | null;
+  verified_run_at: string | null;
+  verified_run_detail: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1845,6 +1848,11 @@ export interface ProviderConnection {
   paidOverageEnabled: boolean;
   paidOverageNote: string | null;
   paidOverageSetAt: string | null;
+  /** The lighter model for broad discovery; `model` is the strong one. */
+  lightModel: string | null;
+  /** When a real job last ran here — not when a probe last answered. */
+  verifiedRunAt: string | null;
+  verifiedRunDetail: string | null;
   createdAt: string;
   updatedAt: string;
 }

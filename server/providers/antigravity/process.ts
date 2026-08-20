@@ -26,6 +26,7 @@ import { spawn } from 'node:child_process';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { wrapInPty } from './pty.ts';
 
 /** Above this, the prompt goes to a file rather than down stdin. */
 export const STDIN_LIMIT_BYTES = 256 * 1024;
@@ -65,6 +66,15 @@ export interface RunJobInput {
    * Without it a large prompt still goes over stdin.
    */
   promptFileFlag?: string | null;
+  /**
+   * Run the tool attached to a pseudo-terminal.
+   *
+   * Only honoured when the explicit configuration flag is on and the machine
+   * has a helper; otherwise the job runs the ordinary way. Everything else —
+   * argument arrays, the timeout, cancellation, tree kill, the bounded
+   * workspace, the output caps — applies identically on both paths.
+   */
+  pty?: boolean;
 }
 
 /**
@@ -135,6 +145,12 @@ export async function runAntigravityJob(input: RunJobInput): Promise<JobResult> 
     promptDelivery = 'file';
   }
 
+  // A terminal, when the tool insists on one. The wrapper is prepended; the
+  // arguments it wraps are the same array, and the prompt is still not in them.
+  const wrapped = input.pty === true ? wrapInPty(input.command, args) : null;
+  const command = wrapped?.command ?? input.command;
+  const spawnArgs = wrapped?.args ?? args;
+
   const startedAt = Date.now();
   const stdout = new Capture();
   const stderr = new Capture();
@@ -143,7 +159,7 @@ export async function runAntigravityJob(input: RunJobInput): Promise<JobResult> 
     let settled = false;
     let outcome: JobOutcome = 'COMPLETED';
 
-    const child = spawn(input.command, args, {
+    const child = spawn(command, spawnArgs, {
       cwd: input.jobDir,
       shell: false,
       windowsHide: true,
@@ -154,7 +170,9 @@ export async function runAntigravityJob(input: RunJobInput): Promise<JobResult> 
         ...process.env,
         // Discourage the interactive rendering that makes output unparseable.
         NO_COLOR: '1',
-        TERM: 'dumb',
+        // On the ordinary path a dumb terminal is what we want. Under a PTY it
+        // would undo the point of the PTY, so the terminal declares itself.
+        TERM: wrapped ? 'xterm-256color' : 'dumb',
         CI: '1',
       },
     });

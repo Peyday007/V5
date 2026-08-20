@@ -268,6 +268,9 @@ function mapConnection(row: ProviderConnectionRow): ProviderConnection {
     paidOverageEnabled: toBool(row.paid_overage_enabled),
     paidOverageNote: row.paid_overage_note,
     paidOverageSetAt: row.paid_overage_set_at,
+    lightModel: row.light_model,
+    verifiedRunAt: row.verified_run_at,
+    verifiedRunDetail: row.verified_run_detail,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -341,20 +344,69 @@ export function saveConnection(input: SaveConnectionInput): ProviderConnection {
  * Always an explicit act, always recorded with when and why. Nothing else in the
  * platform may set this.
  */
+/**
+ * The user's choice of which model does which kind of work.
+ *
+ * Stored rather than configured in the environment, because it is an ordinary
+ * preference on an ordinary settings page — not something worth restarting a
+ * server for.
+ */
+export function setModelDefaults(
+  provider: string,
+  input: { light: string | null; strong: string | null },
+): ProviderConnection | null {
+  ensureConnection(provider);
+  getDb().run(
+    'UPDATE provider_connections SET light_model = ?, model = ?, updated_at = ? WHERE provider = ?',
+    [input.light, input.strong, nowIso(), provider],
+  );
+  return getConnection(provider);
+}
+
+/**
+ * Record that a real job ran here.
+ *
+ * This is the question a connection page is really answering: not "is it
+ * installed" but "has it ever actually done the work on this machine". A probe
+ * never sets it.
+ */
+export function recordVerifiedRun(provider: string, detail: string): ProviderConnection | null {
+  ensureConnection(provider);
+  const ts = nowIso();
+  getDb().run(
+    `UPDATE provider_connections SET verified_run_at = ?, verified_run_detail = ?,
+       last_success_at = ?, updated_at = ? WHERE provider = ?`,
+    [ts, detail, ts, ts, provider],
+  );
+  return getConnection(provider);
+}
+
+/** Forget what Brain recorded about a connection, without touching the tool. */
+export function clearConnection(provider: string): ProviderConnection | null {
+  const existing = getConnection(provider);
+  if (!existing) return null;
+  getDb().run(
+    `UPDATE provider_connections SET installed = 0, authenticated = 0, automation_ready = 0,
+       executable_path = NULL, version = NULL, quota_state = NULL,
+       message = 'Disconnected in Brain. Nothing was changed in the tool itself; use Detect to reconnect.',
+       diagnostics = NULL, last_checked_at = ?, updated_at = ? WHERE provider = ?`,
+    [nowIso(), nowIso(), provider],
+  );
+  return getConnection(provider);
+}
+
+/** A row to hang settings off, for a provider that has never been probed. */
+function ensureConnection(provider: string): void {
+  if (getConnection(provider)) return;
+  saveConnection({ provider, installed: false, authenticated: false, automationReady: false });
+}
+
 export function setPaidOverage(
   provider: string,
   enabled: boolean,
   note: string | null,
 ): ProviderConnection | null {
-  const existing = getConnection(provider);
-  if (!existing) {
-    saveConnection({
-      provider,
-      installed: false,
-      authenticated: false,
-      automationReady: false,
-    });
-  }
+  ensureConnection(provider);
   getDb().run(
     `UPDATE provider_connections SET paid_overage_enabled = ?, paid_overage_note = ?,
        paid_overage_set_at = ?, updated_at = ? WHERE provider = ?`,
