@@ -31,6 +31,12 @@ import { listEventsByEntity } from '../server/repos/events.ts';
 import { getRun } from '../server/repos/runs.ts';
 import { applyReviewDecisions, buildReview, REVIEW_TIERS } from '../server/services/research/review.ts';
 import {
+  assessPacket,
+  packetEvidence,
+  planCoverageFragments,
+} from '../server/services/research/packet.ts';
+import { listRequirements } from '../server/repos/reconciliation.ts';
+import {
   jobFragmentOutcomes,
   jobsForFragment,
   listJobs,
@@ -1054,6 +1060,100 @@ describe('synthesis and the audit handoff', () => {
     expect(events).toContain('RESEARCH_QUEUED');
     expect(events).toContain('RESEARCH_PLANNED');
     expect(events).toContain('RESEARCH_COMPLETED');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4b. Packet coverage before synthesis
+// ---------------------------------------------------------------------------
+
+describe('the packet is checked against the whole goal before a word is written', () => {
+  it('confirms the scope is consistent and nothing rests on one source', async () => {
+    const { id, outcome } = await run({ plan: plan(4) });
+    expect(outcome.documentId).toBeTruthy();
+
+    const coverage = assessPacket({ orchestrationId: id, projectId: fixture.project.id });
+    const named = coverage.checks.map((check) => check.check);
+    // The checks the spec asks for are all actually run.
+    expect(named).toContain('Mandatory requirements are covered');
+    expect(named).toContain('Geography is consistent');
+    expect(named).toContain('Timeframe is consistent');
+    expect(named).toContain('Calculation inputs are verified');
+    expect(named).toContain('Credible counterarguments were investigated');
+    expect(named).toContain('The packet answers the goal it was given');
+    expect(named).toContain('No mandatory conclusion rests on one source');
+  });
+
+  it('refuses to write around a mandatory requirement it never covered', async () => {
+    // Every fragment returns prose with no source, so nothing is established.
+    const { id, outcome } = await run({
+      plan: plan(3),
+      claims: { '*': [claims([{ claim: 'Everyone knows this.', url: null }])] },
+      verification: { '*': [verification(1)] },
+    });
+
+    expect(outcome.documentId).toBeNull();
+    const orchestration = getOrchestration(id)!;
+    expect(orchestration.status).toBe('NEEDS_HUMAN');
+
+    const coverage = assessPacket({ orchestrationId: id, projectId: fixture.project.id });
+    expect(coverage.ok).toBe(false);
+    const mandatory = coverage.checks.find(
+      (check) => check.check === 'Mandatory requirements are covered',
+    )!;
+    expect(mandatory.passed).toBe(false);
+    // And it says which requirements, so the response can be targeted.
+    expect(mandatory.requirementIds.length).toBeGreaterThan(0);
+  });
+
+  it('plans fragments for what is missing, not for what already worked', async () => {
+    const { id } = await run({ plan: plan(3) });
+    const before = currentFragments(id).length;
+
+    // A coverage failure naming one requirement produces work for that
+    // requirement alone.
+    const coverage = assessPacket({ orchestrationId: id, projectId: fixture.project.id });
+    const requirementId = listRequirements(id)[0]!.id;
+    const created = planCoverageFragments({
+      orchestrationId: id,
+      coverage: {
+        ...coverage,
+        ok: false,
+        checks: [
+          {
+            check: 'Mandatory requirements are covered',
+            passed: false,
+            detail: 'The recognised moment for one regime has no source.',
+            requirementIds: [requirementId],
+          },
+        ],
+      },
+      maxFragments: 60,
+    });
+
+    expect(created).toHaveLength(1);
+    expect(created[0]!.requirementIds).toEqual([requirementId]);
+    expect(created[0]!.whyExistingInsufficient).toMatch(/failed this check before synthesis/i);
+    // Nothing that already succeeded was queued again.
+    expect(currentFragments(id).length).toBe(before + 1);
+  });
+
+  it('lets the report cite the archive and the new research on one standard', async () => {
+    const { id } = await run({ plan: plan(3) });
+    const evidence = packetEvidence({ orchestrationId: id, projectId: fixture.project.id });
+
+    // Every claim offered to the synthesis was accepted, and each resolves to a
+    // passage in a source.
+    expect(evidence.newClaims.length).toBeGreaterThan(0);
+    for (const claim of evidence.newClaims) {
+      expect(claim.accepted).toBe(true);
+      expect(claim.sourceUrl).toBeTruthy();
+      expect((claim.evidenceExcerpt ?? '').length).toBeGreaterThan(0);
+    }
+    // A rejected fragment contributes nothing at all.
+    for (const fragment of evidence.rejectedFragments) {
+      expect(evidence.newClaims.some((claim) => claim.fragmentId === fragment.id)).toBe(false);
+    }
   });
 });
 

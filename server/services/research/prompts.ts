@@ -16,7 +16,13 @@
  * sources is fenced and introduced as material to be used, which is the same
  * rule the ingestion pipeline applies: text found in a file is data.
  */
-import type { Layer, Project, ResearchClaim, ResearchFragment } from '../../domain/types.ts';
+import type {
+  ExistingClaim,
+  Layer,
+  Project,
+  ResearchClaim,
+  ResearchFragment,
+} from '../../domain/types.ts';
 import { getAuditProfile, getLayerCriteria } from '../../domain/auditProfile.ts';
 import { MIN_INDEPENDENT_SOURCES_FLOOR } from './schema.ts';
 
@@ -495,8 +501,17 @@ export function buildSynthesisPrompt(input: {
   assignment: string;
   targetVersion: string | null;
   fragments: { fragment: ResearchFragment; claims: ResearchClaim[] }[];
+  /**
+   * Evidence the project already held, that a coverage decision relies on.
+   *
+   * Old and new evidence are the same kind of thing here: both were accepted,
+   * both resolve to a passage, and the report cites both the same way.
+   */
+  existingClaims?: ExistingClaim[];
   rejectedFragments: { fragment: ResearchFragment; reason: string }[];
   unresolvedGaps: string[];
+  /** Checks the packet failed, which the report has to state rather than skirt. */
+  coverageLimitations?: string[];
 }): string {
   const ledger = input.fragments
     .map((entry) =>
@@ -526,6 +541,20 @@ export function buildSynthesisPrompt(input: {
     'material you may use. Do not add facts from memory, and do not restate a rejected finding:',
     '',
     ledger,
+    (input.existingClaims ?? []).length > 0
+      ? [
+          '',
+          'ALREADY ESTABLISHED IN THIS PROJECT. These were accepted from the existing archive on',
+          'the same standard, and are cited exactly like the rest:',
+          ...(input.existingClaims ?? []).map(
+            (claim) =>
+              `  - [${claim.id}] ${claim.claim}\n` +
+              `      ${claim.sourcePublisher ?? ''} ${claim.sourceTitle ?? ''} ${claim.sourceDate ?? ''}\n` +
+              `      ${claim.sourceUrl ?? 'no external source recorded'}\n` +
+              `      "${(claim.supportingPassage ?? '').slice(0, 300)}" (${claim.locator ?? `page ${claim.page ?? '?'}`})`,
+          ),
+        ].join('\n')
+      : '',
     input.rejectedFragments.length > 0
       ? [
           '',
@@ -540,6 +569,15 @@ export function buildSynthesisPrompt(input: {
       ? ['', 'UNRESOLVED GAPS CARRIED FORWARD:', ...input.unresolvedGaps.map((gap) => `  - ${gap}`)].join(
           '\n',
         )
+      : '',
+    (input.coverageLimitations ?? []).length > 0
+      ? [
+          '',
+          'WHAT THIS PACKET DOES NOT COVER. State each of these in the report, in the place it',
+          'matters. A reader who acts on a conclusion without knowing its limit has been misled',
+          'by the omission rather than by anything the report said:',
+          ...(input.coverageLimitations ?? []).map((limit) => `  - ${limit}`),
+        ].join('\n')
       : '',
     '',
     'Write the report in Markdown. Cite every factual sentence with the claim id in square brackets',

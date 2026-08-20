@@ -80,6 +80,13 @@ import { applyGate, fragmentPasses, type GateResult } from './gate.ts';
 import { bundleFragments, modelFor, type Bundle } from './bundling.ts';
 import { executionOrder, quotaDecision, type QuotaDecision } from './quota.ts';
 import { planContradictionFragments, reconcileAcceptedFragment } from './replan.ts';
+import {
+  assessPacket,
+  MAX_COVERAGE_ROUNDS,
+  packetEvidence,
+  planCoverageFragments,
+  type PacketCoverage,
+} from './packet.ts';
 import { buildRepairPlan, describeRepairPlan } from './repair.ts';
 import { modelDefaults } from '../providers/connection.ts';
 import {
@@ -1130,6 +1137,10 @@ export async function runOrchestration(
       return total * MAX_FRAGMENT_ATTEMPTS + total + 5;
     };
 
+    // Rounds, not repeats: when the finished packet turns out not to cover the
+    // goal, the response is fragments for exactly what is missing — never a
+    // second run of the work that already succeeded.
+    for (let round = 0; ; round += 1) {
     for (;;) {
       checkCancelled(loaded.id, options.signal);
       const ready = runnableBatch(loaded.id);
@@ -1267,7 +1278,44 @@ export async function runOrchestration(
       }
     }
 
-    return await synthesizeAndAudit(loaded.id, project, layer, provider, options);
+      // Everything runnable has run. Does the packet actually answer the goal?
+      const coverage = assessPacket({ orchestrationId: loaded.id, projectId: project.id });
+      if (coverage.ok || round >= MAX_COVERAGE_ROUNDS) {
+        return await synthesizeAndAudit(loaded.id, project, layer, provider, options, coverage);
+      }
+
+      const targeted = planCoverageFragments({
+        orchestrationId: loaded.id,
+        coverage,
+        maxFragments: MAX_FRAGMENTS_TOTAL,
+      });
+      if (targeted.length === 0) {
+        return await synthesizeAndAudit(loaded.id, project, layer, provider, options, coverage);
+      }
+
+      recordEvent({
+        projectId: project.id,
+        layerId: layer.id,
+        entityType: 'RUN',
+        entityId: loaded.runId,
+        eventType: 'RESEARCH_COVERAGE_GAP',
+        payload: {
+          orchestrationId: loaded.id,
+          round: round + 1,
+          summary: coverage.summary,
+          fragments: targeted.map((fragment) => fragment.fragmentKey),
+        },
+      });
+      options.onProgress?.({
+        orchestrationId: loaded.id,
+        phase: 'RESEARCHING',
+        passKey: 'TARGETED',
+        fragmentKey: null,
+        index: currentFragments(loaded.id).length - targeted.length,
+        total: currentFragments(loaded.id).length,
+        message: `${coverage.summary} Researching ${targeted.length} targeted fragment(s) for it.`,
+      });
+    }
   } catch (error) {
     if (error instanceof ResearchCancelled) {
       // Whoever cancelled already said why. Overwriting that with the generic
@@ -1469,6 +1517,7 @@ async function synthesizeAndAudit(
   layer: Layer,
   provider: AIProvider,
   options: RunOrchestrationOptions,
+  coverage: PacketCoverage,
 ): Promise<OrchestrationOutcome> {
   const orchestration = getOrchestration(orchestrationId)!;
   const fragments = currentFragments(orchestrationId);
@@ -1477,6 +1526,9 @@ async function synthesizeAndAudit(
     (fragment) => fragment.status === 'REJECTED' || fragment.status === 'BLOCKED',
   );
   const claims = acceptedClaims(orchestrationId);
+  // Old evidence and new evidence, on one standard: cited by a coverage
+  // decision, not superseded, and never rejected.
+  const evidence = packetEvidence({ orchestrationId, projectId: project.id });
 
   if (accepted.length === 0 || claims.length === 0) {
     // Nothing survived. Writing a report anyway would be the exact failure this
@@ -1507,6 +1559,48 @@ async function synthesizeAndAudit(
       acceptedFragments: 0,
       rejectedFragments: rejected.length,
       acceptedClaims: 0,
+      documentId: null,
+      auditId: null,
+      verdict: null,
+    };
+  }
+
+  // A packet that does not answer the mandatory part of its own goal is not a
+  // report waiting to be written — it is a gap, and writing around it is the
+  // failure this whole pipeline exists to prevent.
+  const fatal = coverage.checks.filter(
+    (check) =>
+      !check.passed &&
+      (check.check === 'Mandatory requirements are covered' ||
+        check.check === 'The packet answers the goal it was given'),
+  );
+  if (fatal.length > 0) {
+    const reason =
+      `${coverage.summary} Nothing was written: a report that covered around a mandatory ` +
+      'requirement would read as an answer to the assignment when it is not one.';
+    updateOrchestration(orchestrationId, {
+      status: 'NEEDS_HUMAN',
+      currentPass: 'SYNTHESIS',
+      failureReason: reason,
+    });
+    updateRun(orchestration.runId, { status: 'BLOCKED', failureReason: reason });
+    recordEvent({
+      projectId: project.id,
+      layerId: layer.id,
+      entityType: 'RUN',
+      entityId: orchestration.runId,
+      eventType: 'RESEARCH_BLOCKED',
+      payload: {
+        orchestrationId,
+        coverage: coverage.checks.filter((check) => !check.passed).map((check) => check.check),
+      },
+    });
+    return {
+      orchestration: getOrchestration(orchestrationId)!,
+      fragments,
+      acceptedFragments: accepted.length,
+      rejectedFragments: rejected.length,
+      acceptedClaims: claims.length,
       documentId: null,
       auditId: null,
       verdict: null,
@@ -1545,11 +1639,17 @@ async function synthesizeAndAudit(
           fragment,
           claims: claims.filter((claim) => claim.fragmentId === fragment.id),
         })),
+        existingClaims: evidence.existingClaims,
         rejectedFragments: rejected.map((fragment) => ({
           fragment,
           reason: fragment.blockedReason ?? 'did not clear its evidence gate',
         })),
         unresolvedGaps: [...unresolved],
+        // What the packet does not cover, so the report states it rather than
+        // writing around it.
+        coverageLimitations: coverage.checks
+          .filter((check) => !check.passed)
+          .map((check) => `${check.check}: ${check.detail}`),
       }),
       provider,
       options,
