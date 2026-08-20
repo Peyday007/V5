@@ -139,9 +139,18 @@ function describeBundle(bundle: Bundle): string {
  * contradiction that has already survived one attempt is not.
  */
 function kindOf(bundle: Bundle): JobKind {
+  // A contradiction is the case a cheap model gets wrong most confidently.
   if (bundle.fragments.some((fragment) => fragment.contradictionTargets.length > 0)) {
     return 'INVESTIGATION';
   }
+  // A calculation's inputs have to be exactly right or the arithmetic is worse
+  // than useless, so they are not discovery work either.
+  if (bundle.fragments.some((fragment) => fragment.expectedClaimTypes.includes('CALCULATION'))) {
+    return 'INVESTIGATION';
+  }
+  // A first broad pass over supporting evidence is what a lighter model is for.
+  // If it comes back weak the repair is an investigation, on the strong model —
+  // the bar it has to clear does not move, only the cost of the first try.
   if (bundle.fragments.every((fragment) => fragment.attempt === 1 && fragment.priority > 3)) {
     return 'DISCOVERY';
   }

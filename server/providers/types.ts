@@ -8,6 +8,8 @@
  * from the database and the filesystem.
  */
 
+import type { ProviderQuota } from '../domain/types.ts';
+
 export interface ProviderMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
@@ -30,6 +32,14 @@ export interface ProviderStatus {
    * artifact would be the worst outcome the platform can produce.
    */
   placeholder?: boolean;
+  /**
+   * What the provider says about its allowance, when it says anything.
+   *
+   * Optional because most providers do not expose one. Omitting it means
+   * UNKNOWN, which the orchestration treats as "go ahead and find out" rather
+   * than as exhaustion.
+   */
+  quota?: ProviderQuota;
 }
 
 export interface ResearchRequest {

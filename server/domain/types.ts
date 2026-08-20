@@ -190,6 +190,7 @@ export const EVENT_TYPES = [
   'RESEARCH_FRAGMENT_ACCEPTED',
   'RESEARCH_FRAGMENT_REJECTED',
   'RESEARCH_BLOCKED',
+  'RESEARCH_PAUSED_QUOTA',
   'RESEARCH_CANCELLED',
   'RESEARCH_FAILED',
   'RESEARCH_COMPLETED',
@@ -382,6 +383,9 @@ export const ORCHESTRATION_STATUSES = [
   'CANCELLED',
   'INTERRUPTED',
   'NEEDS_HUMAN',
+  // Out of allowance, not out of work: everything completed is kept and
+  // everything queued stays queued until the quota refreshes.
+  'PAUSED_QUOTA',
 ] as const;
 export type OrchestrationStatus = (typeof ORCHESTRATION_STATUSES)[number];
 
@@ -515,6 +519,28 @@ export type ReconciliationOutcome = (typeof RECONCILIATION_OUTCOMES)[number];
 /** What a bundled job is for, which decides how much model it deserves. */
 export const JOB_KINDS = ['DISCOVERY', 'INVESTIGATION', 'VERIFICATION', 'SYNTHESIS'] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
+
+/**
+ * What a provider says about the allowance it is running on.
+ *
+ * UNKNOWN is a real answer and the common one: most tools do not report a
+ * quota, and treating silence as exhaustion would stop research that would have
+ * worked. Scope matters because a provider's own model allowance and a
+ * third-party model's allowance run out separately.
+ */
+export const QUOTA_STATES = ['AVAILABLE', 'LIMITED', 'EXHAUSTED', 'UNKNOWN'] as const;
+export type QuotaState = (typeof QUOTA_STATES)[number];
+
+export const QUOTA_SCOPES = ['GEMINI', 'THIRD_PARTY', 'UNKNOWN'] as const;
+export type QuotaScope = (typeof QUOTA_SCOPES)[number];
+
+export interface ProviderQuota {
+  state: QuotaState;
+  scope: QuotaScope;
+  /** Phrased for the user; never a raw CLI line. */
+  detail: string;
+  resetsAt: string | null;
+}
 
 export const JOB_STATUSES = [
   'QUEUED',

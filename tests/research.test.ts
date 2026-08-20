@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { DATA_ROOT } from '../server/env.ts';
+import type { ProviderQuota } from '../server/domain/types.ts';
 import type {
   AIProvider,
   AuditRequest,
@@ -28,7 +29,12 @@ import type {
 import { getDocument } from '../server/repos/documents.ts';
 import { listEventsByEntity } from '../server/repos/events.ts';
 import { getRun } from '../server/repos/runs.ts';
-import { jobFragmentOutcomes, jobsForFragment, listJobs } from '../server/repos/jobs.ts';
+import {
+  jobFragmentOutcomes,
+  jobsForFragment,
+  listJobs,
+  openQuotaPause,
+} from '../server/repos/jobs.ts';
 import {
   acceptedClaims,
   currentFragments,
@@ -39,7 +45,12 @@ import {
   startPass,
   updateOrchestration,
 } from '../server/repos/research.ts';
-import { startResearch, runOrchestration, MAX_FRAGMENT_ATTEMPTS } from '../server/services/research/orchestrator.ts';
+import {
+  startResearch,
+  runOrchestration,
+  resumeAfterQuota,
+  MAX_FRAGMENT_ATTEMPTS,
+} from '../server/services/research/orchestrator.ts';
 import {
   cancelResearch,
   enqueueResearch,
@@ -244,6 +255,10 @@ interface Script {
   synthesis?: unknown;
   throwOn?: string;
   onCall?: (passKind: string, fragmentKey: string | null) => void;
+  /** The allowance the worker reports, which the test can change mid-run. */
+  quota?: ProviderQuota;
+  /** Report the allowance exhausted once this many research jobs have run. */
+  exhaustAfterJobs?: number;
 }
 
 /** A worker that answers whatever the prompt is asking for, from a script. */
@@ -363,7 +378,28 @@ class ScriptedWorker implements AIProvider {
     throw new Error('not used');
   }
 
+  /** The allowance came back. */
+  restoreQuota(): void {
+    delete this.#script.exhaustAfterJobs;
+    delete this.#script.quota;
+  }
+
+  /** How many research jobs this worker has actually run. */
+  get researchJobs(): number {
+    return this.calls.filter((call) => call.kind === 'RESEARCH').length;
+  }
+
   getStatus(): ProviderStatus {
+    const exhaust = this.#script.exhaustAfterJobs;
+    const quota =
+      exhaust !== undefined && this.researchJobs >= exhaust
+        ? ({
+            state: 'EXHAUSTED',
+            scope: 'GEMINI',
+            detail: 'The Gemini allowance is used up for now.',
+            resetsAt: null,
+          } as ProviderQuota)
+        : this.#script.quota;
     return {
       name: this.name,
       available: true,
@@ -371,6 +407,7 @@ class ScriptedWorker implements AIProvider {
       model: null,
       capabilities: { chat: false, research: true, audit: true },
       placeholder: false,
+      ...(quota ? { quota } : {}),
     };
   }
 }
@@ -771,6 +808,80 @@ describe('compatible fragments share one job', () => {
     if (outcomes.length > 1) {
       expect(outcomes.some((entry) => entry.outcome === 'ACCEPTED')).toBe(true);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3c. Quota
+// ---------------------------------------------------------------------------
+
+describe('a run that runs out of allowance', () => {
+  it('pauses with everything kept, and resumes where it stopped', async () => {
+    const worker = new ScriptedWorker({
+      plan: plan(6),
+      // One job's worth of allowance, then nothing.
+      exhaustAfterJobs: 1,
+      claims: {
+        // And one fragment that cannot clear its gate, to prove the bar does
+        // not move when the allowance is short.
+        'fragment-6': [
+          claims([
+            { claim: 'A', url: 'https://www.bls.gov/one.htm' },
+            { claim: 'B', url: 'https://www.bls.gov/two.htm' },
+          ]),
+        ],
+      },
+      verification: { 'fragment-6': [verification(2)] },
+    });
+    const orchestration = startResearch({
+      layerId: fixture.layerByName('World Model').id,
+      title: 'How custody transfer is recognised',
+      assignment: 'Establish how custody transfer is recognised across distressed asset classes.',
+    });
+
+    const paused = await runOrchestration(orchestration.id, { provider: worker });
+    expect(paused.orchestration.status).toBe('PAUSED_QUOTA');
+    // The pause is explained in terms of the allowance, not an error.
+    expect(paused.orchestration.failureReason).toMatch(/allowance/i);
+    expect(paused.orchestration.failureReason).toMatch(/Paid overages are off/);
+
+    // Completed work is kept, and queued work stays queued.
+    expect(paused.acceptedFragments).toBeGreaterThan(0);
+    const atPause = currentFragments(orchestration.id);
+    expect(atPause.some((entry) => ['QUEUED', 'PLANNED'].includes(entry.status))).toBe(true);
+    // Nothing was synthesized on a partial ledger.
+    expect(paused.documentId).toBeNull();
+
+    const open = openQuotaPause(orchestration.id);
+    expect(open).not.toBeNull();
+    expect(open!.detail).toMatch(/allowance/i);
+
+    const events = listEventsByEntity('RUN', paused.orchestration.runId);
+    const pauseEvent = events.find((event) => event.eventType === 'RESEARCH_PAUSED_QUOTA')!;
+    expect(pauseEvent).toBeTruthy();
+    expect((pauseEvent.payload as { fragmentsPending: number }).fragmentsPending).toBeGreaterThan(0);
+
+    // The allowance comes back and the run picks up exactly where it stopped.
+    worker.restoreQuota();
+    const finished = await resumeAfterQuota(orchestration.id, { provider: worker });
+    await whenExtractionIdle();
+    expect(finished.orchestration.status).not.toBe('PAUSED_QUOTA');
+    expect(openQuotaPause(orchestration.id)).toBeNull();
+    expect(finished.acceptedFragments).toBeGreaterThan(paused.acceptedFragments);
+
+    // A short allowance is never a reason to accept weaker evidence: the
+    // one-publisher fragment is still refused.
+    const weak = currentFragments(orchestration.id).find(
+      (entry) => entry.fragmentKey === 'fragment-6',
+    )!;
+    expect(weak.status).not.toBe('ACCEPTED');
+  });
+
+  it('refuses to resume a run that was not paused for quota', async () => {
+    const { id } = await run({ plan: plan(3) });
+    await expect(resumeAfterQuota(id, { provider: new ScriptedWorker() })).rejects.toThrow(
+      /not paused for quota/i,
+    );
   });
 });
 

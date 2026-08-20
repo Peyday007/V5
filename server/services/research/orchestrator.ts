@@ -73,10 +73,15 @@ import { registerRunArtifact, targetVersionForRun } from '../runArtifacts.ts';
 import { selectRelevantSegments } from '../sources/ingest.ts';
 import { applyGate, fragmentPasses, type GateResult } from './gate.ts';
 import { bundleFragments, modelFor, type Bundle } from './bundling.ts';
+import { executionOrder, quotaDecision, type QuotaDecision } from './quota.ts';
 import {
   cancelQueuedJobs,
   createJob,
+  getConnection,
+  openQuotaPause,
   recordFragmentOutcome,
+  recordQuotaPause,
+  resolveQuotaPause,
   updateJob,
 } from '../../repos/jobs.ts';
 import { dependenciesSettled, planDependencies, shouldSplit, splitFragment } from './splitting.ts';
@@ -1102,9 +1107,24 @@ export async function runOrchestration(
         );
       }
 
+      // What the allowance can pay for comes before what the queue would like to
+      // run. A pause here keeps every accepted fragment and every queued one.
+      const decision = quotaDecision({
+        provider,
+        paidOverageEnabled: getConnection(provider.name)?.paidOverageEnabled ?? false,
+      });
+      if (!decision.canRun) {
+        return pauseForQuota(loaded.id, project, layer, decision, options);
+      }
+
+      // Most urgent first: the boundary before the evidence inside it, a premise
+      // before the fragment resting on it, a contradiction before anything built
+      // on top of it.
+      const ordered = executionOrder(ready, currentFragments(loaded.id));
+
       // Compatible fragments ride in one job: same scope, same source types, no
       // dependency between them. Their claims still come back separately.
-      const [bundle] = bundleFragments(ready);
+      const [bundle] = bundleFragments(ordered);
       if (!bundle) break;
 
       const job = createJob({
@@ -1205,6 +1225,119 @@ export async function runOrchestration(
     });
     throw error;
   }
+}
+
+/**
+ * Stop because the allowance ran out, keeping everything.
+ *
+ * Running out of quota is an ordinary event, not a failure: nothing is
+ * discarded, nothing is downgraded, and no fragment is accepted on weaker
+ * evidence to squeeze the run in under the limit. What the user gets is a
+ * sentence saying which allowance is gone, what has been done so far, and what
+ * is still waiting.
+ */
+function pauseForQuota(
+  orchestrationId: string,
+  project: Project,
+  layer: Layer,
+  decision: QuotaDecision,
+  options: RunOrchestrationOptions,
+): OrchestrationOutcome {
+  const orchestration = getOrchestration(orchestrationId)!;
+  const fragments = currentFragments(orchestrationId);
+  const settled = fragments.filter((fragment) =>
+    ['ACCEPTED', 'REJECTED', 'NEEDS_HUMAN'].includes(fragment.status),
+  );
+  const pending = fragments.length - settled.length;
+
+  recordQuotaPause({
+    orchestrationId,
+    provider: orchestration.provider,
+    quotaState: decision.quota.state,
+    detail: decision.detail,
+    jobsCompleted: settled.length,
+    jobsPending: pending,
+  });
+
+  updateOrchestration(orchestrationId, {
+    status: 'PAUSED_QUOTA',
+    failureReason: decision.detail,
+  });
+  recordEvent({
+    projectId: project.id,
+    layerId: layer.id,
+    entityType: 'RUN',
+    entityId: orchestration.runId,
+    eventType: 'RESEARCH_PAUSED_QUOTA',
+    payload: {
+      orchestrationId,
+      quotaState: decision.quota.state,
+      quotaScope: decision.quota.scope,
+      resetsAt: decision.quota.resetsAt,
+      fragmentsSettled: settled.length,
+      fragmentsPending: pending,
+      paidOverageOffered: decision.overageWouldHelp,
+    },
+  });
+  options.onProgress?.({
+    orchestrationId,
+    phase: 'RESEARCHING',
+    passKey: 'TARGETED',
+    fragmentKey: null,
+    index: settled.length,
+    total: fragments.length,
+    message: decision.detail,
+  });
+
+  return {
+    orchestration: getOrchestration(orchestrationId)!,
+    fragments,
+    acceptedFragments: fragments.filter((fragment) => fragment.status === 'ACCEPTED').length,
+    rejectedFragments: fragments.filter((fragment) =>
+      fragment.status === 'REJECTED' || fragment.status === 'BLOCKED',
+    ).length,
+    acceptedClaims: acceptedClaims(orchestrationId).length,
+    documentId: null,
+    auditId: null,
+    verdict: null,
+  };
+}
+
+/**
+ * Pick a quota-paused run back up.
+ *
+ * The run resumes exactly where it stopped, because nothing was thrown away
+ * when it paused: the fragments that were queued are still queued and the ones
+ * that were accepted are still accepted.
+ */
+export async function resumeAfterQuota(
+  orchestrationId: string,
+  options: RunOrchestrationOptions = {},
+): Promise<OrchestrationOutcome> {
+  const orchestration = getOrchestration(orchestrationId);
+  if (!orchestration) throw new Error(`Unknown research run ${orchestrationId}`);
+  if (orchestration.status !== 'PAUSED_QUOTA') {
+    throw new Error(
+      `This run is ${orchestration.status.toLowerCase().replace(/_/g, ' ')}, not paused for quota.`,
+    );
+  }
+
+  const provider = options.provider ?? getProvider(orchestration.provider);
+  const decision = quotaDecision({
+    provider,
+    paidOverageEnabled: getConnection(provider.name)?.paidOverageEnabled ?? false,
+  });
+  if (!decision.canRun) {
+    // Resuming into the same wall would only churn. The pause stands, and it
+    // says the same thing it said before.
+    const { project, layer } = requireContext(orchestration);
+    return pauseForQuota(orchestrationId, project, layer, decision, options);
+  }
+
+  const open = openQuotaPause(orchestrationId);
+  if (open) resolveQuotaPause(open.id);
+  updateOrchestration(orchestrationId, { status: 'RESEARCHING', failureReason: null });
+  return await runOrchestration(orchestrationId, options);
 }
 
 async function synthesizeAndAudit(

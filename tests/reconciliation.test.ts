@@ -32,6 +32,7 @@ import {
   planFragmentsFromGaps,
   reconcile,
 } from '../server/services/reconcile/plan.ts';
+import { PRIORITY_TIERS } from '../server/services/research/quota.ts';
 
 let fixture: TestProject;
 let orchestrationId: string;
@@ -403,7 +404,9 @@ describe('fragments are created only for genuine gaps', () => {
     expect(fragment.whyExistingInsufficient).toMatch(/nothing in the project/i);
     expect(fragment.missingEvidence).toBeTruthy();
     expect(fragment.geography).toBe('United States');
-    expect(fragment.priority).toBe(1);
+    // Priority is the execution tier: nothing depends on this one, so it is a
+    // mandatory synthesis input rather than a foundation.
+    expect(fragment.priority).toBe(PRIORITY_TIERS.indexOf('MANDATORY_SYNTHESIS_INPUT') + 1);
   });
 
   it('scales the count to the gaps, above or below any fixed number', () => {
@@ -498,7 +501,9 @@ describe('fragments are created only for genuine gaps', () => {
 
     const boundary = fragments.find((fragment) => fragment.fragmentKey.startsWith('boundary-'));
     expect(boundary).toBeTruthy();
-    expect(boundary!.priority).toBe(0);
+    // A boundary question runs before everything it would scope.
+    expect(boundary!.priority).toBe(PRIORITY_TIERS.indexOf('BOUNDARY_AND_DEFINITION') + 1);
+    expect(boundary!.priority).toBe(1);
     expect(boundary!.minIndependentSources).toBe(1);
   });
 });

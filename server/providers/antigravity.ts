@@ -29,7 +29,7 @@ import type {
   ResearchRunOptions,
 } from './types.ts';
 import { COPY_PROMPT_FALLBACK } from './types.ts';
-import { antigravityStatus, type AntigravityStatus } from './antigravity/runtime.ts';
+import { antigravityStatus, readQuotaDetail, type AntigravityStatus } from './antigravity/runtime.ts';
 import { runAntigravityJob, type JobResult } from './antigravity/process.ts';
 import { createJob, sha256, writeExecutionLog, type ExecutionLog } from './antigravity/jobs.ts';
 
@@ -215,7 +215,8 @@ export class AntigravityProvider implements AIProvider {
   }
 
   getStatus(): ProviderStatus {
-    const status = antigravityStatus().status;
+    const probe = antigravityStatus();
+    const status = probe.status;
     const usable = this.#usable(status);
     return {
       name: this.name,
@@ -225,6 +226,7 @@ export class AntigravityProvider implements AIProvider {
       // Research is what this provider does. Chat and audit still belong to the
       // providers that return structured output for them.
       capabilities: { chat: false, research: usable, audit: false },
+      quota: readQuotaDetail(probe.diagnostics.rawExcerpt ?? ''),
     };
   }
 }

@@ -26,6 +26,7 @@ import {
   WINDOWS,
   type ExecutableProbe,
 } from '../../services/exec/discovery.ts';
+import type { ProviderQuota, QuotaScope, QuotaState as QuotaStateName } from '../../domain/types.ts';
 
 /** How much of the user's allowance is left, as far as the CLI will say. */
 export type QuotaState = 'available' | 'limited' | 'exhausted' | 'unknown';
@@ -193,6 +194,45 @@ function readQuota(text: string): QuotaState {
   if (QUOTA_EXHAUSTED.test(text)) return 'exhausted';
   if (QUOTA_LIMITED.test(text)) return 'limited';
   return 'unknown';
+}
+
+/** Whose allowance ran out: the tool's own models, or a third party's. */
+const THIRD_PARTY_MODEL = /\b(claude|anthropic|gpt-?[0-9]|openai|byok|third[- ]party)\b/i;
+const GEMINI_MODEL = /\bgemini\b/i;
+/** "resets at 14:00 UTC", "try again in 3 hours", "resets tomorrow". */
+const QUOTA_RESET = /\b(?:resets?|available again|try again)\s+(?:at|in|on)?\s*([^\n.;]{3,40})/i;
+
+/**
+ * The quota, phrased for a person.
+ *
+ * The CLI's own wording is not shown: it is unstable across versions and often
+ * a raw API error. What the user needs is which allowance is gone and whether
+ * waiting will fix it.
+ */
+export function readQuotaDetail(text: string): ProviderQuota {
+  const state = readQuota(text);
+  const scope: QuotaScope = THIRD_PARTY_MODEL.test(text)
+    ? 'THIRD_PARTY'
+    : GEMINI_MODEL.test(text)
+      ? 'GEMINI'
+      : 'UNKNOWN';
+  const reset = QUOTA_RESET.exec(text)?.[1]?.trim() ?? null;
+
+  const mapped: QuotaStateName =
+    state === 'exhausted' ? 'EXHAUSTED' : state === 'limited' ? 'LIMITED' : 'UNKNOWN';
+
+  const detail =
+    mapped === 'EXHAUSTED'
+      ? scope === 'THIRD_PARTY'
+        ? 'The third-party model allowance is used up for now.'
+        : scope === 'GEMINI'
+          ? 'The Gemini allowance is used up for now.'
+          : 'The model allowance is used up for now.'
+      : mapped === 'LIMITED'
+        ? 'The allowance is running low, so long runs may not finish in one sitting.'
+        : 'This build does not report how much allowance is left.';
+
+  return { state: mapped, scope, detail, resetsAt: reset };
 }
 
 /** Keep raw CLI output out of the browser, but keep enough to diagnose. */

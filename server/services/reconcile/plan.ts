@@ -30,6 +30,7 @@ import type {
 } from '../../domain/types.ts';
 import { listDocuments } from '../../repos/documents.ts';
 import { createFragments, currentFragments } from '../../repos/research.ts';
+import { assignExecutionPriority } from '../research/quota.ts';
 import {
   contractFor,
   createBoundaryContract,
@@ -408,7 +409,9 @@ export function planFragmentsFromGaps(input: {
     index += 1;
   }
 
-  return createFragments(briefs);
+  // Urgency is decided across the whole set, not per requirement: which tier a
+  // fragment belongs to depends on what else was planned and what depends on it.
+  return createFragments(assignExecutionPriority(briefs));
 }
 
 export type { CoverageAssessment };
