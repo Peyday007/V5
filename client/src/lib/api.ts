@@ -499,6 +499,51 @@ export const Api = {
     return api('/api/providers/status/check', { method: 'POST' });
   },
 
+  // -------------------------------------------------------------------------
+  // Settings -> Research Providers -> Antigravity
+  // -------------------------------------------------------------------------
+
+  /** The stored connection, without re-probing. */
+  providerConnection(provider = 'antigravity'): Promise<{ connection: ProviderConnectionView }> {
+    return api(`/api/providers/connections/${enc(provider)}`);
+  },
+
+  /** Detect Antigravity, and Check Authentication: the same probe, re-run. */
+  detectProvider(provider = 'antigravity'): Promise<{ connection: ProviderConnectionView }> {
+    return api(`/api/providers/connections/${enc(provider)}/detect`, { method: 'POST' });
+  },
+
+  /** Run one real job. The only thing that marks a connection verified. */
+  testProviderConnection(provider = 'antigravity'): Promise<ConnectionTestView> {
+    return api(`/api/providers/connections/${enc(provider)}/test`, { method: 'POST' });
+  },
+
+  disconnectProvider(provider = 'antigravity'): Promise<{ connection: ProviderConnectionView }> {
+    return api(`/api/providers/connections/${enc(provider)}/disconnect`, { method: 'POST' });
+  },
+
+  setProviderModels(
+    provider: string,
+    models: { light: string | null; strong: string | null },
+  ): Promise<{ connection: ProviderConnectionView }> {
+    return api(`/api/providers/connections/${enc(provider)}/models`, {
+      method: 'PATCH',
+      body: JSON.stringify(models),
+    });
+  },
+
+  /** Never called on the user's behalf; only from the switch they operate. */
+  setPaidOverage(
+    provider: string,
+    enabled: boolean,
+    note: string | null,
+  ): Promise<{ connection: ProviderConnectionView }> {
+    return api(`/api/providers/connections/${enc(provider)}/paid-overage`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled, note }),
+    });
+  },
+
   /** Ask the evidence a question and get passages with page anchors back. */
   searchLayerEvidence(layerId: string, query: string): Promise<EvidenceSearchView> {
     return api(`/api/layers/${enc(layerId)}/evidence`, {
@@ -669,6 +714,36 @@ export interface ResearchProviderStatusView {
   quotaState: 'available' | 'limited' | 'exhausted' | 'unknown';
   lastCheckedAt: string;
   message: string;
+}
+
+/** Everything the connection page renders. Server-shaped, never re-derived here. */
+export interface ProviderConnectionView {
+  provider: string;
+  installed: boolean;
+  authenticated: boolean;
+  automationReady: boolean;
+  quota: { state: string; scope: string; detail: string; resetsAt: string | null };
+  executablePath: string | null;
+  version: string | null;
+  message: string;
+  remediation: string[];
+  lastCheckedAt: string | null;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  lastFailureReason: string | null;
+  verifiedRunAt: string | null;
+  verifiedRunDetail: string | null;
+  models: { light: string | null; strong: string | null };
+  paidOverage: { enabled: boolean; note: string | null; setAt: string | null };
+  pty: { enabled: boolean; available: boolean; helper: string | null; detail: string };
+  diagnostics: { stage: string; result: string }[];
+}
+
+export interface ConnectionTestView {
+  ok: boolean;
+  detail: string;
+  durationMs: number;
+  connection: ProviderConnectionView;
 }
 
 export interface DocumentFindingView {

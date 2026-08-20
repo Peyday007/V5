@@ -64,6 +64,7 @@ export function TopBar(props: {
   onSources(): void;
   onWhatNext(): void;
   onReconcile(): void;
+  onSettings(): void;
   onRefresh(): void;
   busy: boolean;
 }): JSX.Element {
@@ -113,6 +114,9 @@ export function TopBar(props: {
         </button>
         <button type="button" className="btn" onClick={props.onReconcile} disabled={disabled}>
           SCAN &amp; RECONCILE
+        </button>
+        <button type="button" className="btn" onClick={props.onSettings} disabled={busy}>
+          SETTINGS
         </button>
         <button type="button" className="btn btn--ghost" onClick={props.onRefresh} disabled={busy}>
           REFRESH

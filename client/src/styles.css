@@ -1726,3 +1726,20 @@ legend {
 .setup-steps__mark { font-family: var(--mono); color: var(--fg-muted); }
 .setup-steps__done .setup-steps__mark { color: var(--green); }
 .setup-steps__done strong { color: var(--fg-muted); font-weight: 400; }
+
+/* ---------------------------------------------------------------------------
+   Settings -> Research Providers
+   Four separate facts, the next action, and what Brain is allowed to spend.
+   --------------------------------------------------------------------------- */
+.provider-settings { display: grid; gap: 12px; }
+.provider-settings h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.04em; }
+.provider-settings__next { margin: 6px 0 0; padding-left: 18px; }
+.provider-settings__next li { margin-bottom: 2px; }
+.provider-settings .field { flex: 1 1 180px; }
+
+.field--check { flex-direction: row; align-items: flex-start; gap: 8px; }
+.field--check input { margin-top: 3px; }
+
+.table--compact th,
+.table--compact td { padding: 4px 8px; vertical-align: top; }
+.table--compact th { width: 132px; white-space: nowrap; }

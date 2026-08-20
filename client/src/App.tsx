@@ -28,6 +28,7 @@ import { LayerDetail } from './components/LayerDetail.tsx';
 import { LayerList } from './components/LayerList.tsx';
 import { Modal } from './components/Modal.tsx';
 import { PlannerPane } from './components/PlannerPane.tsx';
+import { ProviderSettings } from './components/ProviderSettings.tsx';
 import { TopBar } from './components/TopBar.tsx';
 
 type BannerTone = 'info' | 'ok' | 'warn' | 'bad';
@@ -99,6 +100,7 @@ export default function App(): JSX.Element {
   const [importOpen, setImportOpen] = useState(false);
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [reconcileReport, setReconcileReport] = useState<ReconcileReport | null>(null);
   const [layerReloadKey, setLayerReloadKey] = useState(0);
 
@@ -270,6 +272,7 @@ export default function App(): JSX.Element {
         onSources={() => setSourcesOpen(true)}
         onWhatNext={() => void handleWhatNext()}
         onReconcile={() => void handleReconcile()}
+        onSettings={() => setSettingsOpen(true)}
         onRefresh={handleRefreshClick}
         busy={busy || loading}
       />
@@ -391,6 +394,20 @@ export default function App(): JSX.Element {
           </section>
         </main>
       )}
+
+      <Modal
+        title="SETTINGS · RESEARCH PROVIDERS · ANTIGRAVITY"
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        footer={
+          <span className="muted">
+            Brain drives Antigravity as its research worker. Once it is installed and signed in,
+            nothing here needs a terminal.
+          </span>
+        }
+      >
+        <ProviderSettings />
+      </Modal>
 
       <ImportPanel
         projectId={project?.id ?? null}
