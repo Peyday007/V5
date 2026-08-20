@@ -44,7 +44,19 @@ function wrap(driver: SqliteDriver): Database {
  * Open the database and bring the schema fully up to date. Called once during
  * boot, before any route is served. Idempotent.
  */
-export function initDatabase(options: { dbPath?: string } = {}): {
+export function initDatabase(
+  options: {
+    dbPath?: string;
+    /**
+     * Where the migrations live.
+     *
+     * A test seam and nothing else: it exists so the upgrade path can be
+     * exercised against a database standing at an older release, which is the
+     * migration that actually matters — the user's own.
+     */
+    migrationsDir?: string;
+  } = {},
+): {
   db: Database;
   migrations: MigrationReport;
 } {
@@ -64,7 +76,7 @@ export function initDatabase(options: { dbPath?: string } = {}): {
 
   const wrapped = wrap(driver);
   try {
-    migrationReport = runMigrations(wrapped, file);
+    migrationReport = runMigrations(wrapped, file, options.migrationsDir);
   } catch (error) {
     bootError = error instanceof Error ? error : new Error(String(error));
     driver.close();
