@@ -191,6 +191,7 @@ export const EVENT_TYPES = [
   'RESEARCH_FRAGMENT_REJECTED',
   'RESEARCH_BLOCKED',
   'RESEARCH_PAUSED_QUOTA',
+  'RESEARCH_REPLANNED',
   'RESEARCH_CANCELLED',
   'RESEARCH_FAILED',
   'RESEARCH_COMPLETED',
@@ -564,6 +565,29 @@ export type SufficiencyVerdict = (typeof SUFFICIENCY_VERDICTS)[number];
 export const CONTRADICTION_STATES = ['UNCHALLENGED', 'SUPPORTED', 'CONTESTED', 'REFUTED'] as const;
 export type ContradictionState = (typeof CONTRADICTION_STATES)[number];
 
+/**
+ * What kind of disagreement two claims are actually in.
+ *
+ * Most "contradictions" are not factual conflicts at all: two figures measured
+ * on different populations, in different years, or under different definitions
+ * disagree because they are answering different questions. Saying which kind it
+ * is decides what to do — a definition mismatch is settled by choosing the
+ * definition, a factual conflict needs a source that resolves it, and neither
+ * is ever settled by averaging the two numbers.
+ */
+export const CONTRADICTION_KINDS = [
+  'DIRECT_FACTUAL_CONFLICT',
+  'DEFINITION_MISMATCH',
+  'TIMEFRAME_MISMATCH',
+  'GEOGRAPHY_MISMATCH',
+  'POPULATION_MISMATCH',
+  'METHODOLOGICAL_DIFFERENCE',
+  'MEASUREMENT_UNCERTAINTY',
+  'FORECAST_DISAGREEMENT',
+  'RESOLVED_BY_CONTEXT',
+] as const;
+export type ContradictionKind = (typeof CONTRADICTION_KINDS)[number];
+
 /** Structural verdict on a claim's source. Only SOURCED counts as evidence. */
 export const CLAIM_VALIDATION_STATES = [
   'SOURCED',
@@ -906,6 +930,8 @@ export interface ResearchFragmentRow {
   estimated_effort: string | null;
   max_repairs: number;
   split_from_id: string | null;
+  repair_plan: string | null;
+  cancelled_reason: string | null;
   id: string;
   orchestration_id: string;
   project_id: string;
@@ -973,6 +999,8 @@ export interface ResearchClaimRow {
   job_id: string | null;
   reconciliation: string | null;
   reconciled_claim_id: string | null;
+  contradiction_kind: string | null;
+  reconciliation_detail: string | null;
   id: string;
   orchestration_id: string;
   fragment_id: string | null;
@@ -1864,6 +1892,61 @@ export interface ResearchOrchestration {
  * One bounded piece of an assignment, with the boundaries that make its answer
  * checkable and the bar it has to clear before any of it counts.
  */
+/**
+ * Why an attempt failed and what the next one must do differently.
+ *
+ * The point of writing this down is that a repair which is the same prompt with
+ * a different adjective is not a repair — it burns an attempt and the user's
+ * allowance to produce the same failure. Every field here is something the next
+ * attempt can act on, and the ecosystems already tried are recorded so they are
+ * not tried again.
+ */
+export interface RepairPlan {
+  /** The requirement that is still not established. */
+  failedRequirement: string;
+  /** Claims from the failed attempt that were rejected, and why. */
+  affectedClaims: { claim: string; why: string }[];
+  missingEvidence: string;
+  rejectedEvidence: string[];
+  unresolvedContradiction: string | null;
+  /** Source ecosystems this fragment has already been searched in. */
+  ecosystemsAttempted: string[];
+  alternativeEcosystems: string[];
+  alternativeTerminology: string[];
+  alternativeClassifications: string[];
+  /** A narrower question, when narrowing is the honest response to the failure. */
+  narrowerQuestion: string | null;
+  splitRequired: boolean;
+  /** Attempts left before this fragment is reported unresolved. */
+  remainingBudget: number;
+  /** The named strategies this attempt should use, in order. */
+  strategies: RepairStrategy[];
+}
+
+/**
+ * The things that can actually be done differently.
+ *
+ * A named ladder rather than free text, so a repair cannot repeat the previous
+ * attempt's approach and so the reason a fragment was finally abandoned is
+ * checkable: every rung was tried.
+ */
+export const REPAIR_STRATEGIES = [
+  'RESOLVE_CANONICAL_LINK',
+  'FIND_PRIMARY_DATA',
+  'TRY_DIFFERENT_REPOSITORIES',
+  'USE_REGULATORY_RECORDS',
+  'USE_PROCUREMENT_RECORDS',
+  'USE_OFFICIAL_FILINGS',
+  'INSPECT_ARCHIVED_SOURCES',
+  'FIND_METHODOLOGY_DOCUMENTATION',
+  'CHANGE_TERMINOLOGY',
+  'USE_CLASSIFICATION_CODES',
+  'NARROW_THE_CLAIM',
+  'REPLACE_ESTIMATE_WITH_RANGE',
+  'MARK_UNRESOLVED',
+] as const;
+export type RepairStrategy = (typeof REPAIR_STRATEGIES)[number];
+
 export interface ResearchFragment {
   /** The requirements this fragment exists to answer. */
   requirementIds: string[];
@@ -1886,6 +1969,10 @@ export interface ResearchFragment {
   estimatedEffort: string | null;
   maxRepairs: number;
   splitFromId: string | null;
+  /** The structured plan behind a repair attempt; null on a first attempt. */
+  repairPlan: RepairPlan | null;
+  /** Set when accepted evidence made this fragment unnecessary. */
+  cancelledReason: string | null;
   id: string;
   orchestrationId: string;
   projectId: string;
@@ -1955,6 +2042,9 @@ export interface ResearchClaim {
   /** What this finding does to the evidence the project already had. */
   reconciliation: ReconciliationOutcome | null;
   reconciledClaimId: string | null;
+  /** How it disagrees with the claim it was reconciled against, when it does. */
+  contradictionKind: ContradictionKind | null;
+  reconciliationDetail: string | null;
   id: string;
   orchestrationId: string;
   fragmentId: string | null;

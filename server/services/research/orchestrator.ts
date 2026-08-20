@@ -44,7 +44,12 @@ import { getRun, createRun, updateRun } from '../../repos/runs.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { listDocuments } from '../../repos/documents.ts';
 import { listLayers } from '../../repos/layers.ts';
-import { persistPlan, planFragmentsFromGaps, reconcile } from '../reconcile/plan.ts';
+import {
+  MAX_FRAGMENTS_TOTAL,
+  persistPlan,
+  planFragmentsFromGaps,
+  reconcile,
+} from '../reconcile/plan.ts';
 import {
   acceptedClaims,
   beat,
@@ -74,6 +79,8 @@ import { selectRelevantSegments } from '../sources/ingest.ts';
 import { applyGate, fragmentPasses, type GateResult } from './gate.ts';
 import { bundleFragments, modelFor, type Bundle } from './bundling.ts';
 import { executionOrder, quotaDecision, type QuotaDecision } from './quota.ts';
+import { planContradictionFragments, reconcileAcceptedFragment } from './replan.ts';
+import { buildRepairPlan, describeRepairPlan } from './repair.ts';
 import {
   cancelQueuedJobs,
   createJob,
@@ -971,63 +978,43 @@ function nextRunnable(orchestrationId: string): ResearchFragment | null {
  * the same question with the same approach is how a loop burns a user's quota
  * without learning anything.
  */
-function repairStrategyFor(gate: GateResult, fragment: ResearchFragment): string {
-  if (gate.failedConditions.includes('COVERAGE')) {
-    const missing = gate.coverage.filter((lane) => !lane.meetsThreshold).map((lane) => lane.lane);
-    const parts: string[] = [];
-    if (missing.length > 0) parts.push(`Fill these evidence lanes, which have nothing in them: ${missing.join(', ')}.`);
-    if (gate.independentSources < fragment.minIndependentSources) {
-      parts.push(
-        `Find corroboration from different publishers: the accepted evidence comes from ` +
-          `${gate.independentSources} source(s) and this fragment needs ${fragment.minIndependentSources}.`,
-      );
-    }
-    parts.push(
-      'Search for the underlying primary sources — statistical agencies, filings, registries, ' +
-        'court records — rather than commentary about them.',
-    );
-    return parts.join(' ');
-  }
-  if (gate.failedConditions.includes('SCOPE_MATCH')) {
-    return (
-      'The evidence was about a different scope. Either find sources matching this fragment\'s ' +
-      'geography, timeframe, population and definitions exactly, or report plainly that no ' +
-      'source measures it on those terms.'
-    );
-  }
-  if (gate.failedConditions.includes('SOURCE_SUPPORTS')) {
-    return (
-      'The sources did not support the claims made from them. Quote the exact sentence or table ' +
-      'cell that states the claim, and drop any claim you cannot quote.'
-    );
-  }
-  if (gate.failedConditions.includes('DERIVATIONS')) {
-    return (
-      'Calculations were unsupported. Establish each input as its own sourced claim first, then ' +
-      'derive from those, or omit the calculation.'
-    );
-  }
-  return (
-    'Narrow the question to the part that can be evidenced, and use a different search strategy: ' +
-    'primary sources, official statistics, regulatory filings, and named datasets.'
-  );
-}
-
+/**
+ * Plan the next attempt at a fragment that failed.
+ *
+ * Two things make this a repair rather than a retry: the plan is built from
+ * what actually failed, and it is filtered against what earlier attempts
+ * already tried. Everything else about the fragment is carried forward
+ * unchanged — its requirements, its scope, its evidence bar — because a repair
+ * answers the same question, not an easier one.
+ */
 function planRepair(
   orchestration: ResearchOrchestration,
   fragment: ResearchFragment,
   gate: GateResult,
 ): ResearchFragment | null {
-  const attempts = listAttempts(orchestration.id, fragment.fragmentKey).length;
-  if (attempts >= MAX_FRAGMENT_ATTEMPTS) {
+  const history = listAttempts(orchestration.id, fragment.fragmentKey);
+  const attempts = history.length;
+  // The fragment's own budget, never more than the platform-wide cap.
+  const cap = Math.min(MAX_FRAGMENT_ATTEMPTS, 1 + Math.max(0, fragment.maxRepairs));
+
+  if (attempts >= cap) {
     updateFragment(fragment.id, {
       status: 'REJECTED',
       blockedReason:
-        `${gate.reasons.join(' ')} After ${attempts} attempts this fragment still cannot meet its ` +
-        'evidence bar, so nothing from it enters the synthesis.',
+        `${gate.reasons.join(' ')} After ${attempts} attempt(s) this fragment still cannot meet its ` +
+        'evidence bar, so nothing from it enters the synthesis and the gap is reported as unresolved.',
     });
     return null;
   }
+
+  const plan = buildRepairPlan({
+    fragment,
+    gate,
+    history,
+    claims: listClaimsForFragment(fragment.id),
+    splitRequired: false,
+    remainingBudget: cap - attempts,
+  });
 
   const [repaired] = createFragments([
     {
@@ -1036,7 +1023,7 @@ function planRepair(
       layerId: fragment.layerId,
       fragmentIndex: fragment.fragmentIndex,
       fragmentKey: fragment.fragmentKey,
-      question: fragment.question,
+      question: plan.narrowerQuestion ?? fragment.question,
       geography: fragment.geography,
       timeframe: fragment.timeframe,
       population: fragment.population,
@@ -1050,8 +1037,31 @@ function planRepair(
       attempt: fragment.attempt + 1,
       parentFragmentId: fragment.id,
       repairReason: gate.reasons.join(' '),
-      repairStrategy: repairStrategyFor(gate, fragment),
+      repairStrategy: describeRepairPlan(plan),
+      repairPlan: plan,
       status: 'QUEUED',
+      // Everything that says what this fragment is for. A repair that lost its
+      // requirements would be re-ranked as a boundary question and would never
+      // move the coverage matrix when it finally succeeded.
+      requirementIds: fragment.requirementIds,
+      evidenceLane: fragment.evidenceLane,
+      whyItMatters: fragment.whyItMatters,
+      missingEvidence: fragment.missingEvidence,
+      whyExistingInsufficient: fragment.whyExistingInsufficient,
+      existingClaimIds: fragment.existingClaimIds,
+      excludedScope: fragment.excludedScope,
+      expectedClaimTypes: fragment.expectedClaimTypes,
+      preferredSourceTypes: fragment.preferredSourceTypes,
+      prohibitedEvidence: fragment.prohibitedEvidence,
+      requiredComparisons: fragment.requiredComparisons,
+      requiredCalculations: fragment.requiredCalculations,
+      contradictionTargets: fragment.contradictionTargets,
+      failureConditions: fragment.failureConditions,
+      uncertaintyTolerance: fragment.uncertaintyTolerance,
+      priority: fragment.priority,
+      estimatedEffort: fragment.estimatedEffort,
+      maxRepairs: fragment.maxRepairs,
+      splitFromId: fragment.splitFromId,
     },
   ]);
   return repaired ?? null;
@@ -1092,14 +1102,19 @@ export async function runOrchestration(
 
     updateOrchestration(loaded.id, { status: 'RESEARCHING' });
     let guard = 0;
-    const ceiling = planned.length * MAX_FRAGMENT_ATTEMPTS + planned.length + 5;
+    // Recomputed each round: replanning may add a contradiction fragment, and a
+    // guard fixed at planning time would read that as a runaway loop.
+    const ceilingNow = (): number => {
+      const total = Math.max(planned.length, currentFragments(loaded.id).length);
+      return total * MAX_FRAGMENT_ATTEMPTS + total + 5;
+    };
 
     for (;;) {
       checkCancelled(loaded.id, options.signal);
       const ready = runnableBatch(loaded.id);
       if (ready.length === 0) break;
       guard += 1;
-      if (guard > ceiling) {
+      if (guard > ceilingNow()) {
         throw new ResearchFailure(
           loaded.id,
           'TARGETED',
@@ -1174,7 +1189,40 @@ export async function runOrchestration(
       for (const [fragmentId, gate] of gates) {
         const current = getFragment(fragmentId);
         if (!current) continue;
-        if (fragmentPasses(gate)) continue;
+
+        if (fragmentPasses(gate)) {
+          // Accepted evidence changes what the rest of the run still needs to
+          // do: what it confirms, updates or contradicts, which requirements
+          // are now covered, and which queued work has become pointless.
+          const replan = reconcileAcceptedFragment({
+            orchestrationId: loaded.id,
+            projectId: project.id,
+            fragment: current,
+          });
+          planContradictionFragments({
+            orchestrationId: loaded.id,
+            parent: current,
+            contradictions: replan.contradictionsToResolve,
+            maxFragments: MAX_FRAGMENTS_TOTAL,
+          });
+          if (replan.cancelledFragments.length > 0 || replan.contradictionsToResolve.length > 0) {
+            recordEvent({
+              projectId: project.id,
+              layerId: layer.id,
+              entityType: 'RUN',
+              entityId: loaded.runId,
+              eventType: 'RESEARCH_REPLANNED',
+              payload: {
+                orchestrationId: loaded.id,
+                fragmentKey: current.fragmentKey,
+                requirementsUpdated: replan.requirementsUpdated.length,
+                cancelled: replan.cancelledFragments,
+                contradictions: replan.contradictionsToResolve.length,
+              },
+            });
+          }
+          continue;
+        }
 
         // Splitting comes before repair: a fragment that is really two questions
         // would otherwise be repaired as a whole, re-researching the half that

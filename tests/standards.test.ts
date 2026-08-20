@@ -60,6 +60,8 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     jobId: null,
     reconciliation: null,
     reconciledClaimId: null,
+    contradictionKind: null,
+    reconciliationDetail: null,
     contentHash: 'hash',
     createdAt: new Date().toISOString(),
     ...overrides,
@@ -119,6 +121,8 @@ function fragment(overrides: Partial<ResearchFragment> = {}): ResearchFragment {
     estimatedEffort: null,
     maxRepairs: 2,
     splitFromId: null,
+    repairPlan: null,
+    cancelledReason: null,
     ...overrides,
   };
 }

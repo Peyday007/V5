@@ -10,6 +10,7 @@ import { getDb } from '../db/database.ts';
 import type {
   ClaimType,
   ClaimValidationState,
+  ContradictionKind,
   ContradictionState,
   ReconciliationOutcome,
   FragmentStatus,
@@ -26,6 +27,7 @@ import type {
   ResearchPassKey,
   ResearchPassRow,
   ResearchPassStatus,
+  RepairPlan,
 } from '../domain/types.ts';
 import { buildUpdate, fromBool, newId, nowIso, parseJson, toBool, toJson } from './util.ts';
 
@@ -103,6 +105,8 @@ function mapFragment(row: ResearchFragmentRow): ResearchFragment {
     estimatedEffort: row.estimated_effort,
     maxRepairs: Number(row.max_repairs ?? 2),
     splitFromId: row.split_from_id,
+    repairPlan: parseJson<RepairPlan | null>(row.repair_plan ?? null, null),
+    cancelledReason: row.cancelled_reason ?? null,
     repairReason: row.repair_reason,
     repairStrategy: row.repair_strategy,
     integrityVerdict: (row.integrity_verdict as IntegrityVerdict | null) ?? null,
@@ -174,6 +178,8 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     jobId: row.job_id ?? null,
     reconciliation: (row.reconciliation as ReconciliationOutcome | null) ?? null,
     reconciledClaimId: row.reconciled_claim_id ?? null,
+    contradictionKind: (row.contradiction_kind as ContradictionKind | null) ?? null,
+    reconciliationDetail: row.reconciliation_detail ?? null,
     derived: toBool(row.derived),
     derivedFrom: parseJson<string[]>(row.derived_from, []),
     accepted: toBool(row.accepted),
@@ -387,6 +393,7 @@ export interface CreateFragmentInput {
   estimatedEffort?: string | null;
   maxRepairs?: number;
   splitFromId?: string | null;
+  repairPlan?: RepairPlan | null;
 }
 
 export function createFragments(inputs: CreateFragmentInput[]): ResearchFragment[] {
@@ -407,9 +414,10 @@ export function createFragments(inputs: CreateFragmentInput[]): ResearchFragment
            missing_evidence, why_existing_insufficient, existing_claim_ids, excluded_scope,
            expected_claim_types, preferred_source_types, prohibited_evidence, required_comparisons,
            required_calculations, contradiction_targets, failure_conditions, uncertainty_tolerance,
-           priority, estimated_effort, max_repairs, split_from_id, created_at, updated_at)
+           priority, estimated_effort, max_repairs, split_from_id, repair_plan,
+           created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.projectId, input.layerId, input.fragmentIndex,
           input.fragmentKey, input.question, input.geography ?? null, input.timeframe ?? null,
           input.population ?? null, input.definitions ?? null, toJson(input.requiredEvidence),
@@ -425,7 +433,8 @@ export function createFragments(inputs: CreateFragmentInput[]): ResearchFragment
           toJson(input.requiredComparisons ?? []), toJson(input.requiredCalculations ?? []),
           toJson(input.contradictionTargets ?? []), toJson(input.failureConditions ?? []),
           input.uncertaintyTolerance ?? null, input.priority ?? 5, input.estimatedEffort ?? null,
-          input.maxRepairs ?? 2, input.splitFromId ?? null, ts, ts],
+          input.maxRepairs ?? 2, input.splitFromId ?? null,
+          input.repairPlan ? toJson(input.repairPlan) : null, ts, ts],
       );
     }
   });
@@ -469,6 +478,7 @@ export interface UpdateFragmentInput {
   startedAt?: string | null;
   completedAt?: string | null;
   acceptedAt?: string | null;
+  cancelledReason?: string | null;
 }
 
 export function updateFragment(id: string, patch: UpdateFragmentInput): ResearchFragment | null {
@@ -482,6 +492,7 @@ export function updateFragment(id: string, patch: UpdateFragmentInput): Research
     started_at: patch.startedAt,
     completed_at: patch.completedAt,
     accepted_at: patch.acceptedAt,
+    cancelled_reason: patch.cancelledReason,
   });
   if (!clause) return getFragment(id);
   getDb().run(`UPDATE research_fragments SET ${clause}, updated_at = ? WHERE id = ?`, [
@@ -748,6 +759,30 @@ export function listClaims(orchestrationId: string): ResearchClaim[] {
       [orchestrationId],
     )
     .map(mapClaim);
+}
+
+/**
+ * Record what a finding did to the evidence the project already had.
+ *
+ * Only the classification is written. Neither claim is edited and neither is
+ * deleted — new evidence never silently overwrites old evidence, so what
+ * changes is what the project says about the two of them together.
+ */
+export function recordClaimReconciliation(
+  id: string,
+  input: {
+    outcome: ReconciliationOutcome;
+    againstClaimId: string | null;
+    contradictionKind?: ContradictionKind | null;
+    detail: string;
+  },
+): ResearchClaim | null {
+  getDb().run(
+    `UPDATE research_claims SET reconciliation = ?, reconciled_claim_id = ?,
+       contradiction_kind = ?, reconciliation_detail = ? WHERE id = ?`,
+    [input.outcome, input.againstClaimId, input.contradictionKind ?? null, input.detail, id],
+  );
+  return getClaim(id);
 }
 
 /**

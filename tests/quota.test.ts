@@ -113,6 +113,8 @@ function fragment(overrides: Partial<ResearchFragment> & { fragmentKey: string }
     estimatedEffort: null,
     maxRepairs: 2,
     splitFromId: null,
+    repairPlan: null,
+    cancelledReason: null,
     id: `frag_${overrides.fragmentKey}`,
     orchestrationId: 'orch_1',
     projectId: 'proj_1',
