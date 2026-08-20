@@ -29,6 +29,7 @@ import type {
 import { getDocument } from '../server/repos/documents.ts';
 import { listEventsByEntity } from '../server/repos/events.ts';
 import { getRun } from '../server/repos/runs.ts';
+import { applyReviewDecisions, buildReview, REVIEW_TIERS } from '../server/services/research/review.ts';
 import {
   jobFragmentOutcomes,
   jobsForFragment,
@@ -882,6 +883,124 @@ describe('a run that runs out of allowance', () => {
     await expect(resumeAfterQuota(id, { provider: new ScriptedWorker() })).rejects.toThrow(
       /not paused for quota/i,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3d. Review before execution
+// ---------------------------------------------------------------------------
+
+describe('nothing expensive happens before the plan is right', () => {
+  /** Start an assignment that stops for review, and plan it. */
+  async function planned(script: Script = {}) {
+    const worker = new ScriptedWorker({ plan: plan(4), ...script });
+    const orchestration = startResearch({
+      layerId: fixture.layerByName('World Model').id,
+      title: 'How custody transfer is recognised',
+      assignment: 'Establish how custody transfer is recognised across distressed asset classes.',
+      requireApproval: true,
+    });
+    const outcome = await runOrchestration(orchestration.id, { provider: worker });
+    return { worker, outcome, id: orchestration.id };
+  }
+
+  it('plans the whole run, spends nothing, and waits', async () => {
+    const { worker, outcome, id } = await planned();
+
+    expect(outcome.orchestration.status).toBe('AWAITING_APPROVAL');
+    // Planning happened; research did not.
+    expect(currentFragments(id).length).toBeGreaterThan(0);
+    expect(worker.calls.filter((call) => call.kind === 'RESEARCH')).toHaveLength(0);
+    expect(outcome.documentId).toBeNull();
+
+    const review = buildReview(id);
+    expect(review.approvalRequired).toBe(true);
+    // Brain's reading of the goal, in terms a person can correct.
+    expect(review.interpretation.primaryQuestion).toMatch(/custody transfer/i);
+    expect(review.interpretation.geography).toBe('United States');
+    expect(review.interpretation.definitions.length).toBeGreaterThan(0);
+    // The requirements, the gaps, the fragments and the jobs they would run as.
+    expect(review.requirements.length).toBeGreaterThan(0);
+    expect(review.gaps.length).toBeGreaterThan(0);
+    expect(review.fragments.length).toBeGreaterThan(0);
+    expect(review.jobs.length).toBeGreaterThan(0);
+    for (const job of review.jobs) expect(job.fragmentKeys.length).toBeGreaterThan(0);
+    // Every fragment says which tier it is in and why, so the order is checkable.
+    for (const entry of review.fragments) {
+      expect(REVIEW_TIERS).toContain(entry.tier as (typeof REVIEW_TIERS)[number]);
+      expect(entry.tierReason.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('does not research a fragment the user removed', async () => {
+    const { id } = await planned();
+    const target = buildReview(id).fragments[0]!.fragment.fragmentKey;
+
+    const outcome = applyReviewDecisions(id, { removeFragments: [target] });
+    expect(outcome.applied.join(' ')).toMatch(/will not be researched/i);
+
+    const removed = currentFragments(id).find((entry) => entry.fragmentKey === target)!;
+    expect(removed.status).toBe('CANCELLED');
+    expect(removed.cancelledReason).toMatch(/removed during review/i);
+    // And it is not in any job the run would launch.
+    expect(buildReview(id).jobs.flatMap((job) => job.fragmentKeys)).not.toContain(target);
+  });
+
+  it('adds a requirement the user says the goal needs, and plans it', async () => {
+    const { id } = await planned();
+    const before = buildReview(id);
+
+    const outcome = applyReviewDecisions(id, {
+      addRequirements: [{ statement: 'Which regulator publishes the recognition rule?' }],
+    });
+    expect(outcome.applied.join(' ')).toMatch(/requirement\(s\) you added/i);
+
+    const after = outcome.review;
+    expect(after.requirements.length).toBe(before.requirements.length + 1);
+    // A requirement nothing in the archive answers becomes a real gap, and a
+    // gap becomes a fragment.
+    expect(after.fragments.length).toBeGreaterThan(before.fragments.length);
+  });
+
+  it('records the correction to a boundary Brain read differently', async () => {
+    const { id } = await planned();
+    const outcome = applyReviewDecisions(id, {
+      boundary: { geography: 'United Kingdom', timeframe: '2024' },
+    });
+    expect(outcome.applied.join(' ')).toMatch(/boundary was corrected/i);
+    expect(outcome.review.interpretation.geography).toBe('United Kingdom');
+    expect(outcome.review.boundary!.status).toBe('APPROVED');
+  });
+
+  it('runs only once approved, and says who let it run', async () => {
+    const { id } = await planned();
+    expect(getOrchestration(id)!.approvedAt).toBeNull();
+
+    applyReviewDecisions(id, { approve: true, note: 'Checked the boundary and the gaps.' });
+    const approved = getOrchestration(id)!;
+    expect(approved.approvedAt).not.toBeNull();
+    expect(approved.approvalNote).toMatch(/checked the boundary/i);
+
+    // Approving releases the run; the same worker now does the research.
+    const worker = new ScriptedWorker({ plan: plan(4) });
+    const outcome = await runOrchestration(id, { provider: worker });
+    await whenExtractionIdle();
+    expect(outcome.orchestration.status).not.toBe('AWAITING_APPROVAL');
+    expect(worker.calls.filter((call) => call.kind === 'RESEARCH').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the plan inspectable even when automatic execution is turned on', async () => {
+    const { id } = await planned();
+    applyReviewDecisions(id, { autoApprove: true, note: 'Run the rest without asking.' });
+
+    const orchestration = getOrchestration(id)!;
+    expect(orchestration.autoApprove).toBe(true);
+    // Automatic execution is a decision about approval, not about visibility.
+    const review = buildReview(id);
+    expect(review.approvalRequired).toBe(false);
+    expect(review.requirements.length).toBeGreaterThan(0);
+    expect(review.fragments.length).toBeGreaterThan(0);
+    expect(review.interpretation.assignment.length).toBeGreaterThan(0);
   });
 });
 

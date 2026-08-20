@@ -322,6 +322,14 @@ export interface StartResearchInput {
   model?: string | null;
   /** Attach to an existing assignment run instead of creating one. */
   runId?: string | null;
+  /**
+   * Plan the run, then stop and wait for a person.
+   *
+   * The user-facing START RESEARCH path sets this: research costs the user's
+   * allowance, and the cheapest moment to discover Brain read the goal wrongly
+   * is before any of it has been spent.
+   */
+  requireApproval?: boolean;
 }
 
 /**
@@ -368,6 +376,9 @@ export function startResearch(input: StartResearchInput): ResearchOrchestration 
     targetVersion: input.targetVersion ?? run.targetVersion ?? null,
     provider: provider.name,
     model: input.model ?? null,
+    // The route asks for review; a programmatic caller that says nothing gets
+    // the straight-through behaviour it already had.
+    autoApprove: input.requireApproval !== true,
   });
 
   recordEvent({
@@ -1101,6 +1112,15 @@ export async function runOrchestration(
   try {
     const planned = await planFragments(loaded, project, layer, provider, options);
 
+    // Nothing expensive happens until the plan is right. A run that wants a
+    // person's eyes stops here with everything planned and nothing spent — the
+    // cheapest possible moment to discover Brain read the goal differently
+    // from the way it was meant.
+    const current = getOrchestration(loaded.id)!;
+    if (!current.autoApprove && current.approvedAt === null) {
+      return awaitApproval(loaded.id, project, layer, planned, options);
+    }
+
     updateOrchestration(loaded.id, { status: 'RESEARCHING' });
     let guard = 0;
     // Recomputed each round: replanning may add a contradiction fragment, and a
@@ -1276,6 +1296,58 @@ export async function runOrchestration(
     });
     throw error;
   }
+}
+
+/**
+ * Stop with the plan made and nothing spent.
+ *
+ * The run is complete as far as planning goes: the boundary, the requirements,
+ * the coverage matrix and the fragments are all persisted, and the review page
+ * reads them. What has not happened is a single research job.
+ */
+function awaitApproval(
+  orchestrationId: string,
+  project: Project,
+  layer: Layer,
+  planned: ResearchFragment[],
+  options: RunOrchestrationOptions,
+): OrchestrationOutcome {
+  const orchestration = getOrchestration(orchestrationId)!;
+  updateOrchestration(orchestrationId, {
+    status: 'AWAITING_APPROVAL',
+    currentPass: 'PLAN',
+    failureReason: null,
+  });
+  recordEvent({
+    projectId: project.id,
+    layerId: layer.id,
+    entityType: 'RUN',
+    entityId: orchestration.runId,
+    eventType: 'RESEARCH_AWAITING_APPROVAL',
+    payload: { orchestrationId, fragments: planned.length },
+  });
+  options.onProgress?.({
+    orchestrationId,
+    phase: 'PLANNING',
+    passKey: 'PLAN',
+    fragmentKey: null,
+    index: 0,
+    total: planned.length,
+    message:
+      `Planned ${planned.length} fragment(s) and spent nothing yet. Review what Brain understood ` +
+      'the goal to be, and what it proposes to research, before it starts.',
+  });
+
+  return {
+    orchestration: getOrchestration(orchestrationId)!,
+    fragments: currentFragments(orchestrationId),
+    acceptedFragments: 0,
+    rejectedFragments: 0,
+    acceptedClaims: 0,
+    documentId: null,
+    auditId: null,
+    verdict: null,
+  };
 }
 
 /**

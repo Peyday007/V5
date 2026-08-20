@@ -47,16 +47,24 @@ import {
   researchQueueDepth,
   resumeResearch,
 } from '../services/research/queue.ts';
+import { applyReviewDecisions, buildReview } from '../services/research/review.ts';
 import {
   badRequest,
   bodyOf,
   handler,
   notFound,
+  optionalBoolean,
   optionalString,
+  optionalStringArray,
   pathId,
   requireLayer,
   requiredString,
 } from './helpers.ts';
+
+/** A body field that has to be an object before it can be read as one. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 export const researchRouter = Router();
 
@@ -168,9 +176,15 @@ researchRouter.post(
       );
     }
 
+    // Research costs the user's allowance and their afternoon, so the default
+    // is to plan it, show the plan, and wait. Passing review: false is a
+    // deliberate choice to skip that, not an accident of omission.
+    const requireApproval = optionalBoolean(body['review'], 'review') ?? true;
+
     const orchestration = startResearch({
       layerId: layer.id,
       assignment,
+      requireApproval,
       ...(title ? { title } : {}),
       ...(providerName ? { providerName } : {}),
       ...(model ? { model } : {}),
@@ -185,6 +199,71 @@ researchRouter.post(
 researchRouter.get(
   '/research/:orchestrationId',
   handler((req) => orchestrationView(pathId(req, 'orchestrationId'))),
+);
+
+/**
+ * What Brain proposes to do, before anything is spent doing it.
+ *
+ * The goal as it was understood, what the archive already answers, what is
+ * stale or contradicted, the genuine gaps, the fragments planned for them and
+ * the jobs they would be bundled into.
+ */
+researchRouter.get(
+  '/research/:orchestrationId/review',
+  handler((req) => {
+    const orchestrationId = pathId(req, 'orchestrationId');
+    if (!getOrchestration(orchestrationId)) {
+      throw notFound(`No research run with id ${orchestrationId}.`);
+    }
+    return buildReview(orchestrationId);
+  }),
+);
+
+/**
+ * Approve the plan, or change it.
+ *
+ * Corrections are applied first and the plan is re-derived around them, so what
+ * is approved is what will actually run. Approving is what releases the run;
+ * until then nothing has been spent.
+ */
+researchRouter.post(
+  '/research/:orchestrationId/review',
+  handler((req) => {
+    const orchestrationId = pathId(req, 'orchestrationId');
+    const orchestration = getOrchestration(orchestrationId);
+    if (!orchestration) throw notFound(`No research run with id ${orchestrationId}.`);
+    const body = bodyOf(req);
+
+    const outcome = applyReviewDecisions(orchestrationId, {
+      ...(isRecord(body['boundary']) ? { boundary: body['boundary'] as never } : {}),
+      ...(Array.isArray(body['addRequirements'])
+        ? { addRequirements: body['addRequirements'] as never }
+        : {}),
+      ...(optionalStringArray(body['removeFragments'], 'removeFragments')
+        ? { removeFragments: optionalStringArray(body['removeFragments'], 'removeFragments')! }
+        : {}),
+      ...(optionalStringArray(body['supersedeClaims'], 'supersedeClaims')
+        ? { supersedeClaims: optionalStringArray(body['supersedeClaims'], 'supersedeClaims')! }
+        : {}),
+      ...(optionalStringArray(body['forceReverify'], 'forceReverify')
+        ? { forceReverify: optionalStringArray(body['forceReverify'], 'forceReverify')! }
+        : {}),
+      ...(optionalBoolean(body['approve'], 'approve') === undefined
+        ? {}
+        : { approve: optionalBoolean(body['approve'], 'approve')! }),
+      ...(optionalBoolean(body['autoApprove'], 'autoApprove') === undefined
+        ? {}
+        : { autoApprove: optionalBoolean(body['autoApprove'], 'autoApprove')! }),
+      ...(optionalString(body['note'], 'note') ? { note: optionalString(body['note'], 'note')! } : {}),
+    });
+
+    // Approval is what starts the work. Everything else only changes the plan.
+    const approved = getOrchestration(orchestrationId);
+    if (approved && approved.approvedAt !== null && approved.status === 'AWAITING_APPROVAL') {
+      void enqueueResearch(orchestrationId);
+    }
+    return outcome;
+  }),
 );
 
 /** One fragment in full: its brief, its attempts, its claims and its verdict. */

@@ -192,6 +192,8 @@ export const EVENT_TYPES = [
   'RESEARCH_BLOCKED',
   'RESEARCH_PAUSED_QUOTA',
   'RESEARCH_REPLANNED',
+  'RESEARCH_PLAN_REVIEWED',
+  'RESEARCH_AWAITING_APPROVAL',
   'RESEARCH_CANCELLED',
   'RESEARCH_FAILED',
   'RESEARCH_COMPLETED',
@@ -379,6 +381,9 @@ export const ORCHESTRATION_STATUSES = [
   'SYNTHESIZING',
   'AUDITING',
   'AWAITING_REPAIR',
+  // Planned, and waiting for a person to say the plan is right before any of
+  // the user's allowance is spent on it.
+  'AWAITING_APPROVAL',
   'COMPLETE',
   'FAILED',
   'CANCELLED',
@@ -909,6 +914,9 @@ export interface ResearchOrchestrationRow {
   cancelled_at: string | null;
   cancel_reason: string | null;
   heartbeat_at: string | null;
+  auto_approve: number;
+  approved_at: string | null;
+  approval_note: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1892,6 +1900,10 @@ export interface ResearchOrchestration {
   cancelledAt: string | null;
   cancelReason: string | null;
   heartbeatAt: string | null;
+  /** False means: plan it, show the plan, and wait for a person. */
+  autoApprove: boolean;
+  approvedAt: string | null;
+  approvalNote: string | null;
   createdAt: string;
   updatedAt: string;
 }

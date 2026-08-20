@@ -59,6 +59,9 @@ function mapOrchestration(row: ResearchOrchestrationRow): ResearchOrchestration 
     cancelledAt: row.cancelled_at,
     cancelReason: row.cancel_reason,
     heartbeatAt: row.heartbeat_at,
+    autoApprove: toBool(row.auto_approve),
+    approvedAt: row.approved_at,
+    approvalNote: row.approval_note,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -206,6 +209,8 @@ export interface CreateOrchestrationInput {
   attempt?: number;
   parentOrchestrationId?: string | null;
   repairReason?: string | null;
+  /** False plans the run and then waits for a person to approve it. */
+  autoApprove?: boolean;
 }
 
 export function createOrchestration(input: CreateOrchestrationInput): ResearchOrchestration {
@@ -214,11 +219,12 @@ export function createOrchestration(input: CreateOrchestrationInput): ResearchOr
   getDb().run(
     `INSERT INTO research_orchestrations (id, project_id, layer_id, run_id, title, assignment,
        target_version, provider, model, status, attempt, parent_orchestration_id, repair_reason,
-       queued_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?, ?)`,
+       auto_approve, queued_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?, ?, ?)`,
     [id, input.projectId, input.layerId, input.runId, input.title, input.assignment,
       input.targetVersion ?? null, input.provider, input.model ?? null, input.attempt ?? 1,
-      input.parentOrchestrationId ?? null, input.repairReason ?? null, ts, ts, ts],
+      input.parentOrchestrationId ?? null, input.repairReason ?? null,
+      fromBool(input.autoApprove ?? true), ts, ts, ts],
   );
   return getOrchestration(id)!;
 }
@@ -308,6 +314,9 @@ export interface UpdateOrchestrationInput {
   cancelledAt?: string | null;
   cancelReason?: string | null;
   heartbeatAt?: string | null;
+  autoApprove?: boolean;
+  approvedAt?: string | null;
+  approvalNote?: string | null;
 }
 
 export function updateOrchestration(
@@ -328,6 +337,9 @@ export function updateOrchestration(
     cancelled_at: patch.cancelledAt,
     cancel_reason: patch.cancelReason,
     heartbeat_at: patch.heartbeatAt,
+    auto_approve: patch.autoApprove === undefined ? undefined : fromBool(patch.autoApprove),
+    approved_at: patch.approvedAt,
+    approval_note: patch.approvalNote,
   });
   if (!clause) return getOrchestration(id);
   getDb().run(`UPDATE research_orchestrations SET ${clause}, updated_at = ? WHERE id = ?`, [
