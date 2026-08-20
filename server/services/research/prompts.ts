@@ -18,7 +18,7 @@
  */
 import type { Layer, Project, ResearchClaim, ResearchFragment } from '../../domain/types.ts';
 import { getAuditProfile, getLayerCriteria } from '../../domain/auditProfile.ts';
-import { MAX_FRAGMENTS, MIN_FRAGMENTS, MIN_INDEPENDENT_SOURCES_FLOOR } from './schema.ts';
+import { MIN_INDEPENDENT_SOURCES_FLOOR } from './schema.ts';
 
 /** Ends every prompt: the reply is JSON, and only the last block is read. */
 function jsonInstruction(shape: string): string {
@@ -63,62 +63,100 @@ function sourceMaterial(passages: { title: string; text: string }[]): string {
 }
 
 // ---------------------------------------------------------------------------
-// Pass 1 — decompose the assignment
+// Pass 1 — what the goal requires, before anything is researched
+//
+// The plan pass no longer proposes fragments. It states what the assignment is
+// about and what it would take to answer it; Brain then compares that against
+// the archive and creates fragments only for what is genuinely missing. Asking a
+// research worker to propose fragments up front is what produced research into
+// things the project had already established.
 // ---------------------------------------------------------------------------
 
-export function buildPlanPrompt(input: {
+export function buildGoalPlanPrompt(input: {
   project: Project;
   layer: Layer;
   title: string;
   assignment: string;
   passages: { title: string; text: string }[];
+  /** Titles of documents the project already holds, so the plan knows what exists. */
+  existingDocuments: string[];
 }): string {
   return [
-    'You are decomposing a research assignment into bounded fragments before any research happens.',
+    'You are working out what a research assignment actually requires, before any research happens.',
+    'You are not proposing research. You are stating the boundaries of the question and the list of',
+    'things that would have to be established for it to be answered.',
     '',
     layerContext(input.project, input.layer),
     '',
     `ASSIGNMENT: ${input.title}`,
     input.assignment,
+    input.existingDocuments.length > 0
+      ? [
+          '',
+          'THE PROJECT ALREADY HOLDS THESE DOCUMENTS. Some of what the assignment asks for may',
+          'already be established in them; that is checked separately, so do not assume either way:',
+          ...input.existingDocuments.slice(0, 40).map((title) => `  - ${title}`),
+        ].join('\n')
+      : '',
     sourceMaterial(input.passages),
     '',
-    'Break this into research fragments. Each fragment is a separate job that one researcher can',
-    'answer completely and defend with sources. Breadth comes from having many fragments, so do not',
-    'write a fragment that is really the whole subject again.',
+    'First, the boundary. Almost every wasted research run is a scope failure — the right answer to',
+    'a slightly different question — so be specific about geography, timeframe, population and the',
+    'definitions in use, and about what is deliberately excluded.',
     '',
-    `Produce between ${MIN_FRAGMENTS} and ${MAX_FRAGMENTS} fragments. Choose the number from the`,
-    'scope of the assignment and how much of it is currently unevidenced — not from a habit.',
+    'If a boundary genuinely cannot be settled from the assignment, do not choose one. List it as an',
+    'ambiguity: it will be researched or put to the user rather than guessed.',
     '',
-    'Every fragment must state:',
-    '  - one bounded question, answerable on its own',
-    '  - the evidence lanes it needs filled (name each kind of evidence separately)',
-    '  - which source types are acceptable for it',
-    '  - which source types are inadequate or excluded for it, and are not to be cited',
-    '  - its geography, timeframe, population and the definitions it uses',
-    '  - what "complete" means for it, as checkable criteria',
-    `  - the minimum number of independent sources (at least ${MIN_INDEPENDENT_SOURCES_FLOOR})`,
-    '  - the keys of any fragments that must be answered before it',
+    'Then, the requirements. Each is one thing that must be established, with the evidence that',
+    'would establish it and the test for when it is done. Classify each one honestly:',
     '',
-    'A fragment whose question cannot be answered from public sources should still be planned:',
-    'establishing that the evidence does not exist is a real finding.',
+    '  RESEARCH              a question answered by finding and reading sources',
+    '  DEFINITION            a term that must be pinned down before anything else means anything',
+    '  COMPARISON            two or more things that must be compared on the same basis',
+    '  CALCULATION           a figure derived from inputs that must themselves be established',
+    '  OTHER_LAYER           a question a different layer of this project owns',
+    '  IMPLEMENTATION        something to be built, not looked up',
+    '  EMPIRICAL_VALIDATION  something that can only be settled by running it',
+    '  TUNING                a parameter to be adjusted in operation',
+    '  OPTIONAL_ENRICHMENT   nice to have, does not change the conclusion',
+    '  IRRELEVANT            appears in the goal but does not materially affect it',
+    '',
+    'Marking something OTHER_LAYER, IMPLEMENTATION, EMPIRICAL_VALIDATION or TUNING is not a way of',
+    'avoiding work; it is how the packet avoids researching things research cannot answer.',
     '',
     jsonInstruction(
       `{
-  "rationale": "why this decomposition, in one paragraph",
-  "fragments": [
+  "boundary": {
+    "primaryQuestion": "the one question this assignment answers",
+    "decisionSupported": "the decision or deliverable this feeds, or null",
+    "audience": "who reads the result, or null",
+    "includedSubjects": ["…"],
+    "excludedSubjects": ["…"],
+    "geography": "…or null",
+    "timeframe": "…or null",
+    "population": "…or null",
+    "definitions": [{ "term": "…", "definition": "…" }],
+    "requiredComparisons": ["…"],
+    "requiredCalculations": ["…"],
+    "expectedOutput": "what the finished packet looks like",
+    "requiredConfidence": "how sure the conclusions must be",
+    "acceptableUncertainty": "what may remain unknown",
+    "prohibitedAssumptions": ["…"],
+    "sourceConstraints": ["known limits on what can be sourced"],
+    "completionStandard": "the test for the packet being finished",
+    "ambiguities": [{ "question": "a boundary that cannot be settled from the assignment", "why": "…" }]
+  },
+  "requirements": [
     {
       "key": "short-stable-key",
-      "question": "one bounded question?",
-      "geography": "…or null",
-      "timeframe": "…or null",
-      "population": "…or null",
-      "definitions": "the definitions this fragment uses, or null",
-      "requiredEvidence": ["evidence lane", "…"],
-      "acceptableSourceTypes": ["…"],
-      "excludedSourceTypes": ["…"],
-      "completionCriteria": ["…"],
-      "minIndependentSources": 2,
-      "dependsOn": ["other-fragment-key"]
+      "statement": "one thing that must be established",
+      "necessity": "MANDATORY | SUPPORTING | OPTIONAL",
+      "kind": "RESEARCH | DEFINITION | COMPARISON | CALCULATION | OTHER_LAYER | IMPLEMENTATION | EMPIRICAL_VALIDATION | TUNING | OPTIONAL_ENRICHMENT | IRRELEVANT",
+      "rationale": "why the goal needs it",
+      "requiredEvidence": ["what kind of evidence would establish it"],
+      "completionCriteria": ["how you know it is established"],
+      "dependsOn": ["other-requirement-key"],
+      "owningLayer": "for OTHER_LAYER only, which layer owns it"
     }
   ]
 }`,

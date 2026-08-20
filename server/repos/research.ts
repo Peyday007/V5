@@ -8,8 +8,10 @@
  */
 import { getDb } from '../db/database.ts';
 import type {
+  ClaimType,
   ClaimValidationState,
   ContradictionState,
+  ReconciliationOutcome,
   FragmentStatus,
   IntegrityVerdict,
   OrchestrationStatus,
@@ -82,6 +84,25 @@ function mapFragment(row: ResearchFragmentRow): ResearchFragment {
     status: row.status as FragmentStatus,
     attempt: Number(row.attempt),
     parentFragmentId: row.parent_fragment_id,
+    requirementIds: parseJson<string[]>(row.requirement_ids, []),
+    evidenceLane: row.evidence_lane,
+    whyItMatters: row.why_it_matters,
+    missingEvidence: row.missing_evidence,
+    whyExistingInsufficient: row.why_existing_insufficient,
+    existingClaimIds: parseJson<string[]>(row.existing_claim_ids, []),
+    excludedScope: row.excluded_scope,
+    expectedClaimTypes: parseJson<string[]>(row.expected_claim_types, []),
+    preferredSourceTypes: parseJson<string[]>(row.preferred_source_types, []),
+    prohibitedEvidence: parseJson<string[]>(row.prohibited_evidence, []),
+    requiredComparisons: parseJson<string[]>(row.required_comparisons, []),
+    requiredCalculations: parseJson<string[]>(row.required_calculations, []),
+    contradictionTargets: parseJson<string[]>(row.contradiction_targets, []),
+    failureConditions: parseJson<string[]>(row.failure_conditions, []),
+    uncertaintyTolerance: row.uncertainty_tolerance,
+    priority: Number(row.priority ?? 5),
+    estimatedEffort: row.estimated_effort,
+    maxRepairs: Number(row.max_repairs ?? 2),
+    splitFromId: row.split_from_id,
     repairReason: row.repair_reason,
     repairStrategy: row.repair_strategy,
     integrityVerdict: (row.integrity_verdict as IntegrityVerdict | null) ?? null,
@@ -142,6 +163,17 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     validationState: row.validation_state as ClaimValidationState,
     validationDetail: row.validation_detail,
     sourced: toBool(row.sourced),
+    claimType: (row.claim_type as ClaimType | undefined) ?? 'SOURCED_FACT',
+    sourceGroup: row.source_group ?? null,
+    primarySource: toBool(row.primary_source ?? 0),
+    geography: row.geography ?? null,
+    timeframe: row.timeframe ?? null,
+    population: row.population ?? null,
+    definition: row.definition ?? null,
+    requirementIds: parseJson<string[]>(row.requirement_ids, []),
+    jobId: row.job_id ?? null,
+    reconciliation: (row.reconciliation as ReconciliationOutcome | null) ?? null,
+    reconciledClaimId: row.reconciled_claim_id ?? null,
     derived: toBool(row.derived),
     derivedFrom: parseJson<string[]>(row.derived_from, []),
     accepted: toBool(row.accepted),
@@ -336,6 +368,25 @@ export interface CreateFragmentInput {
   repairReason?: string | null;
   repairStrategy?: string | null;
   status?: FragmentStatus;
+  requirementIds?: string[];
+  evidenceLane?: string | null;
+  whyItMatters?: string | null;
+  missingEvidence?: string | null;
+  whyExistingInsufficient?: string | null;
+  existingClaimIds?: string[];
+  excludedScope?: string | null;
+  expectedClaimTypes?: string[];
+  preferredSourceTypes?: string[];
+  prohibitedEvidence?: string[];
+  requiredComparisons?: string[];
+  requiredCalculations?: string[];
+  contradictionTargets?: string[];
+  failureConditions?: string[];
+  uncertaintyTolerance?: string | null;
+  priority?: number;
+  estimatedEffort?: string | null;
+  maxRepairs?: number;
+  splitFromId?: string | null;
 }
 
 export function createFragments(inputs: CreateFragmentInput[]): ResearchFragment[] {
@@ -352,15 +403,29 @@ export function createFragments(inputs: CreateFragmentInput[]): ResearchFragment
            fragment_index, fragment_key, question, geography, timeframe, population, definitions,
            required_evidence, acceptable_source_types, excluded_source_types, completion_criteria,
            depends_on, min_independent_sources, status, attempt, parent_fragment_id,
-           repair_reason, repair_strategy, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           repair_reason, repair_strategy, requirement_ids, evidence_lane, why_it_matters,
+           missing_evidence, why_existing_insufficient, existing_claim_ids, excluded_scope,
+           expected_claim_types, preferred_source_types, prohibited_evidence, required_comparisons,
+           required_calculations, contradiction_targets, failure_conditions, uncertainty_tolerance,
+           priority, estimated_effort, max_repairs, split_from_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.projectId, input.layerId, input.fragmentIndex,
           input.fragmentKey, input.question, input.geography ?? null, input.timeframe ?? null,
           input.population ?? null, input.definitions ?? null, toJson(input.requiredEvidence),
           toJson(input.acceptableSourceTypes), toJson(input.excludedSourceTypes),
           toJson(input.completionCriteria), toJson(input.dependsOn), input.minIndependentSources,
           input.status ?? 'PLANNED', input.attempt ?? 1, input.parentFragmentId ?? null,
-          input.repairReason ?? null, input.repairStrategy ?? null, ts, ts],
+          input.repairReason ?? null, input.repairStrategy ?? null,
+          toJson(input.requirementIds ?? []), input.evidenceLane ?? null,
+          input.whyItMatters ?? null, input.missingEvidence ?? null,
+          input.whyExistingInsufficient ?? null, toJson(input.existingClaimIds ?? []),
+          input.excludedScope ?? null, toJson(input.expectedClaimTypes ?? []),
+          toJson(input.preferredSourceTypes ?? []), toJson(input.prohibitedEvidence ?? []),
+          toJson(input.requiredComparisons ?? []), toJson(input.requiredCalculations ?? []),
+          toJson(input.contradictionTargets ?? []), toJson(input.failureConditions ?? []),
+          input.uncertaintyTolerance ?? null, input.priority ?? 5, input.estimatedEffort ?? null,
+          input.maxRepairs ?? 2, input.splitFromId ?? null, ts, ts],
       );
     }
   });
@@ -567,6 +632,15 @@ export interface InsertClaimInput {
   accepted?: boolean;
   rejectionReason?: string | null;
   scopeMatch?: unknown;
+  claimType?: ClaimType;
+  sourceGroup?: string | null;
+  primarySource?: boolean;
+  geography?: string | null;
+  timeframe?: string | null;
+  population?: string | null;
+  definition?: string | null;
+  requirementIds?: string[];
+  jobId?: string | null;
   contentHash: string;
 }
 
@@ -584,8 +658,11 @@ export function insertClaims(inputs: InsertClaimInput[]): ResearchClaim[] {
            source_url, source_title, source_publisher, source_date, evidence_excerpt,
            evidence_locator, evidence_lane, retrieved_at, confidence, contradiction_state,
            contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
-           accepted, rejection_reason, scope_match, content_hash, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           accepted, rejection_reason, scope_match, claim_type, source_group, primary_source,
+           geography, timeframe, population, definition, requirement_ids, job_id,
+           content_hash, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane, input.retrievedAt,
@@ -594,7 +671,11 @@ export function insertClaims(inputs: InsertClaimInput[]): ResearchClaim[] {
           input.validationState, input.validationDetail, fromBool(input.sourced),
           fromBool(input.derived ?? false), toJson(input.derivedFrom ?? []),
           fromBool(input.accepted ?? false), input.rejectionReason ?? null,
-          input.scopeMatch === undefined ? null : toJson(input.scopeMatch), input.contentHash, ts],
+          input.scopeMatch === undefined ? null : toJson(input.scopeMatch),
+          input.claimType ?? 'SOURCED_FACT', input.sourceGroup ?? null,
+          fromBool(input.primarySource ?? false), input.geography ?? null, input.timeframe ?? null,
+          input.population ?? null, input.definition ?? null, toJson(input.requirementIds ?? []),
+          input.jobId ?? null, input.contentHash, ts],
       );
     }
   });

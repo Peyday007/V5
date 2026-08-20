@@ -406,6 +406,112 @@ export const FRAGMENT_STATUSES = [
 ] as const;
 export type FragmentStatus = (typeof FRAGMENT_STATUSES)[number];
 
+/** What a claim is, which decides what would count as evidence for it. */
+export const CLAIM_TYPES = [
+  'SOURCED_FACT',
+  'SELF_REPORT',
+  'UNSUPPORTED_ASSERTION',
+  'QUOTATION',
+  'INFERENCE',
+  'CALCULATION',
+  'FORECAST',
+  'NEGATIVE_EXISTENCE',
+  'RECOMMENDATION',
+  'DECISION',
+  'INSTRUCTION',
+] as const;
+export type ClaimType = (typeof CLAIM_TYPES)[number];
+
+/** What a requirement is for; not all of them are research. */
+export const REQUIREMENT_KINDS = [
+  'RESEARCH',
+  'DEFINITION',
+  'COMPARISON',
+  'CALCULATION',
+  'OTHER_LAYER',
+  'IMPLEMENTATION',
+  'EMPIRICAL_VALIDATION',
+  'TUNING',
+  'OPTIONAL_ENRICHMENT',
+  'IRRELEVANT',
+] as const;
+export type RequirementKind = (typeof REQUIREMENT_KINDS)[number];
+
+export const REQUIREMENT_NECESSITIES = ['MANDATORY', 'SUPPORTING', 'OPTIONAL'] as const;
+export type RequirementNecessity = (typeof REQUIREMENT_NECESSITIES)[number];
+
+/**
+ * How well the archive already answers one requirement.
+ *
+ * The distinctions carry weight: SATISFIED stops research happening at all,
+ * PRESENT_BUT_UNVERIFIED means somebody wrote the answer down but nothing
+ * supports it, and DEFINITION_MISMATCH is the one that quietly ruins a packet —
+ * a real number about a slightly different thing.
+ */
+export const COVERAGE_STATUSES = [
+  'SATISFIED',
+  'PARTIALLY_SATISFIED',
+  'PRESENT_BUT_UNVERIFIED',
+  'STALE',
+  'CONTRADICTED',
+  'DEFINITION_MISMATCH',
+  'SUPERSEDED',
+  'OWNED_ELSEWHERE',
+  'NOT_REQUIRED',
+  'MISSING',
+] as const;
+export type CoverageStatus = (typeof COVERAGE_STATUSES)[number];
+
+/** Why a requirement is not covered, which decides whether research is the answer. */
+export const GAP_TYPES = [
+  'MISSING_FOUNDATIONAL',
+  'MISSING_SUPPORTING',
+  'MISSING_CALCULATION_INPUT',
+  'MISSING_COMPARISON',
+  'MISSING_GEOGRAPHY',
+  'MISSING_TIMEFRAME',
+  'MISSING_POPULATION',
+  'MISSING_DEFINITION',
+  'STALE_EVIDENCE',
+  'UNVERIFIABLE_CITATION',
+  'SOURCE_QUALITY',
+  'UNRESOLVED_CONTRADICTION',
+  'INSUFFICIENT_INDEPENDENCE',
+  'MISSING_COUNTEREVIDENCE',
+  'AMBIGUOUS_EVIDENCE',
+  'SYNTHESIS_GAP',
+  'OTHER_LAYER_OWNERSHIP',
+  'IMPLEMENTATION_DETAIL',
+  'EMPIRICAL_VALIDATION',
+  'TUNING',
+  'OPTIONAL_ENRICHMENT',
+] as const;
+export type GapType = (typeof GAP_TYPES)[number];
+
+/** Whether an existing claim's own source stands up. */
+export const VERIFICATION_STATES = [
+  'UNVERIFIED',
+  'VERIFIED',
+  'UNVERIFIABLE',
+  'SUPERSEDED',
+  'REJECTED',
+] as const;
+export type VerificationState = (typeof VERIFICATION_STATES)[number];
+
+/** What a new finding does to what the project already had. */
+export const RECONCILIATION_OUTCOMES = [
+  'CONFIRMS',
+  'STRENGTHENS',
+  'UPDATES_STALE',
+  'FILLS_GAP',
+  'NARROWS',
+  'CONTRADICTS',
+  'DUPLICATES',
+  'FAILS_REQUIREMENT',
+  'RAISES_NEW_QUESTION',
+] as const;
+export type ReconciliationOutcome = (typeof RECONCILIATION_OUTCOMES)[number];
+
 /** Does the evidence hold up? Separate from whether there is enough of it. */
 export const INTEGRITY_VERDICTS = ['PASS', 'FAIL'] as const;
 export type IntegrityVerdict = (typeof INTEGRITY_VERDICTS)[number];
@@ -563,6 +669,107 @@ export interface ImportFileRow {
   updated_at: string;
 }
 
+export interface BoundaryContractRow {
+  id: string;
+  orchestration_id: string;
+  project_id: string;
+  layer_id: string;
+  primary_question: string;
+  decision_supported: string | null;
+  audience: string | null;
+  included_subjects: string;
+  excluded_subjects: string;
+  geography: string | null;
+  timeframe: string | null;
+  population: string | null;
+  definitions: string;
+  required_comparisons: string;
+  required_calculations: string;
+  expected_output: string | null;
+  required_confidence: string | null;
+  acceptable_uncertainty: string | null;
+  prohibited_assumptions: string;
+  source_constraints: string;
+  completion_standard: string | null;
+  ambiguities: string;
+  status: string;
+  approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RequirementRow {
+  id: string;
+  orchestration_id: string;
+  project_id: string;
+  layer_id: string;
+  requirement_key: string;
+  ordinal: number;
+  statement: string;
+  necessity: string;
+  kind: string;
+  rationale: string | null;
+  required_evidence: string;
+  completion_criteria: string;
+  depends_on: string;
+  owning_layer_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExistingClaimRow {
+  id: string;
+  project_id: string;
+  document_id: string;
+  extraction_run_id: string | null;
+  layer_id: string | null;
+  claim: string;
+  claim_type: string;
+  page: number | null;
+  block_index: number | null;
+  char_start: number | null;
+  char_end: number | null;
+  locator: string | null;
+  source_url: string | null;
+  source_title: string | null;
+  source_publisher: string | null;
+  source_date: string | null;
+  retrieved_at: string | null;
+  supporting_passage: string | null;
+  geography: string | null;
+  timeframe: string | null;
+  population: string | null;
+  definition: string | null;
+  extraction_confidence: number;
+  evidence_confidence: number;
+  contradiction_state: string;
+  verification_state: string;
+  verification_detail: string | null;
+  prior_audit_id: string | null;
+  document_version: string | null;
+  superseded: number;
+  content_hash: string;
+  created_at: string;
+}
+
+export interface RequirementCoverageRow {
+  id: string;
+  orchestration_id: string;
+  requirement_id: string;
+  status: string;
+  reasons: string;
+  claim_ids: string;
+  document_ids: string;
+  confidence: number;
+  gap_type: string | null;
+  gap_detail: string | null;
+  needs_research: number;
+  user_override: string | null;
+  overridden_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ResearchOrchestrationRow {
   id: string;
   project_id: string;
@@ -595,6 +802,25 @@ export interface ResearchOrchestrationRow {
 }
 
 export interface ResearchFragmentRow {
+  requirement_ids: string;
+  evidence_lane: string | null;
+  why_it_matters: string | null;
+  missing_evidence: string | null;
+  why_existing_insufficient: string | null;
+  existing_claim_ids: string;
+  excluded_scope: string | null;
+  expected_claim_types: string;
+  preferred_source_types: string;
+  prohibited_evidence: string;
+  required_comparisons: string;
+  required_calculations: string;
+  contradiction_targets: string;
+  failure_conditions: string;
+  uncertainty_tolerance: string | null;
+  priority: number;
+  estimated_effort: string | null;
+  max_repairs: number;
+  split_from_id: string | null;
   id: string;
   orchestration_id: string;
   project_id: string;
@@ -651,6 +877,17 @@ export interface ResearchPassRow {
 }
 
 export interface ResearchClaimRow {
+  claim_type: string;
+  source_group: string | null;
+  primary_source: number;
+  geography: string | null;
+  timeframe: string | null;
+  population: string | null;
+  definition: string | null;
+  requirement_ids: string;
+  job_id: string | null;
+  reconciliation: string | null;
+  reconciled_claim_id: string | null;
   id: string;
   orchestration_id: string;
   fragment_id: string | null;
@@ -1339,6 +1576,111 @@ export interface ImportFile {
   updatedAt: string;
 }
 
+/** What this assignment is, and is not, about. Settled before any research. */
+export interface BoundaryContract {
+  id: string;
+  orchestrationId: string;
+  projectId: string;
+  layerId: string;
+  primaryQuestion: string;
+  decisionSupported: string | null;
+  audience: string | null;
+  includedSubjects: string[];
+  excludedSubjects: string[];
+  geography: string | null;
+  timeframe: string | null;
+  population: string | null;
+  definitions: { term: string; definition: string }[];
+  requiredComparisons: string[];
+  requiredCalculations: string[];
+  expectedOutput: string | null;
+  requiredConfidence: string | null;
+  acceptableUncertainty: string | null;
+  prohibitedAssumptions: string[];
+  sourceConstraints: string[];
+  completionStandard: string | null;
+  /** Boundaries the plan could not settle; each is a candidate fragment. */
+  ambiguities: { question: string; why: string }[];
+  status: 'DRAFT' | 'APPROVED' | 'SUPERSEDED';
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Requirement {
+  id: string;
+  orchestrationId: string;
+  projectId: string;
+  layerId: string;
+  requirementKey: string;
+  ordinal: number;
+  statement: string;
+  necessity: RequirementNecessity;
+  kind: RequirementKind;
+  rationale: string | null;
+  requiredEvidence: string[];
+  completionCriteria: string[];
+  dependsOn: string[];
+  owningLayerId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A claim recovered from a document the project already had. */
+export interface ExistingClaim {
+  id: string;
+  projectId: string;
+  documentId: string;
+  extractionRunId: string | null;
+  layerId: string | null;
+  claim: string;
+  claimType: ClaimType;
+  page: number | null;
+  blockIndex: number | null;
+  charStart: number | null;
+  charEnd: number | null;
+  locator: string | null;
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+  sourcePublisher: string | null;
+  sourceDate: string | null;
+  retrievedAt: string | null;
+  supportingPassage: string | null;
+  geography: string | null;
+  timeframe: string | null;
+  population: string | null;
+  definition: string | null;
+  extractionConfidence: number;
+  evidenceConfidence: number;
+  contradictionState: ContradictionState;
+  verificationState: VerificationState;
+  verificationDetail: string | null;
+  priorAuditId: string | null;
+  documentVersion: string | null;
+  superseded: boolean;
+  contentHash: string;
+  createdAt: string;
+}
+
+/** How well the archive already answers one requirement, and why. */
+export interface RequirementCoverage {
+  id: string;
+  orchestrationId: string;
+  requirementId: string;
+  status: CoverageStatus;
+  reasons: string[];
+  claimIds: string[];
+  documentIds: string[];
+  confidence: number;
+  gapType: GapType | null;
+  gapDetail: string | null;
+  needsResearch: boolean;
+  userOverride: string | null;
+  overriddenAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /**
  * One assignment being worked through, pass by pass.
  *
@@ -1383,6 +1725,27 @@ export interface ResearchOrchestration {
  * checkable and the bar it has to clear before any of it counts.
  */
 export interface ResearchFragment {
+  /** The requirements this fragment exists to answer. */
+  requirementIds: string[];
+  evidenceLane: string | null;
+  whyItMatters: string | null;
+  missingEvidence: string | null;
+  /** Why the archive's own evidence could not answer it. */
+  whyExistingInsufficient: string | null;
+  existingClaimIds: string[];
+  excludedScope: string | null;
+  expectedClaimTypes: string[];
+  preferredSourceTypes: string[];
+  prohibitedEvidence: string[];
+  requiredComparisons: string[];
+  requiredCalculations: string[];
+  contradictionTargets: string[];
+  failureConditions: string[];
+  uncertaintyTolerance: string | null;
+  priority: number;
+  estimatedEffort: string | null;
+  maxRepairs: number;
+  splitFromId: string | null;
   id: string;
   orchestrationId: string;
   projectId: string;
@@ -1439,6 +1802,19 @@ export interface ResearchPass {
 }
 
 export interface ResearchClaim {
+  claimType: ClaimType;
+  /** Sources that are really one source share a group; copies do not corroborate. */
+  sourceGroup: string | null;
+  primarySource: boolean;
+  geography: string | null;
+  timeframe: string | null;
+  population: string | null;
+  definition: string | null;
+  requirementIds: string[];
+  jobId: string | null;
+  /** What this finding does to the evidence the project already had. */
+  reconciliation: ReconciliationOutcome | null;
+  reconciledClaimId: string | null;
   id: string;
   orchestrationId: string;
   fragmentId: string | null;

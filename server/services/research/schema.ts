@@ -14,8 +14,12 @@
  */
 import {
   CONTRADICTION_STATES,
+  REQUIREMENT_KINDS,
+  REQUIREMENT_NECESSITIES,
   SUFFICIENCY_VERDICTS,
   type ContradictionState,
+  type RequirementKind,
+  type RequirementNecessity,
   type SufficiencyVerdict,
 } from '../../domain/types.ts';
 import {
@@ -29,9 +33,17 @@ import {
   type ParseResult,
 } from '../audit/schema.ts';
 
-/** The spec's bounds on decomposition: enough to cover a subject, few enough to finish. */
-export const MIN_FRAGMENTS = 5;
-export const MAX_FRAGMENTS = 15;
+/**
+ * How many fragments an assignment may have.
+ *
+ * There is deliberately no minimum. The count comes from the gaps the coverage
+ * matrix finds: an assignment whose archive already answers most of it needs two
+ * fragments, and a genuinely open one needs thirty. A fixed floor would force
+ * research nobody needed, which is exactly the waste this build exists to stop.
+ *
+ * The ceiling is a backstop against a runaway plan, not a target.
+ */
+export const MAX_FRAGMENTS = 60;
 
 /** A fragment cannot rest on one source and call itself covered. */
 export const MIN_INDEPENDENT_SOURCES_FLOOR = 2;
@@ -54,7 +66,241 @@ function arrayOf(value: unknown, field: string): ParseResult<Record<string, unkn
 }
 
 // ---------------------------------------------------------------------------
-// Pass 1 — the fragmentation plan
+// Pass 1a — the boundary contract and the requirement graph
+//
+// This is what the plan pass produces now. Fragments are not proposed here at
+// all: they are derived later, from the gaps the coverage matrix finds, so that
+// nothing is researched merely because it appeared in the goal.
+// ---------------------------------------------------------------------------
+
+export interface ParsedBoundary {
+  primaryQuestion: string;
+  decisionSupported: string | null;
+  audience: string | null;
+  includedSubjects: string[];
+  excludedSubjects: string[];
+  geography: string | null;
+  timeframe: string | null;
+  population: string | null;
+  definitions: { term: string; definition: string }[];
+  requiredComparisons: string[];
+  requiredCalculations: string[];
+  expectedOutput: string | null;
+  requiredConfidence: string | null;
+  acceptableUncertainty: string | null;
+  prohibitedAssumptions: string[];
+  sourceConstraints: string[];
+  completionStandard: string | null;
+  ambiguities: { question: string; why: string }[];
+}
+
+export interface ParsedRequirement {
+  key: string;
+  statement: string;
+  necessity: RequirementNecessity;
+  kind: RequirementKind;
+  rationale: string | null;
+  requiredEvidence: string[];
+  completionCriteria: string[];
+  dependsOn: string[];
+  owningLayerName: string | null;
+}
+
+export interface GoalPlanOutput {
+  boundary: ParsedBoundary;
+  requirements: ParsedRequirement[];
+}
+
+/** At least this many requirements, or the goal was restated rather than analysed. */
+const MIN_REQUIREMENTS = 3;
+const MAX_REQUIREMENTS = 60;
+
+function pairs(value: unknown, field: string): ParseResult<{ term: string; definition: string }[]> {
+  if (value === undefined || value === null) return { ok: true, value: [] };
+  const rows = arrayOf(value, field);
+  if (!rows.ok) return rows;
+  const out: { term: string; definition: string }[] = [];
+  for (const [index, row] of rows.value.entries()) {
+    const term = stringField(row['term'], `${field}[${index}].term`, { required: true });
+    if (!term.ok) return term;
+    const definition = stringField(row['definition'], `${field}[${index}].definition`, {
+      required: true,
+    });
+    if (!definition.ok) return definition;
+    out.push({ term: term.value, definition: definition.value });
+  }
+  return { ok: true, value: out };
+}
+
+export function parseGoalPlan(text: string): ParseResult<GoalPlanOutput> {
+  const json = extractJsonObject(text);
+  if (!json.ok) return json;
+  const body = json.value;
+
+  const boundaryRaw = body['boundary'];
+  if (!boundaryRaw || typeof boundaryRaw !== 'object' || Array.isArray(boundaryRaw)) {
+    return fail('"boundary" must be an object stating what this assignment is and is not about.');
+  }
+  const b = boundaryRaw as Record<string, unknown>;
+
+  const primaryQuestion = stringField(b['primaryQuestion'], 'boundary.primaryQuestion', {
+    required: true,
+  });
+  if (!primaryQuestion.ok) return primaryQuestion;
+
+  const strings = (key: string): ParseResult<string[]> => stringArray(b[key], `boundary.${key}`);
+  const included = strings('includedSubjects');
+  if (!included.ok) return included;
+  const excluded = strings('excludedSubjects');
+  if (!excluded.ok) return excluded;
+  const comparisons = strings('requiredComparisons');
+  if (!comparisons.ok) return comparisons;
+  const calculations = strings('requiredCalculations');
+  if (!calculations.ok) return calculations;
+  const prohibited = strings('prohibitedAssumptions');
+  if (!prohibited.ok) return prohibited;
+  const constraints = strings('sourceConstraints');
+  if (!constraints.ok) return constraints;
+
+  const definitions = pairs(b['definitions'], 'boundary.definitions');
+  if (!definitions.ok) return definitions;
+
+  const optional = (key: string): ParseResult<string> => stringField(b[key], `boundary.${key}`);
+  const decision = optional('decisionSupported');
+  if (!decision.ok) return decision;
+  const audience = optional('audience');
+  if (!audience.ok) return audience;
+  const geography = optional('geography');
+  if (!geography.ok) return geography;
+  const timeframe = optional('timeframe');
+  if (!timeframe.ok) return timeframe;
+  const population = optional('population');
+  if (!population.ok) return population;
+  const expectedOutput = optional('expectedOutput');
+  if (!expectedOutput.ok) return expectedOutput;
+  const requiredConfidence = optional('requiredConfidence');
+  if (!requiredConfidence.ok) return requiredConfidence;
+  const acceptableUncertainty = optional('acceptableUncertainty');
+  if (!acceptableUncertainty.ok) return acceptableUncertainty;
+  const completionStandard = optional('completionStandard');
+  if (!completionStandard.ok) return completionStandard;
+
+  const ambiguityRows = arrayOf(b['ambiguities'] ?? [], 'boundary.ambiguities');
+  if (!ambiguityRows.ok) return ambiguityRows;
+  const ambiguities: { question: string; why: string }[] = [];
+  for (const [index, row] of ambiguityRows.value.entries()) {
+    const question = stringField(row['question'], `boundary.ambiguities[${index}].question`, {
+      required: true,
+    });
+    if (!question.ok) return question;
+    const why = stringField(row['why'], `boundary.ambiguities[${index}].why`);
+    if (!why.ok) return why;
+    ambiguities.push({ question: question.value, why: why.value });
+  }
+
+  const requirementRows = arrayOf(body['requirements'], 'requirements');
+  if (!requirementRows.ok) return requirementRows;
+  if (requirementRows.value.length < MIN_REQUIREMENTS) {
+    return fail(
+      `The plan listed ${requirementRows.value.length} requirement(s). A goal that decomposes into ` +
+        `fewer than ${MIN_REQUIREMENTS} has been restated rather than analysed.`,
+    );
+  }
+  if (requirementRows.value.length > MAX_REQUIREMENTS) {
+    return fail(`The plan listed ${requirementRows.value.length} requirements, above the ceiling of ${MAX_REQUIREMENTS}.`);
+  }
+
+  const requirements: ParsedRequirement[] = [];
+  const keys = new Set<string>();
+  for (const [index, row] of requirementRows.value.entries()) {
+    const where = `requirements[${index}]`;
+    const statement = stringField(row['statement'], `${where}.statement`, { required: true });
+    if (!statement.ok) return statement;
+
+    const necessity = strictEnum(row['necessity'], REQUIREMENT_NECESSITIES, `${where}.necessity`);
+    if (!necessity.ok) return necessity;
+    const kind = strictEnum(row['kind'], REQUIREMENT_KINDS, `${where}.kind`);
+    if (!kind.ok) return kind;
+
+    const rationale = stringField(row['rationale'], `${where}.rationale`);
+    if (!rationale.ok) return rationale;
+    const requiredEvidence = stringArray(row['requiredEvidence'], `${where}.requiredEvidence`);
+    if (!requiredEvidence.ok) return requiredEvidence;
+    const completionCriteria = stringArray(row['completionCriteria'], `${where}.completionCriteria`);
+    if (!completionCriteria.ok) return completionCriteria;
+    const dependsOn = stringArray(row['dependsOn'], `${where}.dependsOn`);
+    if (!dependsOn.ok) return dependsOn;
+    const owningLayer = stringField(row['owningLayer'], `${where}.owningLayer`);
+    if (!owningLayer.ok) return owningLayer;
+
+    // A research requirement that does not say what evidence would answer it
+    // cannot be judged covered or uncovered, which makes it useless.
+    if (kind.value === 'RESEARCH' && requiredEvidence.value.length === 0) {
+      return fail(`"${where}.requiredEvidence" is empty; say what evidence would answer it.`);
+    }
+
+    const rawKey = stringField(row['key'], `${where}.key`);
+    if (!rawKey.ok) return rawKey;
+    let key = slugify(rawKey.value || statement.value, `requirement-${index + 1}`);
+    let suffix = 2;
+    while (keys.has(key)) {
+      key = `${key}-${suffix}`;
+      suffix += 1;
+    }
+    keys.add(key);
+
+    requirements.push({
+      key,
+      statement: statement.value,
+      necessity: necessity.value,
+      kind: kind.value,
+      rationale: rationale.value || null,
+      requiredEvidence: requiredEvidence.value,
+      completionCriteria: completionCriteria.value,
+      dependsOn: dependsOn.value,
+      owningLayerName: owningLayer.value || null,
+    });
+  }
+
+  // Dependencies are resolved against the keys that exist, for the same reason
+  // as fragments: one pointing nowhere would stall the graph.
+  const known = new Set(requirements.map((requirement) => requirement.key));
+  for (const requirement of requirements) {
+    requirement.dependsOn = requirement.dependsOn
+      .map((dependency) => slugify(dependency, ''))
+      .filter((dependency) => dependency.length > 0 && dependency !== requirement.key && known.has(dependency));
+  }
+
+  return {
+    ok: true,
+    value: {
+      boundary: {
+        primaryQuestion: primaryQuestion.value,
+        decisionSupported: decision.value || null,
+        audience: audience.value || null,
+        includedSubjects: included.value,
+        excludedSubjects: excluded.value,
+        geography: geography.value || null,
+        timeframe: timeframe.value || null,
+        population: population.value || null,
+        definitions: definitions.value,
+        requiredComparisons: comparisons.value,
+        requiredCalculations: calculations.value,
+        expectedOutput: expectedOutput.value || null,
+        requiredConfidence: requiredConfidence.value || null,
+        acceptableUncertainty: acceptableUncertainty.value || null,
+        prohibitedAssumptions: prohibited.value,
+        sourceConstraints: constraints.value,
+        completionStandard: completionStandard.value || null,
+        ambiguities,
+      },
+      requirements,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Pass 1 — the fragmentation plan (retained for direct fragment planning)
 // ---------------------------------------------------------------------------
 
 export interface PlannedFragment {
@@ -98,11 +344,8 @@ export function parsePlanPass(text: string): ParseResult<PlanPassOutput> {
   const rows = arrayOf(body['fragments'], 'fragments');
   if (!rows.ok) return rows;
 
-  if (rows.value.length < MIN_FRAGMENTS) {
-    return fail(
-      `The plan proposed ${rows.value.length} fragment(s). An assignment is decomposed into at ` +
-        `least ${MIN_FRAGMENTS}: fewer means one conversation is still carrying a broad subject.`,
-    );
+  if (rows.value.length === 0) {
+    return fail('The plan proposed no fragments at all, so there is nothing to research.');
   }
   if (rows.value.length > MAX_FRAGMENTS) {
     return fail(

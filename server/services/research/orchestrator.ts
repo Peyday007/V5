@@ -41,6 +41,8 @@ import { getProject } from '../../repos/projects.ts';
 import { getRun, createRun, updateRun } from '../../repos/runs.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { listDocuments } from '../../repos/documents.ts';
+import { listLayers } from '../../repos/layers.ts';
+import { persistPlan, planFragmentsFromGaps, reconcile } from '../reconcile/plan.ts';
 import {
   acceptedClaims,
   beat,
@@ -70,12 +72,12 @@ import { selectRelevantSegments } from '../sources/ingest.ts';
 import { applyGate, fragmentPasses, type GateResult } from './gate.ts';
 import {
   buildFragmentResearchPrompt,
-  buildPlanPrompt,
+  buildGoalPlanPrompt,
   buildSynthesisPrompt,
   buildVerificationPrompt,
 } from './prompts.ts';
 import {
-  parsePlanPass,
+  parseGoalPlan,
   parseResearchPass,
   parseSynthesisPass,
   parseVerificationPass,
@@ -379,6 +381,16 @@ function relevantPassages(
   return passages.slice(0, 6);
 }
 
+/**
+ * Pass 1: work out what the goal requires, then what the project already knows,
+ * and create fragments only for what is genuinely missing.
+ *
+ * This is the governing rule of the whole build. Research is expensive and slow,
+ * and the most expensive research is the kind that re-establishes something the
+ * archive already contains — or worse, that quietly disagrees with it. So the
+ * order is fixed: boundaries, requirements, existing claims, coverage, gaps, and
+ * only then fragments.
+ */
 async function planFragments(
   orchestration: ResearchOrchestration,
   project: Project,
@@ -397,15 +409,20 @@ async function planFragments(
     fragmentKey: null,
     index: 0,
     total: 0,
-    message: 'Decomposing the assignment into bounded fragments',
+    message: 'Working out what the goal requires',
   });
 
-  const prompt = buildPlanPrompt({
+  const documents = listDocuments(project.id)
+    .filter((document) => !document.fileMissing)
+    .map((document) => `${document.canonicalName}${document.version ? ` (${document.version})` : ''}`);
+
+  const prompt = buildGoalPlanPrompt({
     project,
     layer,
     title: orchestration.title,
     assignment: orchestration.assignment,
     passages: relevantPassages(project.id, `${orchestration.title} ${orchestration.assignment}`),
+    existingDocuments: documents,
   });
 
   const { value } = await callProvider(
@@ -416,33 +433,58 @@ async function planFragments(
       prompt,
       provider,
       options,
-      expectedTitle: `${orchestration.title} — plan`,
-      expectedFilename: 'plan.json',
+      expectedTitle: `${orchestration.title} — requirements`,
+      expectedFilename: 'requirements.json',
     },
-    parsePlanPass,
+    parseGoalPlan,
   );
 
-  const fragments = createFragments(
-    value.fragments.map((fragment, index) => ({
-      orchestrationId: orchestration.id,
-      projectId: project.id,
-      layerId: layer.id,
-      fragmentIndex: index,
-      fragmentKey: fragment.key,
-      question: fragment.question,
-      geography: fragment.geography,
-      timeframe: fragment.timeframe,
-      population: fragment.population,
-      definitions: fragment.definitions,
-      requiredEvidence: fragment.requiredEvidence,
-      acceptableSourceTypes: fragment.acceptableSourceTypes,
-      excludedSourceTypes: fragment.excludedSourceTypes,
-      completionCriteria: fragment.completionCriteria,
-      dependsOn: fragment.dependsOn,
-      minIndependentSources: fragment.minIndependentSources,
-      status: 'QUEUED' as const,
+  const layers = listLayers(project.id);
+  const { contract, requirements } = persistPlan({
+    orchestrationId: orchestration.id,
+    project,
+    layer,
+    contract: value.boundary,
+    requirements: value.requirements.map((requirement) => ({
+      requirementKey: requirement.key,
+      ordinal: 0,
+      statement: requirement.statement,
+      necessity: requirement.necessity,
+      kind: requirement.kind,
+      rationale: requirement.rationale,
+      requiredEvidence: requirement.requiredEvidence,
+      completionCriteria: requirement.completionCriteria,
+      dependsOn: requirement.dependsOn,
+      owningLayerId:
+        layers.find(
+          (candidate) =>
+            candidate.name.toLowerCase() === (requirement.owningLayerName ?? '').trim().toLowerCase(),
+        )?.id ?? null,
     })),
-  );
+  });
+
+  options.onProgress?.({
+    orchestrationId: orchestration.id,
+    phase: 'PLANNING',
+    passKey: 'PLAN',
+    fragmentKey: null,
+    index: 0,
+    total: requirements.length,
+    message: `Comparing ${requirements.length} requirement(s) against what the project already holds`,
+  });
+
+  // Read the archive, judge every requirement against it, and record why.
+  const reconciliation = reconcile({
+    orchestrationId: orchestration.id,
+    projectId: project.id,
+    requirements,
+    contract,
+  });
+
+  const fragments = planFragmentsFromGaps({
+    orchestrationId: orchestration.id,
+    reconciliation,
+  });
 
   recordEvent({
     projectId: project.id,
@@ -452,9 +494,26 @@ async function planFragments(
     eventType: 'RESEARCH_PLANNED',
     payload: {
       orchestrationId: orchestration.id,
+      requirements: requirements.length,
+      documentsRead: reconciliation.documentsRead,
+      existingClaims: reconciliation.claims.length,
+      satisfied: reconciliation.satisfied.length,
+      notResearch: reconciliation.notResearch.length,
+      gaps: reconciliation.researchable.length,
       fragments: fragments.length,
-      rationale: value.rationale,
     },
+  });
+
+  options.onProgress?.({
+    orchestrationId: orchestration.id,
+    phase: 'PLANNING',
+    passKey: 'PLAN',
+    fragmentKey: null,
+    index: 0,
+    total: fragments.length,
+    message:
+      `${reconciliation.satisfied.length} requirement(s) already satisfied by the archive; ` +
+      `${fragments.length} fragment(s) created for genuine gaps`,
   });
 
   return fragments;

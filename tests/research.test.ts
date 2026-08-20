@@ -46,7 +46,7 @@ import {
   researchQueueDepth,
   whenResearchIdle,
 } from '../server/services/research/queue.ts';
-import { parsePlanPass, parseResearchPass } from '../server/services/research/schema.ts';
+import { parseGoalPlan, parseResearchPass } from '../server/services/research/schema.ts';
 import { validateClaim } from '../server/services/research/sources.ts';
 import { whenExtractionIdle } from '../server/services/documents/queue.ts';
 
@@ -75,26 +75,50 @@ interface PlannedFragmentInput {
   dependsOn?: string[];
 }
 
+/**
+ * The plan pass now returns the boundary and the requirement graph; fragments
+ * are derived from the gaps. In these tests the project starts empty, so every
+ * requirement is a gap and each one becomes exactly one fragment — which keeps
+ * the fragment keys predictable while exercising the real derivation path.
+ */
 function plan(fragments: PlannedFragmentInput[] | number = 5): unknown {
   const list: PlannedFragmentInput[] =
     typeof fragments === 'number'
       ? Array.from({ length: fragments }, (_v, index) => ({ key: `fragment-${index + 1}` }))
       : fragments;
   return {
-    rationale: 'Split by evidence type so each question can be answered from primary sources.',
-    fragments: list.map((fragment) => ({
-      key: fragment.key,
-      question: fragment.question ?? `What does the record show about ${fragment.key}?`,
+    boundary: {
+      primaryQuestion: 'How is custody transfer recognised across distressed asset classes?',
+      decisionSupported: 'Whether routing can rely on a single recognition point.',
+      audience: 'The World Model layer',
+      includedSubjects: ['custody transfer', 'control'],
+      excludedSubjects: ['tax treatment'],
       geography: 'United States',
       timeframe: '2023',
       population: 'B2B firms with a sales team',
-      definitions: 'Outsourced SDR: an external firm booking qualified meetings.',
+      definitions: [
+        { term: 'Outsourced SDR', definition: 'An external firm booking qualified meetings.' },
+      ],
+      requiredComparisons: [],
+      requiredCalculations: [],
+      expectedOutput: 'A layer report with the recognised moment for each regime.',
+      requiredConfidence: 'Sourced to primary law.',
+      acceptableUncertainty: 'Regimes with no published rule may be reported as unknown.',
+      prohibitedAssumptions: ['That control and ownership pass together.'],
+      sourceConstraints: [],
+      completionStandard: 'Every regime surveyed has a sourced recognition point or a stated gap.',
+      ambiguities: [],
+    },
+    requirements: list.map((fragment) => ({
+      key: fragment.key,
+      statement: fragment.question ?? `What does the record show about ${fragment.key}?`,
+      necessity: 'MANDATORY',
+      kind: 'RESEARCH',
+      rationale: 'The layer cannot represent custody transfer without it.',
       requiredEvidence: fragment.requiredEvidence ?? ['official statistics'],
-      acceptableSourceTypes: ['government statistics', 'regulatory filings'],
-      excludedSourceTypes: ['vendor marketing pages'],
       completionCriteria: ['a figure with its definition', 'the measurement date'],
-      minIndependentSources: fragment.minIndependentSources ?? 2,
       dependsOn: fragment.dependsOn ?? [],
+      owningLayer: '',
     })),
   };
 }
@@ -237,7 +261,7 @@ class ScriptedWorker implements AIProvider {
   }
 
   #kind(prompt: string): string {
-    if (prompt.startsWith('You are decomposing')) return 'PLAN';
+    if (prompt.startsWith('You are working out what a research assignment')) return 'PLAN';
     if (prompt.startsWith('You are checking')) return 'VERIFICATION';
     if (prompt.startsWith('You are writing the layer report')) return 'SYNTHESIS';
     return 'RESEARCH';
@@ -348,24 +372,22 @@ describe('an assignment is decomposed before anything is researched', () => {
     expect(new Set(researchCalls.map((call) => call.fragmentKey)).size).toBe(fragments.length);
   });
 
-  it('refuses a plan that leaves the subject undivided', () => {
-    const parsed = parsePlanPass(fence(plan(3)));
+  it('refuses a plan that restates the goal instead of analysing it', () => {
+    const parsed = parseGoalPlan(fence(plan(2)));
     expect(parsed.ok).toBe(false);
-    if (!parsed.ok) expect(parsed.error).toMatch(/at least 5/i);
+    if (!parsed.ok) expect(parsed.error).toMatch(/restated rather than analysed/i);
   });
 
-  it('refuses a plan that has no bar to clear', () => {
-    const noEvidence = plan([{ key: 'a' }, { key: 'b' }, { key: 'c' }, { key: 'd' }, { key: 'e' }]) as {
-      fragments: { requiredEvidence: string[] }[];
-    };
-    noEvidence.fragments[0]!.requiredEvidence = [];
-    const parsed = parsePlanPass(fence(noEvidence));
+  it('refuses a research requirement that says nothing would answer it', () => {
+    const thin = plan(5) as { requirements: { requiredEvidence: string[] }[] };
+    thin.requirements[0]!.requiredEvidence = [];
+    const parsed = parseGoalPlan(fence(thin));
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) expect(parsed.error).toMatch(/requiredEvidence/);
   });
 
-  it('drops a dependency on a fragment that was never planned', () => {
-    const parsed = parsePlanPass(fence(plan([
+  it('drops a dependency on a requirement that was never stated', () => {
+    const parsed = parseGoalPlan(fence(plan([
       { key: 'a', dependsOn: ['nowhere'] },
       { key: 'b' },
       { key: 'c' },
@@ -373,7 +395,7 @@ describe('an assignment is decomposed before anything is researched', () => {
       { key: 'e' },
     ])));
     expect(parsed.ok).toBe(true);
-    if (parsed.ok) expect(parsed.value.fragments[0]!.dependsOn).toEqual([]);
+    if (parsed.ok) expect(parsed.value.requirements[0]!.dependsOn).toEqual([]);
   });
 
   it('runs a dependent fragment only after the one it waits for', async () => {
@@ -702,7 +724,7 @@ describe('the job survives what happens to it', () => {
   });
 
   it('keeps the raw reply of a pass it refused to act on', async () => {
-    const worker = new ScriptedWorker({ plan: { rationale: 'too few', fragments: [] } });
+    const worker = new ScriptedWorker({ plan: { boundary: { primaryQuestion: 'x' }, requirements: [] } });
     const orchestration = startResearch({
       layerId: fixture.layerByName('World Model').id,
       assignment: 'Anything',
@@ -713,8 +735,8 @@ describe('the job survives what happens to it', () => {
 
     const [pass] = listPasses(orchestration.id);
     expect(pass!.status).toBe('FAILED');
-    expect(pass!.rawResponse).toContain('too few');
-    expect(pass!.error).toMatch(/at least 5/i);
+    expect(pass!.rawResponse).toContain('primaryQuestion');
+    expect(pass!.error).toMatch(/restated rather than analysed|requirements/i);
     expect(getOrchestration(orchestration.id)!.status).toBe('FAILED');
   });
 
