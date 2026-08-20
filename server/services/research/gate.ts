@@ -25,6 +25,7 @@
  */
 import type { ResearchClaim, ResearchFragment } from '../../domain/types.ts';
 import type { ClaimScopeMatch } from './schema.ts';
+import { countIndependentSources, duplicateGroups, effectiveStandard } from './standards.ts';
 
 /** Which of the seven a claim or fragment fell at. */
 export const GATE_CONDITIONS = {
@@ -35,6 +36,8 @@ export const GATE_CONDITIONS = {
   CONTRADICTIONS: 'Contradictions are resolved or explicitly retained',
   COVERAGE: 'Required evidence lanes meet their coverage threshold',
   DERIVATIONS: 'Unsupported calculations and assumptions are rejected',
+  CLAIM_STANDARD: 'The claim meets the evidence standard for its own type',
+  INDEPENDENCE: 'Corroborating sources are genuinely independent',
 } as const;
 
 export type GateCondition = keyof typeof GATE_CONDITIONS;
@@ -61,6 +64,8 @@ export interface GateResult {
   rejectedClaims: number;
   independentSources: number;
   coverage: LaneCoverage[];
+  /** Sources that turned out to be the same source. Reported, not hidden. */
+  duplicateSourceGroups: { group: string; claimIds: string[]; publishers: string[] }[];
   failedConditions: GateCondition[];
   /** Sentences a person can act on, not a dump of the working. */
   reasons: string[];
@@ -204,6 +209,30 @@ export function applyGate(input: {
       continue;
     }
 
+    // The standard for the claim's own type. A statutory fact needs one
+    // authoritative source; a self-report needs somebody other than the
+    // organisation; a market-scale quantity from a secondary source needs
+    // corroboration that is not a copy of the same estimate.
+    const standard = effectiveStandard(claim);
+    if (standard.minIndependentSources > 1) {
+      const corroborating = claims.filter(
+        (other) =>
+          other.id !== claim.id &&
+          other.sourced &&
+          !other.derived &&
+          sameSubject(other, claim) &&
+          (other.sourceGroup ?? '') !== (claim.sourceGroup ?? ''),
+      );
+      if (corroborating.length + 1 < standard.minIndependentSources) {
+        reject(
+          claim,
+          claim.claimType === 'SELF_REPORT' ? 'CLAIM_STANDARD' : 'INDEPENDENCE',
+          standard.rationale,
+        );
+        continue;
+      }
+    }
+
     accept(claim);
   }
 
@@ -254,9 +283,11 @@ export function applyGate(input: {
   // source. That is where "do not rest on a single publisher" is enforced;
   // demanding it inside every lane as well would multiply the bar past what any
   // real fragment could clear.
-  const allSources = new Set(
-    acceptedList.map((claim) => sourceIdentity(claim.sourceUrl)).filter((id): id is string => id !== null),
-  );
+  // Independence is counted by source group rather than by hostname: three wires
+  // carrying one press release are one source, and so are four pages citing the
+  // same upstream estimate.
+  const independentSources = countIndependentSources(acceptedList);
+  const duplicates = duplicateGroups(acceptedList);
 
   const coverage: LaneCoverage[] = fragment.requiredEvidence.map((lane) => {
     const inLane = acceptedList.filter((claim) => claim.evidenceLane === lane);
@@ -276,7 +307,7 @@ export function applyGate(input: {
   );
 
   const uncoveredLanes = coverage.filter((lane) => !lane.meetsThreshold);
-  const enoughSources = allSources.size >= fragment.minIndependentSources;
+  const enoughSources = independentSources >= fragment.minIndependentSources;
   if (uncoveredLanes.length > 0 || !enoughSources) failedConditions.add('COVERAGE');
 
   // Integrity is about the claims that survive, not about whether anything was
@@ -330,7 +361,7 @@ export function applyGate(input: {
       }
       if (!enoughSources) {
         reasons.push(
-          `The accepted claims rest on ${allSources.size} independent source(s), below the ` +
+          `The accepted claims rest on ${independentSources} independent source(s), below the ` +
             `${fragment.minIndependentSources} this fragment requires.`,
         );
       }
@@ -351,12 +382,38 @@ export function applyGate(input: {
     claims: results,
     acceptedClaims: acceptedList.length,
     rejectedClaims: results.length - acceptedList.length,
-    independentSources: allSources.size,
+    independentSources,
+    duplicateSourceGroups: duplicates,
     coverage,
     failedConditions: [...failedConditions],
     reasons,
     unresolvedGaps: verification.unresolvedGaps,
   };
+}
+
+/**
+ * Whether two claims are about the same thing, for corroboration.
+ *
+ * Deliberately crude — shared distinctive words — because the alternative is
+ * asking a model whether two sentences agree, and a wrong answer there would
+ * manufacture corroboration that does not exist. Being too strict costs an extra
+ * research pass; being too loose costs the reader their trust.
+ */
+function sameSubject(a: ResearchClaim, b: ResearchClaim): boolean {
+  if (a.evidenceLane && b.evidenceLane && a.evidenceLane === b.evidenceLane) return true;
+  const words = (value: string): Set<string> =>
+    new Set(
+      value
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((word) => word.length > 4),
+    );
+  const left = words(a.claim);
+  const right = words(b.claim);
+  if (left.size === 0 || right.size === 0) return false;
+  let shared = 0;
+  for (const word of left) if (right.has(word)) shared += 1;
+  return shared / Math.min(left.size, right.size) >= 0.4;
 }
 
 /** A fragment contributes to synthesis only when both verdicts are good. */

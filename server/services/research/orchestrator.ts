@@ -27,6 +27,7 @@
  */
 import crypto from 'node:crypto';
 import type {
+  ClaimType,
   Layer,
   Project,
   ResearchClaim,
@@ -70,6 +71,7 @@ import { isAuditable } from '../documents/quality.ts';
 import { registerRunArtifact, targetVersionForRun } from '../runArtifacts.ts';
 import { selectRelevantSegments } from '../sources/ingest.ts';
 import { applyGate, fragmentPasses, type GateResult } from './gate.ts';
+import { dependenciesSettled, planDependencies, shouldSplit, splitFragment } from './splitting.ts';
 import {
   buildFragmentResearchPrompt,
   buildGoalPlanPrompt,
@@ -84,6 +86,7 @@ import {
   type ParseResult,
 } from './schema.ts';
 import { validateClaim } from './sources.ts';
+import { independenceGroup } from './standards.ts';
 
 /** How many times one fragment may be repaired before a person is needed. */
 export const MAX_FRAGMENT_ATTEMPTS = 3;
@@ -618,12 +621,25 @@ async function researchFragment(input: {
   const stored = insertClaims(
     research.value.claims.map((claim) => {
       const validated = validateClaim(claim);
+      const claimType = (claim.claimType ?? 'SOURCED_FACT') as ClaimType;
       return {
         orchestrationId: orchestration.id,
         fragmentId: fragment.id,
         passId: research.passId,
         passKey,
         claim: claim.claim,
+        claimType,
+        sourceGroup: independenceGroup({
+          sourceUrl: validated.normalizedUrl ?? claim.sourceUrl ?? null,
+          sourcePublisher: claim.sourcePublisher ?? null,
+          evidenceExcerpt: claim.evidenceExcerpt ?? null,
+        }),
+        primarySource: claim.primarySource ?? false,
+        geography: fragment.geography,
+        timeframe: fragment.timeframe,
+        population: fragment.population,
+        definition: fragment.definitions,
+        requirementIds: fragment.requirementIds,
         sourceUrl: validated.normalizedUrl ?? claim.sourceUrl ?? null,
         sourceTitle: claim.sourceTitle ?? null,
         sourcePublisher: claim.sourcePublisher ?? null,
@@ -744,17 +760,35 @@ async function researchFragment(input: {
  */
 function nextRunnable(orchestrationId: string): ResearchFragment | null {
   const fragments = currentFragments(orchestrationId);
+  const plan = planDependencies(fragments);
   const byKey = new Map(fragments.map((fragment) => [fragment.fragmentKey, fragment]));
-  const settled = new Set(['ACCEPTED', 'REJECTED', 'NEEDS_HUMAN', 'CANCELLED']);
 
-  for (const fragment of fragments) {
+  // Dependency order first, so foundations are answered before the fragments
+  // that rest on them and quota is not spent on a premise that may not hold.
+  for (const key of plan.order) {
+    const fragment = byKey.get(key);
+    if (!fragment) continue;
     if (fragment.status !== 'QUEUED' && fragment.status !== 'PLANNED') continue;
-    const waiting = fragment.dependsOn.some((key) => {
-      const dependency = byKey.get(key);
-      return dependency !== undefined && !settled.has(dependency.status);
-    });
-    if (!waiting) return fragment;
+    if (dependenciesSettled(fragment, fragments)) return fragment;
   }
+
+  // A cycle would otherwise stall the queue forever. It is reported on the
+  // fragments involved and then broken by priority, because refusing to run
+  // anything would be worse than running the most foundational one first.
+  for (const cycle of plan.cycles) {
+    for (const key of cycle) {
+      const fragment = byKey.get(key);
+      if (!fragment) continue;
+      if (fragment.status !== 'QUEUED' && fragment.status !== 'PLANNED') continue;
+      updateFragment(fragment.id, {
+        blockedReason:
+          `This fragment is in a dependency cycle (${cycle.join(' -> ')}), so its premise cannot ` +
+          'be settled first. It was run in priority order and the cycle is recorded.',
+      });
+      return fragment;
+    }
+  }
+
   return null;
 }
 
@@ -945,6 +979,7 @@ export async function runOrchestration(
           rejectedClaims: 0,
           independentSources: 0,
           coverage: [],
+          duplicateSourceGroups: [],
           failedConditions: [],
           reasons: [message],
           unresolvedGaps: [],
@@ -954,7 +989,24 @@ export async function runOrchestration(
       }
 
       if (!fragmentPasses(gate)) {
-        planRepair(loaded, getFragment(fragment.id) ?? fragment, gate);
+        // Splitting comes before repair: a fragment that is really two questions
+        // would otherwise be repaired as a whole, re-researching the half that
+        // already worked.
+        const current = getFragment(fragment.id) ?? fragment;
+        const signal = shouldSplit(current, gate);
+        if (signal && current.splitFromId === null) {
+          updateFragment(current.id, {
+            status: 'REJECTED',
+            blockedReason: `Split into ${signal.questions.length} fragments: ${signal.reason}`,
+          });
+          splitFragment({
+            fragment: current,
+            signal,
+            startIndex: currentFragments(loaded.id).length,
+          });
+        } else {
+          planRepair(loaded, current, gate);
+        }
       }
     }
 

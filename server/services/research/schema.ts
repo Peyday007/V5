@@ -13,10 +13,12 @@
  * it is caught, not somewhere downstream where it might be argued about.
  */
 import {
+  CLAIM_TYPES,
   CONTRADICTION_STATES,
   REQUIREMENT_KINDS,
   REQUIREMENT_NECESSITIES,
   SUFFICIENCY_VERDICTS,
+  type ClaimType,
   type ContradictionState,
   type RequirementKind,
   type RequirementNecessity,
@@ -467,6 +469,12 @@ export function parsePlanPass(text: string): ParseResult<PlanPassOutput> {
 
 export interface ParsedClaim {
   claim: string;
+  /** What kind of claim this is, which decides what would count as evidence. */
+  claimType: ClaimType;
+  /** True when the source is the body that produced the data, not a report of it. */
+  primarySource: boolean;
+  /** For a claimed absence: where the worker looked. */
+  searchedRepositories: string[];
   sourceUrl: string | null;
   sourceTitle: string | null;
   sourcePublisher: string | null;
@@ -513,6 +521,15 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
 
   const derived = booleanField(row['derived'], `${where}.derived`);
   if (!derived.ok) return derived;
+  const primarySource = booleanField(row['primarySource'], `${where}.primarySource`);
+  if (!primarySource.ok) return primarySource;
+  const searched = stringArray(row['searchedRepositories'], `${where}.searchedRepositories`);
+  if (!searched.ok) return searched;
+
+  // The claim's own type decides its evidence standard, so it is required rather
+  // than guessed: a forecast filed as a fact is the error this prevents.
+  const claimType = strictEnum(row['claimType'] ?? 'SOURCED_FACT', CLAIM_TYPES, `${where}.claimType`);
+  if (!claimType.ok) return claimType;
   const derivedFrom = stringArray(row['derivedFrom'], `${where}.derivedFrom`);
   if (!derivedFrom.ok) return derivedFrom;
 
@@ -531,6 +548,9 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       evidenceLane: lane.value || null,
       derived: derived.value,
       derivedFrom: derivedFrom.value,
+      claimType: claimType.value,
+      primarySource: primarySource.value,
+      searchedRepositories: searched.value,
     },
   };
 }
