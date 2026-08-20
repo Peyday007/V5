@@ -102,6 +102,14 @@ There must be no workflow where the user has to remember "now go update the data
 10. No generated prompt without recording the exact prompt and required attachments.
 11. No audit result stored only as prose — always the structured record too.
 12. No project state dependent on one chat transcript.
+13. No research into a requirement the archive already answers.
+14. No fixed fragment count; the gaps decide it.
+15. No claim judged by a standard that does not fit what it claims.
+16. No repair that repeats a strategy an earlier attempt already tried.
+17. No new evidence silently overwriting old evidence.
+18. No money spent without the user turning paid overages on themselves.
+19. No expensive run started from the browser without a plan a person approved.
+20. No synthesis over a packet that does not cover the goal's mandatory part.
 
 ## 8. Model prose never mutates project state.
 
@@ -210,9 +218,10 @@ wrong heading.
 ## 12. Breadth comes from fragments. Correctness is enforced inside each one.
 
 One conversation is not responsible for a broad subject, and one giant prompt is
-not deep research. `services/research/` decomposes an assignment into 5–15
-bounded fragments, researches each as its own job, and lets only the fragments
-that clear their evidence gate contribute anything.
+not deep research. `services/research/` decomposes an assignment into bounded
+fragments — as many as the gaps require and no more, with no fixed range —
+researches each as its own job, and lets only the fragments that clear their
+evidence gate contribute anything.
 
 - A fragment declares what it is: one bounded question, the evidence lanes it
   needs, acceptable and excluded source types, its geography, timeframe,
@@ -249,6 +258,94 @@ that clear their evidence gate contribute anything.
   outright — a report of invented citations is the worst thing this platform
   could produce.
 
+## 13. Research what the archive does not already answer.
+
+The default is not to research. Before any job runs, `services/reconcile/`
+extracts the claims the project already holds, maps them to the goal's
+requirements, and decides per requirement whether the archive settles it:
+SATISFIED, PARTIALLY_SATISFIED, PRESENT_BUT_UNVERIFIED, STALE, CONTRADICTED,
+DEFINITION_MISMATCH, SUPERSEDED, OWNED_ELSEWHERE, NOT_REQUIRED or MISSING.
+
+- A fragment exists only for a genuine external-research gap. Researching a
+  requirement the archive already answers spends the user's allowance to learn
+  something the project knew, and it is the same waste as never reading the
+  archive at all.
+- A gap that is real but is not research — another layer's job, an
+  implementation detail, an empirical validation, a tuning decision — is
+  reported as such and never becomes a fragment.
+- The boundary contract is the goal's own terms: question, decision, audience,
+  inclusions, exclusions, geography, timeframe, population, definitions,
+  expected output, completion standard, and what the assignment did not settle.
+  Everything downstream is judged against it, so an ambiguity in it becomes its
+  own fragment before anything else runs.
+
+## 14. What counts as evidence depends on what is being claimed.
+
+"Two independent sources" is right for a disputed market estimate and wrong for
+everything else. `services/research/standards.ts` picks the standard per claim
+type and the gate applies it per claim; there is no general minimum.
+
+- One directly inspected primary source settles a statutory fact. An
+  organisation's own site is conclusive about what it says and worth nothing as
+  independent confirmation. A forecast is never a fact whatever supports it. A
+  claim that something does not exist is established by a documented search of
+  the places it would be, or not at all.
+- Sources that are really one source are counted as one: two pages on a site, a
+  press release carried by three wires, three publishers restating one upstream
+  estimate. The duplicates are reported rather than quietly collapsed, because
+  "four sources agree" reads differently once three are the same release.
+- A disagreement is classified before it is called a contradiction. A different
+  definition, timeframe, geography or population explains it completely and is
+  settled by choosing the scope the assignment asked for. Incompatible figures
+  are never averaged to produce an answer.
+
+## 15. A repair is planned. A retry is not a repair.
+
+`services/research/repair.ts` builds the plan behind a second attempt: what
+failed, which claims were rejected and why, which source ecosystems were already
+searched, what to search instead, the terminology the sources themselves used,
+and how much budget is left. Strategies come from a named ladder and are
+filtered against every earlier attempt, so no two attempts can be the same
+search twice; when the ladder or the budget runs out the honest outcome is
+"unresolved", recorded as such.
+
+- Splitting comes before repair: a fragment that is really two questions would
+  otherwise be repaired as a whole, re-researching the half that already worked.
+- A repaired fragment carries its requirements, scope and evidence bar forward.
+  A repair that loses them answers an easier question than the one that failed.
+- Accepted evidence replans the run. What it confirms, strengthens, updates,
+  narrows or contradicts is recorded per claim, coverage moves, and queued work
+  the new evidence made unnecessary is cancelled with its reason — but new
+  evidence never overwrites old evidence, and both claims keep their rows.
+
+## 16. Execution is bounded by the user's allowance and their approval.
+
+A fragment is a logical evidence unit; a job is an execution container. Compatible
+fragments share one job — same scope, same source ecosystem, no dependency
+between them — while keeping entirely separate claims, verdicts and repair
+histories. Output that cannot be split back apart by fragment key is discarded
+rather than untangled.
+
+- Order follows what the work depends on: boundaries and definitions,
+  foundational evidence, calculation inputs, contradiction resolution, mandatory
+  synthesis inputs, supporting context, optional enrichment.
+- Running out of quota is an ordinary event. The run pauses, keeps every
+  accepted fragment and every queued one, and resumes when the allowance comes
+  back. It is never a reason to lower the evidence bar, and paid overages are
+  off until the user turns them on themselves.
+- Research started from the browser is planned in full and then stops: the user
+  sees the goal as Brain read it, what the archive answers, the genuine gaps and
+  the jobs proposed, and approves before anything is spent. Automatic execution
+  changes when approval is asked for, never whether the plan can be inspected.
+- Before synthesis the packet is checked against the whole goal — mandatory
+  coverage, consistent scope, verified calculation inputs, investigated
+  counterarguments, nothing load-bearing on a single source. A failure produces
+  fragments for exactly what is missing, never a re-run of what worked.
+- The research engine, archive ingestion, and the real Antigravity worker are
+  reported separately. The engine passing its tests against a scripted provider
+  says nothing about whether the tool works on this machine, and the worker is
+  UNVERIFIED until a real job has actually run there.
+
 ---
 
 ## Repository map
@@ -283,6 +380,12 @@ server/
     importer.ts         PDF import and registration
     reconcile.ts        scan & reconcile
     agent/              chat tools and the local intent router
+    archive/
+      import.ts         folder-scale import: discovery, resume, retry, provenance
+    reconcile/
+      claims.ts         mechanical claim extraction from the project's own documents
+      coverage.ts       requirement x archive -> SATISFIED / STALE / MISSING / ...
+      plan.ts           the boundary, the requirement graph, and gap-only fragments
     audit/
       context.ts        what an audit is allowed to see
       prompts.ts        the primary / adversarial / judge prompts
@@ -292,10 +395,22 @@ server/
     research/
       schema.ts         zero-trust validation of every research pass
       sources.ts        what makes a claim sourced; structural URL validation
+      standards.ts      the evidence standard per claim type, and independence
       gate.ts           the seven evidence conditions, applied per fragment
-      prompts.ts        plan / fragment / verification / synthesis prompts
+      splitting.ts      fragment splitting and the dependency order
+      bundling.ts       which fragments may share one job, and which never may
+      quota.ts          execution tiers, and pausing rather than lowering the bar
+      repair.ts         the plan behind a second attempt, never the same search
+      replan.ts         new evidence against old, and cancelling needless work
+      contradictions.ts which kind of disagreement two claims are actually in
+      packet.ts         does this answer the goal, and what is missing if not
+      review.ts         the plan a person approves before anything is spent
+      progress.ts       where the run is, read from persisted state only
+      prompts.ts        plan / fragment / bundle / verification / synthesis prompts
       orchestrator.ts   the assignment loop, and the only path to a filed report
       queue.ts          one job at a time, cancellation, restart recovery
+    providers/
+      connection.ts     detect / authenticate / test / models / paid overage
     sources/
       segmenter.ts      conversation- and topic-aware segmentation
       classify.ts       content-based layer proposals, and injection detection
@@ -314,7 +429,8 @@ server/
       queue.ts          serial background extraction
       retrieval.ts      passage search and citation resolution
       findings.ts       the structured index, anchored to real quotes
-  providers/            AIProvider abstraction: mock, Claude, OpenAI
+  providers/            AIProvider abstraction: mock, Claude, OpenAI, Antigravity
+    antigravity/        runtime probe, bounded process, job workspaces, PTY path
   routes/               HTTP API
 client/                 React UI (three panes: layers / workflow / planner)
 tests/                  Vitest suites
