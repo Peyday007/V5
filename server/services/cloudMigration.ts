@@ -324,6 +324,10 @@ export async function runCloudMigration(
   const target = new PostgresAdapter({
     connectionString: options.target.connectionString,
     max: options.target.poolSize,
+    // Carried through so a migration lands where the server that will read it
+    // is looking. Unset in ordinary use; the test harness gives each file its
+    // own schema in one database.
+    schema: options.target.schema,
   });
   const targetDescription = describeConnection(options.target.connectionString);
 
