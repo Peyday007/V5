@@ -33,7 +33,7 @@ import {
   updateExtractionRun,
   type InsertBlockInput,
 } from '../../repos/extraction.ts';
-import { objectExists, readObject } from '../storage.ts';
+import { objectExists, readObject, storageKeyOf} from '../storage.ts';
 import { detectFormat } from './formats.ts';
 import { extractDocx, DocxUnreadableError } from './docx.ts';
 import { extractPdf, PdfUnreadableError, type ExtractedBlock, type ExtractedPage } from './pdf.ts';
@@ -276,7 +276,8 @@ export async function extractDocument(
 ): Promise<ExtractionResult> {
   const document = await getDocument(documentId);
   if (!document) throw new Error(`Cannot extract: unknown document ${documentId}`);
-  if (!document.filesystemPath || !await objectExists(document.filesystemPath)) {
+  const storageKey = storageKeyOf(document);
+  if (!storageKey || !await objectExists(storageKey)) {
     // Invariant 9 territory: a row whose file is gone is not evidence.
     const run = await createExtractionRun({
       documentId: document.id,
@@ -288,12 +289,12 @@ export async function extractDocument(
       pages: [],
       ocrPages: [],
       warnings: [],
-      blockedReason: 'The registered file is missing from disk, so there is nothing to read.',
+      blockedReason: 'The registered file is missing from storage, so there is nothing to read.',
     });
     return finish(document, run, quality, []);
   }
 
-  const buffer = await readObject(document.storageKey ?? document.filesystemPath);
+  const buffer = await readObject(storageKey);
   const sourceHash = sha256(buffer);
 
   const current = await getCurrentExtractionRun(document.id);

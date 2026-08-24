@@ -25,7 +25,7 @@ import { nowIso } from '../repos/util.ts';
 import { inferForProjectFile, inferFromFilename } from './inference.ts';
 import { registerExistingFile } from './importer.ts';
 import { recomputeProject } from './stateEngine.ts';
-import { objectExists, objectSize, hashObject, listProjectFiles } from './storage.ts';
+import { objectExists, objectSize, hashObject, listProjectFiles, storageKeyOf} from './storage.ts';
 
 export interface ReconcileFixInput {
   projectId: string;
@@ -246,7 +246,7 @@ async function fixChecksum(input: ReconcileFixInput): Promise<{ ok: boolean; mes
     };
   }
   const previousHash = document.fileHash;
-  const hash = await hashObject(document.storageKey ?? document.filesystemPath);
+  const hash = await hashObject(storageKeyOf(document)!);
   await updateDocument(document.id, {
     fileHash: hash,
     fileSize: await objectSize(document.filesystemPath),

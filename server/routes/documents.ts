@@ -42,7 +42,7 @@ import {
 } from '../repos/sources.ts';
 import { DOCUMENT_SCOPES, LINK_STATUSES, LINK_TYPES } from '../domain/types.ts';
 import type { DocumentScope, LinkStatus, LinkType } from '../domain/types.ts';
-import { layerSlugFromPath, relocateFile } from '../services/storage.ts';
+import { layerSlugFromPath, relocateFile, storageKeyOf} from '../services/storage.ts';
 import { getStorage, ObjectNotFoundError } from '../services/storage/index.ts';
 import {
   badRequest,
@@ -281,16 +281,15 @@ documentsRouter.get(
   '/:documentId/file',
   handler(async (req, res, next) => {
     const document = await requireDocument(pathId(req, 'documentId'));
-    if (!document.filesystemPath) {
+    // The key comes from the row, never from the request. Whether it names a
+    // file under the data folder or an object in a bucket is the storage
+    // layer's business, and the same refusals apply either way.
+    const key = storageKeyOf(document);
+    if (!key) {
       throw notFound(
         `"${document.canonicalName}" has no file registered yet — it exists as an expectation only.`,
       );
     }
-
-    // The key comes from the row, never from the request. Whether it names a
-    // file under the data folder or an object in a bucket is the storage
-    // layer's business, and the same refusals apply either way.
-    const key = document.storageKey ?? document.filesystemPath;
     let object: Awaited<ReturnType<ReturnType<typeof getStorage>['openRead']>>;
     try {
       object = await getStorage().openRead(key);

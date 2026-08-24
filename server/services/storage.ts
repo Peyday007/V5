@@ -189,6 +189,25 @@ export async function resolveStoredFile(projectSlug: string, relativePath: strin
   return absolutePathFor(await resolveStoredKey(projectSlug, relativePath));
 }
 
+/**
+ * Where a document's bytes are, in the store's own terms.
+ *
+ * `storage_key` is the address; `filesystem_path` is where the file is on this
+ * machine, when it is on this machine. They hold the same string in local mode
+ * — migration 013 backfilled one from the other — and diverge in cloud mode,
+ * where there is no local path at all.
+ *
+ * Any code reaching for the bytes wants this. Code that genuinely wants a
+ * local path — a reconcile report naming what a person would find in the
+ * folder — should keep reading `filesystemPath`, and get null when there is
+ * none, which is the true answer.
+ */
+export function storageKeyOf(
+  document: { storageKey?: string | null; filesystemPath?: string | null } | null | undefined,
+): string | null {
+  return document?.storageKey ?? document?.filesystemPath ?? null;
+}
+
 export async function objectExists(key: string | null | undefined): Promise<boolean> {
   if (!key) return false;
   try {

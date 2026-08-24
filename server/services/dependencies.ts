@@ -33,7 +33,7 @@ import { findDocumentByCanonicalName, getDocument } from '../repos/documents.ts'
 import { recordEvent } from '../repos/events.ts';
 import { listLayers } from '../repos/layers.ts';
 import { getRun } from '../repos/runs.ts';
-import { objectExists } from './storage.ts';
+import { objectExists, storageKeyOf} from './storage.ts';
 
 /** Document statuses that count as "finished work" for a source packet. */
 const USABLE_STATUSES: ReadonlySet<DocumentStatus> = new Set<DocumentStatus>(['COMPLETE', 'FROZEN']);
@@ -53,10 +53,11 @@ export interface DocumentPresence {
 export async function documentPresence(document: Document | null | undefined): Promise<DocumentPresence> {
   if (!document) return { present: false, fileMissing: false, status: null };
   const statusUsable = USABLE_STATUSES.has(document.status);
-  const onDisk = await objectExists(document.filesystemPath);
-  // A path was recorded, or the status claims a finished artifact: either way
-  // the platform promised a file, so its absence is an inconsistency.
-  const claimsArtifact = Boolean(document.filesystemPath) || statusUsable;
+  const key = storageKeyOf(document);
+  const onDisk = await objectExists(key);
+  // A location was recorded, or the status claims a finished artifact: either
+  // way the platform promised a file, so its absence is an inconsistency.
+  const claimsArtifact = Boolean(key) || statusUsable;
   return {
     present: statusUsable && onDisk,
     fileMissing: claimsArtifact && !onDisk,

@@ -60,6 +60,8 @@ import {
   storeFile,
   type StoredFile,
   assertInsideProjectDocuments,
+  storageKeyOf,
+  currentStorageProvider,
 } from './storage.ts';
 
 export interface ImportFileInput {
@@ -114,7 +116,11 @@ function extensionFor(filename: string): string {
 /** Duplicate detection is by content, not by name: the same PDF renamed is still the same PDF. */
 async function findDocumentByHash(projectId: string, hash: string): Promise<Document | null> {
   const matches = (await listDocuments(projectId)).filter((document) => document.fileHash === hash);
-  return matches.find((document) => objectExists(document.filesystemPath)) ?? matches[0] ?? null;
+  // Prefer a match whose bytes are actually still there. Resolved first rather
+  // than inside a `find` predicate: `find` does not await, so an async
+  // predicate would return the first match whatever the store said.
+  const present = await Promise.all(matches.map((document) => objectExists(storageKeyOf(document))));
+  return matches.find((_, i) => present[i]) ?? matches[0] ?? null;
 }
 
 /**
@@ -282,6 +288,12 @@ async function registerStoredDocument(input: RegistrationInput): Promise<Registr
       status: 'COMPLETE',
       filename: stored.filename,
       filesystemPath: stored.relativePath,
+      // Where the bytes actually are, and in which store. Recorded per document
+      // rather than inferred from configuration, so a project half-migrated to
+      // the cloud can say which half — and so the migration tool can resume by
+      // asking the rows rather than by trusting a flag.
+      storageKey: stored.storageKey,
+      storageProvider: currentStorageProvider(),
       fileSize: stored.size,
       fileHash: stored.hash,
       conversationTitle: names.conversationTitle,
@@ -521,6 +533,8 @@ async function registerProjectSource(input: {
     status: 'COMPLETE',
     filename: stored.filename,
     filesystemPath: stored.relativePath,
+    storageKey: stored.storageKey,
+    storageProvider: currentStorageProvider(),
     fileSize: stored.size,
     fileHash: stored.hash,
     conversationTitle: null,

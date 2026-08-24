@@ -33,7 +33,7 @@ import { getProject } from '../repos/projects.ts';
 import { listActiveRuns } from '../repos/runs.ts';
 import { nowIso } from '../repos/util.ts';
 import { computeLayerState, recomputeLayer } from './stateEngine.ts';
-import { objectExists } from './storage.ts';
+import { objectExists, storageKeyOf} from './storage.ts';
 
 /**
  * The priority ladder. Lower sorts first, and the numbers are deliberately
@@ -541,7 +541,7 @@ async function freezeCandidate(
 async function isUsable(doc: Document): Promise<boolean> {
   if (doc.status !== 'COMPLETE' && doc.status !== 'FROZEN') return false;
   if (doc.fileMissing) return false;
-  return await objectExists(doc.filesystemPath);
+  return await objectExists(storageKeyOf(doc));
 }
 
 /**

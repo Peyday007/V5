@@ -25,7 +25,6 @@ import {
   DB_PATH,
   IS_PRODUCTION,
   PORT,
-  PROJECTS_ROOT,
   REPO_ROOT,
   ensureDataDirs,
 } from './env.ts';
@@ -33,6 +32,9 @@ import { getDefaultProject, listProjects } from './repos/projects.ts';
 import { errorMiddleware } from './routes/helpers.ts';
 import { createApiRouter } from './routes/index.ts';
 import { seedIfEmpty } from './seed.ts';
+import { initStorage } from './services/storage/index.ts';
+import { StorageConfigurationError } from './services/storage/types.ts';
+import { serveStoredObject } from './routes/files.ts';
 import { writeProjectState } from './services/runtimeState.ts';
 import { recomputeProject } from './services/stateEngine.ts';
 import { recoverInterruptedExtractions } from './services/documents/extraction.ts';
@@ -92,20 +94,14 @@ function buildApp(): Express {
 
   app.use('/api', createApiRouter());
 
-  // Read-only window onto the project tree so a stored document can be linked
-  // to directly. Writes only ever happen through the import endpoints.
-  app.use(
-    '/files',
-    express.static(PROJECTS_ROOT, {
-      index: false,
-      dotfiles: 'ignore',
-      redirect: false,
-      maxAge: 0,
-    }),
-  );
-  app.use('/files', (req: Request, res: Response) => {
-    res.status(404).json({ error: `No file at /files${req.path}.` });
-  });
+  // Read-only window onto the stored documents so one can be linked to directly.
+  //
+  // This used to be `express.static(PROJECTS_ROOT)`, which is exactly as correct
+  // as the assumption that a document is a file on this machine. It goes through
+  // the storage layer instead, so the same URL works whether the bytes are on
+  // disk or in a bucket — and so the bucket is never addressed by the client.
+  // Writes only ever happen through the import endpoints.
+  app.use('/files', serveStoredObject);
 
   if (IS_PRODUCTION) {
     const hasBuild = fs.existsSync(CLIENT_INDEX);
@@ -259,6 +255,34 @@ function installShutdown(server: Server): void {
 
 async function main(): Promise<void> {
   ensureDataDirs();
+
+  // The document store opens before the database, because it is the cheaper
+  // failure to discover: a bucket that cannot be reached is a boot Brain must
+  // not complete, and finding that out after migrating is finding it out late.
+  //
+  // `verify()` runs a real operation. Having SUPABASE_URL set is not the same
+  // fact as the bucket answering, and only one of those may be reported.
+  try {
+    await initStorage();
+  } catch (error) {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    console.error('');
+    console.error('  Brain could not use the document storage it was configured for.');
+    console.error('');
+    console.error(`  ${failure.message}`);
+    if (failure instanceof StorageConfigurationError && failure.detail) {
+      console.error(`  ${failure.detail}`);
+    }
+    console.error('');
+    console.error(
+      '  Nothing was written to local disk instead: cloud storage does not fall back, because ' +
+        'documents saved to this machine by a server reporting itself as cloud-backed are ' +
+        'documents nobody else can open.',
+    );
+    console.error('');
+    serveMigrationFailure(failure);
+    return;
+  }
 
   let migrations: MigrationReport;
   try {

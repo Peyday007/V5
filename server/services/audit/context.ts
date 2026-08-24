@@ -26,7 +26,7 @@ import { getLayer, listLayers } from '../../repos/layers.ts';
 import { getDocument, listDocumentsByLayer } from '../../repos/documents.ts';
 import { getRun, listRunsByLayer } from '../../repos/runs.ts';
 import { listAuditsByLayer } from '../../repos/audits.ts';
-import { objectExists } from '../storage.ts';
+import { objectExists, storageKeyOf} from '../storage.ts';
 import { getCurrentExtractionRun, listBlocks } from '../../repos/extraction.ts';
 import { isAuditable } from '../documents/quality.ts';
 import { checkCanonicalNames, checkRunDependencies } from '../dependencies.ts';
@@ -157,14 +157,15 @@ async function readDocumentText(document: Document, budget: number): Promise<Art
     extractionWarnings: run?.warnings ?? [],
   };
 
-  if (!document.filesystemPath || !await objectExists(document.filesystemPath)) {
+  const storageKey = storageKeyOf(document);
+  if (!storageKey || !await objectExists(storageKey)) {
     return {
       ...base,
       text: '',
       fullLength: 0,
       truncated: false,
-      unavailableReason: document.filesystemPath
-        ? 'The registered file is missing from disk.'
+      unavailableReason: storageKey
+        ? 'The registered file is missing from storage.'
         : 'No file has been registered for this document.',
     };
   }

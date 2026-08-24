@@ -226,6 +226,13 @@ export class PostgresAdapter implements Database {
  */
 function annotate(error: unknown, sql: string): unknown {
   if (!(error instanceof Error) || 'brainSql' in error) return error;
+  // Only when the server itself rejected the statement. A SQLSTATE means
+  // Postgres parsed it and said no, so naming it is the whole diagnosis; a
+  // connection that was refused or a TLS handshake that failed has nothing to
+  // do with the statement that happened to be first, and saying so there would
+  // put SQL into a boot error about an unreachable host.
+  const code = (error as { code?: unknown }).code;
+  if (typeof code !== 'string' || !/^[0-9A-Z]{5}$/.test(code)) return error;
   Object.defineProperty(error, 'brainSql', { value: sql, enumerable: false });
   error.message = `${error.message}\n  in: ${sql.replace(/\s+/g, ' ').trim().slice(0, 300)}`;
   return error;

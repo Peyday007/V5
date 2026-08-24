@@ -81,7 +81,7 @@ import {
   recomputeProject,
   setLayerExpectations,
 } from '../stateEngine.ts';
-import { objectExists, objectSize, hashObject } from '../storage.ts';
+import { objectExists, objectSize, hashObject, storageKeyOf} from '../storage.ts';
 
 export interface ToolContext {
   projectId: string;
@@ -294,7 +294,8 @@ async function requireProject(projectId: string): Promise<Project> {
 
 /** Invariant 8/9: a document counts as having a file only if the file is there now. */
 async function filePresent(document: Document): Promise<boolean> {
-  return document.filesystemPath ? await objectExists(document.filesystemPath) : false;
+  const key = storageKeyOf(document);
+  return key ? await objectExists(key) : false;
 }
 
 async function summarizeDocument(document: Document): Promise<DocumentSummary> {
