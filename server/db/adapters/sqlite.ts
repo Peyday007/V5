@@ -128,8 +128,18 @@ export class SqliteAdapter implements Database {
 }
 
 /** Open a local database file and put the pragmas Brain relies on in place. */
-export function openSqlite(filePath: string): SqliteAdapter {
-  const driver = openDriver(filePath);
+export function openSqlite(
+  filePath: string,
+  options: { readOnly?: boolean } = {},
+): SqliteAdapter {
+  const driver = openDriver(filePath, options);
+  if (options.readOnly) {
+    // Nothing here may write, so the pragmas that configure writing are not
+    // set: journal_mode in particular would itself be a write, and would fail.
+    driver.exec('PRAGMA foreign_keys = ON');
+    driver.exec('PRAGMA busy_timeout = 5000');
+    return new SqliteAdapter(driver);
+  }
   // WAL keeps the app responsive while long imports write; foreign keys are
   // enforced so invariant violations surface immediately rather than silently.
   driver.exec('PRAGMA journal_mode = WAL');

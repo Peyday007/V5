@@ -110,7 +110,7 @@ class CachingDriver implements SqliteDriver {
 const require_ = createRequire(import.meta.url);
 
 interface NodeSqliteModule {
-  DatabaseSync: new (p: string) => DatabaseLike;
+  DatabaseSync: new (p: string, o?: { readOnly?: boolean }) => DatabaseLike;
 }
 
 /**
@@ -121,10 +121,31 @@ interface NodeSqliteModule {
  * transform time — `node:sqlite` is not in every bundler's builtin list, and
  * `better-sqlite3` is genuinely optional.
  */
-export function openDriver(filePath: string): SqliteDriver {
+export interface OpenDriverOptions {
+  /**
+   * Open the file without the ability to write to it.
+   *
+   * Enforced by SQLite itself rather than by discipline in the caller. The
+   * cloud migration reads a live local Brain, and the guarantee it makes — that
+   * a failed migration leaves the original untouched — is worth rather more
+   * when the connection could not have written to it even if the code were
+   * wrong.
+   */
+  readOnly?: boolean;
+}
+
+export function openDriver(filePath: string, options: OpenDriverOptions = {}): SqliteDriver {
   try {
-    const Ctor = require_('better-sqlite3') as new (p: string) => DatabaseLike;
-    return new CachingDriver(new Ctor(filePath), 'better-sqlite3');
+    const Ctor = require_('better-sqlite3') as new (
+      p: string,
+      o?: { readonly?: boolean },
+    ) => DatabaseLike;
+    // The options argument is passed only when there is something to say: both
+    // drivers reject an explicit `undefined` where they would accept nothing.
+    return new CachingDriver(
+      options.readOnly ? new Ctor(filePath, { readonly: true }) : new Ctor(filePath),
+      'better-sqlite3',
+    );
   } catch {
     // better-sqlite3 is not installed; use the built-in driver.
   }
@@ -140,5 +161,10 @@ export function openDriver(filePath: string): SqliteDriver {
         'node:sqlite module) or the optional `better-sqlite3` package.',
     );
   }
-  return new CachingDriver(new sqlite.DatabaseSync(filePath), 'node:sqlite');
+  return new CachingDriver(
+    options.readOnly
+      ? new sqlite.DatabaseSync(filePath, { readOnly: true })
+      : new sqlite.DatabaseSync(filePath),
+    'node:sqlite',
+  );
 }

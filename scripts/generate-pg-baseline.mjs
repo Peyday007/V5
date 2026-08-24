@@ -128,7 +128,7 @@ function main() {
   out.push('-- than written beside it (scripts/generate-pg-baseline.mjs), so the two cannot');
   out.push('-- drift into describing different things.');
   out.push('--');
-  out.push('-- Three deliberate differences, and no others:');
+  out.push('-- Four deliberate differences, and no others:');
   out.push('--');
   out.push('--   * every table carries `seq`, an identity column standing in for SQLite\'s');
   out.push('--     rowid. Thirty-odd queries order by it to break ties on equal timestamps,');
@@ -167,6 +167,14 @@ function main() {
   // a table declared later; Postgres does not, and reordering the tables by
   // hand would put the schema's shape at the mercy of alphabetical accident.
   out.push('-- Referential integrity, added once every table exists.');
+  out.push('--');
+  out.push('-- DEFERRABLE INITIALLY IMMEDIATE: checked per statement exactly as before,');
+  out.push('-- so ordinary operation is unchanged and a broken reference still fails at');
+  out.push('-- the statement that made it. What it adds is that a bulk loader may say');
+  out.push('-- SET CONSTRAINTS ALL DEFERRED inside its own transaction — which the cloud');
+  out.push('-- migration does, because this schema has self-references and cycles');
+  out.push('-- (a run points at a document, a document at its parent, an orchestration');
+  out.push('-- at an audit) and no table ordering exists that satisfies them all.');
   for (const object of objects) {
     if (object.type !== 'table') continue;
     if (object.name === 'schema_migrations') continue;
@@ -178,7 +186,8 @@ function main() {
         fk.on_delete && fk.on_delete !== 'NO ACTION' ? ` ON DELETE ${fk.on_delete}` : '';
       out.push(
         `ALTER TABLE ${object.name} ADD CONSTRAINT ${object.name}_${fk.from}_fkey ` +
-          `FOREIGN KEY (${fk.from}) REFERENCES ${fk.table}(${fk.to})${onDelete};`,
+          `FOREIGN KEY (${fk.from}) REFERENCES ${fk.table}(${fk.to})${onDelete} ` +
+          `DEFERRABLE INITIALLY IMMEDIATE;`,
       );
     }
   }

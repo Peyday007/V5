@@ -6,7 +6,7 @@
 -- than written beside it (scripts/generate-pg-baseline.mjs), so the two cannot
 -- drift into describing different things.
 --
--- Three deliberate differences, and no others:
+-- Four deliberate differences, and no others:
 --
 --   * every table carries `seq`, an identity column standing in for SQLite's
 --     rowid. Thirty-odd queries order by it to break ties on equal timestamps,
@@ -811,96 +811,104 @@ CREATE TABLE segment_layer_links (
 );
 
 -- Referential integrity, added once every table exists.
-ALTER TABLE audit_evidence ADD CONSTRAINT audit_evidence_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE;
-ALTER TABLE audit_evidence ADD CONSTRAINT audit_evidence_gap_id_fkey FOREIGN KEY (gap_id) REFERENCES audit_gaps(id) ON DELETE CASCADE;
-ALTER TABLE audit_evidence ADD CONSTRAINT audit_evidence_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL;
-ALTER TABLE audit_evidence ADD CONSTRAINT audit_evidence_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE SET NULL;
-ALTER TABLE audit_evidence ADD CONSTRAINT audit_evidence_chunk_id_fkey FOREIGN KEY (chunk_id) REFERENCES document_chunks(id) ON DELETE SET NULL;
-ALTER TABLE audit_findings ADD CONSTRAINT audit_findings_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE;
-ALTER TABLE audit_gaps ADD CONSTRAINT audit_gaps_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE;
-ALTER TABLE audit_gaps ADD CONSTRAINT audit_gaps_owning_layer_id_fkey FOREIGN KEY (owning_layer_id) REFERENCES layers(id) ON DELETE SET NULL;
-ALTER TABLE audit_passes ADD CONSTRAINT audit_passes_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE;
-ALTER TABLE audit_passes ADD CONSTRAINT audit_passes_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE audit_passes ADD CONSTRAINT audit_passes_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE SET NULL;
-ALTER TABLE audits ADD CONSTRAINT audits_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE audits ADD CONSTRAINT audits_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE SET NULL;
-ALTER TABLE audits ADD CONSTRAINT audits_run_id_fkey FOREIGN KEY (run_id) REFERENCES research_runs(id) ON DELETE SET NULL;
-ALTER TABLE audits ADD CONSTRAINT audits_audited_document_id_fkey FOREIGN KEY (audited_document_id) REFERENCES documents(id) ON DELETE SET NULL;
-ALTER TABLE boundary_contracts ADD CONSTRAINT boundary_contracts_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE;
-ALTER TABLE boundary_contracts ADD CONSTRAINT boundary_contracts_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE boundary_contracts ADD CONSTRAINT boundary_contracts_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE CASCADE;
-ALTER TABLE conversations ADD CONSTRAINT conversations_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE conversations ADD CONSTRAINT conversations_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE SET NULL;
-ALTER TABLE conversations ADD CONSTRAINT conversations_run_id_fkey FOREIGN KEY (run_id) REFERENCES research_runs(id) ON DELETE SET NULL;
-ALTER TABLE dependencies ADD CONSTRAINT dependencies_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE dependencies ADD CONSTRAINT dependencies_dependent_document_id_fkey FOREIGN KEY (dependent_document_id) REFERENCES documents(id) ON DELETE CASCADE;
-ALTER TABLE dependencies ADD CONSTRAINT dependencies_dependent_run_id_fkey FOREIGN KEY (dependent_run_id) REFERENCES research_runs(id) ON DELETE CASCADE;
-ALTER TABLE dependencies ADD CONSTRAINT dependencies_required_document_id_fkey FOREIGN KEY (required_document_id) REFERENCES documents(id) ON DELETE SET NULL;
-ALTER TABLE dependencies ADD CONSTRAINT dependencies_required_layer_id_fkey FOREIGN KEY (required_layer_id) REFERENCES layers(id) ON DELETE SET NULL;
-ALTER TABLE document_blocks ADD CONSTRAINT document_blocks_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE CASCADE;
-ALTER TABLE document_blocks ADD CONSTRAINT document_blocks_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE;
-ALTER TABLE document_chunks ADD CONSTRAINT document_chunks_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE CASCADE;
-ALTER TABLE document_chunks ADD CONSTRAINT document_chunks_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE;
-ALTER TABLE document_findings ADD CONSTRAINT document_findings_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE CASCADE;
-ALTER TABLE document_findings ADD CONSTRAINT document_findings_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE;
-ALTER TABLE document_findings ADD CONSTRAINT document_findings_chunk_id_fkey FOREIGN KEY (chunk_id) REFERENCES document_chunks(id) ON DELETE SET NULL;
-ALTER TABLE document_segments ADD CONSTRAINT document_segments_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE;
-ALTER TABLE document_segments ADD CONSTRAINT document_segments_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE CASCADE;
-ALTER TABLE documents ADD CONSTRAINT documents_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE documents ADD CONSTRAINT documents_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE SET NULL;
-ALTER TABLE documents ADD CONSTRAINT documents_parent_document_id_fkey FOREIGN KEY (parent_document_id) REFERENCES documents(id) ON DELETE SET NULL;
-ALTER TABLE documents ADD CONSTRAINT documents_superseded_by_document_id_fkey FOREIGN KEY (superseded_by_document_id) REFERENCES documents(id) ON DELETE SET NULL;
-ALTER TABLE existing_claims ADD CONSTRAINT existing_claims_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE existing_claims ADD CONSTRAINT existing_claims_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE;
-ALTER TABLE existing_claims ADD CONSTRAINT existing_claims_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE SET NULL;
-ALTER TABLE existing_claims ADD CONSTRAINT existing_claims_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE SET NULL;
-ALTER TABLE existing_claims ADD CONSTRAINT existing_claims_prior_audit_id_fkey FOREIGN KEY (prior_audit_id) REFERENCES audits(id) ON DELETE SET NULL;
-ALTER TABLE extraction_runs ADD CONSTRAINT extraction_runs_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE;
-ALTER TABLE extraction_runs ADD CONSTRAINT extraction_runs_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE extraction_runs ADD CONSTRAINT extraction_runs_superseded_by_run_id_fkey FOREIGN KEY (superseded_by_run_id) REFERENCES extraction_runs(id) ON DELETE SET NULL;
-ALTER TABLE import_files ADD CONSTRAINT import_files_job_id_fkey FOREIGN KEY (job_id) REFERENCES import_jobs(id) ON DELETE CASCADE;
-ALTER TABLE import_files ADD CONSTRAINT import_files_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE import_files ADD CONSTRAINT import_files_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL;
-ALTER TABLE import_files ADD CONSTRAINT import_files_duplicate_of_id_fkey FOREIGN KEY (duplicate_of_id) REFERENCES documents(id) ON DELETE SET NULL;
-ALTER TABLE import_jobs ADD CONSTRAINT import_jobs_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE ingestion_reports ADD CONSTRAINT ingestion_reports_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE;
-ALTER TABLE ingestion_reports ADD CONSTRAINT ingestion_reports_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE CASCADE;
-ALTER TABLE layers ADD CONSTRAINT layers_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE messages ADD CONSTRAINT messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE;
-ALTER TABLE project_events ADD CONSTRAINT project_events_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE quota_pauses ADD CONSTRAINT quota_pauses_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE;
-ALTER TABLE requirement_coverage ADD CONSTRAINT requirement_coverage_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE;
-ALTER TABLE requirement_coverage ADD CONSTRAINT requirement_coverage_requirement_id_fkey FOREIGN KEY (requirement_id) REFERENCES requirements(id) ON DELETE CASCADE;
-ALTER TABLE requirements ADD CONSTRAINT requirements_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE;
-ALTER TABLE requirements ADD CONSTRAINT requirements_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE requirements ADD CONSTRAINT requirements_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE CASCADE;
-ALTER TABLE requirements ADD CONSTRAINT requirements_owning_layer_id_fkey FOREIGN KEY (owning_layer_id) REFERENCES layers(id) ON DELETE SET NULL;
-ALTER TABLE research_claims ADD CONSTRAINT research_claims_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE;
-ALTER TABLE research_claims ADD CONSTRAINT research_claims_fragment_id_fkey FOREIGN KEY (fragment_id) REFERENCES research_fragments(id) ON DELETE CASCADE;
-ALTER TABLE research_claims ADD CONSTRAINT research_claims_pass_id_fkey FOREIGN KEY (pass_id) REFERENCES research_passes(id) ON DELETE SET NULL;
-ALTER TABLE research_fragments ADD CONSTRAINT research_fragments_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE;
-ALTER TABLE research_fragments ADD CONSTRAINT research_fragments_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE research_fragments ADD CONSTRAINT research_fragments_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE CASCADE;
-ALTER TABLE research_fragments ADD CONSTRAINT research_fragments_parent_fragment_id_fkey FOREIGN KEY (parent_fragment_id) REFERENCES research_fragments(id) ON DELETE SET NULL;
-ALTER TABLE research_job_fragments ADD CONSTRAINT research_job_fragments_job_id_fkey FOREIGN KEY (job_id) REFERENCES research_jobs(id) ON DELETE CASCADE;
-ALTER TABLE research_job_fragments ADD CONSTRAINT research_job_fragments_fragment_id_fkey FOREIGN KEY (fragment_id) REFERENCES research_fragments(id) ON DELETE CASCADE;
-ALTER TABLE research_jobs ADD CONSTRAINT research_jobs_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE;
-ALTER TABLE research_jobs ADD CONSTRAINT research_jobs_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE research_orchestrations ADD CONSTRAINT research_orchestrations_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE research_orchestrations ADD CONSTRAINT research_orchestrations_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE CASCADE;
-ALTER TABLE research_orchestrations ADD CONSTRAINT research_orchestrations_run_id_fkey FOREIGN KEY (run_id) REFERENCES research_runs(id) ON DELETE CASCADE;
-ALTER TABLE research_orchestrations ADD CONSTRAINT research_orchestrations_parent_orchestration_id_fkey FOREIGN KEY (parent_orchestration_id) REFERENCES research_orchestrations(id) ON DELETE SET NULL;
-ALTER TABLE research_orchestrations ADD CONSTRAINT research_orchestrations_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL;
-ALTER TABLE research_orchestrations ADD CONSTRAINT research_orchestrations_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE SET NULL;
-ALTER TABLE research_passes ADD CONSTRAINT research_passes_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE;
-ALTER TABLE research_passes ADD CONSTRAINT research_passes_fragment_id_fkey FOREIGN KEY (fragment_id) REFERENCES research_fragments(id) ON DELETE CASCADE;
-ALTER TABLE research_runs ADD CONSTRAINT research_runs_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-ALTER TABLE research_runs ADD CONSTRAINT research_runs_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE SET NULL;
-ALTER TABLE research_runs ADD CONSTRAINT research_runs_target_document_id_fkey FOREIGN KEY (target_document_id) REFERENCES documents(id) ON DELETE SET NULL;
-ALTER TABLE research_runs ADD CONSTRAINT research_runs_parent_run_id_fkey FOREIGN KEY (parent_run_id) REFERENCES research_runs(id) ON DELETE SET NULL;
-ALTER TABLE segment_layer_links ADD CONSTRAINT segment_layer_links_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE;
-ALTER TABLE segment_layer_links ADD CONSTRAINT segment_layer_links_segment_id_fkey FOREIGN KEY (segment_id) REFERENCES document_segments(id) ON DELETE CASCADE;
-ALTER TABLE segment_layer_links ADD CONSTRAINT segment_layer_links_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE CASCADE;
+--
+-- DEFERRABLE INITIALLY IMMEDIATE: checked per statement exactly as before,
+-- so ordinary operation is unchanged and a broken reference still fails at
+-- the statement that made it. What it adds is that a bulk loader may say
+-- SET CONSTRAINTS ALL DEFERRED inside its own transaction — which the cloud
+-- migration does, because this schema has self-references and cycles
+-- (a run points at a document, a document at its parent, an orchestration
+-- at an audit) and no table ordering exists that satisfies them all.
+ALTER TABLE audit_evidence ADD CONSTRAINT audit_evidence_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audit_evidence ADD CONSTRAINT audit_evidence_gap_id_fkey FOREIGN KEY (gap_id) REFERENCES audit_gaps(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audit_evidence ADD CONSTRAINT audit_evidence_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audit_evidence ADD CONSTRAINT audit_evidence_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audit_evidence ADD CONSTRAINT audit_evidence_chunk_id_fkey FOREIGN KEY (chunk_id) REFERENCES document_chunks(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audit_findings ADD CONSTRAINT audit_findings_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audit_gaps ADD CONSTRAINT audit_gaps_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audit_gaps ADD CONSTRAINT audit_gaps_owning_layer_id_fkey FOREIGN KEY (owning_layer_id) REFERENCES layers(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audit_passes ADD CONSTRAINT audit_passes_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audit_passes ADD CONSTRAINT audit_passes_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audit_passes ADD CONSTRAINT audit_passes_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audits ADD CONSTRAINT audits_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audits ADD CONSTRAINT audits_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audits ADD CONSTRAINT audits_run_id_fkey FOREIGN KEY (run_id) REFERENCES research_runs(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE audits ADD CONSTRAINT audits_audited_document_id_fkey FOREIGN KEY (audited_document_id) REFERENCES documents(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE boundary_contracts ADD CONSTRAINT boundary_contracts_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE boundary_contracts ADD CONSTRAINT boundary_contracts_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE boundary_contracts ADD CONSTRAINT boundary_contracts_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE conversations ADD CONSTRAINT conversations_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE conversations ADD CONSTRAINT conversations_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE conversations ADD CONSTRAINT conversations_run_id_fkey FOREIGN KEY (run_id) REFERENCES research_runs(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE dependencies ADD CONSTRAINT dependencies_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE dependencies ADD CONSTRAINT dependencies_dependent_document_id_fkey FOREIGN KEY (dependent_document_id) REFERENCES documents(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE dependencies ADD CONSTRAINT dependencies_dependent_run_id_fkey FOREIGN KEY (dependent_run_id) REFERENCES research_runs(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE dependencies ADD CONSTRAINT dependencies_required_document_id_fkey FOREIGN KEY (required_document_id) REFERENCES documents(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE dependencies ADD CONSTRAINT dependencies_required_layer_id_fkey FOREIGN KEY (required_layer_id) REFERENCES layers(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE document_blocks ADD CONSTRAINT document_blocks_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE document_blocks ADD CONSTRAINT document_blocks_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE document_chunks ADD CONSTRAINT document_chunks_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE document_chunks ADD CONSTRAINT document_chunks_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE document_findings ADD CONSTRAINT document_findings_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE document_findings ADD CONSTRAINT document_findings_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE document_findings ADD CONSTRAINT document_findings_chunk_id_fkey FOREIGN KEY (chunk_id) REFERENCES document_chunks(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE document_segments ADD CONSTRAINT document_segments_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE document_segments ADD CONSTRAINT document_segments_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE documents ADD CONSTRAINT documents_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE documents ADD CONSTRAINT documents_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE documents ADD CONSTRAINT documents_parent_document_id_fkey FOREIGN KEY (parent_document_id) REFERENCES documents(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE documents ADD CONSTRAINT documents_superseded_by_document_id_fkey FOREIGN KEY (superseded_by_document_id) REFERENCES documents(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE existing_claims ADD CONSTRAINT existing_claims_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE existing_claims ADD CONSTRAINT existing_claims_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE existing_claims ADD CONSTRAINT existing_claims_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE existing_claims ADD CONSTRAINT existing_claims_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE existing_claims ADD CONSTRAINT existing_claims_prior_audit_id_fkey FOREIGN KEY (prior_audit_id) REFERENCES audits(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE extraction_runs ADD CONSTRAINT extraction_runs_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE extraction_runs ADD CONSTRAINT extraction_runs_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE extraction_runs ADD CONSTRAINT extraction_runs_superseded_by_run_id_fkey FOREIGN KEY (superseded_by_run_id) REFERENCES extraction_runs(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE import_files ADD CONSTRAINT import_files_job_id_fkey FOREIGN KEY (job_id) REFERENCES import_jobs(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE import_files ADD CONSTRAINT import_files_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE import_files ADD CONSTRAINT import_files_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE import_files ADD CONSTRAINT import_files_duplicate_of_id_fkey FOREIGN KEY (duplicate_of_id) REFERENCES documents(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE import_jobs ADD CONSTRAINT import_jobs_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE ingestion_reports ADD CONSTRAINT ingestion_reports_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE ingestion_reports ADD CONSTRAINT ingestion_reports_extraction_run_id_fkey FOREIGN KEY (extraction_run_id) REFERENCES extraction_runs(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE layers ADD CONSTRAINT layers_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE messages ADD CONSTRAINT messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE project_events ADD CONSTRAINT project_events_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE quota_pauses ADD CONSTRAINT quota_pauses_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE requirement_coverage ADD CONSTRAINT requirement_coverage_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE requirement_coverage ADD CONSTRAINT requirement_coverage_requirement_id_fkey FOREIGN KEY (requirement_id) REFERENCES requirements(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE requirements ADD CONSTRAINT requirements_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE requirements ADD CONSTRAINT requirements_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE requirements ADD CONSTRAINT requirements_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE requirements ADD CONSTRAINT requirements_owning_layer_id_fkey FOREIGN KEY (owning_layer_id) REFERENCES layers(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_claims ADD CONSTRAINT research_claims_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_claims ADD CONSTRAINT research_claims_fragment_id_fkey FOREIGN KEY (fragment_id) REFERENCES research_fragments(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_claims ADD CONSTRAINT research_claims_pass_id_fkey FOREIGN KEY (pass_id) REFERENCES research_passes(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_fragments ADD CONSTRAINT research_fragments_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_fragments ADD CONSTRAINT research_fragments_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_fragments ADD CONSTRAINT research_fragments_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_fragments ADD CONSTRAINT research_fragments_parent_fragment_id_fkey FOREIGN KEY (parent_fragment_id) REFERENCES research_fragments(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_job_fragments ADD CONSTRAINT research_job_fragments_job_id_fkey FOREIGN KEY (job_id) REFERENCES research_jobs(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_job_fragments ADD CONSTRAINT research_job_fragments_fragment_id_fkey FOREIGN KEY (fragment_id) REFERENCES research_fragments(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_jobs ADD CONSTRAINT research_jobs_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_jobs ADD CONSTRAINT research_jobs_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_orchestrations ADD CONSTRAINT research_orchestrations_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_orchestrations ADD CONSTRAINT research_orchestrations_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_orchestrations ADD CONSTRAINT research_orchestrations_run_id_fkey FOREIGN KEY (run_id) REFERENCES research_runs(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_orchestrations ADD CONSTRAINT research_orchestrations_parent_orchestration_id_fkey FOREIGN KEY (parent_orchestration_id) REFERENCES research_orchestrations(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_orchestrations ADD CONSTRAINT research_orchestrations_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_orchestrations ADD CONSTRAINT research_orchestrations_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_passes ADD CONSTRAINT research_passes_orchestration_id_fkey FOREIGN KEY (orchestration_id) REFERENCES research_orchestrations(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_passes ADD CONSTRAINT research_passes_fragment_id_fkey FOREIGN KEY (fragment_id) REFERENCES research_fragments(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_runs ADD CONSTRAINT research_runs_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_runs ADD CONSTRAINT research_runs_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_runs ADD CONSTRAINT research_runs_target_document_id_fkey FOREIGN KEY (target_document_id) REFERENCES documents(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE research_runs ADD CONSTRAINT research_runs_parent_run_id_fkey FOREIGN KEY (parent_run_id) REFERENCES research_runs(id) ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE segment_layer_links ADD CONSTRAINT segment_layer_links_document_id_fkey FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE segment_layer_links ADD CONSTRAINT segment_layer_links_segment_id_fkey FOREIGN KEY (segment_id) REFERENCES document_segments(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE segment_layer_links ADD CONSTRAINT segment_layer_links_layer_id_fkey FOREIGN KEY (layer_id) REFERENCES layers(id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;
 
 -- Indexes, exactly as the local chain declares them.
 CREATE INDEX idx_audit_evidence_audit ON audit_evidence (audit_id);
