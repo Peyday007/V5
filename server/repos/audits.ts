@@ -177,7 +177,10 @@ export async function createAudit(input: CreateAuditInput): Promise<Audit> {
         input.provider ?? null, input.model ?? null, toJson(input.evidenceManifest ?? {})],
     );
 
-    gaps.forEach(async (gap, ordinal) => {
+    // A sequential loop, not `forEach(async ...)`: forEach ignores the promise
+    // its callback returns, so the inserts would float free of the transaction
+    // and `getAudit` below would read an audit whose gaps had not been written.
+    for (const [ordinal, gap] of gaps.entries()) {
       await db.run(
         `INSERT INTO audit_gaps (id, audit_id, ordinal, classification, title, detail,
            owning_layer_id, owning_layer_name, justification, research_question,
@@ -188,7 +191,7 @@ export async function createAudit(input: CreateAuditInput): Promise<Audit> {
           gap.researchQuestion ?? null, gap.expectedContribution ?? null,
           gap.sourcePass ?? 'JUDGE', ts],
       );
-    });
+    }
 
     // Passes are written before the verdict exists, so they are adopted here.
     if (input.pipelineId) {
@@ -211,13 +214,15 @@ export async function createAudit(input: CreateAuditInput): Promise<Audit> {
     }
 
     for (const [findingType, items] of groups) {
-      items.forEach(async (content, ordinal) => {
+      // Sequential for the same reason as the gaps above, and because `ordinal`
+      // is the order a reader sees these findings in.
+      for (const [ordinal, content] of items.entries()) {
         await db.run(
           `INSERT INTO audit_findings (id, audit_id, finding_type, ordinal, content, payload, created_at)
            VALUES (?, ?, ?, ?, ?, '{}', ?)`,
           [newId('afd'), id, findingType, ordinal, content, ts],
         );
-      });
+      }
     }
     return (await getAudit(id))!;
   });

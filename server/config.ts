@@ -26,6 +26,14 @@ export interface DatabaseConfig {
   /** Set only for Postgres. Never logged, never returned by an endpoint. */
   connectionString: string | null;
   poolSize: number;
+  /**
+   * Confine this connection to one Postgres schema.
+   *
+   * Never read from the environment — it exists so the test harness can give
+   * each file its own namespace inside one database. Ordinary operation uses
+   * the connection's default search path.
+   */
+  schema?: string;
 }
 
 export interface StorageConfig {

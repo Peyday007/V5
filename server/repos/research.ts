@@ -591,7 +591,10 @@ export async function completedPass(
   const row = await getDb().get<ResearchPassRow>(
     `SELECT * FROM research_passes
       WHERE orchestration_id = ? AND pass_key = ? AND status = 'COMPLETE'
-        AND fragment_id IS ?
+        -- Null-safe equality: a pass with no fragment is matched by passing
+        -- null, where a plain equality would silently never match it. Spelled
+        -- the standard way rather than SQLite's IS, which Postgres rejects.
+        AND fragment_id IS NOT DISTINCT FROM ?
       ORDER BY attempt DESC, rowid DESC LIMIT 1`,
     [orchestrationId, passKey, fragmentId],
   );

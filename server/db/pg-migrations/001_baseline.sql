@@ -17,7 +17,21 @@
 --   * timestamps stay `text`, holding the same ISO-8601 UTC strings SQLite
 --     holds. A timestamptz would re-interpret them on the way in and out, and
 --     the point of this schema is that the values survive unchanged.
+--   * a `nocase` collation is defined, so the three queries that compare a
+--     canonical name case-insensitively read identically on both backends.
+--     SQLite has `COLLATE NOCASE` built in; Postgres needs the collation to
+--     exist, and a nondeterministic ICU one at strength level 2 is what gives
+--     the same answer. Defining it here is what lets the repositories stay
+--     free of `if (dialect === ...)`.
 -- ---------------------------------------------------------------------------
+
+-- Must exist before any table that might reference it, and before the first
+-- query that uses it.
+CREATE COLLATION IF NOT EXISTS nocase (
+  provider = icu,
+  locale = 'und-u-ks-level2',
+  deterministic = false
+);
 
 CREATE TABLE audit_evidence (
   id                       text PRIMARY KEY,

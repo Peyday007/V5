@@ -135,6 +135,14 @@ function deriveStatus(input: {
   inconsistentDocuments: string[];
   /** Canonical names whose file is there but could not be read. */
   unreadableDocuments: string[];
+  /**
+   * The first present document nobody has audited yet, or null.
+   *
+   * Resolved by the caller because finding it is a query and this function is
+   * deliberately pure — given the same bag of facts it always returns the same
+   * status, which is what makes the derived state reproducible and testable.
+   */
+  unaudited: Document | null;
   frozenCanonical: Document | null;
   latestVerdict: AuditVerdict | null;
   latestAuditNextVersion: string | null;
@@ -154,6 +162,7 @@ function deriveStatus(input: {
     reopenedPending,
     inconsistentDocuments,
     unreadableDocuments,
+    unaudited,
     frozenCanonical,
     latestVerdict,
     latestAuditNextVersion,
@@ -315,9 +324,6 @@ function deriveStatus(input: {
   }
 
   // 9. Finished, complete, and nobody has inspected it yet.
-  const unaudited = presentDocuments.find(
-    async (document) => await getLatestAuditForDocument(document.id) === null,
-  );
   if (unaudited && missingVersions.length === 0) {
     return {
       status: 'AUDIT_READY',
@@ -494,6 +500,16 @@ async function deriveLayer(layerId: string): Promise<LayerDerivation> {
   const reopenedPending =
     reopenedAt !== null && (latestActivityAt === null || reopenedAt > latestActivityAt);
 
+  // The first unaudited document, resolved here so `deriveStatus` stays pure.
+  // One lookup per present document, awaited together rather than inside a
+  // `find` predicate — `find` does not await, so an async predicate would fire
+  // every query at once and then return the first document regardless of the
+  // answers, because a pending promise is truthy.
+  const latestAuditPerDocument = await Promise.all(
+    presentDocuments.map((document) => getLatestAuditForDocument(document.id)),
+  );
+  const unaudited = presentDocuments.find((_, i) => latestAuditPerDocument[i] === null) ?? null;
+
   const derived = deriveStatus({
     layer,
     policy,
@@ -509,6 +525,7 @@ async function deriveLayer(layerId: string): Promise<LayerDerivation> {
     reopenedPending,
     inconsistentDocuments,
     unreadableDocuments,
+    unaudited,
     frozenCanonical,
     latestVerdict: latestAudit?.verdict ?? null,
     latestAuditNextVersion: latestAudit?.nextVersion ?? null,

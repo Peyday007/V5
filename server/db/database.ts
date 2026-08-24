@@ -74,6 +74,31 @@ export async function initDatabase(
   }
 }
 
+/**
+ * Turn the driver's own wording into the change that would fix it.
+ *
+ * These three account for most first-boot failures, and each has a specific
+ * remedy that "could not reach the database" does not convey. Anything else is
+ * reported as the driver phrased it rather than guessed at.
+ */
+function hintFor(reason: string): string {
+  if (/does not support SSL/i.test(reason)) {
+    return (
+      ' Brain requires TLS unless the connection string says otherwise, because a managed ' +
+      'database reached without it sends the password in clear. A local Postgres with no TLS ' +
+      'is a legitimate exception: add `?sslmode=disable` to BRAIN_DATABASE_URL to say so ' +
+      'deliberately.'
+    );
+  }
+  if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN/i.test(reason)) {
+    return ' Check the host and port in BRAIN_DATABASE_URL, and that the server is running.';
+  }
+  if (/password|authentication|role .* does not exist/i.test(reason)) {
+    return ' The host answered, so the address is right and the credentials are not.';
+  }
+  return '';
+}
+
 function openLocal(file: string): { db: Database; describedPath: string } {
   ensureDataDirs();
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -91,6 +116,7 @@ async function openCloud(config: DatabaseConfig): Promise<{ db: Database; descri
   const adapter = new PostgresAdapter({
     connectionString: config.connectionString!,
     max: config.poolSize,
+    schema: config.schema,
   });
   const described = describeConnection(config.connectionString!);
   try {
@@ -100,9 +126,9 @@ async function openCloud(config: DatabaseConfig): Promise<{ db: Database; descri
     const reason = error instanceof Error ? error.message : String(error);
     throw new DatabaseConfigurationError(
       `Brain is configured for Postgres but could not reach ${described}.`,
-      `${reason} Nothing was written locally: cloud mode does not fall back, because a server ` +
-        `that quietly kept working against a local file would report itself as cloud-backed ` +
-        `while the work went somewhere nobody else can see.`,
+      `${reason}${hintFor(reason)} Nothing was written locally: cloud mode does not fall back, ` +
+        `because a server that quietly kept working against a local file would report itself as ` +
+        `cloud-backed while the work went somewhere nobody else can see.`,
     );
   }
   return { db: adapter, describedPath: described };

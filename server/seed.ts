@@ -69,11 +69,14 @@ export async function seedDealDispatch(): Promise<SeedResult> {
 
     const present = new Map((await listLayers(project.id)).map((l) => [l.name, l]));
     const layers: Layer[] = [];
-    DEAL_DISPATCH_LAYERS.forEach(async (name, index) => {
+    // A sequential loop, not `forEach(async ...)`: forEach discards the promise
+    // its callback returns, so `layers` would still be empty here and the seed
+    // would report a project with no layers while the inserts ran on unwatched.
+    for (const [index, name] of DEAL_DISPATCH_LAYERS.entries()) {
       const found = present.get(name);
       layers.push(
         found ??
-          await createLayer({
+          (await createLayer({
             projectId: project.id,
             name,
             orderIndex: index,
@@ -81,9 +84,9 @@ export async function seedDealDispatch(): Promise<SeedResult> {
             // or derived after importing existing research.
             expectedVersions: [],
             currentWave: 1,
-          }),
+          })),
       );
-    });
+    }
 
     await ensureProjectTree(project.slug, layers.map((l) => l.slug));
 

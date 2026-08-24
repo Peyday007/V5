@@ -139,7 +139,21 @@ function main() {
   out.push('--   * timestamps stay `text`, holding the same ISO-8601 UTC strings SQLite');
   out.push('--     holds. A timestamptz would re-interpret them on the way in and out, and');
   out.push('--     the point of this schema is that the values survive unchanged.');
+  out.push('--   * a `nocase` collation is defined, so the three queries that compare a');
+  out.push('--     canonical name case-insensitively read identically on both backends.');
+  out.push('--     SQLite has `COLLATE NOCASE` built in; Postgres needs the collation to');
+  out.push('--     exist, and a nondeterministic ICU one at strength level 2 is what gives');
+  out.push('--     the same answer. Defining it here is what lets the repositories stay');
+  out.push("--     free of `if (dialect === ...)`.");
   out.push('-- ---------------------------------------------------------------------------');
+  out.push('');
+  out.push('-- Must exist before any table that might reference it, and before the first');
+  out.push('-- query that uses it.');
+  out.push('CREATE COLLATION IF NOT EXISTS nocase (');
+  out.push('  provider = icu,');
+  out.push("  locale = 'und-u-ks-level2',");
+  out.push('  deterministic = false');
+  out.push(');');
   out.push('');
 
   for (const object of objects) {

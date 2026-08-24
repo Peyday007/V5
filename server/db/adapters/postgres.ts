@@ -59,6 +59,16 @@ export interface PostgresOptions {
   connectionTimeoutMillis?: number;
   idleTimeoutMillis?: number;
   applicationName?: string;
+  /**
+   * Confine every connection to one schema.
+   *
+   * Set through the connection's own `options` parameter rather than by issuing
+   * a `SET` after connecting, because the pool hands a client out as soon as it
+   * is connected — a `SET` racing that would let the first statements run
+   * against `public`. Used by the test harness to give each file its own
+   * namespace in one database; unset in ordinary operation.
+   */
+  schema?: string;
 }
 
 export class PostgresAdapter implements Database {
@@ -77,6 +87,15 @@ export class PostgresAdapter implements Database {
       idleTimeoutMillis: options.idleTimeoutMillis ?? 30_000,
       application_name: options.applicationName ?? 'brain',
     };
+    if (options.schema) {
+      if (!/^[a-z_][a-z0-9_]*$/i.test(options.schema)) {
+        throw new DatabaseConfigurationError(
+          `"${options.schema}" is not a usable schema name.`,
+          'A schema name may contain letters, digits and underscores, and must not start with a digit.',
+        );
+      }
+      config.options = `-c search_path=${options.schema}`;
+    }
     // Supabase and most managed Postgres require TLS, and their certificates
     // are signed by roots Node does not ship. Verification is therefore off by
     // default for the pooled connection string — which is what every Supabase
@@ -102,10 +121,18 @@ export class PostgresAdapter implements Database {
     const translated = toPostgresSql(sql);
     const values = normalise(params);
     const context = this.#transactions.getStore();
-    if (context) {
-      return (await context.client.query<T>(translated.sql, values)) as pg.QueryResult<T>;
+    try {
+      if (context) {
+        return (await context.client.query<T>(translated.sql, values)) as pg.QueryResult<T>;
+      }
+      return (await this.#pool.query<T>(translated.sql, values)) as pg.QueryResult<T>;
+    } catch (error) {
+      // Name the statement. A dialect problem otherwise surfaces as `syntax
+      // error at or near "$3"` with nothing to say which of two hundred queries
+      // produced it. The parameters are deliberately not included: they are the
+      // part that carries the user's content.
+      throw annotate(error, translated.sql);
     }
-    return (await this.#pool.query<T>(translated.sql, values)) as pg.QueryResult<T>;
   }
 
   /**
@@ -189,6 +216,19 @@ export class PostgresAdapter implements Database {
     this.#closed = true;
     await this.#pool.end();
   }
+}
+
+/**
+ * Attach the offending SQL to a driver error, once.
+ *
+ * The original error is rethrown rather than replaced so its `code` and the
+ * rest of the driver's detail survive for anything matching on them.
+ */
+function annotate(error: unknown, sql: string): unknown {
+  if (!(error instanceof Error) || 'brainSql' in error) return error;
+  Object.defineProperty(error, 'brainSql', { value: sql, enumerable: false });
+  error.message = `${error.message}\n  in: ${sql.replace(/\s+/g, ' ').trim().slice(0, 300)}`;
+  return error;
 }
 
 /**

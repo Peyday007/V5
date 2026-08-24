@@ -25,11 +25,53 @@ export interface TestProject {
  * project slug is stable, so leaving files behind would make the next test's
  * reconciliation see them as unregistered.
  */
+/**
+ * Where this run's tests keep their rows.
+ *
+ * With `BRAIN_TEST_DATABASE_URL` set, the whole suite runs against a real
+ * Postgres instead of SQLite. That is the only way to find out whether one
+ * repository layer over two backends is actually true: a mock proves the code
+ * calls the adapter, and nothing else. Each test file gets its own schema,
+ * because vitest runs files concurrently and they would otherwise share tables.
+ */
+const POSTGRES_URL = (process.env.BRAIN_TEST_DATABASE_URL ?? '').trim() || null;
+
+export const testDatabaseKind: 'sqlite' | 'postgres' = POSTGRES_URL ? 'postgres' : 'sqlite';
+
+/** One schema per test file, derived from the per-file data root vitest hands out. */
+function schemaForThisFile(): string {
+  const stem = path.basename(DATA_ROOT).replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+  return `brain_t_${stem}`.slice(0, 60);
+}
+
+async function openTestDatabase(): Promise<void> {
+  if (!POSTGRES_URL) {
+    const dbPath = path.join(DATA_ROOT, `test-${Math.random().toString(36).slice(2)}.db`);
+    await initDatabase({ dbPath });
+    return;
+  }
+  const schema = schemaForThisFile();
+  // Dropped and recreated rather than truncated: the migrator has to run from
+  // nothing every time, so the schema each test sees is the one the migrations
+  // actually produce rather than one left over from a previous run.
+  const pg = await import('pg');
+  const admin = new pg.default.Client({ connectionString: POSTGRES_URL });
+  await admin.connect();
+  try {
+    await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+    await admin.query(`CREATE SCHEMA ${schema}`);
+  } finally {
+    await admin.end();
+  }
+  await initDatabase({
+    config: { provider: 'postgres', connectionString: POSTGRES_URL, poolSize: 4, schema },
+  });
+}
+
 export async function freshProject(): Promise<TestProject> {
   await closeDatabase();
   fs.rmSync(path.join(DATA_ROOT, 'projects'), { recursive: true, force: true });
-  const dbPath = path.join(DATA_ROOT, `test-${Math.random().toString(36).slice(2)}.db`);
-  await initDatabase({ dbPath });
+  await openTestDatabase();
   const { project, layers } = await seedDealDispatch();
   return {
     project,
