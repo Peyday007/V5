@@ -72,14 +72,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export const researchRouter = Router();
 
 /** Everything one research job is, in the shape the UI renders. */
-function orchestrationView(orchestrationId: string) {
-  const orchestration = getOrchestration(orchestrationId);
+async function orchestrationView(orchestrationId: string) {
+  const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) throw notFound(`No research run with id ${orchestrationId}.`);
 
-  const fragments = listFragments(orchestration.id);
-  const live = currentFragments(orchestration.id);
-  const claims = listClaims(orchestration.id);
-  const passes = listPasses(orchestration.id);
+  const fragments = await listFragments(orchestration.id);
+  const live = await currentFragments(orchestration.id);
+  const claims = await listClaims(orchestration.id);
+  const passes = await listPasses(orchestration.id);
 
   const byStatus: Record<string, number> = {};
   for (const fragment of live) byStatus[fragment.status] = (byStatus[fragment.status] ?? 0) + 1;
@@ -98,14 +98,14 @@ function orchestrationView(orchestrationId: string) {
       live.length > 0 && live.every((fragment) =>
         ['ACCEPTED', 'REJECTED', 'CANCELLED', 'NEEDS_HUMAN'].includes(fragment.status),
       ) && live.some((fragment) => fragment.status === 'ACCEPTED'),
-    document: orchestration.documentId ? getDocument(orchestration.documentId) : null,
-    audit: orchestration.auditId ? getAudit(orchestration.auditId) : null,
-    run: getRun(orchestration.runId),
-    lineage: getOrchestrationLineage(orchestration.id),
-    jobs: listJobs(orchestration.id),
+    document: orchestration.documentId ? await getDocument(orchestration.documentId) : null,
+    audit: orchestration.auditId ? await getAudit(orchestration.auditId) : null,
+    run: await getRun(orchestration.runId),
+    lineage: await getOrchestrationLineage(orchestration.id),
+    jobs: await listJobs(orchestration.id),
     // The whole picture, read from persisted state rather than accumulated in
     // the browser: a panel that survives a refresh, a reconnect and a restart.
-    progress: progressSnapshot(orchestration.id),
+    progress: await progressSnapshot(orchestration.id),
   };
 }
 
@@ -117,7 +117,7 @@ function orchestrationView(orchestrationId: string) {
  */
 researchRouter.get(
   '/research/readiness',
-  handler(() => {
+  handler(async () => {
     const probe = antigravityStatus();
     return {
       orchestration: {
@@ -132,7 +132,7 @@ researchRouter.get(
       // Three subsystems, three separate answers. Running the engine against a
       // scripted provider proves the engine and proves nothing at all about the
       // tool on this machine, so the two are never reported as one number.
-      subsystems: subsystemStatus(),
+      subsystems: await subsystemStatus(),
     };
   }),
 );
@@ -145,13 +145,13 @@ researchRouter.get(
  * single "research: ready" would be true of the engine and false of the thing
  * the user cares about, so the two never share a status.
  */
-function subsystemStatus(): {
+async function subsystemStatus(): Promise<{
   researchEngine: { status: string; detail: string };
   archiveIngestion: { status: string; detail: string };
   realAntigravityWorker: { status: string; detail: string };
-} {
+}> {
   const probe = antigravityStatus().status;
-  const connection = getConnection('antigravity');
+  const connection = await getConnection('antigravity');
   const ocr = ocrStatus();
 
   return {
@@ -187,16 +187,16 @@ function subsystemStatus(): {
 
 researchRouter.get(
   '/layers/:layerId/research',
-  handler((req) => {
-    const layer = requireLayer(pathId(req, 'layerId'));
-    return { orchestrations: listOrchestrationsByLayer(layer.id) };
+  handler(async (req) => {
+    const layer = await requireLayer(pathId(req, 'layerId'));
+    return { orchestrations: await listOrchestrationsByLayer(layer.id) };
   }),
 );
 
 researchRouter.get(
   '/projects/:projectId/research',
-  handler((req) => ({
-    orchestrations: listOrchestrationsByProject(pathId(req, 'projectId')),
+  handler(async (req) => ({
+    orchestrations: await listOrchestrationsByProject(pathId(req, 'projectId')),
     queueDepth: researchQueueDepth(),
   })),
 );
@@ -210,8 +210,8 @@ researchRouter.get(
  */
 researchRouter.post(
   '/layers/:layerId/research',
-  handler((req) => {
-    const layer = requireLayer(pathId(req, 'layerId'));
+  handler(async (req) => {
+    const layer = await requireLayer(pathId(req, 'layerId'));
     const body = bodyOf(req);
     const assignment = requiredString(body['assignment'], 'assignment');
     const title = optionalString(body['title'], 'title');
@@ -240,7 +240,7 @@ researchRouter.post(
     // deliberate choice to skip that, not an accident of omission.
     const requireApproval = optionalBoolean(body['review'], 'review') ?? true;
 
-    const orchestration = startResearch({
+    const orchestration = await startResearch({
       layerId: layer.id,
       assignment,
       requireApproval,
@@ -251,7 +251,7 @@ researchRouter.post(
     });
     void enqueueResearch(orchestration.id);
 
-    return { ...orchestrationView(orchestration.id), plan: buildPlan(layer.projectId) };
+    return { ...await orchestrationView(orchestration.id), plan: await buildPlan(layer.projectId) };
   }),
 );
 
@@ -269,9 +269,9 @@ researchRouter.get(
  */
 researchRouter.get(
   '/research/:orchestrationId/review',
-  handler((req) => {
+  handler(async (req) => {
     const orchestrationId = pathId(req, 'orchestrationId');
-    if (!getOrchestration(orchestrationId)) {
+    if (!await getOrchestration(orchestrationId)) {
       throw notFound(`No research run with id ${orchestrationId}.`);
     }
     return buildReview(orchestrationId);
@@ -287,13 +287,13 @@ researchRouter.get(
  */
 researchRouter.post(
   '/research/:orchestrationId/review',
-  handler((req) => {
+  handler(async (req) => {
     const orchestrationId = pathId(req, 'orchestrationId');
-    const orchestration = getOrchestration(orchestrationId);
+    const orchestration = await getOrchestration(orchestrationId);
     if (!orchestration) throw notFound(`No research run with id ${orchestrationId}.`);
     const body = bodyOf(req);
 
-    const outcome = applyReviewDecisions(orchestrationId, {
+    const outcome = await applyReviewDecisions(orchestrationId, {
       ...(isRecord(body['boundary']) ? { boundary: body['boundary'] as never } : {}),
       ...(Array.isArray(body['addRequirements'])
         ? { addRequirements: body['addRequirements'] as never }
@@ -317,7 +317,7 @@ researchRouter.post(
     });
 
     // Approval is what starts the work. Everything else only changes the plan.
-    const approved = getOrchestration(orchestrationId);
+    const approved = await getOrchestration(orchestrationId);
     if (approved && approved.approvedAt !== null && approved.status === 'AWAITING_APPROVAL') {
       void enqueueResearch(orchestrationId);
     }
@@ -328,30 +328,30 @@ researchRouter.post(
 /** One fragment in full: its brief, its attempts, its claims and its verdict. */
 researchRouter.get(
   '/research/:orchestrationId/fragments/:fragmentId',
-  handler((req) => {
+  handler(async (req) => {
     const orchestrationId = pathId(req, 'orchestrationId');
     const fragmentId = pathId(req, 'fragmentId');
-    const fragment = listFragments(orchestrationId).find((entry) => entry.id === fragmentId);
+    const fragment = (await listFragments(orchestrationId)).find((entry) => entry.id === fragmentId);
     if (!fragment) throw notFound(`No fragment ${fragmentId} in this research run.`);
-    const claims = listClaims(orchestrationId).filter((claim) => claim.fragmentId === fragment.id);
+    const claims = (await listClaims(orchestrationId)).filter((claim) => claim.fragmentId === fragment.id);
     return {
       fragment,
-      attempts: listFragments(orchestrationId).filter(
+      attempts: (await listFragments(orchestrationId)).filter(
         (entry) => entry.fragmentKey === fragment.fragmentKey,
       ),
       claims,
       ledger: summarize(claims),
-      passes: listPasses(orchestrationId).filter((pass) => pass.fragmentId === fragment.id),
+      passes: (await listPasses(orchestrationId)).filter((pass) => pass.fragmentId === fragment.id),
     };
   }),
 );
 
 researchRouter.post(
   '/research/:orchestrationId/cancel',
-  handler((req) => {
+  handler(async (req) => {
     const orchestrationId = pathId(req, 'orchestrationId');
     const reason = optionalString(bodyOf(req)['reason'], 'reason') ?? 'Cancelled from the browser.';
-    const cancelled = cancelResearch(orchestrationId, reason);
+    const cancelled = await cancelResearch(orchestrationId, reason);
     if (!cancelled) throw notFound(`No research run with id ${orchestrationId}.`);
     return orchestrationView(orchestrationId);
   }),
@@ -360,9 +360,9 @@ researchRouter.post(
 /** Continue an interrupted or repairable job without re-running completed work. */
 researchRouter.post(
   '/research/:orchestrationId/resume',
-  handler((req) => {
+  handler(async (req) => {
     const orchestrationId = pathId(req, 'orchestrationId');
-    const orchestration = getOrchestration(orchestrationId);
+    const orchestration = await getOrchestration(orchestrationId);
     if (!orchestration) throw notFound(`No research run with id ${orchestrationId}.`);
     void resumeResearch(orchestrationId);
     return orchestrationView(orchestrationId);
@@ -378,8 +378,8 @@ researchRouter.post(
 
 researchRouter.get(
   '/imports/:jobId',
-  handler((req) => {
-    const report = importReport(pathId(req, 'jobId'));
+  handler(async (req) => {
+    const report = await importReport(pathId(req, 'jobId'));
     if (!report) throw notFound(`No import job with id ${pathId(req, 'jobId')}.`);
     return report;
   }),
@@ -387,9 +387,9 @@ researchRouter.get(
 
 researchRouter.post(
   '/imports/:jobId/resume',
-  handler((req) => {
+  handler(async (req) => {
     const jobId = pathId(req, 'jobId');
-    const report = importReport(jobId);
+    const report = await importReport(jobId);
     if (!report) throw notFound(`No import job with id ${jobId}.`);
     void resumeArchiveImport(jobId);
     return importReport(jobId);
@@ -398,10 +398,10 @@ researchRouter.post(
 
 researchRouter.post(
   '/imports/:jobId/cancel',
-  handler((req) => {
+  handler(async (req) => {
     const jobId = pathId(req, 'jobId');
     const reason = optionalString(bodyOf(req)['reason'], 'reason') ?? 'Cancelled from the browser.';
-    const cancelled = cancelArchiveImport(jobId, reason);
+    const cancelled = await cancelArchiveImport(jobId, reason);
     if (!cancelled) throw notFound(`No import job with id ${jobId}.`);
     return importReport(jobId);
   }),
@@ -410,9 +410,9 @@ researchRouter.post(
 /** Try the files that failed, and only those. */
 researchRouter.post(
   '/imports/:jobId/retry',
-  handler((req) => {
+  handler(async (req) => {
     const jobId = pathId(req, 'jobId');
-    const report = importReport(jobId);
+    const report = await importReport(jobId);
     if (!report) throw notFound(`No import job with id ${jobId}.`);
     void retryFailedFiles(jobId);
     return importReport(jobId);
@@ -430,9 +430,9 @@ function sseSend(res: Response, event: string, data: unknown): void {
  * late — or reconnects — sees where the work is rather than waiting for the next
  * pass to start.
  */
-researchRouter.get('/research/:orchestrationId/stream', (req, res: Response) => {
+researchRouter.get('/research/:orchestrationId/stream', async (req, res: Response) => {
   const orchestrationId = String(req.params['orchestrationId'] ?? '');
-  const orchestration = getOrchestration(orchestrationId);
+  const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) {
     res.status(404).json({ error: `No research run with id ${orchestrationId}.` });
     return;
@@ -443,12 +443,12 @@ researchRouter.get('/research/:orchestrationId/stream', (req, res: Response) => 
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders?.();
 
-  sseSend(res, 'state', orchestrationView(orchestrationId));
+  sseSend(res, 'state', await orchestrationView(orchestrationId));
 
-  const unsubscribe = onResearchProgress(orchestrationId, (progress) => {
+  const unsubscribe = onResearchProgress(orchestrationId, async (progress) => {
     sseSend(res, 'progress', progress);
     // The state travels with each step: the panel stays correct without polling.
-    sseSend(res, 'state', orchestrationView(orchestrationId));
+    sseSend(res, 'state', await orchestrationView(orchestrationId));
   });
 
   // A long research job outlives most proxies' idle timeouts.

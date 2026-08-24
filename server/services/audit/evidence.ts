@@ -50,11 +50,11 @@ function rows(
  * defeat the purpose. It never throws — a verdict that is already recorded must
  * not be undone by a failure to annotate it.
  */
-export function recordAuditEvidence(input: {
+export async function recordAuditEvidence(input: {
   audit: Audit;
   documentIds: string[];
   verdictQuery: string;
-}): number {
+}): Promise<number> {
   const documentIds = [...new Set(input.documentIds)].filter((id) => id.length > 0);
   if (documentIds.length === 0) return 0;
 
@@ -64,7 +64,7 @@ export function recordAuditEvidence(input: {
   for (const gap of input.audit.gaps) {
     const query = queryForGap(gap);
     if (query.length === 0) continue;
-    const found = retrieveEvidence({ documentIds, query, limit: PER_GAP });
+    const found = await retrieveEvidence({ documentIds, query, limit: PER_GAP });
     for (const passage of found.passages) {
       const key = `${gap.id}:${passage.chunkId}`;
       if (seen.has(key)) continue;
@@ -75,7 +75,7 @@ export function recordAuditEvidence(input: {
 
   // With no gaps there is still a verdict, and it should be checkable too.
   if (input.audit.gaps.length === 0 && input.verdictQuery.trim().length > 0) {
-    const found = retrieveEvidence({
+    const found = await retrieveEvidence({
       documentIds,
       query: input.verdictQuery,
       limit: PER_VERDICT,
@@ -84,6 +84,6 @@ export function recordAuditEvidence(input: {
   }
 
   if (entries.length === 0) return 0;
-  insertAuditEvidence(entries);
+  await insertAuditEvidence(entries);
   return entries.length;
 }

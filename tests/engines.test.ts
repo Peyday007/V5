@@ -32,11 +32,11 @@ import { getProject } from '../server/repos/projects.ts';
 
 let fixture: TestProject;
 
-beforeEach(() => {
-  fixture = freshProject();
+beforeEach(async () => {
+  fixture = await freshProject();
 });
-afterEach(() => {
-  teardown();
+afterEach(async () => {
+  await teardown();
 });
 
 const FULL_PACKET = ['v1', 'v1B', 'v1C', 'v1D', 'v1E', 'v1F', 'v1G'];
@@ -44,8 +44,8 @@ const FULL_PACKET = ['v1', 'v1B', 'v1C', 'v1D', 'v1E', 'v1F', 'v1G'];
 const PRIORITY_AUDIT = 30;
 
 /** A persisted, already-failed expansion run so lineage tests have a parent. */
-function failedRun(layerId: string, documentId: string | null = null) {
-  const compiled = compilePrompt({ projectId: fixture.project.id, layerId, runType: 'EXPANSION' });
+async function failedRun(layerId: string, documentId: string | null = null) {
+  const compiled = await compilePrompt({ projectId: fixture.project.id, layerId, runType: 'EXPANSION' });
   return createRun({
     projectId: fixture.project.id,
     layerId,
@@ -62,98 +62,98 @@ function failedRun(layerId: string, documentId: string | null = null) {
 }
 
 describe('dependency checker', () => {
-  it('renders the spec summary and names what is missing', () => {
-    for (const v of FULL_PACKET.slice(0, 6)) addDocument(fixture, 'Decision Routing Rules', v);
+  it('renders the spec summary and names what is missing', async () => {
+    for (const v of FULL_PACKET.slice(0, 6)) await addDocument(fixture, 'Decision Routing Rules', v);
     const required = FULL_PACKET.map((v) => `Decision Routing Rules ${v}`);
 
-    const before = checkCanonicalNames(fixture.project.id, required);
+    const before = await checkCanonicalNames(fixture.project.id, required);
     expect(before.summary).toBe('6 / 7 READY');
     expect(before.missing).toEqual(['Decision Routing Rules v1G']);
     expect(before.ready).toBe(false);
 
-    addDocument(fixture, 'Decision Routing Rules', 'v1G');
-    const after = checkCanonicalNames(fixture.project.id, required);
+    await addDocument(fixture, 'Decision Routing Rules', 'v1G');
+    const after = await checkCanonicalNames(fixture.project.id, required);
     expect(after.summary).toBe('7 / 7 READY');
     expect(after.ready).toBe(true);
   });
 
-  it('refuses to count a document whose file disappeared', () => {
-    const document = addDocument(fixture, 'Monetization Logic', 'v1');
+  it('refuses to count a document whose file disappeared', async () => {
+    const document = await addDocument(fixture, 'Monetization Logic', 'v1');
     deletePhysicalFile(document);
-    const result = checkCanonicalNames(fixture.project.id, ['Monetization Logic v1']);
+    const result = await checkCanonicalNames(fixture.project.id, ['Monetization Logic v1']);
     expect(result.presentCount).toBe(0);
     expect(result.inconsistent).toContain('Monetization Logic v1');
   });
 
-  it('stores run dependencies idempotently', () => {
-    const layer = fixture.layerByName('Discovery Logic');
-    const run = failedRun(layer.id);
+  it('stores run dependencies idempotently', async () => {
+    const layer = await fixture.layerByName('Discovery Logic');
+    const run = await failedRun(layer.id);
     const names = ['Discovery Logic v1', 'Discovery Logic v1B'];
-    const first = setRunDependencies(run.id, names);
-    const second = setRunDependencies(run.id, names);
+    const first = await setRunDependencies(run.id, names);
+    const second = await setRunDependencies(run.id, names);
     expect(first).toHaveLength(2);
     expect(second.map((d) => d.id).sort()).toEqual(first.map((d) => d.id).sort());
-    expect(checkRunDependencies(run.id).requiredCount).toBe(2);
+    expect((await checkRunDependencies(run.id)).requiredCount).toBe(2);
   });
 });
 
 describe('state engine', () => {
-  it('reports INCOMPLETE naming the exact missing version', () => {
-    for (const v of ['v1', 'v1B', 'v1C', 'v1E']) addDocument(fixture, 'Discovery Logic', v);
-    const layer = fixture.layerByName('Discovery Logic');
-    setLayerExpectations(layer.id, ['v1', 'v1B', 'v1C', 'v1D', 'v1E']);
+  it('reports INCOMPLETE naming the exact missing version', async () => {
+    for (const v of ['v1', 'v1B', 'v1C', 'v1E']) await addDocument(fixture, 'Discovery Logic', v);
+    const layer = await fixture.layerByName('Discovery Logic');
+    await setLayerExpectations(layer.id, ['v1', 'v1B', 'v1C', 'v1D', 'v1E']);
 
-    const state = computeLayerState(layer.id);
+    const state = await computeLayerState(layer.id);
     expect(state.missingVersions).toEqual(['v1D']);
     expect(state.documentsComplete).toBe(4);
     expect(state.documentsExpected).toBe(5);
     expect(state.status).toBe('INCOMPLETE');
   });
 
-  it('becomes AUDIT_READY when every expected document is present', () => {
+  it('becomes AUDIT_READY when every expected document is present', async () => {
     const versions = ['v1', 'v1B', 'v1C'];
-    for (const v of versions) addDocument(fixture, 'Execution Playbooks', v);
-    const layer = fixture.layerByName('Execution Playbooks');
-    setLayerExpectations(layer.id, versions);
-    expect(computeLayerState(layer.id).status).toBe('AUDIT_READY');
+    for (const v of versions) await addDocument(fixture, 'Execution Playbooks', v);
+    const layer = await fixture.layerByName('Execution Playbooks');
+    await setLayerExpectations(layer.id, versions);
+    expect((await computeLayerState(layer.id)).status).toBe('AUDIT_READY');
   });
 
-  it('marks a vanished file inconsistent and flips the document flag', () => {
-    const document = addDocument(fixture, 'World Model', 'v1');
+  it('marks a vanished file inconsistent and flips the document flag', async () => {
+    const document = await addDocument(fixture, 'World Model', 'v1');
     deletePhysicalFile(document);
-    recomputeProject(fixture.project.id);
+    await recomputeProject(fixture.project.id);
 
-    expect(getDocument(document.id)?.fileMissing).toBe(true);
-    expect(computeLayerState(fixture.layerByName('World Model').id).inconsistentDocuments)
+    expect((await getDocument(document.id))?.fileMissing).toBe(true);
+    expect((await computeLayerState((await fixture.layerByName('World Model')).id)).inconsistentDocuments)
       .toContain('World Model v1');
   });
 
-  it('derives expectations from what was actually imported', () => {
-    for (const v of ['v1', 'v1B', 'v1C']) addDocument(fixture, 'Taxonomy', v);
-    const state = deriveLayerExpectationsFromDocuments(fixture.layerByName('Taxonomy').id);
+  it('derives expectations from what was actually imported', async () => {
+    for (const v of ['v1', 'v1B', 'v1C']) await addDocument(fixture, 'Taxonomy', v);
+    const state = await deriveLayerExpectationsFromDocuments((await fixture.layerByName('Taxonomy')).id);
     expect(state.expectedVersions).toEqual(['v1', 'v1B', 'v1C']);
     expect(state.missingVersions).toEqual([]);
   });
 
-  it('honours a manual override but still exposes the derived reason', () => {
-    addDocument(fixture, 'Taxonomy', 'v1');
-    const layer = fixture.layerByName('Taxonomy');
-    const state = setLayerManualStatus(layer.id, 'BLOCKED', 'waiting on an external source');
+  it('honours a manual override but still exposes the derived reason', async () => {
+    await addDocument(fixture, 'Taxonomy', 'v1');
+    const layer = await fixture.layerByName('Taxonomy');
+    const state = await setLayerManualStatus(layer.id, 'BLOCKED', 'waiting on an external source');
     expect(state.status).toBe('BLOCKED');
     expect(state.statusSource).toBe('MANUAL');
     expect(state.reason.length).toBeGreaterThan(0);
 
-    const cleared = setLayerManualStatus(layer.id, null);
+    const cleared = await setLayerManualStatus(layer.id, null);
     expect(cleared.statusSource).toBe('DERIVED');
   });
 });
 
 describe('prompt compiler', () => {
-  it('targets the next expansion and enforces naming', () => {
-    addDocument(fixture, 'Qualification Logic', 'v1');
-    const compiled = compilePrompt({
+  it('targets the next expansion and enforces naming', async () => {
+    await addDocument(fixture, 'Qualification Logic', 'v1');
+    const compiled = await compilePrompt({
       projectId: fixture.project.id,
-      layerId: fixture.layerByName('Qualification Logic').id,
+      layerId: (await fixture.layerByName('Qualification Logic')).id,
       runType: 'EXPANSION',
     });
 
@@ -166,11 +166,11 @@ describe('prompt compiler', () => {
     expect(compiled.sections.at(-1)?.key).toBe('FINAL_NAMING_CHECK');
   });
 
-  it('builds a synthesis prompt over the whole source packet', () => {
-    for (const v of FULL_PACKET) addDocument(fixture, 'Decision Routing Rules', v);
-    const compiled = compilePrompt({
+  it('builds a synthesis prompt over the whole source packet', async () => {
+    for (const v of FULL_PACKET) await addDocument(fixture, 'Decision Routing Rules', v);
+    const compiled = await compilePrompt({
       projectId: fixture.project.id,
-      layerId: fixture.layerByName('Decision Routing Rules').id,
+      layerId: (await fixture.layerByName('Decision Routing Rules')).id,
       runType: 'SYNTHESIS',
     });
     expect(compiled.targetVersion).toBe('v3.1');
@@ -178,11 +178,11 @@ describe('prompt compiler', () => {
     expect(compiled.expectedFilename).toBe('Decision Routing Rules v3.1.pdf');
   });
 
-  it('declares the other layers out of scope', () => {
-    addDocument(fixture, 'World Model', 'v1');
-    const compiled = compilePrompt({
+  it('declares the other layers out of scope', async () => {
+    await addDocument(fixture, 'World Model', 'v1');
+    const compiled = await compilePrompt({
       projectId: fixture.project.id,
-      layerId: fixture.layerByName('World Model').id,
+      layerId: (await fixture.layerByName('World Model')).id,
       runType: 'EXPANSION',
     });
     const boundaries = compiled.sections.find((s) => s.key === 'CROSS_LAYER_BOUNDARIES');
@@ -192,43 +192,45 @@ describe('prompt compiler', () => {
 });
 
 describe('synthesis', () => {
-  it('refuses an incomplete packet and unblocks once it is complete', () => {
-    for (const v of FULL_PACKET.slice(0, 6)) addDocument(fixture, 'Discovery Logic', v);
-    const layer = fixture.layerByName('Discovery Logic');
-    setLayerExpectations(layer.id, FULL_PACKET);
+  it('refuses an incomplete packet and unblocks once it is complete', async () => {
+    for (const v of FULL_PACKET.slice(0, 6)) await addDocument(fixture, 'Discovery Logic', v);
+    const layer = await fixture.layerByName('Discovery Logic');
+    await setLayerExpectations(layer.id, FULL_PACKET);
 
     let error: unknown;
     try {
-      prepareSynthesis({ layerId: layer.id });
+      await prepareSynthesis({ layerId: layer.id });
     } catch (caught) {
       error = caught;
     }
     expect(error).toBeInstanceOf(DependencyError);
     expect((error as DependencyError).result.missing).toContain('Discovery Logic v1G');
 
-    addDocument(fixture, 'Discovery Logic', 'v1G');
-    const prepared = prepareSynthesis({ layerId: layer.id });
+    await addDocument(fixture, 'Discovery Logic', 'v1G');
+    const prepared = await prepareSynthesis({ layerId: layer.id });
     expect(prepared.dependencies.summary).toBe('7 / 7 READY');
     expect(prepared.document.canonicalName).toBe('Discovery Logic v3.1');
     // Invariant 10: the exact prompt and attachment list are persisted on the run.
-    expect(getRun(prepared.run.id)?.prompt).toBe(prepared.run.prompt);
+    expect((await getRun(prepared.run.id))?.prompt).toBe(prepared.run.prompt);
     expect(prepared.run.requiredAttachments).toHaveLength(7);
   });
 
-  it('refuses outright on a layer with nothing to consolidate', () => {
+  it('refuses outright on a layer with nothing to consolidate', async () => {
     // "0 / 0 READY" is technically ready and completely meaningless.
-    expect(() => prepareSynthesis({ layerId: fixture.layerByName('Taxonomy').id }))
-      .toThrow(/no completed research/i);
-    expect(() => prepareSynthesis({ layerId: fixture.layerByName('Taxonomy').id, override: true }))
-      .toThrow(/no completed research/i);
+    await expect(
+      prepareSynthesis({ layerId: (await fixture.layerByName('Taxonomy')).id }),
+    ).rejects.toThrow(/no completed research/i);
+    await expect(
+      prepareSynthesis({ layerId: (await fixture.layerByName('Taxonomy')).id, override: true }),
+    ).rejects.toThrow(/no completed research/i);
   });
 
-  it('records the reason when the user overrides the warning', () => {
-    for (const v of FULL_PACKET.slice(0, 6)) addDocument(fixture, 'Discovery Logic', v);
-    const layer = fixture.layerByName('Discovery Logic');
-    setLayerExpectations(layer.id, FULL_PACKET);
+  it('records the reason when the user overrides the warning', async () => {
+    for (const v of FULL_PACKET.slice(0, 6)) await addDocument(fixture, 'Discovery Logic', v);
+    const layer = await fixture.layerByName('Discovery Logic');
+    await setLayerExpectations(layer.id, FULL_PACKET);
 
-    const prepared = prepareSynthesis({
+    const prepared = await prepareSynthesis({
       layerId: layer.id,
       override: true,
       overrideReason: 'v1G is not going to happen',
@@ -239,15 +241,15 @@ describe('synthesis', () => {
 });
 
 describe('audit verdict coercion', () => {
-  const ctx = () => ({ projectId: fixture.project.id, layerId: fixture.layerByName('Taxonomy').id });
+  const ctx = async () => ({ projectId: fixture.project.id, layerId: (await fixture.layerByName('Taxonomy')).id });
 
-  it('accepts the canonical verdicts and common aliases', () => {
-    expect(normalizeAuditResult({ verdict: 'PASS' }, ctx()).verdict).toBe('PASS');
-    expect(normalizeAuditResult({ verdict: 'ready for synthesis' as never }, ctx()).verdict)
+  it('accepts the canonical verdicts and common aliases', async () => {
+    expect((await normalizeAuditResult({ verdict: 'PASS' }, await ctx())).verdict).toBe('PASS');
+    expect((await normalizeAuditResult({ verdict: 'ready for synthesis' as never }, await ctx())).verdict)
       .toBe('READY_FOR_SYNTHESIS');
   });
 
-  it('never reads a negated verdict as its own opposite', () => {
+  it('never reads a negated verdict as its own opposite', async () => {
     // "not ready for synthesis" contains "ready for synthesis"; treating that as
     // approval would advance a layer the audit had just rejected.
     for (const raw of [
@@ -257,7 +259,7 @@ describe('audit verdict coercion', () => {
       'definitely not ready for synthesis',
       'failed audit',
     ]) {
-      expect(normalizeAuditResult({ verdict: raw as never }, ctx()).verdict, raw)
+      expect((await normalizeAuditResult({ verdict: raw as never }, await ctx())).verdict, raw)
         .toBe('MORE_RESEARCH');
     }
   });
@@ -292,10 +294,10 @@ describe('audit verdict coercion', () => {
     expect(parsed?.summary).toContain('stub');
   });
 
-  it('refuses a verdict string that names several verdicts at once', () => {
+  it('refuses a verdict string that names several verdicts at once', async () => {
     // The template's verdict field lists all nine; that is a menu, not a decision.
     const menu = 'PASS | KEEP | REDO | READY_FOR_SYNTHESIS | BLOCKED';
-    expect(normalizeAuditResult({ verdict: menu as never }, ctx()).verdict).toBe('MORE_RESEARCH');
+    expect((await normalizeAuditResult({ verdict: menu as never }, await ctx())).verdict).toBe('MORE_RESEARCH');
   });
 
   it('parses fenced model JSON without inverting it', () => {
@@ -303,8 +305,8 @@ describe('audit verdict coercion', () => {
     expect(parsed?.verdict).toBe('MORE_RESEARCH');
   });
 
-  it('always produces the structured arrays, even from a bare verdict', () => {
-    const result = normalizeAuditResult({ verdict: 'PATCH' }, ctx());
+  it('always produces the structured arrays, even from a bare verdict', async () => {
+    const result = await normalizeAuditResult({ verdict: 'PATCH' }, await ctx());
     expect(result.failures).toEqual([]);
     expect(result.missingDocuments).toEqual([]);
     expect(result.requiredResearchRuns).toEqual([]);
@@ -314,11 +316,11 @@ describe('audit verdict coercion', () => {
 });
 
 describe('audit, redo and freeze', () => {
-  it('stores audits structurally and moves the layer', () => {
-    const document = addDocument(fixture, 'Monetization Logic', 'v1');
-    const layer = fixture.layerByName('Monetization Logic');
+  it('stores audits structurally and moves the layer', async () => {
+    const document = await addDocument(fixture, 'Monetization Logic', 'v1');
+    const layer = await fixture.layerByName('Monetization Logic');
 
-    const outcome = recordAudit({
+    const outcome = await recordAudit({
       projectId: fixture.project.id,
       layerId: layer.id,
       auditedDocumentId: document.id,
@@ -333,20 +335,20 @@ describe('audit, redo and freeze', () => {
     expect(outcome.audit.findings.filter((f) => f.findingType === 'FAILURE')).toHaveLength(2);
     expect(outcome.audit.findings.filter((f) => f.findingType === 'MISSING_DOCUMENT')).toHaveLength(1);
     expect(outcome.layerState.status).toBe('MORE_RESEARCH_REQUIRED');
-    expect(listEventsByLayer(layer.id).some((e) => e.eventType === 'AUDIT_COMPLETED')).toBe(true);
+    expect((await listEventsByLayer(layer.id)).some((e) => e.eventType === 'AUDIT_COMPLETED')).toBe(true);
   });
 
-  it('creates a redo without touching the failed attempt', () => {
-    const document = addDocument(fixture, 'Learning Evaluation', 'v1');
-    const layer = fixture.layerByName('Learning Evaluation');
-    const parent = failedRun(layer.id, document.id);
+  it('creates a redo without touching the failed attempt', async () => {
+    const document = await addDocument(fixture, 'Learning Evaluation', 'v1');
+    const layer = await fixture.layerByName('Learning Evaluation');
+    const parent = await failedRun(layer.id, document.id);
 
-    const redo = createRedoRun({
+    const redo = await createRedoRun({
       parentRunId: parent.id,
       reason: 'missing source-family observability section',
     });
 
-    const reloaded = getRun(parent.id);
+    const reloaded = await getRun(parent.id);
     expect(reloaded?.prompt).toBe(parent.prompt);
     expect(reloaded?.status).toBe('FAILED');
     expect(redo.parentRunId).toBe(parent.id);
@@ -355,45 +357,45 @@ describe('audit, redo and freeze', () => {
     expect(redo.prompt).toBeTruthy();
   });
 
-  it('stops automatic redos at the configured cap', () => {
-    const layer = fixture.layerByName('Learning Evaluation');
-    let current = failedRun(layer.id);
+  it('stops automatic redos at the configured cap', async () => {
+    const layer = await fixture.layerByName('Learning Evaluation');
+    let current = await failedRun(layer.id);
     for (let i = 0; i < 2; i += 1) {
-      current = createRedoRun({ parentRunId: current.id, reason: `attempt ${i}`, automatic: true });
+      current = await createRedoRun({ parentRunId: current.id, reason: `attempt ${i}`, automatic: true });
     }
-    const verdict = canAutoRedo(current.id, 2);
+    const verdict = await canAutoRedo(current.id, 2);
     expect(verdict.allowed).toBe(false);
     expect(verdict.reason.toLowerCase()).toContain('human');
   });
 
-  it('freezes only with a canonical artifact and keeps provenance', () => {
-    for (const v of ['v1', 'v1B', 'v1C']) addDocument(fixture, 'World Model', v);
-    const layer = fixture.layerByName('World Model');
+  it('freezes only with a canonical artifact and keeps provenance', async () => {
+    for (const v of ['v1', 'v1B', 'v1C']) await addDocument(fixture, 'World Model', v);
+    const layer = await fixture.layerByName('World Model');
 
-    expect(() => freezeLayer(layer.id)).toThrow();
+    await expect(freezeLayer(layer.id)).rejects.toThrow();
 
-    const canonical = addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
-    const state = freezeLayer(layer.id, canonical.id);
+    const canonical = await addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
+    const state = await freezeLayer(layer.id, canonical.id);
     expect(state.status).toBe('FROZEN');
     expect(state.canonicalName).toBe('World Model v3.1');
 
-    const documents = listDocumentsByLayer(layer.id);
+    const documents = await listDocumentsByLayer(layer.id);
     expect(documents).toHaveLength(4);
     expect(documents.find((d) => d.version === 'v3.1')?.isCanonical).toBe(true);
     expect(documents.filter((d) => d.status === 'SUPERSEDED')).toHaveLength(3);
 
-    const reopened = reopenLayer(layer.id, 'cross-layer audit found a contradiction');
+    const reopened = await reopenLayer(layer.id, 'cross-layer audit found a contradiction');
     expect(reopened.status).toBe('REOPENED');
-    expect(listDocumentsByLayer(layer.id)).toHaveLength(4);
+    expect(await listDocumentsByLayer(layer.id)).toHaveLength(4);
   });
 });
 
 describe('blockages clear themselves', () => {
-  it('stops blocking once the document a MISSING_DEPENDENCY audit named arrives', () => {
-    addDocument(fixture, 'Discovery Logic', 'v1');
-    const layer = fixture.layerByName('Discovery Logic');
+  it('stops blocking once the document a MISSING_DEPENDENCY audit named arrives', async () => {
+    await addDocument(fixture, 'Discovery Logic', 'v1');
+    const layer = await fixture.layerByName('Discovery Logic');
 
-    recordAudit({
+    await recordAudit({
       projectId: fixture.project.id,
       layerId: layer.id,
       result: {
@@ -402,115 +404,115 @@ describe('blockages clear themselves', () => {
         missingDocuments: ['Discovery Logic v1B'],
       },
     });
-    expect(computeLayerState(layer.id).status).toBe('BLOCKED');
+    expect((await computeLayerState(layer.id)).status).toBe('BLOCKED');
 
     // Spec section 18: uploading the missing dependency is what unblocks the
     // work — the user should not have to re-run the audit to clear the flag.
-    addDocument(fixture, 'Discovery Logic', 'v1B');
-    recomputeProject(fixture.project.id);
+    await addDocument(fixture, 'Discovery Logic', 'v1B');
+    await recomputeProject(fixture.project.id);
 
-    const after = computeLayerState(layer.id);
+    const after = await computeLayerState(layer.id);
     expect(after.missingDependencies).toEqual([]);
     expect(after.status).not.toBe('BLOCKED');
   });
 
-  it('keeps blocking when the audit named nothing to resolve', () => {
-    addDocument(fixture, 'Qualification Logic', 'v1');
-    const layer = fixture.layerByName('Qualification Logic');
-    recordAudit({
+  it('keeps blocking when the audit named nothing to resolve', async () => {
+    await addDocument(fixture, 'Qualification Logic', 'v1');
+    const layer = await fixture.layerByName('Qualification Logic');
+    await recordAudit({
       projectId: fixture.project.id,
       layerId: layer.id,
       result: { verdict: 'BLOCKED', summary: 'Waiting on a decision about scope.' },
     });
-    recomputeProject(fixture.project.id);
+    await recomputeProject(fixture.project.id);
     // Nothing was named, so nothing can arrive to clear it — a human must act.
-    expect(computeLayerState(layer.id).status).toBe('BLOCKED');
+    expect((await computeLayerState(layer.id)).status).toBe('BLOCKED');
   });
 
-  it('gives a reopened layer its source packet back so it can be re-synthesised', () => {
-    for (const v of ['v1', 'v1B', 'v1C']) addDocument(fixture, 'World Model', v);
-    const canonical = addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
-    const layer = fixture.layerByName('World Model');
-    freezeLayer(layer.id, canonical.id);
-    expect(listDocumentsByLayer(layer.id).filter((d) => d.status === 'SUPERSEDED')).toHaveLength(3);
+  it('gives a reopened layer its source packet back so it can be re-synthesised', async () => {
+    for (const v of ['v1', 'v1B', 'v1C']) await addDocument(fixture, 'World Model', v);
+    const canonical = await addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
+    const layer = await fixture.layerByName('World Model');
+    await freezeLayer(layer.id, canonical.id);
+    expect((await listDocumentsByLayer(layer.id)).filter((d) => d.status === 'SUPERSEDED')).toHaveLength(3);
 
-    reopenLayer(layer.id, 'cross-layer audit found a contradiction');
-    recomputeProject(fixture.project.id);
+    await reopenLayer(layer.id, 'cross-layer audit found a contradiction');
+    await recomputeProject(fixture.project.id);
 
     // The provenance is usable again — otherwise the layer dead-ends: its own
     // registered, on-disk documents would report as missing forever.
-    const restored = listDocumentsByLayer(layer.id);
+    const restored = await listDocumentsByLayer(layer.id);
     expect(restored.filter((d) => d.status === 'SUPERSEDED')).toHaveLength(0);
     expect(restored.every((d) => !d.frozen)).toBe(true);
-    expect(() => prepareSynthesis({ layerId: layer.id })).not.toThrow();
+    await expect(prepareSynthesis({ layerId: layer.id })).resolves.toBeTruthy();
   });
 
-  it('lets a reopen lapse once work resumes, instead of pinning the layer', () => {
-    for (const v of ['v1', 'v1B']) addDocument(fixture, 'World Model', v);
-    const canonical = addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
-    const layer = fixture.layerByName('World Model');
-    freezeLayer(layer.id, canonical.id);
-    reopenLayer(layer.id, 'contradiction');
-    recomputeProject(fixture.project.id);
+  it('lets a reopen lapse once work resumes, instead of pinning the layer', async () => {
+    for (const v of ['v1', 'v1B']) await addDocument(fixture, 'World Model', v);
+    const canonical = await addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
+    const layer = await fixture.layerByName('World Model');
+    await freezeLayer(layer.id, canonical.id);
+    await reopenLayer(layer.id, 'contradiction');
+    await recomputeProject(fixture.project.id);
 
     // Derived, never pinned — a pin would mask every later audit forever.
-    expect(computeLayerState(layer.id).statusSource).toBe('DERIVED');
+    expect((await computeLayerState(layer.id)).statusSource).toBe('DERIVED');
 
-    recordAudit({
+    await recordAudit({
       projectId: fixture.project.id,
       layerId: layer.id,
       result: { verdict: 'READY_FOR_SYNTHESIS', summary: 'Rework holds up.' },
     });
-    recomputeProject(fixture.project.id);
-    expect(computeLayerState(layer.id).status).toBe('SYNTHESIS_READY');
+    await recomputeProject(fixture.project.id);
+    expect((await computeLayerState(layer.id)).status).toBe('SYNTHESIS_READY');
   });
 
-  it('keeps a reopened layer reopened until something happens', () => {
-    for (const v of ['v1', 'v1B']) addDocument(fixture, 'World Model', v);
-    const canonical = addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
-    const layer = fixture.layerByName('World Model');
-    freezeLayer(layer.id, canonical.id);
+  it('keeps a reopened layer reopened until something happens', async () => {
+    for (const v of ['v1', 'v1B']) await addDocument(fixture, 'World Model', v);
+    const canonical = await addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
+    const layer = await fixture.layerByName('World Model');
+    await freezeLayer(layer.id, canonical.id);
 
-    expect(reopenLayer(layer.id, 'cross-layer contradiction').status).toBe('REOPENED');
-    recomputeProject(fixture.project.id);
-    expect(computeLayerState(layer.id).status).toBe('REOPENED');
+    expect((await reopenLayer(layer.id, 'cross-layer contradiction')).status).toBe('REOPENED');
+    await recomputeProject(fixture.project.id);
+    expect((await computeLayerState(layer.id)).status).toBe('REOPENED');
   });
 });
 
 describe('waiting runs follow their packet', () => {
-  it('moves a run from BLOCKED to READY when the missing document arrives', () => {
-    const layer = fixture.layerByName('Taxonomy');
-    const run = failedRun(layer.id);
-    updateRun(run.id, { status: 'BLOCKED' });
-    setRunDependencies(run.id, ['Monetization Logic v1']);
-    recomputeProject(fixture.project.id);
-    expect(getRun(run.id)?.status).toBe('BLOCKED');
+  it('moves a run from BLOCKED to READY when the missing document arrives', async () => {
+    const layer = await fixture.layerByName('Taxonomy');
+    const run = await failedRun(layer.id);
+    await updateRun(run.id, { status: 'BLOCKED' });
+    await setRunDependencies(run.id, ['Monetization Logic v1']);
+    await recomputeProject(fixture.project.id);
+    expect((await getRun(run.id))?.status).toBe('BLOCKED');
 
-    addDocument(fixture, 'Monetization Logic', 'v1');
-    recomputeProject(fixture.project.id);
+    await addDocument(fixture, 'Monetization Logic', 'v1');
+    await recomputeProject(fixture.project.id);
 
     // Section 18: no "now go update the database" step.
-    expect(checkRunDependencies(run.id).ready).toBe(true);
-    expect(getRun(run.id)?.status).toBe('READY');
+    expect((await checkRunDependencies(run.id)).ready).toBe(true);
+    expect((await getRun(run.id))?.status).toBe('READY');
   });
 
-  it("leaves a finished run's status alone", () => {
-    const layer = fixture.layerByName('Taxonomy');
-    const run = failedRun(layer.id);
-    setRunDependencies(run.id, ['Monetization Logic v1']);
-    recomputeProject(fixture.project.id);
+  it("leaves a finished run's status alone", async () => {
+    const layer = await fixture.layerByName('Taxonomy');
+    const run = await failedRun(layer.id);
+    await setRunDependencies(run.id, ['Monetization Logic v1']);
+    await recomputeProject(fixture.project.id);
     // History is not rewritten by a recompute.
-    expect(getRun(run.id)?.status).toBe('FAILED');
+    expect((await getRun(run.id))?.status).toBe('FAILED');
   });
 });
 
 describe('a passing final audit freezes the layer', () => {
-  it('freezes automatically when the canonical document exists', () => {
-    for (const v of ['v1', 'v1B']) addDocument(fixture, 'Decision Routing Rules', v);
-    addDocument(fixture, 'Decision Routing Rules', 'v3.1', { documentType: 'SYNTHESIS' });
-    const layer = fixture.layerByName('Decision Routing Rules');
+  it('freezes automatically when the canonical document exists', async () => {
+    for (const v of ['v1', 'v1B']) await addDocument(fixture, 'Decision Routing Rules', v);
+    await addDocument(fixture, 'Decision Routing Rules', 'v3.1', { documentType: 'SYNTHESIS' });
+    const layer = await fixture.layerByName('Decision Routing Rules');
 
-    const outcome = recordAudit({
+    const outcome = await recordAudit({
       projectId: fixture.project.id,
       layerId: layer.id,
       result: { verdict: 'READY_TO_FREEZE', summary: 'The synthesis holds up.' },
@@ -518,14 +520,14 @@ describe('a passing final audit freezes the layer', () => {
 
     // Sections 4, 14 and 18 all state this transition is automatic.
     expect(outcome.layerState.status).toBe('FROZEN');
-    expect(computeLayerState(layer.id).canonicalName).toBe('Decision Routing Rules v3.1');
+    expect((await computeLayerState(layer.id)).canonicalName).toBe('Decision Routing Rules v3.1');
   });
 
-  it('records the audit but does not freeze without a canonical artifact', () => {
-    addDocument(fixture, 'Learning Evaluation', 'v1');
-    const layer = fixture.layerByName('Learning Evaluation');
+  it('records the audit but does not freeze without a canonical artifact', async () => {
+    await addDocument(fixture, 'Learning Evaluation', 'v1');
+    const layer = await fixture.layerByName('Learning Evaluation');
 
-    const outcome = recordAudit({
+    const outcome = await recordAudit({
       projectId: fixture.project.id,
       layerId: layer.id,
       result: { verdict: 'READY_TO_FREEZE', summary: 'Looks done.' },
@@ -533,24 +535,24 @@ describe('a passing final audit freezes the layer', () => {
 
     // Invariant 6 still holds: the audit stands, the freeze waits.
     expect(outcome.audit.verdict).toBe('READY_TO_FREEZE');
-    expect(computeLayerState(layer.id).status).not.toBe('FROZEN');
+    expect((await computeLayerState(layer.id)).status).not.toBe('FROZEN');
   });
 });
 
 describe('a frozen layer is not immune to a missing file', () => {
-  it('reports BLOCKED, not "nothing to do", when the canonical artifact vanishes', () => {
-    for (const v of ['v1', 'v1B']) addDocument(fixture, 'World Model', v);
-    const canonical = addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
-    const layer = fixture.layerByName('World Model');
-    freezeLayer(layer.id, canonical.id);
-    expect(computeLayerState(layer.id).status).toBe('FROZEN');
+  it('reports BLOCKED, not "nothing to do", when the canonical artifact vanishes', async () => {
+    for (const v of ['v1', 'v1B']) await addDocument(fixture, 'World Model', v);
+    const canonical = await addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
+    const layer = await fixture.layerByName('World Model');
+    await freezeLayer(layer.id, canonical.id);
+    expect((await computeLayerState(layer.id)).status).toBe('FROZEN');
 
     deletePhysicalFile(canonical);
-    recomputeProject(fixture.project.id);
+    await recomputeProject(fixture.project.id);
 
     // Invariant 9 outranks the frozen shortcut: saying "nothing to do" while
     // listing the document as inconsistent is a contradiction in one payload.
-    const state = computeLayerState(layer.id);
+    const state = await computeLayerState(layer.id);
     expect(state.inconsistentDocuments).toContain('World Model v3.1');
     expect(state.status).toBe('BLOCKED');
     expect(state.nextAction.toLowerCase()).toContain('restore');
@@ -558,84 +560,84 @@ describe('a frozen layer is not immune to a missing file', () => {
 });
 
 describe('planner', () => {
-  it('names the blocking document and is deterministic', () => {
-    for (const v of FULL_PACKET.slice(0, 6)) addDocument(fixture, 'Discovery Logic', v);
-    setLayerExpectations(fixture.layerByName('Discovery Logic').id, FULL_PACKET);
-    recomputeProject(fixture.project.id);
+  it('names the blocking document and is deterministic', async () => {
+    for (const v of FULL_PACKET.slice(0, 6)) await addDocument(fixture, 'Discovery Logic', v);
+    await setLayerExpectations((await fixture.layerByName('Discovery Logic')).id, FULL_PACKET);
+    await recomputeProject(fixture.project.id);
 
-    const plan = buildPlan(fixture.project.id);
+    const plan = await buildPlan(fixture.project.id);
     const discovery = [...plan.now, ...plan.next, ...plan.blocked, ...plan.later].find(
       (item) => item.layerName === 'Discovery Logic',
     );
     expect(discovery).toBeDefined();
     expect(discovery?.missing).toContain('Discovery Logic v1G');
     expect(plan.nextBestActionText.length).toBeGreaterThan(0);
-    expect(calculateNextAction(fixture.project.id)).not.toBeNull();
+    expect(await calculateNextAction(fixture.project.id)).not.toBeNull();
 
-    const again = buildPlan(fixture.project.id);
+    const again = await buildPlan(fixture.project.id);
     expect(again.nextBestActionText).toBe(plan.nextBestActionText);
     expect(again.now.map((i) => i.layerId)).toEqual(plan.now.map((i) => i.layerId));
   });
 
-  it('names the same document as the layer row does', () => {
+  it('names the same document as the layer row does', async () => {
     // Regression: the planner used to target the highest version while the state
     // engine targeted the first unaudited one, so the two panes disagreed.
-    addDocument(fixture, 'World Model', 'v1');
-    addDocument(fixture, 'World Model', 'v1B');
-    recomputeProject(fixture.project.id);
+    await addDocument(fixture, 'World Model', 'v1');
+    await addDocument(fixture, 'World Model', 'v1B');
+    await recomputeProject(fixture.project.id);
 
-    const state = computeLayerState(fixture.layerByName('World Model').id);
+    const state = await computeLayerState((await fixture.layerByName('World Model')).id);
     expect(state.status).toBe('AUDIT_READY');
 
-    const plan = buildPlan(fixture.project.id);
+    const plan = await buildPlan(fixture.project.id);
     const item = [...plan.now, ...plan.next].find((i) => i.layerName === 'World Model');
     expect(item?.title).toBe(state.nextAction);
     expect(item?.targetVersion).toBe(state.nextVersion);
   });
 
-  it('makes a real blockage the next best action, ahead of ordinary work', () => {
+  it('makes a real blockage the next best action, ahead of ordinary work', async () => {
     // The spec's example: Discovery Logic is BLOCKED missing v1G while another
     // layer has an audit waiting, and the one prominent answer is about v1G.
-    for (const v of FULL_PACKET.slice(0, 6)) addDocument(fixture, 'Discovery Logic', v);
-    const layer = fixture.layerByName('Discovery Logic');
-    setLayerExpectations(layer.id, FULL_PACKET);
-    addDocument(fixture, 'World Model', 'v1');
+    for (const v of FULL_PACKET.slice(0, 6)) await addDocument(fixture, 'Discovery Logic', v);
+    const layer = await fixture.layerByName('Discovery Logic');
+    await setLayerExpectations(layer.id, FULL_PACKET);
+    await addDocument(fixture, 'World Model', 'v1');
 
     // A run requiring the packet is what turns "v1G is expected" into
     // "v1G is required". (An explicitly overridden run would not block, by design.)
-    const run = failedRun(layer.id);
-    updateRun(run.id, { status: 'PLANNED' });
-    setRunDependencies(run.id, FULL_PACKET.map((v) => `Discovery Logic ${v}`));
-    recomputeProject(fixture.project.id);
+    const run = await failedRun(layer.id);
+    await updateRun(run.id, { status: 'PLANNED' });
+    await setRunDependencies(run.id, FULL_PACKET.map((v) => `Discovery Logic ${v}`));
+    await recomputeProject(fixture.project.id);
 
-    const state = computeLayerState(layer.id);
+    const state = await computeLayerState(layer.id);
     expect(state.status).toBe('BLOCKED');
     expect(state.missingDependencies).toContain('Discovery Logic v1G');
 
-    const plan = buildPlan(fixture.project.id);
+    const plan = await buildPlan(fixture.project.id);
     expect(plan.nextBestActionText).toContain('Discovery Logic v1G');
     expect(plan.nextBestAction?.priority).toBeLessThan(PRIORITY_AUDIT);
   });
 
-  it('prioritises an inconsistent file above all ordinary work', () => {
-    const document = addDocument(fixture, 'Discovery Logic', 'v1');
-    addDocument(fixture, 'World Model', 'v1');
+  it('prioritises an inconsistent file above all ordinary work', async () => {
+    const document = await addDocument(fixture, 'Discovery Logic', 'v1');
+    await addDocument(fixture, 'World Model', 'v1');
     deletePhysicalFile(document);
-    recomputeProject(fixture.project.id);
+    await recomputeProject(fixture.project.id);
 
-    const plan = buildPlan(fixture.project.id);
+    const plan = await buildPlan(fixture.project.id);
     // Invariant 9: nothing else about the project is safe to act on first.
     expect(plan.nextBestAction?.actionType).toBe('RECONCILE');
     expect(plan.nextBestActionText).toContain('Discovery Logic v1');
     expect(plan.blocked.some((i) => i.actionType === 'RECONCILE')).toBe(true);
   });
 
-  it('puts a frozen layer in LATER with nothing to do', () => {
-    const canonical = addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
-    freezeLayer(fixture.layerByName('World Model').id, canonical.id);
-    recomputeProject(fixture.project.id);
+  it('puts a frozen layer in LATER with nothing to do', async () => {
+    const canonical = await addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
+    await freezeLayer((await fixture.layerByName('World Model')).id, canonical.id);
+    await recomputeProject(fixture.project.id);
 
-    const plan = buildPlan(fixture.project.id);
+    const plan = await buildPlan(fixture.project.id);
     const item = plan.later.find((i) => i.layerName === 'World Model');
     expect(item).toBeDefined();
     expect(item?.actionType).toBe('NONE');
@@ -643,34 +645,34 @@ describe('planner', () => {
 });
 
 describe('waves advance on their own', () => {
-  it('moves the layer and the project forward as research progresses', () => {
-    const layer = fixture.layerByName('Taxonomy');
+  it('moves the layer and the project forward as research progresses', async () => {
+    const layer = await fixture.layerByName('Taxonomy');
 
-    addDocument(fixture, 'Taxonomy', 'v1');
-    recomputeProject(fixture.project.id);
-    expect(getLayer(layer.id)?.currentWave).toBe(1);
-    expect(getProject(fixture.project.id)?.currentWave).toBe(1);
+    await addDocument(fixture, 'Taxonomy', 'v1');
+    await recomputeProject(fixture.project.id);
+    expect((await getLayer(layer.id))?.currentWave).toBe(1);
+    expect((await getProject(fixture.project.id))?.currentWave).toBe(1);
 
-    addDocument(fixture, 'Taxonomy', 'v1B');
-    recomputeProject(fixture.project.id);
-    expect(getLayer(layer.id)?.currentWave).toBe(2);
-    expect(getProject(fixture.project.id)?.currentWave).toBe(2);
+    await addDocument(fixture, 'Taxonomy', 'v1B');
+    await recomputeProject(fixture.project.id);
+    expect((await getLayer(layer.id))?.currentWave).toBe(2);
+    expect((await getProject(fixture.project.id))?.currentWave).toBe(2);
 
-    addDocument(fixture, 'Taxonomy', 'v3.1', { documentType: 'SYNTHESIS' });
-    recomputeProject(fixture.project.id);
-    expect(getLayer(layer.id)?.currentWave).toBe(3);
+    await addDocument(fixture, 'Taxonomy', 'v3.1', { documentType: 'SYNTHESIS' });
+    await recomputeProject(fixture.project.id);
+    expect((await getLayer(layer.id))?.currentWave).toBe(3);
     // The project sits at the furthest wave any layer has reached.
-    expect(getProject(fixture.project.id)?.currentWave).toBe(3);
-    expect(getLayer(fixture.layerByName('World Model').id)?.currentWave).toBe(1);
+    expect((await getProject(fixture.project.id))?.currentWave).toBe(3);
+    expect((await getLayer((await fixture.layerByName('World Model')).id))?.currentWave).toBe(1);
   });
 });
 
 describe('runtime state file', () => {
-  it('writes a derived snapshot that mirrors the database', () => {
-    for (const v of ['v1', 'v1B']) addDocument(fixture, 'Taxonomy', v);
-    recomputeProject(fixture.project.id);
+  it('writes a derived snapshot that mirrors the database', async () => {
+    for (const v of ['v1', 'v1B']) await addDocument(fixture, 'Taxonomy', v);
+    await recomputeProject(fixture.project.id);
 
-    const written = writeProjectState(fixture.project.id);
+    const written = await writeProjectState(fixture.project.id);
     const read = readProjectState();
     expect(read).not.toBeNull();
     expect(read?.project.slug).toBe('deal-dispatch');

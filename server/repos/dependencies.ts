@@ -30,9 +30,9 @@ export interface CreateDependencyInput {
   notes?: string | null;
 }
 
-export function createDependency(input: CreateDependencyInput): Dependency {
+export async function createDependency(input: CreateDependencyInput): Promise<Dependency> {
   const id = newId('dep');
-  getDb().run(
+  await getDb().run(
     `INSERT INTO dependencies (id, project_id, dependent_document_id, dependent_run_id,
        required_document_id, required_canonical_name, required_layer_id, dependency_type,
        required, notes, created_at)
@@ -42,63 +42,59 @@ export function createDependency(input: CreateDependencyInput): Dependency {
       input.dependencyType ?? 'SOURCE_PACKET', fromBool(input.required ?? true),
       input.notes ?? null, nowIso()],
   );
-  return getDependency(id)!;
+  return (await getDependency(id))!;
 }
 
-export function getDependency(id: string): Dependency | null {
-  const row = getDb().get<DependencyRow>('SELECT * FROM dependencies WHERE id = ?', [id]);
+export async function getDependency(id: string): Promise<Dependency | null> {
+  const row = await getDb().get<DependencyRow>('SELECT * FROM dependencies WHERE id = ?', [id]);
   return row ? mapDependency(row) : null;
 }
 
-export function listDependenciesForRun(runId: string): Dependency[] {
-  return getDb()
-    .all<DependencyRow>('SELECT * FROM dependencies WHERE dependent_run_id = ? ORDER BY created_at', [
+export async function listDependenciesForRun(runId: string): Promise<Dependency[]> {
+  return (await getDb().all<DependencyRow>('SELECT * FROM dependencies WHERE dependent_run_id = ? ORDER BY created_at', [
       runId,
-    ])
+    ]))
     .map(mapDependency);
 }
 
-export function listDependenciesForDocument(documentId: string): Dependency[] {
-  return getDb()
-    .all<DependencyRow>(
+export async function listDependenciesForDocument(documentId: string): Promise<Dependency[]> {
+  return (await getDb().all<DependencyRow>(
       'SELECT * FROM dependencies WHERE dependent_document_id = ? ORDER BY created_at',
       [documentId],
-    )
+    ))
     .map(mapDependency);
 }
 
-export function listDependenciesForProject(projectId: string): Dependency[] {
-  return getDb()
-    .all<DependencyRow>('SELECT * FROM dependencies WHERE project_id = ? ORDER BY created_at', [
+export async function listDependenciesForProject(projectId: string): Promise<Dependency[]> {
+  return (await getDb().all<DependencyRow>('SELECT * FROM dependencies WHERE project_id = ? ORDER BY created_at', [
       projectId,
-    ])
+    ]))
     .map(mapDependency);
 }
 
 /** Dependencies naming a document, whether or not they are resolved. */
-export function listDependentsOfCanonicalName(projectId: string, canonicalName: string): Dependency[] {
-  return getDb()
-    .all<DependencyRow>(
+export async function listDependentsOfCanonicalName(projectId: string, canonicalName: string): Promise<Dependency[]> {
+  return (await getDb().all<DependencyRow>(
       'SELECT * FROM dependencies WHERE project_id = ? AND required_canonical_name = ? COLLATE NOCASE',
       [projectId, canonicalName],
-    )
+    ))
     .map(mapDependency);
 }
 
-export function linkDependencyToDocument(dependencyId: string, documentId: string | null): void {
-  getDb().run('UPDATE dependencies SET required_document_id = ? WHERE id = ?', [documentId, dependencyId]);
+export async function linkDependencyToDocument(dependencyId: string, documentId: string | null): Promise<void> {
+  await getDb().run('UPDATE dependencies SET required_document_id = ? WHERE id = ?', [documentId, dependencyId]);
 }
 
 /**
  * Re-resolve every dependency in a project against current documents.
  * Returns the canonical names that newly resolved and that newly broke.
  */
-export function resolveProjectDependencies(projectId: string): {
+export async function resolveProjectDependencies(projectId: string): Promise<{
   resolved: string[];
   broken: string[];
-} {
+}> {
   const db = getDb();
-  const rows = db.all<DependencyRow & { doc_id: string | null }>(
+  const rows = await db.all<DependencyRow & { doc_id: string | null }>(
     `SELECT d.*, doc.id AS doc_id
      FROM dependencies d
      LEFT JOIN documents doc
@@ -114,13 +110,13 @@ export function resolveProjectDependencies(projectId: string): {
   for (const row of rows) {
     const shouldBe = row.doc_id ?? null;
     if (shouldBe === row.required_document_id) continue;
-    db.run('UPDATE dependencies SET required_document_id = ? WHERE id = ?', [shouldBe, row.id]);
+    await db.run('UPDATE dependencies SET required_document_id = ? WHERE id = ?', [shouldBe, row.id]);
     if (shouldBe) resolved.push(row.required_canonical_name);
     else broken.push(row.required_canonical_name);
   }
   return { resolved: [...new Set(resolved)], broken: [...new Set(broken)] };
 }
 
-export function deleteDependenciesForRun(runId: string): void {
-  getDb().run('DELETE FROM dependencies WHERE dependent_run_id = ?', [runId]);
+export async function deleteDependenciesForRun(runId: string): Promise<void> {
+  await getDb().run('DELETE FROM dependencies WHERE dependent_run_id = ?', [runId]);
 }

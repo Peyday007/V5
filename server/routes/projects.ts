@@ -128,66 +128,66 @@ function mergeVersionPolicy(value: unknown, current: VersionPolicy): VersionPoli
 
 projectsRouter.get(
   '/',
-  handler(() => ({ projects: listProjects() })),
+  handler(async () => ({ projects: await listProjects() })),
 );
 
 projectsRouter.get(
   '/:projectId',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
     // One planner pass produces both the buckets and the per-layer snapshots,
     // so the two can never disagree inside a single response.
-    const plan = buildPlan(project.id);
-    return { project, layers: listLayers(project.id), state: plan.layers, plan };
+    const plan = await buildPlan(project.id);
+    return { project, layers: await listLayers(project.id), state: plan.layers, plan };
   }),
 );
 
 projectsRouter.get(
   '/:projectId/plan',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
-    return { plan: buildPlan(project.id) };
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { plan: await buildPlan(project.id) };
   }),
 );
 
 projectsRouter.get(
   '/:projectId/next-action',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
-    const plan = buildPlan(project.id);
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    const plan = await buildPlan(project.id);
     return { action: plan.nextBestAction, text: plan.nextBestActionText };
   }),
 );
 
 projectsRouter.get(
   '/:projectId/events',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
     const limit = optionalInteger(queryOf(req)['limit'], 'limit', { min: 1, max: 2000 }) ?? 200;
-    return { events: listEvents(project.id, limit) };
+    return { events: await listEvents(project.id, limit) };
   }),
 );
 
 projectsRouter.get(
   '/:projectId/documents',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
-    return { documents: listDocuments(project.id) };
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { documents: await listDocuments(project.id) };
   }),
 );
 
 projectsRouter.get(
   '/:projectId/runs',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
-    return { runs: listRuns(project.id) };
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { runs: await listRuns(project.id) };
   }),
 );
 
 projectsRouter.get(
   '/:projectId/runtime-state',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
     // Regenerated rather than read back: the endpoint and the file on disk must
     // agree, and a stale snapshot is exactly the failure mode this file exists
     // to prevent.
@@ -201,8 +201,8 @@ projectsRouter.get(
 
 projectsRouter.patch(
   '/:projectId',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
 
     const name = optionalString(body['name'], 'name');
@@ -214,7 +214,7 @@ projectsRouter.patch(
     const settings = optionalRecord(body['settings'], 'settings');
 
     const updated =
-      updateProject(project.id, {
+      await updateProject(project.id, {
         name,
         description,
         northStar,
@@ -240,7 +240,7 @@ projectsRouter.patch(
     }
     if (settings !== undefined) changes['settings'] = { from: project.settings, to: updated.settings };
     if (Object.keys(changes).length > 0) {
-      recordEvent({
+      await recordEvent({
         projectId: project.id,
         entityType: 'PROJECT',
         entityId: project.id,
@@ -250,32 +250,32 @@ projectsRouter.patch(
     }
 
     // A changed version policy changes what every layer is waiting for.
-    recomputeProject(updated.id);
-    return { project: requireProject(updated.id) };
+    await recomputeProject(updated.id);
+    return { project: await requireProject(updated.id) };
   }),
 );
 
 projectsRouter.post(
   '/:projectId/recompute',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
-    recomputeProject(project.id);
-    return { plan: buildPlan(project.id) };
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    await recomputeProject(project.id);
+    return { plan: await buildPlan(project.id) };
   }),
 );
 
 projectsRouter.post(
   '/:projectId/reconcile',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
-    return { report: scanAndReconcile(project.id) };
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { report: await scanAndReconcile(project.id) };
   }),
 );
 
 projectsRouter.post(
   '/:projectId/reconcile/fix',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
     const kind = optionalEnum<ReconcileIssue['kind']>(body['kind'], RECONCILE_KINDS, 'kind');
     if (!kind) {
@@ -283,9 +283,9 @@ projectsRouter.post(
     }
 
     const layerId = optionalString(body['layerId'], 'layerId');
-    if (layerId) requireLayerOfProject(layerId, project.id);
+    if (layerId) await requireLayerOfProject(layerId, project.id);
 
-    const outcome = applyReconcileFix({
+    const outcome = await applyReconcileFix({
       projectId: project.id,
       kind,
       path: optionalString(body['path'], 'path') ?? null,
@@ -295,24 +295,24 @@ projectsRouter.post(
       documentType: optionalEnum<DocumentType>(body['documentType'], DOCUMENT_TYPES, 'documentType') ?? null,
     });
 
-    recomputeProject(project.id);
+    await recomputeProject(project.id);
     return {
       ok: outcome.ok,
       message: outcome.message,
       report: outcome.report,
-      plan: buildPlan(project.id),
+      plan: await buildPlan(project.id),
     };
   }),
 );
 
 projectsRouter.post(
   '/:projectId/import/resolve',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
 
     const relativePath = requiredString(body['relativePath'], 'relativePath');
-    const layer = requireLayerOfProject(requiredString(body['layerId'], 'layerId'), project.id);
+    const layer = await requireLayerOfProject(requiredString(body['layerId'], 'layerId'), project.id);
     const version = parseVersion(body['version'], 'version');
     if (!version) throw badRequest('"version" is required to file a document, e.g. v1G.');
     const documentType = optionalEnum<DocumentType>(
@@ -324,7 +324,7 @@ projectsRouter.post(
       throw badRequest(`"documentType" is required. Expected one of: ${DOCUMENT_TYPES.join(', ')}.`);
     }
 
-    const result = resolveImport({
+    const result = await resolveImport({
       projectId: project.id,
       relativePath,
       layerId: layer.id,
@@ -333,8 +333,8 @@ projectsRouter.post(
       notes: nullableString(body['notes'], 'notes') ?? null,
     });
 
-    recomputeProject(project.id);
-    return { result, plan: buildPlan(project.id) };
+    await recomputeProject(project.id);
+    return { result, plan: await buildPlan(project.id) };
   }),
 );
 
@@ -352,7 +352,7 @@ projectsRouter.post(
   '/:projectId/import-source',
   uploadManyFiles,
   handler(async (req) => {
-    const project = requireProject(pathId(req, 'projectId'));
+    const project = await requireProject(pathId(req, 'projectId'));
     const files = uploadedFiles(req);
     if (files.length === 0) {
       throw badRequest(
@@ -366,7 +366,7 @@ projectsRouter.post(
 
     const results = [];
     for (const file of files) {
-      const imported = importProjectSource({
+      const imported = await importProjectSource({
         projectId: project.id,
         originalFilename: file.originalname,
         contents: file.buffer,
@@ -380,8 +380,8 @@ projectsRouter.post(
       results.push({ import: imported, report });
     }
 
-    recomputeProject(project.id);
-    return { results, plan: buildPlan(project.id) };
+    await recomputeProject(project.id);
+    return { results, plan: await buildPlan(project.id) };
   }),
 );
 
@@ -394,7 +394,7 @@ projectsRouter.post(
 projectsRouter.post(
   '/:projectId/reprocess-unfiled',
   handler(async (req) => {
-    const project = requireProject(pathId(req, 'projectId'));
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
     const relativePath = requiredString(body['relativePath'], 'relativePath');
     const scope =
@@ -405,9 +405,9 @@ projectsRouter.post(
     // request. A stored file is inside this project's documents or it is not
     // ours to read. The path is accepted in either of the two forms the user
     // could reasonably have: from the data root, or from the documents folder.
-    const absolute = resolveStoredFile(project.slug, relativePath);
+    const absolute = await resolveStoredFile(project.slug, relativePath);
 
-    const imported = importProjectSourceFromFile({
+    const imported = await importProjectSourceFromFile({
       projectId: project.id,
       relativePath: toDataRelative(absolute),
       scope,
@@ -416,8 +416,8 @@ projectsRouter.post(
       ? await ingestSource({ documentId: imported.documentId, scope })
       : null;
 
-    recomputeProject(project.id);
-    return { import: imported, report, plan: buildPlan(project.id) };
+    await recomputeProject(project.id);
+    return { import: imported, report, plan: await buildPlan(project.id) };
   }),
 );
 
@@ -430,14 +430,14 @@ projectsRouter.post(
  */
 projectsRouter.post(
   '/:projectId/archive-import',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
     const folder = requiredString(body['folder'], 'folder');
     const scope = optionalEnum<DocumentScope>(body['scope'], DOCUMENT_SCOPES, 'scope');
     const start = optionalBoolean(body['start'], 'start') ?? true;
 
-    const job = startArchiveImport({
+    const job = await startArchiveImport({
       projectId: project.id,
       folder,
       ...(scope ? { scope } : {}),
@@ -449,17 +449,17 @@ projectsRouter.post(
 
 projectsRouter.get(
   '/:projectId/archive-imports',
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
-    return { jobs: listImportJobs(project.id) };
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { jobs: await listImportJobs(project.id) };
   }),
 );
 
 projectsRouter.post(
   '/:projectId/import',
   uploadManyFiles,
-  handler((req) => {
-    const project = requireProject(pathId(req, 'projectId'));
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
     const files = uploadedFiles(req);
     if (files.length === 0) {
       throw badRequest(
@@ -469,25 +469,27 @@ projectsRouter.post(
 
     const body = bodyOf(req);
     const layerIdField = optionalString(body['layerId'], 'layerId');
-    const layer = layerIdField ? requireLayerOfProject(layerIdField, project.id) : null;
+    const layer = layerIdField ? await requireLayerOfProject(layerIdField, project.id) : null;
     const version = parseVersion(body['version'], 'version') ?? null;
     const documentType =
       optionalEnum<DocumentType>(body['documentType'], DOCUMENT_TYPES, 'documentType') ?? null;
 
     // Every file is stored even when it cannot be filed confidently (invariant 8:
     // storing is not registering), so one ambiguous name never loses an upload.
-    const results: ImportResult[] = files.map((file) =>
-      importFile({
-        projectId: project.id,
-        originalFilename: file.originalname,
-        contents: file.buffer,
-        layerId: layer?.id ?? null,
-        version,
-        documentType,
-      }),
+    const results: ImportResult[] = await Promise.all(
+      files.map((file) =>
+        importFile({
+          projectId: project.id,
+          originalFilename: file.originalname,
+          contents: file.buffer,
+          layerId: layer?.id ?? null,
+          version,
+          documentType,
+        }),
+      ),
     );
 
-    recomputeProject(project.id);
-    return { results, plan: buildPlan(project.id) };
+    await recomputeProject(project.id);
+    return { results, plan: await buildPlan(project.id) };
   }),
 );

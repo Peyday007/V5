@@ -43,20 +43,20 @@ import {
 export const auditsRouter = Router();
 
 /** The shape the UI renders: headline first, reasoning behind it. */
-function auditResponse(outcome: DynamicAuditOutcome) {
+async function auditResponse(outcome: DynamicAuditOutcome) {
   const audit = outcome.audit;
   return {
     audit,
     state: outcome.layerState,
     redoRun: outcome.redoRun,
-    plan: buildPlan(audit.projectId),
+    plan: await buildPlan(audit.projectId),
     pipelineId: outcome.pipelineId,
-    passes: listPipelinePasses(outcome.pipelineId),
+    passes: await listPipelinePasses(outcome.pipelineId),
     researchCandidates: outcome.researchCandidates,
     adversarial: outcome.adversarial,
     primary: outcome.primary,
     // What each conclusion can be checked against, gap by gap.
-    evidence: listAuditEvidence(audit.id),
+    evidence: await listAuditEvidence(audit.id),
     manifest: outcome.context.manifest,
     headline: {
       verdict: audit.verdict,
@@ -75,8 +75,8 @@ interface AuditTarget {
 }
 
 /** Resolve what is being audited from the route that was called. */
-function targetFromRun(runId: string): AuditTarget {
-  const run = requireRun(runId);
+async function targetFromRun(runId: string): Promise<AuditTarget> {
+  const run = await requireRun(runId);
   if (!run.layerId) {
     throw badRequest(`Run ${run.id} is not attached to a layer, so there is nothing to audit it against.`);
   }
@@ -85,8 +85,8 @@ function targetFromRun(runId: string): AuditTarget {
   return { mode: 'SINGLE_DOCUMENT', layerId: run.layerId, documentId, runId: run.id };
 }
 
-function targetFromDocument(documentId: string): AuditTarget {
-  const document = requireDocument(documentId);
+async function targetFromDocument(documentId: string): Promise<AuditTarget> {
+  const document = await requireDocument(documentId);
   if (!document.layerId) {
     throw badRequest(`${document.canonicalName} is not filed under a layer, so it cannot be audited.`);
   }
@@ -98,8 +98,8 @@ function targetFromDocument(documentId: string): AuditTarget {
   };
 }
 
-function targetFromLayer(layerId: string): AuditTarget {
-  const layer = requireLayer(layerId);
+async function targetFromLayer(layerId: string): Promise<AuditTarget> {
+  const layer = await requireLayer(layerId);
   return { mode: 'LAYER_PACKET', layerId: layer.id, documentId: null, runId: null };
 }
 
@@ -114,14 +114,14 @@ function providerOptions(body: Record<string, unknown>): { providerName: string 
  * A failed audit is a 422, not a 500: the platform worked correctly and the
  * model did not. The project is untouched, and the recorded passes say why.
  */
-function auditFailureBody(error: AuditFailure) {
+async function auditFailureBody(error: AuditFailure) {
   return {
     error: error.message,
     detail: {
       pass: error.passKey,
       pipelineId: error.pipelineId,
       rawResponse: error.rawResponse,
-      passes: listPipelinePasses(error.pipelineId),
+      passes: await listPipelinePasses(error.pipelineId),
       stateChanged: false,
     },
   };
@@ -139,9 +139,9 @@ function runAudit(target: AuditTarget, body: Record<string, unknown>): Promise<D
   });
 }
 
-function auditHandler(resolve: (req: Parameters<typeof pathId>[0]) => AuditTarget) {
+function auditHandler(resolve: (req: Parameters<typeof pathId>[0]) => Promise<AuditTarget>) {
   return handler(async (req) => {
-    const target = resolve(req);
+    const target = await resolve(req);
     try {
       return auditResponse(await runAudit(target, bodyOf(req)));
     } catch (error) {
@@ -149,7 +149,7 @@ function auditHandler(resolve: (req: Parameters<typeof pathId>[0]) => AuditTarge
         // A real HttpError, not an Error dressed up as one: only the former
         // carries `detail` through the error middleware, and `detail` is where
         // "nothing was changed" and the recorded passes live.
-        const body = auditFailureBody(error);
+        const body = await auditFailureBody(error);
         throw unprocessable(body.error, body.detail);
       }
       throw error;
@@ -180,7 +180,7 @@ function sseSend(res: Response, event: string, data: unknown): void {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-function streamHandler(resolve: (req: Parameters<typeof pathId>[0]) => AuditTarget) {
+function streamHandler(resolve: (req: Parameters<typeof pathId>[0]) => Promise<AuditTarget>) {
   return async (req: Parameters<typeof pathId>[0] & { body?: unknown }, res: Response): Promise<void> => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -188,7 +188,7 @@ function streamHandler(resolve: (req: Parameters<typeof pathId>[0]) => AuditTarg
     res.flushHeaders?.();
 
     try {
-      const target = resolve(req);
+      const target = await resolve(req);
       const body = (req.body ?? {}) as Record<string, unknown>;
       const { providerName, model } = providerOptions(body);
       const outcome = await runDynamicAudit({
@@ -200,10 +200,10 @@ function streamHandler(resolve: (req: Parameters<typeof pathId>[0]) => AuditTarg
         model,
         onProgress: (progress: AuditProgress) => sseSend(res, 'progress', progress),
       });
-      sseSend(res, 'result', auditResponse(outcome));
+      sseSend(res, 'result', await auditResponse(outcome));
     } catch (error) {
       if (error instanceof AuditFailure) {
-        sseSend(res, 'failed', auditFailureBody(error));
+        sseSend(res, 'failed', await auditFailureBody(error));
       } else {
         sseSend(res, 'failed', {
           error: error instanceof Error ? error.message : String(error),
@@ -235,18 +235,18 @@ auditsRouter.post(
 
 auditsRouter.get(
   '/audits/:auditId',
-  handler((req) => {
+  handler(async (req) => {
     const auditId = pathId(req, 'auditId');
-    const audit = getAudit(auditId);
+    const audit = await getAudit(auditId);
     if (!audit) throw notFound(`No audit with id ${auditId}.`);
     return {
       audit,
-      passes: listAuditPasses(audit.id),
-      layer: audit.layerId ? computeLayerState(audit.layerId) : null,
+      passes: await listAuditPasses(audit.id),
+      layer: audit.layerId ? await computeLayerState(audit.layerId) : null,
       documents: audit.auditedDocumentIds.map((id) => getDocument(id)).filter(Boolean),
-      run: audit.runId ? getRun(audit.runId) : null,
+      run: audit.runId ? await getRun(audit.runId) : null,
       // The citation trail: which passage each conclusion can be checked against.
-      evidence: listAuditEvidence(audit.id),
+      evidence: await listAuditEvidence(audit.id),
     };
   }),
 );
@@ -260,25 +260,25 @@ auditsRouter.get(
  */
 auditsRouter.post(
   '/layers/:layerId/evidence',
-  handler((req) => {
-    const layer = requireLayer(pathId(req, 'layerId'));
+  handler(async (req) => {
+    const layer = await requireLayer(pathId(req, 'layerId'));
     const body = bodyOf(req);
     const query = requiredString(body['query'], 'query');
     const limit = optionalInteger(body['limit'], 'limit', { min: 1, max: 25 }) ?? 5;
-    const documentIds = listDocumentsByLayer(layer.id)
+    const documentIds = (await listDocumentsByLayer(layer.id))
       .filter((document) => document.status === 'COMPLETE' || document.status === 'FROZEN')
       .map((document) => document.id);
-    return { layer, query, ...retrieveEvidence({ documentIds, query, limit }) };
+    return { layer, query, ...await retrieveEvidence({ documentIds, query, limit }) };
   }),
 );
 
 auditsRouter.post(
   '/documents/:documentId/evidence',
-  handler((req) => {
-    const document = requireDocument(pathId(req, 'documentId'));
+  handler(async (req) => {
+    const document = await requireDocument(pathId(req, 'documentId'));
     const body = bodyOf(req);
     const query = requiredString(body['query'], 'query');
     const limit = optionalInteger(body['limit'], 'limit', { min: 1, max: 25 }) ?? 5;
-    return { document, query, ...retrieveEvidence({ documentIds: [document.id], query, limit }) };
+    return { document, query, ...await retrieveEvidence({ documentIds: [document.id], query, limit }) };
   }),
 );

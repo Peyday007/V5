@@ -34,7 +34,7 @@ export interface CreateProjectInput {
   settings?: Record<string, unknown>;
 }
 
-export function createProject(input: CreateProjectInput): Project {
+export async function createProject(input: CreateProjectInput): Promise<Project> {
   const db = getDb();
   const ts = nowIso();
   const row: ProjectRow = {
@@ -50,7 +50,7 @@ export function createProject(input: CreateProjectInput): Project {
     created_at: ts,
     updated_at: ts,
   };
-  db.run(
+  await db.run(
     `INSERT INTO projects (id, slug, name, description, north_star, current_wave, status,
        version_policy, settings, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -60,28 +60,27 @@ export function createProject(input: CreateProjectInput): Project {
   return mapProject(row);
 }
 
-export function listProjects(): Project[] {
-  return getDb()
-    .all<ProjectRow>('SELECT * FROM projects ORDER BY created_at')
+export async function listProjects(): Promise<Project[]> {
+  return (await getDb().all<ProjectRow>('SELECT * FROM projects ORDER BY created_at'))
     .map(mapProject);
 }
 
-export function getProject(id: string): Project | null {
-  const row = getDb().get<ProjectRow>('SELECT * FROM projects WHERE id = ?', [id]);
+export async function getProject(id: string): Promise<Project | null> {
+  const row = await getDb().get<ProjectRow>('SELECT * FROM projects WHERE id = ?', [id]);
   return row ? mapProject(row) : null;
 }
 
-export function getProjectBySlug(slug: string): Project | null {
-  const row = getDb().get<ProjectRow>('SELECT * FROM projects WHERE slug = ?', [slug]);
+export async function getProjectBySlug(slug: string): Promise<Project | null> {
+  const row = await getDb().get<ProjectRow>('SELECT * FROM projects WHERE slug = ?', [slug]);
   return row ? mapProject(row) : null;
 }
 
 /** The single active project used when the caller does not name one. */
-export function getDefaultProject(): Project | null {
-  const row = getDb().get<ProjectRow>(
+export async function getDefaultProject(): Promise<Project | null> {
+  const row = await getDb().get<ProjectRow>(
     "SELECT * FROM projects WHERE status = 'ACTIVE' ORDER BY created_at LIMIT 1",
   );
-  return row ? mapProject(row) : (listProjects()[0] ?? null);
+  return row ? mapProject(row) : ((await listProjects())[0] ?? null);
 }
 
 export interface UpdateProjectInput {
@@ -94,7 +93,7 @@ export interface UpdateProjectInput {
   settings?: Record<string, unknown>;
 }
 
-export function updateProject(id: string, patch: UpdateProjectInput): Project | null {
+export async function updateProject(id: string, patch: UpdateProjectInput): Promise<Project | null> {
   const { clause, values } = buildUpdate({
     name: patch.name,
     description: patch.description,
@@ -105,7 +104,7 @@ export function updateProject(id: string, patch: UpdateProjectInput): Project | 
     settings: patch.settings ? toJson(patch.settings) : undefined,
   });
   if (!clause) return getProject(id);
-  getDb().run(`UPDATE projects SET ${clause}, updated_at = ? WHERE id = ?`, [
+  await getDb().run(`UPDATE projects SET ${clause}, updated_at = ? WHERE id = ?`, [
     ...(values as never[]),
     nowIso(),
     id,

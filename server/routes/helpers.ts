@@ -247,33 +247,33 @@ export function optionalRecord(
 // Entity lookups — an unknown id is a 404, never a 500
 // ---------------------------------------------------------------------------
 
-export function requireProject(projectId: string): Project {
-  const project = getProject(projectId);
+export async function requireProject(projectId: string): Promise<Project> {
+  const project = await getProject(projectId);
   if (!project) throw notFound(`No project with id "${projectId}".`);
   return project;
 }
 
-export function requireLayer(layerId: string): Layer {
-  const layer = getLayer(layerId);
+export async function requireLayer(layerId: string): Promise<Layer> {
+  const layer = await getLayer(layerId);
   if (!layer) throw notFound(`No layer with id "${layerId}".`);
   return layer;
 }
 
-export function requireRun(runId: string): ResearchRun {
-  const run = getRun(runId);
+export async function requireRun(runId: string): Promise<ResearchRun> {
+  const run = await getRun(runId);
   if (!run) throw notFound(`No research run with id "${runId}".`);
   return run;
 }
 
-export function requireDocument(documentId: string): Document {
-  const document = getDocument(documentId);
+export async function requireDocument(documentId: string): Promise<Document> {
+  const document = await getDocument(documentId);
   if (!document) throw notFound(`No document with id "${documentId}".`);
   return document;
 }
 
 /** A layer id supplied in a body must belong to the project being addressed. */
-export function requireLayerOfProject(layerId: string, projectId: string): Layer {
-  const layer = requireLayer(layerId);
+export async function requireLayerOfProject(layerId: string, projectId: string): Promise<Layer> {
+  const layer = await requireLayer(layerId);
   if (layer.projectId !== projectId) {
     throw badRequest(`Layer "${layer.name}" belongs to a different project.`);
   }
@@ -281,8 +281,8 @@ export function requireLayerOfProject(layerId: string, projectId: string): Layer
 }
 
 /** The project a layer belongs to — a missing one means the database is corrupt. */
-export function projectOfLayer(layer: Layer): Project {
-  const project = getProject(layer.projectId);
+export async function projectOfLayer(layer: Layer): Promise<Project> {
+  const project = await getProject(layer.projectId);
   if (!project) {
     throw new HttpError(
       500,
@@ -293,13 +293,13 @@ export function projectOfLayer(layer: Layer): Project {
 }
 
 /** Runs without a layer cannot target a document, so most actions refuse them. */
-export function layerOfRun(run: ResearchRun): Layer {
+export async function layerOfRun(run: ResearchRun): Promise<Layer> {
   if (!run.layerId) {
     throw badRequest(
       `Run ${run.id} is not attached to a layer, so it has no target document or prompt context.`,
     );
   }
-  return requireLayer(run.layerId);
+  return await requireLayer(run.layerId);
 }
 
 // ---------------------------------------------------------------------------

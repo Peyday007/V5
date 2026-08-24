@@ -17,7 +17,7 @@ import type { Document, DocumentType, Layer, Project } from '../server/domain/ty
 export interface TestProject {
   project: Project;
   layers: Layer[];
-  layerByName(name: string): Layer;
+  layerByName(name: string): Promise<Layer>;
 }
 
 /**
@@ -25,25 +25,25 @@ export interface TestProject {
  * project slug is stable, so leaving files behind would make the next test's
  * reconciliation see them as unregistered.
  */
-export function freshProject(): TestProject {
-  closeDatabase();
+export async function freshProject(): Promise<TestProject> {
+  await closeDatabase();
   fs.rmSync(path.join(DATA_ROOT, 'projects'), { recursive: true, force: true });
   const dbPath = path.join(DATA_ROOT, `test-${Math.random().toString(36).slice(2)}.db`);
-  initDatabase({ dbPath });
-  const { project, layers } = seedDealDispatch();
+  await initDatabase({ dbPath });
+  const { project, layers } = await seedDealDispatch();
   return {
     project,
     layers,
-    layerByName(name: string): Layer {
-      const found = listLayers(project.id).find((l) => l.name === name);
+    async layerByName(name: string): Promise<Layer> {
+      const found = (await listLayers(project.id)).find((l) => l.name === name);
       if (!found) throw new Error(`No such layer in test fixture: ${name}`);
       return found;
     },
   };
 }
 
-export function teardown(): void {
-  closeDatabase();
+export async function teardown(): Promise<void> {
+  await closeDatabase();
 }
 
 export interface AddDocumentOptions {
@@ -58,13 +58,13 @@ export interface AddDocumentOptions {
  * Register a document for a layer the way the importer would, optionally writing
  * a real file so filesystem-sensitive code paths (invariants 8 and 9) are exercised.
  */
-export function addDocument(
+export async function addDocument(
   fixture: TestProject,
   layerName: string,
   version: string,
   options: AddDocumentOptions = {},
-): Document {
-  const layer = fixture.layerByName(layerName);
+): Promise<Document> {
+  const layer = await fixture.layerByName(layerName);
   const names = buildNames(layer.name, version);
   const withFile = options.withFile ?? true;
 
@@ -72,7 +72,7 @@ export function addDocument(
   let fileSize: number | null = null;
   let fileHash: string | null = null;
   if (withFile) {
-    const stored = storeFile({
+    const stored = await storeFile({
       projectSlug: fixture.project.slug,
       layerSlug: layer.slug,
       filename: names.filename,
@@ -83,7 +83,7 @@ export function addDocument(
     fileHash = stored.hash;
   }
 
-  return createDocument({
+  return await createDocument({
     projectId: fixture.project.id,
     layerId: layer.id,
     canonicalName: names.canonicalName,

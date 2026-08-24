@@ -37,11 +37,11 @@ export interface CreateLayerInput {
   parkedNote?: string | null;
 }
 
-export function createLayer(input: CreateLayerInput): Layer {
+export async function createLayer(input: CreateLayerInput): Promise<Layer> {
   const db = getDb();
   const ts = nowIso();
   const id = newId('lyr');
-  db.run(
+  await db.run(
     `INSERT INTO layers (id, project_id, slug, name, order_index, status, status_source,
        current_wave, expected_versions, parked, parked_note, notes, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, 'NOT_STARTED', 'DERIVED', ?, ?, ?, ?, ?, ?, ?)`,
@@ -49,22 +49,21 @@ export function createLayer(input: CreateLayerInput): Layer {
       input.currentWave ?? 1, toJson(input.expectedVersions ?? []), fromBool(input.parked),
       input.parkedNote ?? null, input.notes ?? null, ts, ts],
   );
-  return getLayer(id)!;
+  return (await getLayer(id))!;
 }
 
-export function listLayers(projectId: string): Layer[] {
-  return getDb()
-    .all<LayerRow>('SELECT * FROM layers WHERE project_id = ? ORDER BY order_index', [projectId])
+export async function listLayers(projectId: string): Promise<Layer[]> {
+  return (await getDb().all<LayerRow>('SELECT * FROM layers WHERE project_id = ? ORDER BY order_index', [projectId]))
     .map(mapLayer);
 }
 
-export function getLayer(id: string): Layer | null {
-  const row = getDb().get<LayerRow>('SELECT * FROM layers WHERE id = ?', [id]);
+export async function getLayer(id: string): Promise<Layer | null> {
+  const row = await getDb().get<LayerRow>('SELECT * FROM layers WHERE id = ?', [id]);
   return row ? mapLayer(row) : null;
 }
 
-export function getLayerBySlug(projectId: string, slug: string): Layer | null {
-  const row = getDb().get<LayerRow>('SELECT * FROM layers WHERE project_id = ? AND slug = ?', [
+export async function getLayerBySlug(projectId: string, slug: string): Promise<Layer | null> {
+  const row = await getDb().get<LayerRow>('SELECT * FROM layers WHERE project_id = ? AND slug = ?', [
     projectId,
     slug,
   ]);
@@ -87,7 +86,7 @@ export interface UpdateLayerInput {
   orderIndex?: number;
 }
 
-export function updateLayer(id: string, patch: UpdateLayerInput): Layer | null {
+export async function updateLayer(id: string, patch: UpdateLayerInput): Promise<Layer | null> {
   const { clause, values } = buildUpdate({
     name: patch.name,
     status: patch.status,
@@ -104,7 +103,7 @@ export function updateLayer(id: string, patch: UpdateLayerInput): Layer | null {
     order_index: patch.orderIndex,
   });
   if (!clause) return getLayer(id);
-  getDb().run(`UPDATE layers SET ${clause}, updated_at = ? WHERE id = ?`, [
+  await getDb().run(`UPDATE layers SET ${clause}, updated_at = ? WHERE id = ?`, [
     ...(values as never[]),
     nowIso(),
     id,

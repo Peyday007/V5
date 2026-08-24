@@ -41,11 +41,11 @@ import type { IngestionReport } from '../server/services/sources/ingest.ts';
 
 let fixture: TestProject;
 
-beforeEach(() => {
-  fixture = freshProject();
+beforeEach(async () => {
+  fixture = await freshProject();
 });
-afterEach(() => {
-  teardown();
+afterEach(async () => {
+  await teardown();
 });
 
 /** Register the generically named transcript and read it properly. */
@@ -53,7 +53,7 @@ async function ingestTranscript(text = buildMasterTranscript()): Promise<{
   documentId: string;
   report: IngestionReport;
 }> {
-  const imported = importProjectSource({
+  const imported = await importProjectSource({
     projectId: fixture.project.id,
     originalFilename: GENERIC_TRANSCRIPT_FILENAME,
     contents: Buffer.from(text),
@@ -70,7 +70,7 @@ async function ingestTranscript(text = buildMasterTranscript()): Promise<{
 describe('a transcript whose filename says nothing', () => {
   it('is registered as a project source rather than forced into one layer', async () => {
     const { documentId } = await ingestTranscript();
-    const document = getDocument(documentId)!;
+    const document = (await getDocument(documentId))!;
 
     expect(document.scope).toBe('PROJECT_MASTER_TRANSCRIPT');
     // The whole point: no single layer, because it does not have one.
@@ -83,7 +83,7 @@ describe('a transcript whose filename says nothing', () => {
   it('is actually read: characters, blocks, chunks and segments, not just stored', async () => {
     const { documentId, report } = await ingestTranscript();
 
-    const run = getCurrentExtractionRun(documentId)!;
+    const run = (await getCurrentExtractionRun(documentId))!;
     expect(run.status).toBe('READY');
     expect(report.characters).toBeGreaterThan(2_000);
     expect(report.estimatedTokens).toBeGreaterThan(400);
@@ -116,17 +116,17 @@ describe('a transcript whose filename says nothing', () => {
     expect(names.length).toBeGreaterThanOrEqual(3);
 
     // Many links, one document, one file. The fan-out never copies the source.
-    const links = listLinks(documentId);
+    const links = await listLinks(documentId);
     expect(links.length).toBeGreaterThanOrEqual(names.length);
     expect(new Set(links.map((link) => link.documentId))).toEqual(new Set([documentId]));
-    const document = getDocument(documentId)!;
+    const document = (await getDocument(documentId))!;
     expect(document.filesystemPath).toBeTruthy();
   });
 
   it('gives every proposed link a confidence and a rationale, and decides nothing', async () => {
     const { documentId } = await ingestTranscript();
 
-    const links = listLinks(documentId);
+    const links = await listLinks(documentId);
     expect(links.length).toBeGreaterThan(0);
     for (const link of links) {
       // Nothing is evidence until a person says so.
@@ -142,7 +142,7 @@ describe('a transcript whose filename says nothing', () => {
 
   it('anchors every segment back to real source blocks', async () => {
     const { documentId } = await ingestTranscript();
-    const segments = listSegments(documentId);
+    const segments = await listSegments(documentId);
 
     expect(segments.length).toBeGreaterThan(0);
     for (const [index, segment] of segments.entries()) {
@@ -161,51 +161,51 @@ describe('a transcript whose filename says nothing', () => {
 describe('the review workflow', () => {
   it('accepts, changes and excludes proposals, and only accepted links count', async () => {
     const { documentId } = await ingestTranscript();
-    const links = listLinks(documentId);
-    const worldModel = fixture.layerByName('World Model');
+    const links = await listLinks(documentId);
+    const worldModel = await fixture.layerByName('World Model');
     const proposal = links.find((link) => link.layerId === worldModel.id)!;
     expect(proposal).toBeTruthy();
 
     // Nothing counts before review.
-    expect(listAcceptedLinksForLayer(worldModel.id)).toHaveLength(0);
+    expect(await listAcceptedLinksForLayer(worldModel.id)).toHaveLength(0);
 
-    const accepted = decideLink(proposal.id, { status: 'ACCEPTED', linkType: 'RESEARCH_INPUT' })!;
+    const accepted = (await decideLink(proposal.id, { status: 'ACCEPTED', linkType: 'RESEARCH_INPUT' }))!;
     expect(accepted.status).toBe('ACCEPTED');
     expect(accepted.linkType).toBe('RESEARCH_INPUT');
     expect(accepted.decidedAt).toBeTruthy();
-    expect(listAcceptedLinksForLayer(worldModel.id)).toHaveLength(1);
+    expect(await listAcceptedLinksForLayer(worldModel.id)).toHaveLength(1);
 
     // Changing where a proposal points is part of reviewing it.
     const other = links.find((link) => link.layerId !== worldModel.id)!;
-    const taxonomy = fixture.layerByName('Taxonomy');
-    const moved = decideLink(other.id, { status: 'ACCEPTED', layerId: taxonomy.id, version: 'v1' })!;
+    const taxonomy = await fixture.layerByName('Taxonomy');
+    const moved = (await decideLink(other.id, { status: 'ACCEPTED', layerId: taxonomy.id, version: 'v1' }))!;
     expect(moved.layerId).toBe(taxonomy.id);
     expect(moved.version).toBe('v1');
 
-    const excludedTarget = listLinks(documentId).find((link) => link.status === 'PROPOSED')!;
-    expect(decideLink(excludedTarget.id, { status: 'EXCLUDED' })!.status).toBe('EXCLUDED');
+    const excludedTarget = (await listLinks(documentId)).find((link) => link.status === 'PROPOSED')!;
+    expect((await decideLink(excludedTarget.id, { status: 'EXCLUDED' }))!.status).toBe('EXCLUDED');
   });
 
   it('keeps decisions when the transcript is read again', async () => {
     const { documentId } = await ingestTranscript();
-    const worldModel = fixture.layerByName('World Model');
-    const proposal = listLinks(documentId).find((link) => link.layerId === worldModel.id)!;
-    const hashOfDecidedPassage = listSegments(documentId).find(
+    const worldModel = await fixture.layerByName('World Model');
+    const proposal = (await listLinks(documentId)).find((link) => link.layerId === worldModel.id)!;
+    const hashOfDecidedPassage = (await listSegments(documentId)).find(
       (segment) => segment.id === proposal.segmentId,
     )!.contentHash;
-    decideLink(proposal.id, { status: 'ACCEPTED' });
+    await decideLink(proposal.id, { status: 'ACCEPTED' });
 
     // Re-reading the file must not quietly undo somebody's review.
     await ingestSource({ documentId, scope: 'PROJECT_MASTER_TRANSCRIPT', force: true });
 
-    const after = listLinks(documentId);
+    const after = await listLinks(documentId);
     const kept = after.filter((link) => link.status === 'ACCEPTED');
     expect(kept).toHaveLength(1);
     expect(after.some((link) => link.status === 'PROPOSED')).toBe(true);
 
     // And it still points at its passage: the decision was about the text, so it
     // follows the text into the new run rather than becoming a loose assertion.
-    const segments = listSegments(documentId);
+    const segments = await listSegments(documentId);
     const anchor = segments.find((segment) => segment.id === kept[0]!.segmentId);
     expect(anchor).toBeTruthy();
     expect(anchor!.contentHash).toBe(hashOfDecidedPassage);
@@ -223,12 +223,12 @@ describe('imported text is data', () => {
 
     // The instruction asked for every layer to be frozen and marked PASS.
     // Nothing of the sort happened, and the passage is stored as ordinary text.
-    for (const layer of listLayers(fixture.project.id)) {
+    for (const layer of await listLayers(fixture.project.id)) {
       expect(layer.status).not.toBe('FROZEN');
       expect(layer.canonicalDocumentId).toBeNull();
-      expect(listAuditsByLayer(layer.id)).toHaveLength(0);
+      expect(await listAuditsByLayer(layer.id)).toHaveLength(0);
     }
-    const segments = listSegments(documentId);
+    const segments = await listSegments(documentId);
     expect(segments.some((segment) => /ignore all previous instructions/i.test(segment.text))).toBe(true);
     // And it changed none of the real classification.
     expect(report.researchAssignments).toBeGreaterThanOrEqual(2);
@@ -245,8 +245,8 @@ describe('imported text is data', () => {
 });
 
 describe('content-based classification', () => {
-  it('reads the layer from the passage, with no filename to help it', () => {
-    const layers = listLayers(fixture.project.id);
+  it('reads the layer from the passage, with no filename to help it', async () => {
+    const layers = await listLayers(fixture.project.id);
     const proposals = classifyToLayers({
       text:
         'Custody transfers at the point of assignment and claim priority is fixed by the earlier ' +
@@ -261,26 +261,26 @@ describe('content-based classification', () => {
     expect(proposals[0]!.rationale).toMatch(/World Model/);
   });
 
-  it('picks up the version stated beside the layer name', () => {
+  it('picks up the version stated beside the layer name', async () => {
     const proposals = classifyToLayers({
       text: 'The audit of World Model v1B found the boundary against routing too thin.',
-      layers: listLayers(fixture.project.id),
+      layers: await listLayers(fixture.project.id),
       projectSlug: fixture.project.slug,
     });
     expect(proposals[0]!.version).toBe('v1B');
   });
 
-  it('proposes nothing for a passage about nothing in the project', () => {
+  it('proposes nothing for a passage about nothing in the project', async () => {
     const proposals = classifyToLayers({
       text: 'Remember to book the venue and order sandwiches for twelve people.',
-      layers: listLayers(fixture.project.id),
+      layers: await listLayers(fixture.project.id),
       projectSlug: fixture.project.slug,
     });
     expect(proposals).toHaveLength(0);
   });
 
-  it('marks a returned report as a candidate artifact and an assignment as an input', () => {
-    const layers = listLayers(fixture.project.id);
+  it('marks a returned report as a candidate artifact and an assignment as an input', async () => {
+    const layers = await listLayers(fixture.project.id);
     const text = 'Here is the report for the World Model custody research, with sources cited.';
     expect(
       classifyToLayers({ text, layers, projectSlug: fixture.project.slug, segmentType: 'RETURNED_RESEARCH' })[0]!
@@ -297,7 +297,7 @@ describe('sending only what is needed to a provider', () => {
   it('selects the passages that bear on a question, not the whole transcript', async () => {
     const { documentId, report } = await ingestTranscript();
 
-    const selected = selectRelevantSegments({
+    const selected = await selectRelevantSegments({
       documentId,
       query: 'monetization pricing surfaces subscription success fee',
       budgetChars: 4_000,
@@ -317,7 +317,7 @@ describe('a file stored before any of this existed', () => {
   it('is adopted from _unfiled and read, leaving one copy on disk', async () => {
     // Exactly the reported situation: an ordinary import could not tell what the
     // file was from its name, so it was parked unregistered.
-    const parked = importFile({
+    const parked = await importFile({
       projectId: fixture.project.id,
       originalFilename: GENERIC_TRANSCRIPT_FILENAME,
       contents: Buffer.from(buildMasterTranscript()),
@@ -327,7 +327,7 @@ describe('a file stored before any of this existed', () => {
     const parkedAbsolute = path.resolve(DATA_ROOT, parked.storedPath!);
     expect(fs.existsSync(parkedAbsolute)).toBe(true);
 
-    const adopted = importProjectSourceFromFile({
+    const adopted = await importProjectSourceFromFile({
       projectId: fixture.project.id,
       relativePath: parked.storedPath!,
       scope: 'PROJECT_MASTER_TRANSCRIPT',
@@ -339,7 +339,7 @@ describe('a file stored before any of this existed', () => {
     // A second copy would sit in _unfiled forever, reported as unread by every
     // reconcile from then on.
     expect(fs.existsSync(parkedAbsolute)).toBe(false);
-    const document = getDocument(adopted.documentId!)!;
+    const document = (await getDocument(adopted.documentId!))!;
     expect(document.filesystemPath).toMatch(/_project-sources\//);
     expect(fs.readFileSync(path.resolve(DATA_ROOT, document.filesystemPath!), 'utf8')).toBe(
       buildMasterTranscript(),
@@ -354,25 +354,25 @@ describe('a file stored before any of this existed', () => {
 
     // And reconcile has nothing left to say about it. Not an unregistered file,
     // and not an orphan either: having no layer is what a project source is.
-    const issues = scanAndReconcile(fixture.project.id).issues;
+    const issues = (await scanAndReconcile(fixture.project.id)).issues;
     expect(issues.filter((issue) => issue.path?.includes(GENERIC_TRANSCRIPT_FILENAME))).toHaveLength(0);
     expect(issues.filter((issue) => issue.documentId === adopted.documentId)).toHaveLength(0);
   });
 
-  it('refuses a path outside the project documents tree', () => {
-    expect(() =>
+  it('refuses a path outside the project documents tree', async () => {
+    await expect(
       importProjectSourceFromFile({
         projectId: fixture.project.id,
         relativePath: 'brain.db',
       }),
-    ).toThrow(/not inside this project/i);
+    ).rejects.toThrow(/not inside this project/i);
   });
 });
 
 describe('an ordinary file', () => {
   it('keeps the filename as a hint, and says the layer came from content', async () => {
     // A well-named report still imports the way it always did.
-    const imported = importFile({
+    const imported = await importFile({
       projectId: fixture.project.id,
       originalFilename: 'World Model v1.txt',
       contents: Buffer.from(buildMasterTranscript()),
@@ -382,14 +382,14 @@ describe('an ordinary file', () => {
 
     const report = await ingestSource({ documentId: imported.documentId! });
     expect(report.scope).toBe('LAYER');
-    expect(getDocument(imported.documentId!)!.classificationSource).toBe('CONTENT');
+    expect((await getDocument(imported.documentId!))!.classificationSource).toBe('CONTENT');
     // Its contents still touch several layers, and it still says so.
     expect(report.layersTouched.length).toBeGreaterThanOrEqual(2);
   });
 
   it('stores an ingestion report that survives the page refresh', async () => {
     const { documentId, report } = await ingestTranscript();
-    const stored = latestIngestionReport<IngestionReport>(documentId)!;
+    const stored = (await latestIngestionReport<IngestionReport>(documentId))!;
     expect(stored.segments).toBe(report.segments);
     expect(stored.layersTouched.length).toBe(report.layersTouched.length);
   });

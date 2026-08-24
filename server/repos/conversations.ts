@@ -32,41 +32,40 @@ function mapMessage(row: MessageRow): Message {
   };
 }
 
-export function createConversation(input: {
+export async function createConversation(input: {
   projectId: string;
   title: string;
   layerId?: string | null;
   runId?: string | null;
   providerConversationId?: string | null;
-}): Conversation {
+}): Promise<Conversation> {
   const ts = nowIso();
   const id = newId('cnv');
-  getDb().run(
+  await getDb().run(
     `INSERT INTO conversations (id, project_id, layer_id, run_id, title, provider_conversation_id, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, input.projectId, input.layerId ?? null, input.runId ?? null, input.title,
       input.providerConversationId ?? null, ts, ts],
   );
-  return getConversation(id)!;
+  return (await getConversation(id))!;
 }
 
-export function getConversation(id: string): Conversation | null {
-  const row = getDb().get<ConversationRow>('SELECT * FROM conversations WHERE id = ?', [id]);
+export async function getConversation(id: string): Promise<Conversation | null> {
+  const row = await getDb().get<ConversationRow>('SELECT * FROM conversations WHERE id = ?', [id]);
   return row ? mapConversation(row) : null;
 }
 
-export function listConversations(projectId: string): Conversation[] {
-  return getDb()
-    .all<ConversationRow>(
+export async function listConversations(projectId: string): Promise<Conversation[]> {
+  return (await getDb().all<ConversationRow>(
       'SELECT * FROM conversations WHERE project_id = ? ORDER BY updated_at DESC',
       [projectId],
-    )
+    ))
     .map(mapConversation);
 }
 
 /** The single always-on project chat, created on first use. */
-export function getOrCreateMainConversation(projectId: string): Conversation {
-  const row = getDb().get<ConversationRow>(
+export async function getOrCreateMainConversation(projectId: string): Promise<Conversation> {
+  const row = await getDb().get<ConversationRow>(
     "SELECT * FROM conversations WHERE project_id = ? AND run_id IS NULL AND title = 'Project Chat' LIMIT 1",
     [projectId],
   );
@@ -74,29 +73,28 @@ export function getOrCreateMainConversation(projectId: string): Conversation {
   return createConversation({ projectId, title: 'Project Chat' });
 }
 
-export function addMessage(input: {
+export async function addMessage(input: {
   conversationId: string;
   role: MessageRole;
   content: string;
   metadata?: Record<string, unknown>;
-}): Message {
+}): Promise<Message> {
   const ts = nowIso();
   const id = newId('msg');
   const db = getDb();
-  db.run(
+  await db.run(
     `INSERT INTO messages (id, conversation_id, role, content, metadata, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
     [id, input.conversationId, input.role, input.content, toJson(input.metadata ?? {}), ts],
   );
-  db.run('UPDATE conversations SET updated_at = ? WHERE id = ?', [ts, input.conversationId]);
-  return db.all<MessageRow>('SELECT * FROM messages WHERE id = ?', [id]).map(mapMessage)[0]!;
+  await db.run('UPDATE conversations SET updated_at = ? WHERE id = ?', [ts, input.conversationId]);
+  return (await db.all<MessageRow>('SELECT * FROM messages WHERE id = ?', [id])).map(mapMessage)[0]!;
 }
 
-export function listMessages(conversationId: string, limit = 500): Message[] {
-  return getDb()
-    .all<MessageRow>(
+export async function listMessages(conversationId: string, limit = 500): Promise<Message[]> {
+  return (await getDb().all<MessageRow>(
       'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at, rowid LIMIT ?',
       [conversationId, limit],
-    )
+    ))
     .map(mapMessage);
 }

@@ -79,13 +79,13 @@ function setEnv(key: string, value: string | undefined): void {
   setOcrEngine(null);
 }
 
-beforeEach(() => {
-  fixture = freshProject();
+beforeEach(async () => {
+  fixture = await freshProject();
   workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-ocrtest-'));
   setOcrEngine(null);
 });
 
-afterEach(() => {
+afterEach(async () => {
   for (const [key, value] of Object.entries(savedEnv)) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
@@ -93,19 +93,19 @@ afterEach(() => {
   }
   setOcrEngine(null);
   fs.rmSync(workDir, { recursive: true, force: true });
-  teardown();
+  await teardown();
 });
 
 /** Import a scanned fixture and read it to completion. */
 async function importScan(name: string, filename: string): Promise<Document> {
-  const result = importFile({
+  const result = await importFile({
     projectId: fixture.project.id,
     originalFilename: filename,
     contents: scan(name),
   });
   expect(result.documentId).toBeTruthy();
   await whenExtractionIdle();
-  return getDocument(result.documentId!)!;
+  return (await getDocument(result.documentId!))!;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +196,7 @@ describe('the local OCR runtime', () => {
 withOcr('a real scanned PDF', () => {
   it('is read page by page, with the engine and image recorded', async () => {
     const document = await importScan('scanned-multipage', 'World Model v1.pdf');
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
 
     expect(run.status).toBe('READY_WITH_WARNINGS');
     expect(run.pagesExpected).toBe(3);
@@ -224,7 +224,7 @@ withOcr('a real scanned PDF', () => {
     // Each page is a different picture, so each has a different identity.
     expect(new Set(run.ocrPages.map((record) => record.imageHash)).size).toBe(3);
 
-    const text = listBlocks(run.id)
+    const text = (await listBlocks(run.id))
       .map((block) => block.normalizedText)
       .join(' ');
     expect(text).toMatch(/custody/i);
@@ -233,7 +233,7 @@ withOcr('a real scanned PDF', () => {
 
   it('gives every recognised block a page, a box, a confidence and a warning', async () => {
     const document = await importScan('scanned-multipage', 'World Model v1.pdf');
-    const blocks = listBlocks(getCurrentExtractionRun(document.id)!.id);
+    const blocks = await listBlocks((await getCurrentExtractionRun(document.id))!.id);
 
     expect(blocks.length).toBeGreaterThan(0);
     expect(new Set(blocks.map((block) => block.pageNumber))).toEqual(new Set([1, 2, 3]));
@@ -253,11 +253,11 @@ withOcr('a real scanned PDF', () => {
 
   it('reads a page the scanner fed in sideways', async () => {
     const document = await importScan('rotated', 'World Model v1.pdf');
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
 
     expect(run.pagesOcr).toBe(1);
     expect(run.pagesReadable).toBe(1);
-    const text = listBlocks(run.id).map((block) => block.normalizedText).join(' ');
+    const text = (await listBlocks(run.id)).map((block) => block.normalizedText).join(' ');
     expect(text).toMatch(/custody/i);
     expect(text).toMatch(/priority/i);
     // The rendered page is landscape, and the record says so.
@@ -267,7 +267,7 @@ withOcr('a real scanned PDF', () => {
 
   it('keeps the structure of a scanned page: heading, paragraphs and a list', async () => {
     const document = await importScan('structured-scan', 'Qualification Logic v1.pdf');
-    const blocks = listBlocks(getCurrentExtractionRun(document.id)!.id);
+    const blocks = await listBlocks((await getCurrentExtractionRun(document.id))!.id);
     const types = blocks.map((block) => block.blockType);
 
     expect(types).toContain('HEADING');
@@ -281,7 +281,7 @@ withOcr('a real scanned PDF', () => {
 withOcr('a PDF that mixes native text and scans', () => {
   it('OCRs only the scanned page and labels each page by method', async () => {
     const document = await importScan('mixed-native-scanned', 'World Model v1.pdf');
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
 
     expect(run.pagesExpected).toBe(3);
     expect(run.pagesReadable).toBe(3);
@@ -291,7 +291,7 @@ withOcr('a PDF that mixes native text and scans', () => {
     expect(run.ocrPages.map((record) => record.page)).toEqual([2]);
 
     const byPage = new Map<number, Set<string>>();
-    for (const block of listBlocks(run.id)) {
+    for (const block of await listBlocks(run.id)) {
       byPage.set(
         block.pageNumber,
         (byPage.get(block.pageNumber) ?? new Set()).add(block.extractionMethod),
@@ -310,7 +310,7 @@ withOcr('a PDF that mixes native text and scans', () => {
 withOcr('a scan too poor to trust', () => {
   it('is BLOCKED, with the confidence that caused it stated', async () => {
     const document = await importScan('low-resolution', 'World Model v1.pdf');
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
 
     // It produced characters — that is exactly why the check matters. A document
     // must not become READY merely because OCR returned something.
@@ -321,13 +321,13 @@ withOcr('a scan too poor to trust', () => {
     expect(run.blockedReason).toMatch(/confidence below/i);
     expect(run.blockedReason).toMatch(/rescan/i);
     expect(run.warnings.some((warning) => /low confidence/i.test(warning))).toBe(true);
-    expect(getDocument(document.id)!.extractionStatus).toBe('BLOCKED');
+    expect((await getDocument(document.id))!.extractionStatus).toBe('BLOCKED');
   }, 60_000);
 
   it('is BLOCKED when there is nothing on the page to read', async () => {
     setEnv('BRAIN_OCR_DPI', '150');
     const document = await importScan('unreadable-scan', 'World Model v1.pdf');
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
 
     expect(run.status).toBe('BLOCKED');
     expect(run.pagesOcr).toBe(0);
@@ -377,7 +377,7 @@ describe('when the OCR runtime cannot do its job', () => {
     setEnv('BRAIN_TESSERACT_PATH', path.join(workDir, 'missing'));
 
     const document = await importScan('scanned-multipage', 'World Model v1.pdf');
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
 
     expect(run.status).toBe('BLOCKED');
     expect(run.pagesOcr).toBe(0);
@@ -385,13 +385,13 @@ describe('when the OCR runtime cannot do its job', () => {
     expect(run.ocrPages.map((record) => record.page)).toEqual([1, 2, 3]);
     expect(run.ocrPages.every((record) => record.ok === false)).toBe(true);
     expect(run.warnings.join(' ')).toMatch(/not installed/i);
-    expect(listBlocks(run.id)).toHaveLength(0);
+    expect(await listBlocks(run.id)).toHaveLength(0);
   }, 60_000);
 
   it('blocks the document when the page renderer fails', async () => {
     useFakes({ renderer: 'fail' });
     const document = await importScan('scanned-multipage', 'World Model v1.pdf');
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
 
     expect(run.status).toBe('BLOCKED');
     expect(run.pagesOcr).toBe(0);
@@ -402,7 +402,7 @@ describe('when the OCR runtime cannot do its job', () => {
   it('blocks the document when the renderer produces no image', async () => {
     useFakes({ renderer: 'empty' });
     const document = await importScan('scanned-multipage', 'World Model v1.pdf');
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
 
     expect(run.status).toBe('BLOCKED');
     expect(run.warnings.join(' ')).toMatch(/produced no image/i);
@@ -411,7 +411,7 @@ describe('when the OCR runtime cannot do its job', () => {
   it('blocks the document when the recogniser exits non-zero', async () => {
     useFakes({ recognizer: 'fail' });
     const document = await importScan('scanned-multipage', 'World Model v1.pdf');
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
 
     expect(run.status).toBe('BLOCKED');
     expect(run.pagesOcr).toBe(0);
@@ -425,7 +425,7 @@ describe('when the OCR runtime cannot do its job', () => {
     setEnv('BRAIN_OCR_TIMEOUT_MS', '5000');
 
     const document = await importScan('scanned-multipage', 'World Model v1.pdf');
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
 
     expect(run.status).toBe('BLOCKED');
     expect(run.warnings.join(' ')).toMatch(/timed out/i);
@@ -437,17 +437,17 @@ describe('when the OCR runtime cannot do its job', () => {
   it('never advances, audits or freezes a layer on a failed reading', async () => {
     useFakes({ renderer: 'fail' });
     const document = await importScan('scanned-multipage', 'World Model v1.pdf');
-    expect(getCurrentExtractionRun(document.id)!.status).toBe('BLOCKED');
+    expect((await getCurrentExtractionRun(document.id))!.status).toBe('BLOCKED');
 
     // Registering the document is supposed to move state; the failed reading is
     // not, so what must be untouched is everything a verdict would have changed.
-    const state = computeLayerState(document.layerId!);
+    const state = await computeLayerState(document.layerId!);
     expect(state.frozen).toBe(false);
     expect(state.latestAuditVerdict).toBeNull();
     expect(state.status).not.toBe('FROZEN');
     expect(state.status).not.toBe('SYNTHESIS_READY');
     expect(
-      listEventsByLayer(document.layerId!).some((event) => event.eventType.startsWith('LAYER_FROZEN')),
+      (await listEventsByLayer(document.layerId!)).some((event) => event.eventType.startsWith('LAYER_FROZEN')),
     ).toBe(false);
   }, 60_000);
 });
@@ -459,25 +459,25 @@ describe('when the OCR runtime cannot do its job', () => {
 withOcr('an OCR reading', () => {
   it('is superseded, not overwritten, when the document is reprocessed', async () => {
     const document = await importScan('structured-scan', 'Qualification Logic v1.pdf');
-    const first = getCurrentExtractionRun(document.id)!;
+    const first = (await getCurrentExtractionRun(document.id))!;
     expect(first.pagesOcr).toBe(1);
 
     const again = await enqueueExtraction(document.id, { force: true });
     expect(again.run.id).not.toBe(first.id);
 
-    const history = listExtractionRuns(document.id);
+    const history = await listExtractionRuns(document.id);
     expect(history).toHaveLength(2);
     expect(history.find((run) => run.id === first.id)!.supersededByRunId).toBe(again.run.id);
     // The old reading keeps its blocks and its provenance, so an audit recorded
     // against it still resolves to the text it actually read.
-    expect(listBlocks(first.id).length).toBeGreaterThan(0);
-    expect(getCurrentExtractionRun(document.id)!.ocrPages).toHaveLength(1);
+    expect((await listBlocks(first.id)).length).toBeGreaterThan(0);
+    expect((await getCurrentExtractionRun(document.id))!.ocrPages).toHaveLength(1);
   }, 90_000);
 
   it('resolves a citation back to the page it was recognised from', async () => {
     const document = await importScan('scanned-multipage', 'World Model v1.pdf');
 
-    const retrieved = retrieveEvidence({
+    const retrieved = await retrieveEvidence({
       documentIds: [document.id],
       query: 'custody assignment claim priority',
     });
@@ -487,7 +487,7 @@ withOcr('an OCR reading', () => {
     const passage = retrieved.passages[0]!;
     expect(passage.fromOcr).toBe(true);
 
-    const resolved = resolveCitation(passage.chunkId)!;
+    const resolved = (await resolveCitation(passage.chunkId))!;
     expect(resolved.document.id).toBe(document.id);
     expect(resolved.blocks.length).toBeGreaterThan(0);
     const pages = resolved.blocks.map((block) => block.pageNumber);
@@ -498,19 +498,19 @@ withOcr('an OCR reading', () => {
 
   it('is marked INTERRUPTED, never ready, when the process dies mid-recognition', async () => {
     const document = await importScan('structured-scan', 'Qualification Logic v1.pdf');
-    const run = createExtractionRun({
+    const run = await createExtractionRun({
       documentId: document.id,
       projectId: document.projectId,
       pipelineVersion: 'doc-understanding-1',
       status: 'OCR',
     });
-    updateDocument(document.id, { extractionStatus: 'OCR', extractionRunId: run.id });
+    await updateDocument(document.id, { extractionStatus: 'OCR', extractionRunId: run.id });
 
-    expect(recoverInterruptedExtractions()).toBe(1);
-    const recovered = getCurrentExtractionRun(document.id)!;
+    expect(await recoverInterruptedExtractions()).toBe(1);
+    const recovered = (await getCurrentExtractionRun(document.id))!;
     expect(recovered.status).toBe('INTERRUPTED');
     expect(recovered.error).toMatch(/interrupted/i);
-    expect(getDocument(document.id)!.extractionStatus).toBe('INTERRUPTED');
+    expect((await getDocument(document.id))!.extractionStatus).toBe('INTERRUPTED');
   }, 60_000);
 });
 
@@ -572,7 +572,7 @@ withOcr('an audit of a scanned document', () => {
   it('reads the recognised text, and the manifest says it was recognised', async () => {
     const document = await importScan('scanned-multipage', 'World Model v1.pdf');
 
-    const context = buildAuditContext({
+    const context = await buildAuditContext({
       mode: 'SINGLE_DOCUMENT',
       layerId: document.layerId!,
       documentId: document.id,
@@ -599,7 +599,7 @@ withOcr('an audit of a scanned document', () => {
   it('is refused outright when the scan could not be read', async () => {
     setEnv('BRAIN_OCR_DPI', '150');
     const document = await importScan('unreadable-scan', 'World Model v1.pdf');
-    expect(getCurrentExtractionRun(document.id)!.status).toBe('BLOCKED');
+    expect((await getCurrentExtractionRun(document.id))!.status).toBe('BLOCKED');
 
     await expect(
       runDynamicAudit({
@@ -611,7 +611,7 @@ withOcr('an audit of a scanned document', () => {
     ).rejects.toBeInstanceOf(AuditFailure);
 
     // Nothing was recorded, and the layer did not move.
-    const state = computeLayerState(document.layerId!);
+    const state = await computeLayerState(document.layerId!);
     expect(state.latestAuditVerdict).toBeNull();
   }, 90_000);
 });

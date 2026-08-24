@@ -216,19 +216,19 @@ export interface ReplanResult {
  * was about to be rejected would move project state on the strength of claims
  * the platform does not accept.
  */
-export function reconcileAcceptedFragment(input: {
+export async function reconcileAcceptedFragment(input: {
   orchestrationId: string;
   projectId: string;
   fragment: ResearchFragment;
-}): ReplanResult {
-  const archive = listExistingClaims(input.projectId);
-  const claims = listClaimsForFragment(input.fragment.id);
+}): Promise<ReplanResult> {
+  const archive = await listExistingClaims(input.projectId);
+  const claims = await listClaimsForFragment(input.fragment.id);
   const findings: FindingOutcome[] = [];
   const contradictionsToResolve: ReplanResult['contradictionsToResolve'] = [];
 
   for (const claim of claims) {
     const finding = classifyFinding(claim, archive);
-    recordClaimReconciliation(claim.id, {
+    await recordClaimReconciliation(claim.id, {
       outcome: finding.outcome,
       againstClaimId: finding.againstClaimId,
       contradictionKind: finding.contradiction?.kind ?? null,
@@ -248,8 +248,8 @@ export function reconcileAcceptedFragment(input: {
     }
   }
 
-  const requirements = listRequirements(input.orchestrationId);
-  const requirementsUpdated = updateCoverageFromFragment({
+  const requirements = await listRequirements(input.orchestrationId);
+  const requirementsUpdated = await updateCoverageFromFragment({
     orchestrationId: input.orchestrationId,
     fragment: input.fragment,
     claims: claims.filter((claim) => claim.accepted),
@@ -257,7 +257,7 @@ export function reconcileAcceptedFragment(input: {
     unresolvedContradictions: contradictionsToResolve.length,
   });
 
-  const cancelledFragments = cancelUnnecessaryWork({
+  const cancelledFragments = await cancelUnnecessaryWork({
     orchestrationId: input.orchestrationId,
     satisfied: requirementsUpdated,
     keepFragmentId: input.fragment.id,
@@ -273,16 +273,16 @@ export function reconcileAcceptedFragment(input: {
  * its bar — an unresolved contradiction keeps it open however many claims came
  * back, because a requirement answered two contradictory ways is not answered.
  */
-function updateCoverageFromFragment(input: {
+async function updateCoverageFromFragment(input: {
   orchestrationId: string;
   fragment: ResearchFragment;
   claims: ResearchClaim[];
   requirements: Requirement[];
   unresolvedContradictions: number;
-}): string[] {
+}): Promise<string[]> {
   const updated: string[] = [];
   const existingCoverage = new Map(
-    listCoverage(input.orchestrationId).map((entry) => [entry.requirementId, entry]),
+    (await listCoverage(input.orchestrationId)).map((entry) => [entry.requirementId, entry]),
   );
 
   for (const requirementId of input.fragment.requirementIds) {
@@ -295,7 +295,7 @@ function updateCoverageFromFragment(input: {
     const carriedClaimIds = [...new Set([...(previous?.claimIds ?? []), ...claimIds])];
 
     if (input.unresolvedContradictions > 0) {
-      upsertCoverage({
+      await upsertCoverage({
         orchestrationId: input.orchestrationId,
         requirementId,
         status: 'CONTRADICTED',
@@ -316,7 +316,7 @@ function updateCoverageFromFragment(input: {
     if (claimIds.length === 0) continue;
 
     const enough = independent >= input.fragment.minIndependentSources;
-    upsertCoverage({
+    await upsertCoverage({
       orchestrationId: input.orchestrationId,
       requirementId,
       status: enough ? 'SATISFIED' : 'PARTIALLY_SATISFIED',
@@ -349,21 +349,21 @@ function updateCoverageFromFragment(input: {
  * now satisfied. A fragment that is already running is left alone: killing work
  * mid-flight to save a slice of quota loses more than it saves.
  */
-function cancelUnnecessaryWork(input: {
+async function cancelUnnecessaryWork(input: {
   orchestrationId: string;
   satisfied: string[];
   keepFragmentId: string;
-}): { fragmentKey: string; reason: string }[] {
+}): Promise<{ fragmentKey: string; reason: string }[]> {
   if (input.satisfied.length === 0) return [];
   const satisfiedNow = new Set(
-    listCoverage(input.orchestrationId)
+    (await listCoverage(input.orchestrationId))
       .filter((entry) => entry.status === 'SATISFIED' && !entry.needsResearch)
       .map((entry) => entry.requirementId),
   );
   if (satisfiedNow.size === 0) return [];
 
   const cancelled: { fragmentKey: string; reason: string }[] = [];
-  for (const fragment of currentFragments(input.orchestrationId)) {
+  for (const fragment of await currentFragments(input.orchestrationId)) {
     if (fragment.id === input.keepFragmentId) continue;
     if (fragment.status !== 'QUEUED' && fragment.status !== 'PLANNED') continue;
     if (fragment.requirementIds.length === 0) continue;
@@ -373,7 +373,7 @@ function cancelUnnecessaryWork(input: {
       'Cancelled before it ran: the requirements it was planned for are now established by ' +
       'accepted evidence, so researching them again would spend the allowance on a question ' +
       'that already has an answer.';
-    updateFragment(fragment.id, {
+    await updateFragment(fragment.id, {
       status: 'CANCELLED',
       cancelledReason: reason,
       blockedReason: reason,
@@ -393,15 +393,15 @@ function cancelUnnecessaryWork(input: {
  * same question, because a contradiction that regenerates its own fragment
  * every round is how a run stops terminating.
  */
-export function planContradictionFragments(input: {
+export async function planContradictionFragments(input: {
   orchestrationId: string;
   parent: ResearchFragment;
   contradictions: ReplanResult['contradictionsToResolve'];
   /** Ceiling on the whole run's fragments, so this cannot run away. */
   maxFragments: number;
-}): ResearchFragment[] {
+}): Promise<ResearchFragment[]> {
   if (input.contradictions.length === 0) return [];
-  const existing = currentFragments(input.orchestrationId);
+  const existing = await currentFragments(input.orchestrationId);
   const alreadyTargeted = new Set(
     existing.flatMap((fragment) => fragment.contradictionTargets),
   );

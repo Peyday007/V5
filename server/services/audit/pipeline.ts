@@ -159,7 +159,7 @@ async function runPass(
       PASS_LABELS[passKey],
     );
     const durationMs = Date.now() - startedAt;
-    recordAuditPass({
+    await recordAuditPass({
       pipelineId,
       projectId: context.project.id,
       layerId: context.layer.id,
@@ -176,7 +176,7 @@ async function runPass(
     return { raw: response.text, durationMs };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    recordAuditPass({
+    await recordAuditPass({
       pipelineId,
       projectId: context.project.id,
       layerId: context.layer.id,
@@ -196,16 +196,16 @@ async function runPass(
 }
 
 /** Mark a recorded pass as parsed, or fail the audit with the raw text preserved. */
-function parseOrFail<T>(
+async function parseOrFail<T>(
   context: AuditContext,
   pipelineId: string,
   passKey: AuditPassKey,
   raw: string,
   parse: (text: string) => { ok: true; value: T } | { ok: false; error: string },
-): T {
+): Promise<T> {
   const parsed = parse(raw);
   if (!parsed.ok) {
-    recordAuditPass({
+    await recordAuditPass({
       pipelineId,
       projectId: context.project.id,
       layerId: context.layer.id,
@@ -227,8 +227,8 @@ function parseOrFail<T>(
   return parsed.value;
 }
 
-function toGapInputs(gaps: ParsedGap[], projectId: string): CreateAuditGapInput[] {
-  const layers = listLayers(projectId);
+async function toGapInputs(gaps: ParsedGap[], projectId: string): Promise<CreateAuditGapInput[]> {
+  const layers = await listLayers(projectId);
   return gaps.map((gap) => {
     const owner = gap.owningLayerName
       ? layers.find((layer) => layer.name.toLowerCase() === gap.owningLayerName!.trim().toLowerCase())
@@ -306,7 +306,7 @@ function toStructuredResult(judge: JudgePassOutput, primary: PrimaryPassOutput):
  */
 export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<DynamicAuditOutcome> {
   const pipelineId = `pipe_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
-  const context = buildAuditContext({
+  const context = await buildAuditContext({
     mode: input.mode,
     layerId: input.layerId,
     documentId: input.documentId ?? null,
@@ -361,7 +361,7 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
     model,
     timeoutMs,
   );
-  const primary = parseOrFail(context, pipelineId, 'PRIMARY', primaryRaw.raw, parsePrimaryPass);
+  const primary = await parseOrFail(context, pipelineId, 'PRIMARY', primaryRaw.raw, parsePrimaryPass);
 
   input.onProgress?.({ passKey: 'ADVERSARIAL', index: 2, total, label: PASS_LABELS.ADVERSARIAL });
   const adversarialRaw = await runPass(
@@ -374,7 +374,7 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
     model,
     timeoutMs,
   );
-  const adversarial = parseOrFail(
+  const adversarial = await parseOrFail(
     context,
     pipelineId,
     'ADVERSARIAL',
@@ -393,14 +393,14 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
     model,
     timeoutMs,
   );
-  const judge = parseOrFail(context, pipelineId, 'JUDGE', judgeRaw.raw, parseJudgePass);
+  const judge = await parseOrFail(context, pipelineId, 'JUDGE', judgeRaw.raw, parseJudgePass);
 
   // Only now does anything change.
   const auditedDocumentIds = context.artifacts
     .map((artifact) => artifact.documentId)
     .filter((id): id is string => Boolean(id));
 
-  const outcome = recordAudit({
+  const outcome = await recordAudit({
     projectId: context.project.id,
     layerId: context.layer.id,
     runId: input.runId ?? context.run?.id ?? null,
@@ -414,7 +414,7 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
     model,
     pipelineId,
     evidenceManifest: context.manifest,
-    gaps: toGapInputs(judge.gapClassifications, context.project.id),
+    gaps: await toGapInputs(judge.gapClassifications, context.project.id),
     extraFindings: [
       ...judge.otherLayerHandoffs.map((content) => ({
         findingType: 'OTHER_LAYER_HANDOFF' as const,
@@ -433,7 +433,7 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
   // failure of the audit.
   let citations = 0;
   try {
-    citations = recordAuditEvidence({
+    citations = await recordAuditEvidence({
       audit: outcome.audit,
       documentIds: auditedDocumentIds,
       verdictQuery: [judge.summary, judge.nextAction].join(' '),
@@ -442,7 +442,7 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
     console.error('[brain] could not record audit evidence:', error);
   }
 
-  recordEvent({
+  await recordEvent({
     projectId: context.project.id,
     layerId: context.layer.id,
     entityType: 'AUDIT',

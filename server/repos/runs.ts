@@ -61,11 +61,11 @@ export interface CreateRunInput {
   conversationId?: string | null;
 }
 
-export function createRun(input: CreateRunInput): ResearchRun {
+export async function createRun(input: CreateRunInput): Promise<ResearchRun> {
   const db = getDb();
   const ts = nowIso();
   const id = newId('run');
-  db.run(
+  await db.run(
     `INSERT INTO research_runs (id, project_id, layer_id, target_document_id, target_version,
        run_type, attempt_number, status, provider, model, prompt, prompt_sections,
        required_attachments, expected_conversation_title, expected_filename, parent_run_id,
@@ -78,39 +78,36 @@ export function createRun(input: CreateRunInput): ResearchRun {
       input.expectedFilename ?? null, input.parentRunId ?? null, input.redoReason ?? null,
       input.conversationId ?? null, ts, ts],
   );
-  return getRun(id)!;
+  return (await getRun(id))!;
 }
 
-export function getRun(id: string): ResearchRun | null {
-  const row = getDb().get<ResearchRunRow>('SELECT * FROM research_runs WHERE id = ?', [id]);
+export async function getRun(id: string): Promise<ResearchRun | null> {
+  const row = await getDb().get<ResearchRunRow>('SELECT * FROM research_runs WHERE id = ?', [id]);
   return row ? mapRun(row) : null;
 }
 
-export function listRuns(projectId: string): ResearchRun[] {
-  return getDb()
-    .all<ResearchRunRow>(
+export async function listRuns(projectId: string): Promise<ResearchRun[]> {
+  return (await getDb().all<ResearchRunRow>(
       'SELECT * FROM research_runs WHERE project_id = ? ORDER BY created_at DESC',
       [projectId],
-    )
+    ))
     .map(mapRun);
 }
 
-export function listRunsByLayer(layerId: string): ResearchRun[] {
-  return getDb()
-    .all<ResearchRunRow>('SELECT * FROM research_runs WHERE layer_id = ? ORDER BY created_at DESC', [
+export async function listRunsByLayer(layerId: string): Promise<ResearchRun[]> {
+  return (await getDb().all<ResearchRunRow>('SELECT * FROM research_runs WHERE layer_id = ? ORDER BY created_at DESC', [
       layerId,
-    ])
+    ]))
     .map(mapRun);
 }
 
-export function listActiveRuns(projectId: string): ResearchRun[] {
-  return getDb()
-    .all<ResearchRunRow>(
+export async function listActiveRuns(projectId: string): Promise<ResearchRun[]> {
+  return (await getDb().all<ResearchRunRow>(
       `SELECT * FROM research_runs
        WHERE project_id = ? AND status IN ('PLANNED','READY','RUNNING','BLOCKED','AUDIT_REQUIRED','REDO_REQUIRED')
        ORDER BY created_at DESC`,
       [projectId],
-    )
+    ))
     .map(mapRun);
 }
 
@@ -123,15 +120,15 @@ export function listActiveRuns(projectId: string): ResearchRun[] {
  * bypassed indefinitely by auditing the parent again, which the UI's run picker
  * makes a single click.
  */
-export function getRunLineage(runId: string): ResearchRun[] {
-  const start = getRun(runId);
+export async function getRunLineage(runId: string): Promise<ResearchRun[]> {
+  const start = await getRun(runId);
   if (!start) return [];
 
   // Climb to the root of the lineage first.
   let root = start;
   const climbed = new Set<string>([root.id]);
   while (root.parentRunId) {
-    const parent = getRun(root.parentRunId);
+    const parent = await getRun(root.parentRunId);
     if (!parent || climbed.has(parent.id)) break;
     climbed.add(parent.id);
     root = parent;
@@ -144,7 +141,7 @@ export function getRunLineage(runId: string): ResearchRun[] {
   const queue: string[] = [root.id];
   while (queue.length > 0 && lineage.length < 500) {
     const currentId = queue.shift()!;
-    const children = db.all<ResearchRunRow>(
+    const children = await db.all<ResearchRunRow>(
       'SELECT * FROM research_runs WHERE parent_run_id = ? ORDER BY attempt_number, created_at',
       [currentId],
     );
@@ -159,8 +156,8 @@ export function getRunLineage(runId: string): ResearchRun[] {
 }
 
 /** How many automatic redos already happened in this lineage. */
-export function countRedoAttempts(runId: string): number {
-  return getRunLineage(runId).filter((r) => r.runType === 'REDO' || r.attemptNumber > 1).length;
+export async function countRedoAttempts(runId: string): Promise<number> {
+  return (await getRunLineage(runId)).filter((r) => r.runType === 'REDO' || r.attemptNumber > 1).length;
 }
 
 export interface UpdateRunInput {
@@ -186,7 +183,7 @@ export interface UpdateRunInput {
   conversationId?: string | null;
 }
 
-export function updateRun(id: string, patch: UpdateRunInput): ResearchRun | null {
+export async function updateRun(id: string, patch: UpdateRunInput): Promise<ResearchRun | null> {
   const { clause, values } = buildUpdate({
     target_document_id: patch.targetDocumentId,
     target_version: patch.targetVersion,
@@ -211,7 +208,7 @@ export function updateRun(id: string, patch: UpdateRunInput): ResearchRun | null
     conversation_id: patch.conversationId,
   });
   if (!clause) return getRun(id);
-  getDb().run(`UPDATE research_runs SET ${clause}, updated_at = ? WHERE id = ?`, [
+  await getDb().run(`UPDATE research_runs SET ${clause}, updated_at = ? WHERE id = ?`, [
     ...(values as never[]),
     nowIso(),
     id,

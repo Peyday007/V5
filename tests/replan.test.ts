@@ -352,23 +352,23 @@ describe('what a finding does to the archive', () => {
 describe('replanning after evidence lands', () => {
   let fixture: TestProject;
 
-  beforeEach(() => {
-    fixture = freshProject();
+  beforeEach(async () => {
+    fixture = await freshProject();
   });
-  afterEach(() => {
-    teardown();
+  afterEach(async () => {
+    await teardown();
   });
 
   /** An assignment with one requirement and two fragments chasing it. */
-  function assignment() {
-    const layer = fixture.layerByName('World Model');
-    const run = createRun({
+  async function assignment() {
+    const layer = await fixture.layerByName('World Model');
+    const run = await createRun({
       projectId: fixture.project.id,
       layerId: layer.id,
       runType: 'FOUNDATION',
       status: 'RUNNING',
     });
-    const orchestration = createOrchestration({
+    const orchestration = await createOrchestration({
       projectId: fixture.project.id,
       layerId: layer.id,
       runId: run.id,
@@ -376,7 +376,7 @@ describe('replanning after evidence lands', () => {
       assignment: 'Establish how custody transfer is recognised.',
       provider: 'mock',
     });
-    const [requirement] = createRequirements([
+    const [requirement] = await createRequirements([
       {
         orchestrationId: orchestration.id,
         projectId: fixture.project.id,
@@ -394,7 +394,7 @@ describe('replanning after evidence lands', () => {
     return { orchestration, requirement: requirement!, layer };
   }
 
-  function planFragment(input: {
+  async function planFragment(input: {
     orchestrationId: string;
     layerId: string;
     key: string;
@@ -402,7 +402,7 @@ describe('replanning after evidence lands', () => {
     index: number;
     status?: 'QUEUED' | 'RUNNING';
   }) {
-    const [created] = createFragments([
+    const [created] = await createFragments([
       {
         orchestrationId: input.orchestrationId,
         projectId: fixture.project.id,
@@ -462,8 +462,8 @@ describe('replanning after evidence lands', () => {
   }
 
   it('cancels queued work that the accepted evidence made unnecessary', async () => {
-    const { orchestration, requirement, layer } = assignment();
-    const answered = planFragment({
+    const { orchestration, requirement, layer } = await assignment();
+    const answered = await planFragment({
       orchestrationId: orchestration.id,
       layerId: layer.id,
       key: 'fragment-1',
@@ -471,7 +471,7 @@ describe('replanning after evidence lands', () => {
       index: 0,
       status: 'RUNNING',
     });
-    const alsoQueued = planFragment({
+    const alsoQueued = await planFragment({
       orchestrationId: orchestration.id,
       layerId: layer.id,
       key: 'fragment-2',
@@ -479,7 +479,7 @@ describe('replanning after evidence lands', () => {
       index: 1,
     });
 
-    const inserted = insertClaims([
+    const inserted = await insertClaims([
       claimInput({
         orchestrationId: orchestration.id,
         fragmentId: answered.id,
@@ -499,17 +499,17 @@ describe('replanning after evidence lands', () => {
         requirementIds: [requirement.id],
       }),
     ]);
-    for (const claim of inserted) decideClaim(claim.id, { accepted: true });
+    for (const claim of inserted) await decideClaim(claim.id, { accepted: true });
 
-    const result = reconcileAcceptedFragment({
+    const result = await reconcileAcceptedFragment({
       orchestrationId: orchestration.id,
       projectId: fixture.project.id,
-      fragment: getFragment(answered.id)!,
+      fragment: (await getFragment(answered.id))!,
     });
 
     // The requirement is now covered by evidence from two publishers.
     expect(result.requirementsUpdated).toContain(requirement.id);
-    const coverage = listCoverage(orchestration.id).find(
+    const coverage = (await listCoverage(orchestration.id)).find(
       (entry) => entry.requirementId === requirement.id,
     )!;
     expect(coverage.status).toBe('SATISFIED');
@@ -517,28 +517,28 @@ describe('replanning after evidence lands', () => {
 
     // So the other fragment chasing it is cancelled before it spends a job.
     expect(result.cancelledFragments.map((entry) => entry.fragmentKey)).toContain('fragment-2');
-    const cancelled = getFragment(alsoQueued.id)!;
+    const cancelled = (await getFragment(alsoQueued.id))!;
     expect(cancelled.status).toBe('CANCELLED');
     expect(cancelled.cancelledReason).toMatch(/already has an answer/i);
 
     // Every finding carries what it did to the archive, not just that it landed.
-    const stored = listClaimsForFragment(answered.id);
+    const stored = await listClaimsForFragment(answered.id);
     expect(stored.every((claim) => claim.reconciliation !== null)).toBe(true);
   });
 
   it('keeps the requirement open, and the work queued, when the finding contradicts the archive', async () => {
-    const { orchestration, requirement, layer } = assignment();
-    const documentId = importFile({
+    const { orchestration, requirement, layer } = await assignment();
+    const documentId = (await importFile({
       projectId: fixture.project.id,
       originalFilename: 'World Model v1.txt',
       contents: Buffer.from('Employment in the occupation was 240,000 in 2023.'),
       layerId: layer.id,
       version: 'v1',
       documentType: 'FOUNDATION',
-    }).documentId!;
+    })).documentId!;
     await whenExtractionIdle();
 
-    insertExistingClaims([
+    await insertExistingClaims([
       {
         projectId: fixture.project.id,
         documentId,
@@ -559,7 +559,7 @@ describe('replanning after evidence lands', () => {
       },
     ]);
 
-    const answered = planFragment({
+    const answered = await planFragment({
       orchestrationId: orchestration.id,
       layerId: layer.id,
       key: 'fragment-1',
@@ -567,7 +567,7 @@ describe('replanning after evidence lands', () => {
       index: 0,
       status: 'RUNNING',
     });
-    const queued = planFragment({
+    const queued = await planFragment({
       orchestrationId: orchestration.id,
       layerId: layer.id,
       key: 'fragment-2',
@@ -575,7 +575,7 @@ describe('replanning after evidence lands', () => {
       index: 1,
     });
 
-    const [claim] = insertClaims([
+    const [claim] = await insertClaims([
       claimInput({
         orchestrationId: orchestration.id,
         fragmentId: answered.id,
@@ -586,32 +586,32 @@ describe('replanning after evidence lands', () => {
         requirementIds: [requirement.id],
       }),
     ]);
-    decideClaim(claim!.id, { accepted: true });
+    await decideClaim(claim!.id, { accepted: true });
 
-    const result = reconcileAcceptedFragment({
+    const result = await reconcileAcceptedFragment({
       orchestrationId: orchestration.id,
       projectId: fixture.project.id,
-      fragment: getFragment(answered.id)!,
+      fragment: (await getFragment(answered.id))!,
     });
 
     expect(result.findings[0]!.outcome).toBe('CONTRADICTS');
     expect(result.contradictionsToResolve).toHaveLength(1);
 
     // A requirement answered two incompatible ways is not answered.
-    const coverage = listCoverage(orchestration.id).find(
+    const coverage = (await listCoverage(orchestration.id)).find(
       (entry) => entry.requirementId === requirement.id,
     )!;
     expect(coverage.status).toBe('CONTRADICTED');
     expect(coverage.needsResearch).toBe(true);
-    expect(getFragment(queued.id)!.status).toBe('QUEUED');
+    expect((await getFragment(queued.id))!.status).toBe('QUEUED');
 
     // The archive's claim is still there. New evidence never overwrites it.
-    expect(listExistingClaims(fixture.project.id)).toHaveLength(1);
+    expect(await listExistingClaims(fixture.project.id)).toHaveLength(1);
 
     // And the conflict becomes a fragment whose job is to settle it.
-    const resolution = planContradictionFragments({
+    const resolution = await planContradictionFragments({
       orchestrationId: orchestration.id,
-      parent: getFragment(answered.id)!,
+      parent: (await getFragment(answered.id))!,
       contradictions: result.contradictionsToResolve,
       maxFragments: 60,
     });
@@ -624,9 +624,9 @@ describe('replanning after evidence lands', () => {
 
     // Asked again, it does not plan the same fragment twice.
     expect(
-      planContradictionFragments({
+      await planContradictionFragments({
         orchestrationId: orchestration.id,
-        parent: getFragment(answered.id)!,
+        parent: (await getFragment(answered.id))!,
         contradictions: result.contradictionsToResolve,
         maxFragments: 60,
       }),

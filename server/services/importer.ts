@@ -51,11 +51,10 @@ export const PROJECT_SOURCES_FOLDER = '_project-sources';
 export const PROJECT_SOURCE_VERSION = 'source';
 export const PROJECT_SOURCE_SORT = 'zzzz.source';
 import {
-  absolutePathFor,
-  fileExists,
-  fileSize,
+  objectExists,
+  objectSize,
   hashBuffer,
-  hashFile,
+  hashObject,
   layerSlugFromPath,
   relocateFile,
   storeFile,
@@ -94,14 +93,14 @@ export interface RegisterExistingFileInput {
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-function requireProject(projectId: string): Project {
-  const project = getProject(projectId);
+async function requireProject(projectId: string): Promise<Project> {
+  const project = await getProject(projectId);
   if (!project) throw new Error(`Unknown project: ${projectId}`);
   return project;
 }
 
-function requireLayer(project: Project, layerId: string): Layer {
-  const layer = getLayer(layerId);
+async function requireLayer(project: Project, layerId: string): Promise<Layer> {
+  const layer = await getLayer(layerId);
   if (!layer || layer.projectId !== project.id) {
     throw new Error(`Layer ${layerId} does not belong to project ${project.name}.`);
   }
@@ -113,9 +112,9 @@ function extensionFor(filename: string): string {
 }
 
 /** Duplicate detection is by content, not by name: the same PDF renamed is still the same PDF. */
-function findDocumentByHash(projectId: string, hash: string): Document | null {
-  const matches = listDocuments(projectId).filter((document) => document.fileHash === hash);
-  return matches.find((document) => fileExists(document.filesystemPath)) ?? matches[0] ?? null;
+async function findDocumentByHash(projectId: string, hash: string): Promise<Document | null> {
+  const matches = (await listDocuments(projectId)).filter((document) => document.fileHash === hash);
+  return matches.find((document) => objectExists(document.filesystemPath)) ?? matches[0] ?? null;
 }
 
 /**
@@ -123,10 +122,10 @@ function findDocumentByHash(projectId: string, hash: string): Document | null {
  * The previous document keeps its file and its history under a marked name and
  * points forward at its replacement.
  */
-function supersededNameFor(projectId: string, canonicalName: string): string {
+async function supersededNameFor(projectId: string, canonicalName: string): Promise<string> {
   for (let attempt = 1; attempt < 500; attempt += 1) {
     const candidate = `${canonicalName} (superseded ${attempt})`;
-    if (!findDocumentByCanonicalName(projectId, candidate)) return candidate;
+    if (!await findDocumentByCanonicalName(projectId, candidate)) return candidate;
   }
   return `${canonicalName} (superseded ${Date.now()})`;
 }
@@ -206,14 +205,14 @@ interface Registration {
  * and the new upload supersedes it. Nothing is ever overwritten either way.
  * Invariant 3: every branch is recorded as an event.
  */
-function registerStoredDocument(input: RegistrationInput): Registration {
+async function registerStoredDocument(input: RegistrationInput): Promise<Registration> {
   const { project, layer, names, stored } = input;
-  return getDb().transaction<Registration>(() => {
-    const previous = findDocumentByCanonicalName(project.id, names.canonicalName);
+  return getDb().transaction<Registration>(async () => {
+    const previous = await findDocumentByCanonicalName(project.id, names.canonicalName);
 
-    if (previous && !(previous.filesystemPath && fileExists(previous.filesystemPath))) {
+    if (previous && !(previous.filesystemPath && await objectExists(previous.filesystemPath))) {
       const filled =
-        updateDocument(previous.id, {
+        await updateDocument(previous.id, {
           layerId: layer.id,
           version: input.version,
           versionSort: versionSortKey(input.version),
@@ -230,7 +229,7 @@ function registerStoredDocument(input: RegistrationInput): Registration {
           importedAt: nowIso(),
         }) ?? previous;
 
-      recordEvent({
+      await recordEvent({
         projectId: project.id,
         layerId: layer.id,
         entityType: 'DOCUMENT',
@@ -242,7 +241,7 @@ function registerStoredDocument(input: RegistrationInput): Registration {
           origin: input.origin,
         },
       });
-      recordEvent({
+      await recordEvent({
         projectId: project.id,
         layerId: layer.id,
         entityType: 'DOCUMENT',
@@ -266,13 +265,13 @@ function registerStoredDocument(input: RegistrationInput): Registration {
     let superseded: Document | null = null;
     if (previous) {
       superseded =
-        updateDocument(previous.id, {
-          canonicalName: supersededNameFor(project.id, names.canonicalName),
+        await updateDocument(previous.id, {
+          canonicalName: await supersededNameFor(project.id, names.canonicalName),
           status: 'SUPERSEDED',
         }) ?? previous;
     }
 
-    const document = createDocument({
+    const document = await createDocument({
       projectId: project.id,
       layerId: layer.id,
       canonicalName: names.canonicalName,
@@ -292,8 +291,8 @@ function registerStoredDocument(input: RegistrationInput): Registration {
     });
 
     if (superseded) {
-      updateDocument(superseded.id, { supersededByDocumentId: document.id });
-      recordEvent({
+      await updateDocument(superseded.id, { supersededByDocumentId: document.id });
+      await recordEvent({
         projectId: project.id,
         layerId: layer.id,
         entityType: 'DOCUMENT',
@@ -308,7 +307,7 @@ function registerStoredDocument(input: RegistrationInput): Registration {
       });
     }
 
-    recordEvent({
+    await recordEvent({
       projectId: project.id,
       layerId: layer.id,
       entityType: 'DOCUMENT',
@@ -321,7 +320,7 @@ function registerStoredDocument(input: RegistrationInput): Registration {
         origin: input.origin,
       },
     });
-    recordEvent({
+    await recordEvent({
       projectId: project.id,
       layerId: layer.id,
       entityType: 'DOCUMENT',
@@ -348,9 +347,9 @@ function registerStoredDocument(input: RegistrationInput): Registration {
  * into a folder: state is recalculated immediately, so the planner's answer to
  * "what next?" changes the moment the missing document arrives.
  */
-function recomputeAfterRegistration(projectId: string): void {
-  refreshProjectDependencies(projectId);
-  recomputeProject(projectId);
+async function recomputeAfterRegistration(projectId: string): Promise<void> {
+  await refreshProjectDependencies(projectId);
+  await recomputeProject(projectId);
 }
 
 /**
@@ -393,21 +392,21 @@ function describeRegistration(registration: Registration): string {
  * It still becomes a real document: one row, one file, one extraction run, the
  * same provenance as everything else.
  */
-export function importProjectSource(input: {
+export async function importProjectSource(input: {
   projectId: string;
   originalFilename: string;
   contents: Buffer;
   scope?: DocumentScope;
   notes?: string | null;
-}): ImportResult {
-  const project = requireProject(input.projectId);
+}): Promise<ImportResult> {
+  const project = await requireProject(input.projectId);
   const originalFilename = path.basename((input.originalFilename || '').trim() || 'source.txt');
   const hash = hashBuffer(input.contents);
 
-  const duplicate = duplicateSource(project.id, originalFilename, hash);
+  const duplicate = await duplicateSource(project.id, originalFilename, hash);
   if (duplicate) return duplicate;
 
-  const stored = storeFile({
+  const stored = await storeFile({
     projectSlug: project.slug,
     layerSlug: PROJECT_SOURCES_FOLDER,
     filename: originalFilename,
@@ -432,23 +431,23 @@ export function importProjectSource(input: {
  * what they are. Copying would leave two identical files on disk and a permanent
  * "unregistered file" in every reconcile from then on.
  */
-export function importProjectSourceFromFile(input: {
+export async function importProjectSourceFromFile(input: {
   projectId: string;
   relativePath: string;
   scope?: DocumentScope;
   notes?: string | null;
-}): ImportResult {
-  const project = requireProject(input.projectId);
+}): Promise<ImportResult> {
+  const project = await requireProject(input.projectId);
   // Adopting relocates the file, so the path is confined first — the data root
   // also holds the database, the backups and the runtime snapshot.
   assertInsideProjectDocuments(project.slug, input.relativePath);
-  if (!fileExists(input.relativePath)) {
+  if (!await objectExists(input.relativePath)) {
     throw new Error(`There is no file at ${input.relativePath} to read.`);
   }
 
   const originalFilename = path.basename(input.relativePath);
 
-  const existing = findDocumentByPath(input.relativePath);
+  const existing = await findDocumentByPath(input.relativePath);
   if (existing) {
     return result({
       filename: originalFilename,
@@ -462,11 +461,11 @@ export function importProjectSourceFromFile(input: {
     });
   }
 
-  const hash = hashFile(absolutePathFor(input.relativePath));
-  const duplicate = duplicateSource(project.id, originalFilename, hash);
+  const hash = await hashObject(input.relativePath);
+  const duplicate = await duplicateSource(project.id, originalFilename, hash);
   if (duplicate) return duplicate;
 
-  const stored = relocateFile(
+  const stored = await relocateFile(
     input.relativePath,
     project.slug,
     PROJECT_SOURCES_FOLDER,
@@ -483,9 +482,9 @@ export function importProjectSourceFromFile(input: {
 }
 
 /** One file, one row: the same bytes are never registered twice. */
-function duplicateSource(projectId: string, filename: string, hash: string): ImportResult | null {
-  const duplicate = findDocumentByHash(projectId, hash);
-  if (!duplicate || !fileExists(duplicate.filesystemPath)) return null;
+async function duplicateSource(projectId: string, filename: string, hash: string): Promise<ImportResult | null> {
+  const duplicate = await findDocumentByHash(projectId, hash);
+  if (!duplicate || !await objectExists(duplicate.filesystemPath)) return null;
   return result({
     filename,
     storedPath: duplicate.filesystemPath,
@@ -499,19 +498,19 @@ function duplicateSource(projectId: string, filename: string, hash: string): Imp
 }
 
 /** The row a project-wide source gets: no layer, and no place in the version order. */
-function registerProjectSource(input: {
+async function registerProjectSource(input: {
   project: Project;
   originalFilename: string;
   stored: StoredFile;
   scope: DocumentScope;
   notes: string | null;
-}): ImportResult {
+}): Promise<ImportResult> {
   const { project, stored } = input;
 
   // A project source has no version in the layer sense — it is not the first or
   // second draft of anything. It sorts outside the version ordering rather than
   // pretending to a place inside it.
-  const document = createDocument({
+  const document = await createDocument({
     projectId: project.id,
     layerId: null,
     canonicalName: input.originalFilename.replace(/\.[A-Za-z0-9]+$/, ''),
@@ -529,9 +528,9 @@ function registerProjectSource(input: {
     notes: input.notes,
     importedAt: nowIso(),
   });
-  updateDocument(document.id, { scope: input.scope });
+  await updateDocument(document.id, { scope: input.scope });
 
-  recordEvent({
+  await recordEvent({
     projectId: project.id,
     layerId: null,
     entityType: 'DOCUMENT',
@@ -563,16 +562,16 @@ function registerProjectSource(input: {
   });
 }
 
-export function importFile(input: ImportFileInput): ImportResult {
-  const project = requireProject(input.projectId);
+export async function importFile(input: ImportFileInput): Promise<ImportResult> {
+  const project = await requireProject(input.projectId);
   const originalFilename = path.basename((input.originalFilename || '').trim() || 'document.pdf');
   const hash = hashBuffer(input.contents);
-  const inference = inferFromFilename(project.id, originalFilename);
+  const inference = await inferFromFilename(project.id, originalFilename);
 
   // --- content already known to the platform -------------------------------
-  const duplicate = findDocumentByHash(project.id, hash);
-  if (duplicate && fileExists(duplicate.filesystemPath)) {
-    recordEvent({
+  const duplicate = await findDocumentByHash(project.id, hash);
+  if (duplicate && await objectExists(duplicate.filesystemPath)) {
+    await recordEvent({
       projectId: project.id,
       layerId: duplicate.layerId,
       entityType: 'DOCUMENT',
@@ -596,22 +595,22 @@ export function importFile(input: ImportFileInput): ImportResult {
 
   if (duplicate) {
     // Same content as a document whose file went missing: this is a restore.
-    const layer = duplicate.layerId ? getLayer(duplicate.layerId) : null;
-    const stored = storeFile({
+    const layer = duplicate.layerId ? await getLayer(duplicate.layerId) : null;
+    const stored = await storeFile({
       projectSlug: project.slug,
       layerSlug: layer?.slug ?? null,
       filename: duplicate.filename ?? `${duplicate.canonicalName}${extensionFor(originalFilename)}`,
       contents: input.contents,
     });
     const restored =
-      updateDocument(duplicate.id, {
+      await updateDocument(duplicate.id, {
         filename: stored.filename,
         filesystemPath: stored.relativePath,
         fileSize: stored.size,
         fileHash: stored.hash,
         fileMissing: false,
       }) ?? duplicate;
-    recordEvent({
+    await recordEvent({
       projectId: project.id,
       layerId: restored.layerId,
       entityType: 'DOCUMENT',
@@ -619,7 +618,7 @@ export function importFile(input: ImportFileInput): ImportResult {
       eventType: 'DOCUMENT_FILE_RESTORED',
       payload: { canonicalName: restored.canonicalName, storedPath: stored.relativePath },
     });
-    recordEvent({
+    await recordEvent({
       projectId: project.id,
       layerId: restored.layerId,
       entityType: 'DOCUMENT',
@@ -633,7 +632,7 @@ export function importFile(input: ImportFileInput): ImportResult {
         registered: true,
       },
     });
-    recomputeAfterRegistration(project.id);
+    await recomputeAfterRegistration(project.id);
     scheduleExtraction(restored.id);
     return result({
       filename: originalFilename,
@@ -651,7 +650,7 @@ export function importFile(input: ImportFileInput): ImportResult {
   let explicitLayer: Layer | null = null;
   let explicitInvalid = false;
   if (input.layerId) {
-    const candidate = getLayer(input.layerId);
+    const candidate = await getLayer(input.layerId);
     if (candidate && candidate.projectId === project.id) {
       explicitLayer = candidate;
       extraReasons.push(`The layer "${candidate.name}" was supplied with the upload.`);
@@ -672,7 +671,7 @@ export function importFile(input: ImportFileInput): ImportResult {
     }
   }
 
-  const layer = explicitLayer ?? (inference.layerId ? getLayer(inference.layerId) : null);
+  const layer = explicitLayer ?? (inference.layerId ? await getLayer(inference.layerId) : null);
   const version = explicitVersion ?? inference.version;
   const documentType = input.documentType ?? inference.documentType ?? 'REFERENCE';
   const confidentEnough =
@@ -694,7 +693,7 @@ export function importFile(input: ImportFileInput): ImportResult {
 
   // --- not confident: store it, register nothing (invariant 8) --------------
   if (!layer || !version || !canRegister) {
-    const stored = storeFile({
+    const stored = await storeFile({
       projectSlug: project.slug,
       layerSlug: null,
       filename: originalFilename,
@@ -711,7 +710,7 @@ export function importFile(input: ImportFileInput): ImportResult {
       ...extraReasons,
       'Stored under _unfiled and left unregistered until a human confirms it.',
     ]);
-    recordEvent({
+    await recordEvent({
       projectId: project.id,
       entityType: 'FILE',
       entityId: null,
@@ -741,9 +740,9 @@ export function importFile(input: ImportFileInput): ImportResult {
   const names = buildNames(layer.name, version, extensionFor(originalFilename));
 
   // A frozen canonical artifact is never replaced behind the user's back (invariant 6).
-  const previous = findDocumentByCanonicalName(project.id, names.canonicalName);
+  const previous = await findDocumentByCanonicalName(project.id, names.canonicalName);
   if (previous && (previous.frozen || previous.isCanonical)) {
-    const stored = storeFile({
+    const stored = await storeFile({
       projectSlug: project.slug,
       layerSlug: null,
       filename: originalFilename,
@@ -762,13 +761,13 @@ export function importFile(input: ImportFileInput): ImportResult {
     });
   }
 
-  const stored = storeFile({
+  const stored = await storeFile({
     projectSlug: project.slug,
     layerSlug: layer.slug,
     filename: names.filename,
     contents: input.contents,
   });
-  const registration = registerStoredDocument({
+  const registration = await registerStoredDocument({
     project,
     layer,
     version,
@@ -780,7 +779,7 @@ export function importFile(input: ImportFileInput): ImportResult {
     originalFilename,
   });
   const document = registration.document;
-  recomputeAfterRegistration(project.id);
+  await recomputeAfterRegistration(project.id);
   scheduleExtraction(document.id);
 
   return result({
@@ -804,9 +803,9 @@ export function importFile(input: ImportFileInput): ImportResult {
  * The human's answer to an ambiguous import: move the parked file into its
  * layer folder under the platform-controlled filename and register it.
  */
-export function resolveImport(input: ResolveImportInput): ImportResult {
-  const project = requireProject(input.projectId);
-  const layer = requireLayer(project, input.layerId);
+export async function resolveImport(input: ResolveImportInput): Promise<ImportResult> {
+  const project = await requireProject(input.projectId);
+  const layer = await requireLayer(project, input.layerId);
   if (!isValidVersion(input.version)) {
     throw new Error(`"${input.version}" is not a version this project understands.`);
   }
@@ -815,17 +814,17 @@ export function resolveImport(input: ResolveImportInput): ImportResult {
   // Confine it to the project's own documents tree so nothing outside it — the
   // database included — can be relocated.
   assertInsideProjectDocuments(project.slug, input.relativePath);
-  if (!fileExists(input.relativePath)) {
+  if (!await objectExists(input.relativePath)) {
     throw new Error(`There is no file at ${input.relativePath} to confirm.`);
   }
 
   const filename = path.basename(input.relativePath);
-  const inference = inferForProjectFile(project.id, project.slug, input.relativePath);
+  const inference = await inferForProjectFile(project.id, project.slug, input.relativePath);
   const confirmed = resolvedInference(inference, layer, version, input.documentType, [
     `Confirmed by the user as "${layer.name} ${version}".`,
   ]);
 
-  const alreadyRegistered = findDocumentByPath(input.relativePath);
+  const alreadyRegistered = await findDocumentByPath(input.relativePath);
   if (alreadyRegistered) {
     return result({
       filename,
@@ -838,9 +837,9 @@ export function resolveImport(input: ResolveImportInput): ImportResult {
     });
   }
 
-  const hash = hashFile(absolutePathFor(input.relativePath));
-  const duplicate = findDocumentByHash(project.id, hash);
-  if (duplicate && fileExists(duplicate.filesystemPath)) {
+  const hash = await hashObject(input.relativePath);
+  const duplicate = await findDocumentByHash(project.id, hash);
+  if (duplicate && await objectExists(duplicate.filesystemPath)) {
     return result({
       filename,
       storedPath: input.relativePath,
@@ -856,7 +855,7 @@ export function resolveImport(input: ResolveImportInput): ImportResult {
   }
 
   const names = buildNames(layer.name, version, extensionFor(filename));
-  const previous = findDocumentByCanonicalName(project.id, names.canonicalName);
+  const previous = await findDocumentByCanonicalName(project.id, names.canonicalName);
   if (previous && (previous.frozen || previous.isCanonical)) {
     return result({
       filename,
@@ -871,8 +870,8 @@ export function resolveImport(input: ResolveImportInput): ImportResult {
     });
   }
 
-  const stored = relocateFile(input.relativePath, project.slug, layer.slug, names.filename);
-  const registration = registerStoredDocument({
+  const stored = await relocateFile(input.relativePath, project.slug, layer.slug, names.filename);
+  const registration = await registerStoredDocument({
     project,
     layer,
     version,
@@ -884,7 +883,7 @@ export function resolveImport(input: ResolveImportInput): ImportResult {
     originalFilename: filename,
   });
   const document = registration.document;
-  recomputeAfterRegistration(project.id);
+  await recomputeAfterRegistration(project.id);
   scheduleExtraction(document.id);
 
   return result({
@@ -908,17 +907,17 @@ export function resolveImport(input: ResolveImportInput): ImportResult {
  * Register a file that is already sitting in the project tree — the fix SCAN &
  * RECONCILE offers for a document someone dropped into a layer folder by hand.
  */
-export function registerExistingFile(input: RegisterExistingFileInput): ImportResult {
-  const project = requireProject(input.projectId);
+export async function registerExistingFile(input: RegisterExistingFileInput): Promise<ImportResult> {
+  const project = await requireProject(input.projectId);
   // Same confinement as resolveImport: registering also relocates the file.
   assertInsideProjectDocuments(project.slug, input.relativePath);
-  if (!fileExists(input.relativePath)) {
+  if (!await objectExists(input.relativePath)) {
     throw new Error(`There is no file at ${input.relativePath}.`);
   }
   const filename = path.basename(input.relativePath);
-  const inference = inferForProjectFile(project.id, project.slug, input.relativePath);
+  const inference = await inferForProjectFile(project.id, project.slug, input.relativePath);
 
-  const existing = findDocumentByPath(input.relativePath);
+  const existing = await findDocumentByPath(input.relativePath);
   if (existing) {
     return result({
       filename,
@@ -931,9 +930,9 @@ export function registerExistingFile(input: RegisterExistingFileInput): ImportRe
     });
   }
 
-  const hash = hashFile(absolutePathFor(input.relativePath));
-  const duplicate = findDocumentByHash(project.id, hash);
-  if (duplicate && fileExists(duplicate.filesystemPath)) {
+  const hash = await hashObject(input.relativePath);
+  const duplicate = await findDocumentByHash(project.id, hash);
+  if (duplicate && await objectExists(duplicate.filesystemPath)) {
     return result({
       filename,
       storedPath: input.relativePath,
@@ -951,10 +950,10 @@ export function registerExistingFile(input: RegisterExistingFileInput): ImportRe
   const extraReasons: string[] = [];
   let layer: Layer | null = null;
   if (input.layerId) {
-    layer = requireLayer(project, input.layerId);
+    layer = await requireLayer(project, input.layerId);
     extraReasons.push(`The layer "${layer.name}" was chosen by the user.`);
   } else if (inference.layerId) {
-    layer = getLayer(inference.layerId);
+    layer = await getLayer(inference.layerId);
   }
 
   let version: string | null = inference.version;
@@ -989,7 +988,7 @@ export function registerExistingFile(input: RegisterExistingFileInput): ImportRe
   }
 
   const names = buildNames(layer.name, version, extensionFor(filename));
-  const previous = findDocumentByCanonicalName(project.id, names.canonicalName);
+  const previous = await findDocumentByCanonicalName(project.id, names.canonicalName);
   if (previous && (previous.frozen || previous.isCanonical)) {
     return result({
       filename,
@@ -1007,18 +1006,18 @@ export function registerExistingFile(input: RegisterExistingFileInput): ImportRe
   // Only move the file when it is not already in the right place under the right name.
   const inRightPlace =
     layerSlugFromPath(project.slug, input.relativePath) === layer.slug && filename === names.filename;
-  const stored: StoredFile =
-    inRightPlace
-      ? {
-          absolutePath: absolutePathFor(input.relativePath),
-          relativePath: input.relativePath,
-          filename,
-          size: fileSize(input.relativePath) ?? 0,
-          hash,
-        }
-      : relocateFile(input.relativePath, project.slug, layer.slug, names.filename);
+  const stored: StoredFile = inRightPlace
+    ? {
+        storageKey: input.relativePath,
+        absolutePath: null,
+        relativePath: input.relativePath,
+        filename,
+        size: (await objectSize(input.relativePath)) ?? 0,
+        hash,
+      }
+    : await relocateFile(input.relativePath, project.slug, layer.slug, names.filename);
 
-  const registration = registerStoredDocument({
+  const registration = await registerStoredDocument({
     project,
     layer,
     version,
@@ -1030,7 +1029,7 @@ export function registerExistingFile(input: RegisterExistingFileInput): ImportRe
     originalFilename: filename,
   });
   const document = registration.document;
-  recomputeAfterRegistration(project.id);
+  await recomputeAfterRegistration(project.id);
   scheduleExtraction(document.id);
 
   return result({

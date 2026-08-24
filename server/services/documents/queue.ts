@@ -61,11 +61,15 @@ async function drain(): Promise<void> {
  * when one already exists, so two imports of the same file share one extraction
  * rather than racing.
  */
-export function enqueueExtraction(
+export async function enqueueExtraction(
   documentId: string,
   options: { force?: boolean } = {},
 ): Promise<ExtractionResult> {
-  const existing = inFlight.get(documentId);
+  // Read without awaiting, deliberately. `inFlight` is a Map, so there is
+  // nothing to await — and suspending here would return control before the
+  // `inFlight.set` below, letting a second caller for the same document miss
+  // the entry and enqueue a competing extraction of the same file.
+  const existing: Promise<ExtractionResult> | undefined = inFlight.get(documentId);
   if (existing) return existing;
 
   const promise = new Promise<ExtractionResult>((resolve, reject) => {
@@ -74,7 +78,7 @@ export function enqueueExtraction(
   inFlight.set(documentId, promise);
   // Errors are delivered to whoever awaited the promise; an unawaited scheduling
   // call must not take the process down.
-  promise.catch(() => undefined);
+  void promise.catch(() => undefined);
   void drain();
   return promise;
 }
@@ -98,8 +102,8 @@ export function extractionQueueDepth(): number {
  * whose extraction was interrupted, becomes auditable without the user having to
  * ask. Documents already READY are left alone.
  */
-export function queueUnreadDocuments(): number {
-  const rows = getDb().all<{ id: string }>(
+export async function queueUnreadDocuments(): Promise<number> {
+  const rows = await getDb().all<{ id: string }>(
     `SELECT id FROM documents
      WHERE filesystem_path IS NOT NULL
        AND file_missing = 0

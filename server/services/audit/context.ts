@@ -26,7 +26,7 @@ import { getLayer, listLayers } from '../../repos/layers.ts';
 import { getDocument, listDocumentsByLayer } from '../../repos/documents.ts';
 import { getRun, listRunsByLayer } from '../../repos/runs.ts';
 import { listAuditsByLayer } from '../../repos/audits.ts';
-import { fileExists } from '../storage.ts';
+import { objectExists } from '../storage.ts';
 import { getCurrentExtractionRun, listBlocks } from '../../repos/extraction.ts';
 import { isAuditable } from '../documents/quality.ts';
 import { checkCanonicalNames, checkRunDependencies } from '../dependencies.ts';
@@ -140,8 +140,8 @@ export interface ManifestEntry {
  * scraping bytes. A document that is not READY is evidence the auditor does not
  * have, and it says so.
  */
-function readDocumentText(document: Document, budget: number): ArtifactContent {
-  const run = getCurrentExtractionRun(document.id);
+async function readDocumentText(document: Document, budget: number): Promise<ArtifactContent> {
+  const run = await getCurrentExtractionRun(document.id);
   const base = {
     documentId: document.id,
     canonicalName: document.canonicalName,
@@ -157,7 +157,7 @@ function readDocumentText(document: Document, budget: number): ArtifactContent {
     extractionWarnings: run?.warnings ?? [],
   };
 
-  if (!document.filesystemPath || !fileExists(document.filesystemPath)) {
+  if (!document.filesystemPath || !await objectExists(document.filesystemPath)) {
     return {
       ...base,
       text: '',
@@ -195,7 +195,7 @@ function readDocumentText(document: Document, budget: number): ArtifactContent {
     };
   }
 
-  const blocks = listBlocks(run.id).filter(
+  const blocks = (await listBlocks(run.id)).filter(
     (block) => block.blockType !== 'PAGE_HEADER' && block.blockType !== 'PAGE_FOOTER',
   );
   // Page markers travel with the text so the auditor can cite a page number.
@@ -219,8 +219,8 @@ function readDocumentText(document: Document, budget: number): ArtifactContent {
   };
 }
 
-function toArtifact(document: Document, budget: number): ArtifactContent {
-  return readDocumentText(document, budget);
+async function toArtifact(document: Document, budget: number): Promise<ArtifactContent> {
+  return await readDocumentText(document, budget);
 }
 
 export interface BuildAuditContextInput {
@@ -237,22 +237,22 @@ export interface BuildAuditContextInput {
  * Assemble everything an audit is allowed to see. Pure: it reads state, records
  * nothing, and never consults a provider.
  */
-export function buildAuditContext(input: BuildAuditContextInput): AuditContext {
-  const layer = getLayer(input.layerId);
+export async function buildAuditContext(input: BuildAuditContextInput): Promise<AuditContext> {
+  const layer = await getLayer(input.layerId);
   if (!layer) throw new Error(`Cannot audit: unknown layer ${input.layerId}`);
-  const project = getProject(layer.projectId);
+  const project = await getProject(layer.projectId);
   if (!project) throw new Error(`Cannot audit: unknown project ${layer.projectId}`);
 
   const budget = input.contentBudget ?? DEFAULT_CONTENT_BUDGET;
   const profile = getAuditProfile(project.slug);
   const layerCriteria = profile ? getLayerCriteria(profile, layer.slug) : null;
-  const layerState = computeLayerState(layer.id);
-  const layerDocuments = listDocumentsByLayer(layer.id);
+  const layerState = await computeLayerState(layer.id);
+  const layerDocuments = await listDocumentsByLayer(layer.id);
 
   // Which documents are under audit, and which are merely context.
   let artifactDocuments: Document[];
   if (input.mode === 'SINGLE_DOCUMENT') {
-    const document = input.documentId ? getDocument(input.documentId) : null;
+    const document = input.documentId ? await getDocument(input.documentId) : null;
     if (!document) throw new Error('Cannot audit: no document was identified for a single-document audit.');
     artifactDocuments = [document];
   } else {
@@ -276,36 +276,48 @@ export function buildAuditContext(input: BuildAuditContextInput): AuditContext {
       ? Math.max(4_000, Math.min(PER_DOCUMENT_BUDGET, Math.floor(budget / Math.max(1, artifactDocuments.length))))
       : budget;
 
-  const artifacts = artifactDocuments.map((document) => toArtifact(document, perDocumentBudget));
+  const artifacts = await Promise.all(
+    artifactDocuments.map((document) => toArtifact(document, perDocumentBudget)),
+  );
   const siblings =
     input.mode === 'SINGLE_DOCUMENT'
-      ? layerDocuments
-          .filter((document) => !artifactIds.has(document.id))
-          .map((document) => toArtifact(document, Math.min(8_000, perDocumentBudget)))
+      ? await Promise.all(
+          layerDocuments
+            .filter((document) => !artifactIds.has(document.id))
+            .map((document) => toArtifact(document, Math.min(8_000, perDocumentBudget))),
+        )
       : [];
 
-  const run = input.runId ? getRun(input.runId) : sourceRunFor(artifactDocuments);
+  const run = input.runId ? await getRun(input.runId) : await sourceRunFor(artifactDocuments);
   const assignmentPrompt = run?.prompt ?? null;
   const requiredAttachments = run?.requiredAttachments ?? [];
 
   const dependencies = run
-    ? checkRunDependencies(run.id)
-    : checkCanonicalNames(
+    ? await checkRunDependencies(run.id)
+    : await checkCanonicalNames(
         project.id,
         input.mode === 'LAYER_PACKET'
-          ? defaultRequiredDocuments(project.id, layer.id, 'SYNTHESIS')
+          ? await defaultRequiredDocuments(project.id, layer.id, 'SYNTHESIS')
           : layerState.expectedVersions.map((version) => `${layer.name} ${version}`),
       );
 
   // Canonical documents of the other layers: the foundation this layer builds on.
-  const parentFoundation = listLayers(project.id)
-    .filter((other) => other.id !== layer.id && other.canonicalDocumentId)
-    .flatMap((other) => {
-      const canonical = other.canonicalDocumentId ? getDocument(other.canonicalDocumentId) : null;
-      return canonical ? [{ layerName: other.name, canonicalName: canonical.canonicalName }] : [];
-    });
+  const parentFoundation = (
+    await Promise.all(
+      (await listLayers(project.id))
+        .filter((other) => other.id !== layer.id && other.canonicalDocumentId)
+        .map(async (other) => {
+          const canonical = other.canonicalDocumentId
+            ? await getDocument(other.canonicalDocumentId)
+            : null;
+          return canonical
+            ? [{ layerName: other.name, canonicalName: canonical.canonicalName }]
+            : [];
+        }),
+    )
+  ).flat();
 
-  const otherLayers = listLayers(project.id)
+  const otherLayers = (await listLayers(project.id))
     .filter((other) => other.id !== layer.id)
     .map((other) => ({
       name: other.name,
@@ -339,7 +351,7 @@ export function buildAuditContext(input: BuildAuditContextInput): AuditContext {
     artifacts,
     siblings,
     parentFoundation,
-    previousAudits: listAuditsByLayer(layer.id).slice(0, 5),
+    previousAudits: (await listAuditsByLayer(layer.id)).slice(0, 5),
     presentVersions,
     expectedVersions: layerState.expectedVersions,
     missingVersions: layerState.missingVersions,
@@ -394,16 +406,16 @@ function buildManifest(
 }
 
 /** The run that produced an artifact, so its exact assignment can be read back. */
-function sourceRunFor(documents: Document[]): ResearchRun | null {
+async function sourceRunFor(documents: Document[]): Promise<ResearchRun | null> {
   for (const document of documents) {
     if (document.sourceRunId) {
-      const run = getRun(document.sourceRunId);
+      const run = await getRun(document.sourceRunId);
       if (run) return run;
     }
   }
   const layerId = documents[0]?.layerId;
   if (!layerId) return null;
-  return listRunsByLayer(layerId).find((run) => Boolean(run.prompt)) ?? null;
+  return (await listRunsByLayer(layerId)).find((run) => Boolean(run.prompt)) ?? null;
 }
 
 /** Artifacts the auditor cannot read. A blocked audit, never a passing one. */

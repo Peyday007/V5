@@ -122,7 +122,7 @@ export interface RetrieveInput {
 }
 
 /** Find the strongest passages for a question across a set of documents. */
-export function retrieveEvidence(input: RetrieveInput): RetrievalResult {
+export async function retrieveEvidence(input: RetrieveInput): Promise<RetrievalResult> {
   const terms = [...new Set(tokenize(input.query))];
   const limit = input.limit ?? 5;
   const maxQuoteChars = input.maxQuoteChars ?? 700;
@@ -132,9 +132,9 @@ export function retrieveEvidence(input: RetrieveInput): RetrievalResult {
   const scored: EvidencePassage[] = [];
 
   for (const documentId of input.documentIds) {
-    const document = getDocument(documentId);
+    const document = await getDocument(documentId);
     if (!document) continue;
-    const run = getCurrentExtractionRun(documentId);
+    const run = await getCurrentExtractionRun(documentId);
 
     if (!run || !isAuditable(run.status)) {
       unreadable.push({
@@ -147,7 +147,7 @@ export function retrieveEvidence(input: RetrieveInput): RetrievalResult {
       continue;
     }
 
-    const chunks = listChunks(run.id);
+    const chunks = await listChunks(run.id);
     searched.push({ documentId, documentLabel: labelOf(document), chunkCount: chunks.length });
 
     for (const chunk of chunks) {
@@ -178,21 +178,21 @@ export function retrieveEvidence(input: RetrieveInput): RetrievalResult {
  * This is what makes a verdict checkable: the UI and the user follow the same
  * path from a conclusion to the exact text it rests on.
  */
-export function resolveCitation(chunkId: string): {
+export async function resolveCitation(chunkId: string): Promise<{
   chunk: DocumentChunk;
   document: Document;
   run: ExtractionRun | null;
   blocks: { pageNumber: number; blockType: string; text: string }[];
-} | null {
-  const chunk = getChunk(chunkId);
+} | null> {
+  const chunk = await getChunk(chunkId);
   if (!chunk) return null;
-  const document = getDocument(chunk.documentId);
+  const document = await getDocument(chunk.documentId);
   if (!document) return null;
-  const run = getCurrentExtractionRun(chunk.documentId);
+  const run = await getCurrentExtractionRun(chunk.documentId);
 
   // The blocks the chunk was built from, so the citation shows real source text
   // rather than the chunk's concatenation.
-  const blocks = listBlocks(chunk.extractionRunId)
+  const blocks = (await listBlocks(chunk.extractionRunId))
     .filter((block) => block.blockIndex >= chunk.blockStart && block.blockIndex <= chunk.blockEnd)
     .map((block) => ({
       pageNumber: block.pageNumber,
@@ -204,15 +204,15 @@ export function resolveCitation(chunkId: string): {
 }
 
 /** Full readable text of a document's current extraction, for VIEW EXTRACTED TEXT. */
-export function readableText(documentId: string): {
+export async function readableText(documentId: string): Promise<{
   run: ExtractionRun | null;
   pages: { pageNumber: number; blocks: { blockType: string; text: string; method: string }[] }[];
-} {
-  const run = getCurrentExtractionRun(documentId);
+}> {
+  const run = await getCurrentExtractionRun(documentId);
   if (!run) return { run: null, pages: [] };
 
   const byPage = new Map<number, { blockType: string; text: string; method: string }[]>();
-  for (const block of listBlocks(run.id)) {
+  for (const block of await listBlocks(run.id)) {
     const list = byPage.get(block.pageNumber) ?? [];
     list.push({
       blockType: block.blockType,

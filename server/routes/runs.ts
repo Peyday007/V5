@@ -82,8 +82,8 @@ function parseVersion(value: unknown, field: string): string | undefined {
   return normalizeVersion(raw);
 }
 
-function auditsForRun(run: ResearchRun): Audit[] {
-  const all = run.layerId ? listAuditsByLayer(run.layerId) : listAuditsByProject(run.projectId);
+async function auditsForRun(run: ResearchRun): Promise<Audit[]> {
+  const all = run.layerId ? await listAuditsByLayer(run.layerId) : await listAuditsByProject(run.projectId);
   return all.filter((audit) => audit.runId === run.id);
 }
 
@@ -94,14 +94,14 @@ function auditsForRun(run: ResearchRun): Audit[] {
 
 runsRouter.get(
   '/:runId',
-  handler((req) => {
-    const run = requireRun(pathId(req, 'runId'));
+  handler(async (req) => {
+    const run = await requireRun(pathId(req, 'runId'));
     return {
       run,
-      layer: run.layerId ? requireLayer(run.layerId) : null,
-      dependencies: checkRunDependencies(run.id),
-      audits: auditsForRun(run),
-      lineage: getRunLineage(run.id),
+      layer: run.layerId ? await requireLayer(run.layerId) : null,
+      dependencies: await checkRunDependencies(run.id),
+      audits: await auditsForRun(run),
+      lineage: await getRunLineage(run.id),
     };
   }),
 );
@@ -112,8 +112,8 @@ runsRouter.get(
 
 runsRouter.patch(
   '/:runId',
-  handler((req) => {
-    const run = requireRun(pathId(req, 'runId'));
+  handler(async (req) => {
+    const run = await requireRun(pathId(req, 'runId'));
     const body = bodyOf(req);
 
     const status = optionalEnum<RunStatus>(body['status'], RUN_STATUSES, 'status');
@@ -128,7 +128,7 @@ runsRouter.patch(
 
     const now = nowIso();
     const updated =
-      updateRun(run.id, {
+      await updateRun(run.id, {
         status,
         provider,
         model: 'model' in body ? nullableString(body['model'], 'model') : undefined,
@@ -149,7 +149,7 @@ runsRouter.patch(
       ('resultText' in body && updated.resultText !== run.resultText) ||
       ('failureReason' in body && updated.failureReason !== run.failureReason);
     if (rewroteRecord) {
-      recordEvent({
+      await recordEvent({
         projectId: run.projectId,
         layerId: run.layerId,
         entityType: 'RUN',
@@ -167,7 +167,7 @@ runsRouter.patch(
     }
 
     if (status && status !== run.status) {
-      recordEvent({
+      await recordEvent({
         projectId: run.projectId,
         layerId: run.layerId,
         entityType: 'RUN',
@@ -177,8 +177,8 @@ runsRouter.patch(
       });
     }
 
-    recomputeProject(run.projectId);
-    return { run: requireRun(updated.id), plan: buildPlan(run.projectId) };
+    await recomputeProject(run.projectId);
+    return { run: await requireRun(updated.id), plan: await buildPlan(run.projectId) };
   }),
 );
 
@@ -187,17 +187,17 @@ const RECOMPILABLE_RUN_STATUSES = new Set<RunStatus>(['PLANNED', 'READY', 'BLOCK
 
 runsRouter.post(
   '/:runId/prompt',
-  handler((req) => {
-    const run = requireRun(pathId(req, 'runId'));
-    const layer = layerOfRun(run);
-    const project = projectOfLayer(layer);
+  handler(async (req) => {
+    const run = await requireRun(pathId(req, 'runId'));
+    const layer = await layerOfRun(run);
+    const project = await projectOfLayer(layer);
     const body = bodyOf(req);
 
     // A redo carries its parent's audit and text forward, so recompiling one
     // rebuilds the corrected prompt rather than the original.
-    const parentAudit = run.parentRunId ? getLatestAuditForRun(run.parentRunId) : null;
+    const parentAudit = run.parentRunId ? await getLatestAuditForRun(run.parentRunId) : null;
 
-    const compiled = compilePrompt({
+    const compiled = await compilePrompt({
       projectId: project.id,
       layerId: layer.id,
       runType: run.runType,
@@ -210,7 +210,7 @@ runsRouter.post(
       previousRunId: run.parentRunId,
     });
 
-    const dependencies = getDb().transaction(() => {
+    const dependencies = await getDb().transaction(async () => {
       // Invariants 5 and 10: a started run's prompt is the record of what was
       // actually sent, and it is the only copy. Recompiling over a FAILED or
       // COMPLETE run would destroy the evidence a redo is supposed to preserve.
@@ -223,7 +223,7 @@ runsRouter.post(
         );
       }
 
-      updateRun(run.id, {
+      await updateRun(run.id, {
         targetVersion: compiled.targetVersion,
         prompt: compiled.prompt,
         promptSections: compiled.sections,
@@ -231,13 +231,13 @@ runsRouter.post(
         expectedConversationTitle: compiled.expectedConversationTitle,
         expectedFilename: compiled.expectedFilename,
       });
-      setRunDependencies(run.id, compiled.requiredAttachments, {
+      await setRunDependencies(run.id, compiled.requiredAttachments, {
         dependencyType:
           run.runType === 'AUDIT' || run.runType === 'CROSS_LAYER_AUDIT' ? 'AUDIT_INPUT' : 'SOURCE_PACKET',
       });
-      const check = checkRunDependencies(run.id);
-      updateRun(run.id, { status: check.ready ? 'READY' : 'BLOCKED' });
-      recordEvent({
+      const check = await checkRunDependencies(run.id);
+      await updateRun(run.id, { status: check.ready ? 'READY' : 'BLOCKED' });
+      await recordEvent({
         projectId: project.id,
         layerId: layer.id,
         entityType: 'RUN',
@@ -253,8 +253,8 @@ runsRouter.post(
       return check;
     });
 
-    recomputeProject(project.id);
-    return { run: requireRun(run.id), compiled, dependencies };
+    await recomputeProject(project.id);
+    return { run: await requireRun(run.id), compiled, dependencies };
   }),
 );
 
@@ -264,9 +264,9 @@ runsRouter.post(
  * layer freezable, so completing one on a packet the platform knows is
  * incomplete is the same violation as starting it — just later and harder to see.
  */
-function assertSynthesisPacketComplete(run: ResearchRun, verb: string): void {
+async function assertSynthesisPacketComplete(run: ResearchRun, verb: string): Promise<void> {
   if (run.runType !== 'SYNTHESIS' || run.dependencyOverride) return;
-  const check = checkRunDependencies(run.id);
+  const check = await checkRunDependencies(run.id);
   if (check.ready) return;
   throw conflict(
     `This synthesis cannot ${verb}: its source packet is ${check.summary}. ` +
@@ -278,13 +278,13 @@ function assertSynthesisPacketComplete(run: ResearchRun, verb: string): void {
 
 runsRouter.post(
   '/:runId/start',
-  handler((req) => {
-    const run = requireRun(pathId(req, 'runId'));
-    assertSynthesisPacketComplete(run, 'start');
+  handler(async (req) => {
+    const run = await requireRun(pathId(req, 'runId'));
+    await assertSynthesisPacketComplete(run, 'start');
 
     const now = nowIso();
-    updateRun(run.id, { status: 'RUNNING', startedAt: run.startedAt ?? now });
-    recordEvent({
+    await updateRun(run.id, { status: 'RUNNING', startedAt: run.startedAt ?? now });
+    await recordEvent({
       projectId: run.projectId,
       layerId: run.layerId,
       entityType: 'RUN',
@@ -293,16 +293,16 @@ runsRouter.post(
       payload: { runType: run.runType, targetVersion: run.targetVersion, startedAt: now },
     });
 
-    recomputeProject(run.projectId);
-    return { run: requireRun(run.id), plan: buildPlan(run.projectId) };
+    await recomputeProject(run.projectId);
+    return { run: await requireRun(run.id), plan: await buildPlan(run.projectId) };
   }),
 );
 
 runsRouter.post(
   '/:runId/complete',
-  handler((req) => {
-    const run = requireRun(pathId(req, 'runId'));
-    assertSynthesisPacketComplete(run, 'be completed');
+  handler(async (req) => {
+    const run = await requireRun(pathId(req, 'runId'));
+    await assertSynthesisPacketComplete(run, 'be completed');
     const body = bodyOf(req);
     const resultText = 'resultText' in body ? nullableString(body['resultText'], 'resultText') : undefined;
 
@@ -312,20 +312,20 @@ runsRouter.post(
 
     let document: Document | null = null;
     if (register) {
-      const layer = layerOfRun(run);
-      const project = projectOfLayer(layer);
+      const layer = await layerOfRun(run);
+      const project = await projectOfLayer(layer);
       const version =
         parseVersion(register['version'], 'register.version') ??
-        targetVersionForRun(run, layer.id, project.id);
+        await targetVersionForRun(run, layer.id, project.id);
       const documentType =
         optionalEnum<DocumentType>(register['documentType'], DOCUMENT_TYPES, 'register.documentType') ??
-        documentTypeForRun(run);
+        await documentTypeForRun(run);
 
       if (resultText && resultText.length > 0) {
         // The returned text is the artifact: store it so the document has a real
         // file, rather than a row that claims a document nobody can open.
         const names = buildNames(layer.name, version, '.md');
-        const imported = importFile({
+        const imported = await importFile({
           projectId: project.id,
           originalFilename: names.filename,
           contents: Buffer.from(resultText, 'utf8'),
@@ -336,17 +336,17 @@ runsRouter.post(
         });
         if (!imported.documentId) throw conflict(imported.message, imported);
         document =
-          updateDocument(imported.documentId, { sourceRunId: run.id, status: 'COMPLETE' }) ??
-          requireDocument(imported.documentId);
+          await updateDocument(imported.documentId, { sourceRunId: run.id, status: 'COMPLETE' }) ??
+          await requireDocument(imported.documentId);
       } else {
         // No text yet: register the expectation so the layer can say exactly
         // which document it is waiting for.
         const names = buildNames(layer.name, version);
-        const existing = findDocumentByCanonicalName(project.id, names.canonicalName);
+        const existing = await findDocumentByCanonicalName(project.id, names.canonicalName);
         if (existing) {
-          document = updateDocument(existing.id, { documentType, sourceRunId: run.id }) ?? existing;
+          document = await updateDocument(existing.id, { documentType, sourceRunId: run.id }) ?? existing;
         } else {
-          document = createDocument({
+          document = await createDocument({
             projectId: project.id,
             layerId: layer.id,
             canonicalName: names.canonicalName,
@@ -359,7 +359,7 @@ runsRouter.post(
             sourceRunId: run.id,
             notes: `Expected artifact of run ${run.id}.`,
           });
-          recordEvent({
+          await recordEvent({
             projectId: project.id,
             layerId: layer.id,
             entityType: 'DOCUMENT',
@@ -378,13 +378,13 @@ runsRouter.post(
     }
 
     const completedAt = nowIso();
-    updateRun(run.id, {
+    await updateRun(run.id, {
       status: 'COMPLETE',
       resultText,
       completedAt,
       targetDocumentId: document ? document.id : undefined,
     });
-    recordEvent({
+    await recordEvent({
       projectId: run.projectId,
       layerId: run.layerId,
       entityType: 'RUN',
@@ -399,26 +399,26 @@ runsRouter.post(
       },
     });
 
-    recomputeProject(run.projectId);
+    await recomputeProject(run.projectId);
     return {
-      run: requireRun(run.id),
-      document: document ? getDocument(document.id) : null,
-      plan: buildPlan(run.projectId),
+      run: await requireRun(run.id),
+      document: document ? await getDocument(document.id) : null,
+      plan: await buildPlan(run.projectId),
     };
   }),
 );
 
 runsRouter.post(
   '/:runId/fail',
-  handler((req) => {
-    const run = requireRun(pathId(req, 'runId'));
+  handler(async (req) => {
+    const run = await requireRun(pathId(req, 'runId'));
     const failureReason = requiredString(bodyOf(req)['failureReason'], 'failureReason');
 
     const failedAt = nowIso();
     // The prompt, the packet and any partial result stay exactly as they are:
     // a failed attempt is evidence, not garbage (invariant 5).
-    updateRun(run.id, { status: 'FAILED', failureReason, failedAt });
-    recordEvent({
+    await updateRun(run.id, { status: 'FAILED', failureReason, failedAt });
+    await recordEvent({
       projectId: run.projectId,
       layerId: run.layerId,
       entityType: 'RUN',
@@ -427,19 +427,19 @@ runsRouter.post(
       payload: { runType: run.runType, failureReason, failedAt },
     });
 
-    recomputeProject(run.projectId);
-    return { run: requireRun(run.id), plan: buildPlan(run.projectId) };
+    await recomputeProject(run.projectId);
+    return { run: await requireRun(run.id), plan: await buildPlan(run.projectId) };
   }),
 );
 
 runsRouter.post(
   '/:runId/result-file',
   uploadOneFile,
-  handler((req) => {
-    const run = requireRun(pathId(req, 'runId'));
-    assertSynthesisPacketComplete(run, 'register its result');
-    const layer = layerOfRun(run);
-    const project = projectOfLayer(layer);
+  handler(async (req) => {
+    const run = await requireRun(pathId(req, 'runId'));
+    await assertSynthesisPacketComplete(run, 'register its result');
+    const layer = await layerOfRun(run);
+    const project = await projectOfLayer(layer);
     const file = uploadedFile(req);
     if (file.buffer.byteLength === 0) {
       throw badRequest('The uploaded file is empty, so there is nothing to register.');
@@ -447,7 +447,7 @@ runsRouter.post(
 
     // The same filing path staged research uses: the platform owns the filename
     // (invariant 4), and one registration completes the run either way.
-    const filed = registerRunArtifact({
+    const filed = await registerRunArtifact({
       run,
       layer,
       project,
@@ -457,18 +457,18 @@ runsRouter.post(
     if (!filed.imported.documentId) throw conflict(filed.imported.message, filed.imported);
 
     return {
-      run: requireRun(run.id),
-      document: getDocument(filed.imported.documentId),
-      plan: buildPlan(project.id),
+      run: await requireRun(run.id),
+      document: await getDocument(filed.imported.documentId),
+      plan: await buildPlan(project.id),
     };
   }),
 );
 
 runsRouter.post(
   '/:runId/audit',
-  handler((req) => {
-    const run = requireRun(pathId(req, 'runId'));
-    const layer = layerOfRun(run);
+  handler(async (req) => {
+    const run = await requireRun(pathId(req, 'runId'));
+    const layer = await layerOfRun(run);
     const body = bodyOf(req);
 
     // `text` is the raw model output; the structured record is what gets stored
@@ -516,7 +516,7 @@ runsRouter.post(
     const confidence = optionalNumber(body['confidence'], 'confidence', { min: 0, max: 1 });
     if (confidence !== undefined) result.confidence = confidence;
 
-    const outcome = asInvariantViolation(() =>
+    const outcome = await asInvariantViolation(() =>
       recordAudit({
         projectId: run.projectId,
         layerId: layer.id,
@@ -527,25 +527,25 @@ runsRouter.post(
       }),
     );
 
-    recomputeProject(run.projectId);
+    await recomputeProject(run.projectId);
     return {
       audit: outcome.audit,
-      state: computeLayerState(layer.id),
+      state: await computeLayerState(layer.id),
       redoRun: outcome.redoRun,
-      plan: buildPlan(run.projectId),
+      plan: await buildPlan(run.projectId),
     };
   }),
 );
 
 runsRouter.post(
   '/:runId/redo',
-  handler((req) => {
-    const run = requireRun(pathId(req, 'runId'));
+  handler(async (req) => {
+    const run = await requireRun(pathId(req, 'runId'));
     const reason = requiredString(bodyOf(req)['reason'], 'reason');
-    const audit = getLatestAuditForRun(run.id);
+    const audit = await getLatestAuditForRun(run.id);
 
     // A new attempt, never an edit of the old one.
-    const redo = asInvariantViolation(() =>
+    const redo = await asInvariantViolation(() =>
       createRedoRun({
         parentRunId: run.id,
         auditId: audit?.id ?? null,
@@ -554,7 +554,7 @@ runsRouter.post(
       }),
     );
 
-    recomputeProject(run.projectId);
-    return { run: requireRun(redo.id), plan: buildPlan(run.projectId) };
+    await recomputeProject(run.projectId);
+    return { run: await requireRun(redo.id), plan: await buildPlan(run.projectId) };
   }),
 );

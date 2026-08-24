@@ -68,13 +68,12 @@ export function mapAuditPass(row: AuditPassRow): AuditPass {
   };
 }
 
-function loadGaps(auditId: string): AuditGap[] {
-  return getDb()
-    .all<AuditGapRow>('SELECT * FROM audit_gaps WHERE audit_id = ? ORDER BY ordinal, rowid', [auditId])
+async function loadGaps(auditId: string): Promise<AuditGap[]> {
+  return (await getDb().all<AuditGapRow>('SELECT * FROM audit_gaps WHERE audit_id = ? ORDER BY ordinal, rowid', [auditId]))
     .map(mapGap);
 }
 
-function mapAudit(row: AuditRow, findings: AuditFinding[]): Audit {
+async function mapAudit(row: AuditRow, findings: AuditFinding[]): Promise<Audit> {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -99,17 +98,16 @@ function mapAudit(row: AuditRow, findings: AuditFinding[]): Audit {
     auditedDocumentIds: parseJson<string[]>(row.audited_document_ids, []),
     provider: row.provider ?? null,
     model: row.model ?? null,
-    gaps: loadGaps(row.id),
+    gaps: await loadGaps(row.id),
     evidenceManifest: parseJson<Record<string, unknown>>(row.evidence_manifest, {}),
   };
 }
 
-function loadFindings(auditId: string): AuditFinding[] {
-  return getDb()
-    .all<AuditFindingRow>(
+async function loadFindings(auditId: string): Promise<AuditFinding[]> {
+  return (await getDb().all<AuditFindingRow>(
       'SELECT * FROM audit_findings WHERE audit_id = ? ORDER BY finding_type, ordinal',
       [auditId],
-    )
+    ))
     .map(mapFinding);
 }
 
@@ -150,20 +148,20 @@ export interface CreateAuditInput {
  * Persist an audit together with its structured children. Invariant 11: an
  * audit is never stored as prose alone.
  */
-export function createAudit(input: CreateAuditInput): Audit {
+export async function createAudit(input: CreateAuditInput): Promise<Audit> {
   const db = getDb();
   const ts = nowIso();
   const id = newId('aud');
   const r = input.result;
 
-  return db.transaction(() => {
+  return await db.transaction(async () => {
     const gaps = input.gaps ?? [];
     const foundationalGapCount = gaps.filter((gap) => gap.classification === 'FOUNDATIONAL_GAP').length;
     const targetedResearchRuns = gaps.filter(
       (gap) => gap.classification === 'TARGETED_RESEARCH_GAP',
     ).length;
 
-    db.run(
+    await db.run(
       `INSERT INTO audits (id, project_id, layer_id, run_id, audited_document_id, verdict, summary,
          confidence, synthesis_required, freeze_eligible, next_version, next_action, source, raw, created_at,
          mode, profile_id, foundational_gap_count, targeted_research_runs_required,
@@ -179,8 +177,8 @@ export function createAudit(input: CreateAuditInput): Audit {
         input.provider ?? null, input.model ?? null, toJson(input.evidenceManifest ?? {})],
     );
 
-    gaps.forEach((gap, ordinal) => {
-      db.run(
+    gaps.forEach(async (gap, ordinal) => {
+      await db.run(
         `INSERT INTO audit_gaps (id, audit_id, ordinal, classification, title, detail,
            owning_layer_id, owning_layer_name, justification, research_question,
            expected_contribution, source_pass, created_at)
@@ -194,7 +192,7 @@ export function createAudit(input: CreateAuditInput): Audit {
 
     // Passes are written before the verdict exists, so they are adopted here.
     if (input.pipelineId) {
-      db.run('UPDATE audit_passes SET audit_id = ? WHERE pipeline_id = ?', [id, input.pipelineId]);
+      await db.run('UPDATE audit_passes SET audit_id = ? WHERE pipeline_id = ?', [id, input.pipelineId]);
     }
 
     const groups: [AuditFindingType, string[]][] = [
@@ -205,7 +203,7 @@ export function createAudit(input: CreateAuditInput): Audit {
       ['NEXT_ACTION', r.nextAction ? [r.nextAction] : []],
     ];
     for (const extra of input.extraFindings ?? []) {
-      db.run(
+      await db.run(
         `INSERT INTO audit_findings (id, audit_id, finding_type, ordinal, content, payload, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [newId('afd'), id, extra.findingType, 0, extra.content, toJson(extra.payload ?? {}), ts],
@@ -213,57 +211,61 @@ export function createAudit(input: CreateAuditInput): Audit {
     }
 
     for (const [findingType, items] of groups) {
-      items.forEach((content, ordinal) => {
-        db.run(
+      items.forEach(async (content, ordinal) => {
+        await db.run(
           `INSERT INTO audit_findings (id, audit_id, finding_type, ordinal, content, payload, created_at)
            VALUES (?, ?, ?, ?, ?, '{}', ?)`,
           [newId('afd'), id, findingType, ordinal, content, ts],
         );
       });
     }
-    return getAudit(id)!;
+    return (await getAudit(id))!;
   });
 }
 
-export function getAudit(id: string): Audit | null {
-  const row = getDb().get<AuditRow>('SELECT * FROM audits WHERE id = ?', [id]);
-  return row ? mapAudit(row, loadFindings(id)) : null;
+export async function getAudit(id: string): Promise<Audit | null> {
+  const row = await getDb().get<AuditRow>('SELECT * FROM audits WHERE id = ?', [id]);
+  return row ? await mapAudit(row, await loadFindings(id)) : null;
 }
 
-export function listAuditsByLayer(layerId: string): Audit[] {
-  return getDb()
-    .all<AuditRow>('SELECT * FROM audits WHERE layer_id = ? ORDER BY created_at DESC', [layerId])
-    .map((row) => mapAudit(row, loadFindings(row.id)));
+export async function listAuditsByLayer(layerId: string): Promise<Audit[]> {
+  const rows = await getDb().all<AuditRow>(
+    'SELECT * FROM audits WHERE layer_id = ? ORDER BY created_at DESC',
+    [layerId],
+  );
+  return await Promise.all(rows.map(async (row) => mapAudit(row, await loadFindings(row.id))));
 }
 
-export function listAuditsByProject(projectId: string): Audit[] {
-  return getDb()
-    .all<AuditRow>('SELECT * FROM audits WHERE project_id = ? ORDER BY created_at DESC', [projectId])
-    .map((row) => mapAudit(row, loadFindings(row.id)));
+export async function listAuditsByProject(projectId: string): Promise<Audit[]> {
+  const rows = await getDb().all<AuditRow>(
+    'SELECT * FROM audits WHERE project_id = ? ORDER BY created_at DESC',
+    [projectId],
+  );
+  return await Promise.all(rows.map(async (row) => mapAudit(row, await loadFindings(row.id))));
 }
 
-export function getLatestAuditForLayer(layerId: string): Audit | null {
-  const row = getDb().get<AuditRow>(
+export async function getLatestAuditForLayer(layerId: string): Promise<Audit | null> {
+  const row = await getDb().get<AuditRow>(
     'SELECT * FROM audits WHERE layer_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1',
     [layerId],
   );
-  return row ? mapAudit(row, loadFindings(row.id)) : null;
+  return row ? await mapAudit(row, await loadFindings(row.id)) : null;
 }
 
-export function getLatestAuditForDocument(documentId: string): Audit | null {
-  const row = getDb().get<AuditRow>(
+export async function getLatestAuditForDocument(documentId: string): Promise<Audit | null> {
+  const row = await getDb().get<AuditRow>(
     'SELECT * FROM audits WHERE audited_document_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1',
     [documentId],
   );
-  return row ? mapAudit(row, loadFindings(row.id)) : null;
+  return row ? await mapAudit(row, await loadFindings(row.id)) : null;
 }
 
-export function getLatestAuditForRun(runId: string): Audit | null {
-  const row = getDb().get<AuditRow>(
+export async function getLatestAuditForRun(runId: string): Promise<Audit | null> {
+  const row = await getDb().get<AuditRow>(
     'SELECT * FROM audits WHERE run_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1',
     [runId],
   );
-  return row ? mapAudit(row, loadFindings(row.id)) : null;
+  return row ? await mapAudit(row, await loadFindings(row.id)) : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -291,9 +293,9 @@ export interface RecordAuditPassInput {
  * cannot be traced back to what the model actually said is not auditable, and a
  * failed audit still has to leave evidence of why it failed.
  */
-export function recordAuditPass(input: RecordAuditPassInput): AuditPass {
+export async function recordAuditPass(input: RecordAuditPassInput): Promise<AuditPass> {
   const id = newId('aps');
-  getDb().run(
+  await getDb().run(
     `INSERT INTO audit_passes (id, audit_id, pipeline_id, project_id, layer_id, pass_key, ordinal,
        provider, model, prompt, raw_response, parsed, ok, error, duration_ms, created_at)
      VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -302,37 +304,33 @@ export function recordAuditPass(input: RecordAuditPassInput): AuditPass {
       toJson(input.parsed ?? null), fromBool(input.ok), input.error ?? null,
       input.durationMs ?? null, nowIso()],
   );
-  return getDb()
-    .all<AuditPassRow>('SELECT * FROM audit_passes WHERE id = ?', [id])
+  return (await getDb().all<AuditPassRow>('SELECT * FROM audit_passes WHERE id = ?', [id]))
     .map(mapAuditPass)[0]!;
 }
 
-export function listAuditPasses(auditId: string): AuditPass[] {
-  return getDb()
-    .all<AuditPassRow>('SELECT * FROM audit_passes WHERE audit_id = ? ORDER BY ordinal, rowid', [
+export async function listAuditPasses(auditId: string): Promise<AuditPass[]> {
+  return (await getDb().all<AuditPassRow>('SELECT * FROM audit_passes WHERE audit_id = ? ORDER BY ordinal, rowid', [
       auditId,
-    ])
+    ]))
     .map(mapAuditPass);
 }
 
-export function listPipelinePasses(pipelineId: string): AuditPass[] {
-  return getDb()
-    .all<AuditPassRow>('SELECT * FROM audit_passes WHERE pipeline_id = ? ORDER BY ordinal, rowid', [
+export async function listPipelinePasses(pipelineId: string): Promise<AuditPass[]> {
+  return (await getDb().all<AuditPassRow>('SELECT * FROM audit_passes WHERE pipeline_id = ? ORDER BY ordinal, rowid', [
       pipelineId,
-    ])
+    ]))
     .map(mapAuditPass);
 }
 
 /** Gaps across a layer's audit history, newest audit first. */
-export function listGapsByLayer(layerId: string, limit = 200): AuditGap[] {
-  return getDb()
-    .all<AuditGapRow>(
+export async function listGapsByLayer(layerId: string, limit = 200): Promise<AuditGap[]> {
+  return (await getDb().all<AuditGapRow>(
       `SELECT g.* FROM audit_gaps g
        JOIN audits a ON a.id = g.audit_id
        WHERE a.layer_id = ?
        ORDER BY a.created_at DESC, g.ordinal
        LIMIT ?`,
       [layerId, limit],
-    )
+    ))
     .map(mapGap);
 }

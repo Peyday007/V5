@@ -139,14 +139,14 @@ const GROUPS: Record<string, keyof Pick<
  * bundles are the ones the run will actually use, so the plan a person approves
  * is the plan that executes.
  */
-export function buildReview(orchestrationId: string): ResearchPlanReview {
-  const orchestration = getOrchestration(orchestrationId);
+export async function buildReview(orchestrationId: string): Promise<ResearchPlanReview> {
+  const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) throw new Error(`Unknown research run ${orchestrationId}`);
 
-  const contract = contractFor(orchestrationId);
-  const requirements = listRequirements(orchestrationId);
-  const coverage = new Map(listCoverage(orchestrationId).map((entry) => [entry.requirementId, entry]));
-  const archive = listExistingClaims(orchestration.projectId);
+  const contract = await contractFor(orchestrationId);
+  const requirements = await listRequirements(orchestrationId);
+  const coverage = new Map((await listCoverage(orchestrationId)).map((entry) => [entry.requirementId, entry]));
+  const archive = await listExistingClaims(orchestration.projectId);
   const byClaimId = new Map(archive.map((claim) => [claim.id, claim]));
 
   const review: ResearchPlanReview = {
@@ -203,7 +203,7 @@ export function buildReview(orchestrationId: string): ResearchPlanReview {
   }
 
   // The fragments and the bundles the run would actually execute.
-  const fragments = currentFragments(orchestrationId);
+  const fragments = await currentFragments(orchestrationId);
   const runnable = fragments.filter((fragment) => ['PLANNED', 'QUEUED'].includes(fragment.status));
   const bundles = bundleFragments(executionOrder(runnable, fragments));
   const jobOf = new Map<string, number>();
@@ -283,23 +283,23 @@ export interface ReviewDecisionOutcome {
  * found — so a requirement the archive already answers does not become a job
  * just because a person typed it.
  */
-export function applyReviewDecisions(
+export async function applyReviewDecisions(
   orchestrationId: string,
   decisions: ReviewDecisions,
-): ReviewDecisionOutcome {
-  const orchestration = getOrchestration(orchestrationId);
+): Promise<ReviewDecisionOutcome> {
+  const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) throw new Error(`Unknown research run ${orchestrationId}`);
   const applied: string[] = [];
-  const contract = contractFor(orchestrationId);
+  const contract = await contractFor(orchestrationId);
 
   if (decisions.boundary && contract) {
-    updateBoundaryContract(contract.id, { ...decisions.boundary, status: 'APPROVED' });
+    await updateBoundaryContract(contract.id, { ...decisions.boundary, status: 'APPROVED' });
     applied.push('The boundary was corrected, and the scope now says what you meant.');
   }
 
   if (decisions.supersedeClaims && decisions.supersedeClaims.length > 0) {
     for (const claimId of decisions.supersedeClaims) {
-      updateExistingClaim(claimId, {
+      await updateExistingClaim(claimId, {
         superseded: true,
         verificationState: 'SUPERSEDED',
         verificationDetail: 'Marked out of date during review, before research began.',
@@ -313,7 +313,7 @@ export function applyReviewDecisions(
 
   if (decisions.forceReverify && decisions.forceReverify.length > 0) {
     for (const requirementId of decisions.forceReverify) {
-      upsertCoverage({
+      await upsertCoverage({
         orchestrationId,
         requirementId,
         status: 'PRESENT_BUT_UNVERIFIED',
@@ -333,8 +333,8 @@ export function applyReviewDecisions(
   }
 
   if (decisions.addRequirements && decisions.addRequirements.length > 0) {
-    const existing = listRequirements(orchestrationId);
-    createRequirements(
+    const existing = await listRequirements(orchestrationId);
+    await createRequirements(
       decisions.addRequirements.map((entry, index) => ({
         orchestrationId,
         projectId: orchestration.projectId,
@@ -358,13 +358,13 @@ export function applyReviewDecisions(
   // Re-assess everything against the corrected boundary and the archive as it
   // now stands, then plan fragments for whatever is still a gap.
   if (decisions.boundary || decisions.addRequirements || decisions.supersedeClaims || decisions.forceReverify) {
-    const result = reconcile({
+    const result = await reconcile({
       orchestrationId,
       projectId: orchestration.projectId,
-      requirements: listRequirements(orchestrationId),
-      contract: contractFor(orchestrationId),
+      requirements: await listRequirements(orchestrationId),
+      contract: await contractFor(orchestrationId),
     });
-    const planned = planFragmentsFromGaps({ orchestrationId, reconciliation: result });
+    const planned = await planFragmentsFromGaps({ orchestrationId, reconciliation: result });
     if (planned.length > 0) {
       applied.push(`${planned.length} new fragment(s) were planned for the gaps that remain.`);
     }
@@ -373,11 +373,11 @@ export function applyReviewDecisions(
   if (decisions.removeFragments && decisions.removeFragments.length > 0) {
     const keys = new Set(decisions.removeFragments);
     let removed = 0;
-    for (const fragment of currentFragments(orchestrationId)) {
+    for (const fragment of await currentFragments(orchestrationId)) {
       if (!keys.has(fragment.fragmentKey)) continue;
       if (!['PLANNED', 'QUEUED'].includes(fragment.status)) continue;
       const reason = 'Removed during review: you decided this does not need researching.';
-      updateFragment(fragment.id, {
+      await updateFragment(fragment.id, {
         status: 'CANCELLED',
         cancelledReason: reason,
         blockedReason: reason,
@@ -389,7 +389,7 @@ export function applyReviewDecisions(
   }
 
   if (decisions.approve || decisions.autoApprove) {
-    updateOrchestration(orchestrationId, {
+    await updateOrchestration(orchestrationId, {
       approvedAt: new Date().toISOString(),
       approvalNote: decisions.note ?? null,
       ...(decisions.autoApprove === undefined ? {} : { autoApprove: decisions.autoApprove }),
@@ -402,7 +402,7 @@ export function applyReviewDecisions(
     );
   }
 
-  recordEvent({
+  await recordEvent({
     projectId: orchestration.projectId,
     layerId: orchestration.layerId,
     entityType: 'RUN',
@@ -416,7 +416,7 @@ export function applyReviewDecisions(
     },
   });
 
-  return { review: buildReview(orchestrationId), applied };
+  return { review: await buildReview(orchestrationId), applied };
 }
 
 /** The tier names, so the review page can order and label them itself. */

@@ -1152,6 +1152,8 @@ export interface DocumentRow {
   status: string;
   filename: string | null;
   filesystem_path: string | null;
+  storage_key: string | null;
+  storage_provider: string | null;
   file_size: number | null;
   file_hash: string | null;
   file_missing: number;
@@ -1473,6 +1475,16 @@ export interface Document {
   status: DocumentStatus;
   filename: string | null;
   filesystemPath: string | null;
+  /**
+   * Where the bytes are, in the document store's own terms.
+   *
+   * The same string as `filesystemPath` for anything stored locally — a
+   * data-root-relative path is a perfectly good key — and an identity-based key
+   * for anything stored in the cloud.
+   */
+  storageKey: string | null;
+  /** Which store holds them: LOCAL or SUPABASE. */
+  storageProvider: string | null;
   fileSize: number | null;
   fileHash: string | null;
   fileMissing: boolean;

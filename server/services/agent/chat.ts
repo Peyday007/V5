@@ -73,7 +73,7 @@ interface Turn {
   projectId: string;
   content: string;
   lower: string;
-  invoke(name: ToolName, args?: Record<string, unknown>): ToolResult;
+  invoke(name: ToolName, args?: Record<string, unknown>): Promise<ToolResult>;
 }
 
 const CAPABILITIES = [
@@ -176,13 +176,13 @@ function detectIntent(content: string): Intent {
   return 'HELP';
 }
 
-function layerArgs(projectId: string, content: string): { layerId: string } | null {
-  const layer = resolveLayerReference(projectId, content);
+async function layerArgs(projectId: string, content: string): Promise<{ layerId: string } | null> {
+  const layer = await resolveLayerReference(projectId, content);
   return layer ? { layerId: layer.id } : null;
 }
 
-function unknownLayerBlocks(turn: Turn, verb: string): string[] {
-  const state = turn.invoke('get_project_state');
+async function unknownLayerBlocks(turn: Turn, verb: string): Promise<string[]> {
+  const state = await turn.invoke('get_project_state');
   return [
     `I could not tell which layer you meant, so I did not ${verb} anything. Name one of the layers below.`,
     state.text,
@@ -193,12 +193,12 @@ function unknownLayerBlocks(turn: Turn, verb: string): string[] {
 // Intent handlers — each returns the blocks the assistant message is built from
 // ---------------------------------------------------------------------------
 
-function handleNextAction(turn: Turn): string[] {
-  return [turn.invoke('calculate_next_action').text];
+async function handleNextAction(turn: Turn): Promise<string[]> {
+  return [(await turn.invoke('calculate_next_action')).text];
 }
 
-function handleRunNext(turn: Turn): string[] {
-  const next = turn.invoke('calculate_next_action');
+async function handleRunNext(turn: Turn): Promise<string[]> {
+  const next = await turn.invoke('calculate_next_action');
   const blocks = [next.text];
   const item = (next.data as NextActionData | null)?.nextBestAction ?? null;
   if (!item) {
@@ -209,11 +209,11 @@ function handleRunNext(turn: Turn): string[] {
   const runType = RUN_TYPE_FOR_ACTION[item.actionType];
   if (runType) {
     blocks.push(
-      turn.invoke('create_run', {
+      (await turn.invoke('create_run', {
         layerId: item.layerId,
         runType,
         targetVersion: item.targetVersion,
-      }).text,
+      })).text,
     );
     return blocks;
   }
@@ -221,31 +221,31 @@ function handleRunNext(turn: Turn): string[] {
   switch (item.actionType) {
     case 'RUN_REDO':
       blocks.push(
-        turn.invoke('create_redo', {
+        (await turn.invoke('create_redo', {
           layerId: item.layerId,
           reason: 'Redo started from chat: "run the next thing".',
-        }).text,
+        })).text,
       );
       break;
     case 'FREEZE_LAYER':
-      blocks.push(turn.invoke('get_layer_state', { layerId: item.layerId }).text);
+      blocks.push((await turn.invoke('get_layer_state', { layerId: item.layerId })).text);
       blocks.push(
         `Freezing is an explicit act, so I stopped short of it. Say "Freeze ${item.layerName}." and I will.`,
       );
       break;
     case 'IMPORT_DOCUMENT':
       blocks.push(importAffordance(null));
-      blocks.push(turn.invoke('scan_and_reconcile').text);
+      blocks.push((await turn.invoke('scan_and_reconcile')).text);
       break;
     case 'RECONCILE':
-      blocks.push(turn.invoke('scan_and_reconcile').text);
+      blocks.push((await turn.invoke('scan_and_reconcile')).text);
       break;
     case 'RESOLVE_DEPENDENCY':
       blocks.push(
-        turn.invoke(
+        (await turn.invoke(
           'resolve_dependencies',
           item.missing.length > 0 ? { canonicalNames: item.missing } : { layerId: item.layerId },
-        ).text,
+        )).text,
       );
       break;
     default:
@@ -255,47 +255,47 @@ function handleRunNext(turn: Turn): string[] {
   return blocks;
 }
 
-function handleWhatIsMissing(turn: Turn): string[] {
+async function handleWhatIsMissing(turn: Turn): Promise<string[]> {
   return [
-    turn.invoke('get_project_state').text,
-    turn.invoke('resolve_dependencies').text,
-    turn.invoke('scan_and_reconcile').text,
-    turn.invoke('calculate_next_action').text,
+    (await turn.invoke('get_project_state')).text,
+    (await turn.invoke('resolve_dependencies')).text,
+    (await turn.invoke('scan_and_reconcile')).text,
+    (await turn.invoke('calculate_next_action')).text,
   ];
 }
 
-function handleAuditLayer(turn: Turn): string[] {
-  const target = layerArgs(turn.projectId, turn.content);
+async function handleAuditLayer(turn: Turn): Promise<string[]> {
+  const target = await layerArgs(turn.projectId, turn.content);
   if (!target) return unknownLayerBlocks(turn, 'audit');
   return [
-    turn.invoke('get_layer_state', target).text,
-    turn.invoke('create_run', { ...target, runType: 'AUDIT' }).text,
+    (await turn.invoke('get_layer_state', target)).text,
+    (await turn.invoke('create_run', { ...target, runType: 'AUDIT' })).text,
   ];
 }
 
-function handleRedo(turn: Turn): string[] {
-  const target = layerArgs(turn.projectId, turn.content);
+async function handleRedo(turn: Turn): Promise<string[]> {
+  const target = await layerArgs(turn.projectId, turn.content);
   const version = extractVersionToken(turn.content);
-  const redo = turn.invoke('create_redo', {
+  const redo = await turn.invoke('create_redo', {
     ...(target ?? {}),
     ...(version ? { version } : {}),
     reason: `Redo requested in chat: ${JSON.stringify(turn.content)}`,
   });
   const blocks = [redo.text];
   if (!redo.ok) {
-    blocks.push(turn.invoke('list_runs', { ...(target ?? {}), limit: 10 }).text);
+    blocks.push((await turn.invoke('list_runs', { ...(target ?? {}), limit: 10 })).text);
     if (version) {
-      blocks.push(turn.invoke('find_document', { ...(target ?? {}), version }).text);
+      blocks.push((await turn.invoke('find_document', { ...(target ?? {}), version })).text);
     }
   }
   return blocks;
 }
 
-function handleFreeze(turn: Turn): string[] {
-  const target = layerArgs(turn.projectId, turn.content);
+async function handleFreeze(turn: Turn): Promise<string[]> {
+  const target = await layerArgs(turn.projectId, turn.content);
   if (!target) return unknownLayerBlocks(turn, 'freeze');
-  const state = turn.invoke('get_layer_state', target);
-  const frozen = turn.invoke('mark_layer_frozen', target);
+  const state = await turn.invoke('get_layer_state', target);
+  const frozen = await turn.invoke('mark_layer_frozen', target);
   return frozen.ok ? [frozen.text] : [frozen.text, state.text];
 }
 
@@ -323,48 +323,48 @@ function runTypeForStatus(status: LayerStatus): RunType {
   }
 }
 
-function handleCompilePrompt(turn: Turn): string[] {
+async function handleCompilePrompt(turn: Turn): Promise<string[]> {
   if (/\bredo\b/.test(turn.lower)) return handleRedo(turn);
-  const target = layerArgs(turn.projectId, turn.content);
+  const target = await layerArgs(turn.projectId, turn.content);
   if (!target) return unknownLayerBlocks(turn, 'compile a prompt for');
 
-  const state = turn.invoke('get_layer_state', target);
+  const state = await turn.invoke('get_layer_state', target);
   const snapshot = (state.data as LayerStateData | null)?.snapshot ?? null;
   const runType =
     runTypeFromText(turn.lower) ?? (snapshot ? runTypeForStatus(snapshot.status) : 'EXPANSION');
-  return [state.text, turn.invoke('create_run', { ...target, runType }).text];
+  return [state.text, (await turn.invoke('create_run', { ...target, runType })).text];
 }
 
-function handleLayerStatus(turn: Turn): string[] {
-  const target = layerArgs(turn.projectId, turn.content);
+async function handleLayerStatus(turn: Turn): Promise<string[]> {
+  const target = await layerArgs(turn.projectId, turn.content);
   // get_layer_state already lists the layer's documents, so one call answers this.
-  if (!target) return [turn.invoke('get_project_state').text];
-  return [turn.invoke('get_layer_state', target).text];
+  if (!target) return [(await turn.invoke('get_project_state')).text];
+  return [(await turn.invoke('get_layer_state', target)).text];
 }
 
-function handleListDocuments(turn: Turn): string[] {
-  const target = layerArgs(turn.projectId, turn.content);
-  return [turn.invoke('list_documents', target ?? {}).text];
+async function handleListDocuments(turn: Turn): Promise<string[]> {
+  const target = await layerArgs(turn.projectId, turn.content);
+  return [(await turn.invoke('list_documents', target ?? {})).text];
 }
 
-function handleListRuns(turn: Turn): string[] {
-  const target = layerArgs(turn.projectId, turn.content);
-  return [turn.invoke('list_runs', { ...(target ?? {}), limit: 15 }).text];
+async function handleListRuns(turn: Turn): Promise<string[]> {
+  const target = await layerArgs(turn.projectId, turn.content);
+  return [(await turn.invoke('list_runs', { ...(target ?? {}), limit: 15 })).text];
 }
 
-function handleReconcile(turn: Turn): string[] {
-  return [turn.invoke('scan_and_reconcile').text, turn.invoke('calculate_next_action').text];
+async function handleReconcile(turn: Turn): Promise<string[]> {
+  return [(await turn.invoke('scan_and_reconcile')).text, (await turn.invoke('calculate_next_action')).text];
 }
 
-function handleAddFile(turn: Turn): string[] {
-  const state = turn.invoke('get_project_state');
+async function handleAddFile(turn: Turn): Promise<string[]> {
+  const state = await turn.invoke('get_project_state');
   const slug = (state.data as ProjectStateData | null)?.project.slug ?? null;
-  return [importAffordance(slug), turn.invoke('scan_and_reconcile').text];
+  return [importAffordance(slug), (await turn.invoke('scan_and_reconcile')).text];
 }
 
-function handleRunInterrupted(turn: Turn): string[] {
-  const target = layerArgs(turn.projectId, turn.content);
-  const runs = turn.invoke('list_runs', { ...(target ?? {}), limit: 10 });
+async function handleRunInterrupted(turn: Turn): Promise<string[]> {
+  const target = await layerArgs(turn.projectId, turn.content);
+  const runs = await turn.invoke('list_runs', { ...(target ?? {}), limit: 10 });
   const blocks = [runs.text];
   const candidates = (runs.data as RunsData | null)?.runs.filter((run) => run.active) ?? [];
 
@@ -377,7 +377,7 @@ function handleRunInterrupted(turn: Turn): string[] {
       `There are ${candidates.length} open runs and you did not say which layer, so I marked ` +
         'nothing as failed. Name the layer — for example "Discovery rate limit ran out."',
     );
-    blocks.push(turn.invoke('calculate_next_action').text);
+    blocks.push((await turn.invoke('calculate_next_action')).text);
     return blocks;
   }
 
@@ -385,11 +385,11 @@ function handleRunInterrupted(turn: Turn): string[] {
 
   if (open) {
     blocks.push(
-      turn.invoke('update_run', {
+      (await turn.invoke('update_run', {
         runId: open.id,
         status: 'FAILED',
         failureReason: `Reported in chat: ${JSON.stringify(turn.content)}`,
-      }).text,
+      })).text,
     );
     blocks.push(
       'The attempt is kept as history — a redo will be chained to it rather than replacing it.',
@@ -400,19 +400,19 @@ function handleRunInterrupted(turn: Turn): string[] {
         'outside the platform, create the run (or import the report) first.',
     );
   }
-  blocks.push(turn.invoke('calculate_next_action').text);
+  blocks.push((await turn.invoke('calculate_next_action')).text);
   return blocks;
 }
 
-function handleHelp(turn: Turn): string[] {
+async function handleHelp(turn: Turn): Promise<string[]> {
   return [
     'I did not recognise that as an instruction, so I did not change anything.',
     CAPABILITIES,
-    turn.invoke('calculate_next_action').text,
+    (await turn.invoke('calculate_next_action')).text,
   ];
 }
 
-function route(intent: Intent, turn: Turn): string[] {
+function route(intent: Intent, turn: Turn): Promise<string[]> {
   switch (intent) {
     case 'NEXT_ACTION':
       return handleNextAction(turn);
@@ -447,9 +447,9 @@ function route(intent: Intent, turn: Turn): string[] {
 }
 
 /** The project's main chat, or the named conversation when it belongs here. */
-function resolveConversation(projectId: string, conversationId?: string | null): Conversation {
+async function resolveConversation(projectId: string, conversationId?: string | null): Promise<Conversation> {
   if (conversationId) {
-    const existing = getConversation(conversationId);
+    const existing = await getConversation(conversationId);
     if (existing && existing.projectId === projectId) return existing;
   }
   return getOrCreateMainConversation(projectId);
@@ -461,19 +461,19 @@ function resolveConversation(projectId: string, conversationId?: string | null):
  * lives in the local database, so the transcript is a record of what was done
  * rather than the place the truth is kept.
  */
-export function handleChatMessage(input: {
+export async function handleChatMessage(input: {
   projectId: string;
   content: string;
   conversationId?: string | null;
-}): ChatTurnResult {
-  const project = getProject(input.projectId);
+}): Promise<ChatTurnResult> {
+  const project = await getProject(input.projectId);
   if (!project) throw new Error(`Cannot handle a chat message: unknown project ${input.projectId}`);
 
-  const conversation = resolveConversation(project.id, input.conversationId ?? null);
+  const conversation = await resolveConversation(project.id, input.conversationId ?? null);
   const content = input.content ?? '';
   const intent = detectIntent(content);
 
-  const userMessage = addMessage({
+  const userMessage = await addMessage({
     conversationId: conversation.id,
     role: 'USER',
     content,
@@ -485,10 +485,10 @@ export function handleChatMessage(input: {
     projectId: project.id,
     content,
     lower: content.trim().toLowerCase(),
-    invoke(name, args = {}) {
-      const result = runTool(name, { projectId: project.id }, args);
+    async invoke(name, args = {}) {
+      const result = await runTool(name, { projectId: project.id }, args);
       toolCalls.push({ name, args, result });
-      addMessage({
+      await addMessage({
         conversationId: conversation.id,
         role: 'TOOL',
         content: result.text,
@@ -499,7 +499,7 @@ export function handleChatMessage(input: {
     },
   };
 
-  const blocks = route(intent, turn).filter((block) => block.trim().length > 0);
+  const blocks = (await route(intent, turn)).filter((block) => block.trim().length > 0);
   // Provenance line: every claim above is traceable to a query made in this turn.
   const footer =
     toolCalls.length > 0
@@ -507,7 +507,7 @@ export function handleChatMessage(input: {
         `${[...new Set(toolCalls.map((call) => call.name))].join(', ')}.`
       : '— nothing was read or changed.';
 
-  const assistantMessage = addMessage({
+  const assistantMessage = await addMessage({
     conversationId: conversation.id,
     role: 'ASSISTANT',
     content: [...blocks, footer].join('\n\n'),
@@ -518,7 +518,7 @@ export function handleChatMessage(input: {
     },
   });
 
-  recordEvent({
+  await recordEvent({
     projectId: project.id,
     entityType: 'CONVERSATION',
     entityId: conversation.id,
@@ -539,12 +539,12 @@ export function handleChatMessage(input: {
 }
 
 /** The transcript for the project's main chat (or one named conversation). */
-export function getChatHistory(
+export async function getChatHistory(
   projectId: string,
   conversationId?: string | null,
-): { conversation: Conversation; messages: Message[] } {
-  const project = getProject(projectId);
+): Promise<{ conversation: Conversation; messages: Message[] }> {
+  const project = await getProject(projectId);
   if (!project) throw new Error(`Cannot load chat history: unknown project ${projectId}`);
-  const conversation = resolveConversation(project.id, conversationId ?? null);
-  return { conversation, messages: listMessages(conversation.id) };
+  const conversation = await resolveConversation(project.id, conversationId ?? null);
+  return { conversation, messages: await listMessages(conversation.id) };
 }

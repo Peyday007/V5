@@ -73,13 +73,13 @@ process.exit(1);
 
 const AUTOMATABLE = 'Usage: agy -p <prompt> --non-interactive\n';
 
-beforeEach(() => {
+beforeEach(async () => {
   workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-conn-'));
-  freshProject();
+  await freshProject();
   setAntigravityProbe(null);
 });
 
-afterEach(() => {
+afterEach(async () => {
   for (const [key, value] of Object.entries(saved)) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
@@ -87,14 +87,14 @@ afterEach(() => {
   }
   setAntigravityProbe(null);
   fs.rmSync(workDir, { recursive: true, force: true });
-  teardown();
+  await teardown();
 });
 
 describe('the connection page', () => {
-  it('says the tool is not there, and what to do about it', () => {
+  it('says the tool is not there, and what to do about it', async () => {
     setEnv('BRAIN_ANTIGRAVITY_PATH', path.join(workDir, 'no-such-binary'));
 
-    const view = detectConnection();
+    const view = await detectConnection();
     expect(view.installed).toBe(false);
     expect(view.version).toBeNull();
     expect(view.remediation[0]).toMatch(/install antigravity/i);
@@ -102,16 +102,16 @@ describe('the connection page', () => {
     expect(view.verifiedRunAt).toBeNull();
     expect(view.lastSuccessAt).toBeNull();
     // And the state is stored, so the page renders without re-probing.
-    expect(getConnection('antigravity')!.installed).toBe(false);
+    expect((await getConnection('antigravity'))!.installed).toBe(false);
   });
 
-  it('reports the executable and its version once it is found', () => {
+  it('reports the executable and its version once it is found', async () => {
     setEnv(
       'BRAIN_ANTIGRAVITY_PATH',
       fakeAgy(agyScript({ help: AUTOMATABLE, auth: 'Signed in as researcher@example.com\n' })),
     );
 
-    const view = detectConnection();
+    const view = await detectConnection();
     expect(view.installed).toBe(true);
     expect(view.version).toBe('antigravity 1.0.6');
     expect(view.executablePath).toContain('agy');
@@ -120,26 +120,26 @@ describe('the connection page', () => {
     expect(view.remediation.join(' ')).toMatch(/test connection/i);
   });
 
-  it('asks the user to sign in inside the tool, never in Brain', () => {
+  it('asks the user to sign in inside the tool, never in Brain', async () => {
     setEnv(
       'BRAIN_ANTIGRAVITY_PATH',
       fakeAgy(agyScript({ help: AUTOMATABLE, auth: 'not logged in\n' })),
     );
 
-    const view = detectConnection();
+    const view = await detectConnection();
     expect(view.installed).toBe(true);
     expect(view.authenticated).toBe(false);
     expect(view.remediation.join(' ')).toMatch(/sign in to antigravity in the app itself/i);
     expect(view.remediation.join(' ')).toMatch(/never asks for your password/i);
   });
 
-  it('keeps credentials, environment and raw output out of what it shows', () => {
+  it('keeps credentials, environment and raw output out of what it shows', async () => {
     setEnv(
       'BRAIN_ANTIGRAVITY_PATH',
       fakeAgy(agyScript({ help: AUTOMATABLE, auth: 'Signed in as researcher@example.com\n' })),
     );
 
-    const view = detectConnection();
+    const view = await detectConnection();
     const rendered = JSON.stringify(view);
     // The diagnostic trail is a list of stages and results, not a CLI dump.
     expect(view.diagnostics.map((entry) => entry.stage)).toContain('Authentication');
@@ -184,7 +184,7 @@ class TestWorker implements AIProvider {
 
 describe('testing the connection', () => {
   it('marks the connection verified only after a real job actually ran', async () => {
-    const before = connectionView();
+    const before = await connectionView();
     expect(before.verifiedRunAt).toBeNull();
 
     const result = await testConnection({
@@ -225,32 +225,32 @@ describe('testing the connection', () => {
 });
 
 describe('what the connection is allowed to spend', () => {
-  it('has paid overages off until the user turns them on', () => {
-    expect(connectionView().paidOverage.enabled).toBe(false);
+  it('has paid overages off until the user turns them on', async () => {
+    expect((await connectionView()).paidOverage.enabled).toBe(false);
 
-    const on = updatePaidOverage('antigravity', true, 'Approved for the custody research.');
+    const on = await updatePaidOverage('antigravity', true, 'Approved for the custody research.');
     expect(on.paidOverage.enabled).toBe(true);
     expect(on.paidOverage.note).toMatch(/custody research/i);
     // When it was turned on is recorded, because that is the first question
     // anybody asks about a charge.
     expect(on.paidOverage.setAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
-    expect(updatePaidOverage('antigravity', false, null).paidOverage.enabled).toBe(false);
+    expect((await updatePaidOverage('antigravity', false, null)).paidOverage.enabled).toBe(false);
   });
 
-  it('keeps the overage setting through a disconnect', () => {
-    updatePaidOverage('antigravity', true, 'Approved.');
-    const after = disconnect();
+  it('keeps the overage setting through a disconnect', async () => {
+    await updatePaidOverage('antigravity', true, 'Approved.');
+    const after = await disconnect();
     expect(after.installed).toBe(false);
     // Disconnecting forgets the connection, not the user's spending decision.
     expect(after.paidOverage.enabled).toBe(true);
     expect(after.message).toMatch(/nothing was changed in the tool itself/i);
   });
 
-  it('lets the user choose which model does which kind of work', () => {
-    const view = updateModelDefaults('antigravity', { light: 'flash', strong: 'pro' });
+  it('lets the user choose which model does which kind of work', async () => {
+    const view = await updateModelDefaults('antigravity', { light: 'flash', strong: 'pro' });
     expect(view.models).toEqual({ light: 'flash', strong: 'pro' });
-    expect(modelDefaults('antigravity')).toEqual({ light: 'flash', strong: 'pro' });
+    expect(await modelDefaults('antigravity')).toEqual({ light: 'flash', strong: 'pro' });
   });
 });
 

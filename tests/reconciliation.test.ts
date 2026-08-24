@@ -38,29 +38,31 @@ let fixture: TestProject;
 let orchestrationId: string;
 
 /** An orchestration to hang requirements and coverage off. */
-function newAssignment(): string {
-  const layer = fixture.layerByName('World Model');
-  const run = createRun({
+async function newAssignment(): Promise<string> {
+  const layer = await fixture.layerByName('World Model');
+  const run = await createRun({
     projectId: fixture.project.id,
     layerId: layer.id,
     runType: 'FOUNDATION',
     status: 'RUNNING',
   });
-  return createOrchestration({
+  return (await createOrchestration({
     projectId: fixture.project.id,
     layerId: layer.id,
     runId: run.id,
     title: 'Custody recognition',
     assignment: 'Establish how custody transfer is recognised.',
     provider: 'mock',
-  }).id;
+  })).id;
 }
 
-function contract(overrides: Partial<Parameters<typeof createBoundaryContract>[0]> = {}): BoundaryContract {
-  return createBoundaryContract({
+async function contract(
+  overrides: Partial<Parameters<typeof createBoundaryContract>[0]> = {},
+): Promise<BoundaryContract> {
+  return await createBoundaryContract({
     orchestrationId,
     projectId: fixture.project.id,
-    layerId: fixture.layerByName('World Model').id,
+    layerId: (await fixture.layerByName('World Model')).id,
     primaryQuestion: 'How is custody transfer recognised?',
     geography: 'United States',
     timeframe: '2023 onwards',
@@ -69,12 +71,12 @@ function contract(overrides: Partial<Parameters<typeof createBoundaryContract>[0
   });
 }
 
-function requirement(statement: string, overrides: Partial<Requirement> = {}): Requirement {
-  const [created] = createRequirements([
+async function requirement(statement: string, overrides: Partial<Requirement> = {}): Promise<Requirement> {
+  const [created] = await createRequirements([
     {
       orchestrationId,
       projectId: fixture.project.id,
-      layerId: fixture.layerByName('World Model').id,
+      layerId: (await fixture.layerByName('World Model')).id,
       requirementKey: statement.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40),
       ordinal: 0,
       statement,
@@ -90,11 +92,11 @@ function requirement(statement: string, overrides: Partial<Requirement> = {}): R
 
 /** Import a document with known contents and read it. */
 async function addDocument(name: string, text: string): Promise<string> {
-  const result = importFile({
+  const result = await importFile({
     projectId: fixture.project.id,
     originalFilename: name,
     contents: Buffer.from(text),
-    layerId: fixture.layerByName('World Model').id,
+    layerId: (await fixture.layerByName('World Model')).id,
     version: 'v1',
     documentType: 'FOUNDATION',
   });
@@ -114,12 +116,12 @@ const SOURCED = [
   'Custody transfer is recognised at the point of the recorded act in 2024 filings.',
 ].join('\n');
 
-beforeEach(() => {
-  fixture = freshProject();
-  orchestrationId = newAssignment();
+beforeEach(async () => {
+  fixture = await freshProject();
+  orchestrationId = await newAssignment();
 });
-afterEach(() => {
-  teardown();
+afterEach(async () => {
+  await teardown();
 });
 
 // ---------------------------------------------------------------------------
@@ -129,7 +131,7 @@ afterEach(() => {
 describe('claims are recovered from documents the project already has', () => {
   it('finds asserted sentences with the page and offsets that locate them', async () => {
     const documentId = await addDocument('World Model v1.txt', SOURCED);
-    const candidates = extractClaimCandidates(documentId);
+    const candidates = await extractClaimCandidates(documentId);
 
     expect(candidates.length).toBeGreaterThan(0);
     for (const candidate of candidates) {
@@ -151,7 +153,7 @@ describe('claims are recovered from documents the project already has', () => {
         'The outsourced market is worth approximately 4 billion dollars in 2024.',
       ].join('\n'),
     );
-    const claims = inventoryDocument(documentId);
+    const claims = await inventoryDocument(documentId);
 
     const sourced = claims.find((claim) => claim.sourceUrl !== null);
     const unsupported = claims.find((claim) => claim.claim.includes('4 billion'));
@@ -173,7 +175,7 @@ describe('claims are recovered from documents the project already has', () => {
         'No public dataset separates B2B appointment setting from consumer telemarketing.',
       ].join('\n'),
     );
-    const types = new Set(inventoryDocument(documentId).map((claim) => claim.claimType));
+    const types = new Set((await inventoryDocument(documentId)).map((claim) => claim.claimType));
 
     expect(types.has('FORECAST')).toBe(true);
     expect(types.has('CALCULATION')).toBe(true);
@@ -183,15 +185,15 @@ describe('claims are recovered from documents the project already has', () => {
 
   it('re-reading a document replaces its claims rather than doubling them', async () => {
     const documentId = await addDocument('World Model v1.txt', SOURCED);
-    const first = inventoryDocument(documentId);
-    const second = inventoryDocument(documentId);
+    const first = await inventoryDocument(documentId);
+    const second = await inventoryDocument(documentId);
     expect(second).toHaveLength(first.length);
-    expect(listExistingClaims(fixture.project.id)).toHaveLength(first.length);
+    expect(await listExistingClaims(fixture.project.id)).toHaveLength(first.length);
   });
 
   it('does not inventory a document nobody could read', async () => {
     const documentId = await addDocument('World Model v1.txt', 'too short');
-    const inventory = inventoryProject(fixture.project.id);
+    const inventory = await inventoryProject(fixture.project.id);
     expect(inventory.claims.filter((claim) => claim.documentId === documentId)).toHaveLength(0);
     expect(inventory.documentsUnreadable).toBeGreaterThan(0);
   });
@@ -204,10 +206,10 @@ describe('claims are recovered from documents the project already has', () => {
 describe('the coverage matrix', () => {
   it('marks a requirement satisfied when corroborated evidence answers it', async () => {
     const documentId = await addDocument('World Model v1.txt', SOURCED);
-    const claims = inventoryDocument(documentId);
-    const target = requirement('Employment in the outsourced telemarketing occupation');
+    const claims = await inventoryDocument(documentId);
+    const target = await requirement('Employment in the outsourced telemarketing occupation');
 
-    const assessment = assessRequirement(target, claims, contract());
+    const assessment = assessRequirement(target, claims, await contract());
     expect(assessment.status).toBe('SATISFIED');
     expect(assessment.needsResearch).toBe(false);
     expect(assessment.claimIds.length).toBeGreaterThan(0);
@@ -223,10 +225,10 @@ describe('the coverage matrix', () => {
         'Outsourced appointment setting employment has been stable for several years in 2024.',
       ].join('\n'),
     );
-    const claims = inventoryDocument(documentId);
-    const target = requirement('Outsourced appointment setting employment');
+    const claims = await inventoryDocument(documentId);
+    const target = await requirement('Outsourced appointment setting employment');
 
-    const assessment = assessRequirement(target, claims, contract());
+    const assessment = assessRequirement(target, claims, await contract());
     expect(assessment.status).toBe('PRESENT_BUT_UNVERIFIED');
     expect(assessment.needsResearch).toBe(true);
     expect(assessment.gapType).toBe('UNVERIFIABLE_CITATION');
@@ -243,10 +245,10 @@ describe('the coverage matrix', () => {
         'https://www.census.gov/2017.html',
       ].join('\n'),
     );
-    const claims = inventoryDocument(documentId);
-    const target = requirement('Outsourced appointment setting employment');
+    const claims = await inventoryDocument(documentId);
+    const target = await requirement('Outsourced appointment setting employment');
 
-    const assessment = assessRequirement(target, claims, contract({ timeframe: '2023 onwards' }));
+    const assessment = assessRequirement(target, claims, await contract({ timeframe: '2023 onwards' }));
     expect(assessment.status).toBe('STALE');
     expect(assessment.needsResearch).toBe(true);
   });
@@ -259,24 +261,24 @@ describe('the coverage matrix', () => {
         'https://www.ons.gov.uk/employment.html',
       ].join('\n'),
     );
-    const claims = inventoryDocument(documentId);
-    const target = requirement('Outsourced appointment setting employment');
+    const claims = await inventoryDocument(documentId);
+    const target = await requirement('Outsourced appointment setting employment');
 
-    const assessment = assessRequirement(target, claims, contract({ geography: 'United States' }));
+    const assessment = assessRequirement(target, claims, await contract({ geography: 'United States' }));
     expect(assessment.status).toBe('DEFINITION_MISMATCH');
     expect(assessment.gapType).toBe('MISSING_GEOGRAPHY');
   });
 
   it('marks an unresolved disagreement CONTRADICTED', async () => {
     const documentId = await addDocument('World Model v1.txt', SOURCED);
-    const claims = inventoryDocument(documentId);
-    updateExistingClaim(claims[0]!.id, { contradictionState: 'CONTESTED' });
-    const target = requirement('Employment in the outsourced telemarketing occupation');
+    const claims = await inventoryDocument(documentId);
+    await updateExistingClaim(claims[0]!.id, { contradictionState: 'CONTESTED' });
+    const target = await requirement('Employment in the outsourced telemarketing occupation');
 
     const assessment = assessRequirement(
       target,
-      listExistingClaims(fixture.project.id),
-      contract(),
+      await listExistingClaims(fixture.project.id),
+      await contract(),
     );
     expect(assessment.status).toBe('CONTRADICTED');
     expect(assessment.gapType).toBe('UNRESOLVED_CONTRADICTION');
@@ -285,35 +287,35 @@ describe('the coverage matrix', () => {
   it('marks evidence from a replaced document SUPERSEDED', async () => {
     const documentId = await addDocument('World Model v1.txt', SOURCED);
     const replacement = await addDocument('World Model v1B.txt', SOURCED);
-    updateDocument(documentId, { supersededByDocumentId: replacement });
-    const claims = inventoryDocument(documentId);
-    const target = requirement('Employment in the outsourced telemarketing occupation');
+    await updateDocument(documentId, { supersededByDocumentId: replacement });
+    const claims = await inventoryDocument(documentId);
+    const target = await requirement('Employment in the outsourced telemarketing occupation');
 
-    const assessment = assessRequirement(target, claims, contract());
+    const assessment = assessRequirement(target, claims, await contract());
     expect(assessment.status).toBe('SUPERSEDED');
     expect(assessment.needsResearch).toBe(true);
   });
 
-  it('marks a requirement with nothing about it MISSING', () => {
-    const target = requirement('Custody transfer under Japanese insolvency law');
-    const assessment = assessRequirement(target, [], contract());
+  it('marks a requirement with nothing about it MISSING', async () => {
+    const target = await requirement('Custody transfer under Japanese insolvency law');
+    const assessment = assessRequirement(target, [], await contract());
     expect(assessment.status).toBe('MISSING');
     expect(assessment.gapType).toBe('MISSING_FOUNDATIONAL');
     expect(assessment.needsResearch).toBe(true);
   });
 
-  it('refuses to research what research cannot settle', () => {
-    const owned = requirement('Routing rules for distressed assets', { kind: 'OTHER_LAYER' });
-    const build = requirement('Build the ingestion pipeline', { kind: 'IMPLEMENTATION' });
-    const tune = requirement('Tune the confidence threshold', { kind: 'TUNING' });
-    const measure = requirement('Measure conversion once live', { kind: 'EMPIRICAL_VALIDATION' });
+  it('refuses to research what research cannot settle', async () => {
+    const owned = await requirement('Routing rules for distressed assets', { kind: 'OTHER_LAYER' });
+    const build = await requirement('Build the ingestion pipeline', { kind: 'IMPLEMENTATION' });
+    const tune = await requirement('Tune the confidence threshold', { kind: 'TUNING' });
+    const measure = await requirement('Measure conversion once live', { kind: 'EMPIRICAL_VALIDATION' });
 
-    expect(assessRequirement(owned, [], contract()).status).toBe('OWNED_ELSEWHERE');
-    expect(assessRequirement(build, [], contract()).status).toBe('NOT_REQUIRED');
-    expect(assessRequirement(tune, [], contract()).status).toBe('NOT_REQUIRED');
-    expect(assessRequirement(measure, [], contract()).status).toBe('NOT_REQUIRED');
+    expect(assessRequirement(owned, [], await contract()).status).toBe('OWNED_ELSEWHERE');
+    expect(assessRequirement(build, [], await contract()).status).toBe('NOT_REQUIRED');
+    expect(assessRequirement(tune, [], await contract()).status).toBe('NOT_REQUIRED');
+    expect(assessRequirement(measure, [], await contract()).status).toBe('NOT_REQUIRED');
     for (const kind of [owned, build, tune, measure]) {
-      expect(assessRequirement(kind, [], contract()).needsResearch).toBe(false);
+      expect(assessRequirement(kind, [], await contract()).needsResearch).toBe(false);
     }
   });
 
@@ -328,10 +330,10 @@ describe('the coverage matrix', () => {
         'https://www.bls.gov/oes/current/oes419041b.htm',
       ].join('\n'),
     );
-    const claims = inventoryDocument(documentId);
-    const target = requirement('Outsourced appointment setting employment');
+    const claims = await inventoryDocument(documentId);
+    const target = await requirement('Outsourced appointment setting employment');
 
-    const assessment = assessRequirement(target, claims, contract());
+    const assessment = assessRequirement(target, claims, await contract());
     expect(assessment.status).toBe('PARTIALLY_SATISFIED');
     expect(assessment.gapType).toBe('INSUFFICIENT_INDEPENDENCE');
     expect(assessment.needsResearch).toBe(true);
@@ -339,21 +341,21 @@ describe('the coverage matrix', () => {
 
   it('persists the matrix with its reasons, so the decision can be argued with', async () => {
     const documentId = await addDocument('World Model v1.txt', SOURCED);
-    const claims = inventoryDocument(documentId);
+    const claims = await inventoryDocument(documentId);
     const requirements = [
-      requirement('Employment in the outsourced telemarketing occupation'),
-      requirement('Custody transfer under Japanese insolvency law'),
+      await requirement('Employment in the outsourced telemarketing occupation'),
+      await requirement('Custody transfer under Japanese insolvency law'),
     ];
 
-    const { coverage } = buildCoverageMatrix({
+    const { coverage } = await buildCoverageMatrix({
       orchestrationId,
       requirements,
       claims,
-      contract: contract(),
+      contract: await contract(),
     });
 
     expect(coverage).toHaveLength(2);
-    expect(listCoverage(orchestrationId)).toHaveLength(2);
+    expect(await listCoverage(orchestrationId)).toHaveLength(2);
     for (const entry of coverage) {
       expect(entry.reasons.length).toBeGreaterThan(0);
     }
@@ -367,36 +369,36 @@ describe('the coverage matrix', () => {
 describe('fragments are created only for genuine gaps', () => {
   it('creates none for a requirement the archive already answers', async () => {
     const documentId = await addDocument('World Model v1.txt', SOURCED);
-    inventoryDocument(documentId);
-    const requirements = [requirement('Employment in the outsourced telemarketing occupation')];
+    await inventoryDocument(documentId);
+    const requirements = [await requirement('Employment in the outsourced telemarketing occupation')];
 
-    const result = reconcile({
+    const result = await reconcile({
       orchestrationId,
       projectId: fixture.project.id,
       requirements,
-      contract: contract(),
+      contract: await contract(),
     });
     expect(result.satisfied).toHaveLength(1);
 
-    const fragments = planFragmentsFromGaps({ orchestrationId, reconciliation: result });
+    const fragments = await planFragmentsFromGaps({ orchestrationId, reconciliation: result });
     expect(fragments).toHaveLength(0);
   });
 
   it('creates one for a real gap, carrying why the archive was not enough', async () => {
     const documentId = await addDocument('World Model v1.txt', SOURCED);
-    inventoryDocument(documentId);
+    await inventoryDocument(documentId);
     const requirements = [
-      requirement('Employment in the outsourced telemarketing occupation'),
-      requirement('Custody transfer under Japanese insolvency law'),
+      await requirement('Employment in the outsourced telemarketing occupation'),
+      await requirement('Custody transfer under Japanese insolvency law'),
     ];
 
-    const result = reconcile({
+    const result = await reconcile({
       orchestrationId,
       projectId: fixture.project.id,
       requirements,
-      contract: contract(),
+      contract: await contract(),
     });
-    const fragments = planFragmentsFromGaps({ orchestrationId, reconciliation: result });
+    const fragments = await planFragmentsFromGaps({ orchestrationId, reconciliation: result });
 
     expect(fragments).toHaveLength(1);
     const fragment = fragments[0]!;
@@ -409,29 +411,30 @@ describe('fragments are created only for genuine gaps', () => {
     expect(fragment.priority).toBe(PRIORITY_TIERS.indexOf('MANDATORY_SYNTHESIS_INPUT') + 1);
   });
 
-  it('scales the count to the gaps, above or below any fixed number', () => {
+  it('scales the count to the gaps, above or below any fixed number', async () => {
     // Three gaps out of three requirements: fewer than the old floor of five.
     const few = [
-      requirement('Custody transfer under Japanese insolvency law'),
-      requirement('Custody transfer under Brazilian insolvency law'),
-      requirement('Custody transfer under Indian insolvency law'),
+      await requirement('Custody transfer under Japanese insolvency law'),
+      await requirement('Custody transfer under Brazilian insolvency law'),
+      await requirement('Custody transfer under Indian insolvency law'),
     ];
-    const small = reconcile({
+    const small = await reconcile({
       orchestrationId,
       projectId: fixture.project.id,
       requirements: few,
-      contract: contract(),
+      contract: await contract(),
     });
-    expect(planFragmentsFromGaps({ orchestrationId, reconciliation: small })).toHaveLength(3);
+    expect(await planFragmentsFromGaps({ orchestrationId, reconciliation: small })).toHaveLength(3);
 
     // And a genuinely open assignment goes well past the old ceiling of fifteen.
-    const other = newAssignment();
-    const many = Array.from({ length: 22 }, (_value, index) => {
-      const [created] = createRequirements([
+    const other = await newAssignment();
+    const many = await Promise.all(
+      Array.from({ length: 22 }, async (_value, index) => {
+      const [created] = await createRequirements([
         {
           orchestrationId: other,
           projectId: fixture.project.id,
-          layerId: fixture.layerByName('World Model').id,
+          layerId: (await fixture.layerByName('World Model')).id,
           requirementKey: `open-question-${index + 1}`,
           ordinal: index,
           statement: `Custody transfer under jurisdiction number ${index + 1} of the survey`,
@@ -442,48 +445,49 @@ describe('fragments are created only for genuine gaps', () => {
           dependsOn: [],
         },
       ]);
-      return created!;
-    });
-    const large = reconcile({
+        return created!;
+      }),
+    );
+    const large = await reconcile({
       orchestrationId: other,
       projectId: fixture.project.id,
       requirements: many,
-      contract: contract({ orchestrationId: other } as never),
+      contract: await contract({ orchestrationId: other } as never),
     });
-    expect(planFragmentsFromGaps({ orchestrationId: other, reconciliation: large })).toHaveLength(22);
+    expect(await planFragmentsFromGaps({ orchestrationId: other, reconciliation: large })).toHaveLength(22);
   });
 
-  it('does not fragment the same requirement forever', () => {
-    const target = requirement('Custody transfer under Japanese insolvency law');
-    const result = reconcile({
+  it('does not fragment the same requirement forever', async () => {
+    const target = await requirement('Custody transfer under Japanese insolvency law');
+    const result = await reconcile({
       orchestrationId,
       projectId: fixture.project.id,
       requirements: [target],
-      contract: contract(),
+      contract: await contract(),
     });
 
     // Calling the planner repeatedly must not keep adding fragments for one gap.
-    planFragmentsFromGaps({ orchestrationId, reconciliation: result });
-    planFragmentsFromGaps({ orchestrationId, reconciliation: result });
-    planFragmentsFromGaps({ orchestrationId, reconciliation: result });
-    const fragments = planFragmentsFromGaps({ orchestrationId, reconciliation: result });
+    await planFragmentsFromGaps({ orchestrationId, reconciliation: result });
+    await planFragmentsFromGaps({ orchestrationId, reconciliation: result });
+    await planFragmentsFromGaps({ orchestrationId, reconciliation: result });
+    const fragments = await planFragmentsFromGaps({ orchestrationId, reconciliation: result });
     void fragments;
 
-    const total = reconcile({
+    const total = await reconcile({
       orchestrationId,
       projectId: fixture.project.id,
       requirements: [target],
-      contract: contract(),
+      contract: await contract(),
     });
     void total;
     // One fragment for one gap, however many times the planner runs.
     expect(
-      planFragmentsFromGaps({ orchestrationId, reconciliation: result }).length,
+      (await planFragmentsFromGaps({ orchestrationId, reconciliation: result })).length,
     ).toBe(0);
   });
 
-  it('turns an unsettled boundary into its own fragment', () => {
-    const withAmbiguity = contract({
+  it('turns an unsettled boundary into its own fragment', async () => {
+    const withAmbiguity = await contract({
       ambiguities: [
         {
           question: 'Does "distressed" include performing loans sold at a discount?',
@@ -491,13 +495,13 @@ describe('fragments are created only for genuine gaps', () => {
         },
       ],
     });
-    const result = reconcile({
+    const result = await reconcile({
       orchestrationId,
       projectId: fixture.project.id,
-      requirements: [requirement('Custody transfer under Japanese insolvency law')],
+      requirements: [await requirement('Custody transfer under Japanese insolvency law')],
       contract: withAmbiguity,
     });
-    const fragments = planFragmentsFromGaps({ orchestrationId, reconciliation: result });
+    const fragments = await planFragmentsFromGaps({ orchestrationId, reconciliation: result });
 
     const boundary = fragments.find((fragment) => fragment.fragmentKey.startsWith('boundary-'));
     expect(boundary).toBeTruthy();

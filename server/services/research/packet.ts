@@ -71,20 +71,20 @@ export interface PacketEvidence {
  * superseded, and by having survived verification. A claim nobody relied on and
  * a claim that failed are equally absent.
  */
-export function packetEvidence(input: {
+export async function packetEvidence(input: {
   orchestrationId: string;
   projectId: string;
-}): PacketEvidence {
-  const requirements = listRequirements(input.orchestrationId);
-  const coverage = listCoverage(input.orchestrationId);
-  const fragments = currentFragments(input.orchestrationId);
+}): Promise<PacketEvidence> {
+  const requirements = await listRequirements(input.orchestrationId);
+  const coverage = await listCoverage(input.orchestrationId);
+  const fragments = await currentFragments(input.orchestrationId);
 
   const relied = new Set(
     coverage
       .filter((entry) => entry.status === 'SATISFIED' || entry.status === 'PARTIALLY_SATISFIED')
       .flatMap((entry) => entry.claimIds),
   );
-  const existingClaims = listExistingClaims(input.projectId).filter(
+  const existingClaims = (await listExistingClaims(input.projectId)).filter(
     (claim) =>
       relied.has(claim.id) &&
       !claim.superseded &&
@@ -95,7 +95,7 @@ export function packetEvidence(input: {
   return {
     requirements,
     coverage,
-    newClaims: acceptedClaims(input.orchestrationId),
+    newClaims: await acceptedClaims(input.orchestrationId),
     existingClaims,
     acceptedFragments: fragments.filter((fragment) => fragment.status === 'ACCEPTED'),
     rejectedFragments: fragments.filter((fragment) =>
@@ -124,13 +124,13 @@ function distinct(claims: ResearchClaim[], field: 'geography' | 'timeframe' | 'p
  * Each check names the requirements it is about, so a failure produces targeted
  * fragments rather than a second run of everything that already worked.
  */
-export function assessPacket(input: {
+export async function assessPacket(input: {
   orchestrationId: string;
   projectId: string;
-}): PacketCoverage {
-  const evidence = packetEvidence(input);
-  const contract = contractFor(input.orchestrationId);
-  const fragments = currentFragments(input.orchestrationId);
+}): Promise<PacketCoverage> {
+  const evidence = await packetEvidence(input);
+  const contract = await contractFor(input.orchestrationId);
+  const fragments = await currentFragments(input.orchestrationId);
   const checks: PacketCheck[] = [];
 
   const byRequirement = new Map(evidence.coverage.map((entry) => [entry.requirementId, entry]));
@@ -196,7 +196,7 @@ export function assessPacket(input: {
   }
 
   // 5. Every calculation rests on inputs that were themselves accepted.
-  const allClaims = listClaims(input.orchestrationId);
+  const allClaims = await listClaims(input.orchestrationId);
   const acceptedIds = new Set(evidence.newClaims.map((claim) => claim.id));
   const brokenDerivations = evidence.newClaims.filter(
     (claim) => claim.derived && !claim.derivedFrom.every((id) => acceptedIds.has(id)),
@@ -330,14 +330,14 @@ export const MAX_COVERAGE_ROUNDS = 2;
  * missing — which is why each fragment here is built from one failed check and
  * one requirement, and carries that check as its reason for existing.
  */
-export function planCoverageFragments(input: {
+export async function planCoverageFragments(input: {
   orchestrationId: string;
   coverage: PacketCoverage;
   maxFragments: number;
-}): ResearchFragment[] {
-  const existing = currentFragments(input.orchestrationId);
-  const requirements = listRequirements(input.orchestrationId);
-  const contract = contractFor(input.orchestrationId);
+}): Promise<ResearchFragment[]> {
+  const existing = await currentFragments(input.orchestrationId);
+  const requirements = await listRequirements(input.orchestrationId);
+  const contract = await contractFor(input.orchestrationId);
 
   // A requirement that has already been attempted repeatedly does not get
   // another fragment because a later check noticed the same hole.

@@ -28,42 +28,38 @@ export interface RecordEventInput {
  * Append-only. Invariant 3: no important action without an event.
  * History is never rewritten, only added to.
  */
-export function recordEvent(input: RecordEventInput): ProjectEvent {
+export async function recordEvent(input: RecordEventInput): Promise<ProjectEvent> {
   const id = newId('evt');
-  getDb().run(
+  await getDb().run(
     `INSERT INTO project_events (id, project_id, layer_id, entity_type, entity_id, event_type, payload, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, input.projectId, input.layerId ?? null, input.entityType, input.entityId ?? null,
       input.eventType, toJson(input.payload ?? {}), nowIso()],
   );
-  return getDb()
-    .all<ProjectEventRow>('SELECT * FROM project_events WHERE id = ?', [id])
+  return (await getDb().all<ProjectEventRow>('SELECT * FROM project_events WHERE id = ?', [id]))
     .map(mapEvent)[0]!;
 }
 
-export function listEvents(projectId: string, limit = 200): ProjectEvent[] {
-  return getDb()
-    .all<ProjectEventRow>(
+export async function listEvents(projectId: string, limit = 200): Promise<ProjectEvent[]> {
+  return (await getDb().all<ProjectEventRow>(
       'SELECT * FROM project_events WHERE project_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?',
       [projectId, limit],
-    )
+    ))
     .map(mapEvent);
 }
 
-export function listEventsByLayer(layerId: string, limit = 100): ProjectEvent[] {
-  return getDb()
-    .all<ProjectEventRow>(
+export async function listEventsByLayer(layerId: string, limit = 100): Promise<ProjectEvent[]> {
+  return (await getDb().all<ProjectEventRow>(
       'SELECT * FROM project_events WHERE layer_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?',
       [layerId, limit],
-    )
+    ))
     .map(mapEvent);
 }
 
-export function listEventsByEntity(entityType: string, entityId: string): ProjectEvent[] {
-  return getDb()
-    .all<ProjectEventRow>(
+export async function listEventsByEntity(entityType: string, entityId: string): Promise<ProjectEvent[]> {
+  return (await getDb().all<ProjectEventRow>(
       'SELECT * FROM project_events WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC',
       [entityType, entityId],
-    )
+    ))
     .map(mapEvent);
 }

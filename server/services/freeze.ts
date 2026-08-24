@@ -32,9 +32,9 @@ function isEarlierThan(document: Document, canonical: Document): boolean {
   return document.createdAt < canonical.createdAt;
 }
 
-function snapshotFor(projectId: string, layerId: string): LayerStateSnapshot {
-  const snapshots = recomputeProject(projectId);
-  return snapshots.find((snapshot) => snapshot.layerId === layerId) ?? computeLayerState(layerId);
+async function snapshotFor(projectId: string, layerId: string): Promise<LayerStateSnapshot> {
+  const snapshots = await recomputeProject(projectId);
+  return snapshots.find((snapshot) => snapshot.layerId === layerId) ?? await computeLayerState(layerId);
 }
 
 /**
@@ -45,19 +45,19 @@ function snapshotFor(projectId: string, layerId: string): LayerStateSnapshot {
  * the document the layer is waiting for, because "no canonical artifact" is
  * useless to a user who wants to know what to do next.
  */
-export function freezeLayer(layerId: string, canonicalDocumentId?: string | null): LayerStateSnapshot {
-  const layer = getLayer(layerId);
+export async function freezeLayer(layerId: string, canonicalDocumentId?: string | null): Promise<LayerStateSnapshot> {
+  const layer = await getLayer(layerId);
   if (!layer) throw new Error(`Cannot freeze: unknown layer ${layerId}`);
-  const project = getProject(layer.projectId);
+  const project = await getProject(layer.projectId);
   if (!project) throw new Error(`Cannot freeze ${layer.name}: unknown project ${layer.projectId}`);
   const policy: VersionPolicy = project.versionPolicy ?? DEFAULT_VERSION_POLICY;
 
-  const documents = listDocumentsByLayer(layerId);
+  const documents = await listDocumentsByLayer(layerId);
   const expectedCanonicalVersion = normalizeVersion(synthesisVersion(policy));
 
   let canonical: Document | null = null;
   if (canonicalDocumentId) {
-    const explicit = getDocument(canonicalDocumentId);
+    const explicit = await getDocument(canonicalDocumentId);
     if (!explicit) {
       throw new Error(`Cannot freeze ${layer.name}: document ${canonicalDocumentId} does not exist.`);
     }
@@ -83,7 +83,7 @@ export function freezeLayer(layerId: string, canonicalDocumentId?: string | null
   }
 
   // The row is not the artifact: the file has to be there too (invariants 8, 9).
-  const presence = checkCanonicalNames(layer.projectId, [canonical.canonicalName]);
+  const presence = await checkCanonicalNames(layer.projectId, [canonical.canonicalName]);
   const item = presence.items[0];
   if (!item || !item.present) {
     const detail = item?.fileMissing
@@ -97,8 +97,8 @@ export function freezeLayer(layerId: string, canonicalDocumentId?: string | null
 
   const target = canonical;
   const db = getDb();
-  db.transaction(() => {
-    updateDocument(target.id, { isCanonical: true, frozen: true, status: 'FROZEN' });
+  await db.transaction(async () => {
+    await updateDocument(target.id, { isCanonical: true, frozen: true, status: 'FROZEN' });
 
     const replaced: string[] = [];
     for (const document of documents) {
@@ -109,13 +109,13 @@ export function freezeLayer(layerId: string, canonicalDocumentId?: string | null
 
       // History is provenance: the row is kept, relabelled, and pointed at its
       // successor. Nothing is ever deleted here.
-      updateDocument(document.id, {
+      await updateDocument(document.id, {
         status: 'SUPERSEDED',
         supersededByDocumentId: target.id,
         isCanonical: false,
         frozen: false,
       });
-      recordEvent({
+      await recordEvent({
         projectId: layer.projectId,
         layerId,
         entityType: 'DOCUMENT',
@@ -132,7 +132,7 @@ export function freezeLayer(layerId: string, canonicalDocumentId?: string | null
 
     // A freeze is a decision about reality, so any manual pin is released and
     // the derived engine is allowed to agree with it.
-    updateLayer(layerId, {
+    await updateLayer(layerId, {
       canonicalDocumentId: target.id,
       currentVersion: target.version,
       status: 'FROZEN',
@@ -141,7 +141,7 @@ export function freezeLayer(layerId: string, canonicalDocumentId?: string | null
       manualStatusReason: null,
     });
 
-    recordEvent({
+    await recordEvent({
       projectId: layer.projectId,
       layerId,
       entityType: 'LAYER',
@@ -168,20 +168,20 @@ export function freezeLayer(layerId: string, canonicalDocumentId?: string | null
  * history. The status is pinned to REOPENED with the stated reason, because
  * REOPENED is a human decision that no derivation rule can produce.
  */
-export function reopenLayer(layerId: string, reason: string): LayerStateSnapshot {
-  const layer = getLayer(layerId);
+export async function reopenLayer(layerId: string, reason: string): Promise<LayerStateSnapshot> {
+  const layer = await getLayer(layerId);
   if (!layer) throw new Error(`Cannot reopen: unknown layer ${layerId}`);
   const reasonText = (reason ?? '').trim() || 'Reopened without a stated reason.';
 
   const db = getDb();
-  db.transaction(() => {
+  await db.transaction(async () => {
     // Freezing marks the provenance SUPERSEDED and the canonical document
     // FROZEN. Reopening has to undo both, or the layer's own source packet stays
     // unusable and it can never be re-synthesised — the packet would report
     // "1 / 4 READY" for documents that are registered and sitting on disk.
     const canonicalId = layer.canonicalDocumentId;
     const thawed: string[] = [];
-    for (const document of listDocumentsByLayer(layerId)) {
+    for (const document of await listDocumentsByLayer(layerId)) {
       const wasFrozen = document.frozen || document.status === 'FROZEN';
       // Exactly the documents this freeze pushed aside — identified by the
       // successor link the freeze wrote — not every superseded row in the layer.
@@ -190,7 +190,7 @@ export function reopenLayer(layerId: string, reason: string): LayerStateSnapshot
         canonicalId !== null &&
         document.supersededByDocumentId === canonicalId;
       if (!wasFrozen && !supersededByThisFreeze) continue;
-      updateDocument(document.id, {
+      await updateDocument(document.id, {
         status: 'COMPLETE',
         ...(wasFrozen ? { frozen: false, isCanonical: false } : {}),
         ...(supersededByThisFreeze ? { supersededByDocumentId: null } : {}),
@@ -202,7 +202,7 @@ export function reopenLayer(layerId: string, reason: string): LayerStateSnapshot
     // REOPENED for good, masking every later audit and blockage, and the UI has
     // no control to release a pin. REOPENED is derived instead, and lapses by
     // itself as soon as real work resumes.
-    updateLayer(layerId, {
+    await updateLayer(layerId, {
       status: 'REOPENED',
       statusSource: 'DERIVED',
       manualStatus: null,
@@ -210,7 +210,7 @@ export function reopenLayer(layerId: string, reason: string): LayerStateSnapshot
       canonicalDocumentId: null,
     });
 
-    recordEvent({
+    await recordEvent({
       projectId: layer.projectId,
       layerId,
       entityType: 'LAYER',

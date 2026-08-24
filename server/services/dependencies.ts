@@ -33,7 +33,7 @@ import { findDocumentByCanonicalName, getDocument } from '../repos/documents.ts'
 import { recordEvent } from '../repos/events.ts';
 import { listLayers } from '../repos/layers.ts';
 import { getRun } from '../repos/runs.ts';
-import { fileExists } from './storage.ts';
+import { objectExists } from './storage.ts';
 
 /** Document statuses that count as "finished work" for a source packet. */
 const USABLE_STATUSES: ReadonlySet<DocumentStatus> = new Set<DocumentStatus>(['COMPLETE', 'FROZEN']);
@@ -50,10 +50,10 @@ export interface DocumentPresence {
  * The single definition of "this document is really here", shared by the
  * dependency checker and the state engine so the two can never disagree.
  */
-export function documentPresence(document: Document | null | undefined): DocumentPresence {
+export async function documentPresence(document: Document | null | undefined): Promise<DocumentPresence> {
   if (!document) return { present: false, fileMissing: false, status: null };
   const statusUsable = USABLE_STATUSES.has(document.status);
-  const onDisk = fileExists(document.filesystemPath);
+  const onDisk = await objectExists(document.filesystemPath);
   // A path was recorded, or the status claims a finished artifact: either way
   // the platform promised a file, so its absence is an inconsistency.
   const claimsArtifact = Boolean(document.filesystemPath) || statusUsable;
@@ -84,11 +84,11 @@ function uniqueNames(names: readonly string[]): string[] {
  * used so a dependency on a document that does not exist yet still points at
  * the layer that has to produce it.
  */
-function inferRequiredLayerId(projectId: string, canonicalName: string): string | null {
+async function inferRequiredLayerId(projectId: string, canonicalName: string): Promise<string | null> {
   const target = normalizeName(canonicalName);
   let bestId: string | null = null;
   let bestLength = 0;
-  for (const layer of listLayers(projectId)) {
+  for (const layer of await listLayers(projectId)) {
     const prefix = normalizeName(layer.name);
     if (!prefix || !target.startsWith(prefix)) continue;
     if (prefix.length > bestLength) {
@@ -99,19 +99,19 @@ function inferRequiredLayerId(projectId: string, canonicalName: string): string 
   return bestId;
 }
 
-function evaluate(
+async function evaluate(
   projectId: string,
   canonicalName: string,
   required: boolean,
   dependencyType: DependencyType,
   linkedDocumentId: string | null,
-): DependencyCheckItem {
+): Promise<DependencyCheckItem> {
   // The canonical name is authoritative; the stored link is only a cache of a
   // previous resolution and may point at a row that has since been renamed.
   const document =
-    findDocumentByCanonicalName(projectId, canonicalName) ??
-    (linkedDocumentId ? getDocument(linkedDocumentId) : null);
-  const presence = documentPresence(document);
+    await findDocumentByCanonicalName(projectId, canonicalName) ??
+    (linkedDocumentId ? await getDocument(linkedDocumentId) : null);
+  const presence = await documentPresence(document);
   return {
     canonicalName,
     documentId: document?.id ?? null,
@@ -147,45 +147,52 @@ function summarize(items: DependencyCheckItem[]): DependencyCheckResult {
   };
 }
 
-function checkDependencyRows(projectId: string, rows: Dependency[]): DependencyCheckResult {
+async function checkDependencyRows(
+  projectId: string,
+  rows: Dependency[],
+): Promise<DependencyCheckResult> {
   return summarize(
-    rows.map((row) =>
-      evaluate(
-        projectId,
-        row.requiredCanonicalName,
-        row.required,
-        row.dependencyType,
-        row.requiredDocumentId,
+    await Promise.all(
+      rows.map((row) =>
+        evaluate(
+          projectId,
+          row.requiredCanonicalName,
+          row.required,
+          row.dependencyType,
+          row.requiredDocumentId,
+        ),
       ),
     ),
   );
 }
 
 /** Source-packet status for a run, e.g. before letting a synthesis start. */
-export function checkRunDependencies(runId: string): DependencyCheckResult {
-  const run = getRun(runId);
+export async function checkRunDependencies(runId: string): Promise<DependencyCheckResult> {
+  const run = await getRun(runId);
   if (!run) throw new Error(`Cannot check dependencies: unknown run ${runId}`);
-  return checkDependencyRows(run.projectId, listDependenciesForRun(runId));
+  return checkDependencyRows(run.projectId, await listDependenciesForRun(runId));
 }
 
 /** Source-packet status for a document (its inputs, not its dependents). */
-export function checkDocumentDependencies(documentId: string): DependencyCheckResult {
-  const document = getDocument(documentId);
+export async function checkDocumentDependencies(documentId: string): Promise<DependencyCheckResult> {
+  const document = await getDocument(documentId);
   if (!document) throw new Error(`Cannot check dependencies: unknown document ${documentId}`);
-  return checkDependencyRows(document.projectId, listDependenciesForDocument(documentId));
+  return checkDependencyRows(document.projectId, await listDependenciesForDocument(documentId));
 }
 
 /**
  * Check a set of canonical names before any run row exists — used by the prompt
  * preview so the user sees `6 / 7 READY` before committing to a run.
  */
-export function checkCanonicalNames(
+export async function checkCanonicalNames(
   projectId: string,
   requiredCanonicalNames: string[],
-): DependencyCheckResult {
+): Promise<DependencyCheckResult> {
   return summarize(
-    uniqueNames(requiredCanonicalNames).map((name) =>
-      evaluate(projectId, name, true, 'SOURCE_PACKET', null),
+    await Promise.all(
+      uniqueNames(requiredCanonicalNames).map((name) =>
+        evaluate(projectId, name, true, 'SOURCE_PACKET', null),
+      ),
     ),
   );
 }
@@ -195,20 +202,20 @@ export function checkCanonicalNames(
  * twice with the same names leaves the original rows (and their ids) alone, so
  * re-compiling a prompt does not churn the dependency table.
  */
-export function setRunDependencies(
+export async function setRunDependencies(
   runId: string,
   requiredCanonicalNames: string[],
   options: { dependencyType?: DependencyType; required?: boolean } = {},
-): Dependency[] {
-  const run = getRun(runId);
+): Promise<Dependency[]> {
+  const run = await getRun(runId);
   if (!run) throw new Error(`Cannot set dependencies: unknown run ${runId}`);
   const dependencyType: DependencyType = options.dependencyType ?? 'SOURCE_PACKET';
   const required = options.required ?? true;
   const names = uniqueNames(requiredCanonicalNames);
 
   const db = getDb();
-  return db.transaction(() => {
-    const existing = listDependenciesForRun(runId);
+  return await db.transaction(async () => {
+    const existing = await listDependenciesForRun(runId);
     const unchanged =
       existing.length === names.length &&
       existing.every(
@@ -219,33 +226,36 @@ export function setRunDependencies(
       );
     if (unchanged) {
       // Still re-point the resolution links: documents may have arrived since.
-      return existing.map((row) => relinkDependency(row));
+      return await Promise.all(existing.map((row) => relinkDependency(row)));
     }
 
-    deleteDependenciesForRun(runId);
-    return names.map((canonicalName) => {
-      const document = findDocumentByCanonicalName(run.projectId, canonicalName);
-      const presence = documentPresence(document);
-      return createDependency({
-        projectId: run.projectId,
-        dependentRunId: runId,
-        requiredCanonicalName: canonicalName,
-        requiredDocumentId: presence.present ? (document?.id ?? null) : null,
-        requiredLayerId: document?.layerId ?? inferRequiredLayerId(run.projectId, canonicalName),
-        dependencyType,
-        required,
-      });
-    });
+    await deleteDependenciesForRun(runId);
+    return await Promise.all(
+      names.map(async (canonicalName) => {
+        const document = await findDocumentByCanonicalName(run.projectId, canonicalName);
+        const presence = await documentPresence(document);
+        return createDependency({
+          projectId: run.projectId,
+          dependentRunId: runId,
+          requiredCanonicalName: canonicalName,
+          requiredDocumentId: presence.present ? (document?.id ?? null) : null,
+          requiredLayerId:
+            document?.layerId ?? (await inferRequiredLayerId(run.projectId, canonicalName)),
+          dependencyType,
+          required,
+        });
+      }),
+    );
   });
 }
 
 /** Re-read a dependency's resolution without rewriting its identity. */
-function relinkDependency(row: Dependency): Dependency {
-  const document = findDocumentByCanonicalName(row.projectId, row.requiredCanonicalName);
-  const presence = documentPresence(document);
+async function relinkDependency(row: Dependency): Promise<Dependency> {
+  const document = await findDocumentByCanonicalName(row.projectId, row.requiredCanonicalName);
+  const presence = await documentPresence(document);
   const shouldBe = presence.present ? (document?.id ?? null) : null;
   if (shouldBe === row.requiredDocumentId) return row;
-  linkDependencyToDocument(row.id, shouldBe);
+  await linkDependencyToDocument(row.id, shouldBe);
   return { ...row, requiredDocumentId: shouldBe };
 }
 
@@ -254,26 +264,26 @@ function relinkDependency(row: Dependency): Dependency {
  * what changed. Called from `recomputeProject`, which is why importing one PDF
  * can unblock a synthesis three layers away without anyone asking it to.
  */
-export function refreshProjectDependencies(projectId: string): {
+export async function refreshProjectDependencies(projectId: string): Promise<{
   resolved: string[];
   broken: string[];
-} {
+}> {
   const db = getDb();
-  return db.transaction(() => {
-    const changes = resolveProjectDependencies(projectId);
+  return db.transaction(async () => {
+    const changes = await resolveProjectDependencies(projectId);
     for (const canonicalName of changes.resolved) {
-      recordEvent({
+      await recordEvent({
         projectId,
-        layerId: inferRequiredLayerId(projectId, canonicalName),
+        layerId: await inferRequiredLayerId(projectId, canonicalName),
         entityType: 'DEPENDENCY',
         eventType: 'DEPENDENCY_RESOLVED',
         payload: { canonicalName },
       });
     }
     for (const canonicalName of changes.broken) {
-      recordEvent({
+      await recordEvent({
         projectId,
-        layerId: inferRequiredLayerId(projectId, canonicalName),
+        layerId: await inferRequiredLayerId(projectId, canonicalName),
         entityType: 'DEPENDENCY',
         eventType: 'DEPENDENCY_MISSING',
         payload: { canonicalName },

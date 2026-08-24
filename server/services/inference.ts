@@ -221,11 +221,11 @@ function inferDocumentType(
   return 'REFERENCE';
 }
 
-function infer(projectId: string, filename: string, folderSlug: string | null): InferenceResult {
-  const project = getProject(projectId);
+async function infer(projectId: string, filename: string, folderSlug: string | null): Promise<InferenceResult> {
+  const project = await getProject(projectId);
   if (!project) return unknownResult(`No project with id ${projectId} exists, so nothing could be inferred.`);
   const policy: VersionPolicy = project.versionPolicy ?? DEFAULT_VERSION_POLICY;
-  const layers = listLayers(projectId);
+  const layers = await listLayers(projectId);
 
   const cleaned = cleanFilename(filename);
   const reasons = [...cleaned.notes];
@@ -270,7 +270,7 @@ function infer(projectId: string, filename: string, folderSlug: string | null): 
   }
 
   if (folderSlug) {
-    const folderLayer = getLayerBySlug(projectId, folderSlug);
+    const folderLayer = await getLayerBySlug(projectId, folderSlug);
     if (folderLayer) {
       reasons.push(
         best && best.layer.id === folderLayer.id
@@ -330,7 +330,7 @@ function infer(projectId: string, filename: string, folderSlug: string | null): 
 }
 
 /** Infer layer / version / document type from a filename. Never throws. */
-export function inferFromFilename(projectId: string, filename: string): InferenceResult {
+export async function inferFromFilename(projectId: string, filename: string): Promise<InferenceResult> {
   try {
     return infer(projectId, filename, null);
   } catch (error) {
@@ -345,13 +345,17 @@ export function inferFromFilename(projectId: string, filename: string): Inferenc
  * was found in is much stronger evidence than its name, which is what lets
  * SCAN & RECONCILE offer a one-click fix for hand-dropped files.
  */
-export function inferForProjectFile(
+export async function inferForProjectFile(
   projectId: string,
   projectSlug: string,
   relativePath: string,
-): InferenceResult {
+): Promise<InferenceResult> {
   try {
-    return infer(projectId, path.basename(relativePath), layerSlugFromPath(projectSlug, relativePath));
+    return await infer(
+      projectId,
+      path.basename(relativePath),
+      layerSlugFromPath(projectSlug, relativePath),
+    );
   } catch (error) {
     return unknownResult(
       `Could not read "${relativePath}": ${error instanceof Error ? error.message : String(error)}`,

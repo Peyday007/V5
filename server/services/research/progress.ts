@@ -70,19 +70,19 @@ function count<T extends string>(values: T[]): Record<string, number> {
 }
 
 /** Everything the progress panel shows, derived from persisted state only. */
-export function progressSnapshot(orchestrationId: string): ResearchProgressSnapshot | null {
-  const orchestration = getOrchestration(orchestrationId);
+export async function progressSnapshot(orchestrationId: string): Promise<ResearchProgressSnapshot | null> {
+  const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) return null;
 
-  const contract = contractFor(orchestrationId);
-  const requirements = listRequirements(orchestrationId);
-  const coverage = listCoverage(orchestrationId);
-  const fragments = currentFragments(orchestrationId);
-  const attempts = listFragments(orchestrationId);
-  const claims = listClaims(orchestrationId);
-  const jobs = listJobs(orchestrationId);
-  const pause = openQuotaPause(orchestrationId);
-  const connection = getConnection(orchestration.provider);
+  const contract = await contractFor(orchestrationId);
+  const requirements = await listRequirements(orchestrationId);
+  const coverage = await listCoverage(orchestrationId);
+  const fragments = await currentFragments(orchestrationId);
+  const attempts = await listFragments(orchestrationId);
+  const claims = await listClaims(orchestrationId);
+  const jobs = await listJobs(orchestrationId);
+  const pause = await openQuotaPause(orchestrationId);
+  const connection = await getConnection(orchestration.provider);
   const probe = antigravityStatus().status;
 
   const active = jobs.find((job) => job.status === 'RUNNING') ?? null;
@@ -105,7 +105,7 @@ export function progressSnapshot(orchestrationId: string): ResearchProgressSnaps
       .map((entry) => entry.gapType as string),
   );
 
-  const audit = orchestration.auditId ? getAudit(orchestration.auditId) : null;
+  const audit = orchestration.auditId ? await getAudit(orchestration.auditId) : null;
   const settled = fragments.filter((fragment) =>
     ['ACCEPTED', 'REJECTED', 'CANCELLED', 'NEEDS_HUMAN'].includes(fragment.status),
   );

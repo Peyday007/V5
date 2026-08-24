@@ -44,11 +44,11 @@ import type {
 
 let fixture: TestProject;
 
-beforeEach(() => {
-  fixture = freshProject();
+beforeEach(async () => {
+  fixture = await freshProject();
 });
-afterEach(() => {
-  teardown();
+afterEach(async () => {
+  await teardown();
 });
 
 /** An archive document that already answers one of the requirements. */
@@ -375,21 +375,21 @@ class AcceptanceWorker implements AIProvider {
 describe('one assignment, end to end', () => {
   it('reads the archive, plans only the gaps, waits, researches, repairs, and files', async () => {
     // --- The archive the project already has ------------------------------
-    const imported = importFile({
+    const imported = await importFile({
       projectId: fixture.project.id,
       originalFilename: 'World Model v1.txt',
       contents: Buffer.from(ARCHIVE),
-      layerId: fixture.layerByName('World Model').id,
+      layerId: (await fixture.layerByName('World Model')).id,
       version: 'v1',
       documentType: 'FOUNDATION',
     });
     await whenExtractionIdle();
-    expect(getDocument(imported.documentId!)).toBeTruthy();
+    expect(await getDocument(imported.documentId!)).toBeTruthy();
 
     // --- The goal, planned but not started --------------------------------
     const worker = new AcceptanceWorker();
-    const orchestration = startResearch({
-      layerId: fixture.layerByName('World Model').id,
+    const orchestration = await startResearch({
+      layerId: (await fixture.layerByName('World Model')).id,
       title: 'Custody recognition and occupation size',
       assignment: 'Establish how custody transfer is recognised and how large the occupation is.',
       requireApproval: true,
@@ -399,11 +399,11 @@ describe('one assignment, end to end', () => {
 
     // The goal became a requirement graph, and nothing was researched yet.
     expect(planned.orchestration.status).toBe('AWAITING_APPROVAL');
-    expect(listRequirements(id)).toHaveLength(4);
+    expect(await listRequirements(id)).toHaveLength(4);
     expect(worker.calls.filter((call) => call.kind === 'RESEARCH')).toHaveLength(0);
 
     // The archive was read first, and its claims mapped to a requirement.
-    const review = buildReview(id);
+    const review = await buildReview(id);
     expect(review.alreadyAnswered.length).toBeGreaterThan(0);
     const satisfied = review.alreadyAnswered[0]!;
     expect(satisfied.evidence.length).toBeGreaterThan(0);
@@ -424,8 +424,8 @@ describe('one assignment, end to end', () => {
     expect(review.jobs.length).toBeLessThanOrEqual(review.fragments.length);
 
     // --- Approval is what starts the work ---------------------------------
-    applyReviewDecisions(id, { approve: true, note: 'Checked the gaps.' });
-    expect(getOrchestration(id)!.approvedAt).not.toBeNull();
+    await applyReviewDecisions(id, { approve: true, note: 'Checked the gaps.' });
+    expect((await getOrchestration(id))!.approvedAt).not.toBeNull();
 
     const outcome = await runOrchestration(id, { provider: worker });
     await whenExtractionIdle();
@@ -434,7 +434,7 @@ describe('one assignment, end to end', () => {
     expect(worker.calls.filter((call) => call.kind === 'RESEARCH').length).toBeGreaterThan(0);
 
     // A fragment that came back on one publisher was repaired, not accepted.
-    const vendorAttempts = listFragments(id).filter((entry) =>
+    const vendorAttempts = (await listFragments(id)).filter((entry) =>
       entry.fragmentKey.includes('vendor'),
     );
     expect(vendorAttempts.length).toBeGreaterThanOrEqual(2);
@@ -445,12 +445,12 @@ describe('one assignment, end to end', () => {
     expect(vendorAttempts.at(-1)!.status).toBe('ACCEPTED');
 
     // Bundled fragments kept separate verdicts and separate claims.
-    const jobs = listJobs(id);
+    const jobs = await listJobs(id);
     expect(jobs.length).toBeGreaterThan(0);
     const bundled = jobs.find((job) => job.fragmentIds.length > 1);
     if (bundled) {
       const claimsByFragment = new Map<string, number>();
-      for (const claim of listClaims(id)) {
+      for (const claim of await listClaims(id)) {
         if (!claim.fragmentId) continue;
         claimsByFragment.set(claim.fragmentId, (claimsByFragment.get(claim.fragmentId) ?? 0) + 1);
       }
@@ -460,20 +460,20 @@ describe('one assignment, end to end', () => {
     }
 
     // The packet was checked against the whole goal before anything was written.
-    const coverage = assessPacket({ orchestrationId: id, projectId: fixture.project.id });
+    const coverage = await assessPacket({ orchestrationId: id, projectId: fixture.project.id });
     expect(coverage.checks.length).toBeGreaterThan(5);
 
     // --- What was filed ---------------------------------------------------
     expect(outcome.documentId).toBeTruthy();
-    const filed = getDocument(outcome.documentId!)!;
+    const filed = (await getDocument(outcome.documentId!))!;
     expect(filed.canonicalName.length).toBeGreaterThan(0);
     expect(outcome.auditId).toBeTruthy();
     expect(outcome.verdict).toBe('PASS');
-    expect(getOrchestration(id)!.status).toBe('COMPLETE');
+    expect((await getOrchestration(id))!.status).toBe('COMPLETE');
 
     // Synthesis used accepted evidence only, and every claim behind it resolves
     // to a source and a passage.
-    const evidence = packetEvidence({ orchestrationId: id, projectId: fixture.project.id });
+    const evidence = await packetEvidence({ orchestrationId: id, projectId: fixture.project.id });
     expect(evidence.newClaims.length).toBeGreaterThan(0);
     for (const claim of evidence.newClaims) {
       expect(claim.accepted).toBe(true);
@@ -482,18 +482,18 @@ describe('one assignment, end to end', () => {
       expect(claim.requirementIds.length).toBeGreaterThan(0);
     }
     // A rejected claim contributed nothing.
-    const rejected = listClaims(id).filter((claim) => !claim.accepted);
+    const rejected = (await listClaims(id)).filter((claim) => !claim.accepted);
     for (const claim of rejected) {
       expect(evidence.newClaims.some((entry) => entry.id === claim.id)).toBe(false);
     }
 
     // Coverage moved as evidence landed, rather than staying where the archive
     // left it.
-    const coverageRows = listCoverage(id);
+    const coverageRows = await listCoverage(id);
     expect(coverageRows.some((entry) => entry.status === 'SATISFIED')).toBe(true);
 
     // --- What the user would see -----------------------------------------
-    const progress = progressSnapshot(id)!;
+    const progress = (await progressSnapshot(id))!;
     expect(progress.requirements.total).toBe(4);
     expect(progress.fragments.accepted).toBeGreaterThan(0);
     expect(progress.evidence.acceptedClaims).toBeGreaterThan(0);
@@ -502,7 +502,7 @@ describe('one assignment, end to end', () => {
     expect(progress.audit.verdict).toBe('PASS');
     expect(progress.disposition).toMatch(/finished/i);
     // Every fragment settled; nothing is left silently open.
-    for (const fragment of currentFragments(id)) {
+    for (const fragment of await currentFragments(id)) {
       expect(['ACCEPTED', 'REJECTED', 'CANCELLED', 'NEEDS_HUMAN']).toContain(fragment.status);
     }
   }, 60_000);

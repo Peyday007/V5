@@ -25,7 +25,7 @@ import { nowIso } from '../repos/util.ts';
 import { inferForProjectFile, inferFromFilename } from './inference.ts';
 import { registerExistingFile } from './importer.ts';
 import { recomputeProject } from './stateEngine.ts';
-import { absolutePathFor, fileExists, fileSize, hashFile, listProjectFiles } from './storage.ts';
+import { objectExists, objectSize, hashObject, listProjectFiles } from './storage.ts';
 
 export interface ReconcileFixInput {
   projectId: string;
@@ -43,17 +43,17 @@ interface ProjectHandle {
   name: string;
 }
 
-function requireProject(projectId: string): ProjectHandle {
-  const project = getProject(projectId);
+async function requireProject(projectId: string): Promise<ProjectHandle> {
+  const project = await getProject(projectId);
   if (!project) throw new Error(`Unknown project: ${projectId}`);
   return { id: project.id, slug: project.slug, name: project.name };
 }
 
-function unregisteredFileIssue(
+async function unregisteredFileIssue(
   project: ProjectHandle,
   relativePath: string,
-): ReconcileIssue {
-  const inference = inferForProjectFile(project.id, project.slug, relativePath);
+): Promise<ReconcileIssue> {
+  const inference = await inferForProjectFile(project.id, project.slug, relativePath);
   const fixable = inference.layerId !== null && inference.version !== null;
   return {
     kind: 'UNREGISTERED_FILE',
@@ -98,8 +98,8 @@ function checksumIssue(document: Document, currentHash: string): ReconcileIssue 
   };
 }
 
-function orphanIssue(projectId: string, document: Document): ReconcileIssue {
-  const inference: InferenceResult = inferFromFilename(
+async function orphanIssue(projectId: string, document: Document): Promise<ReconcileIssue> {
+  const inference: InferenceResult = await inferFromFilename(
     projectId,
     document.filename ?? document.canonicalName,
   );
@@ -121,10 +121,10 @@ function orphanIssue(projectId: string, document: Document): ReconcileIssue {
  * Compare every file under the project's document tree with every registered
  * document and report the differences. Read-only apart from the audit event.
  */
-export function scanAndReconcile(projectId: string): ReconcileReport {
-  const project = requireProject(projectId);
-  const files = listProjectFiles(project.slug);
-  const documents = listDocuments(project.id);
+export async function scanAndReconcile(projectId: string): Promise<ReconcileReport> {
+  const project = await requireProject(projectId);
+  const files = await listProjectFiles(project.slug);
+  const documents = await listDocuments(project.id);
   const issues: ReconcileIssue[] = [];
 
   const registeredPaths = new Set<string>();
@@ -137,26 +137,26 @@ export function scanAndReconcile(projectId: string): ReconcileReport {
     // the error. Reporting it as orphaned every time would train the user to
     // ignore this report.
     if (!document.layerId && (document.scope ?? 'LAYER') === 'LAYER') {
-      issues.push(orphanIssue(project.id, document));
+      issues.push(await orphanIssue(project.id, document));
     }
 
     // A document that was planned but not yet produced legitimately has no file.
     const relativePath = document.filesystemPath;
     if (!relativePath) continue;
 
-    if (!fileExists(relativePath)) {
+    if (!await objectExists(relativePath)) {
       issues.push(missingFileIssue(document));
       continue;
     }
     if (document.fileHash) {
-      const currentHash = hashFile(absolutePathFor(relativePath));
+      const currentHash = await hashObject(relativePath);
       if (currentHash !== document.fileHash) issues.push(checksumIssue(document, currentHash));
     }
   }
 
   for (const relativePath of files) {
     if (registeredPaths.has(relativePath)) continue;
-    issues.push(unregisteredFileIssue(project, relativePath));
+    issues.push(await unregisteredFileIssue(project, relativePath));
   }
 
   const report: ReconcileReport = {
@@ -168,7 +168,7 @@ export function scanAndReconcile(projectId: string): ReconcileReport {
     generatedAt: nowIso(),
   };
 
-  recordEvent({
+  await recordEvent({
     projectId: project.id,
     entityType: 'PROJECT',
     entityId: project.id,
@@ -189,9 +189,9 @@ export function scanAndReconcile(projectId: string): ReconcileReport {
   return report;
 }
 
-function fixUnregisteredFile(input: ReconcileFixInput): { ok: boolean; message: string } {
+async function fixUnregisteredFile(input: ReconcileFixInput): Promise<{ ok: boolean; message: string }> {
   if (!input.path) return { ok: false, message: 'Which file? A path is needed to register it.' };
-  const outcome = registerExistingFile({
+  const outcome = await registerExistingFile({
     projectId: input.projectId,
     relativePath: input.path,
     layerId: input.layerId ?? null,
@@ -201,22 +201,22 @@ function fixUnregisteredFile(input: ReconcileFixInput): { ok: boolean; message: 
   return { ok: outcome.registered, message: outcome.message };
 }
 
-function fixMissingFile(input: ReconcileFixInput): { ok: boolean; message: string } {
+async function fixMissingFile(input: ReconcileFixInput): Promise<{ ok: boolean; message: string }> {
   if (!input.documentId) return { ok: false, message: 'Which document? A document id is needed.' };
-  const document = getDocument(input.documentId);
+  const document = await getDocument(input.documentId);
   if (!document || document.projectId !== input.projectId) {
     return { ok: false, message: `No document ${input.documentId} in this project.` };
   }
-  if (document.filesystemPath && fileExists(document.filesystemPath)) {
-    updateDocument(document.id, { fileMissing: false });
-    recomputeProject(input.projectId);
+  if (document.filesystemPath && await objectExists(document.filesystemPath)) {
+    await updateDocument(document.id, { fileMissing: false });
+    await recomputeProject(input.projectId);
     return {
       ok: true,
       message: `The file for "${document.canonicalName}" is back on disk — the document is healthy again.`,
     };
   }
-  updateDocument(document.id, { fileMissing: true });
-  recordEvent({
+  await updateDocument(document.id, { fileMissing: true });
+  await recordEvent({
     projectId: document.projectId,
     layerId: document.layerId,
     entityType: 'DOCUMENT',
@@ -224,7 +224,7 @@ function fixMissingFile(input: ReconcileFixInput): { ok: boolean; message: strin
     eventType: 'DOCUMENT_FILE_MISSING',
     payload: { canonicalName: document.canonicalName, expectedPath: document.filesystemPath },
   });
-  recomputeProject(input.projectId);
+  await recomputeProject(input.projectId);
   return {
     ok: true,
     message:
@@ -233,26 +233,26 @@ function fixMissingFile(input: ReconcileFixInput): { ok: boolean; message: strin
   };
 }
 
-function fixChecksum(input: ReconcileFixInput): { ok: boolean; message: string } {
+async function fixChecksum(input: ReconcileFixInput): Promise<{ ok: boolean; message: string }> {
   if (!input.documentId) return { ok: false, message: 'Which document? A document id is needed.' };
-  const document = getDocument(input.documentId);
+  const document = await getDocument(input.documentId);
   if (!document || document.projectId !== input.projectId) {
     return { ok: false, message: `No document ${input.documentId} in this project.` };
   }
-  if (!document.filesystemPath || !fileExists(document.filesystemPath)) {
+  if (!document.filesystemPath || !await objectExists(document.filesystemPath)) {
     return {
       ok: false,
       message: `"${document.canonicalName}" has no file on disk to accept. Re-import it instead.`,
     };
   }
   const previousHash = document.fileHash;
-  const hash = hashFile(absolutePathFor(document.filesystemPath));
-  updateDocument(document.id, {
+  const hash = await hashObject(document.storageKey ?? document.filesystemPath);
+  await updateDocument(document.id, {
     fileHash: hash,
-    fileSize: fileSize(document.filesystemPath),
+    fileSize: await objectSize(document.filesystemPath),
     fileMissing: false,
   });
-  recordEvent({
+  await recordEvent({
     projectId: document.projectId,
     layerId: document.layerId,
     entityType: 'DOCUMENT',
@@ -265,37 +265,37 @@ function fixChecksum(input: ReconcileFixInput): { ok: boolean; message: string }
       fileHash: hash,
     },
   });
-  recomputeProject(input.projectId);
+  await recomputeProject(input.projectId);
   return {
     ok: true,
     message: `Accepted the file on disk as the current content of "${document.canonicalName}".`,
   };
 }
 
-function fixOrphanedDocument(input: ReconcileFixInput): { ok: boolean; message: string } {
+async function fixOrphanedDocument(input: ReconcileFixInput): Promise<{ ok: boolean; message: string }> {
   if (!input.documentId) return { ok: false, message: 'Which document? A document id is needed.' };
-  const document = getDocument(input.documentId);
+  const document = await getDocument(input.documentId);
   if (!document || document.projectId !== input.projectId) {
     return { ok: false, message: `No document ${input.documentId} in this project.` };
   }
   const inferred = input.layerId
     ? input.layerId
-    : inferFromFilename(input.projectId, document.filename ?? document.canonicalName).layerId;
+    : (await inferFromFilename(input.projectId, document.filename ?? document.canonicalName)).layerId;
   if (!inferred) {
     return {
       ok: false,
       message: `Nothing in "${document.canonicalName}" says which layer it belongs to — choose one.`,
     };
   }
-  const layer = getLayer(inferred);
+  const layer = await getLayer(inferred);
   if (!layer || layer.projectId !== input.projectId) {
     return { ok: false, message: `Layer ${inferred} does not belong to this project.` };
   }
-  updateDocument(document.id, {
+  await updateDocument(document.id, {
     layerId: layer.id,
     documentType: input.documentType ?? document.documentType,
   });
-  recordEvent({
+  await recordEvent({
     projectId: document.projectId,
     layerId: layer.id,
     entityType: 'DOCUMENT',
@@ -308,7 +308,7 @@ function fixOrphanedDocument(input: ReconcileFixInput): { ok: boolean; message: 
       layerName: layer.name,
     },
   });
-  recomputeProject(input.projectId);
+  await recomputeProject(input.projectId);
   return { ok: true, message: `Assigned "${document.canonicalName}" to ${layer.name}.` };
 }
 
@@ -316,24 +316,24 @@ function fixOrphanedDocument(input: ReconcileFixInput): { ok: boolean; message: 
  * Apply one fix and hand back a freshly computed report, so the UI always shows
  * the state that exists after the fix rather than the state that provoked it.
  */
-export function applyReconcileFix(
+export async function applyReconcileFix(
   input: ReconcileFixInput,
-): { ok: boolean; message: string; report: ReconcileReport } {
-  requireProject(input.projectId);
+): Promise<{ ok: boolean; message: string; report: ReconcileReport }> {
+  await requireProject(input.projectId);
   let outcome: { ok: boolean; message: string };
   try {
     switch (input.kind) {
       case 'UNREGISTERED_FILE':
-        outcome = fixUnregisteredFile(input);
+        outcome = await fixUnregisteredFile(input);
         break;
       case 'MISSING_PHYSICAL_FILE':
-        outcome = fixMissingFile(input);
+        outcome = await fixMissingFile(input);
         break;
       case 'CHECKSUM_CHANGED':
-        outcome = fixChecksum(input);
+        outcome = await fixChecksum(input);
         break;
       case 'ORPHANED_DOCUMENT':
-        outcome = fixOrphanedDocument(input);
+        outcome = await fixOrphanedDocument(input);
         break;
       default:
         outcome = { ok: false, message: `There is no fix for "${String(input.kind)}".` };
@@ -341,5 +341,5 @@ export function applyReconcileFix(
   } catch (error) {
     outcome = { ok: false, message: error instanceof Error ? error.message : String(error) };
   }
-  return { ...outcome, report: scanAndReconcile(input.projectId) };
+  return { ...outcome, report: await scanAndReconcile(input.projectId) };
 }

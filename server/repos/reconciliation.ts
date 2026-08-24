@@ -86,10 +86,10 @@ export interface CreateBoundaryContractInput {
   ambiguities?: { question: string; why: string }[];
 }
 
-export function createBoundaryContract(input: CreateBoundaryContractInput): BoundaryContract {
+export async function createBoundaryContract(input: CreateBoundaryContractInput): Promise<BoundaryContract> {
   const ts = nowIso();
   const id = newId('bnd');
-  getDb().run(
+  await getDb().run(
     `INSERT INTO boundary_contracts (id, orchestration_id, project_id, layer_id, primary_question,
        decision_supported, audience, included_subjects, excluded_subjects, geography, timeframe,
        population, definitions, required_comparisons, required_calculations, expected_output,
@@ -106,16 +106,16 @@ export function createBoundaryContract(input: CreateBoundaryContractInput): Boun
       toJson(input.prohibitedAssumptions ?? []), toJson(input.sourceConstraints ?? []),
       input.completionStandard ?? null, toJson(input.ambiguities ?? []), ts, ts],
   );
-  return getBoundaryContract(id)!;
+  return (await getBoundaryContract(id))!;
 }
 
-export function getBoundaryContract(id: string): BoundaryContract | null {
-  const row = getDb().get<BoundaryContractRow>('SELECT * FROM boundary_contracts WHERE id = ?', [id]);
+export async function getBoundaryContract(id: string): Promise<BoundaryContract | null> {
+  const row = await getDb().get<BoundaryContractRow>('SELECT * FROM boundary_contracts WHERE id = ?', [id]);
   return row ? mapContract(row) : null;
 }
 
-export function contractFor(orchestrationId: string): BoundaryContract | null {
-  const row = getDb().get<BoundaryContractRow>(
+export async function contractFor(orchestrationId: string): Promise<BoundaryContract | null> {
+  const row = await getDb().get<BoundaryContractRow>(
     `SELECT * FROM boundary_contracts WHERE orchestration_id = ? AND status != 'SUPERSEDED'
       ORDER BY created_at DESC LIMIT 1`,
     [orchestrationId],
@@ -123,10 +123,10 @@ export function contractFor(orchestrationId: string): BoundaryContract | null {
   return row ? mapContract(row) : null;
 }
 
-export function updateBoundaryContract(
+export async function updateBoundaryContract(
   id: string,
   patch: Partial<CreateBoundaryContractInput> & { status?: BoundaryContract['status']; approvedAt?: string | null },
-): BoundaryContract | null {
+): Promise<BoundaryContract | null> {
   const { clause, values } = buildUpdate({
     primary_question: patch.primaryQuestion,
     decision_supported: patch.decisionSupported,
@@ -150,7 +150,7 @@ export function updateBoundaryContract(
     approved_at: patch.approvedAt,
   });
   if (!clause) return getBoundaryContract(id);
-  getDb().run(`UPDATE boundary_contracts SET ${clause}, updated_at = ? WHERE id = ?`, [
+  await getDb().run(`UPDATE boundary_contracts SET ${clause}, updated_at = ? WHERE id = ?`, [
     ...(values as never[]),
     nowIso(),
     id,
@@ -199,16 +199,16 @@ export interface CreateRequirementInput {
   owningLayerId?: string | null;
 }
 
-export function createRequirements(inputs: CreateRequirementInput[]): Requirement[] {
+export async function createRequirements(inputs: CreateRequirementInput[]): Promise<Requirement[]> {
   if (inputs.length === 0) return [];
   const db = getDb();
   const ts = nowIso();
   const ids: string[] = [];
-  db.transaction(() => {
+  await db.transaction(async () => {
     for (const input of inputs) {
       const id = newId('req');
       ids.push(id);
-      db.run(
+      await db.run(
         `INSERT INTO requirements (id, orchestration_id, project_id, layer_id, requirement_key,
            ordinal, statement, necessity, kind, rationale, required_evidence, completion_criteria,
            depends_on, owning_layer_id, created_at, updated_at)
@@ -220,20 +220,20 @@ export function createRequirements(inputs: CreateRequirementInput[]): Requiremen
       );
     }
   });
-  return ids.map((id) => getRequirement(id)).filter((r): r is Requirement => r !== null);
+  const loaded = await Promise.all(ids.map((id) => getRequirement(id)));
+  return loaded.filter((r): r is Requirement => r !== null);
 }
 
-export function getRequirement(id: string): Requirement | null {
-  const row = getDb().get<RequirementRow>('SELECT * FROM requirements WHERE id = ?', [id]);
+export async function getRequirement(id: string): Promise<Requirement | null> {
+  const row = await getDb().get<RequirementRow>('SELECT * FROM requirements WHERE id = ?', [id]);
   return row ? mapRequirement(row) : null;
 }
 
-export function listRequirements(orchestrationId: string): Requirement[] {
-  return getDb()
-    .all<RequirementRow>(
+export async function listRequirements(orchestrationId: string): Promise<Requirement[]> {
+  return (await getDb().all<RequirementRow>(
       'SELECT * FROM requirements WHERE orchestration_id = ? ORDER BY ordinal, rowid',
       [orchestrationId],
-    )
+    ))
     .map(mapRequirement);
 }
 
@@ -310,16 +310,16 @@ export interface InsertExistingClaimInput {
   contentHash: string;
 }
 
-export function insertExistingClaims(inputs: InsertExistingClaimInput[]): ExistingClaim[] {
+export async function insertExistingClaims(inputs: InsertExistingClaimInput[]): Promise<ExistingClaim[]> {
   if (inputs.length === 0) return [];
   const db = getDb();
   const ts = nowIso();
   const ids: string[] = [];
-  db.transaction(() => {
+  await db.transaction(async () => {
     for (const input of inputs) {
       const id = newId('exc');
       ids.push(id);
-      db.run(
+      await db.run(
         `INSERT INTO existing_claims (id, project_id, document_id, extraction_run_id, layer_id,
            claim, claim_type, page, block_index, char_start, char_end, locator, source_url,
            source_title, source_publisher, source_date, retrieved_at, supporting_passage,
@@ -340,38 +340,37 @@ export function insertExistingClaims(inputs: InsertExistingClaimInput[]): Existi
       );
     }
   });
-  return ids.map((id) => getExistingClaim(id)).filter((c): c is ExistingClaim => c !== null);
+  const loaded = await Promise.all(ids.map((id) => getExistingClaim(id)));
+  return loaded.filter((c): c is ExistingClaim => c !== null);
 }
 
-export function getExistingClaim(id: string): ExistingClaim | null {
-  const row = getDb().get<ExistingClaimRow>('SELECT * FROM existing_claims WHERE id = ?', [id]);
+export async function getExistingClaim(id: string): Promise<ExistingClaim | null> {
+  const row = await getDb().get<ExistingClaimRow>('SELECT * FROM existing_claims WHERE id = ?', [id]);
   return row ? mapExistingClaim(row) : null;
 }
 
-export function listExistingClaims(projectId: string): ExistingClaim[] {
-  return getDb()
-    .all<ExistingClaimRow>(
+export async function listExistingClaims(projectId: string): Promise<ExistingClaim[]> {
+  return (await getDb().all<ExistingClaimRow>(
       'SELECT * FROM existing_claims WHERE project_id = ? ORDER BY created_at, rowid',
       [projectId],
-    )
+    ))
     .map(mapExistingClaim);
 }
 
-export function listExistingClaimsForDocument(documentId: string): ExistingClaim[] {
-  return getDb()
-    .all<ExistingClaimRow>(
+export async function listExistingClaimsForDocument(documentId: string): Promise<ExistingClaim[]> {
+  return (await getDb().all<ExistingClaimRow>(
       'SELECT * FROM existing_claims WHERE document_id = ? ORDER BY page, block_index, rowid',
       [documentId],
-    )
+    ))
     .map(mapExistingClaim);
 }
 
 /** Re-reading a document replaces its claims; the document is the source of truth. */
-export function clearExistingClaims(documentId: string): void {
-  getDb().run('DELETE FROM existing_claims WHERE document_id = ?', [documentId]);
+export async function clearExistingClaims(documentId: string): Promise<void> {
+  await getDb().run('DELETE FROM existing_claims WHERE document_id = ?', [documentId]);
 }
 
-export function updateExistingClaim(
+export async function updateExistingClaim(
   id: string,
   patch: {
     verificationState?: VerificationState;
@@ -380,7 +379,7 @@ export function updateExistingClaim(
     evidenceConfidence?: number;
     superseded?: boolean;
   },
-): ExistingClaim | null {
+): Promise<ExistingClaim | null> {
   const { clause, values } = buildUpdate({
     verification_state: patch.verificationState,
     verification_detail: patch.verificationDetail,
@@ -389,7 +388,7 @@ export function updateExistingClaim(
     superseded: patch.superseded === undefined ? undefined : fromBool(patch.superseded),
   });
   if (!clause) return getExistingClaim(id);
-  getDb().run(`UPDATE existing_claims SET ${clause} WHERE id = ?`, [...(values as never[]), id]);
+  await getDb().run(`UPDATE existing_claims SET ${clause} WHERE id = ?`, [...(values as never[]), id]);
   return getExistingClaim(id);
 }
 
@@ -438,16 +437,16 @@ export interface UpsertCoverageInput {
  * worth keeping — the claims and the reasons behind it are, and those live in
  * their own tables.
  */
-export function upsertCoverage(input: UpsertCoverageInput): RequirementCoverage {
+export async function upsertCoverage(input: UpsertCoverageInput): Promise<RequirementCoverage> {
   const db = getDb();
   const ts = nowIso();
-  const existing = db.get<RequirementCoverageRow>(
+  const existing = await db.get<RequirementCoverageRow>(
     'SELECT * FROM requirement_coverage WHERE orchestration_id = ? AND requirement_id = ?',
     [input.orchestrationId, input.requirementId],
   );
 
   if (existing) {
-    db.run(
+    await db.run(
       `UPDATE requirement_coverage SET status = ?, reasons = ?, claim_ids = ?, document_ids = ?,
          confidence = ?, gap_type = ?, gap_detail = ?, needs_research = ?, updated_at = ?
        WHERE id = ?`,
@@ -456,12 +455,12 @@ export function upsertCoverage(input: UpsertCoverageInput): RequirementCoverage 
         fromBool(input.needsResearch), ts, existing.id],
     );
     return mapCoverage(
-      db.get<RequirementCoverageRow>('SELECT * FROM requirement_coverage WHERE id = ?', [existing.id])!,
+      await (await db.get<RequirementCoverageRow>('SELECT * FROM requirement_coverage WHERE id = ?', [existing.id]))!,
     );
   }
 
   const id = newId('cov');
-  db.run(
+  await db.run(
     `INSERT INTO requirement_coverage (id, orchestration_id, requirement_id, status, reasons,
        claim_ids, document_ids, confidence, gap_type, gap_detail, needs_research,
        created_at, updated_at)
@@ -471,30 +470,29 @@ export function upsertCoverage(input: UpsertCoverageInput): RequirementCoverage 
       input.gapDetail ?? null, fromBool(input.needsResearch), ts, ts],
   );
   return mapCoverage(
-    db.get<RequirementCoverageRow>('SELECT * FROM requirement_coverage WHERE id = ?', [id])!,
+    await (await db.get<RequirementCoverageRow>('SELECT * FROM requirement_coverage WHERE id = ?', [id]))!,
   );
 }
 
-export function listCoverage(orchestrationId: string): RequirementCoverage[] {
-  return getDb()
-    .all<RequirementCoverageRow>(
+export async function listCoverage(orchestrationId: string): Promise<RequirementCoverage[]> {
+  return (await getDb().all<RequirementCoverageRow>(
       'SELECT * FROM requirement_coverage WHERE orchestration_id = ? ORDER BY created_at, rowid',
       [orchestrationId],
-    )
+    ))
     .map(mapCoverage);
 }
 
 /** A person overruling Brain's reading of the evidence. Recorded, never silent. */
-export function overrideCoverage(
+export async function overrideCoverage(
   id: string,
   input: { status: CoverageStatus; note: string; needsResearch: boolean },
-): RequirementCoverage | null {
-  getDb().run(
+): Promise<RequirementCoverage | null> {
+  await getDb().run(
     `UPDATE requirement_coverage SET status = ?, user_override = ?, needs_research = ?,
        overridden_at = ?, updated_at = ? WHERE id = ?`,
     [input.status, input.note, fromBool(input.needsResearch), nowIso(), nowIso(), id],
   );
-  const row = getDb().get<RequirementCoverageRow>(
+  const row = await getDb().get<RequirementCoverageRow>(
     'SELECT * FROM requirement_coverage WHERE id = ?',
     [id],
   );

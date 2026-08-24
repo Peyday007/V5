@@ -139,43 +139,42 @@ function mapEvidence(row: AuditEvidenceRow): AuditEvidence {
 // Extraction runs
 // ---------------------------------------------------------------------------
 
-export function createExtractionRun(input: {
+export async function createExtractionRun(input: {
   documentId: string;
   projectId: string;
   pipelineVersion: string;
   detectedFormat?: DocumentFormat | null;
   sourceHash?: string | null;
   status?: ExtractionStatus;
-}): ExtractionRun {
+}): Promise<ExtractionRun> {
   const id = newId('exr');
   const ts = nowIso();
-  getDb().run(
+  await getDb().run(
     `INSERT INTO extraction_runs (id, document_id, project_id, status, pipeline_version,
        detected_format, source_hash, started_at, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, input.documentId, input.projectId, input.status ?? 'QUEUED', input.pipelineVersion,
       input.detectedFormat ?? null, input.sourceHash ?? null, ts, ts, ts],
   );
-  return getExtractionRun(id)!;
+  return (await getExtractionRun(id))!;
 }
 
-export function getExtractionRun(id: string): ExtractionRun | null {
-  const row = getDb().get<ExtractionRunRow>('SELECT * FROM extraction_runs WHERE id = ?', [id]);
+export async function getExtractionRun(id: string): Promise<ExtractionRun | null> {
+  const row = await getDb().get<ExtractionRunRow>('SELECT * FROM extraction_runs WHERE id = ?', [id]);
   return row ? mapExtractionRun(row) : null;
 }
 
-export function listExtractionRuns(documentId: string): ExtractionRun[] {
-  return getDb()
-    .all<ExtractionRunRow>(
+export async function listExtractionRuns(documentId: string): Promise<ExtractionRun[]> {
+  return (await getDb().all<ExtractionRunRow>(
       'SELECT * FROM extraction_runs WHERE document_id = ? ORDER BY created_at DESC, rowid DESC',
       [documentId],
-    )
+    ))
     .map(mapExtractionRun);
 }
 
 /** The run whose evidence is current for a document. */
-export function getCurrentExtractionRun(documentId: string): ExtractionRun | null {
-  const row = getDb().get<ExtractionRunRow>(
+export async function getCurrentExtractionRun(documentId: string): Promise<ExtractionRun | null> {
+  const row = await getDb().get<ExtractionRunRow>(
     `SELECT * FROM extraction_runs
      WHERE document_id = ? AND superseded_by_run_id IS NULL
      ORDER BY created_at DESC, rowid DESC LIMIT 1`,
@@ -184,7 +183,7 @@ export function getCurrentExtractionRun(documentId: string): ExtractionRun | nul
   return row ? mapExtractionRun(row) : null;
 }
 
-export function updateExtractionRun(
+export async function updateExtractionRun(
   id: string,
   patch: {
     status?: ExtractionStatus;
@@ -205,7 +204,7 @@ export function updateExtractionRun(
     ocrPages?: OcrPageRecord[];
     completedAt?: string | null;
   },
-): ExtractionRun | null {
+): Promise<ExtractionRun | null> {
   const fields: Record<string, unknown> = {
     status: patch.status,
     detected_format: patch.detectedFormat,
@@ -227,7 +226,7 @@ export function updateExtractionRun(
   };
   const keys = Object.keys(fields).filter((key) => fields[key] !== undefined);
   if (keys.length === 0) return getExtractionRun(id);
-  getDb().run(
+  await getDb().run(
     `UPDATE extraction_runs SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`,
     [...(keys.map((k) => fields[k]) as never[]), nowIso(), id],
   );
@@ -241,13 +240,13 @@ export function updateExtractionRun(
  * leave two runs claiming to be current and let ordering decide which evidence
  * an audit resolves to, so the supersession is written down rather than inferred.
  */
-export function supersedePreviousRuns(documentId: string, currentRunId: string): number {
+export async function supersedePreviousRuns(documentId: string, currentRunId: string): Promise<number> {
   // "Previous" means previous. Superseding every other run would let two runs
   // that finish in the wrong order supersede each other, and a document with
   // both of its runs superseded has no current reading at all — the worst
   // outcome available, since every caller then behaves as though the file was
   // never read. Ordering matches getCurrentExtractionRun exactly.
-  const current = getDb().get<{ created_at: string; rowid: number }>(
+  const current = await getDb().get<{ created_at: string; rowid: number }>(
     'SELECT created_at, rowid FROM extraction_runs WHERE id = ?',
     [currentRunId],
   );
@@ -258,12 +257,12 @@ export function supersedePreviousRuns(documentId: string, currentRunId: string):
     'AND (created_at < ? OR (created_at = ? AND rowid < ?))';
   const scope = [documentId, currentRunId, current.created_at, current.created_at, current.rowid];
 
-  const stale = getDb().all<{ id: string }>(
+  const stale = await getDb().all<{ id: string }>(
     `SELECT id FROM extraction_runs WHERE ${olderThanCurrent}`,
     scope,
   );
   if (stale.length === 0) return 0;
-  getDb().run(
+  await getDb().run(
     `UPDATE extraction_runs SET superseded_by_run_id = ?, updated_at = ? WHERE ${olderThanCurrent}`,
     [currentRunId, nowIso(), ...scope],
   );
@@ -274,13 +273,12 @@ export function supersedePreviousRuns(documentId: string, currentRunId: string):
  * Runs left mid-flight by a crash. They are recoverable, and crucially they are
  * never mistaken for a document that was successfully read.
  */
-export function listUnfinishedExtractionRuns(): ExtractionRun[] {
-  return getDb()
-    .all<ExtractionRunRow>(
+export async function listUnfinishedExtractionRuns(): Promise<ExtractionRun[]> {
+  return (await getDb().all<ExtractionRunRow>(
       `SELECT * FROM extraction_runs
        WHERE status IN ('QUEUED','EXTRACTING','OCR','INDEXING')
        ORDER BY created_at`,
-    )
+    ))
     .map(mapExtractionRun);
 }
 
@@ -305,13 +303,13 @@ export interface InsertBlockInput {
   bbox?: [number, number, number, number] | null;
 }
 
-export function insertBlocks(blocks: InsertBlockInput[]): void {
+export async function insertBlocks(blocks: InsertBlockInput[]): Promise<void> {
   if (blocks.length === 0) return;
   const db = getDb();
   const ts = nowIso();
-  db.transaction(() => {
+  await db.transaction(async () => {
     for (const block of blocks) {
-      db.run(
+      await db.run(
         `INSERT INTO document_blocks (id, extraction_run_id, document_id, page_number, block_index,
            block_type, raw_text, normalized_text, char_start, char_end, extraction_method,
            confidence, warnings, content_hash, bbox, created_at)
@@ -325,21 +323,19 @@ export function insertBlocks(blocks: InsertBlockInput[]): void {
   });
 }
 
-export function listBlocks(extractionRunId: string): DocumentBlock[] {
-  return getDb()
-    .all<DocumentBlockRow>(
+export async function listBlocks(extractionRunId: string): Promise<DocumentBlock[]> {
+  return (await getDb().all<DocumentBlockRow>(
       'SELECT * FROM document_blocks WHERE extraction_run_id = ? ORDER BY page_number, block_index',
       [extractionRunId],
-    )
+    ))
     .map(mapBlock);
 }
 
-export function listBlocksForPage(extractionRunId: string, pageNumber: number): DocumentBlock[] {
-  return getDb()
-    .all<DocumentBlockRow>(
+export async function listBlocksForPage(extractionRunId: string, pageNumber: number): Promise<DocumentBlock[]> {
+  return (await getDb().all<DocumentBlockRow>(
       'SELECT * FROM document_blocks WHERE extraction_run_id = ? AND page_number = ? ORDER BY block_index',
       [extractionRunId, pageNumber],
-    )
+    ))
     .map(mapBlock);
 }
 
@@ -360,16 +356,16 @@ export interface InsertChunkInput {
   contentHash: string;
 }
 
-export function insertChunks(chunks: InsertChunkInput[]): DocumentChunk[] {
+export async function insertChunks(chunks: InsertChunkInput[]): Promise<DocumentChunk[]> {
   if (chunks.length === 0) return [];
   const db = getDb();
   const ts = nowIso();
   const ids: string[] = [];
-  db.transaction(() => {
+  await db.transaction(async () => {
     for (const chunk of chunks) {
       const id = newId('chk');
       ids.push(id);
-      db.run(
+      await db.run(
         `INSERT INTO document_chunks (id, extraction_run_id, document_id, chunk_index, page_start,
            page_end, block_start, block_end, heading_path, text, char_count, char_start, char_end,
            overlap_prev, has_ocr, content_hash, created_at)
@@ -384,21 +380,20 @@ export function insertChunks(chunks: InsertChunkInput[]): DocumentChunk[] {
   return listChunks(chunks[0]!.extractionRunId);
 }
 
-export function listChunks(extractionRunId: string): DocumentChunk[] {
-  return getDb()
-    .all<DocumentChunkRow>(
+export async function listChunks(extractionRunId: string): Promise<DocumentChunk[]> {
+  return (await getDb().all<DocumentChunkRow>(
       'SELECT * FROM document_chunks WHERE extraction_run_id = ? ORDER BY chunk_index',
       [extractionRunId],
-    )
+    ))
     .map(mapChunk);
 }
 
-export function getChunk(id: string): DocumentChunk | null {
-  const row = getDb().get<DocumentChunkRow>('SELECT * FROM document_chunks WHERE id = ?', [id]);
+export async function getChunk(id: string): Promise<DocumentChunk | null> {
+  const row = await getDb().get<DocumentChunkRow>('SELECT * FROM document_chunks WHERE id = ?', [id]);
   return row ? mapChunk(row) : null;
 }
 
-export function insertFindings(
+export async function insertFindings(
   findings: {
     extractionRunId: string;
     documentId: string;
@@ -411,13 +406,13 @@ export function insertFindings(
     confidence?: number | null;
     source?: string;
   }[],
-): void {
+): Promise<void> {
   if (findings.length === 0) return;
   const db = getDb();
   const ts = nowIso();
-  db.transaction(() => {
+  await db.transaction(async () => {
     for (const finding of findings) {
-      db.run(
+      await db.run(
         `INSERT INTO document_findings (id, extraction_run_id, document_id, chunk_id, finding_type,
            ordinal, content, evidence_page, evidence_quote, confidence, source, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -437,22 +432,21 @@ export function insertFindings(
  * whole new set lands or the old set stays: a half-written index would make the
  * auditor believe a document says less than it does.
  */
-export function replaceFindings(
+export async function replaceFindings(
   extractionRunId: string,
   findings: Parameters<typeof insertFindings>[0],
-): void {
-  getDb().transaction(() => {
-    getDb().run('DELETE FROM document_findings WHERE extraction_run_id = ?', [extractionRunId]);
-    insertFindings(findings);
+): Promise<void> {
+  await getDb().transaction(async () => {
+    await getDb().run('DELETE FROM document_findings WHERE extraction_run_id = ?', [extractionRunId]);
+    await insertFindings(findings);
   });
 }
 
-export function listDocumentFindings(extractionRunId: string): DocumentFinding[] {
-  return getDb()
-    .all<DocumentFindingRow>(
+export async function listDocumentFindings(extractionRunId: string): Promise<DocumentFinding[]> {
+  return (await getDb().all<DocumentFindingRow>(
       'SELECT * FROM document_findings WHERE extraction_run_id = ? ORDER BY finding_type, ordinal',
       [extractionRunId],
-    )
+    ))
     .map(mapFinding);
 }
 
@@ -460,7 +454,7 @@ export function listDocumentFindings(extractionRunId: string): DocumentFinding[]
 // Audit evidence
 // ---------------------------------------------------------------------------
 
-export function insertAuditEvidence(
+export async function insertAuditEvidence(
   entries: {
     auditId: string;
     gapId?: string | null;
@@ -471,13 +465,13 @@ export function insertAuditEvidence(
     pageNumber?: number | null;
     quote: string;
   }[],
-): void {
+): Promise<void> {
   if (entries.length === 0) return;
   const db = getDb();
   const ts = nowIso();
-  db.transaction(() => {
+  await db.transaction(async () => {
     for (const entry of entries) {
-      db.run(
+      await db.run(
         `INSERT INTO audit_evidence (id, audit_id, gap_id, document_id, extraction_run_id, chunk_id,
            document_label, page_number, quote, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -489,8 +483,7 @@ export function insertAuditEvidence(
   });
 }
 
-export function listAuditEvidence(auditId: string): AuditEvidence[] {
-  return getDb()
-    .all<AuditEvidenceRow>('SELECT * FROM audit_evidence WHERE audit_id = ? ORDER BY rowid', [auditId])
+export async function listAuditEvidence(auditId: string): Promise<AuditEvidence[]> {
+  return (await getDb().all<AuditEvidenceRow>('SELECT * FROM audit_evidence WHERE audit_id = ? ORDER BY rowid', [auditId]))
     .map(mapEvidence);
 }

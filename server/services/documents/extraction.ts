@@ -33,7 +33,7 @@ import {
   updateExtractionRun,
   type InsertBlockInput,
 } from '../../repos/extraction.ts';
-import { absolutePathFor, fileExists } from '../storage.ts';
+import { objectExists, readObject } from '../storage.ts';
 import { detectFormat } from './formats.ts';
 import { extractDocx, DocxUnreadableError } from './docx.ts';
 import { extractPdf, PdfUnreadableError, type ExtractedBlock, type ExtractedPage } from './pdf.ts';
@@ -274,11 +274,11 @@ export async function extractDocument(
   documentId: string,
   options: { force?: boolean } = {},
 ): Promise<ExtractionResult> {
-  const document = getDocument(documentId);
+  const document = await getDocument(documentId);
   if (!document) throw new Error(`Cannot extract: unknown document ${documentId}`);
-  if (!document.filesystemPath || !fileExists(document.filesystemPath)) {
+  if (!document.filesystemPath || !await objectExists(document.filesystemPath)) {
     // Invariant 9 territory: a row whose file is gone is not evidence.
-    const run = createExtractionRun({
+    const run = await createExtractionRun({
       documentId: document.id,
       projectId: document.projectId,
       pipelineVersion: PIPELINE_VERSION,
@@ -293,10 +293,10 @@ export async function extractDocument(
     return finish(document, run, quality, []);
   }
 
-  const buffer = fs.readFileSync(absolutePathFor(document.filesystemPath));
+  const buffer = await readObject(document.storageKey ?? document.filesystemPath);
   const sourceHash = sha256(buffer);
 
-  const current = getCurrentExtractionRun(document.id);
+  const current = await getCurrentExtractionRun(document.id);
   if (
     !options.force &&
     current &&
@@ -310,7 +310,7 @@ export async function extractDocument(
     const reconciled =
       document.extractionStatus === current.status && document.extractionRunId === current.id
         ? document
-        : (updateDocument(document.id, {
+        : (await updateDocument(document.id, {
             extractionStatus: current.status,
             extractionRunId: current.id,
             pipelineVersion: current.pipelineVersion,
@@ -319,7 +319,7 @@ export async function extractDocument(
   }
 
   const detection = detectFormat(document.filename ?? document.canonicalName, buffer);
-  const run = createExtractionRun({
+  const run = await createExtractionRun({
     documentId: document.id,
     projectId: document.projectId,
     pipelineVersion: PIPELINE_VERSION,
@@ -327,7 +327,7 @@ export async function extractDocument(
     sourceHash,
     status: 'EXTRACTING',
   });
-  updateDocument(document.id, {
+  await updateDocument(document.id, {
     extractionStatus: 'EXTRACTING',
     extractionRunId: run.id,
     mimeType: detection.mimeType,
@@ -348,8 +348,8 @@ export async function extractDocument(
     if (!blockedReason && pages.length > 0) {
       const needsOcr = pagesNeedingOcr(pages);
       if (needsOcr.length > 0) {
-        updateExtractionRun(run.id, { status: 'OCR' });
-        updateDocument(document.id, { extractionStatus: 'OCR' });
+        await updateExtractionRun(run.id, { status: 'OCR' });
+        await updateDocument(document.id, { extractionStatus: 'OCR' });
       }
       const ocr = await applyOcr(detection.format, buffer, pages);
       ocrPages = ocr.ocrPages;
@@ -358,7 +358,7 @@ export async function extractDocument(
       if (ocr.records.length > 0) {
         // Written before the verdict: which engine read which rendered image is
         // part of the evidence, not a footnote to a successful outcome.
-        updateExtractionRun(run.id, {
+        await updateExtractionRun(run.id, {
           ocrEngine: ocr.engine,
           ocrEngineVersion: ocr.engineVersion,
           ocrRendererVersion: ocr.rendererVersion,
@@ -367,15 +367,15 @@ export async function extractDocument(
       }
     }
 
-    updateExtractionRun(run.id, { status: 'INDEXING' });
-    updateDocument(document.id, { extractionStatus: 'INDEXING' });
+    await updateExtractionRun(run.id, { status: 'INDEXING' });
+    await updateDocument(document.id, { extractionStatus: 'INDEXING' });
 
-    const blocks = persistBlocks(run.id, document.id, pages, methodFor(detection.format), ocrPages);
+    const blocks = await persistBlocks(run.id, document.id, pages, methodFor(detection.format), ocrPages);
     const quality = assessExtraction({ pages, ocrPages, ocrRecords, warnings, blockedReason });
 
     if (blocks.length > 0) {
-      const planned = planChunks(listBlocks(run.id));
-      insertChunks(
+      const planned = planChunks(await listBlocks(run.id));
+      await insertChunks(
         planned.map((chunk) => ({
           extractionRunId: run.id,
           documentId: document.id,
@@ -398,13 +398,13 @@ export async function extractDocument(
     return finish(document, run, quality, pages);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    updateExtractionRun(run.id, {
+    await updateExtractionRun(run.id, {
       status: 'FAILED',
       error: message,
       completedAt: new Date().toISOString(),
     });
-    updateDocument(document.id, { extractionStatus: 'FAILED' });
-    recordEvent({
+    await updateDocument(document.id, { extractionStatus: 'FAILED' });
+    await recordEvent({
       projectId: document.projectId,
       layerId: document.layerId,
       entityType: 'DOCUMENT',
@@ -417,13 +417,13 @@ export async function extractDocument(
 }
 
 /** Persist blocks with raw text, normalized text and running character offsets. */
-function persistBlocks(
+async function persistBlocks(
   runId: string,
   documentId: string,
   pages: ExtractedPage[],
   defaultMethod: ExtractionMethod,
   ocrPages: number[],
-): InsertBlockInput[] {
+): Promise<InsertBlockInput[]> {
   const ocr = new Set(ocrPages);
   const rows: InsertBlockInput[] = [];
   let offset = 0;
@@ -458,7 +458,7 @@ function persistBlocks(
       });
     }
   }
-  insertBlocks(rows);
+  await insertBlocks(rows);
   return rows;
 }
 
@@ -477,14 +477,14 @@ function qualityOf(run: ExtractionRun): ExtractionQuality {
   };
 }
 
-function finish(
+async function finish(
   document: Document,
   run: ExtractionRun,
   quality: ExtractionQuality,
   pages: ExtractedPage[],
-): ExtractionResult {
+): Promise<ExtractionResult> {
   const completedAt = new Date().toISOString();
-  const updated = updateExtractionRun(run.id, {
+  const updated = (await updateExtractionRun(run.id, {
     status: quality.status,
     pagesExpected: quality.pagesExpected,
     pagesReadable: quality.pagesReadable,
@@ -495,21 +495,21 @@ function finish(
     warnings: quality.warnings,
     blockedReason: quality.blockedReason,
     completedAt,
-  })!;
+  }))!;
 
   // Supersede the previous run only now that this one has a verdict, so a failed
   // reprocess never leaves the document with no current evidence.
-  supersedePreviousRuns(document.id, run.id);
+  await supersedePreviousRuns(document.id, run.id);
 
   const documentAfter =
-    updateDocument(document.id, {
+    await updateDocument(document.id, {
       extractionStatus: quality.status,
       extractionRunId: run.id,
       pageCount: pages.length > 0 ? pages.length : (document.pageCount ?? null),
       pipelineVersion: quality.pipelineVersion,
     }) ?? document;
 
-  recordEvent({
+  await recordEvent({
     projectId: document.projectId,
     layerId: document.layerId,
     entityType: 'DOCUMENT',
@@ -534,17 +534,17 @@ function finish(
  * restart. Mark it INTERRUPTED so nothing mistakes it for a readable document,
  * and leave it available to reprocess.
  */
-export function recoverInterruptedExtractions(): number {
-  const unfinished = listUnfinishedExtractionRuns();
+export async function recoverInterruptedExtractions(): Promise<number> {
+  const unfinished = await listUnfinishedExtractionRuns();
   for (const run of unfinished) {
-    updateExtractionRun(run.id, {
+    await updateExtractionRun(run.id, {
       status: 'INTERRUPTED',
       error: 'The extraction was interrupted before it finished.',
       completedAt: new Date().toISOString(),
     });
-    const document = getDocument(run.documentId);
+    const document = await getDocument(run.documentId);
     if (document && document.extractionRunId === run.id) {
-      updateDocument(document.id, { extractionStatus: 'INTERRUPTED' });
+      await updateDocument(document.id, { extractionStatus: 'INTERRUPTED' });
     }
   }
   return unfinished.length;

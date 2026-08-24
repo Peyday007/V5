@@ -213,10 +213,10 @@ export interface CreateOrchestrationInput {
   autoApprove?: boolean;
 }
 
-export function createOrchestration(input: CreateOrchestrationInput): ResearchOrchestration {
+export async function createOrchestration(input: CreateOrchestrationInput): Promise<ResearchOrchestration> {
   const ts = nowIso();
   const id = newId('orc');
-  getDb().run(
+  await getDb().run(
     `INSERT INTO research_orchestrations (id, project_id, layer_id, run_id, title, assignment,
        target_version, provider, model, status, attempt, parent_orchestration_id, repair_reason,
        auto_approve, queued_at, created_at, updated_at)
@@ -226,55 +226,52 @@ export function createOrchestration(input: CreateOrchestrationInput): ResearchOr
       input.parentOrchestrationId ?? null, input.repairReason ?? null,
       fromBool(input.autoApprove ?? true), ts, ts, ts],
   );
-  return getOrchestration(id)!;
+  return (await getOrchestration(id))!;
 }
 
-export function getOrchestration(id: string): ResearchOrchestration | null {
-  const row = getDb().get<ResearchOrchestrationRow>(
+export async function getOrchestration(id: string): Promise<ResearchOrchestration | null> {
+  const row = await getDb().get<ResearchOrchestrationRow>(
     'SELECT * FROM research_orchestrations WHERE id = ?',
     [id],
   );
   return row ? mapOrchestration(row) : null;
 }
 
-export function listOrchestrationsByLayer(layerId: string): ResearchOrchestration[] {
-  return getDb()
-    .all<ResearchOrchestrationRow>(
+export async function listOrchestrationsByLayer(layerId: string): Promise<ResearchOrchestration[]> {
+  return (await getDb().all<ResearchOrchestrationRow>(
       'SELECT * FROM research_orchestrations WHERE layer_id = ? ORDER BY created_at DESC',
       [layerId],
-    )
+    ))
     .map(mapOrchestration);
 }
 
-export function listOrchestrationsByProject(projectId: string): ResearchOrchestration[] {
-  return getDb()
-    .all<ResearchOrchestrationRow>(
+export async function listOrchestrationsByProject(projectId: string): Promise<ResearchOrchestration[]> {
+  return (await getDb().all<ResearchOrchestrationRow>(
       'SELECT * FROM research_orchestrations WHERE project_id = ? ORDER BY created_at DESC',
       [projectId],
-    )
+    ))
     .map(mapOrchestration);
 }
 
 /** Everything not yet finished, oldest first — the queue's own order. */
-export function listPendingOrchestrations(): ResearchOrchestration[] {
-  return getDb()
-    .all<ResearchOrchestrationRow>(
+export async function listPendingOrchestrations(): Promise<ResearchOrchestration[]> {
+  return (await getDb().all<ResearchOrchestrationRow>(
       `SELECT * FROM research_orchestrations
        WHERE status IN ('QUEUED','PLANNING','RESEARCHING','SYNTHESIZING','AUDITING')
        ORDER BY queued_at, rowid`,
-    )
+    ))
     .map(mapOrchestration);
 }
 
 /** Every attempt in one repair lineage, oldest first. */
-export function getOrchestrationLineage(id: string): ResearchOrchestration[] {
-  const start = getOrchestration(id);
+export async function getOrchestrationLineage(id: string): Promise<ResearchOrchestration[]> {
+  const start = await getOrchestration(id);
   if (!start) return [];
 
   let root = start;
   const climbed = new Set<string>([root.id]);
   while (root.parentOrchestrationId) {
-    const parent = getOrchestration(root.parentOrchestrationId);
+    const parent = await getOrchestration(root.parentOrchestrationId);
     if (!parent || climbed.has(parent.id)) break;
     climbed.add(parent.id);
     root = parent;
@@ -286,7 +283,7 @@ export function getOrchestrationLineage(id: string): ResearchOrchestration[] {
   const seen = new Set<string>([root.id]);
   while (queue.length > 0 && lineage.length < 200) {
     const currentId = queue.shift()!;
-    const children = db.all<ResearchOrchestrationRow>(
+    const children = await db.all<ResearchOrchestrationRow>(
       'SELECT * FROM research_orchestrations WHERE parent_orchestration_id = ? ORDER BY attempt, created_at',
       [currentId],
     );
@@ -319,10 +316,10 @@ export interface UpdateOrchestrationInput {
   approvalNote?: string | null;
 }
 
-export function updateOrchestration(
+export async function updateOrchestration(
   id: string,
   patch: UpdateOrchestrationInput,
-): ResearchOrchestration | null {
+): Promise<ResearchOrchestration | null> {
   const { clause, values } = buildUpdate({
     status: patch.status,
     current_pass: patch.currentPass,
@@ -342,7 +339,7 @@ export function updateOrchestration(
     approval_note: patch.approvalNote,
   });
   if (!clause) return getOrchestration(id);
-  getDb().run(`UPDATE research_orchestrations SET ${clause}, updated_at = ? WHERE id = ?`, [
+  await getDb().run(`UPDATE research_orchestrations SET ${clause}, updated_at = ? WHERE id = ?`, [
     ...(values as never[]),
     nowIso(),
     id,
@@ -351,9 +348,9 @@ export function updateOrchestration(
 }
 
 /** Cheap liveness write, so a dead process is distinguishable from a slow one. */
-export function beat(id: string): void {
+export async function beat(id: string): Promise<void> {
   const ts = nowIso();
-  getDb().run('UPDATE research_orchestrations SET heartbeat_at = ?, updated_at = ? WHERE id = ?', [
+  await getDb().run('UPDATE research_orchestrations SET heartbeat_at = ?, updated_at = ? WHERE id = ?', [
     ts,
     ts,
     id,
@@ -408,16 +405,16 @@ export interface CreateFragmentInput {
   repairPlan?: RepairPlan | null;
 }
 
-export function createFragments(inputs: CreateFragmentInput[]): ResearchFragment[] {
+export async function createFragments(inputs: CreateFragmentInput[]): Promise<ResearchFragment[]> {
   if (inputs.length === 0) return [];
   const db = getDb();
   const ts = nowIso();
   const ids: string[] = [];
-  db.transaction(() => {
+  await db.transaction(async () => {
     for (const input of inputs) {
       const id = newId('frg');
       ids.push(id);
-      db.run(
+      await db.run(
         `INSERT INTO research_fragments (id, orchestration_id, project_id, layer_id,
            fragment_index, fragment_key, question, geography, timeframe, population, definitions,
            required_evidence, acceptable_source_types, excluded_source_types, completion_criteria,
@@ -450,20 +447,20 @@ export function createFragments(inputs: CreateFragmentInput[]): ResearchFragment
       );
     }
   });
-  return ids.map((id) => getFragment(id)).filter((f): f is ResearchFragment => f !== null);
+  const loaded = await Promise.all(ids.map((id) => getFragment(id)));
+  return loaded.filter((f): f is ResearchFragment => f !== null);
 }
 
-export function getFragment(id: string): ResearchFragment | null {
-  const row = getDb().get<ResearchFragmentRow>('SELECT * FROM research_fragments WHERE id = ?', [id]);
+export async function getFragment(id: string): Promise<ResearchFragment | null> {
+  const row = await getDb().get<ResearchFragmentRow>('SELECT * FROM research_fragments WHERE id = ?', [id]);
   return row ? mapFragment(row) : null;
 }
 
-export function listFragments(orchestrationId: string): ResearchFragment[] {
-  return getDb()
-    .all<ResearchFragmentRow>(
+export async function listFragments(orchestrationId: string): Promise<ResearchFragment[]> {
+  return (await getDb().all<ResearchFragmentRow>(
       'SELECT * FROM research_fragments WHERE orchestration_id = ? ORDER BY fragment_index, attempt, rowid',
       [orchestrationId],
-    )
+    ))
     .map(mapFragment);
 }
 
@@ -471,9 +468,9 @@ export function listFragments(orchestrationId: string): ResearchFragment[] {
  * The live fragment for each key: the newest attempt, which is the one whose
  * verdict counts. Earlier attempts stay in the table as failure history.
  */
-export function currentFragments(orchestrationId: string): ResearchFragment[] {
+export async function currentFragments(orchestrationId: string): Promise<ResearchFragment[]> {
   const byKey = new Map<string, ResearchFragment>();
-  for (const fragment of listFragments(orchestrationId)) {
+  for (const fragment of await listFragments(orchestrationId)) {
     const existing = byKey.get(fragment.fragmentKey);
     if (!existing || fragment.attempt >= existing.attempt) byKey.set(fragment.fragmentKey, fragment);
   }
@@ -493,7 +490,7 @@ export interface UpdateFragmentInput {
   cancelledReason?: string | null;
 }
 
-export function updateFragment(id: string, patch: UpdateFragmentInput): ResearchFragment | null {
+export async function updateFragment(id: string, patch: UpdateFragmentInput): Promise<ResearchFragment | null> {
   const { clause, values } = buildUpdate({
     status: patch.status,
     integrity_verdict: patch.integrityVerdict,
@@ -507,7 +504,7 @@ export function updateFragment(id: string, patch: UpdateFragmentInput): Research
     cancelled_reason: patch.cancelledReason,
   });
   if (!clause) return getFragment(id);
-  getDb().run(`UPDATE research_fragments SET ${clause}, updated_at = ? WHERE id = ?`, [
+  await getDb().run(`UPDATE research_fragments SET ${clause}, updated_at = ? WHERE id = ?`, [
     ...(values as never[]),
     nowIso(),
     id,
@@ -532,9 +529,9 @@ export interface StartPassInput {
 }
 
 /** Written before the provider is called: an unanswered pass is still a fact. */
-export function startPass(input: StartPassInput): ResearchPass {
+export async function startPass(input: StartPassInput): Promise<ResearchPass> {
   const id = newId('rps');
-  getDb().run(
+  await getDb().run(
     `INSERT INTO research_passes (id, orchestration_id, fragment_id, pass_key, ordinal, attempt,
        status, provider, model, prompt, prompt_sha256, started_at)
      VALUES (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?, ?, ?)`,
@@ -542,7 +539,7 @@ export function startPass(input: StartPassInput): ResearchPass {
       input.attempt ?? 1, input.provider, input.model ?? null, input.prompt, input.promptSha256,
       nowIso()],
   );
-  return getPass(id)!;
+  return (await getPass(id))!;
 }
 
 export interface FinishPassInput {
@@ -554,8 +551,8 @@ export interface FinishPassInput {
   durationMs?: number | null;
 }
 
-export function finishPass(id: string, input: FinishPassInput): ResearchPass | null {
-  getDb().run(
+export async function finishPass(id: string, input: FinishPassInput): Promise<ResearchPass | null> {
+  await getDb().run(
     `UPDATE research_passes
         SET status = ?, raw_response = ?, parsed = ?, error = ?, job_id = ?,
             completed_at = ?, duration_ms = ?
@@ -567,17 +564,16 @@ export function finishPass(id: string, input: FinishPassInput): ResearchPass | n
   return getPass(id);
 }
 
-export function getPass(id: string): ResearchPass | null {
-  const row = getDb().get<ResearchPassRow>('SELECT * FROM research_passes WHERE id = ?', [id]);
+export async function getPass(id: string): Promise<ResearchPass | null> {
+  const row = await getDb().get<ResearchPassRow>('SELECT * FROM research_passes WHERE id = ?', [id]);
   return row ? mapPass(row) : null;
 }
 
-export function listPasses(orchestrationId: string): ResearchPass[] {
-  return getDb()
-    .all<ResearchPassRow>(
+export async function listPasses(orchestrationId: string): Promise<ResearchPass[]> {
+  return (await getDb().all<ResearchPassRow>(
       'SELECT * FROM research_passes WHERE orchestration_id = ? ORDER BY ordinal, attempt, rowid',
       [orchestrationId],
-    )
+    ))
     .map(mapPass);
 }
 
@@ -587,12 +583,12 @@ export function listPasses(orchestrationId: string): ResearchPass[] {
  * This is what makes resumption possible: a pass that already completed is never
  * asked again, on a resume or a repair.
  */
-export function completedPass(
+export async function completedPass(
   orchestrationId: string,
   passKey: ResearchPassKey,
   fragmentId: string | null = null,
-): ResearchPass | null {
-  const row = getDb().get<ResearchPassRow>(
+): Promise<ResearchPass | null> {
+  const row = await getDb().get<ResearchPassRow>(
     `SELECT * FROM research_passes
       WHERE orchestration_id = ? AND pass_key = ? AND status = 'COMPLETE'
         AND fragment_id IS ?
@@ -602,23 +598,22 @@ export function completedPass(
   return row ? mapPass(row) : null;
 }
 
-export function listPassesForFragment(fragmentId: string): ResearchPass[] {
-  return getDb()
-    .all<ResearchPassRow>(
+export async function listPassesForFragment(fragmentId: string): Promise<ResearchPass[]> {
+  return (await getDb().all<ResearchPassRow>(
       'SELECT * FROM research_passes WHERE fragment_id = ? ORDER BY ordinal, attempt, rowid',
       [fragmentId],
-    )
+    ))
     .map(mapPass);
 }
 
 /** Mark whatever was left running by a dead process, so nothing reads as in flight. */
-export function abandonRunningPasses(orchestrationId: string, error: string): number {
-  const running = getDb().all<{ id: string }>(
+export async function abandonRunningPasses(orchestrationId: string, error: string): Promise<number> {
+  const running = await getDb().all<{ id: string }>(
     "SELECT id FROM research_passes WHERE orchestration_id = ? AND status = 'RUNNING'",
     [orchestrationId],
   );
   if (running.length === 0) return 0;
-  getDb().run(
+  await getDb().run(
     `UPDATE research_passes SET status = 'FAILED', error = ?, completed_at = ?
       WHERE orchestration_id = ? AND status = 'RUNNING'`,
     [error, nowIso(), orchestrationId],
@@ -667,16 +662,16 @@ export interface InsertClaimInput {
   contentHash: string;
 }
 
-export function insertClaims(inputs: InsertClaimInput[]): ResearchClaim[] {
+export async function insertClaims(inputs: InsertClaimInput[]): Promise<ResearchClaim[]> {
   if (inputs.length === 0) return [];
   const db = getDb();
   const ts = nowIso();
   const ids: string[] = [];
-  db.transaction(() => {
+  await db.transaction(async () => {
     for (const input of inputs) {
       const id = newId('clm');
       ids.push(id);
-      db.run(
+      await db.run(
         `INSERT INTO research_claims (id, orchestration_id, fragment_id, pass_id, pass_key, claim,
            source_url, source_title, source_publisher, source_date, evidence_excerpt,
            evidence_locator, evidence_lane, retrieved_at, confidence, contradiction_state,
@@ -702,20 +697,20 @@ export function insertClaims(inputs: InsertClaimInput[]): ResearchClaim[] {
       );
     }
   });
-  return ids.map((id) => getClaim(id)).filter((claim): claim is ResearchClaim => claim !== null);
+  const loaded = await Promise.all(ids.map((id) => getClaim(id)));
+  return loaded.filter((claim): claim is ResearchClaim => claim !== null);
 }
 
-export function getClaim(id: string): ResearchClaim | null {
-  const row = getDb().get<ResearchClaimRow>('SELECT * FROM research_claims WHERE id = ?', [id]);
+export async function getClaim(id: string): Promise<ResearchClaim | null> {
+  const row = await getDb().get<ResearchClaimRow>('SELECT * FROM research_claims WHERE id = ?', [id]);
   return row ? mapClaim(row) : null;
 }
 
-export function listClaimsForFragment(fragmentId: string): ResearchClaim[] {
-  return getDb()
-    .all<ResearchClaimRow>(
+export async function listClaimsForFragment(fragmentId: string): Promise<ResearchClaim[]> {
+  return (await getDb().all<ResearchClaimRow>(
       'SELECT * FROM research_claims WHERE fragment_id = ? ORDER BY created_at, rowid',
       [fragmentId],
-    )
+    ))
     .map(mapClaim);
 }
 
@@ -726,15 +721,14 @@ export function listClaimsForFragment(fragmentId: string): ResearchClaim[] {
  * cannot re-enter through a later pass, which is the whole point of deciding
  * acceptance at the fragment gate rather than at synthesis time.
  */
-export function acceptedClaims(orchestrationId: string): ResearchClaim[] {
-  return getDb()
-    .all<ResearchClaimRow>(
+export async function acceptedClaims(orchestrationId: string): Promise<ResearchClaim[]> {
+  return (await getDb().all<ResearchClaimRow>(
       `SELECT c.* FROM research_claims c
          JOIN research_fragments f ON f.id = c.fragment_id
         WHERE c.orchestration_id = ? AND c.accepted = 1 AND f.status = 'ACCEPTED'
         ORDER BY f.fragment_index, c.created_at, c.rowid`,
       [orchestrationId],
-    )
+    ))
     .map(mapClaim);
 }
 
@@ -746,17 +740,17 @@ export function acceptedClaims(orchestrationId: string): ResearchClaim[] {
  * into ids, immediately after the claims are stored and before anything is
  * judged.
  */
-export function updateClaimDerivedFrom(id: string, ids: string[]): ResearchClaim | null {
-  getDb().run('UPDATE research_claims SET derived_from = ? WHERE id = ?', [toJson(ids), id]);
+export async function updateClaimDerivedFrom(id: string, ids: string[]): Promise<ResearchClaim | null> {
+  await getDb().run('UPDATE research_claims SET derived_from = ? WHERE id = ?', [toJson(ids), id]);
   return getClaim(id);
 }
 
 /** The gate's decision on one claim. Written once, when the fragment is judged. */
-export function decideClaim(
+export async function decideClaim(
   id: string,
   input: { accepted: boolean; rejectionReason?: string | null; scopeMatch?: unknown },
-): ResearchClaim | null {
-  getDb().run(
+): Promise<ResearchClaim | null> {
+  await getDb().run(
     'UPDATE research_claims SET accepted = ?, rejection_reason = ?, scope_match = ? WHERE id = ?',
     [fromBool(input.accepted), input.rejectionReason ?? null,
       input.scopeMatch === undefined ? null : toJson(input.scopeMatch), id],
@@ -764,12 +758,11 @@ export function decideClaim(
   return getClaim(id);
 }
 
-export function listClaims(orchestrationId: string): ResearchClaim[] {
-  return getDb()
-    .all<ResearchClaimRow>(
+export async function listClaims(orchestrationId: string): Promise<ResearchClaim[]> {
+  return (await getDb().all<ResearchClaimRow>(
       'SELECT * FROM research_claims WHERE orchestration_id = ? ORDER BY created_at, rowid',
       [orchestrationId],
-    )
+    ))
     .map(mapClaim);
 }
 
@@ -780,7 +773,7 @@ export function listClaims(orchestrationId: string): ResearchClaim[] {
  * deleted — new evidence never silently overwrites old evidence, so what
  * changes is what the project says about the two of them together.
  */
-export function recordClaimReconciliation(
+export async function recordClaimReconciliation(
   id: string,
   input: {
     outcome: ReconciliationOutcome;
@@ -788,8 +781,8 @@ export function recordClaimReconciliation(
     contradictionKind?: ContradictionKind | null;
     detail: string;
   },
-): ResearchClaim | null {
-  getDb().run(
+): Promise<ResearchClaim | null> {
+  await getDb().run(
     `UPDATE research_claims SET reconciliation = ?, reconciled_claim_id = ?,
        contradiction_kind = ?, reconciliation_detail = ? WHERE id = ?`,
     [input.outcome, input.againstClaimId, input.contradictionKind ?? null, input.detail, id],
@@ -803,12 +796,12 @@ export function recordClaimReconciliation(
  * Only the contradiction state moves. The claim and its source stay exactly as
  * first recorded — a ledger that lets an entry be rewritten proves nothing.
  */
-export function markContradiction(
+export async function markContradiction(
   id: string,
   state: ContradictionState,
   note: string | null,
-): ResearchClaim | null {
-  getDb().run(
+): Promise<ResearchClaim | null> {
+  await getDb().run(
     'UPDATE research_claims SET contradiction_state = ?, contradiction_note = ? WHERE id = ?',
     [state, note, id],
   );

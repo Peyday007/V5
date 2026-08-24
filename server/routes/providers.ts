@@ -39,13 +39,13 @@ function requireProvider(value: string): string {
 
 providersRouter.get(
   '/providers/connections/:provider',
-  handler((req) => ({ connection: connectionView(requireProvider(req.params.provider ?? '')) })),
+  handler(async (req) => ({ connection: await connectionView(requireProvider(req.params.provider ?? '')) })),
 );
 
 /** Detect Antigravity, and Check Authentication: the same probe, re-run. */
 providersRouter.post(
   '/providers/connections/:provider/detect',
-  handler((req) => ({ connection: detectConnection(requireProvider(req.params.provider ?? '')) })),
+  handler(async (req) => ({ connection: await detectConnection(requireProvider(req.params.provider ?? '')) })),
 );
 
 /**
@@ -61,16 +61,16 @@ providersRouter.post(
 
 providersRouter.post(
   '/providers/connections/:provider/disconnect',
-  handler((req) => ({ connection: disconnect(requireProvider(req.params.provider ?? '')) })),
+  handler(async (req) => ({ connection: await disconnect(requireProvider(req.params.provider ?? '')) })),
 );
 
 providersRouter.patch(
   '/providers/connections/:provider/models',
-  handler((req) => {
+  handler(async (req) => {
     const provider = requireProvider(req.params.provider ?? '');
     const body = (req.body ?? {}) as Record<string, unknown>;
     return {
-      connection: updateModelDefaults(provider, {
+      connection: await updateModelDefaults(provider, {
         light: optionalString(body['light'], 'light') ?? null,
         strong: optionalString(body['strong'], 'strong') ?? null,
       }),
@@ -87,7 +87,7 @@ providersRouter.patch(
  */
 providersRouter.post(
   '/providers/connections/:provider/paid-overage',
-  handler((req) => {
+  handler(async (req) => {
     const provider = requireProvider(req.params.provider ?? '');
     const body = (req.body ?? {}) as Record<string, unknown>;
     const enabled = optionalBoolean(body['enabled'], 'enabled');
@@ -95,7 +95,7 @@ providersRouter.post(
       throw badRequest('"enabled" must be true or false — paid overages are never changed by implication.');
     }
     return {
-      connection: updatePaidOverage(provider, enabled, optionalString(body['note'], 'note') ?? null),
+      connection: await updatePaidOverage(provider, enabled, optionalString(body['note'], 'note') ?? null),
     };
   }),
 );

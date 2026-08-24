@@ -171,20 +171,20 @@ function sha256(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-function requireContext(orchestration: ResearchOrchestration): { project: Project; layer: Layer } {
-  const project = getProject(orchestration.projectId);
-  const layer = getLayer(orchestration.layerId);
+async function requireContext(orchestration: ResearchOrchestration): Promise<{ project: Project; layer: Layer }> {
+  const project = await getProject(orchestration.projectId);
+  const layer = await getLayer(orchestration.layerId);
   if (!project || !layer) {
     throw new ResearchFailure(orchestration.id, 'CONTEXT', 'The project or layer no longer exists.');
   }
   return { project, layer };
 }
 
-function checkCancelled(orchestrationId: string, signal?: AbortSignal): void {
+async function checkCancelled(orchestrationId: string, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) {
     throw new ResearchCancelled(orchestrationId, 'The research run was cancelled.');
   }
-  const current = getOrchestration(orchestrationId);
+  const current = await getOrchestration(orchestrationId);
   if (current?.status === 'CANCELLED') {
     throw new ResearchCancelled(orchestrationId, 'The research run was cancelled.');
   }
@@ -229,12 +229,12 @@ async function callProvider<T>(
   parse: (text: string) => ParseResult<T>,
 ): Promise<{ value: T; raw: string; passId: string }> {
   const { orchestration, provider } = input;
-  checkCancelled(orchestration.id, input.options.signal);
+  await checkCancelled(orchestration.id, input.options.signal);
 
   // Resumption: a pass that already completed is never bought twice. After a
   // crash between the scan and its verification, the scan's claims are already
   // in the ledger and the job continues from there.
-  const done = completedPass(orchestration.id, input.passKey, input.fragmentId ?? null);
+  const done = await completedPass(orchestration.id, input.passKey, input.fragmentId ?? null);
   if (done && done.attempt === (input.attempt ?? 1) && done.rawResponse) {
     const reparsed = parse(done.rawResponse);
     if (reparsed.ok) {
@@ -242,7 +242,7 @@ async function callProvider<T>(
     }
   }
 
-  const pass = startPass({
+  const pass = await startPass({
     orchestrationId: orchestration.id,
     fragmentId: input.fragmentId ?? null,
     passKey: input.passKey,
@@ -253,7 +253,7 @@ async function callProvider<T>(
     prompt: input.prompt,
     promptSha256: sha256(input.prompt),
   });
-  beat(orchestration.id);
+  await beat(orchestration.id);
 
   const startedAt = Date.now();
   let response: { text: string; externalResponseId: string | null };
@@ -278,7 +278,7 @@ async function callProvider<T>(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const cancelled = input.options.signal?.aborted === true;
-    finishPass(pass.id, {
+    await finishPass(pass.id, {
       status: cancelled ? 'CANCELLED' : 'FAILED',
       error: message,
       durationMs: Date.now() - startedAt,
@@ -291,7 +291,7 @@ async function callProvider<T>(
   if (!parsed.ok) {
     // The raw reply is kept: a result that cannot be validated is still the
     // evidence for why this pass failed.
-    finishPass(pass.id, {
+    await finishPass(pass.id, {
       status: 'FAILED',
       rawResponse: response.text,
       error: parsed.error,
@@ -305,14 +305,14 @@ async function callProvider<T>(
     );
   }
 
-  finishPass(pass.id, {
+  await finishPass(pass.id, {
     status: 'COMPLETE',
     rawResponse: response.text,
     parsed: parsed.value,
     jobId: response.externalResponseId,
     durationMs: Date.now() - startedAt,
   });
-  beat(orchestration.id);
+  await beat(orchestration.id);
   return { value: parsed.value, raw: response.text, passId: pass.id };
 }
 
@@ -346,10 +346,10 @@ export interface StartResearchInput {
  * workflow — so a staged research job and a hand-run one produce the same
  * lineage, the same dependencies and the same document in the end.
  */
-export function startResearch(input: StartResearchInput): ResearchOrchestration {
-  const layer = getLayer(input.layerId);
+export async function startResearch(input: StartResearchInput): Promise<ResearchOrchestration> {
+  const layer = await getLayer(input.layerId);
   if (!layer) throw new Error(`Unknown layer ${input.layerId}`);
-  const project = getProject(layer.projectId);
+  const project = await getProject(layer.projectId);
   if (!project) throw new Error(`Unknown project ${layer.projectId}`);
 
   const assignment = input.assignment.trim();
@@ -359,10 +359,10 @@ export function startResearch(input: StartResearchInput): ResearchOrchestration 
   const provider = getProvider(providerName);
   const title = (input.title ?? '').trim() || `${layer.name} research`;
 
-  const existing = input.runId ? getRun(input.runId) : null;
+  const existing = input.runId ? await getRun(input.runId) : null;
   const run =
     existing ??
-    createRun({
+    await createRun({
       projectId: project.id,
       layerId: layer.id,
       runType: 'FOUNDATION',
@@ -372,9 +372,9 @@ export function startResearch(input: StartResearchInput): ResearchOrchestration 
       prompt: assignment,
       ...(input.targetVersion ? { targetVersion: input.targetVersion } : {}),
     });
-  if (existing) updateRun(run.id, { status: 'RUNNING', provider: provider.name });
+  if (existing) await updateRun(run.id, { status: 'RUNNING', provider: provider.name });
 
-  const orchestration = createOrchestration({
+  const orchestration = await createOrchestration({
     projectId: project.id,
     layerId: layer.id,
     runId: run.id,
@@ -388,7 +388,7 @@ export function startResearch(input: StartResearchInput): ResearchOrchestration 
     autoApprove: input.requireApproval !== true,
   });
 
-  recordEvent({
+  await recordEvent({
     projectId: project.id,
     layerId: layer.id,
     entityType: 'RUN',
@@ -405,15 +405,15 @@ export function startResearch(input: StartResearchInput): ResearchOrchestration 
 // ---------------------------------------------------------------------------
 
 /** Passages from the project's own sources that bear on this assignment. */
-function relevantPassages(
+async function relevantPassages(
   projectId: string,
   query: string,
-): { title: string; text: string }[] {
-  const sources = listDocuments(projectId).filter((document) => document.scope !== 'LAYER');
+): Promise<{ title: string; text: string }[]> {
+  const sources = (await listDocuments(projectId)).filter((document) => document.scope !== 'LAYER');
   const passages: { title: string; text: string }[] = [];
   for (const source of sources) {
     // Never the whole transcript: only the segments that bear on this question.
-    const selected = selectRelevantSegments({
+    const selected = await selectRelevantSegments({
       documentId: source.id,
       query,
       budgetChars: 6_000,
@@ -443,10 +443,10 @@ async function planFragments(
   provider: AIProvider,
   options: RunOrchestrationOptions,
 ): Promise<ResearchFragment[]> {
-  const existing = currentFragments(orchestration.id);
+  const existing = await currentFragments(orchestration.id);
   if (existing.length > 0) return existing;
 
-  updateOrchestration(orchestration.id, { status: 'PLANNING', currentPass: 'PLAN' });
+  await updateOrchestration(orchestration.id, { status: 'PLANNING', currentPass: 'PLAN' });
   options.onProgress?.({
     orchestrationId: orchestration.id,
     phase: 'PLANNING',
@@ -457,7 +457,7 @@ async function planFragments(
     message: 'Working out what the goal requires',
   });
 
-  const documents = listDocuments(project.id)
+  const documents = (await listDocuments(project.id))
     .filter((document) => !document.fileMissing)
     .map((document) => `${document.canonicalName}${document.version ? ` (${document.version})` : ''}`);
 
@@ -466,7 +466,7 @@ async function planFragments(
     layer,
     title: orchestration.title,
     assignment: orchestration.assignment,
-    passages: relevantPassages(project.id, `${orchestration.title} ${orchestration.assignment}`),
+    passages: await relevantPassages(project.id, `${orchestration.title} ${orchestration.assignment}`),
     existingDocuments: documents,
   });
 
@@ -484,8 +484,8 @@ async function planFragments(
     parseGoalPlan,
   );
 
-  const layers = listLayers(project.id);
-  const { contract, requirements } = persistPlan({
+  const layers = await listLayers(project.id);
+  const { contract, requirements } = await persistPlan({
     orchestrationId: orchestration.id,
     project,
     layer,
@@ -519,19 +519,19 @@ async function planFragments(
   });
 
   // Read the archive, judge every requirement against it, and record why.
-  const reconciliation = reconcile({
+  const reconciliation = await reconcile({
     orchestrationId: orchestration.id,
     projectId: project.id,
     requirements,
     contract,
   });
 
-  const fragments = planFragmentsFromGaps({
+  const fragments = await planFragmentsFromGaps({
     orchestrationId: orchestration.id,
     reconciliation,
   });
 
-  recordEvent({
+  await recordEvent({
     projectId: project.id,
     layerId: layer.id,
     entityType: 'RUN',
@@ -569,16 +569,16 @@ async function planFragments(
 // ---------------------------------------------------------------------------
 
 /** Claims already accepted by the fragments this one depends on. */
-function dependencyClaims(
+async function dependencyClaims(
   orchestrationId: string,
   fragment: ResearchFragment,
-): { fragmentKey: string; claim: ResearchClaim }[] {
+): Promise<{ fragmentKey: string; claim: ResearchClaim }[]> {
   if (fragment.dependsOn.length === 0) return [];
   const wanted = new Set(fragment.dependsOn);
   const out: { fragmentKey: string; claim: ResearchClaim }[] = [];
-  for (const other of currentFragments(orchestrationId)) {
+  for (const other of await currentFragments(orchestrationId)) {
     if (!wanted.has(other.fragmentKey) || other.status !== 'ACCEPTED') continue;
-    for (const claim of listClaimsForFragment(other.id)) {
+    for (const claim of await listClaimsForFragment(other.id)) {
       if (claim.accepted) out.push({ fragmentKey: other.fragmentKey, claim });
     }
   }
@@ -586,13 +586,13 @@ function dependencyClaims(
 }
 
 /** Everything a repair must not repeat, from every earlier attempt at this fragment. */
-function rejectedHistory(
+async function rejectedHistory(
   orchestrationId: string,
   fragmentKey: string,
-): { claim: string; why: string }[] {
+): Promise<{ claim: string; why: string }[]> {
   const out: { claim: string; why: string }[] = [];
-  for (const fragment of listAttempts(orchestrationId, fragmentKey)) {
-    for (const claim of listClaimsForFragment(fragment.id)) {
+  for (const fragment of await listAttempts(orchestrationId, fragmentKey)) {
+    for (const claim of await listClaimsForFragment(fragment.id)) {
       if (!claim.accepted && claim.rejectionReason) {
         out.push({ claim: claim.claim, why: claim.rejectionReason });
       }
@@ -608,8 +608,8 @@ function rejectedHistory(
  * queue and the synthesis want. Repairs want the opposite: the whole failure
  * history, so the next attempt knows what has already been tried and rejected.
  */
-function listAttempts(orchestrationId: string, fragmentKey: string): ResearchFragment[] {
-  return listFragments(orchestrationId).filter(
+async function listAttempts(orchestrationId: string, fragmentKey: string): Promise<ResearchFragment[]> {
+  return (await listFragments(orchestrationId)).filter(
     (fragment) => fragment.fragmentKey === fragmentKey,
   );
 }
@@ -636,15 +636,17 @@ async function runBundle(input: {
   const startedAt = Date.now();
 
   for (const fragment of bundle.fragments) {
-    updateFragment(fragment.id, { status: 'RUNNING', startedAt: new Date().toISOString() });
+    await updateFragment(fragment.id, { status: 'RUNNING', startedAt: new Date().toISOString() });
   }
-  updateJob(job.id, { status: 'RUNNING', startedAt: new Date().toISOString() });
+  await updateJob(job.id, { status: 'RUNNING', startedAt: new Date().toISOString() });
 
   const bundled = bundle.fragments.length > 1;
   const passKey: ResearchPassKey = bundle.fragments[0]!.attempt > 1 ? 'TARGETED' : 'BROAD_SCAN';
-  const dependencies = bundle.fragments.flatMap((fragment) =>
-    dependencyClaims(orchestration.id, fragment),
-  );
+  const dependencies = (
+    await Promise.all(
+      bundle.fragments.map((fragment) => dependencyClaims(orchestration.id, fragment)),
+    )
+  ).flat();
 
   // A repair carries its own failure history whether it runs alone or shares a
   // job — the whole point of a repair is that the worker is told what failed.
@@ -654,7 +656,7 @@ async function runBundle(input: {
     repairs.set(fragment.fragmentKey, {
       reason: fragment.repairReason ?? 'The previous attempt did not clear the evidence gate.',
       strategy: fragment.repairStrategy ?? 'Search differently and narrow the question.',
-      rejected: rejectedHistory(orchestration.id, fragment.fragmentKey),
+      rejected: await rejectedHistory(orchestration.id, fragment.fragmentKey),
     });
   }
 
@@ -696,19 +698,19 @@ async function runBundle(input: {
     );
   } catch (error) {
     if (error instanceof ResearchCancelled) {
-      updateJob(job.id, { status: 'CANCELLED', failureReason: error.message });
+      await updateJob(job.id, { status: 'CANCELLED', failureReason: error.message });
       throw error;
     }
     const message = error instanceof Error ? error.message : String(error);
-    updateJob(job.id, {
+    await updateJob(job.id, {
       status: 'FAILED',
       failureReason: message,
       completedAt: new Date().toISOString(),
       durationMs: Date.now() - startedAt,
     });
     for (const fragment of bundle.fragments) {
-      recordFragmentOutcome(job.id, fragment.id, 'FAILED', message);
-      updateFragment(fragment.id, {
+      await recordFragmentOutcome(job.id, fragment.id, 'FAILED', message);
+      await updateFragment(fragment.id, {
         status: 'BLOCKED',
         blockedReason: message,
         completedAt: new Date().toISOString(),
@@ -718,7 +720,7 @@ async function runBundle(input: {
     return results;
   }
 
-  updateJob(job.id, {
+  await updateJob(job.id, {
     status: 'COMPLETE',
     externalJobId: research.passId,
     promptBytes: Buffer.byteLength(prompt),
@@ -746,7 +748,7 @@ async function runBundle(input: {
         options,
       });
       results.set(fragment.id, gate);
-      recordFragmentOutcome(
+      await recordFragmentOutcome(
         job.id,
         fragment.id,
         fragmentPasses(gate) ? 'ACCEPTED' : 'BLOCKED',
@@ -756,12 +758,12 @@ async function runBundle(input: {
       if (error instanceof ResearchCancelled) throw error;
       // One fragment failing inside a shared job is that fragment's problem.
       const message = error instanceof Error ? error.message : String(error);
-      updateFragment(fragment.id, {
+      await updateFragment(fragment.id, {
         status: 'BLOCKED',
         blockedReason: message,
         completedAt: new Date().toISOString(),
       });
-      recordFragmentOutcome(job.id, fragment.id, 'FAILED', message);
+      await recordFragmentOutcome(job.id, fragment.id, 'FAILED', message);
       results.set(fragment.id, failedGate(message));
     }
   }
@@ -804,7 +806,7 @@ async function judgeFragment(input: {
 }): Promise<GateResult> {
   const { orchestration, fragment, job, output, provider, options } = input;
 
-  const stored = insertClaims(
+  const stored = await insertClaims(
     output.claims.map((claim) => {
       const validated = validateClaim(claim);
       const claimType = (claim.claimType ?? 'SOURCED_FACT') as ClaimType;
@@ -859,12 +861,12 @@ async function judgeFragment(input: {
     const resolved = source.derivedFrom
       .map((ref) => byRef.get(ref.trim().toLowerCase().slice(0, 80)) ?? byRef.get(ref.trim()))
       .filter((id): id is string => Boolean(id));
-    updateClaimDerivedFrom(claim.id, resolved);
+    await updateClaimDerivedFrom(claim.id, resolved);
   }
 
-  updateFragment(fragment.id, { status: 'VALIDATING' });
+  await updateFragment(fragment.id, { status: 'VALIDATING' });
 
-  const claims = listClaimsForFragment(fragment.id);
+  const claims = await listClaimsForFragment(fragment.id);
   const verification = await callProvider(
     {
       orchestration,
@@ -894,13 +896,13 @@ async function judgeFragment(input: {
       note: verdict.note,
     });
     if (verdict.contradictionState !== 'UNCHALLENGED') {
-      markContradiction(claim.id, verdict.contradictionState, verdict.note || null);
+      await markContradiction(claim.id, verdict.contradictionState, verdict.note || null);
     }
   }
 
   const gate = applyGate({
     fragment,
-    claims: listClaimsForFragment(fragment.id),
+    claims: await listClaimsForFragment(fragment.id),
     verification: {
       verdicts,
       sufficiency: verification.value.sufficiency,
@@ -910,7 +912,7 @@ async function judgeFragment(input: {
   });
 
   for (const judgement of gate.claims) {
-    decideClaim(judgement.claimId, {
+    await decideClaim(judgement.claimId, {
       accepted: judgement.accepted,
       rejectionReason: judgement.reason,
       scopeMatch: verdicts.get(judgement.claimId)?.scopeMatch ?? null,
@@ -918,7 +920,7 @@ async function judgeFragment(input: {
   }
 
   const passed = fragmentPasses(gate);
-  updateFragment(fragment.id, {
+  await updateFragment(fragment.id, {
     status: passed ? 'ACCEPTED' : 'BLOCKED',
     integrityVerdict: gate.integrity,
     sufficiencyVerdict: gate.sufficiency,
@@ -938,8 +940,8 @@ async function judgeFragment(input: {
  * share a job. Order still comes from the dependency graph, so bundling never
  * moves a fragment ahead of its own premise.
  */
-function runnableBatch(orchestrationId: string): ResearchFragment[] {
-  const fragments = currentFragments(orchestrationId);
+async function runnableBatch(orchestrationId: string): Promise<ResearchFragment[]> {
+  const fragments = await currentFragments(orchestrationId);
   const plan = planDependencies(fragments);
   const byKey = new Map(fragments.map((fragment) => [fragment.fragmentKey, fragment]));
 
@@ -952,12 +954,12 @@ function runnableBatch(orchestrationId: string): ResearchFragment[] {
   }
   if (ready.length > 0) return ready;
 
-  const single = nextRunnable(orchestrationId);
+  const single = await nextRunnable(orchestrationId);
   return single ? [single] : [];
 }
 
-function nextRunnable(orchestrationId: string): ResearchFragment | null {
-  const fragments = currentFragments(orchestrationId);
+async function nextRunnable(orchestrationId: string): Promise<ResearchFragment | null> {
+  const fragments = await currentFragments(orchestrationId);
   const plan = planDependencies(fragments);
   const byKey = new Map(fragments.map((fragment) => [fragment.fragmentKey, fragment]));
 
@@ -978,7 +980,7 @@ function nextRunnable(orchestrationId: string): ResearchFragment | null {
       const fragment = byKey.get(key);
       if (!fragment) continue;
       if (fragment.status !== 'QUEUED' && fragment.status !== 'PLANNED') continue;
-      updateFragment(fragment.id, {
+      await updateFragment(fragment.id, {
         blockedReason:
           `This fragment is in a dependency cycle (${cycle.join(' -> ')}), so its premise cannot ` +
           'be settled first. It was run in priority order and the cycle is recorded.',
@@ -1006,18 +1008,18 @@ function nextRunnable(orchestrationId: string): ResearchFragment | null {
  * unchanged — its requirements, its scope, its evidence bar — because a repair
  * answers the same question, not an easier one.
  */
-function planRepair(
+async function planRepair(
   orchestration: ResearchOrchestration,
   fragment: ResearchFragment,
   gate: GateResult,
-): ResearchFragment | null {
-  const history = listAttempts(orchestration.id, fragment.fragmentKey);
+): Promise<ResearchFragment | null> {
+  const history = await listAttempts(orchestration.id, fragment.fragmentKey);
   const attempts = history.length;
   // The fragment's own budget, never more than the platform-wide cap.
   const cap = Math.min(MAX_FRAGMENT_ATTEMPTS, 1 + Math.max(0, fragment.maxRepairs));
 
   if (attempts >= cap) {
-    updateFragment(fragment.id, {
+    await updateFragment(fragment.id, {
       status: 'REJECTED',
       blockedReason:
         `${gate.reasons.join(' ')} After ${attempts} attempt(s) this fragment still cannot meet its ` +
@@ -1030,12 +1032,12 @@ function planRepair(
     fragment,
     gate,
     history,
-    claims: listClaimsForFragment(fragment.id),
+    claims: await listClaimsForFragment(fragment.id),
     splitRequired: false,
     remainingBudget: cap - attempts,
   });
 
-  const [repaired] = createFragments([
+  const [repaired] = await createFragments([
     {
       orchestrationId: orchestration.id,
       projectId: fragment.projectId,
@@ -1105,12 +1107,12 @@ export async function runOrchestration(
   orchestrationId: string,
   options: RunOrchestrationOptions = {},
 ): Promise<OrchestrationOutcome> {
-  const loaded = getOrchestration(orchestrationId);
+  const loaded = await getOrchestration(orchestrationId);
   if (!loaded) throw new Error(`Unknown research run ${orchestrationId}`);
-  const { project, layer } = requireContext(loaded);
+  const { project, layer } = await requireContext(loaded);
   const provider = options.provider ?? getProvider(loaded.provider);
 
-  updateOrchestration(loaded.id, {
+  await updateOrchestration(loaded.id, {
     startedAt: loaded.startedAt ?? new Date().toISOString(),
     failedAt: null,
     failureReason: null,
@@ -1123,17 +1125,17 @@ export async function runOrchestration(
     // person's eyes stops here with everything planned and nothing spent — the
     // cheapest possible moment to discover Brain read the goal differently
     // from the way it was meant.
-    const current = getOrchestration(loaded.id)!;
+    const current = (await getOrchestration(loaded.id))!;
     if (!current.autoApprove && current.approvedAt === null) {
       return awaitApproval(loaded.id, project, layer, planned, options);
     }
 
-    updateOrchestration(loaded.id, { status: 'RESEARCHING' });
+    await updateOrchestration(loaded.id, { status: 'RESEARCHING' });
     let guard = 0;
     // Recomputed each round: replanning may add a contradiction fragment, and a
     // guard fixed at planning time would read that as a runaway loop.
-    const ceilingNow = (): number => {
-      const total = Math.max(planned.length, currentFragments(loaded.id).length);
+    const ceilingNow = async (): Promise<number> => {
+      const total = Math.max(planned.length, (await currentFragments(loaded.id)).length);
       return total * MAX_FRAGMENT_ATTEMPTS + total + 5;
     };
 
@@ -1142,11 +1144,11 @@ export async function runOrchestration(
     // second run of the work that already succeeded.
     for (let round = 0; ; round += 1) {
     for (;;) {
-      checkCancelled(loaded.id, options.signal);
-      const ready = runnableBatch(loaded.id);
+      await checkCancelled(loaded.id, options.signal);
+      const ready = await runnableBatch(loaded.id);
       if (ready.length === 0) break;
       guard += 1;
-      if (guard > ceilingNow()) {
+      if (guard > await ceilingNow()) {
         throw new ResearchFailure(
           loaded.id,
           'TARGETED',
@@ -1158,7 +1160,7 @@ export async function runOrchestration(
       // run. A pause here keeps every accepted fragment and every queued one.
       const decision = quotaDecision({
         provider,
-        paidOverageEnabled: getConnection(provider.name)?.paidOverageEnabled ?? false,
+        paidOverageEnabled: (await getConnection(provider.name))?.paidOverageEnabled ?? false,
       });
       if (!decision.canRun) {
         return pauseForQuota(loaded.id, project, layer, decision, options);
@@ -1167,14 +1169,14 @@ export async function runOrchestration(
       // Most urgent first: the boundary before the evidence inside it, a premise
       // before the fragment resting on it, a contradiction before anything built
       // on top of it.
-      const ordered = executionOrder(ready, currentFragments(loaded.id));
+      const ordered = executionOrder(ready, await currentFragments(loaded.id));
 
       // Compatible fragments ride in one job: same scope, same source types, no
       // dependency between them. Their claims still come back separately.
       const [bundle] = bundleFragments(ordered);
       if (!bundle) break;
 
-      const job = createJob({
+      const job = await createJob({
         orchestrationId: loaded.id,
         projectId: project.id,
         rationale: bundle.rationale,
@@ -1182,15 +1184,15 @@ export async function runOrchestration(
         // Which model this job deserves, from the user's own settings. The
         // evidence bar does not move with it.
         model: modelFor(bundle.jobKind, {
-          light: modelDefaults(provider.name).light,
-          strong: loaded.model ?? modelDefaults(provider.name).strong,
+          light: (await modelDefaults(provider.name)).light,
+          strong: loaded.model ?? (await modelDefaults(provider.name)).strong,
         }),
         jobKind: bundle.jobKind,
         priority: bundle.priority,
         fragmentIds: bundle.fragments.map((fragment) => fragment.id),
       });
 
-      const settledCount = currentFragments(loaded.id).filter((entry) =>
+      const settledCount = (await currentFragments(loaded.id)).filter((entry) =>
         ['ACCEPTED', 'REJECTED', 'NEEDS_HUMAN'].includes(entry.status),
       ).length;
       options.onProgress?.({
@@ -1199,7 +1201,7 @@ export async function runOrchestration(
         passKey: bundle.fragments[0]!.attempt > 1 ? 'TARGETED' : 'BROAD_SCAN',
         fragmentKey: bundle.fragments.map((fragment) => fragment.fragmentKey).join(', '),
         index: settledCount,
-        total: currentFragments(loaded.id).length,
+        total: (await currentFragments(loaded.id)).length,
         message:
           bundle.fragments.length > 1
             ? `Researching ${bundle.fragments.length} fragments together: ${bundle.fragments
@@ -1221,26 +1223,26 @@ export async function runOrchestration(
       });
 
       for (const [fragmentId, gate] of gates) {
-        const current = getFragment(fragmentId);
+        const current = await getFragment(fragmentId);
         if (!current) continue;
 
         if (fragmentPasses(gate)) {
           // Accepted evidence changes what the rest of the run still needs to
           // do: what it confirms, updates or contradicts, which requirements
           // are now covered, and which queued work has become pointless.
-          const replan = reconcileAcceptedFragment({
+          const replan = await reconcileAcceptedFragment({
             orchestrationId: loaded.id,
             projectId: project.id,
             fragment: current,
           });
-          planContradictionFragments({
+          await planContradictionFragments({
             orchestrationId: loaded.id,
             parent: current,
             contradictions: replan.contradictionsToResolve,
             maxFragments: MAX_FRAGMENTS_TOTAL,
           });
           if (replan.cancelledFragments.length > 0 || replan.contradictionsToResolve.length > 0) {
-            recordEvent({
+            await recordEvent({
               projectId: project.id,
               layerId: layer.id,
               entityType: 'RUN',
@@ -1263,28 +1265,28 @@ export async function runOrchestration(
         // already worked.
         const signal = shouldSplit(current, gate);
         if (signal && current.splitFromId === null) {
-          updateFragment(current.id, {
+          await updateFragment(current.id, {
             status: 'REJECTED',
             blockedReason: `Split into ${signal.questions.length} fragments: ${signal.reason}`,
           });
-          splitFragment({
+          await splitFragment({
             fragment: current,
             signal,
-            startIndex: currentFragments(loaded.id).length,
+            startIndex: (await currentFragments(loaded.id)).length,
           });
         } else {
-          planRepair(loaded, current, gate);
+          await planRepair(loaded, current, gate);
         }
       }
     }
 
       // Everything runnable has run. Does the packet actually answer the goal?
-      const coverage = assessPacket({ orchestrationId: loaded.id, projectId: project.id });
+      const coverage = await assessPacket({ orchestrationId: loaded.id, projectId: project.id });
       if (coverage.ok || round >= MAX_COVERAGE_ROUNDS) {
         return await synthesizeAndAudit(loaded.id, project, layer, provider, options, coverage);
       }
 
-      const targeted = planCoverageFragments({
+      const targeted = await planCoverageFragments({
         orchestrationId: loaded.id,
         coverage,
         maxFragments: MAX_FRAGMENTS_TOTAL,
@@ -1293,7 +1295,7 @@ export async function runOrchestration(
         return await synthesizeAndAudit(loaded.id, project, layer, provider, options, coverage);
       }
 
-      recordEvent({
+      await recordEvent({
         projectId: project.id,
         layerId: layer.id,
         entityType: 'RUN',
@@ -1311,8 +1313,8 @@ export async function runOrchestration(
         phase: 'RESEARCHING',
         passKey: 'TARGETED',
         fragmentKey: null,
-        index: currentFragments(loaded.id).length - targeted.length,
-        total: currentFragments(loaded.id).length,
+        index: (await currentFragments(loaded.id)).length - targeted.length,
+        total: (await currentFragments(loaded.id)).length,
         message: `${coverage.summary} Researching ${targeted.length} targeted fragment(s) for it.`,
       });
     }
@@ -1320,8 +1322,8 @@ export async function runOrchestration(
     if (error instanceof ResearchCancelled) {
       // Whoever cancelled already said why. Overwriting that with the generic
       // "it was cancelled" would throw away the only useful part.
-      const current = getOrchestration(loaded.id);
-      updateOrchestration(loaded.id, {
+      const current = await getOrchestration(loaded.id);
+      await updateOrchestration(loaded.id, {
         status: 'CANCELLED',
         cancelledAt: current?.cancelledAt ?? new Date().toISOString(),
         cancelReason: current?.cancelReason ?? error.message,
@@ -1329,12 +1331,12 @@ export async function runOrchestration(
       throw error;
     }
     const message = error instanceof Error ? error.message : String(error);
-    updateOrchestration(loaded.id, {
+    await updateOrchestration(loaded.id, {
       status: 'FAILED',
       failedAt: new Date().toISOString(),
       failureReason: message,
     });
-    recordEvent({
+    await recordEvent({
       projectId: loaded.projectId,
       layerId: loaded.layerId,
       entityType: 'RUN',
@@ -1353,20 +1355,20 @@ export async function runOrchestration(
  * the coverage matrix and the fragments are all persisted, and the review page
  * reads them. What has not happened is a single research job.
  */
-function awaitApproval(
+async function awaitApproval(
   orchestrationId: string,
   project: Project,
   layer: Layer,
   planned: ResearchFragment[],
   options: RunOrchestrationOptions,
-): OrchestrationOutcome {
-  const orchestration = getOrchestration(orchestrationId)!;
-  updateOrchestration(orchestrationId, {
+): Promise<OrchestrationOutcome> {
+  const orchestration = (await getOrchestration(orchestrationId))!;
+  await updateOrchestration(orchestrationId, {
     status: 'AWAITING_APPROVAL',
     currentPass: 'PLAN',
     failureReason: null,
   });
-  recordEvent({
+  await recordEvent({
     projectId: project.id,
     layerId: layer.id,
     entityType: 'RUN',
@@ -1387,8 +1389,8 @@ function awaitApproval(
   });
 
   return {
-    orchestration: getOrchestration(orchestrationId)!,
-    fragments: currentFragments(orchestrationId),
+    orchestration: (await getOrchestration(orchestrationId))!,
+    fragments: await currentFragments(orchestrationId),
     acceptedFragments: 0,
     rejectedFragments: 0,
     acceptedClaims: 0,
@@ -1407,21 +1409,21 @@ function awaitApproval(
  * sentence saying which allowance is gone, what has been done so far, and what
  * is still waiting.
  */
-function pauseForQuota(
+async function pauseForQuota(
   orchestrationId: string,
   project: Project,
   layer: Layer,
   decision: QuotaDecision,
   options: RunOrchestrationOptions,
-): OrchestrationOutcome {
-  const orchestration = getOrchestration(orchestrationId)!;
-  const fragments = currentFragments(orchestrationId);
+): Promise<OrchestrationOutcome> {
+  const orchestration = (await getOrchestration(orchestrationId))!;
+  const fragments = await currentFragments(orchestrationId);
   const settled = fragments.filter((fragment) =>
     ['ACCEPTED', 'REJECTED', 'NEEDS_HUMAN'].includes(fragment.status),
   );
   const pending = fragments.length - settled.length;
 
-  recordQuotaPause({
+  await recordQuotaPause({
     orchestrationId,
     provider: orchestration.provider,
     quotaState: decision.quota.state,
@@ -1430,11 +1432,11 @@ function pauseForQuota(
     jobsPending: pending,
   });
 
-  updateOrchestration(orchestrationId, {
+  await updateOrchestration(orchestrationId, {
     status: 'PAUSED_QUOTA',
     failureReason: decision.detail,
   });
-  recordEvent({
+  await recordEvent({
     projectId: project.id,
     layerId: layer.id,
     entityType: 'RUN',
@@ -1461,13 +1463,13 @@ function pauseForQuota(
   });
 
   return {
-    orchestration: getOrchestration(orchestrationId)!,
+    orchestration: (await getOrchestration(orchestrationId))!,
     fragments,
     acceptedFragments: fragments.filter((fragment) => fragment.status === 'ACCEPTED').length,
     rejectedFragments: fragments.filter((fragment) =>
       fragment.status === 'REJECTED' || fragment.status === 'BLOCKED',
     ).length,
-    acceptedClaims: acceptedClaims(orchestrationId).length,
+    acceptedClaims: (await acceptedClaims(orchestrationId)).length,
     documentId: null,
     auditId: null,
     verdict: null,
@@ -1485,7 +1487,7 @@ export async function resumeAfterQuota(
   orchestrationId: string,
   options: RunOrchestrationOptions = {},
 ): Promise<OrchestrationOutcome> {
-  const orchestration = getOrchestration(orchestrationId);
+  const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) throw new Error(`Unknown research run ${orchestrationId}`);
   if (orchestration.status !== 'PAUSED_QUOTA') {
     throw new Error(
@@ -1496,18 +1498,18 @@ export async function resumeAfterQuota(
   const provider = options.provider ?? getProvider(orchestration.provider);
   const decision = quotaDecision({
     provider,
-    paidOverageEnabled: getConnection(provider.name)?.paidOverageEnabled ?? false,
+    paidOverageEnabled: (await getConnection(provider.name))?.paidOverageEnabled ?? false,
   });
   if (!decision.canRun) {
     // Resuming into the same wall would only churn. The pause stands, and it
     // says the same thing it said before.
-    const { project, layer } = requireContext(orchestration);
+    const { project, layer } = await requireContext(orchestration);
     return pauseForQuota(orchestrationId, project, layer, decision, options);
   }
 
-  const open = openQuotaPause(orchestrationId);
-  if (open) resolveQuotaPause(open.id);
-  updateOrchestration(orchestrationId, { status: 'RESEARCHING', failureReason: null });
+  const open = await openQuotaPause(orchestrationId);
+  if (open) await resolveQuotaPause(open.id);
+  await updateOrchestration(orchestrationId, { status: 'RESEARCHING', failureReason: null });
   return await runOrchestration(orchestrationId, options);
 }
 
@@ -1519,16 +1521,16 @@ async function synthesizeAndAudit(
   options: RunOrchestrationOptions,
   coverage: PacketCoverage,
 ): Promise<OrchestrationOutcome> {
-  const orchestration = getOrchestration(orchestrationId)!;
-  const fragments = currentFragments(orchestrationId);
+  const orchestration = (await getOrchestration(orchestrationId))!;
+  const fragments = await currentFragments(orchestrationId);
   const accepted = fragments.filter((fragment) => fragment.status === 'ACCEPTED');
   const rejected = fragments.filter(
     (fragment) => fragment.status === 'REJECTED' || fragment.status === 'BLOCKED',
   );
-  const claims = acceptedClaims(orchestrationId);
+  const claims = await acceptedClaims(orchestrationId);
   // Old evidence and new evidence, on one standard: cited by a coverage
   // decision, not superseded, and never rejected.
-  const evidence = packetEvidence({ orchestrationId, projectId: project.id });
+  const evidence = await packetEvidence({ orchestrationId, projectId: project.id });
 
   if (accepted.length === 0 || claims.length === 0) {
     // Nothing survived. Writing a report anyway would be the exact failure this
@@ -1539,13 +1541,13 @@ async function synthesizeAndAudit(
         .slice(0, 5)
         .map((fragment) => `${fragment.fragmentKey}: ${fragment.blockedReason ?? 'blocked'}`)
         .join(' | ');
-    updateOrchestration(orchestrationId, {
+    await updateOrchestration(orchestrationId, {
       status: 'NEEDS_HUMAN',
       currentPass: 'SYNTHESIS',
       failureReason: reason,
     });
-    updateRun(orchestration.runId, { status: 'BLOCKED', failureReason: reason });
-    recordEvent({
+    await updateRun(orchestration.runId, { status: 'BLOCKED', failureReason: reason });
+    await recordEvent({
       projectId: project.id,
       layerId: layer.id,
       entityType: 'RUN',
@@ -1554,7 +1556,7 @@ async function synthesizeAndAudit(
       payload: { orchestrationId, fragments: fragments.length, rejected: rejected.length },
     });
     return {
-      orchestration: getOrchestration(orchestrationId)!,
+      orchestration: (await getOrchestration(orchestrationId))!,
       fragments,
       acceptedFragments: 0,
       rejectedFragments: rejected.length,
@@ -1578,13 +1580,13 @@ async function synthesizeAndAudit(
     const reason =
       `${coverage.summary} Nothing was written: a report that covered around a mandatory ` +
       'requirement would read as an answer to the assignment when it is not one.';
-    updateOrchestration(orchestrationId, {
+    await updateOrchestration(orchestrationId, {
       status: 'NEEDS_HUMAN',
       currentPass: 'SYNTHESIS',
       failureReason: reason,
     });
-    updateRun(orchestration.runId, { status: 'BLOCKED', failureReason: reason });
-    recordEvent({
+    await updateRun(orchestration.runId, { status: 'BLOCKED', failureReason: reason });
+    await recordEvent({
       projectId: project.id,
       layerId: layer.id,
       entityType: 'RUN',
@@ -1596,7 +1598,7 @@ async function synthesizeAndAudit(
       },
     });
     return {
-      orchestration: getOrchestration(orchestrationId)!,
+      orchestration: (await getOrchestration(orchestrationId))!,
       fragments,
       acceptedFragments: accepted.length,
       rejectedFragments: rejected.length,
@@ -1607,7 +1609,7 @@ async function synthesizeAndAudit(
     };
   }
 
-  updateOrchestration(orchestrationId, { status: 'SYNTHESIZING', currentPass: 'SYNTHESIS' });
+  await updateOrchestration(orchestrationId, { status: 'SYNTHESIZING', currentPass: 'SYNTHESIS' });
   options.onProgress?.({
     orchestrationId,
     phase: 'SYNTHESIZING',
@@ -1659,12 +1661,12 @@ async function synthesizeAndAudit(
     parseSynthesisPass,
   );
 
-  updateOrchestration(orchestrationId, { reportText: synthesis.value.report });
+  await updateOrchestration(orchestrationId, { reportText: synthesis.value.report });
 
   // File it exactly as a hand-uploaded report would be filed.
-  const run = getRun(orchestration.runId)!;
-  const version = targetVersionForRun(run, layer.id, project.id);
-  const filed = registerRunArtifact({
+  const run = (await getRun(orchestration.runId))!;
+  const version = await targetVersionForRun(run, layer.id, project.id);
+  const filed = await registerRunArtifact({
     run,
     layer,
     project,
@@ -1675,12 +1677,12 @@ async function synthesizeAndAudit(
 
   if (!filed.imported.documentId) {
     const reason = `The report could not be filed: ${filed.imported.message}`;
-    updateOrchestration(orchestrationId, {
+    await updateOrchestration(orchestrationId, {
       status: 'NEEDS_HUMAN',
       failureReason: reason,
     });
     return {
-      orchestration: getOrchestration(orchestrationId)!,
+      orchestration: (await getOrchestration(orchestrationId))!,
       fragments,
       acceptedFragments: accepted.length,
       rejectedFragments: rejected.length,
@@ -1691,7 +1693,7 @@ async function synthesizeAndAudit(
     };
   }
 
-  updateOrchestration(orchestrationId, { documentId: filed.imported.documentId });
+  await updateOrchestration(orchestrationId, { documentId: filed.imported.documentId });
 
   // The audit reads extracted evidence, never raw bytes (invariant 9), and
   // importing only queues the extraction. Waiting for it here is what makes the
@@ -1702,13 +1704,13 @@ async function synthesizeAndAudit(
     const reason =
       `The report was filed but could not be read back for audit: ` +
       `${extraction.quality?.blockedReason ?? extraction.run.status}.`;
-    updateOrchestration(orchestrationId, {
+    await updateOrchestration(orchestrationId, {
       status: 'NEEDS_HUMAN',
       failureReason: reason,
       completedAt: new Date().toISOString(),
     });
     return {
-      orchestration: getOrchestration(orchestrationId)!,
+      orchestration: (await getOrchestration(orchestrationId))!,
       fragments,
       acceptedFragments: accepted.length,
       rejectedFragments: rejected.length,
@@ -1720,7 +1722,7 @@ async function synthesizeAndAudit(
   }
 
   // Pass 6: Brain's own audit, unchanged, on the assembled packet.
-  updateOrchestration(orchestrationId, { status: 'AUDITING', currentPass: 'AUDIT' });
+  await updateOrchestration(orchestrationId, { status: 'AUDITING', currentPass: 'AUDIT' });
   options.onProgress?.({
     orchestrationId,
     phase: 'AUDITING',
@@ -1758,13 +1760,13 @@ async function synthesizeAndAudit(
           : String(error);
     // The report exists and is registered; only the verdict is missing. That is
     // a state a person can act on, so it is not a failed orchestration.
-    updateOrchestration(orchestrationId, {
+    await updateOrchestration(orchestrationId, {
       status: 'NEEDS_HUMAN',
       failureReason: `The report was filed but the audit could not complete: ${message}`,
       completedAt: new Date().toISOString(),
     });
     return {
-      orchestration: getOrchestration(orchestrationId)!,
+      orchestration: (await getOrchestration(orchestrationId))!,
       fragments,
       acceptedFragments: accepted.length,
       rejectedFragments: rejected.length,
@@ -1776,7 +1778,7 @@ async function synthesizeAndAudit(
   }
 
   const needsRepair = verdict !== 'PASS' && verdict !== 'READY_FOR_SYNTHESIS' && verdict !== 'READY_TO_FREEZE';
-  updateOrchestration(orchestrationId, {
+  await updateOrchestration(orchestrationId, {
     status: needsRepair ? 'AWAITING_REPAIR' : 'COMPLETE',
     auditId,
     verdict,
@@ -1784,7 +1786,7 @@ async function synthesizeAndAudit(
     currentPass: 'AUDIT',
   });
 
-  recordEvent({
+  await recordEvent({
     projectId: project.id,
     layerId: layer.id,
     entityType: 'RUN',
@@ -1812,8 +1814,8 @@ async function synthesizeAndAudit(
   });
 
   return {
-    orchestration: getOrchestration(orchestrationId)!,
-    fragments: currentFragments(orchestrationId),
+    orchestration: (await getOrchestration(orchestrationId))!,
+    fragments: await currentFragments(orchestrationId),
     acceptedFragments: accepted.length,
     rejectedFragments: rejected.length,
     acceptedClaims: claims.length,

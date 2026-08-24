@@ -42,7 +42,8 @@ import {
 } from '../repos/sources.ts';
 import { DOCUMENT_SCOPES, LINK_STATUSES, LINK_TYPES } from '../domain/types.ts';
 import type { DocumentScope, LinkStatus, LinkType } from '../domain/types.ts';
-import { absolutePathFor, layerSlugFromPath, relocateFile } from '../services/storage.ts';
+import { layerSlugFromPath, relocateFile } from '../services/storage.ts';
+import { getStorage, ObjectNotFoundError } from '../services/storage/index.ts';
 import {
   badRequest,
   bodyOf,
@@ -109,26 +110,26 @@ function parseVersion(value: unknown, field: string): string | undefined {
 
 documentsRouter.get(
   '/:documentId',
-  handler((req) => {
-    const document = requireDocument(pathId(req, 'documentId'));
+  handler(async (req) => {
+    const document = await requireDocument(pathId(req, 'documentId'));
     return {
       document,
-      layer: document.layerId ? getLayer(document.layerId) : null,
-      dependencies: listDependenciesForDocument(document.id),
-      dependents: listDependentsOfCanonicalName(document.projectId, document.canonicalName),
-      audits: listAuditsByProject(document.projectId).filter(
+      layer: document.layerId ? await getLayer(document.layerId) : null,
+      dependencies: await listDependenciesForDocument(document.id),
+      dependents: await listDependentsOfCanonicalName(document.projectId, document.canonicalName),
+      audits: (await listAuditsByProject(document.projectId)).filter(
         (audit) => audit.auditedDocumentId === document.id,
       ),
-      events: listEventsByEntity('DOCUMENT', document.id),
+      events: await listEventsByEntity('DOCUMENT', document.id),
     };
   }),
 );
 
 documentsRouter.patch(
   '/:documentId',
-  handler((req) => {
-    const document = requireDocument(pathId(req, 'documentId'));
-    const project = requireProject(document.projectId);
+  handler(async (req) => {
+    const document = await requireDocument(pathId(req, 'documentId'));
+    const project = await requireProject(document.projectId);
     const body = bodyOf(req);
 
     let layerId = document.layerId;
@@ -137,7 +138,7 @@ documentsRouter.patch(
       layerId =
         raw === null || raw === ''
           ? null
-          : requireLayerOfProject(optionalString(raw, 'layerId') ?? '', project.id).id;
+          : (await requireLayerOfProject(optionalString(raw, 'layerId') ?? '', project.id)).id;
     }
 
     const version = parseVersion(body['version'], 'version') ?? document.version;
@@ -163,7 +164,7 @@ documentsRouter.patch(
     let movedTo: string | null = null;
 
     if (identityChanged) {
-      const layer = layerId ? requireLayerOfProject(layerId, project.id) : null;
+      const layer = layerId ? await requireLayerOfProject(layerId, project.id) : null;
       patch.layerId = layerId;
       patch.version = version;
       // version_sort is the only orderable form; storing it is not optional.
@@ -191,7 +192,7 @@ documentsRouter.patch(
         // renamed under the new layer while the row still pointed at the old
         // path, manufacturing exactly the inconsistency invariants 8 and 9 exist
         // to prevent.
-        const clash = findDocumentByCanonicalName(project.id, names.canonicalName);
+        const clash = await findDocumentByCanonicalName(project.id, names.canonicalName);
         if (clash && clash.id !== document.id) {
           throw conflict(
             `"${names.canonicalName}" already exists in this project, so ${document.canonicalName} ` +
@@ -205,7 +206,7 @@ documentsRouter.patch(
         if (document.filesystemPath) {
           const previousPath = document.filesystemPath;
           try {
-            const stored = relocateFile(
+            const stored = await relocateFile(
               document.filesystemPath,
               project.slug,
               layer.slug,
@@ -229,13 +230,13 @@ documentsRouter.patch(
 
     let updated: Document;
     try {
-      updated = updateDocument(document.id, patch) ?? document;
+      updated = await updateDocument(document.id, patch) ?? document;
     } catch (error) {
       // The row did not change, so put the artifact back where the row still
       // says it is rather than leaving the two disagreeing.
       if (movedFrom && movedTo) {
         try {
-          relocateFile(
+          await relocateFile(
             movedTo,
             project.slug,
             layerSlugFromPath(project.slug, movedFrom),
@@ -247,7 +248,7 @@ documentsRouter.patch(
       }
       throw error;
     }
-    recordEvent({
+    await recordEvent({
       projectId: project.id,
       layerId: updated.layerId,
       entityType: 'DOCUMENT',
@@ -271,52 +272,51 @@ documentsRouter.patch(
       },
     });
 
-    recomputeProject(project.id);
-    return { document: requireDocument(updated.id), plan: buildPlan(project.id) };
+    await recomputeProject(project.id);
+    return { document: await requireDocument(updated.id), plan: await buildPlan(project.id) };
   }),
 );
 
 documentsRouter.get(
   '/:documentId/file',
-  handler((req, res, next) => {
-    const document = requireDocument(pathId(req, 'documentId'));
+  handler(async (req, res, next) => {
+    const document = await requireDocument(pathId(req, 'documentId'));
     if (!document.filesystemPath) {
       throw notFound(
         `"${document.canonicalName}" has no file registered yet — it exists as an expectation only.`,
       );
     }
 
-    let absolute: string;
+    // The key comes from the row, never from the request. Whether it names a
+    // file under the data folder or an object in a bucket is the storage
+    // layer's business, and the same refusals apply either way.
+    const key = document.storageKey ?? document.filesystemPath;
+    let object: Awaited<ReturnType<ReturnType<typeof getStorage>['openRead']>>;
     try {
-      absolute = absolutePathFor(document.filesystemPath);
-    } catch {
+      object = await getStorage().openRead(key);
+    } catch (error) {
+      if (error instanceof ObjectNotFoundError) {
+        throw notFound(
+          `The file for "${document.canonicalName}" is no longer in the document store ` +
+            `(expected ${key}). Run SCAN & RECONCILE to resolve the inconsistency, or ` +
+            're-import the document.',
+        );
+      }
       throw badRequest(
-        `The stored path for "${document.canonicalName}" points outside the data root and will not be served.`,
+        `The stored location for "${document.canonicalName}" will not be served: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
       );
     }
 
-    let stat: fs.Stats;
-    try {
-      stat = fs.statSync(absolute);
-    } catch {
-      throw notFound(
-        `The file for "${document.canonicalName}" is no longer on disk (expected ${document.filesystemPath}). ` +
-          'Run SCAN & RECONCILE to resolve the inconsistency, or re-import the document.',
-      );
-    }
-    if (!stat.isFile()) {
-      throw notFound(`${document.filesystemPath} is not a file.`);
-    }
-
-    const filename = document.filename ?? path.basename(absolute);
-    res.setHeader('Content-Type', contentTypeFor(filename));
+    const filename = document.filename ?? path.posix.basename(key);
+    res.setHeader('Content-Type', object.contentType || contentTypeFor(filename));
     res.setHeader('Content-Disposition', contentDisposition(filename));
-    res.setHeader('Content-Length', String(stat.size));
+    if (object.size > 0) res.setHeader('Content-Length', String(object.size));
     // Documents are replaced in place by reconciliation; never let a proxy or
     // the browser show yesterday's version.
     res.setHeader('Cache-Control', 'no-store');
 
-    const stream = fs.createReadStream(absolute);
+    const stream = object.stream;
     stream.on('error', (error) => {
       if (res.headersSent) {
         res.destroy(error);
@@ -334,11 +334,11 @@ documentsRouter.get(
 // ---------------------------------------------------------------------------
 
 /** What the import screen and the document card need to show. */
-function extractionView(documentId: string) {
-  const run = getCurrentExtractionRun(documentId);
+async function extractionView(documentId: string) {
+  const run = await getCurrentExtractionRun(documentId);
   return {
     run,
-    history: listExtractionRuns(documentId),
+    history: await listExtractionRuns(documentId),
     quality: run
       ? {
           status: run.status,
@@ -364,18 +364,18 @@ function extractionView(documentId: string) {
 
 documentsRouter.get(
   '/:documentId/extraction',
-  handler((req) => {
-    const document = requireDocument(pathId(req, 'documentId'));
-    return { document, ...extractionView(document.id) };
+  handler(async (req) => {
+    const document = await requireDocument(pathId(req, 'documentId'));
+    return { document, ...await extractionView(document.id) };
   }),
 );
 
 /** VIEW EXTRACTED TEXT: exactly what the auditor will read, page by page. */
 documentsRouter.get(
   '/:documentId/text',
-  handler((req) => {
-    const document = requireDocument(pathId(req, 'documentId'));
-    const { run, pages } = readableText(document.id);
+  handler(async (req) => {
+    const document = await requireDocument(pathId(req, 'documentId'));
+    const { run, pages } = await readableText(document.id);
     if (!run) {
       throw notFound(
         `${document.canonicalName} has not been read yet, so there is no extracted text to show.`,
@@ -392,9 +392,9 @@ documentsRouter.get(
 documentsRouter.post(
   '/:documentId/reprocess',
   handler(async (req) => {
-    const document = requireDocument(pathId(req, 'documentId'));
+    const document = await requireDocument(pathId(req, 'documentId'));
     const result = await enqueueExtraction(document.id, { force: true });
-    recordEvent({
+    await recordEvent({
       projectId: document.projectId,
       layerId: document.layerId,
       entityType: 'DOCUMENT',
@@ -402,8 +402,8 @@ documentsRouter.post(
       eventType: 'DOCUMENT_REPROCESSED',
       payload: { runId: result.run.id, status: result.quality.status },
     });
-    recomputeProject(document.projectId);
-    return { document: requireDocument(document.id), ...extractionView(document.id) };
+    await recomputeProject(document.projectId);
+    return { document: await requireDocument(document.id), ...await extractionView(document.id) };
   }),
 );
 
@@ -416,17 +416,17 @@ documentsRouter.post(
  */
 documentsRouter.get(
   '/:documentId/findings',
-  handler((req) => {
-    const document = requireDocument(pathId(req, 'documentId'));
-    const run = getCurrentExtractionRun(document.id);
-    return { document, extractionRunId: run?.id ?? null, findings: documentFindings(document.id) };
+  handler(async (req) => {
+    const document = await requireDocument(pathId(req, 'documentId'));
+    const run = await getCurrentExtractionRun(document.id);
+    return { document, extractionRunId: run?.id ?? null, findings: await documentFindings(document.id) };
   }),
 );
 
 documentsRouter.post(
   '/:documentId/findings',
   handler(async (req) => {
-    const document = requireDocument(pathId(req, 'documentId'));
+    const document = await requireDocument(pathId(req, 'documentId'));
     const body = bodyOf(req);
     try {
       return await extractDocumentFindings({
@@ -453,7 +453,7 @@ documentsRouter.post(
 documentsRouter.post(
   '/:documentId/ingest',
   handler(async (req) => {
-    const document = requireDocument(pathId(req, 'documentId'));
+    const document = await requireDocument(pathId(req, 'documentId'));
     const body = bodyOf(req);
     const scope = optionalEnum<DocumentScope>(body['scope'], DOCUMENT_SCOPES, 'scope');
     const report = await ingestSource({
@@ -461,20 +461,20 @@ documentsRouter.post(
       ...(scope ? { scope } : {}),
       force: optionalBoolean(body['force'], 'force') ?? false,
     });
-    return { document: requireDocument(document.id), report };
+    return { document: await requireDocument(document.id), report };
   }),
 );
 
 /** The last ingestion report, its segments, and every proposed link. */
 documentsRouter.get(
   '/:documentId/ingestion',
-  handler((req) => {
-    const document = requireDocument(pathId(req, 'documentId'));
+  handler(async (req) => {
+    const document = await requireDocument(pathId(req, 'documentId'));
     return {
       document,
-      report: latestIngestionReport(document.id),
-      segments: listSegments(document.id),
-      links: listLinks(document.id),
+      report: await latestIngestionReport(document.id),
+      segments: await listSegments(document.id),
+      links: await listLinks(document.id),
     };
   }),
 );
@@ -487,8 +487,8 @@ documentsRouter.get(
  */
 documentsRouter.patch(
   '/:documentId/links/:linkId',
-  handler((req) => {
-    const document = requireDocument(pathId(req, 'documentId'));
+  handler(async (req) => {
+    const document = await requireDocument(pathId(req, 'documentId'));
     const linkId = pathId(req, 'linkId');
     const body = bodyOf(req);
 
@@ -496,27 +496,27 @@ documentsRouter.patch(
     if (!status) throw badRequest('A "status" of PROPOSED, ACCEPTED or EXCLUDED is required.');
     const linkType = optionalEnum<LinkType>(body['linkType'], LINK_TYPES, 'linkType');
     const layerId = optionalString(body['layerId'], 'layerId');
-    if (layerId) requireLayerOfProject(layerId, document.projectId);
+    if (layerId) await requireLayerOfProject(layerId, document.projectId);
     const version = nullableString(body['version'], 'version');
 
-    const updated = decideLink(linkId, {
+    const updated = await decideLink(linkId, {
       status,
       ...(linkType ? { linkType } : {}),
       ...(layerId ? { layerId } : {}),
       ...(version === undefined ? {} : { version }),
     });
     if (!updated) throw notFound(`No link with id ${linkId}.`);
-    recomputeProject(document.projectId);
-    return { link: updated, links: listLinks(document.id) };
+    await recomputeProject(document.projectId);
+    return { link: updated, links: await listLinks(document.id) };
   }),
 );
 
 /** Follow a citation back to the passage it rests on. */
 documentsRouter.get(
   '/chunks/:chunkId',
-  handler((req) => {
+  handler(async (req) => {
     const chunkId = pathId(req, 'chunkId');
-    const resolved = resolveCitation(chunkId);
+    const resolved = await resolveCitation(chunkId);
     if (!resolved) throw notFound(`No stored passage with id ${chunkId}.`);
     return resolved;
   }),

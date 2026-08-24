@@ -44,19 +44,19 @@ export const DOCUMENT_TYPE_BY_RUN_TYPE: Record<RunType, DocumentType> = {
 };
 
 /** A redo produces whatever its original attempt was trying to produce. */
-export function documentTypeForRun(run: ResearchRun): DocumentType {
+export async function documentTypeForRun(run: ResearchRun): Promise<DocumentType> {
   let current: ResearchRun | null = run;
   for (let hops = 0; current !== null && hops < 20; hops += 1) {
     if (current.runType !== 'REDO') return DOCUMENT_TYPE_BY_RUN_TYPE[current.runType];
-    current = current.parentRunId ? getRun(current.parentRunId) : null;
+    current = current.parentRunId ? await getRun(current.parentRunId) : null;
   }
   return DOCUMENT_TYPE_BY_RUN_TYPE.REDO;
 }
 
-export function targetVersionForRun(run: ResearchRun, layerId: string, projectId: string): string {
+export async function targetVersionForRun(run: ResearchRun, layerId: string, projectId: string): Promise<string> {
   const declared = run.targetVersion?.trim();
   if (declared && isValidVersion(declared)) return normalizeVersion(declared);
-  return normalizeVersion(defaultTargetVersion(projectId, layerId, run.runType));
+  return normalizeVersion(await defaultTargetVersion(projectId, layerId, run.runType));
 }
 
 export interface RegisterRunArtifactResult {
@@ -73,19 +73,19 @@ export interface RegisterRunArtifactResult {
  * canonical name): the caller decides whether that is a 409 for a browser or a
  * failed orchestration, and both need the importer's own message.
  */
-export function registerRunArtifact(input: {
+export async function registerRunArtifact(input: {
   run: ResearchRun;
   layer: Layer;
   project: Project;
   originalFilename: string;
   contents: Buffer;
   notes?: string | null;
-}): RegisterRunArtifactResult {
+}): Promise<RegisterRunArtifactResult> {
   const { run, layer, project } = input;
-  const version = targetVersionForRun(run, layer.id, project.id);
-  const documentType = documentTypeForRun(run);
+  const version = await targetVersionForRun(run, layer.id, project.id);
+  const documentType = await documentTypeForRun(run);
 
-  const imported = importFile({
+  const imported = await importFile({
     projectId: project.id,
     originalFilename: input.originalFilename,
     contents: input.contents,
@@ -97,19 +97,19 @@ export function registerRunArtifact(input: {
   if (!imported.documentId) return { imported, document: null, finished: false };
 
   const document =
-    updateDocument(imported.documentId, { sourceRunId: run.id, status: 'COMPLETE' }) ??
-    getDocument(imported.documentId);
+    await updateDocument(imported.documentId, { sourceRunId: run.id, status: 'COMPLETE' }) ??
+    await getDocument(imported.documentId);
 
   const finished = PENDING_RUN_STATUSES.has(run.status);
   const completedAt = nowIso();
-  updateRun(run.id, {
+  await updateRun(run.id, {
     targetDocumentId: imported.documentId,
     status: finished ? 'COMPLETE' : undefined,
     completedAt: finished ? completedAt : undefined,
   });
 
   if (finished) {
-    recordEvent({
+    await recordEvent({
       projectId: project.id,
       layerId: layer.id,
       entityType: 'RUN',
@@ -125,6 +125,6 @@ export function registerRunArtifact(input: {
     });
   }
 
-  recomputeProject(project.id);
+  await recomputeProject(project.id);
   return { imported, document, finished };
 }

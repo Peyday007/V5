@@ -68,17 +68,17 @@ import { buildPlan } from '../server/services/planner.ts';
 
 let fixture: TestProject;
 
-beforeEach(() => {
-  fixture = freshProject();
+beforeEach(async () => {
+  fixture = await freshProject();
   // Deterministic by default: OCR availability is a property of the machine, and
   // a test that passes only where tesseract happens to be installed is not a test.
   setOcrEngine(null);
   process.env['BRAIN_OCR'] = 'none';
 });
-afterEach(() => {
+afterEach(async () => {
   setOcrEngine(null);
   delete process.env['BRAIN_OCR'];
-  teardown();
+  await teardown();
 });
 
 // ---------------------------------------------------------------------------
@@ -119,17 +119,17 @@ async function importAndRead(
   originalFilename: string,
   contents: Buffer,
 ): Promise<{ document: Document; runId: string }> {
-  const result = importFile({ projectId: fixture.project.id, originalFilename, contents });
+  const result = await importFile({ projectId: fixture.project.id, originalFilename, contents });
   expect(result.documentId, `import of ${originalFilename} should register a document`).toBeTruthy();
   await whenExtractionIdle();
-  const document = getDocument(result.documentId!)!;
-  const run = getCurrentExtractionRun(document.id);
+  const document = (await getDocument(result.documentId!))!;
+  const run = await getCurrentExtractionRun(document.id);
   expect(run, `${originalFilename} should have an extraction run`).not.toBeNull();
-  return { document: getDocument(document.id)!, runId: run!.id };
+  return { document: (await getDocument(document.id))!, runId: run!.id };
 }
 
-function textOf(documentId: string): string {
-  return readableText(documentId)
+async function textOf(documentId: string): Promise<string> {
+  return (await readableText(documentId))
     .pages.flatMap((page) => page.blocks.map((block) => block.text))
     .join('\n');
 }
@@ -146,7 +146,7 @@ describe('a normal multi-page text PDF', () => {
     expect(document.detectedFormat).toBe('PDF');
     expect(document.pageCount).toBe(4);
 
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.pagesExpected).toBe(4);
     expect(run.pagesReadable).toBe(4);
     expect(run.pagesFailed).toEqual([]);
@@ -157,12 +157,12 @@ describe('a normal multi-page text PDF', () => {
     expect(run.sourceHash).toMatch(/^[0-9a-f]{64}$/);
 
     // Every page contributed blocks, and the headings survived as headings.
-    const blocks = listBlocks(runId);
+    const blocks = await listBlocks(runId);
     expect(new Set(blocks.map((block) => block.pageNumber))).toEqual(new Set([1, 2, 3, 4]));
     expect(
       blocks.filter((block) => block.blockType === 'HEADING').map((block) => block.normalizedText),
     ).toEqual(['Overview', 'Participants', 'Artefacts', 'Boundaries']);
-    expect(textOf(document.id)).toContain('claim priority is fixed by the earlier');
+    expect(await textOf(document.id)).toContain('claim priority is fixed by the earlier');
   });
 });
 
@@ -196,7 +196,7 @@ describe('a two-column PDF with a repeated header', () => {
 
   it('reads each column in order instead of interleaving them', async () => {
     const { document, runId } = await importAndRead('World Model v1.pdf', columned());
-    const blocks = listBlocks(runId).filter((block) => block.pageNumber === 1);
+    const blocks = (await listBlocks(runId)).filter((block) => block.pageNumber === 1);
 
     const body = blocks.filter((block) => block.blockType === 'PARAGRAPH');
     expect(body).toHaveLength(2);
@@ -205,7 +205,7 @@ describe('a two-column PDF with a repeated header', () => {
     expect(body[1]!.normalizedText).toBe(RIGHT.join(' '));
 
     // The reading order is what a person would follow down the page.
-    const flat = textOf(document.id);
+    const flat = await textOf(document.id);
     expect(flat.indexOf('Nothing here decides routing')).toBeLessThan(
       flat.indexOf('Claim priority is therefore'),
     );
@@ -214,18 +214,18 @@ describe('a two-column PDF with a repeated header', () => {
   it('marks the repeated header as furniture without deleting it', async () => {
     const { document, runId } = await importAndRead('World Model v1.pdf', columned());
 
-    const headers = listBlocks(runId).filter((block) => block.blockType === 'PAGE_HEADER');
+    const headers = (await listBlocks(runId)).filter((block) => block.blockType === 'PAGE_HEADER');
     expect(headers).toHaveLength(3);
     expect(headers.every((block) => block.normalizedText === HEADER)).toBe(true);
 
     // Furniture is kept and labelled, but excluded from retrieval chunks.
-    const chunkText = listChunks(runId)
+    const chunkText = (await listChunks(runId))
       .map((chunk) => chunk.text)
       .join('\n');
     expect(chunkText).not.toContain(HEADER);
-    expect(textOf(document.id)).toContain(HEADER);
+    expect(await textOf(document.id)).toContain(HEADER);
 
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.warnings.some((warning) => /multi-column/i.test(warning))).toBe(true);
     expect(run.status).toBe('READY_WITH_WARNINGS');
   });
@@ -271,7 +271,7 @@ describe('a scanned PDF', () => {
       buildPdf([imageOnlyPage(), imageOnlyPage(), imageOnlyPage()]),
     );
 
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.status).toBe('BLOCKED');
     expect(run.pagesReadable).toBe(0);
     expect(run.pagesFailed).toEqual([1, 2, 3]);
@@ -295,17 +295,17 @@ describe('a scanned PDF', () => {
     );
 
     expect(engine.requested).toEqual([1, 2, 3]);
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.status).toBe('READY_WITH_WARNINGS');
     expect(run.pagesOcr).toBe(3);
     expect(run.pagesReadable).toBe(3);
     expect(run.coverageRatio).toBe(1);
     expect(run.warnings.some((warning) => /read by OCR/i.test(warning))).toBe(true);
 
-    const blocks = listBlocks(runId);
+    const blocks = await listBlocks(runId);
     expect(blocks.every((block) => block.extractionMethod === 'OCR')).toBe(true);
     expect(blocks[0]!.warnings.join(' ')).toMatch(/recognition errors/i);
-    expect(textOf(document.id)).toContain('Recovered from the scan');
+    expect(await textOf(document.id)).toContain('Recovered from the scan');
   });
 });
 
@@ -324,14 +324,14 @@ describe('a PDF mixing native text and scanned pages', () => {
     // The cost of OCR is one page, not three.
     expect(engine.requested).toEqual([2]);
 
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.pagesExpected).toBe(3);
     expect(run.pagesReadable).toBe(3);
     expect(run.pagesOcr).toBe(1);
     expect(run.status).toBe('READY_WITH_WARNINGS');
 
     const byPage = new Map<number, Set<string>>();
-    for (const block of listBlocks(runId)) {
+    for (const block of await listBlocks(runId)) {
       byPage.set(
         block.pageNumber,
         (byPage.get(block.pageNumber) ?? new Set()).add(block.extractionMethod),
@@ -350,7 +350,7 @@ describe('a PDF mixing native text and scanned pages', () => {
 describe('files Brain cannot read', () => {
   it('blocks a blank PDF and keeps the original', async () => {
     const { document } = await importAndRead('World Model v1.pdf', buildPdf([imageOnlyPage()]));
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.status).toBe('BLOCKED');
     expect(run.characterCount).toBe(0);
     expect(fs.existsSync(path.resolve(DATA_ROOT, document.filesystemPath!))).toBe(true);
@@ -362,11 +362,11 @@ describe('files Brain cannot read', () => {
       Buffer.from('this file was truncated by whatever produced it\n'.repeat(20)),
     ]);
     const { document } = await importAndRead('World Model v1.pdf', corrupt);
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.status).toBe('BLOCKED');
     expect(run.blockedReason).toMatch(/could not be parsed/i);
     expect(run.blockedReason).toMatch(/re-export it/i);
-    expect(listBlocks(run.id)).toHaveLength(0);
+    expect(await listBlocks(run.id)).toHaveLength(0);
   });
 
   it('blocks an encrypted PDF and names the reason', async () => {
@@ -374,7 +374,7 @@ describe('files Brain cannot read', () => {
     await expect(extractPdf(encrypted)).rejects.toBeInstanceOf(PdfUnreadableError);
 
     const { document } = await importAndRead('World Model v1.pdf', encrypted);
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.status).toBe('BLOCKED');
     expect(run.blockedReason).toMatch(/password-protected or encrypted/i);
     expect(run.blockedReason).toMatch(/unprotected copy/i);
@@ -388,7 +388,7 @@ describe('files Brain cannot read', () => {
     expect(detectFormat('World Model v1.png', png).format).toBe('UNSUPPORTED');
 
     const { document } = await importAndRead('World Model v1.png', png);
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.status).toBe('BLOCKED');
     expect(run.detectedFormat).toBe('UNSUPPORTED');
     expect(run.blockedReason).toMatch(/cannot read this file format/i);
@@ -398,7 +398,7 @@ describe('files Brain cannot read', () => {
   it('reports a file whose contents contradict its extension', async () => {
     // A PDF saved with a .txt name: the bytes decide, and the mismatch is said aloud.
     const { document } = await importAndRead('World Model v1.txt', multiPagePdf(2));
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.detectedFormat).toBe('PDF');
     expect(run.warnings.some((warning) => /extension does not match/i.test(warning))).toBe(true);
   });
@@ -435,11 +435,11 @@ describe('a DOCX', () => {
     );
 
     expect(document.detectedFormat).toBe('DOCX');
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.status).toBe('READY');
     expect(run.warnings).toEqual([]);
 
-    const blocks = listBlocks(runId);
+    const blocks = await listBlocks(runId);
     const types = blocks.map((block) => block.blockType);
     expect(types).toContain('HEADING');
     expect(types).toContain('LIST_ITEM');
@@ -461,7 +461,7 @@ describe('a DOCX', () => {
       'Monetization Logic v1.docx',
       buildDocx(DOCX_BODY, { omitStyles: true }),
     );
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.status).toBe('READY_WITH_WARNINGS');
     expect(run.warnings.some((warning) => warning.startsWith('DOCX:'))).toBe(true);
   });
@@ -496,8 +496,8 @@ describe('text formats', () => {
     const { document, runId } = await importAndRead('Qualification Logic v1.txt', Buffer.from(plain));
 
     expect(document.detectedFormat).toBe('TEXT');
-    expect(getCurrentExtractionRun(document.id)!.status).toBe('READY');
-    const blocks = listBlocks(runId);
+    expect((await getCurrentExtractionRun(document.id))!.status).toBe('READY');
+    const blocks = await listBlocks(runId);
     expect(blocks).toHaveLength(2);
     expect(blocks.every((block) => block.blockType === 'PARAGRAPH')).toBe(true);
     expect(blocks.every((block) => block.extractionMethod === 'TEXT')).toBe(true);
@@ -510,7 +510,7 @@ describe('text formats', () => {
     );
 
     expect(document.detectedFormat).toBe('MARKDOWN');
-    const blocks = listBlocks(runId);
+    const blocks = await listBlocks(runId);
     expect(
       blocks.filter((block) => block.blockType === 'HEADING').map((block) => block.normalizedText),
     ).toEqual(['Qualification Logic', 'Conditions']);
@@ -520,20 +520,20 @@ describe('text formats', () => {
     expect(code?.rawText).toBe('qualifies(deal) := custody(deal) AND recorded(priority(deal))');
 
     // The heading path travels with the chunk, so a citation knows its section.
-    const chunk = listChunks(runId)[0];
+    const chunk = (await listChunks(runId))[0];
     expect(chunk?.headingPath).toEqual(['Qualification Logic']);
   });
 
   it('treats pasted text exactly like an uploaded file', async () => {
-    const layer = fixture.layerByName('Qualification Logic');
+    const layer = await fixture.layerByName('Qualification Logic');
     const names = buildNames(layer.name, 'v1');
-    const stored = storeFile({
+    const stored = await storeFile({
       projectSlug: fixture.project.slug,
       layerSlug: layer.slug,
       filename: names.filename,
       contents: Buffer.from([BODY.join(' '), '', SECOND.join(' ')].join('\n')),
     });
-    const document = createDocument({
+    const document = await createDocument({
       projectId: fixture.project.id,
       layerId: layer.id,
       canonicalName: names.canonicalName,
@@ -555,8 +555,8 @@ describe('text formats', () => {
     expect(result.quality.status).toBe('READY');
     // Same identity, same blocks, same quality record as any other import.
     expect(result.run.sourceHash).toBe(stored.hash);
-    expect(listBlocks(result.run.id).length).toBeGreaterThan(0);
-    expect(listChunks(result.run.id).length).toBeGreaterThan(0);
+    expect((await listBlocks(result.run.id)).length).toBeGreaterThan(0);
+    expect((await listChunks(result.run.id)).length).toBeGreaterThan(0);
   });
 });
 
@@ -569,7 +569,7 @@ describe('re-importing', () => {
     const pdf = multiPagePdf(3);
     const first = await importAndRead('World Model v1.pdf', pdf);
 
-    const again = importFile({
+    const again = await importFile({
       projectId: fixture.project.id,
       originalFilename: 'World Model v1 (1).pdf',
       contents: pdf,
@@ -580,7 +580,7 @@ describe('re-importing', () => {
     expect(again.registered).toBe(false);
     expect(again.documentId).toBe(first.document.id);
     // One reading of one file: the extraction is not repeated either.
-    expect(listExtractionRuns(first.document.id)).toHaveLength(1);
+    expect(await listExtractionRuns(first.document.id)).toHaveLength(1);
   });
 
   it('reads a new version as its own document, leaving the old reading intact', async () => {
@@ -588,9 +588,9 @@ describe('re-importing', () => {
     const second = await importAndRead('World Model v1B.pdf', multiPagePdf(5));
 
     expect(second.document.id).not.toBe(first.document.id);
-    expect(getCurrentExtractionRun(first.document.id)!.pagesExpected).toBe(3);
-    expect(getCurrentExtractionRun(second.document.id)!.pagesExpected).toBe(5);
-    expect(getCurrentExtractionRun(first.document.id)!.id).toBe(first.runId);
+    expect((await getCurrentExtractionRun(first.document.id))!.pagesExpected).toBe(3);
+    expect((await getCurrentExtractionRun(second.document.id))!.pagesExpected).toBe(5);
+    expect((await getCurrentExtractionRun(first.document.id))!.id).toBe(first.runId);
   });
 
   it('supersedes the previous reading on reprocess without destroying it', async () => {
@@ -598,13 +598,13 @@ describe('re-importing', () => {
     const reprocessed = await enqueueExtraction(document.id, { force: true });
 
     expect(reprocessed.run.id).not.toBe(runId);
-    const history = listExtractionRuns(document.id);
+    const history = await listExtractionRuns(document.id);
     expect(history).toHaveLength(2);
     const previous = history.find((run) => run.id === runId)!;
     expect(previous.supersededByRunId).toBe(reprocessed.run.id);
     // The superseded run keeps its blocks, so an old audit still resolves.
-    expect(listBlocks(runId).length).toBeGreaterThan(0);
-    expect(getCurrentExtractionRun(document.id)!.id).toBe(reprocessed.run.id);
+    expect((await listBlocks(runId)).length).toBeGreaterThan(0);
+    expect((await getCurrentExtractionRun(document.id))!.id).toBe(reprocessed.run.id);
   });
 
   it('always leaves exactly one current reading, whatever order two readings finish in', async () => {
@@ -613,24 +613,24 @@ describe('re-importing', () => {
     // The out-of-order case: an older run reaches its verdict after a newer one.
     // Superseding "every other run" here would have the two cancel each other
     // out and leave the document with no current reading at all.
-    const later = createExtractionRun({
+    const later = await createExtractionRun({
       documentId: document.id,
       projectId: fixture.project.id,
       pipelineVersion: 'test',
       status: 'READY',
     });
-    supersedePreviousRuns(document.id, later.id);
-    supersedePreviousRuns(document.id, runId);
+    await supersedePreviousRuns(document.id, later.id);
+    await supersedePreviousRuns(document.id, runId);
 
-    const current = getCurrentExtractionRun(document.id);
+    const current = await getCurrentExtractionRun(document.id);
     expect(current).not.toBeNull();
     expect(current!.id).toBe(later.id);
-    expect(listExtractionRuns(document.id).filter((run) => run.supersededByRunId === null))
+    expect((await listExtractionRuns(document.id)).filter((run) => run.supersededByRunId === null))
       .toHaveLength(1);
   });
 
   it('shares one reading when an ingest and an import ask for the same document at once', async () => {
-    const imported = importProjectSource({
+    const imported = await importProjectSource({
       projectId: fixture.project.id,
       originalFilename: 'working notes.txt',
       contents: Buffer.from(
@@ -650,9 +650,9 @@ describe('re-importing', () => {
     });
     await whenExtractionIdle();
 
-    expect(getCurrentExtractionRun(imported.documentId!)).not.toBeNull();
+    expect(await getCurrentExtractionRun(imported.documentId!)).not.toBeNull();
     expect(report.extractionStatus).toMatch(/READY/);
-    expect(listExtractionRuns(imported.documentId!)).toHaveLength(1);
+    expect(await listExtractionRuns(imported.documentId!)).toHaveLength(1);
   });
 });
 
@@ -663,7 +663,7 @@ describe('re-importing', () => {
 describe('provenance', () => {
   it('keeps page boundaries and character offsets on every block', async () => {
     const { runId } = await importAndRead('World Model v1.pdf', multiPagePdf(4));
-    const blocks = listBlocks(runId);
+    const blocks = await listBlocks(runId);
 
     // Block indexes are dense and ordered, and pages never go backwards.
     expect(blocks.map((block) => block.blockIndex)).toEqual(blocks.map((_block, index) => index));
@@ -680,9 +680,9 @@ describe('provenance', () => {
 
   it('gives every chunk a page range and block range that match its blocks', async () => {
     const { runId } = await importAndRead('World Model v1.pdf', multiPagePdf(4));
-    const blocks = listBlocks(runId);
+    const blocks = await listBlocks(runId);
 
-    for (const chunk of listChunks(runId)) {
+    for (const chunk of await listChunks(runId)) {
       const members = blocks.filter(
         (block) => block.blockIndex >= chunk.blockStart && block.blockIndex <= chunk.blockEnd,
       );
@@ -731,7 +731,7 @@ describe('normalization', () => {
     ].join('\n');
     const { runId } = await importAndRead('World Model v1.txt', Buffer.from(source));
 
-    const blocks = listBlocks(runId);
+    const blocks = await listBlocks(runId);
     const touched = blocks.filter((block) => block.rawText !== block.normalizedText);
     expect(touched.length, 'the fixture should contain something worth normalizing').toBe(2);
 
@@ -760,7 +760,7 @@ describe('the extraction quality gate', () => {
     ];
     const { document } = await importAndRead('World Model v1.pdf', buildPdf(pages));
 
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.pagesReadable).toBe(3);
     expect(run.pagesExpected).toBe(10);
     expect(run.characterCount).toBeGreaterThan(THRESHOLDS.minDocumentCharacters);
@@ -772,7 +772,7 @@ describe('the extraction quality gate', () => {
 
   it('refuses to let a blocked document be used as audit evidence', async () => {
     const { document } = await importAndRead('World Model v1.pdf', buildPdf([imageOnlyPage()]));
-    const context = buildAuditContext({
+    const context = await buildAuditContext({
       mode: 'SINGLE_DOCUMENT',
       layerId: document.layerId!,
       documentId: document.id,
@@ -784,7 +784,7 @@ describe('the extraction quality gate', () => {
     expect(context.manifest.complete).toBe(false);
 
     // And retrieval says "not read", not "not present".
-    const retrieved = retrieveEvidence({ documentIds: [document.id], query: 'custody priority' });
+    const retrieved = await retrieveEvidence({ documentIds: [document.id], query: 'custody priority' });
     expect(retrieved.passages).toHaveLength(0);
     expect(retrieved.searched).toHaveLength(0);
     expect(retrieved.unreadable[0]?.documentId).toBe(document.id);
@@ -799,18 +799,18 @@ describe('a large document', () => {
   it('is chunked with overlap, and the audit context reports the staging', async () => {
     const { document, runId } = await importAndRead('World Model v1.pdf', multiPagePdf(40));
 
-    const run = getCurrentExtractionRun(document.id)!;
+    const run = (await getCurrentExtractionRun(document.id))!;
     expect(run.pagesExpected).toBe(40);
     expect(run.pagesReadable).toBe(40);
 
-    const chunks = listChunks(runId);
+    const chunks = await listChunks(runId);
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.map((chunk) => chunk.chunkIndex)).toEqual(chunks.map((_chunk, index) => index));
     expect(chunks[0]!.overlapPrev).toBe(0);
     expect(chunks[1]!.overlapPrev).toBeGreaterThan(0);
 
     // Chunks tile the content blocks: nothing falls between two of them.
-    const content = listBlocks(runId).filter(
+    const content = (await listBlocks(runId)).filter(
       (block) => block.blockType !== 'PAGE_HEADER' && block.blockType !== 'PAGE_FOOTER',
     );
     expect(chunks[0]!.blockStart).toBe(content[0]!.blockIndex);
@@ -822,7 +822,7 @@ describe('a large document', () => {
       expect(chunk.blockStart).toBe(next!.blockIndex);
     }
 
-    const context = buildAuditContext({
+    const context = await buildAuditContext({
       mode: 'SINGLE_DOCUMENT',
       layerId: document.layerId!,
       documentId: document.id,
@@ -839,10 +839,10 @@ describe('a large document', () => {
     const long = 'Custody transfers at the point of assignment rather than notice. '.repeat(200);
     const { runId } = await importAndRead('World Model v1.txt', Buffer.from(long));
 
-    const blocks = listBlocks(runId);
+    const blocks = await listBlocks(runId);
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.normalizedText.length).toBeGreaterThan(6_000);
-    const chunks = listChunks(runId);
+    const chunks = await listChunks(runId);
     expect(chunks).toHaveLength(1);
     expect(chunks[0]!.text).toContain(blocks[0]!.normalizedText);
   });
@@ -946,7 +946,7 @@ describe('structured findings', () => {
       expect(finding.chunkId).toBeTruthy();
       expect(finding.source).toBe('scripted-findings');
       // The anchor is a fact about the extraction, checkable against the blocks.
-      const block = listBlocks(runId).find(
+      const block = (await listBlocks(runId)).find(
         (entry) =>
           entry.pageNumber === finding.evidencePage &&
           entry.normalizedText.includes(finding.evidenceQuote),
@@ -981,7 +981,7 @@ describe('structured findings', () => {
 
   it('records nothing when the provider fails partway through', async () => {
     const { document, runId } = await importAndRead('World Model v1.pdf', multiPagePdf(40));
-    expect(listChunks(runId).length).toBeGreaterThan(1);
+    expect((await listChunks(runId)).length).toBeGreaterThan(1);
 
     const provider = new FindingsProvider([
       findingsReply([
@@ -994,19 +994,19 @@ describe('structured findings', () => {
       new Error('provider connection reset'),
     ]);
 
-    const before = getCurrentExtractionRun(document.id)!;
+    const before = (await getCurrentExtractionRun(document.id))!;
     await expect(extractDocumentFindings({ documentId: document.id, provider })).rejects.toThrow(
       /provider connection reset/,
     );
 
     // Nothing recorded, nothing moved.
-    expect(listDocumentFindings(runId)).toHaveLength(0);
-    const after = getCurrentExtractionRun(document.id)!;
+    expect(await listDocumentFindings(runId)).toHaveLength(0);
+    const after = (await getCurrentExtractionRun(document.id))!;
     expect(after.id).toBe(before.id);
     expect(after.status).toBe(before.status);
-    expect(getDocument(document.id)!.extractionStatus).toBe('READY');
+    expect((await getDocument(document.id))!.extractionStatus).toBe('READY');
     expect(
-      listEventsByEntity('DOCUMENT', document.id).some(
+      (await listEventsByEntity('DOCUMENT', document.id)).some(
         (event) => event.eventType === 'DOCUMENT_INDEXED',
       ),
     ).toBe(false);
@@ -1019,7 +1019,7 @@ describe('structured findings', () => {
     await expect(
       extractDocumentFindings({ documentId: document.id, provider }),
     ).rejects.toBeInstanceOf(FindingsExtractionError);
-    expect(listDocumentFindings(runId)).toHaveLength(0);
+    expect(await listDocumentFindings(runId)).toHaveLength(0);
   });
 
   it('rejects an invented finding type rather than guessing the closest one', async () => {
@@ -1064,44 +1064,44 @@ describe('structured findings', () => {
 
 describe('a restart during extraction', () => {
   it('marks the interrupted run INTERRUPTED rather than leaving it apparently ready', async () => {
-    const document = addDocument(fixture, 'World Model', 'v1', { contents: BODY.join(' ') });
-    const run = createExtractionRun({
+    const document = await addDocument(fixture, 'World Model', 'v1', { contents: BODY.join(' ') });
+    const run = await createExtractionRun({
       documentId: document.id,
       projectId: document.projectId,
       pipelineVersion: 'doc-understanding-1',
       status: 'EXTRACTING',
     });
-    updateDocument(document.id, { extractionStatus: 'EXTRACTING', extractionRunId: run.id });
+    await updateDocument(document.id, { extractionStatus: 'EXTRACTING', extractionRunId: run.id });
 
-    expect(recoverInterruptedExtractions()).toBe(1);
+    expect(await recoverInterruptedExtractions()).toBe(1);
 
-    const recovered = getCurrentExtractionRun(document.id)!;
+    const recovered = (await getCurrentExtractionRun(document.id))!;
     expect(recovered.status).toBe('INTERRUPTED');
     expect(recovered.error).toMatch(/interrupted/i);
     expect(recovered.completedAt).toBeTruthy();
-    expect(getDocument(document.id)!.extractionStatus).toBe('INTERRUPTED');
+    expect((await getDocument(document.id))!.extractionStatus).toBe('INTERRUPTED');
 
     // And it is not treated as evidence.
-    const retrieved = retrieveEvidence({ documentIds: [document.id], query: 'custody' });
+    const retrieved = await retrieveEvidence({ documentIds: [document.id], query: 'custody' });
     expect(retrieved.unreadable).toHaveLength(1);
   });
 
   it('re-reads interrupted and never-read documents at boot', async () => {
     const { document } = await importAndRead('World Model v1.pdf', multiPagePdf(3));
-    updateDocument(document.id, { extractionStatus: 'INTERRUPTED' });
+    await updateDocument(document.id, { extractionStatus: 'INTERRUPTED' });
 
-    expect(queueUnreadDocuments()).toBe(1);
+    expect(await queueUnreadDocuments()).toBe(1);
     await whenExtractionIdle();
 
-    expect(getDocument(document.id)!.extractionStatus).toBe('READY');
-    expect(getCurrentExtractionRun(document.id)!.pagesReadable).toBe(3);
+    expect((await getDocument(document.id))!.extractionStatus).toBe('READY');
+    expect((await getCurrentExtractionRun(document.id))!.pagesReadable).toBe(3);
   });
 
   it('does not re-read a document whose bytes and pipeline version are unchanged', async () => {
     const { document, runId } = await importAndRead('World Model v1.pdf', multiPagePdf(3));
     const again = await extractDocument(document.id);
     expect(again.run.id).toBe(runId);
-    expect(listExtractionRuns(document.id)).toHaveLength(1);
+    expect(await listExtractionRuns(document.id)).toHaveLength(1);
   });
 });
 
@@ -1114,7 +1114,7 @@ describe('a layer packet', () => {
     const readable = await importAndRead('World Model v1.pdf', multiPagePdf(3));
     const blocked = await importAndRead('World Model v1B.pdf', buildPdf([imageOnlyPage()]));
 
-    const context = buildAuditContext({ mode: 'LAYER_PACKET', layerId: readable.document.layerId! });
+    const context = await buildAuditContext({ mode: 'LAYER_PACKET', layerId: readable.document.layerId! });
     expect(context.artifacts).toHaveLength(2);
     expect(context.manifest.documents).toHaveLength(2);
     expect(context.manifest.complete).toBe(false);
@@ -1144,7 +1144,7 @@ describe('a layer packet', () => {
       claim('Claim priority is fixed at the point of notice, and assignment alone does not fix it.'),
     );
 
-    const retrieved = retrieveEvidence({
+    const retrieved = await retrieveEvidence({
       documentIds: [first.document.id, second.document.id],
       query: 'when is claim priority fixed',
     });
@@ -1160,7 +1160,7 @@ describe('a layer packet', () => {
     ).toBe(true);
 
     // Both are in the packet, so the auditor sees the conflict instead of one side.
-    const context = buildAuditContext({ mode: 'LAYER_PACKET', layerId: first.document.layerId! });
+    const context = await buildAuditContext({ mode: 'LAYER_PACKET', layerId: first.document.layerId! });
     expect(context.artifacts).toHaveLength(2);
     expect(context.artifacts.map((artifact) => artifact.text).join('\n')).toContain(
       'does not fix it',
@@ -1170,15 +1170,15 @@ describe('a layer packet', () => {
   it('excludes a superseded version from the packet but names it as provenance', async () => {
     const original = await importAndRead('World Model v1.pdf', multiPagePdf(3));
     // Re-importing the same version with different bytes supersedes the first.
-    const replacement = importFile({
+    const replacement = await importFile({
       projectId: fixture.project.id,
       originalFilename: 'World Model v1.pdf',
       contents: multiPagePdf(5),
     });
     await whenExtractionIdle();
 
-    expect(getDocument(original.document.id)!.status).toBe('SUPERSEDED');
-    const context = buildAuditContext({ mode: 'LAYER_PACKET', layerId: original.document.layerId! });
+    expect((await getDocument(original.document.id))!.status).toBe('SUPERSEDED');
+    const context = await buildAuditContext({ mode: 'LAYER_PACKET', layerId: original.document.layerId! });
 
     expect(context.artifacts.map((artifact) => artifact.documentId)).toEqual([
       replacement.documentId,
@@ -1189,9 +1189,9 @@ describe('a layer packet', () => {
     expect(context.manifest.complete).toBe(true);
 
     // The superseded document keeps its file and its reading.
-    const superseded = getDocument(original.document.id)!;
+    const superseded = (await getDocument(original.document.id))!;
     expect(fs.existsSync(path.resolve(DATA_ROOT, superseded.filesystemPath!))).toBe(true);
-    expect(getCurrentExtractionRun(superseded.id)!.status).toBe('READY');
+    expect((await getCurrentExtractionRun(superseded.id))!.status).toBe('READY');
   });
 });
 
@@ -1203,7 +1203,7 @@ describe('evidence citations', () => {
   it('round-trips from a retrieved passage to the raw source blocks', async () => {
     const { document, runId } = await importAndRead('World Model v1.pdf', multiPagePdf(4));
 
-    const retrieved = retrieveEvidence({
+    const retrieved = await retrieveEvidence({
       documentIds: [document.id],
       query: 'custody assignment claim priority',
     });
@@ -1214,7 +1214,7 @@ describe('evidence citations', () => {
     expect(passage.documentLabel).toBe(document.canonicalName);
     expect(passage.quote).toMatch(/custody/i);
 
-    const resolved = resolveCitation(passage.chunkId)!;
+    const resolved = (await resolveCitation(passage.chunkId))!;
     expect(resolved.document.id).toBe(document.id);
     expect(resolved.run!.id).toBe(runId);
     expect(resolved.blocks.length).toBeGreaterThan(0);
@@ -1230,7 +1230,7 @@ describe('evidence citations', () => {
   it('records a citation trail from an audit verdict back to real passages', async () => {
     const { document, runId } = await importAndRead('World Model v1.pdf', multiPagePdf(4));
 
-    const outcome = recordAudit({
+    const outcome = await recordAudit({
       projectId: fixture.project.id,
       layerId: document.layerId!,
       auditedDocumentId: document.id,
@@ -1263,14 +1263,14 @@ describe('evidence citations', () => {
       ],
     });
 
-    const written = recordAuditEvidence({
+    const written = await recordAuditEvidence({
       audit: outcome.audit,
       documentIds: [document.id],
       verdictQuery: 'custody claim priority boundary',
     });
     expect(written).toBeGreaterThan(0);
 
-    const evidence = listAuditEvidence(outcome.audit.id);
+    const evidence = await listAuditEvidence(outcome.audit.id);
     const gapId = outcome.audit.gaps[0]!.id;
     const forGap = evidence.filter((entry) => entry.gapId === gapId);
     expect(forGap.length).toBeGreaterThan(0);
@@ -1280,7 +1280,7 @@ describe('evidence citations', () => {
       expect(entry.documentLabel).toBe(document.canonicalName);
       expect(entry.pageNumber).not.toBeNull();
       // Every citation resolves to real source text, which is the whole point.
-      const resolved = resolveCitation(entry.chunkId!)!;
+      const resolved = (await resolveCitation(entry.chunkId!))!;
       expect(resolved.document.id).toBe(document.id);
       expect(resolved.blocks.length).toBeGreaterThan(0);
       const source = resolved.blocks.map((block) => block.text).join(' ');
@@ -1291,7 +1291,7 @@ describe('evidence citations', () => {
 
   it('cites nothing rather than something invented when no passage matches', async () => {
     const { document } = await importAndRead('World Model v1.pdf', multiPagePdf(2));
-    const outcome = recordAudit({
+    const outcome = await recordAudit({
       projectId: fixture.project.id,
       layerId: document.layerId!,
       auditedDocumentId: document.id,
@@ -1314,20 +1314,20 @@ describe('evidence citations', () => {
       gaps: [],
     });
 
-    const written = recordAuditEvidence({
+    const written = await recordAuditEvidence({
       audit: outcome.audit,
       documentIds: [document.id],
       verdictQuery: 'securitisation waterfall tranche subordination',
     });
     expect(written).toBe(0);
-    expect(listAuditEvidence(outcome.audit.id)).toHaveLength(0);
+    expect(await listAuditEvidence(outcome.audit.id)).toHaveLength(0);
   });
 
   it('distinguishes "the document does not say this" from "I never read it"', async () => {
     const read = await importAndRead('World Model v1.pdf', multiPagePdf(2));
-    const unread = addDocument(fixture, 'World Model', 'v1B', { contents: BODY.join(' ') });
+    const unread = await addDocument(fixture, 'World Model', 'v1B', { contents: BODY.join(' ') });
 
-    const retrieved = retrieveEvidence({
+    const retrieved = await retrieveEvidence({
       documentIds: [read.document.id, unread.id],
       query: 'securitisation waterfall tranche',
     });
@@ -1349,9 +1349,9 @@ describe('a failed extraction', () => {
     // Import first, so what the assertions isolate is the failed reading rather
     // than the arrival of a document — importing one is supposed to move state.
     const { document } = await importAndRead('World Model v1.pdf', multiPagePdf(3));
-    const layer = fixture.layerByName('World Model');
-    const before = computeLayerState(layer.id);
-    const eventsBefore = listEvents(fixture.project.id, 500).length;
+    const layer = await fixture.layerByName('World Model');
+    const before = await computeLayerState(layer.id);
+    const eventsBefore = (await listEvents(fixture.project.id, 500)).length;
 
     fs.writeFileSync(
       path.resolve(DATA_ROOT, document.filesystemPath!),
@@ -1359,8 +1359,8 @@ describe('a failed extraction', () => {
     );
     await enqueueExtraction(document.id, { force: true });
 
-    const after = computeLayerState(layer.id);
-    expect(getCurrentExtractionRun(document.id)!.status).toBe('BLOCKED');
+    const after = await computeLayerState(layer.id);
+    expect((await getCurrentExtractionRun(document.id))!.status).toBe('BLOCKED');
 
     // The layer did not advance, freeze, or acquire a verdict.
     expect(before.status).toBe('AUDIT_READY');
@@ -1379,14 +1379,14 @@ describe('a failed extraction', () => {
 
     // And the planner leads with that, rather than a generic "resolve what is
     // blocking this layer" the user cannot act on.
-    const plan = buildPlan(fixture.project.id);
+    const plan = await buildPlan(fixture.project.id);
     expect(plan.nextBestAction?.title).toMatch(/reprocess or replace/i);
     expect(plan.nextBestAction?.title).toContain(document.canonicalName);
     expect(plan.nextBestAction?.bucket).toBe('BLOCKED');
     expect(plan.nextBestAction?.actionType).toBe('RECONCILE');
 
     // The only new events are about the document, never about the layer.
-    const now = listEvents(fixture.project.id, 500);
+    const now = await listEvents(fixture.project.id, 500);
     const added = now.slice(0, now.length - eventsBefore);
     expect(added.length).toBeGreaterThan(0);
     expect(added.every((event: { eventType: string }) => !event.eventType.startsWith('LAYER_'))).toBe(
@@ -1399,7 +1399,7 @@ describe('a failed extraction', () => {
 
   it('leaves the previous reading in place when a reprocess cannot read the file', async () => {
     const { document, runId } = await importAndRead('World Model v1.pdf', multiPagePdf(3));
-    expect(getCurrentExtractionRun(document.id)!.status).toBe('READY');
+    expect((await getCurrentExtractionRun(document.id))!.status).toBe('READY');
 
     // The file is replaced on disk by something unreadable, then reprocessed.
     fs.writeFileSync(
@@ -1410,9 +1410,9 @@ describe('a failed extraction', () => {
 
     expect(result.quality.status).toBe('BLOCKED');
     // The old run and its blocks survive, so an audit recorded against it still resolves.
-    const previous = listExtractionRuns(document.id).find((run) => run.id === runId)!;
+    const previous = (await listExtractionRuns(document.id)).find((run) => run.id === runId)!;
     expect(previous.status).toBe('READY');
-    expect(listBlocks(runId).length).toBeGreaterThan(0);
+    expect((await listBlocks(runId)).length).toBeGreaterThan(0);
     expect(previous.supersededByRunId).toBe(result.run.id);
   });
 });

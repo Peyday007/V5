@@ -66,8 +66,8 @@ export interface RuntimeProjectState {
  * reader never sees a half-written document and a crash mid-write leaves the
  * previous snapshot intact.
  */
-export function writeProjectState(projectId: string): RuntimeProjectState {
-  const state = buildProjectState(projectId);
+export async function writeProjectState(projectId: string): Promise<RuntimeProjectState> {
+  const state = await buildProjectState(projectId);
   const directory = path.dirname(PROJECT_STATE_FILE);
   fs.mkdirSync(RUNTIME_ROOT, { recursive: true });
   if (path.resolve(directory) !== path.resolve(RUNTIME_ROOT)) {
@@ -115,15 +115,15 @@ export function readProjectState(): RuntimeProjectState | null {
 }
 
 /** Assemble the snapshot from live database state (no filesystem writes). */
-function buildProjectState(projectId: string): RuntimeProjectState {
-  const project = getProject(projectId);
+async function buildProjectState(projectId: string): Promise<RuntimeProjectState> {
+  const project = await getProject(projectId);
   if (!project) throw new Error(`Unknown project: ${projectId}`);
 
   const report = getMigrationReport();
-  const plan = buildPlan(projectId);
-  const layerNames = new Map(listLayers(projectId).map((layer) => [layer.id, layer.name]));
-  const documents = listDocuments(projectId);
-  const activeRuns = listActiveRuns(projectId);
+  const plan = await buildPlan(projectId);
+  const layerNames = new Map((await listLayers(projectId)).map((layer) => [layer.id, layer.name]));
+  const documents = await listDocuments(projectId);
+  const activeRuns = await listActiveRuns(projectId);
 
   return {
     generatedAt: nowIso(),

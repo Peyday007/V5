@@ -75,11 +75,11 @@ import { whenExtractionIdle } from '../server/services/documents/queue.ts';
 
 let fixture: TestProject;
 
-beforeEach(() => {
-  fixture = freshProject();
+beforeEach(async () => {
+  fixture = await freshProject();
 });
-afterEach(() => {
-  teardown();
+afterEach(async () => {
+  await teardown();
 });
 
 // ---------------------------------------------------------------------------
@@ -425,8 +425,8 @@ class ScriptedWorker implements AIProvider {
 
 async function run(script: Script = {}) {
   const worker = new ScriptedWorker(script);
-  const orchestration = startResearch({
-    layerId: fixture.layerByName('World Model').id,
+  const orchestration = await startResearch({
+    layerId: (await fixture.layerByName('World Model')).id,
     title: 'How custody transfer is recognised',
     assignment: 'Establish how custody transfer is recognised across distressed asset classes.',
   });
@@ -443,7 +443,7 @@ describe('an assignment is decomposed before anything is researched', () => {
   it('plans bounded fragments, each with its own brief and evidence bar', async () => {
     const { id, worker } = await run();
 
-    const fragments = currentFragments(id);
+    const fragments = await currentFragments(id);
     expect(fragments.length).toBeGreaterThanOrEqual(5);
     for (const fragment of fragments) {
       expect(fragment.question.length).toBeGreaterThan(0);
@@ -520,8 +520,8 @@ describe('the evidence gate', () => {
       verification: { 'fragment-1': [verification(2)] },
     });
 
-    const fragment = currentFragments(id).find((entry) => entry.fragmentKey === 'fragment-1')!;
-    const ledger = listClaims(id).filter((claim) => claim.fragmentId === fragment.id);
+    const fragment = (await currentFragments(id)).find((entry) => entry.fragmentKey === 'fragment-1')!;
+    const ledger = (await listClaims(id)).filter((claim) => claim.fragmentId === fragment.id);
     const unsourced = ledger.find((claim) => claim.claim === 'Unsourced assertion.')!;
     expect(unsourced.sourced).toBe(false);
     expect(unsourced.accepted).toBe(false);
@@ -538,8 +538,8 @@ describe('the evidence gate', () => {
         ],
       },
     });
-    const fragment = currentFragments(id).find((entry) => entry.fragmentKey === 'fragment-1')!;
-    const rejected = listClaims(id).find(
+    const fragment = (await currentFragments(id)).find((entry) => entry.fragmentKey === 'fragment-1')!;
+    const rejected = (await listClaims(id)).find(
       (claim) => claim.fragmentId === fragment.id && claim.claim === 'A',
     )!;
     expect(rejected.accepted).toBe(false);
@@ -553,8 +553,8 @@ describe('the evidence gate', () => {
         'fragment-1': [verification(2, { 0: { scope: { timeframe: 'MISMATCH' } } })],
       },
     });
-    const fragment = currentFragments(id).find((entry) => entry.fragmentKey === 'fragment-1')!;
-    const rejected = listClaims(id).find(
+    const fragment = (await currentFragments(id)).find((entry) => entry.fragmentKey === 'fragment-1')!;
+    const rejected = (await listClaims(id)).find(
       (claim) => claim.fragmentId === fragment.id && claim.claim === 'A',
     );
     expect(rejected!.accepted).toBe(false);
@@ -643,8 +643,8 @@ describe('the evidence gate', () => {
       },
       verification: { 'fragment-1': [verification(3)] },
     });
-    const fragment = currentFragments(id).find((entry) => entry.fragmentKey === 'fragment-1')!;
-    const derived = listClaims(id).find(
+    const fragment = (await currentFragments(id)).find((entry) => entry.fragmentKey === 'fragment-1')!;
+    const derived = (await listClaims(id)).find(
       (claim) => claim.fragmentId === fragment.id && claim.claim === 'Derived total.',
     )!;
     expect(derived.accepted).toBe(false);
@@ -663,7 +663,7 @@ describe('the evidence gate', () => {
       },
       verification: { 'fragment-1': [verification(2)] },
     });
-    const attempts = listFragments(id).filter((entry) => entry.fragmentKey === 'fragment-1');
+    const attempts = (await listFragments(id)).filter((entry) => entry.fragmentKey === 'fragment-1');
     const first = attempts[0]!;
     expect(first.integrityVerdict).toBe('PASS');
     expect(first.sufficiencyVerdict).toBe('INSUFFICIENT');
@@ -678,8 +678,8 @@ describe('the evidence gate', () => {
         'fragment-1': [verification(2, { 0: { contradiction: 'CONTESTED', note: '' } })],
       },
     });
-    const fragment = currentFragments(id).find((entry) => entry.fragmentKey === 'fragment-1')!;
-    const contested = listClaims(id).find(
+    const fragment = (await currentFragments(id)).find((entry) => entry.fragmentKey === 'fragment-1')!;
+    const contested = (await listClaims(id)).find(
       (claim) => claim.fragmentId === fragment.id && claim.claim === 'A',
     )!;
     expect(contested.contradictionState).toBe('CONTESTED');
@@ -711,7 +711,7 @@ describe('a fragment that fails its gate', () => {
       verification: { 'fragment-1': [verification(2), verification(2)] },
     });
 
-    const attempts = listFragments(id).filter((entry) => entry.fragmentKey === 'fragment-1');
+    const attempts = (await listFragments(id)).filter((entry) => entry.fragmentKey === 'fragment-1');
     expect(attempts.length).toBeGreaterThanOrEqual(2);
     expect(attempts[0]!.status).toBe('BLOCKED');
     expect(attempts[1]!.attempt).toBe(2);
@@ -739,7 +739,7 @@ describe('a fragment that fails its gate', () => {
       verification: { 'fragment-1': [verification(2), verification(2), verification(2), verification(2)] },
     });
 
-    const attempts = listFragments(id).filter((entry) => entry.fragmentKey === 'fragment-1');
+    const attempts = (await listFragments(id)).filter((entry) => entry.fragmentKey === 'fragment-1');
     expect(attempts).toHaveLength(MAX_FRAGMENT_ATTEMPTS);
     expect(attempts.at(-1)!.status).toBe('REJECTED');
     // Every attempt is still there with its own verdict: history, not garbage.
@@ -765,7 +765,7 @@ describe('a fragment that fails its gate', () => {
       verification: { 'fragment-1': [verification(3)] },
     });
 
-    const permitted = acceptedClaims(id);
+    const permitted = await acceptedClaims(id);
     expect(permitted.some((claim) => claim.claim === 'Rejected claim.')).toBe(false);
 
     const synthesisPrompt = worker.calls.find((call) => call.kind === 'SYNTHESIS')?.prompt ?? '';
@@ -781,7 +781,7 @@ describe('a fragment that fails its gate', () => {
       verification: { 'fragment-2': [verification(1)] },
     });
 
-    const fragments = currentFragments(id);
+    const fragments = await currentFragments(id);
     expect(fragments.filter((fragment) => fragment.status === 'ACCEPTED').length).toBeGreaterThan(0);
     expect(fragments.some((fragment) => fragment.status === 'REJECTED')).toBe(true);
     expect(outcome.documentId).toBeTruthy();
@@ -796,8 +796,8 @@ describe('compatible fragments share one job', () => {
   it('packs them into fewer jobs than fragments, losing none of them', async () => {
     const { id } = await run({ plan: plan(6) });
 
-    const fragments = currentFragments(id);
-    const jobs = listJobs(id);
+    const fragments = await currentFragments(id);
+    const jobs = await listJobs(id);
     expect(jobs.length).toBeGreaterThan(0);
     // Six fragments of one shared scope are not six conversations.
     expect(jobs.length).toBeLessThan(fragments.length);
@@ -821,7 +821,7 @@ describe('compatible fragments share one job', () => {
       verification: { 'fragment-2': [verification(1)] },
     });
 
-    const fragments = currentFragments(id);
+    const fragments = await currentFragments(id);
     const failed = fragments.find((entry) => entry.fragmentKey === 'fragment-2')!;
     const others = fragments.filter((entry) => entry.fragmentKey !== 'fragment-2');
 
@@ -833,11 +833,11 @@ describe('compatible fragments share one job', () => {
     // The claim that failed belongs to the fragment that made it — on every one
     // of its attempts — and none of it reached the fragments it rode with.
     const mine = new Set(
-      listFragments(id)
+      (await listFragments(id))
         .filter((entry) => entry.fragmentKey === 'fragment-2')
         .map((entry) => entry.id),
     );
-    const orphaned = listClaims(id).filter(
+    const orphaned = (await listClaims(id)).filter(
       (claim) => claim.claim === 'Everyone knows this.' && (claim.fragmentId === null || !mine.has(claim.fragmentId)),
     );
     expect(orphaned).toHaveLength(0);
@@ -850,16 +850,16 @@ describe('compatible fragments share one job', () => {
       verification: { 'fragment-2': [verification(1)] },
     });
 
-    const failed = listFragments(id).find(
+    const failed = (await listFragments(id)).find(
       (entry) => entry.fragmentKey === 'fragment-2' && entry.attempt === 1,
     )!;
-    const job = jobsForFragment(failed.id)[0]!;
+    const job = (await jobsForFragment(failed.id))[0]!;
     // The job itself ran fine. What differs is what each fragment got from it.
     expect(job.status).toBe('COMPLETE');
     expect(job.promptBytes).toBeGreaterThan(0);
     expect(job.outputBytes).toBeGreaterThan(0);
 
-    const outcomes = jobFragmentOutcomes(job.id);
+    const outcomes = await jobFragmentOutcomes(job.id);
     expect(outcomes.length).toBe(job.fragmentIds.length);
     const mine = outcomes.find((entry) => entry.fragmentId === failed.id)!;
     expect(mine.outcome).toBe('BLOCKED');
@@ -892,8 +892,8 @@ describe('a run that runs out of allowance', () => {
       },
       verification: { 'fragment-6': [verification(2)] },
     });
-    const orchestration = startResearch({
-      layerId: fixture.layerByName('World Model').id,
+    const orchestration = await startResearch({
+      layerId: (await fixture.layerByName('World Model')).id,
       title: 'How custody transfer is recognised',
       assignment: 'Establish how custody transfer is recognised across distressed asset classes.',
     });
@@ -906,16 +906,16 @@ describe('a run that runs out of allowance', () => {
 
     // Completed work is kept, and queued work stays queued.
     expect(paused.acceptedFragments).toBeGreaterThan(0);
-    const atPause = currentFragments(orchestration.id);
+    const atPause = await currentFragments(orchestration.id);
     expect(atPause.some((entry) => ['QUEUED', 'PLANNED'].includes(entry.status))).toBe(true);
     // Nothing was synthesized on a partial ledger.
     expect(paused.documentId).toBeNull();
 
-    const open = openQuotaPause(orchestration.id);
+    const open = await openQuotaPause(orchestration.id);
     expect(open).not.toBeNull();
     expect(open!.detail).toMatch(/allowance/i);
 
-    const events = listEventsByEntity('RUN', paused.orchestration.runId);
+    const events = await listEventsByEntity('RUN', paused.orchestration.runId);
     const pauseEvent = events.find((event) => event.eventType === 'RESEARCH_PAUSED_QUOTA')!;
     expect(pauseEvent).toBeTruthy();
     expect((pauseEvent.payload as { fragmentsPending: number }).fragmentsPending).toBeGreaterThan(0);
@@ -925,12 +925,12 @@ describe('a run that runs out of allowance', () => {
     const finished = await resumeAfterQuota(orchestration.id, { provider: worker });
     await whenExtractionIdle();
     expect(finished.orchestration.status).not.toBe('PAUSED_QUOTA');
-    expect(openQuotaPause(orchestration.id)).toBeNull();
+    expect(await openQuotaPause(orchestration.id)).toBeNull();
     expect(finished.acceptedFragments).toBeGreaterThan(paused.acceptedFragments);
 
     // A short allowance is never a reason to accept weaker evidence: the
     // one-publisher fragment is still refused.
-    const weak = currentFragments(orchestration.id).find(
+    const weak = (await currentFragments(orchestration.id)).find(
       (entry) => entry.fragmentKey === 'fragment-6',
     )!;
     expect(weak.status).not.toBe('ACCEPTED');
@@ -952,8 +952,8 @@ describe('nothing expensive happens before the plan is right', () => {
   /** Start an assignment that stops for review, and plan it. */
   async function planned(script: Script = {}) {
     const worker = new ScriptedWorker({ plan: plan(4), ...script });
-    const orchestration = startResearch({
-      layerId: fixture.layerByName('World Model').id,
+    const orchestration = await startResearch({
+      layerId: (await fixture.layerByName('World Model')).id,
       title: 'How custody transfer is recognised',
       assignment: 'Establish how custody transfer is recognised across distressed asset classes.',
       requireApproval: true,
@@ -967,11 +967,11 @@ describe('nothing expensive happens before the plan is right', () => {
 
     expect(outcome.orchestration.status).toBe('AWAITING_APPROVAL');
     // Planning happened; research did not.
-    expect(currentFragments(id).length).toBeGreaterThan(0);
+    expect((await currentFragments(id)).length).toBeGreaterThan(0);
     expect(worker.calls.filter((call) => call.kind === 'RESEARCH')).toHaveLength(0);
     expect(outcome.documentId).toBeNull();
 
-    const review = buildReview(id);
+    const review = await buildReview(id);
     expect(review.approvalRequired).toBe(true);
     // Brain's reading of the goal, in terms a person can correct.
     expect(review.interpretation.primaryQuestion).toMatch(/custody transfer/i);
@@ -992,23 +992,23 @@ describe('nothing expensive happens before the plan is right', () => {
 
   it('does not research a fragment the user removed', async () => {
     const { id } = await planned();
-    const target = buildReview(id).fragments[0]!.fragment.fragmentKey;
+    const target = (await buildReview(id)).fragments[0]!.fragment.fragmentKey;
 
-    const outcome = applyReviewDecisions(id, { removeFragments: [target] });
+    const outcome = await applyReviewDecisions(id, { removeFragments: [target] });
     expect(outcome.applied.join(' ')).toMatch(/will not be researched/i);
 
-    const removed = currentFragments(id).find((entry) => entry.fragmentKey === target)!;
+    const removed = (await currentFragments(id)).find((entry) => entry.fragmentKey === target)!;
     expect(removed.status).toBe('CANCELLED');
     expect(removed.cancelledReason).toMatch(/removed during review/i);
     // And it is not in any job the run would launch.
-    expect(buildReview(id).jobs.flatMap((job) => job.fragmentKeys)).not.toContain(target);
+    expect((await buildReview(id)).jobs.flatMap((job) => job.fragmentKeys)).not.toContain(target);
   });
 
   it('adds a requirement the user says the goal needs, and plans it', async () => {
     const { id } = await planned();
-    const before = buildReview(id);
+    const before = await buildReview(id);
 
-    const outcome = applyReviewDecisions(id, {
+    const outcome = await applyReviewDecisions(id, {
       addRequirements: [{ statement: 'Which regulator publishes the recognition rule?' }],
     });
     expect(outcome.applied.join(' ')).toMatch(/requirement\(s\) you added/i);
@@ -1022,7 +1022,7 @@ describe('nothing expensive happens before the plan is right', () => {
 
   it('records the correction to a boundary Brain read differently', async () => {
     const { id } = await planned();
-    const outcome = applyReviewDecisions(id, {
+    const outcome = await applyReviewDecisions(id, {
       boundary: { geography: 'United Kingdom', timeframe: '2024' },
     });
     expect(outcome.applied.join(' ')).toMatch(/boundary was corrected/i);
@@ -1032,10 +1032,10 @@ describe('nothing expensive happens before the plan is right', () => {
 
   it('runs only once approved, and says who let it run', async () => {
     const { id } = await planned();
-    expect(getOrchestration(id)!.approvedAt).toBeNull();
+    expect((await getOrchestration(id))!.approvedAt).toBeNull();
 
-    applyReviewDecisions(id, { approve: true, note: 'Checked the boundary and the gaps.' });
-    const approved = getOrchestration(id)!;
+    await applyReviewDecisions(id, { approve: true, note: 'Checked the boundary and the gaps.' });
+    const approved = (await getOrchestration(id))!;
     expect(approved.approvedAt).not.toBeNull();
     expect(approved.approvalNote).toMatch(/checked the boundary/i);
 
@@ -1049,12 +1049,12 @@ describe('nothing expensive happens before the plan is right', () => {
 
   it('keeps the plan inspectable even when automatic execution is turned on', async () => {
     const { id } = await planned();
-    applyReviewDecisions(id, { autoApprove: true, note: 'Run the rest without asking.' });
+    await applyReviewDecisions(id, { autoApprove: true, note: 'Run the rest without asking.' });
 
-    const orchestration = getOrchestration(id)!;
+    const orchestration = (await getOrchestration(id))!;
     expect(orchestration.autoApprove).toBe(true);
     // Automatic execution is a decision about approval, not about visibility.
-    const review = buildReview(id);
+    const review = await buildReview(id);
     expect(review.approvalRequired).toBe(false);
     expect(review.requirements.length).toBeGreaterThan(0);
     expect(review.fragments.length).toBeGreaterThan(0);
@@ -1071,25 +1071,25 @@ describe('synthesis and the audit handoff', () => {
     const { id, outcome } = await run();
 
     expect(outcome.documentId).toBeTruthy();
-    const document = getDocument(outcome.documentId!)!;
-    expect(document.layerId).toBe(fixture.layerByName('World Model').id);
+    const document = (await getDocument(outcome.documentId!))!;
+    expect(document.layerId).toBe((await fixture.layerByName('World Model')).id);
 
     const text = fs.readFileSync(path.resolve(DATA_ROOT, document.filesystemPath!), 'utf8');
     expect(text).toContain('# Layer report');
     expect(text).toContain('## Evidence ledger');
     // Every ledger entry resolves to a URL, which is the point of the ledger.
-    for (const claim of acceptedClaims(id)) {
+    for (const claim of await acceptedClaims(id)) {
       expect(text).toContain(claim.id);
       expect(text).toContain(claim.sourceUrl!);
     }
 
     expect(outcome.auditId).toBeTruthy();
     expect(outcome.verdict).toBe('PASS');
-    const orchestration = getOrchestration(id)!;
+    const orchestration = (await getOrchestration(id))!;
     expect(orchestration.status).toBe('COMPLETE');
     // The audit's own consequence, unchanged by this checkpoint: a passed audit
     // approves the run rather than merely completing it.
-    expect(['COMPLETE', 'APPROVED']).toContain(getRun(orchestration.runId)!.status);
+    expect(['COMPLETE', 'APPROVED']).toContain((await getRun(orchestration.runId))!.status);
   });
 
   it('refuses to write a report when nothing cleared the gate', async () => {
@@ -1099,16 +1099,16 @@ describe('synthesis and the audit handoff', () => {
     });
 
     expect(outcome.documentId).toBeNull();
-    const orchestration = getOrchestration(id)!;
+    const orchestration = (await getOrchestration(id))!;
     expect(orchestration.status).toBe('NEEDS_HUMAN');
     expect(orchestration.failureReason).toMatch(/nothing to synthesize/i);
-    expect(getRun(orchestration.runId)!.status).toBe('BLOCKED');
+    expect((await getRun(orchestration.runId))!.status).toBe('BLOCKED');
   });
 
   it('records the assignment as an event trail on the run', async () => {
     const { id } = await run();
-    const orchestration = getOrchestration(id)!;
-    const events = listEventsByEntity('RUN', orchestration.runId).map((event) => event.eventType);
+    const orchestration = (await getOrchestration(id))!;
+    const events = (await listEventsByEntity('RUN', orchestration.runId)).map((event) => event.eventType);
     expect(events).toContain('RESEARCH_QUEUED');
     expect(events).toContain('RESEARCH_PLANNED');
     expect(events).toContain('RESEARCH_COMPLETED');
@@ -1124,7 +1124,7 @@ describe('the packet is checked against the whole goal before a word is written'
     const { id, outcome } = await run({ plan: plan(4) });
     expect(outcome.documentId).toBeTruthy();
 
-    const coverage = assessPacket({ orchestrationId: id, projectId: fixture.project.id });
+    const coverage = await assessPacket({ orchestrationId: id, projectId: fixture.project.id });
     const named = coverage.checks.map((check) => check.check);
     // The checks the spec asks for are all actually run.
     expect(named).toContain('Mandatory requirements are covered');
@@ -1145,10 +1145,10 @@ describe('the packet is checked against the whole goal before a word is written'
     });
 
     expect(outcome.documentId).toBeNull();
-    const orchestration = getOrchestration(id)!;
+    const orchestration = (await getOrchestration(id))!;
     expect(orchestration.status).toBe('NEEDS_HUMAN');
 
-    const coverage = assessPacket({ orchestrationId: id, projectId: fixture.project.id });
+    const coverage = await assessPacket({ orchestrationId: id, projectId: fixture.project.id });
     expect(coverage.ok).toBe(false);
     const mandatory = coverage.checks.find(
       (check) => check.check === 'Mandatory requirements are covered',
@@ -1160,13 +1160,13 @@ describe('the packet is checked against the whole goal before a word is written'
 
   it('plans fragments for what is missing, not for what already worked', async () => {
     const { id } = await run({ plan: plan(3) });
-    const before = currentFragments(id).length;
+    const before = (await currentFragments(id)).length;
 
     // A coverage failure naming one requirement produces work for that
     // requirement alone.
-    const coverage = assessPacket({ orchestrationId: id, projectId: fixture.project.id });
-    const requirementId = listRequirements(id)[0]!.id;
-    const created = planCoverageFragments({
+    const coverage = await assessPacket({ orchestrationId: id, projectId: fixture.project.id });
+    const requirementId = (await listRequirements(id))[0]!.id;
+    const created = await planCoverageFragments({
       orchestrationId: id,
       coverage: {
         ...coverage,
@@ -1187,12 +1187,12 @@ describe('the packet is checked against the whole goal before a word is written'
     expect(created[0]!.requirementIds).toEqual([requirementId]);
     expect(created[0]!.whyExistingInsufficient).toMatch(/failed this check before synthesis/i);
     // Nothing that already succeeded was queued again.
-    expect(currentFragments(id).length).toBe(before + 1);
+    expect((await currentFragments(id)).length).toBe(before + 1);
   });
 
   it('lets the report cite the archive and the new research on one standard', async () => {
     const { id } = await run({ plan: plan(3) });
-    const evidence = packetEvidence({ orchestrationId: id, projectId: fixture.project.id });
+    const evidence = await packetEvidence({ orchestrationId: id, projectId: fixture.project.id });
 
     // Every claim offered to the synthesis was accepted, and each resolves to a
     // passage in a source.
@@ -1216,7 +1216,7 @@ describe('the packet is checked against the whole goal before a word is written'
 describe('the job survives what happens to it', () => {
   it('writes every pass down with its prompt and its raw reply', async () => {
     const { id } = await run();
-    const passes = listPasses(id);
+    const passes = await listPasses(id);
     expect(passes.length).toBeGreaterThan(5);
     for (const pass of passes) {
       expect(pass.prompt.length).toBeGreaterThan(0);
@@ -1235,19 +1235,19 @@ describe('the job survives what happens to it', () => {
 
   it('keeps the raw reply of a pass it refused to act on', async () => {
     const worker = new ScriptedWorker({ plan: { boundary: { primaryQuestion: 'x' }, requirements: [] } });
-    const orchestration = startResearch({
-      layerId: fixture.layerByName('World Model').id,
+    const orchestration = await startResearch({
+      layerId: (await fixture.layerByName('World Model')).id,
       assignment: 'Anything',
     });
     await expect(runOrchestration(orchestration.id, { provider: worker })).rejects.toThrow(
       /will not act on/i,
     );
 
-    const [pass] = listPasses(orchestration.id);
+    const [pass] = await listPasses(orchestration.id);
     expect(pass!.status).toBe('FAILED');
     expect(pass!.rawResponse).toContain('primaryQuestion');
     expect(pass!.error).toMatch(/restated rather than analysed|requirements/i);
-    expect(getOrchestration(orchestration.id)!.status).toBe('FAILED');
+    expect((await getOrchestration(orchestration.id))!.status).toBe('FAILED');
   });
 
   it('stops when cancelled, and says so instead of failing', async () => {
@@ -1258,23 +1258,25 @@ describe('the job survives what happens to it', () => {
         started += 1;
       },
     });
-    const orchestration = startResearch({
-      layerId: fixture.layerByName('World Model').id,
+    const orchestration = await startResearch({
+      layerId: (await fixture.layerByName('World Model')).id,
       assignment: 'Anything',
     });
 
-    const promise = runOrchestration(orchestration.id, {
+    // The handle is kept rather than awaited here: the assertion below is about
+    // how it settles.
+    const promise: Promise<unknown> = runOrchestration(orchestration.id, {
       provider: worker,
-      onProgress: (progress) => {
+      onProgress: async (progress) => {
         // Cancel as soon as the first fragment starts.
         if (progress.phase === 'RESEARCHING' && progress.index === 0) {
-          cancelResearch(orchestration.id, 'Changed my mind.');
+          await cancelResearch(orchestration.id, 'Changed my mind.');
         }
       },
     });
     await expect(promise).rejects.toThrow(/cancelled/i);
 
-    const cancelled = getOrchestration(orchestration.id)!;
+    const cancelled = (await getOrchestration(orchestration.id))!;
     expect(cancelled.status).toBe('CANCELLED');
     expect(cancelled.cancelReason).toBe('Changed my mind.');
     expect(cancelled.documentId).toBeNull();
@@ -1282,13 +1284,13 @@ describe('the job survives what happens to it', () => {
     expect(started).toBeLessThan(5);
   });
 
-  it('closes out a job the process died in the middle of', () => {
-    const orchestration = startResearch({
-      layerId: fixture.layerByName('World Model').id,
+  it('closes out a job the process died in the middle of', async () => {
+    const orchestration = await startResearch({
+      layerId: (await fixture.layerByName('World Model')).id,
       assignment: 'Anything',
     });
-    updateOrchestration(orchestration.id, { status: 'RESEARCHING' });
-    startPass({
+    await updateOrchestration(orchestration.id, { status: 'RESEARCHING' });
+    await startPass({
       orchestrationId: orchestration.id,
       passKey: 'BROAD_SCAN',
       ordinal: 2,
@@ -1297,12 +1299,12 @@ describe('the job survives what happens to it', () => {
       promptSha256: 'a'.repeat(64),
     });
 
-    expect(recoverInterruptedResearch()).toBe(1);
+    expect(await recoverInterruptedResearch()).toBe(1);
 
-    const recovered = getOrchestration(orchestration.id)!;
+    const recovered = (await getOrchestration(orchestration.id))!;
     expect(recovered.status).toBe('INTERRUPTED');
     expect(recovered.failureReason).toMatch(/interrupted/i);
-    const passes = listPasses(orchestration.id);
+    const passes = await listPasses(orchestration.id);
     expect(passes[0]!.status).toBe('FAILED');
     expect(passes[0]!.error).toMatch(/server stopped/i);
   });
@@ -1312,35 +1314,35 @@ describe('the job survives what happens to it', () => {
     // purpose. Recovery is for work that was interrupted, and treating a
     // deliberate stop as a crash would restart research the user never
     // approved, or spend an allowance that is not there.
-    const waiting = startResearch({
-      layerId: fixture.layerByName('World Model').id,
+    const waiting = await startResearch({
+      layerId: (await fixture.layerByName('World Model')).id,
       assignment: 'Waiting for a person.',
       requireApproval: true,
     });
-    updateOrchestration(waiting.id, { status: 'AWAITING_APPROVAL' });
+    await updateOrchestration(waiting.id, { status: 'AWAITING_APPROVAL' });
 
-    const paused = startResearch({
-      layerId: fixture.layerByName('Taxonomy').id,
+    const paused = await startResearch({
+      layerId: (await fixture.layerByName('Taxonomy')).id,
       assignment: 'Out of allowance.',
     });
-    updateOrchestration(paused.id, { status: 'PAUSED_QUOTA' });
+    await updateOrchestration(paused.id, { status: 'PAUSED_QUOTA' });
 
-    expect(recoverInterruptedResearch()).toBe(0);
-    expect(getOrchestration(waiting.id)!.status).toBe('AWAITING_APPROVAL');
-    expect(getOrchestration(paused.id)!.status).toBe('PAUSED_QUOTA');
+    expect(await recoverInterruptedResearch()).toBe(0);
+    expect((await getOrchestration(waiting.id))!.status).toBe('AWAITING_APPROVAL');
+    expect((await getOrchestration(paused.id))!.status).toBe('PAUSED_QUOTA');
   });
 
   it('stops reporting a job as running once the process that owned it is gone', async () => {
-    const orchestration = startResearch({
-      layerId: fixture.layerByName('World Model').id,
+    const orchestration = await startResearch({
+      layerId: (await fixture.layerByName('World Model')).id,
       assignment: 'Anything',
     });
-    updateOrchestration(orchestration.id, { status: 'RESEARCHING' });
-    const [fragment] = createFragments([
+    await updateOrchestration(orchestration.id, { status: 'RESEARCHING' });
+    const [fragment] = await createFragments([
       {
         orchestrationId: orchestration.id,
         projectId: fixture.project.id,
-        layerId: fixture.layerByName('World Model').id,
+        layerId: (await fixture.layerByName('World Model')).id,
         fragmentIndex: 0,
         fragmentKey: 'fragment-1',
         question: 'q',
@@ -1353,24 +1355,24 @@ describe('the job survives what happens to it', () => {
         status: 'RUNNING',
       },
     ]);
-    const job = createJob({
+    const job = await createJob({
       orchestrationId: orchestration.id,
       projectId: fixture.project.id,
       rationale: 'One fragment.',
       provider: 'mock',
       fragmentIds: [fragment!.id],
     });
-    updateJob(job.id, { status: 'RUNNING', startedAt: new Date().toISOString() });
+    await updateJob(job.id, { status: 'RUNNING', startedAt: new Date().toISOString() });
 
-    expect(recoverInterruptedResearch()).toBe(1);
+    expect(await recoverInterruptedResearch()).toBe(1);
 
     // An external process this instance has no handle on cannot be resumed and
     // must not be left claiming to be running.
-    const after = getJob(job.id)!;
+    const after = (await getJob(job.id))!;
     expect(after.status).toBe('FAILED');
     expect(after.failureReason).toMatch(/never received it/i);
     // The fragment goes back to the queue, so the work itself is not lost.
-    expect(currentFragments(orchestration.id)[0]!.status).toBe('QUEUED');
+    expect((await currentFragments(orchestration.id))[0]!.status).toBe('QUEUED');
   });
 
   it('does not pay twice for a pass that already completed', async () => {
@@ -1391,18 +1393,20 @@ describe('the job survives what happens to it', () => {
     // Attributed by the job's own title, which travels with every call: if the
     // queue were concurrent, the two jobs' calls would interleave.
     const worker = new ScriptedWorker({});
-    const a = startResearch({
-      layerId: fixture.layerByName('World Model').id,
+    const a = await startResearch({
+      layerId: (await fixture.layerByName('World Model')).id,
       title: 'JOB-A',
       assignment: 'A',
     });
-    const b = startResearch({
-      layerId: fixture.layerByName('Taxonomy').id,
+    const b = await startResearch({
+      layerId: (await fixture.layerByName('Taxonomy')).id,
       title: 'JOB-B',
       assignment: 'B',
     });
-    const first = enqueueResearch(a.id, { provider: worker });
-    const second = enqueueResearch(b.id, { provider: worker });
+    // Both handles are kept unawaited: the queue depth below is the assertion,
+    // and awaiting either here would drain the queue before it could be read.
+    const first: Promise<unknown> = enqueueResearch(a.id, { provider: worker });
+    const second: Promise<unknown> = enqueueResearch(b.id, { provider: worker });
     expect(researchQueueDepth()).toBe(2);
 
     await Promise.all([first, second]);
@@ -1413,8 +1417,8 @@ describe('the job survives what happens to it', () => {
     // Every call for the first assignment precedes every call for the second.
     expect(order.lastIndexOf('A')).toBeLessThan(order.indexOf('B'));
     expect(researchQueueDepth()).toBe(0);
-    expect(getOrchestration(a.id)!.status).toBe('COMPLETE');
-    expect(getOrchestration(b.id)!.status).toBe('COMPLETE');
+    expect((await getOrchestration(a.id))!.status).toBe('COMPLETE');
+    expect((await getOrchestration(b.id))!.status).toBe('COMPLETE');
   });
 });
 
@@ -1442,10 +1446,10 @@ describe('what the worker returns is data', () => {
       verification: { 'fragment-1': [verification(2)] },
     });
 
-    const injected = listClaims(id).find((claim) => claim.claim.startsWith('Ignore all'))!;
+    const injected = (await listClaims(id)).find((claim) => claim.claim.startsWith('Ignore all'))!;
     expect(injected.accepted).toBe(false);
     // And nothing it asked for happened.
-    const layer = fixture.layerByName('World Model');
+    const layer = await fixture.layerByName('World Model');
     expect(layer.status).not.toBe('FROZEN');
   });
 });

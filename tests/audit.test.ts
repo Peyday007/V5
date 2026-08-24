@@ -31,11 +31,11 @@ import { getAuditProfile } from '../server/domain/auditProfile.ts';
 
 let fixture: TestProject;
 
-beforeEach(() => {
-  fixture = freshProject();
+beforeEach(async () => {
+  fixture = await freshProject();
 });
-afterEach(() => {
-  teardown();
+afterEach(async () => {
+  await teardown();
 });
 
 // ---------------------------------------------------------------------------
@@ -130,7 +130,7 @@ class ScriptedProvider implements AIProvider {
  * rather than raw bytes — an unread document is deliberately not auditable.
  */
 async function addReadable(layerName: string, version: string, extra = '') {
-  const document = addDocument(fixture, layerName, version, {
+  const document = await addDocument(fixture, layerName, version, {
     // Long enough to clear the quality gate's "essentially empty" floor, because
     // an audit of 170 characters is exactly what that floor exists to refuse.
     contents: [
@@ -157,7 +157,7 @@ async function auditDocument(layerName: string, version: string, script: Script)
   const document = await addReadable(layerName, version);
   return runDynamicAudit({
     mode: 'SINGLE_DOCUMENT',
-    layerId: fixture.layerByName(layerName).id,
+    layerId: (await fixture.layerByName(layerName)).id,
     documentId: document.id,
     provider: new ScriptedProvider(script),
   });
@@ -253,7 +253,7 @@ describe('gap ownership', () => {
     expect(outcome.audit.gaps[0]?.classification).toBe('OTHER_LAYER');
     // The handoff resolves to the real layer, not just a name in prose.
     expect(outcome.audit.gaps[0]?.owningLayerName).toBe('Qualification Logic');
-    expect(outcome.audit.gaps[0]?.owningLayerId).toBe(fixture.layerByName('Qualification Logic').id);
+    expect(outcome.audit.gaps[0]?.owningLayerId).toBe((await fixture.layerByName('Qualification Logic')).id);
     // Discovery is not kept open for it.
     expect(outcome.audit.targetedResearchRunsRequired).toBe(0);
     expect(outcome.researchCandidates).toHaveLength(0);
@@ -468,7 +468,7 @@ describe('full-layer packet audit', () => {
   it('reads every completed document and can clear the layer for synthesis', async () => {
     const packet = ['v1', 'v1B', 'v1C', 'v1D'];
     for (const version of packet) await addReadable('Decision Routing Rules', version);
-    const layer = fixture.layerByName('Decision Routing Rules');
+    const layer = await fixture.layerByName('Decision Routing Rules');
     const provider = new ScriptedProvider({
       judge: judge({
         verdict: 'READY_FOR_SYNTHESIS',
@@ -497,15 +497,15 @@ describe('full-layer packet audit', () => {
     expect(judgePrompt).toContain('AUDIT MODE: LAYER_PACKET');
 
     // And the planner now says what to do next.
-    const plan = buildPlan(fixture.project.id);
+    const plan = await buildPlan(fixture.project.id);
     expect(plan.nextBestActionText.length).toBeGreaterThan(0);
   });
 
   it('freezes the layer when the canonical synthesis passes its final audit', async () => {
     for (const version of ['v1', 'v1B']) await addReadable('Monetization Logic', version);
     const canonical = await addReadable('Monetization Logic', 'v3.1');
-    updateDocument(canonical.id, { documentType: 'SYNTHESIS' });
-    const layer = fixture.layerByName('Monetization Logic');
+    await updateDocument(canonical.id, { documentType: 'SYNTHESIS' });
+    const layer = await fixture.layerByName('Monetization Logic');
 
     const outcome = await runDynamicAudit({
       mode: 'LAYER_PACKET',
@@ -522,15 +522,15 @@ describe('full-layer packet audit', () => {
 
     expect(outcome.audit.verdict).toBe('READY_TO_FREEZE');
     expect(outcome.layerState.status).toBe('FROZEN');
-    expect(computeLayerState(layer.id).canonicalName).toBe('Monetization Logic v3.1');
+    expect((await computeLayerState(layer.id)).canonicalName).toBe('Monetization Logic v3.1');
   });
 });
 
 describe('zero-trust: invalid model output never moves the project', () => {
   async function expectNoStateChange(script: Script): Promise<void> {
     const document = await addReadable('Taxonomy', 'v1');
-    const layer = fixture.layerByName('Taxonomy');
-    const before = computeLayerState(layer.id).status;
+    const layer = await fixture.layerByName('Taxonomy');
+    const before = (await computeLayerState(layer.id)).status;
 
     await expect(
       runDynamicAudit({
@@ -541,9 +541,9 @@ describe('zero-trust: invalid model output never moves the project', () => {
       }),
     ).rejects.toBeInstanceOf(AuditFailure);
 
-    expect(computeLayerState(layer.id).status).toBe(before);
-    expect(listAuditsByLayer(layer.id)).toHaveLength(0);
-    expect(getDocument(document.id)?.status).toBe('COMPLETE');
+    expect((await computeLayerState(layer.id)).status).toBe(before);
+    expect(await listAuditsByLayer(layer.id)).toHaveLength(0);
+    expect((await getDocument(document.id))?.status).toBe('COMPLETE');
   }
 
   it('rejects a verdict that is not one of the nine', async () => {
@@ -615,7 +615,7 @@ describe('zero-trust: invalid model output never moves the project', () => {
 
   it('keeps the raw response of a failed pass for debugging', async () => {
     const document = await addReadable('Taxonomy', 'v1');
-    const layer = fixture.layerByName('Taxonomy');
+    const layer = await fixture.layerByName('Taxonomy');
     let failure: AuditFailure | null = null;
     try {
       await runDynamicAudit({
@@ -629,14 +629,14 @@ describe('zero-trust: invalid model output never moves the project', () => {
     }
     expect(failure).toBeInstanceOf(AuditFailure);
     expect(failure?.passKey).toBe('JUDGE');
-    const passes = listPipelinePasses(failure!.pipelineId);
+    const passes = await listPipelinePasses(failure!.pipelineId);
     expect(passes.some((pass) => pass.rawResponse?.includes('NONSENSE'))).toBe(true);
     expect(passes.some((pass) => !pass.ok)).toBe(true);
   });
 
   it('blocks rather than judges an artifact it cannot read', async () => {
-    const document = addDocument(fixture, 'Taxonomy', 'v1', { withFile: false });
-    const layer = fixture.layerByName('Taxonomy');
+    const document = await addDocument(fixture, 'Taxonomy', 'v1', { withFile: false });
+    const layer = await fixture.layerByName('Taxonomy');
     await expect(
       runDynamicAudit({
         mode: 'SINGLE_DOCUMENT',
@@ -649,14 +649,14 @@ describe('zero-trust: invalid model output never moves the project', () => {
 });
 
 describe('question safety still holds', () => {
-  it('asking whether something is ready to freeze does not freeze it', () => {
-    addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
-    const layer = fixture.layerByName('World Model');
-    handleChatMessage({
+  it('asking whether something is ready to freeze does not freeze it', async () => {
+    await addDocument(fixture, 'World Model', 'v3.1', { documentType: 'SYNTHESIS' });
+    const layer = await fixture.layerByName('World Model');
+    await handleChatMessage({
       projectId: fixture.project.id,
       content: 'Is World Model ready to freeze?',
     });
-    expect(computeLayerState(layer.id).status).not.toBe('FROZEN');
+    expect((await computeLayerState(layer.id)).status).not.toBe('FROZEN');
   });
 });
 
@@ -666,7 +666,7 @@ describe('the audit context', () => {
     const provider = new ScriptedProvider({});
     await runDynamicAudit({
       mode: 'SINGLE_DOCUMENT',
-      layerId: fixture.layerByName('Discovery Logic').id,
+      layerId: (await fixture.layerByName('Discovery Logic')).id,
       documentId: document.id,
       provider,
     });
@@ -684,13 +684,13 @@ describe('the audit context', () => {
   });
 
   it('marks oversized material for staged extraction instead of dropping it', async () => {
-    const big = addDocument(fixture, 'Taxonomy', 'v1B', {
+    const big = await addDocument(fixture, 'Taxonomy', 'v1B', {
       contents: Array.from({ length: 400 }, (_, i) => `Paragraph ${i} of a very long report.`).join('\n\n'),
     });
     await extractDocument(big.id);
-    const context = buildAuditContext({
+    const context = await buildAuditContext({
       mode: 'SINGLE_DOCUMENT',
-      layerId: fixture.layerByName('Taxonomy').id,
+      layerId: (await fixture.layerByName('Taxonomy')).id,
       documentId: big.id,
       contentBudget: 1_000,
     });

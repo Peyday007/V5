@@ -33,8 +33,8 @@ function maxAutoRedosFor(project: Project): number {
   return DEFAULT_VERSION_POLICY.maxAutoRedos;
 }
 
-function describeRun(run: ResearchRun): string {
-  const layer = run.layerId ? getLayer(run.layerId) : null;
+async function describeRun(run: ResearchRun): Promise<string> {
+  const layer = run.layerId ? await getLayer(run.layerId) : null;
   if (layer && run.targetVersion) return buildCanonicalName(layer.name, run.targetVersion);
   if (layer) return layer.name;
   return `run ${run.id}`;
@@ -45,11 +45,11 @@ function describeRun(run: ResearchRun): string {
  * Counts every prior attempt in the lineage, not just direct children, so a
  * chain of redos cannot reset the counter by re-parenting.
  */
-export function canAutoRedo(
+export async function canAutoRedo(
   parentRunId: string,
   maxAutoRedos: number,
-): { allowed: boolean; attempts: number; reason: string } {
-  const parent = getRun(parentRunId);
+): Promise<{ allowed: boolean; attempts: number; reason: string }> {
+  const parent = await getRun(parentRunId);
   if (!parent) {
     return {
       allowed: false,
@@ -60,8 +60,8 @@ export function canAutoRedo(
   const limit = Number.isFinite(maxAutoRedos) && maxAutoRedos >= 0
     ? Math.floor(maxAutoRedos)
     : DEFAULT_VERSION_POLICY.maxAutoRedos;
-  const attempts = countRedoAttempts(parentRunId);
-  const target = describeRun(parent);
+  const attempts = await countRedoAttempts(parentRunId);
+  const target = await describeRun(parent);
 
   if (attempts >= limit) {
     return {
@@ -92,27 +92,27 @@ export interface CreateRedoInput {
  * the redo reason, a copy of the source packet, and a freshly compiled prompt
  * that includes the audit findings and the previous attempt.
  */
-export function createRedoRun(input: CreateRedoInput): ResearchRun {
-  const parent = getRun(input.parentRunId);
+export async function createRedoRun(input: CreateRedoInput): Promise<ResearchRun> {
+  const parent = await getRun(input.parentRunId);
   if (!parent) throw new Error(`Cannot create a redo: unknown run ${input.parentRunId}`);
   const layerId = parent.layerId;
   if (!layerId) throw new Error(`Cannot create a redo: run ${parent.id} is not attached to a layer`);
-  const layer = getLayer(layerId);
+  const layer = await getLayer(layerId);
   if (!layer) throw new Error(`Cannot create a redo: unknown layer ${layerId}`);
-  const project = getProject(parent.projectId);
+  const project = await getProject(parent.projectId);
   if (!project) throw new Error(`Cannot create a redo: unknown project ${parent.projectId}`);
 
-  const reason = input.reason.trim() || `Redo of ${describeRun(parent)} requested.`;
+  const reason = input.reason.trim() || `Redo of ${await describeRun(parent)} requested.`;
   const audit =
-    (input.auditId ? getAudit(input.auditId) : null) ?? getLatestAuditForRun(parent.id) ?? null;
+    (input.auditId ? await getAudit(input.auditId) : null) ?? await getLatestAuditForRun(parent.id) ?? null;
 
   // The redo targets the same artifact as the attempt it replaces.
   const targetVersion =
-    parent.targetVersion ?? defaultTargetVersion(parent.projectId, layerId, 'REDO');
+    parent.targetVersion ?? await defaultTargetVersion(parent.projectId, layerId, 'REDO');
 
   // Same source packet: a redo is a corrected attempt at the same work, not a
   // different question with different inputs.
-  const inheritedPacket = listDependenciesForRun(parent.id).map(
+  const inheritedPacket = (await listDependenciesForRun(parent.id)).map(
     (dependency) => dependency.requiredCanonicalName,
   );
   const requiredDocuments =
@@ -120,9 +120,9 @@ export function createRedoRun(input: CreateRedoInput): ResearchRun {
       ? inheritedPacket
       : parent.requiredAttachments.length > 0
         ? parent.requiredAttachments
-        : defaultRequiredDocuments(parent.projectId, layerId, 'REDO');
+        : await defaultRequiredDocuments(parent.projectId, layerId, 'REDO');
 
-  const compiled = compilePrompt({
+  const compiled = await compilePrompt({
     projectId: parent.projectId,
     layerId,
     runType: 'REDO',
@@ -133,8 +133,8 @@ export function createRedoRun(input: CreateRedoInput): ResearchRun {
   });
 
   const db = getDb();
-  const redo = db.transaction(() => {
-    const created = createRun({
+  const redo = await db.transaction(async () => {
+    const created = await createRun({
       projectId: parent.projectId,
       layerId,
       targetDocumentId: parent.targetDocumentId,
@@ -154,11 +154,11 @@ export function createRedoRun(input: CreateRedoInput): ResearchRun {
       conversationId: parent.conversationId,
     });
 
-    setRunDependencies(created.id, requiredDocuments);
-    const packet = checkRunDependencies(created.id);
-    if (!packet.ready) updateRun(created.id, { status: 'BLOCKED' });
+    await setRunDependencies(created.id, requiredDocuments);
+    const packet = await checkRunDependencies(created.id);
+    if (!packet.ready) await updateRun(created.id, { status: 'BLOCKED' });
 
-    recordEvent({
+    await recordEvent({
       projectId: parent.projectId,
       layerId,
       entityType: 'RUN',
@@ -175,7 +175,7 @@ export function createRedoRun(input: CreateRedoInput): ResearchRun {
         dependencies: packet.summary,
       },
     });
-    recordEvent({
+    await recordEvent({
       projectId: parent.projectId,
       layerId,
       entityType: 'RUN',
@@ -190,7 +190,7 @@ export function createRedoRun(input: CreateRedoInput): ResearchRun {
       },
     });
     if (input.automatic === true) {
-      recordEvent({
+      await recordEvent({
         projectId: parent.projectId,
         layerId,
         entityType: 'RUN',
@@ -208,6 +208,6 @@ export function createRedoRun(input: CreateRedoInput): ResearchRun {
     return created;
   });
 
-  recomputeProject(parent.projectId);
-  return getRun(redo.id) ?? redo;
+  await recomputeProject(parent.projectId);
+  return await getRun(redo.id) ?? redo;
 }

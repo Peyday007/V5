@@ -403,32 +403,34 @@ export function assessRequirement(
 }
 
 /** Judge every requirement, and persist the matrix. */
-export function buildCoverageMatrix(input: CoverageInput): {
+export async function buildCoverageMatrix(input: CoverageInput): Promise<{
   assessments: CoverageAssessment[];
   coverage: RequirementCoverage[];
-} {
+}> {
   const assessments = input.requirements.map((requirement) =>
     assessRequirement(requirement, input.claims, input.contract),
   );
-  const coverage = assessments.map((assessment) =>
-    upsertCoverage({
-      orchestrationId: input.orchestrationId,
-      requirementId: assessment.requirement.id,
-      status: assessment.status,
-      reasons: assessment.reasons,
-      claimIds: assessment.claimIds,
-      documentIds: assessment.documentIds,
-      confidence: assessment.confidence,
-      gapType: assessment.gapType,
-      gapDetail: assessment.gapDetail,
-      needsResearch: assessment.needsResearch,
-    }),
+  const coverage = await Promise.all(
+    assessments.map((assessment) =>
+      upsertCoverage({
+        orchestrationId: input.orchestrationId,
+        requirementId: assessment.requirement.id,
+        status: assessment.status,
+        reasons: assessment.reasons,
+        claimIds: assessment.claimIds,
+        documentIds: assessment.documentIds,
+        confidence: assessment.confidence,
+        gapType: assessment.gapType,
+        gapDetail: assessment.gapDetail,
+        needsResearch: assessment.needsResearch,
+      }),
+    ),
   );
   return { assessments, coverage };
 }
 
 /** Every claim the project has, for a coverage pass. */
-export function projectClaims(projectId: string): ExistingClaim[] {
+export async function projectClaims(projectId: string): Promise<ExistingClaim[]> {
   return listExistingClaims(projectId);
 }
 

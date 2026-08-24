@@ -550,16 +550,16 @@ function deriveNextAction(
  * when the model omitted them — the planner and the state engine read those two
  * fields directly, so they are never allowed to be empty.
  */
-export function normalizeAuditResult(
+export async function normalizeAuditResult(
   input: Partial<StructuredAuditResult> & { verdict: AuditVerdict },
   context: { projectId: string; layerId: string },
-): StructuredAuditResult {
-  const project = getProject(context.projectId);
-  const layer = getLayer(context.layerId);
+): Promise<StructuredAuditResult> {
+  const project = await getProject(context.projectId);
+  const layer = await getLayer(context.layerId);
   const policy: VersionPolicy = project?.versionPolicy ?? DEFAULT_VERSION_POLICY;
   const layerName = layer?.name ?? 'this layer';
   const layerVersions = layer
-    ? listDocumentsByLayer(layer.id).map((document) => normalizeVersion(document.version))
+    ? (await listDocumentsByLayer(layer.id)).map((document) => normalizeVersion(document.version))
     : [];
 
   const verdict = coerceVerdict(input.verdict);
@@ -653,20 +653,20 @@ function isAuditRun(run: ResearchRun): boolean {
  * or the audit run that inspected it; consequences always land on the research
  * run so a redo is chained to the attempt that actually failed.
  */
-function resolveAuditedRun(given: ResearchRun | null): ResearchRun | null {
+async function resolveAuditedRun(given: ResearchRun | null): Promise<ResearchRun | null> {
   if (!given) return null;
-  if (isAuditRun(given) && given.parentRunId) return getRun(given.parentRunId) ?? given;
+  if (isAuditRun(given) && given.parentRunId) return await getRun(given.parentRunId) ?? given;
   return given;
 }
 
-function resolveAuditedDocument(
+async function resolveAuditedDocument(
   explicitId: string | null | undefined,
   auditedRun: ResearchRun | null,
   layer: Layer,
-): Document | null {
+): Promise<Document | null> {
   if (explicitId) return getDocument(explicitId);
   if (auditedRun?.targetDocumentId) {
-    const target = getDocument(auditedRun.targetDocumentId);
+    const target = await getDocument(auditedRun.targetDocumentId);
     if (target) return target;
   }
   const version = auditedRun?.targetVersion;
@@ -691,21 +691,21 @@ interface ConsequenceOutcome {
 }
 
 /** Everything an audit verdict changes in the database, in one place. */
-function applyConsequences(context: ConsequenceContext): ConsequenceOutcome {
+async function applyConsequences(context: ConsequenceContext): Promise<ConsequenceOutcome> {
   const { project, layer, audit, result, auditedRun, auditedDocument } = context;
   const notes: string[] = [];
   let redoRun: ResearchRun | null = null;
 
   if (ACCEPTED_VERDICTS.has(result.verdict)) {
-    if (auditedRun) updateRun(auditedRun.id, { status: 'APPROVED' });
+    if (auditedRun) await updateRun(auditedRun.id, { status: 'APPROVED' });
     if (
       auditedDocument &&
       auditedDocument.status !== 'COMPLETE' &&
       auditedDocument.status !== 'FROZEN' &&
       auditedDocument.status !== 'SUPERSEDED'
     ) {
-      updateDocument(auditedDocument.id, { status: 'COMPLETE' });
-      recordEvent({
+      await updateDocument(auditedDocument.id, { status: 'COMPLETE' });
+      await recordEvent({
         projectId: project.id,
         layerId: layer.id,
         entityType: 'DOCUMENT',
@@ -726,9 +726,9 @@ function applyConsequences(context: ConsequenceContext): ConsequenceOutcome {
         );
         break;
       }
-      const decision = canAutoRedo(auditedRun.id, maxAutoRedosFor(project));
+      const decision = await canAutoRedo(auditedRun.id, maxAutoRedosFor(project));
       if (decision.allowed) {
-        redoRun = createRedoRun({
+        redoRun = await createRedoRun({
           parentRunId: auditedRun.id,
           auditId: audit.id,
           reason,
@@ -736,7 +736,7 @@ function applyConsequences(context: ConsequenceContext): ConsequenceOutcome {
         });
         notes.push(`Automatic redo created as attempt ${redoRun.attemptNumber}.`);
       } else {
-        updateRun(auditedRun.id, {
+        await updateRun(auditedRun.id, {
           status: 'REDO_REQUIRED',
           redoReason: `${reason} ${decision.reason}`,
         });
@@ -745,7 +745,7 @@ function applyConsequences(context: ConsequenceContext): ConsequenceOutcome {
       break;
     }
     case 'READY_FOR_SYNTHESIS': {
-      recordEvent({
+      await recordEvent({
         projectId: project.id,
         layerId: layer.id,
         entityType: 'LAYER',
@@ -766,7 +766,7 @@ function applyConsequences(context: ConsequenceContext): ConsequenceOutcome {
       // the promise that the event changing reality updates the database — the
       // alternative is the user remembering to press FREEZE afterwards.
       try {
-        freezeLayer(layer.id);
+        await freezeLayer(layer.id);
         notes.push(
           `${layer.name} passed its final audit and is now frozen` +
             `${result.nextVersion ? ` at ${result.nextVersion}` : ''}.`,
@@ -786,21 +786,21 @@ function applyConsequences(context: ConsequenceContext): ConsequenceOutcome {
       const named = unique(result.missingDocuments);
       if (auditedRun) {
         if (named.length > 0) {
-          const existing = listDependenciesForRun(auditedRun.id).map(
+          const existing = (await listDependenciesForRun(auditedRun.id)).map(
             (dependency) => dependency.requiredCanonicalName,
           );
-          setRunDependencies(auditedRun.id, unique([...existing, ...named]));
+          await setRunDependencies(auditedRun.id, unique([...existing, ...named]));
         }
-        updateRun(auditedRun.id, { status: 'BLOCKED' });
+        await updateRun(auditedRun.id, { status: 'BLOCKED' });
       } else if (auditedDocument && named.length > 0) {
         const existing = new Set(
-          listDependenciesForDocument(auditedDocument.id).map((dependency) =>
+          (await listDependenciesForDocument(auditedDocument.id)).map((dependency) =>
             normalizeName(dependency.requiredCanonicalName),
           ),
         );
         for (const canonicalName of named) {
           if (existing.has(normalizeName(canonicalName))) continue;
-          createDependency({
+          await createDependency({
             projectId: project.id,
             dependentDocumentId: auditedDocument.id,
             requiredCanonicalName: canonicalName,
@@ -810,9 +810,9 @@ function applyConsequences(context: ConsequenceContext): ConsequenceOutcome {
         }
       }
       if (named.length > 0) {
-        const check = checkCanonicalNames(project.id, named);
+        const check = await checkCanonicalNames(project.id, named);
         if (check.missing.length > 0) {
-          recordEvent({
+          await recordEvent({
             projectId: project.id,
             layerId: layer.id,
             entityType: 'DEPENDENCY',
@@ -833,7 +833,7 @@ function applyConsequences(context: ConsequenceContext): ConsequenceOutcome {
     case 'PATCH': {
       // The attempt itself is finished; the layer simply owes more work.
       if (auditedRun && auditedRun.status === 'AUDIT_REQUIRED') {
-        updateRun(auditedRun.id, { status: 'COMPLETE' });
+        await updateRun(auditedRun.id, { status: 'COMPLETE' });
       }
       notes.push(result.nextAction);
       break;
@@ -852,24 +852,24 @@ function applyConsequences(context: ConsequenceContext): ConsequenceOutcome {
  * Persist an audit with its findings, apply the verdict's consequences, and
  * recompute derived state. This is the only supported way to record an audit.
  */
-export function recordAudit(input: RecordAuditInput): AuditOutcome {
-  const project = getProject(input.projectId);
+export async function recordAudit(input: RecordAuditInput): Promise<AuditOutcome> {
+  const project = await getProject(input.projectId);
   if (!project) throw new Error(`Cannot record audit: unknown project ${input.projectId}`);
-  const layer = getLayer(input.layerId);
+  const layer = await getLayer(input.layerId);
   if (!layer) throw new Error(`Cannot record audit: unknown layer ${input.layerId}`);
 
-  const result = normalizeAuditResult(input.result, {
+  const result = await normalizeAuditResult(input.result, {
     projectId: input.projectId,
     layerId: input.layerId,
   });
 
   const db = getDb();
-  const persisted = db.transaction((): { audit: Audit; redoRun: ResearchRun | null } => {
-    const givenRun = input.runId ? getRun(input.runId) : null;
-    const auditedRun = resolveAuditedRun(givenRun);
-    const auditedDocument = resolveAuditedDocument(input.auditedDocumentId, auditedRun, layer);
+  const persisted = await db.transaction(async (): Promise<{ audit: Audit; redoRun: ResearchRun | null }> => {
+    const givenRun = input.runId ? await getRun(input.runId) : null;
+    const auditedRun = await resolveAuditedRun(givenRun);
+    const auditedDocument = await resolveAuditedDocument(input.auditedDocumentId, auditedRun, layer);
 
-    const audit = createAudit({
+    const audit = await createAudit({
       projectId: input.projectId,
       layerId: input.layerId,
       runId: input.runId ?? null,
@@ -889,10 +889,10 @@ export function recordAudit(input: RecordAuditInput): AuditOutcome {
 
     // An audit run that produced this verdict has done its job.
     if (givenRun && isAuditRun(givenRun) && givenRun.id !== auditedRun?.id) {
-      updateRun(givenRun.id, { status: 'COMPLETE', completedAt: nowIso() });
+      await updateRun(givenRun.id, { status: 'COMPLETE', completedAt: nowIso() });
     }
 
-    const outcome = applyConsequences({
+    const outcome = await applyConsequences({
       project,
       layer,
       audit,
@@ -901,7 +901,7 @@ export function recordAudit(input: RecordAuditInput): AuditOutcome {
       auditedDocument,
     });
 
-    recordEvent({
+    await recordEvent({
       projectId: input.projectId,
       layerId: input.layerId,
       entityType: 'AUDIT',
@@ -927,15 +927,15 @@ export function recordAudit(input: RecordAuditInput): AuditOutcome {
     return { audit, redoRun: outcome.redoRun };
   });
 
-  const snapshots = recomputeProject(input.projectId);
+  const snapshots = await recomputeProject(input.projectId);
   const layerState =
     snapshots.find((snapshot) => snapshot.layerId === input.layerId) ??
-    computeLayerState(input.layerId);
+    await computeLayerState(input.layerId);
 
   return {
     audit: persisted.audit,
     layerState,
-    redoRun: persisted.redoRun ? (getRun(persisted.redoRun.id) ?? persisted.redoRun) : null,
+    redoRun: persisted.redoRun ? (await getRun(persisted.redoRun.id) ?? persisted.redoRun) : null,
   };
 }
 
@@ -989,9 +989,9 @@ function auditScope(auditedName: string, layerName: string): string {
 }
 
 /** An audit run already open against `run`, so re-compiling stays idempotent. */
-function findOpenAuditRun(run: ResearchRun, layerId: string): ResearchRun | null {
+async function findOpenAuditRun(run: ResearchRun, layerId: string): Promise<ResearchRun | null> {
   return (
-    listRunsByLayer(layerId).find(
+    (await listRunsByLayer(layerId)).find(
       (candidate) =>
         candidate.parentRunId === run.id &&
         (candidate.runType === 'AUDIT' || candidate.runType === 'CROSS_LAYER_AUDIT') &&
@@ -1010,26 +1010,26 @@ function findOpenAuditRun(run: ResearchRun, layerId: string): ResearchRun | null
  * document, because the exact prompt of a finished run is history we must keep.
  * When the caller already hands us an audit run, that run is updated in place.
  */
-export function compileAuditPrompt(runId: string): CompiledPrompt {
-  const run = getRun(runId);
+export async function compileAuditPrompt(runId: string): Promise<CompiledPrompt> {
+  const run = await getRun(runId);
   if (!run) throw new Error(`Cannot compile an audit prompt: unknown run ${runId}`);
   const layerId = run.layerId;
   if (!layerId) {
     throw new Error(`Cannot compile an audit prompt: run ${runId} is not attached to a layer`);
   }
-  const layer = getLayer(layerId);
+  const layer = await getLayer(layerId);
   if (!layer) throw new Error(`Cannot compile an audit prompt: unknown layer ${layerId}`);
 
   const version =
-    run.targetVersion ?? defaultTargetVersion(run.projectId, layerId, 'AUDIT');
+    run.targetVersion ?? await defaultTargetVersion(run.projectId, layerId, 'AUDIT');
   const auditedName = buildCanonicalName(layer.name, version);
   const packet = unique([
     auditedName,
-    ...listDependenciesForRun(run.id).map((dependency) => dependency.requiredCanonicalName),
-    ...defaultRequiredDocuments(run.projectId, layerId, 'AUDIT'),
+    ...(await listDependenciesForRun(run.id)).map((dependency) => dependency.requiredCanonicalName),
+    ...await defaultRequiredDocuments(run.projectId, layerId, 'AUDIT'),
   ]);
 
-  const compiled = compilePrompt({
+  const compiled = await compilePrompt({
     projectId: run.projectId,
     layerId,
     runType: 'AUDIT',
@@ -1042,11 +1042,11 @@ export function compileAuditPrompt(runId: string): CompiledPrompt {
   });
 
   const db = getDb();
-  db.transaction(() => {
-    const reused = isAuditRun(run) ? run : findOpenAuditRun(run, layerId);
+  await db.transaction(async () => {
+    const reused = isAuditRun(run) ? run : await findOpenAuditRun(run, layerId);
     const auditRun =
       reused ??
-      createRun({
+      await createRun({
         projectId: run.projectId,
         layerId,
         targetDocumentId: run.targetDocumentId,
@@ -1060,7 +1060,7 @@ export function compileAuditPrompt(runId: string): CompiledPrompt {
         conversationId: run.conversationId,
       });
 
-    updateRun(auditRun.id, {
+    await updateRun(auditRun.id, {
       targetVersion: version,
       status: 'READY',
       prompt: compiled.prompt,
@@ -1069,10 +1069,10 @@ export function compileAuditPrompt(runId: string): CompiledPrompt {
       expectedConversationTitle: compiled.expectedConversationTitle,
       expectedFilename: compiled.expectedFilename,
     });
-    setRunDependencies(auditRun.id, packet, { dependencyType: 'AUDIT_INPUT' });
+    await setRunDependencies(auditRun.id, packet, { dependencyType: 'AUDIT_INPUT' });
 
     if (!reused) {
-      recordEvent({
+      await recordEvent({
         projectId: run.projectId,
         layerId,
         entityType: 'RUN',
@@ -1081,7 +1081,7 @@ export function compileAuditPrompt(runId: string): CompiledPrompt {
         payload: { runType: 'AUDIT', auditedRunId: run.id, targetVersion: version },
       });
     }
-    recordEvent({
+    await recordEvent({
       projectId: run.projectId,
       layerId,
       entityType: 'RUN',
@@ -1099,10 +1099,10 @@ export function compileAuditPrompt(runId: string): CompiledPrompt {
 
     // The audited run is now waiting for a verdict rather than simply finished.
     if (!isAuditRun(run) && (run.status === 'COMPLETE' || run.status === 'RUNNING')) {
-      updateRun(run.id, { status: 'AUDIT_REQUIRED' });
+      await updateRun(run.id, { status: 'AUDIT_REQUIRED' });
     }
   });
 
-  recomputeProject(run.projectId);
+  await recomputeProject(run.projectId);
   return compiled;
 }

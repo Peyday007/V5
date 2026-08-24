@@ -37,13 +37,13 @@ export interface SeedResult {
  * afterwards only backfills layers that are missing and re-creates the
  * filesystem tree (so a deleted folder reappears rather than breaking import).
  */
-export function seedDealDispatch(): SeedResult {
+export async function seedDealDispatch(): Promise<SeedResult> {
   const db = getDb();
-  return db.transaction(() => {
-    const existing = getProjectBySlug(DEAL_DISPATCH_SLUG);
+  return await db.transaction(async () => {
+    const existing = await getProjectBySlug(DEAL_DISPATCH_SLUG);
     const project =
       existing ??
-      createProject({
+      await createProject({
         name: 'Deal Dispatch',
         slug: DEAL_DISPATCH_SLUG,
         description:
@@ -58,7 +58,7 @@ export function seedDealDispatch(): SeedResult {
       });
 
     if (!existing) {
-      recordEvent({
+      await recordEvent({
         projectId: project.id,
         entityType: 'PROJECT',
         entityId: project.id,
@@ -67,13 +67,13 @@ export function seedDealDispatch(): SeedResult {
       });
     }
 
-    const present = new Map(listLayers(project.id).map((l) => [l.name, l]));
+    const present = new Map((await listLayers(project.id)).map((l) => [l.name, l]));
     const layers: Layer[] = [];
-    DEAL_DISPATCH_LAYERS.forEach((name, index) => {
+    DEAL_DISPATCH_LAYERS.forEach(async (name, index) => {
       const found = present.get(name);
       layers.push(
         found ??
-          createLayer({
+          await createLayer({
             projectId: project.id,
             name,
             orderIndex: index,
@@ -85,18 +85,18 @@ export function seedDealDispatch(): SeedResult {
       );
     });
 
-    ensureProjectTree(project.slug, layers.map((l) => l.slug));
+    await ensureProjectTree(project.slug, layers.map((l) => l.slug));
 
     return { created: !existing, project, layers };
   });
 }
 
 /** Boot hook: seed only when the database has no projects at all. */
-export function seedIfEmpty(): SeedResult | null {
-  if (listProjects().length > 0) {
+export async function seedIfEmpty(): Promise<SeedResult | null> {
+  if ((await listProjects()).length > 0) {
     // Still make sure the filesystem tree exists for every known project.
-    for (const project of listProjects()) {
-      ensureProjectTree(project.slug, listLayers(project.id).map((l) => l.slug));
+    for (const project of await listProjects()) {
+      await ensureProjectTree(project.slug, (await listLayers(project.id)).map((l) => l.slug));
     }
     return null;
   }

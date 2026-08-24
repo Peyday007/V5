@@ -142,9 +142,9 @@ function diagnosticsFor(): { stage: string; result: string }[] {
 }
 
 /** Read the connection without re-probing. What the page renders on load. */
-export function connectionView(provider = ANTIGRAVITY): ConnectionView {
+export async function connectionView(provider = ANTIGRAVITY): Promise<ConnectionView> {
   const probe = antigravityStatus();
-  const stored = getConnection(provider);
+  const stored = await getConnection(provider);
   const quota = quotaOf();
   const paidOverageEnabled = stored?.paidOverageEnabled ?? false;
 
@@ -190,16 +190,16 @@ export function connectionView(provider = ANTIGRAVITY): ConnectionView {
 }
 
 /** Re-probe and store what was found. Behind Detect and Check Authentication. */
-export function detectConnection(provider = ANTIGRAVITY): ConnectionView {
+export async function detectConnection(provider = ANTIGRAVITY): Promise<ConnectionView> {
   const probe = recheckAntigravity();
-  saveConnection({
+  await saveConnection({
     provider,
     installed: probe.status.installed,
     authenticated: probe.status.authenticated,
     automationReady: probe.status.automationReady,
     executablePath: probe.diagnostics.executable.command,
     version: probe.status.version,
-    model: getConnection(provider)?.model ?? probe.status.model,
+    model: (await getConnection(provider))?.model ?? probe.status.model,
     quotaState: probe.status.quotaState,
     message: probe.status.message,
     diagnostics: diagnosticsFor(),
@@ -270,28 +270,28 @@ export async function testConnection(
     const detail =
       `The tool ran a real job and returned ${Buffer.byteLength(text)} bytes in ` +
       `${Math.max(1, Math.round((Date.now() - startedAt) / 1000))}s.`;
-    saveConnection({
+    await saveConnection({
       provider,
       installed: true,
       authenticated: true,
       automationReady: true,
       version: antigravityStatus().status.version,
-      model: response.model ?? getConnection(provider)?.model ?? null,
+      model: response.model ?? (await getConnection(provider))?.model ?? null,
       message: detail,
       diagnostics: diagnosticsFor(),
       succeeded: true,
     });
-    recordVerifiedRun(provider, detail);
-    return { ok: true, detail, durationMs: Date.now() - startedAt, connection: connectionView(provider) };
+    await recordVerifiedRun(provider, detail);
+    return { ok: true, detail, durationMs: Date.now() - startedAt, connection: await connectionView(provider) };
   } catch (error) {
     return failed(provider, error instanceof Error ? error.message : String(error), startedAt);
   }
 }
 
 /** A failed test is recorded as carefully as a successful one. */
-function failed(provider: string, detail: string, startedAt: number): TestConnectionResult {
+async function failed(provider: string, detail: string, startedAt: number): Promise<TestConnectionResult> {
   const probe = antigravityStatus();
-  saveConnection({
+  await saveConnection({
     provider,
     installed: probe.status.installed,
     authenticated: probe.status.authenticated,
@@ -300,20 +300,20 @@ function failed(provider: string, detail: string, startedAt: number): TestConnec
     succeeded: false,
     failureReason: detail,
   });
-  return { ok: false, detail, durationMs: Date.now() - startedAt, connection: connectionView(provider) };
+  return { ok: false, detail, durationMs: Date.now() - startedAt, connection: await connectionView(provider) };
 }
 
 /** Forget the connection. The tool itself is untouched. */
-export function disconnect(provider = ANTIGRAVITY): ConnectionView {
-  clearConnection(provider);
+export async function disconnect(provider = ANTIGRAVITY): Promise<ConnectionView> {
+  await clearConnection(provider);
   return connectionView(provider);
 }
 
-export function updateModelDefaults(
+export async function updateModelDefaults(
   provider: string,
   models: { light: string | null; strong: string | null },
-): ConnectionView {
-  setModelDefaults(provider, models);
+): Promise<ConnectionView> {
+  await setModelDefaults(provider, models);
   return connectionView(provider);
 }
 
@@ -324,18 +324,18 @@ export function updateModelDefaults(
  * platform sets this on their behalf, and it is the only thing that lets a run
  * continue past an exhausted allowance.
  */
-export function updatePaidOverage(
+export async function updatePaidOverage(
   provider: string,
   enabled: boolean,
   note: string | null,
-): ConnectionView {
-  setPaidOverage(provider, enabled, note);
+): Promise<ConnectionView> {
+  await setPaidOverage(provider, enabled, note);
   return connectionView(provider);
 }
 
 /** The model defaults the orchestration should use for this provider. */
-export function modelDefaults(provider = ANTIGRAVITY): { light: string | null; strong: string | null } {
-  const stored = getConnection(provider);
+export async function modelDefaults(provider = ANTIGRAVITY): Promise<{ light: string | null; strong: string | null }> {
+  const stored = await getConnection(provider);
   return {
     light: stored?.lightModel ?? process.env['BRAIN_ANTIGRAVITY_LIGHT_MODEL'] ?? null,
     strong: stored?.model ?? null,

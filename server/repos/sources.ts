@@ -78,16 +78,16 @@ export interface InsertSegmentInput {
 }
 
 /** Write a run's segments, returning them with their ids. */
-export function insertSegments(inputs: InsertSegmentInput[]): DocumentSegment[] {
+export async function insertSegments(inputs: InsertSegmentInput[]): Promise<DocumentSegment[]> {
   if (inputs.length === 0) return [];
   const db = getDb();
   const ts = nowIso();
   const ids: string[] = [];
-  db.transaction(() => {
+  await db.transaction(async () => {
     for (const input of inputs) {
       const id = newId('seg');
       ids.push(id);
-      db.run(
+      await db.run(
         `INSERT INTO document_segments (id, document_id, extraction_run_id, segment_index,
            segment_type, title, speaker, timestamp_text, block_start, block_end, char_start,
            char_end, text, content_hash, confidence, rationale, warnings, created_at)
@@ -99,26 +99,26 @@ export function insertSegments(inputs: InsertSegmentInput[]): DocumentSegment[] 
       );
     }
   });
-  return ids.map((id) => getSegment(id)).filter((s): s is DocumentSegment => s !== null);
+  const loaded = await Promise.all(ids.map((id) => getSegment(id)));
+  return loaded.filter((s): s is DocumentSegment => s !== null);
 }
 
-export function getSegment(id: string): DocumentSegment | null {
-  const row = getDb().get<DocumentSegmentRow>('SELECT * FROM document_segments WHERE id = ?', [id]);
+export async function getSegment(id: string): Promise<DocumentSegment | null> {
+  const row = await getDb().get<DocumentSegmentRow>('SELECT * FROM document_segments WHERE id = ?', [id]);
   return row ? mapSegment(row) : null;
 }
 
-export function listSegments(documentId: string): DocumentSegment[] {
-  return getDb()
-    .all<DocumentSegmentRow>(
+export async function listSegments(documentId: string): Promise<DocumentSegment[]> {
+  return (await getDb().all<DocumentSegmentRow>(
       'SELECT * FROM document_segments WHERE document_id = ? ORDER BY segment_index',
       [documentId],
-    )
+    ))
     .map(mapSegment);
 }
 
 /** Remove a document's segments, for a re-ingestion. */
-export function clearSegments(documentId: string): void {
-  getDb().run('DELETE FROM document_segments WHERE document_id = ?', [documentId]);
+export async function clearSegments(documentId: string): Promise<void> {
+  await getDb().run('DELETE FROM document_segments WHERE document_id = ?', [documentId]);
 }
 
 export interface InsertLinkInput {
@@ -134,13 +134,13 @@ export interface InsertLinkInput {
   decidedAt?: string | null;
 }
 
-export function insertLinks(inputs: InsertLinkInput[]): void {
+export async function insertLinks(inputs: InsertLinkInput[]): Promise<void> {
   if (inputs.length === 0) return;
   const db = getDb();
   const ts = nowIso();
-  db.transaction(() => {
+  await db.transaction(async () => {
     for (const input of inputs) {
-      db.run(
+      await db.run(
         `INSERT INTO segment_layer_links (id, document_id, segment_id, layer_id, version,
            link_type, confidence, rationale, status, decided_at, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -152,22 +152,20 @@ export function insertLinks(inputs: InsertLinkInput[]): void {
   });
 }
 
-export function listLinks(documentId: string): SegmentLayerLink[] {
-  return getDb()
-    .all<SegmentLayerLinkRow>(
+export async function listLinks(documentId: string): Promise<SegmentLayerLink[]> {
+  return (await getDb().all<SegmentLayerLinkRow>(
       'SELECT * FROM segment_layer_links WHERE document_id = ? ORDER BY created_at, rowid',
       [documentId],
-    )
+    ))
     .map(mapLink);
 }
 
 /** Every accepted link into one layer — what that layer may actually draw on. */
-export function listAcceptedLinksForLayer(layerId: string): SegmentLayerLink[] {
-  return getDb()
-    .all<SegmentLayerLinkRow>(
+export async function listAcceptedLinksForLayer(layerId: string): Promise<SegmentLayerLink[]> {
+  return (await getDb().all<SegmentLayerLinkRow>(
       "SELECT * FROM segment_layer_links WHERE layer_id = ? AND status = 'ACCEPTED' ORDER BY created_at",
       [layerId],
-    )
+    ))
     .map(mapLink);
 }
 
@@ -190,16 +188,15 @@ export interface DecidedLink {
   decidedAt: string | null;
 }
 
-export function listDecidedLinks(documentId: string): DecidedLink[] {
-  return getDb()
-    .all<SegmentLayerLinkRow & { content_hash: string | null }>(
+export async function listDecidedLinks(documentId: string): Promise<DecidedLink[]> {
+  return (await getDb().all<SegmentLayerLinkRow & { content_hash: string | null }>(
       `SELECT l.*, s.content_hash AS content_hash
          FROM segment_layer_links l
          LEFT JOIN document_segments s ON s.id = l.segment_id
         WHERE l.document_id = ? AND l.status != 'PROPOSED'
         ORDER BY l.created_at, l.rowid`,
       [documentId],
-    )
+    ))
     .map((row) => ({
       contentHash: row.content_hash ?? null,
       layerId: row.layer_id,
@@ -218,16 +215,16 @@ export function listDecidedLinks(documentId: string): DecidedLink[] {
  * Re-reading a file must not undo a review. An accepted or excluded link is a
  * decision somebody made, and it outlives the proposal that prompted it.
  */
-export function clearProposedLinks(documentId: string): void {
-  getDb().run("DELETE FROM segment_layer_links WHERE document_id = ? AND status = 'PROPOSED'", [
+export async function clearProposedLinks(documentId: string): Promise<void> {
+  await getDb().run("DELETE FROM segment_layer_links WHERE document_id = ? AND status = 'PROPOSED'", [
     documentId,
   ]);
 }
 
-export function decideLink(
+export async function decideLink(
   id: string,
   patch: { status: LinkStatus; linkType?: LinkType; layerId?: string; version?: string | null },
-): SegmentLayerLink | null {
+): Promise<SegmentLayerLink | null> {
   const db = getDb();
   const fields: Record<string, unknown> = {
     status: patch.status,
@@ -237,21 +234,21 @@ export function decideLink(
     decided_at: nowIso(),
   };
   const keys = Object.keys(fields).filter((key) => fields[key] !== undefined);
-  db.run(
+  await db.run(
     `UPDATE segment_layer_links SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`,
     [...(keys.map((k) => fields[k]) as never[]), id],
   );
-  const row = getDb().get<SegmentLayerLinkRow>('SELECT * FROM segment_layer_links WHERE id = ?', [id]);
+  const row = await getDb().get<SegmentLayerLinkRow>('SELECT * FROM segment_layer_links WHERE id = ?', [id]);
   return row ? mapLink(row) : null;
 }
 
-export function saveIngestionReport(input: {
+export async function saveIngestionReport(input: {
   documentId: string;
   extractionRunId: string;
   scope: string;
   report: unknown;
-}): void {
-  getDb().run(
+}): Promise<void> {
+  await getDb().run(
     `INSERT INTO ingestion_reports (id, document_id, extraction_run_id, scope, report, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
     [newId('ing'), input.documentId, input.extractionRunId, input.scope, toJson(input.report), nowIso()],
@@ -259,8 +256,8 @@ export function saveIngestionReport(input: {
 }
 
 /** The most recent ingestion report for a document. */
-export function latestIngestionReport<T>(documentId: string): T | null {
-  const row = getDb().get<IngestionReportRow>(
+export async function latestIngestionReport<T>(documentId: string): Promise<T | null> {
+  const row = await getDb().get<IngestionReportRow>(
     'SELECT * FROM ingestion_reports WHERE document_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1',
     [documentId],
   );

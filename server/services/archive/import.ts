@@ -137,8 +137,8 @@ export interface StartArchiveImportInput {
  * Discovery is separate from processing so the user sees the true size of the
  * job — including the unsupported files — before any minutes are spent on it.
  */
-export function startArchiveImport(input: StartArchiveImportInput): ImportJob {
-  const project = getProject(input.projectId);
+export async function startArchiveImport(input: StartArchiveImportInput): Promise<ImportJob> {
+  const project = await getProject(input.projectId);
   if (!project) throw new Error(`Unknown project ${input.projectId}`);
 
   const folder = input.folder.trim();
@@ -156,7 +156,7 @@ export function startArchiveImport(input: StartArchiveImportInput): ImportJob {
   }
   if (!stat.isDirectory()) throw new Error(`${folder} is a file, not a folder.`);
 
-  const job = createImportJob({
+  const job = await createImportJob({
     projectId: project.id,
     sourceLabel: folder,
     rootPath: resolved,
@@ -164,7 +164,7 @@ export function startArchiveImport(input: StartArchiveImportInput): ImportJob {
   });
 
   const entries = discoverFiles(resolved);
-  insertDiscoveredFiles(
+  await insertDiscoveredFiles(
     entries.map((entry) => ({
       jobId: job.id,
       projectId: project.id,
@@ -178,10 +178,10 @@ export function startArchiveImport(input: StartArchiveImportInput): ImportJob {
 
   // Unsupported files are settled at discovery: there is nothing to try later,
   // and leaving them pending would make the job look permanently unfinished.
-  for (const file of listImportFiles(job.id)) {
+  for (const file of await listImportFiles(job.id)) {
     const entry = entries.find((candidate) => candidate.relativePath === file.relativePath);
     if (entry && !entry.supported) {
-      updateImportFile(file.id, {
+      await updateImportFile(file.id, {
         status: 'UNSUPPORTED',
         detail: `Brain cannot read ${path.extname(entry.filename) || 'this file type'} yet, so it was left in place and not imported.`,
         completedAt: new Date().toISOString(),
@@ -189,7 +189,7 @@ export function startArchiveImport(input: StartArchiveImportInput): ImportJob {
     }
   }
 
-  updateImportJob(job.id, {
+  await updateImportJob(job.id, {
     status: entries.length === 0 ? 'COMPLETE' : 'QUEUED',
     message:
       entries.length === 0
@@ -197,9 +197,9 @@ export function startArchiveImport(input: StartArchiveImportInput): ImportJob {
         : `${entries.length} file(s) found.`,
     ...(entries.length === 0 ? { completedAt: new Date().toISOString() } : {}),
   });
-  recountImportJob(job.id);
+  await recountImportJob(job.id);
 
-  recordEvent({
+  await recordEvent({
     projectId: project.id,
     entityType: 'PROJECT',
     entityId: project.id,
@@ -207,7 +207,7 @@ export function startArchiveImport(input: StartArchiveImportInput): ImportJob {
     payload: { jobId: job.id, folder, discovered: entries.length },
   });
 
-  return getImportJob(job.id)!;
+  return (await getImportJob(job.id))!;
 }
 
 // ---------------------------------------------------------------------------
@@ -229,26 +229,27 @@ export interface ProcessOptions {
  * Serial on purpose: extraction and OCR are the expensive parts and they already
  * queue internally, so reading four PDFs at once only makes the first one slower.
  */
-export function processArchiveImport(
+export async function processArchiveImport(
   jobId: string,
   options: ProcessOptions = {},
 ): Promise<ImportJob> {
-  const existing = running.get(jobId);
-  if (existing) return existing;
-  const promise = drain(jobId, options).finally(() => {
+  const existing: Promise<ImportJob> | undefined = running.get(jobId);
+  if (existing) return await existing;
+  // The handle is registered before it is awaited: a second caller arriving
+  // mid-import has to find the job in flight rather than start a second one.
+  const promise: Promise<ImportJob> = drain(jobId, options).finally(() => {
     running.delete(jobId);
   });
   running.set(jobId, promise);
-  promise.catch(() => undefined);
-  return promise;
+  return await promise;
 }
 
 async function drain(jobId: string, options: ProcessOptions): Promise<ImportJob> {
-  const job = getImportJob(jobId);
+  const job = await getImportJob(jobId);
   if (!job) throw new Error(`Unknown import job ${jobId}`);
   cancelled.delete(jobId);
 
-  updateImportJob(jobId, {
+  await updateImportJob(jobId, {
     status: 'RUNNING',
     startedAt: job.startedAt ?? new Date().toISOString(),
     heartbeatAt: new Date().toISOString(),
@@ -260,31 +261,31 @@ async function drain(jobId: string, options: ProcessOptions): Promise<ImportJob>
     if (cancelled.has(jobId)) break;
     if (options.limit !== undefined && processed >= options.limit) break;
 
-    const file = nextPendingFile(jobId);
+    const file = await nextPendingFile(jobId);
     if (!file) break;
 
     await processOneFile(jobId, file);
     processed += 1;
-    const updated = recountImportJob(jobId);
-    updateImportJob(jobId, { heartbeatAt: new Date().toISOString() });
-    const after = getImportFile(file.id);
+    const updated = await recountImportJob(jobId);
+    await updateImportJob(jobId, { heartbeatAt: new Date().toISOString() });
+    const after = await getImportFile(file.id);
     if (updated && after) options.onProgress?.(updated, after);
   }
 
-  const remaining = nextPendingFile(jobId);
+  const remaining = await nextPendingFile(jobId);
   const wasCancelled = cancelled.has(jobId);
   cancelled.delete(jobId);
 
-  const final = recountImportJob(jobId)!;
+  const final = (await recountImportJob(jobId))!;
   if (wasCancelled) {
-    updateImportJob(jobId, {
+    await updateImportJob(jobId, {
       status: 'CANCELLED',
       message:
         `Stopped after ${final.processed} of ${final.discovered} file(s). ` +
         'Everything already imported was kept; resume to continue with the rest.',
     });
   } else if (!remaining) {
-    updateImportJob(jobId, {
+    await updateImportJob(jobId, {
       status: 'COMPLETE',
       completedAt: new Date().toISOString(),
       message:
@@ -292,13 +293,13 @@ async function drain(jobId: string, options: ProcessOptions): Promise<ImportJob>
         `${final.unsupported} unsupported, ${final.unreadable} unreadable, ${final.failed} failed.`,
     });
   } else {
-    updateImportJob(jobId, { status: 'PAUSED', message: 'Paused with files still to read.' });
+    await updateImportJob(jobId, { status: 'PAUSED', message: 'Paused with files still to read.' });
   }
 
-  const done = getImportJob(jobId)!;
+  const done = (await getImportJob(jobId))!;
   if (done.status === 'COMPLETE' || done.status === 'CANCELLED') {
-    recomputeProject(done.projectId);
-    recordEvent({
+    await recomputeProject(done.projectId);
+    await recordEvent({
       projectId: done.projectId,
       entityType: 'PROJECT',
       entityId: done.projectId,
@@ -325,8 +326,8 @@ async function drain(jobId: string, options: ProcessOptions): Promise<ImportJob>
  * is not in their project.
  */
 async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
-  const job = getImportJob(jobId)!;
-  updateImportFile(file.id, {
+  const job = (await getImportJob(jobId))!;
+  await updateImportFile(file.id, {
     status: 'EXTRACTING',
     startedAt: new Date().toISOString(),
     attempts: file.attempts + 1,
@@ -336,7 +337,7 @@ async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
   try {
     const stat = fs.statSync(file.absolutePath);
     if (stat.size > MAX_FILE_BYTES) {
-      updateImportFile(file.id, {
+      await updateImportFile(file.id, {
         status: 'UNSUPPORTED',
         fileSize: stat.size,
         detail: `The file is ${Math.round(stat.size / (1024 * 1024))} MB, above the 50 MB limit.`,
@@ -346,7 +347,7 @@ async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
     }
     contents = fs.readFileSync(file.absolutePath);
   } catch (error) {
-    updateImportFile(file.id, {
+    await updateImportFile(file.id, {
       status: 'FAILED',
       detail: `The file could not be read from disk: ${message(error)}`,
       completedAt: new Date().toISOString(),
@@ -356,14 +357,14 @@ async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
 
   const hash = hashBuffer(contents);
   const detection = detectFormat(file.filename, contents);
-  updateImportFile(file.id, {
+  await updateImportFile(file.id, {
     fileHash: hash,
     fileSize: contents.byteLength,
     detectedFormat: detection.format,
   });
 
   if (detection.format === 'UNSUPPORTED') {
-    updateImportFile(file.id, {
+    await updateImportFile(file.id, {
       status: 'UNSUPPORTED',
       detail: `Brain could not tell what this file is (${detection.reason}), so it was left alone.`,
       completedAt: new Date().toISOString(),
@@ -372,9 +373,9 @@ async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
   }
 
   // Identical bytes already imported: recorded as a duplicate, both paths kept.
-  const twin = findImportedByHash(job.projectId, hash);
+  const twin = await findImportedByHash(job.projectId, hash);
   if (twin && twin.id !== file.id) {
-    updateImportFile(file.id, {
+    await updateImportFile(file.id, {
       status: 'DUPLICATE',
       duplicateOfId: twin.documentId,
       detail:
@@ -391,7 +392,7 @@ async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
     // routing it the long way round.
     const byName =
       job.scope === 'LAYER'
-        ? importOneFile({
+        ? await importOneFile({
             projectId: job.projectId,
             originalFilename: file.filename,
             contents,
@@ -400,7 +401,7 @@ async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
         : null;
 
     if (byName?.duplicateOfDocumentId) {
-      updateImportFile(file.id, {
+      await updateImportFile(file.id, {
         status: 'DUPLICATE',
         duplicateOfId: byName.duplicateOfDocumentId,
         detail: byName.message,
@@ -419,8 +420,8 @@ async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
       byName?.documentId
         ? { documentId: byName.documentId, message: byName.message, inference: byName.inference,
             requiresConfirmation: byName.requiresConfirmation, projectScoped: false }
-        : (() => {
-            const source = importProjectSource({
+        : await (async () => {
+            const source = await importProjectSource({
               projectId: job.projectId,
               originalFilename: file.filename,
               contents,
@@ -439,7 +440,7 @@ async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
 
     if (!registration.documentId) {
       const duplicateOf = (registration as { duplicateOf?: string | null }).duplicateOf ?? null;
-      updateImportFile(file.id, {
+      await updateImportFile(file.id, {
         status: duplicateOf ? 'DUPLICATE' : 'NEEDS_REVIEW',
         duplicateOfId: duplicateOf,
         needsConfirmation: !duplicateOf,
@@ -451,7 +452,7 @@ async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
     }
 
     // Provenance travels with the document, not only with the import job.
-    updateDocument(registration.documentId, {
+    await updateDocument(registration.documentId, {
       importJobId: job.id,
       sourcePath: file.relativePath,
       sourceModifiedAt: file.sourceModifiedAt,
@@ -459,7 +460,7 @@ async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
 
     // Reading it is the point of importing it.
     const extraction = await enqueueExtraction(registration.documentId);
-    const run = getCurrentExtractionRun(registration.documentId) ?? extraction.run;
+    const run = await getCurrentExtractionRun(registration.documentId) ?? extraction.run;
     const readable = isAuditable(run.status);
 
     // Classification reads the contents, and only once they have been read.
@@ -472,7 +473,7 @@ async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
       proposals = report.proposedLinks;
     }
 
-    updateImportFile(file.id, {
+    await updateImportFile(file.id, {
       status: readable ? 'REGISTERED' : 'UNREADABLE',
       documentId: registration.documentId,
       extractionStatus: run.status,
@@ -490,7 +491,7 @@ async function processOneFile(jobId: string, file: ImportFile): Promise<void> {
       completedAt: new Date().toISOString(),
     });
   } catch (error) {
-    updateImportFile(file.id, {
+    await updateImportFile(file.id, {
       status: 'FAILED',
       detail: message(error),
       completedAt: new Date().toISOString(),
@@ -503,13 +504,13 @@ function message(error: unknown): string {
 }
 
 /** Stop the job after the file in flight. Everything finished stays finished. */
-export function cancelArchiveImport(jobId: string, reason: string): ImportJob | null {
-  const job = getImportJob(jobId);
+export async function cancelArchiveImport(jobId: string, reason: string): Promise<ImportJob | null> {
+  const job = await getImportJob(jobId);
   if (!job) return null;
   cancelled.add(jobId);
-  updateImportJob(jobId, { cancelReason: reason });
+  await updateImportJob(jobId, { cancelReason: reason });
   if (!running.has(jobId)) {
-    updateImportJob(jobId, {
+    await updateImportJob(jobId, {
       status: 'CANCELLED',
       message: 'Cancelled before it started. Nothing was imported.',
     });
@@ -518,11 +519,11 @@ export function cancelArchiveImport(jobId: string, reason: string): ImportJob | 
 }
 
 /** Continue a paused, cancelled or interrupted job from the first unfinished file. */
-export function resumeArchiveImport(jobId: string, options: ProcessOptions = {}): Promise<ImportJob> {
-  const job = getImportJob(jobId);
+export async function resumeArchiveImport(jobId: string, options: ProcessOptions = {}): Promise<ImportJob> {
+  const job = await getImportJob(jobId);
   if (!job) throw new Error(`Unknown import job ${jobId}`);
   cancelled.delete(jobId);
-  updateImportJob(jobId, { status: 'QUEUED', cancelReason: null });
+  await updateImportJob(jobId, { status: 'QUEUED', cancelReason: null });
   return processArchiveImport(jobId, options);
 }
 
@@ -532,12 +533,12 @@ export function resumeArchiveImport(jobId: string, options: ProcessOptions = {})
  * A retry that re-read the whole folder would spend the user's time proving what
  * the job already recorded. Successful files are not touched.
  */
-export function retryFailedFiles(jobId: string, options: ProcessOptions = {}): Promise<ImportJob> {
-  const files = retryableFiles(jobId);
+export async function retryFailedFiles(jobId: string, options: ProcessOptions = {}): Promise<ImportJob> {
+  const files = await retryableFiles(jobId);
   for (const file of files) {
-    updateImportFile(file.id, { status: 'QUEUED', detail: null, completedAt: null });
+    await updateImportFile(file.id, { status: 'QUEUED', detail: null, completedAt: null });
   }
-  recountImportJob(jobId);
+  await recountImportJob(jobId);
   return resumeArchiveImport(jobId, options);
 }
 
@@ -548,20 +549,20 @@ export function retryFailedFiles(jobId: string, options: ProcessOptions = {}): P
  * that was mid-read goes back to the queue; everything already settled stays
  * settled, so resuming costs only the file that was lost.
  */
-export function recoverInterruptedImports(): number {
-  const jobs = listUnfinishedImportJobs().filter((job) => !running.has(job.id));
+export async function recoverInterruptedImports(): Promise<number> {
+  const jobs = (await listUnfinishedImportJobs()).filter((job) => !running.has(job.id));
   for (const job of jobs) {
-    for (const file of listImportFiles(job.id)) {
+    for (const file of await listImportFiles(job.id)) {
       if (file.status === 'EXTRACTING' || file.status === 'OCR') {
-        updateImportFile(file.id, {
+        await updateImportFile(file.id, {
           status: 'QUEUED',
           detail: 'The server stopped while this file was being read; it will be read again.',
           startedAt: null,
         });
       }
     }
-    recountImportJob(job.id);
-    updateImportJob(job.id, {
+    await recountImportJob(job.id);
+    await updateImportJob(job.id, {
       status: 'PAUSED',
       message:
         'Interrupted by a restart. Everything already imported was kept — resume to continue ' +
@@ -579,10 +580,10 @@ export interface ImportReport {
   needsAttention: ImportFile[];
 }
 
-export function importReport(jobId: string): ImportReport | null {
-  const job = getImportJob(jobId);
+export async function importReport(jobId: string): Promise<ImportReport | null> {
+  const job = await getImportJob(jobId);
   if (!job) return null;
-  const files = listImportFiles(jobId);
+  const files = await listImportFiles(jobId);
   const byStatus: Record<string, number> = {};
   for (const file of files) byStatus[file.status] = (byStatus[file.status] ?? 0) + 1;
   return {
@@ -596,9 +597,12 @@ export function importReport(jobId: string): ImportReport | null {
 }
 
 /** Documents that came from one import, for the reconciliation stage. */
-export function importedDocuments(jobId: string): string[] {
-  return listImportFiles(jobId)
+export async function importedDocuments(jobId: string): Promise<string[]> {
+  const ids = (await listImportFiles(jobId))
     .map((file) => file.documentId)
-    .filter((id): id is string => id !== null)
-    .filter((id) => getDocument(id) !== null);
+    .filter((id): id is string => id !== null);
+  // The row lookup is a read, so it is resolved before filtering rather than
+  // inside a predicate that would only ever see truthy promises.
+  const rows = await Promise.all(ids.map((id) => getDocument(id)));
+  return ids.filter((_, i) => rows[i] !== null);
 }

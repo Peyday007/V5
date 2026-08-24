@@ -33,7 +33,7 @@ import { getProject } from '../repos/projects.ts';
 import { listActiveRuns } from '../repos/runs.ts';
 import { nowIso } from '../repos/util.ts';
 import { computeLayerState, recomputeLayer } from './stateEngine.ts';
-import { fileExists } from './storage.ts';
+import { objectExists } from './storage.ts';
 
 /**
  * The priority ladder. Lower sorts first, and the numbers are deliberately
@@ -95,17 +95,17 @@ interface PlannedLayer {
  * never writes, so the API can call it on every page load without generating
  * events or fighting a concurrent recompute.
  */
-export function buildPlan(projectId: string): PlannerResult {
-  const project = requireProject(projectId);
-  const layers = listLayers(projectId);
-  const documentsByLayer = groupByLayer(listDocuments(projectId));
-  const runsByLayer = groupByLayer(listActiveRuns(projectId));
+export async function buildPlan(projectId: string): Promise<PlannerResult> {
+  const project = await requireProject(projectId);
+  const layers = await listLayers(projectId);
+  const documentsByLayer = groupByLayer(await listDocuments(projectId));
+  const runsByLayer = groupByLayer(await listActiveRuns(projectId));
 
-  const planned: PlannedLayer[] = layers.map((layer) => {
-    const snapshot = computeLayerState(layer.id);
+  const planned: PlannedLayer[] = await Promise.all(layers.map(async (layer) => {
+    const snapshot = await computeLayerState(layer.id);
     const documents = documentsByLayer.get(layer.id) ?? [];
     const runs = runsByLayer.get(layer.id) ?? [];
-    const classification = classify({
+    const classification = await classify({
       layer,
       snapshot,
       policy: project.versionPolicy,
@@ -126,7 +126,7 @@ export function buildPlan(projectId: string): PlannerResult {
       missing: classification.missing,
     };
     return { layer, snapshot, classification, item };
-  });
+  }));
 
   const blocked: PlannedLayer[] = [];
   const later: PlannedLayer[] = [];
@@ -200,25 +200,25 @@ export function buildPlan(projectId: string): PlannerResult {
  * re-derives and persists each layer's status. That keeps the stored layer rows honest
  * after an out-of-band change without ever changing the answer it returns.
  */
-export function calculateNextAction(projectId: string): PlannerItem | null {
-  requireProject(projectId);
-  for (const layer of listLayers(projectId)) {
-    recomputeLayer(layer.id);
+export async function calculateNextAction(projectId: string): Promise<PlannerItem | null> {
+  await requireProject(projectId);
+  for (const layer of await listLayers(projectId)) {
+    await recomputeLayer(layer.id);
   }
-  return buildPlan(projectId).nextBestAction;
+  return (await buildPlan(projectId)).nextBestAction;
 }
 
 // ---------------------------------------------------------------------------
 // Classification
 // ---------------------------------------------------------------------------
 
-function classify(input: {
+async function classify(input: {
   layer: Layer;
   snapshot: LayerStateSnapshot;
   policy: VersionPolicy;
   documents: Document[];
   runs: ResearchRun[];
-}): Classification {
+}): Promise<Classification> {
   const { layer, snapshot, policy, documents, runs } = input;
   const name = snapshot.layerName || layer.name;
   const running = runs.filter((run) => run.status === 'RUNNING');
@@ -329,7 +329,7 @@ function classify(input: {
       // The state engine picked the *first unaudited* document, which is not the
       // same as the highest version — prefer its answer so the layer row and the
       // planner never name different documents.
-      const target = snapshot.nextVersion ?? snapshot.currentVersion ?? latestUsableVersion(documents);
+      const target = snapshot.nextVersion ?? snapshot.currentVersion ?? await latestUsableVersion(documents);
       return {
         placement: 'ACTIONABLE',
         priority: PRIORITY.AUDIT,
@@ -342,7 +342,7 @@ function classify(input: {
     }
 
     case 'AUDITING': {
-      const target = snapshot.nextVersion ?? snapshot.currentVersion ?? latestUsableVersion(documents);
+      const target = snapshot.nextVersion ?? snapshot.currentVersion ?? await latestUsableVersion(documents);
       if (running.length > 0 && !auditPending) {
         return {
           placement: 'WAITING',
@@ -366,7 +366,7 @@ function classify(input: {
     }
 
     case 'SYNTHESIS_READY': {
-      const freezeTarget = freezeCandidate(snapshot, documents, synthVersion);
+      const freezeTarget = await freezeCandidate(snapshot, documents, synthVersion);
       if (freezeTarget) {
         return {
           placement: 'ACTIONABLE',
@@ -514,12 +514,12 @@ function actionForVersion(version: string, policy: VersionPolicy): PlannerItem['
  * The document a freeze would make canonical, or null when there is nothing to
  * freeze onto. Invariant 6: never propose freezing a layer with no artifact.
  */
-function freezeCandidate(
+async function freezeCandidate(
   snapshot: LayerStateSnapshot,
   documents: Document[],
   synthVersion: string,
-): Document | null {
-  const usable = documents.filter(isUsable);
+): Promise<Document | null> {
+  const usable = await usableDocuments(documents);
   const synthesisDocument =
     usable.find((doc) => normalizeVersion(doc.version) === synthVersion) ?? null;
   if (snapshot.latestAuditVerdict === 'READY_TO_FREEZE') {
@@ -538,10 +538,20 @@ function freezeCandidate(
  * Invariants 8 and 9: a document only counts when the database says it is
  * finished AND its bytes are actually on disk right now.
  */
-function isUsable(doc: Document): boolean {
+async function isUsable(doc: Document): Promise<boolean> {
   if (doc.status !== 'COMPLETE' && doc.status !== 'FROZEN') return false;
   if (doc.fileMissing) return false;
-  return fileExists(doc.filesystemPath);
+  return await objectExists(doc.filesystemPath);
+}
+
+/**
+ * `filter` cannot take an asynchronous predicate — it would keep everything,
+ * since a promise is truthy. So the answers are resolved first and the filter
+ * reads them.
+ */
+async function usableDocuments(documents: Document[]): Promise<Document[]> {
+  const verdicts = await Promise.all(documents.map((document) => isUsable(document)));
+  return documents.filter((_document, index) => verdicts[index] === true);
 }
 
 function highestVersion(documents: Document[]): Document | null {
@@ -550,8 +560,8 @@ function highestVersion(documents: Document[]): Document | null {
   );
 }
 
-function latestUsableVersion(documents: Document[]): string | null {
-  return highestVersion(documents.filter(isUsable))?.version ?? null;
+async function latestUsableVersion(documents: Document[]): Promise<string | null> {
+  return highestVersion(await usableDocuments(documents))?.version ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -662,8 +672,8 @@ function formatList(values: string[], limit = 4): string {
 // Small utilities
 // ---------------------------------------------------------------------------
 
-function requireProject(projectId: string): Project {
-  const project = getProject(projectId);
+async function requireProject(projectId: string): Promise<Project> {
+  const project = await getProject(projectId);
   if (!project) throw new Error(`Unknown project: ${projectId}`);
   return project;
 }

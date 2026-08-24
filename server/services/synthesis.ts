@@ -70,17 +70,17 @@ export interface SynthesisPreparation {
  * compiled prompt (invariant 10). Ends by recomputing project state so the
  * layer immediately reads SYNTHESIS_READY / BLOCKED without a second call.
  */
-export function prepareSynthesis(input: PrepareSynthesisInput): SynthesisPreparation {
-  const layer = getLayer(input.layerId);
+export async function prepareSynthesis(input: PrepareSynthesisInput): Promise<SynthesisPreparation> {
+  const layer = await getLayer(input.layerId);
   if (!layer) throw new Error(`Cannot prepare a synthesis: unknown layer ${input.layerId}`);
-  const project = getProject(layer.projectId);
+  const project = await getProject(layer.projectId);
   if (!project) throw new Error(`Cannot prepare a synthesis: unknown project ${layer.projectId}`);
   const policy: VersionPolicy = project.versionPolicy ?? DEFAULT_VERSION_POLICY;
   const override = input.override === true;
 
   // 1. Validate the whole packet first — nothing is written until it passes.
-  const requiredDocuments = defaultRequiredDocuments(project.id, layer.id, 'SYNTHESIS');
-  const dependencies = checkCanonicalNames(project.id, requiredDocuments);
+  const requiredDocuments = await defaultRequiredDocuments(project.id, layer.id, 'SYNTHESIS');
+  const dependencies = await checkCanonicalNames(project.id, requiredDocuments);
   // An empty packet reports "0 / 0 READY", which is technically ready and
   // completely meaningless: there is nothing to consolidate. Refuse outright,
   // because no override can conjure source material that does not exist.
@@ -93,8 +93,8 @@ export function prepareSynthesis(input: PrepareSynthesisInput): SynthesisPrepara
   if (!dependencies.ready && !override) throw new DependencyError(dependencies);
 
   const targetVersion =
-    defaultTargetVersion(project.id, layer.id, 'SYNTHESIS') || synthesisVersion(policy);
-  const compiled = compilePrompt({
+    await defaultTargetVersion(project.id, layer.id, 'SYNTHESIS') || synthesisVersion(policy);
+  const compiled = await compilePrompt({
     projectId: project.id,
     layerId: layer.id,
     runType: 'SYNTHESIS',
@@ -107,18 +107,18 @@ export function prepareSynthesis(input: PrepareSynthesisInput): SynthesisPrepara
     : null;
 
   const db = getDb();
-  const prepared = db.transaction((): { run: ResearchRun; document: Document } => {
+  const prepared = await db.transaction(async (): Promise<{ run: ResearchRun; document: Document }> => {
     // 2. The synthesis document exists as an expectation before it exists as a
     //    file: that is what makes "Qualification Logic v3.1 is missing" sayable.
-    const existing = findDocumentByCanonicalName(project.id, compiled.targetCanonicalName);
+    const existing = await findDocumentByCanonicalName(project.id, compiled.targetCanonicalName);
     let document: Document;
     if (existing) {
       document =
         existing.status === 'MISSING' || existing.status === 'FAILED'
-          ? (updateDocument(existing.id, { status: 'EXPECTED' }) ?? existing)
+          ? (await updateDocument(existing.id, { status: 'EXPECTED' }) ?? existing)
           : existing;
     } else {
-      document = createDocument({
+      document = await createDocument({
         projectId: project.id,
         layerId: layer.id,
         canonicalName: compiled.targetCanonicalName,
@@ -132,7 +132,7 @@ export function prepareSynthesis(input: PrepareSynthesisInput): SynthesisPrepara
           requiredDocuments.length === 1 ? '' : 's'
         }.`,
       });
-      recordEvent({
+      await recordEvent({
         projectId: project.id,
         layerId: layer.id,
         entityType: 'DOCUMENT',
@@ -149,7 +149,7 @@ export function prepareSynthesis(input: PrepareSynthesisInput): SynthesisPrepara
 
     // 3. The run carries the exact prompt and the exact attachment list.
     const status: RunStatus = dependencies.ready || override ? 'READY' : 'BLOCKED';
-    const run = createRun({
+    const run = await createRun({
       projectId: project.id,
       layerId: layer.id,
       targetDocumentId: document.id,
@@ -162,14 +162,14 @@ export function prepareSynthesis(input: PrepareSynthesisInput): SynthesisPrepara
       expectedConversationTitle: compiled.expectedConversationTitle,
       expectedFilename: compiled.expectedFilename,
     });
-    setRunDependencies(run.id, requiredDocuments);
+    await setRunDependencies(run.id, requiredDocuments);
 
     if (override) {
-      updateRun(run.id, {
+      await updateRun(run.id, {
         dependencyOverride: true,
         dependencyOverrideReason: overrideReason,
       });
-      recordEvent({
+      await recordEvent({
         projectId: project.id,
         layerId: layer.id,
         entityType: 'RUN',
@@ -185,7 +185,7 @@ export function prepareSynthesis(input: PrepareSynthesisInput): SynthesisPrepara
       });
     }
 
-    recordEvent({
+    await recordEvent({
       projectId: project.id,
       layerId: layer.id,
       entityType: 'RUN',
@@ -198,7 +198,7 @@ export function prepareSynthesis(input: PrepareSynthesisInput): SynthesisPrepara
         dependencies: dependencies.summary,
       },
     });
-    recordEvent({
+    await recordEvent({
       projectId: project.id,
       layerId: layer.id,
       entityType: 'RUN',
@@ -212,7 +212,7 @@ export function prepareSynthesis(input: PrepareSynthesisInput): SynthesisPrepara
         expectedFilename: compiled.expectedFilename,
       },
     });
-    recordEvent({
+    await recordEvent({
       projectId: project.id,
       layerId: layer.id,
       entityType: 'RUN',
@@ -235,10 +235,10 @@ export function prepareSynthesis(input: PrepareSynthesisInput): SynthesisPrepara
 
   // Recomputing here is what lets the caller simply refresh the layer instead
   // of deriving state themselves.
-  recomputeProject(project.id);
+  await recomputeProject(project.id);
 
   return {
-    run: getRun(prepared.run.id) ?? prepared.run,
+    run: await getRun(prepared.run.id) ?? prepared.run,
     document: prepared.document,
     dependencies,
     compiled,

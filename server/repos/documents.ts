@@ -25,6 +25,8 @@ export function mapDocument(row: DocumentRow): Document {
     status: row.status as DocumentStatus,
     filename: row.filename,
     filesystemPath: row.filesystem_path,
+    storageKey: row.storage_key ?? row.filesystem_path,
+    storageProvider: row.storage_provider,
     fileSize: row.file_size === null ? null : Number(row.file_size),
     fileHash: row.file_hash,
     fileMissing: toBool(row.file_missing),
@@ -68,6 +70,9 @@ export interface CreateDocumentInput {
   status?: DocumentStatus;
   filename?: string | null;
   filesystemPath?: string | null;
+  /** Where the bytes live in the store. Defaults to the path, which is a key. */
+  storageKey?: string | null;
+  storageProvider?: string | null;
   fileSize?: number | null;
   fileHash?: string | null;
   conversationTitle?: string | null;
@@ -82,65 +87,69 @@ export interface CreateDocumentInput {
   origin?: DocumentOrigin;
 }
 
-export function createDocument(input: CreateDocumentInput): Document {
+export async function createDocument(input: CreateDocumentInput): Promise<Document> {
   const db = getDb();
   const ts = nowIso();
   const id = newId('doc');
-  db.run(
+  await db.run(
     `INSERT INTO documents (id, project_id, layer_id, canonical_name, version, version_sort, wave,
        document_type, status, filename, filesystem_path, file_size, file_hash, file_missing,
        conversation_title, source_run_id, parent_document_id, is_canonical, frozen, notes,
-       imported_at, created_at, updated_at, mime_type, detected_format, page_count, origin)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       imported_at, created_at, updated_at, mime_type, detected_format, page_count, origin,
+       storage_key, storage_provider)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, input.projectId, input.layerId, input.canonicalName, input.version, input.versionSort,
       input.wave ?? null, input.documentType, input.status ?? 'EXPECTED', input.filename ?? null,
-      input.filesystemPath ?? null, input.fileSize ?? null, input.fileHash ?? null,
+      input.filesystemPath ?? null,
+      input.fileSize ?? null, input.fileHash ?? null,
       input.conversationTitle ?? null, input.sourceRunId ?? null, input.parentDocumentId ?? null,
       fromBool(input.isCanonical), input.notes ?? null, input.importedAt ?? null, ts, ts,
       input.mimeType ?? null, input.detectedFormat ?? null, input.pageCount ?? null,
-      input.origin ?? 'UPLOAD'],
+      input.origin ?? 'UPLOAD',
+      input.storageKey ?? input.filesystemPath ?? null,
+      input.storageProvider ?? null],
   );
-  return getDocument(id)!;
+  return (await getDocument(id))!;
 }
 
-export function getDocument(id: string): Document | null {
-  const row = getDb().get<DocumentRow>('SELECT * FROM documents WHERE id = ?', [id]);
+export async function getDocument(id: string): Promise<Document | null> {
+  const row = await getDb().get<DocumentRow>('SELECT * FROM documents WHERE id = ?', [id]);
   return row ? mapDocument(row) : null;
 }
 
-export function findDocumentByCanonicalName(projectId: string, canonicalName: string): Document | null {
-  const row = getDb().get<DocumentRow>(
+export async function findDocumentByCanonicalName(projectId: string, canonicalName: string): Promise<Document | null> {
+  const row = await getDb().get<DocumentRow>(
     'SELECT * FROM documents WHERE project_id = ? AND canonical_name = ? COLLATE NOCASE',
     [projectId, canonicalName],
   );
   return row ? mapDocument(row) : null;
 }
 
-export function findDocumentByPath(filesystemPath: string): Document | null {
-  const row = getDb().get<DocumentRow>('SELECT * FROM documents WHERE filesystem_path = ?', [
+export async function findDocumentByPath(filesystemPath: string): Promise<Document | null> {
+  const row = await getDb().get<DocumentRow>('SELECT * FROM documents WHERE filesystem_path = ?', [
     filesystemPath,
   ]);
   return row ? mapDocument(row) : null;
 }
 
-export function listDocuments(projectId: string): Document[] {
-  return getDb()
-    .all<DocumentRow>(
+export async function listDocuments(projectId: string): Promise<Document[]> {
+  return (await getDb().all<DocumentRow>(
       'SELECT * FROM documents WHERE project_id = ? ORDER BY layer_id, version_sort, created_at',
       [projectId],
-    )
+    ))
     .map(mapDocument);
 }
 
-export function listDocumentsByLayer(layerId: string): Document[] {
-  return getDb()
-    .all<DocumentRow>('SELECT * FROM documents WHERE layer_id = ? ORDER BY version_sort, created_at', [
+export async function listDocumentsByLayer(layerId: string): Promise<Document[]> {
+  return (await getDb().all<DocumentRow>('SELECT * FROM documents WHERE layer_id = ? ORDER BY version_sort, created_at', [
       layerId,
-    ])
+    ]))
     .map(mapDocument);
 }
 
 export interface UpdateDocumentInput {
+  storageKey?: string | null;
+  storageProvider?: string | null;
   layerId?: string | null;
   canonicalName?: string;
   version?: string;
@@ -176,7 +185,7 @@ export interface UpdateDocumentInput {
   sourceModifiedAt?: string | null;
 }
 
-export function updateDocument(id: string, patch: UpdateDocumentInput): Document | null {
+export async function updateDocument(id: string, patch: UpdateDocumentInput): Promise<Document | null> {
   const { clause, values } = buildUpdate({
     layer_id: patch.layerId,
     canonical_name: patch.canonicalName,
@@ -187,6 +196,8 @@ export function updateDocument(id: string, patch: UpdateDocumentInput): Document
     status: patch.status,
     filename: patch.filename,
     filesystem_path: patch.filesystemPath,
+    storage_key: patch.storageKey ?? patch.filesystemPath,
+    storage_provider: patch.storageProvider,
     file_size: patch.fileSize,
     file_hash: patch.fileHash,
     file_missing: patch.fileMissing === undefined ? undefined : fromBool(patch.fileMissing),
@@ -213,7 +224,7 @@ export function updateDocument(id: string, patch: UpdateDocumentInput): Document
     source_modified_at: patch.sourceModifiedAt,
   });
   if (!clause) return getDocument(id);
-  getDb().run(`UPDATE documents SET ${clause}, updated_at = ? WHERE id = ?`, [
+  await getDb().run(`UPDATE documents SET ${clause}, updated_at = ? WHERE id = ?`, [
     ...(values as never[]),
     nowIso(),
     id,
@@ -222,6 +233,6 @@ export function updateDocument(id: string, patch: UpdateDocumentInput): Document
 }
 
 /** Documents are never deleted in ordinary operation — history is provenance. */
-export function deleteDocument(id: string): void {
-  getDb().run('DELETE FROM documents WHERE id = ?', [id]);
+export async function deleteDocument(id: string): Promise<void> {
+  await getDb().run('DELETE FROM documents WHERE id = ?', [id]);
 }

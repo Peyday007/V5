@@ -48,7 +48,7 @@ import {
   documentPresence,
   refreshProjectDependencies,
 } from './dependencies.ts';
-import { fileExists } from './storage.ts';
+import { objectExists } from './storage.ts';
 import { writeProjectState } from './runtimeState.ts';
 
 /** Runs that still owe the project something, and therefore shape layer state. */
@@ -316,7 +316,7 @@ function deriveStatus(input: {
 
   // 9. Finished, complete, and nobody has inspected it yet.
   const unaudited = presentDocuments.find(
-    (document) => getLatestAuditForDocument(document.id) === null,
+    async (document) => await getLatestAuditForDocument(document.id) === null,
   );
   if (unaudited && missingVersions.length === 0) {
     return {
@@ -376,19 +376,29 @@ function deriveStatus(input: {
 }
 
 /** Everything `computeLayerState` needs, gathered from the database + disk. */
-function deriveLayer(layerId: string): LayerDerivation {
-  const layer = getLayer(layerId);
+async function deriveLayer(layerId: string): Promise<LayerDerivation> {
+  const layer = await getLayer(layerId);
   if (!layer) throw new Error(`Cannot compute layer state: unknown layer ${layerId}`);
-  const project = getProject(layer.projectId);
+  const project = await getProject(layer.projectId);
   const policy: VersionPolicy = project?.versionPolicy ?? DEFAULT_VERSION_POLICY;
 
-  const documents = listDocumentsByLayer(layerId);
-  const runs = listRunsByLayer(layerId);
+  const documents = await listDocumentsByLayer(layerId);
+  const runs = await listRunsByLayer(layerId);
   const activeRuns = runs.filter((run) => ACTIVE_RUN_STATUSES.has(run.status));
 
-  // One stat per document: the filesystem is consulted, not assumed.
-  const presence = new Map(documents.map((document) => [document.id, documentPresence(document)]));
-  const presentDocuments = documents.filter((document) => presence.get(document.id)?.present === true);
+  // One stat per document: the store is consulted, not assumed. The presence of
+  // every document is resolved before anything filters on it — an asynchronous
+  // predicate inside `filter` keeps every element, because a promise is truthy.
+  const presence = new Map(
+    await Promise.all(
+      documents.map(
+        async (document) => [document.id, await documentPresence(document)] as const,
+      ),
+    ),
+  );
+  const presentDocuments = documents.filter(
+    (document) => presence.get(document.id)?.present === true,
+  );
   const inconsistentDocuments = documents
     .filter((document) => presence.get(document.id)?.fileMissing === true)
     .map((document) => document.canonicalName);
@@ -445,16 +455,16 @@ function deriveLayer(layerId: string): LayerDerivation {
   };
   for (const run of activeRuns) {
     if (run.dependencyOverride) continue;
-    collect(checkRunDependencies(run.id).items);
+    collect((await checkRunDependencies(run.id)).items);
   }
   for (const document of documents) {
     if (document.status === 'COMPLETE' || document.status === 'FROZEN' || document.status === 'SUPERSEDED') {
       continue;
     }
-    collect(checkDocumentDependencies(document.id).items);
+    collect((await checkDocumentDependencies(document.id)).items);
   }
 
-  const latestAudit = getLatestAuditForLayer(layerId);
+  const latestAudit = await getLatestAuditForLayer(layerId);
   // An audit that declared the layer blocked names the documents it wanted.
   // They are re-checked against reality rather than trusted, so a document that
   // has since been imported does not keep the layer blocked.
@@ -467,14 +477,14 @@ function deriveLayer(layerId: string): LayerDerivation {
         .filter((content) => content.length > 0),
     );
     auditNamedDocumentCount = named.length;
-    if (named.length > 0) collect(checkCanonicalNames(layer.projectId, named).items);
+    if (named.length > 0) collect((await checkCanonicalNames(layer.projectId, named)).items);
   }
 
   // A reopen stands only until real work resumes. Comparing it against the
   // newest run, audit and document means the state clears itself rather than
   // needing a human to unpin it.
   const reopenedAt =
-    listEventsByLayer(layerId, 50).find((event) => event.eventType === 'LAYER_REOPENED')?.createdAt ??
+    (await listEventsByLayer(layerId, 50)).find((event) => event.eventType === 'LAYER_REOPENED')?.createdAt ??
     null;
   const latestActivityAt = [
     ...runs.map((run) => run.createdAt),
@@ -547,8 +557,8 @@ function deriveLayer(layerId: string): LayerDerivation {
 }
 
 /** Pure derivation — reads the database and the filesystem, writes nothing. */
-export function computeLayerState(layerId: string): LayerStateSnapshot {
-  return deriveLayer(layerId).snapshot;
+export async function computeLayerState(layerId: string): Promise<LayerStateSnapshot> {
+  return (await deriveLayer(layerId)).snapshot;
 }
 
 /**
@@ -556,16 +566,16 @@ export function computeLayerState(layerId: string): LayerStateSnapshot {
  * the status actually moved — invariant 3 asks for an event per important
  * action, not an event per page refresh.
  */
-export function recomputeLayer(layerId: string): LayerStateSnapshot {
+export async function recomputeLayer(layerId: string): Promise<LayerStateSnapshot> {
   const db = getDb();
-  return db.transaction(() => {
-    const before = getLayer(layerId);
+  return db.transaction(async () => {
+    const before = await getLayer(layerId);
     if (!before) throw new Error(`Cannot recompute layer: unknown layer ${layerId}`);
-    const { snapshot, canonicalDocumentId } = deriveLayer(layerId);
+    const { snapshot, canonicalDocumentId } = await deriveLayer(layerId);
 
     // A layer's wave is simply where its furthest document sits: v1 is wave 1,
     // sibling expansions wave 2, the canonical synthesis wave 3.
-    const policy = getProject(before.projectId)?.versionPolicy ?? DEFAULT_VERSION_POLICY;
+    const policy = (await getProject(before.projectId))?.versionPolicy ?? DEFAULT_VERSION_POLICY;
     const currentWave = snapshot.currentVersion
       ? Math.max(1, waveForVersion(snapshot.currentVersion, policy))
       : 1;
@@ -575,10 +585,10 @@ export function recomputeLayer(layerId: string): LayerStateSnapshot {
     if (before.currentVersion !== snapshot.currentVersion) patch.currentVersion = snapshot.currentVersion;
     if (before.canonicalDocumentId !== canonicalDocumentId) patch.canonicalDocumentId = canonicalDocumentId;
     if (before.currentWave !== currentWave) patch.currentWave = currentWave;
-    if (Object.keys(patch).length > 0) updateLayer(layerId, patch);
+    if (Object.keys(patch).length > 0) await updateLayer(layerId, patch);
 
     if (before.status !== snapshot.status) {
-      recordEvent({
+      await recordEvent({
         projectId: before.projectId,
         layerId,
         entityType: 'LAYER',
@@ -603,22 +613,22 @@ export function recomputeLayer(layerId: string): LayerStateSnapshot {
  * claiming a file that is not there, and a file that comes back is healed
  * automatically rather than needing a manual fix.
  */
-export function recomputeDocumentFileState(projectId: string): {
+export async function recomputeDocumentFileState(projectId: string): Promise<{
   missing: string[];
   restored: string[];
-} {
+}> {
   const db = getDb();
-  return db.transaction(() => {
+  return db.transaction(async () => {
     const missing: string[] = [];
     const restored: string[] = [];
-    for (const document of listDocuments(projectId)) {
+    for (const document of await listDocuments(projectId)) {
       // No recorded path means nothing was ever stored for this row (an
       // expected document); there is no file to have lost.
       if (!document.filesystemPath) continue;
-      const onDisk = fileExists(document.filesystemPath);
+      const onDisk = await objectExists(document.filesystemPath);
       if (!onDisk && !document.fileMissing) {
-        updateDocument(document.id, { fileMissing: true });
-        recordEvent({
+        await updateDocument(document.id, { fileMissing: true });
+        await recordEvent({
           projectId,
           layerId: document.layerId,
           entityType: 'DOCUMENT',
@@ -628,8 +638,8 @@ export function recomputeDocumentFileState(projectId: string): {
         });
         missing.push(document.canonicalName);
       } else if (onDisk && document.fileMissing) {
-        updateDocument(document.id, { fileMissing: false });
-        recordEvent({
+        await updateDocument(document.id, { fileMissing: false });
+        await recordEvent({
           projectId,
           layerId: document.layerId,
           entityType: 'DOCUMENT',
@@ -652,19 +662,19 @@ export function recomputeDocumentFileState(projectId: string): {
  * until someone re-generated the prompt — exactly the "now go update the
  * database" step section 18 says must not exist.
  */
-export function recomputeRunReadiness(projectId: string): { unblocked: string[]; blocked: string[] } {
+export async function recomputeRunReadiness(projectId: string): Promise<{ unblocked: string[]; blocked: string[] }> {
   const unblocked: string[] = [];
   const blocked: string[] = [];
 
-  for (const run of listRuns(projectId)) {
+  for (const run of await listRuns(projectId)) {
     // Only runs that have not started yet; a finished run's status is history.
     if (run.status !== 'BLOCKED' && run.status !== 'READY' && run.status !== 'PLANNED') continue;
-    const ready = run.dependencyOverride || checkRunDependencies(run.id).ready;
+    const ready = run.dependencyOverride || (await checkRunDependencies(run.id)).ready;
 
     if (!ready && run.status !== 'BLOCKED') {
-      updateRun(run.id, { status: 'BLOCKED' });
+      await updateRun(run.id, { status: 'BLOCKED' });
       blocked.push(run.id);
-      recordEvent({
+      await recordEvent({
         projectId,
         layerId: run.layerId,
         entityType: 'RUN',
@@ -673,9 +683,9 @@ export function recomputeRunReadiness(projectId: string): { unblocked: string[];
         payload: { runId: run.id, targetVersion: run.targetVersion },
       });
     } else if (ready && run.status === 'BLOCKED') {
-      updateRun(run.id, { status: 'READY' });
+      await updateRun(run.id, { status: 'READY' });
       unblocked.push(run.id);
-      recordEvent({
+      await recordEvent({
         projectId,
         layerId: run.layerId,
         entityType: 'RUN',
@@ -697,28 +707,30 @@ let recomputeDepth = 0;
  * derives from the resolved dependencies, and only then is the derived runtime
  * snapshot written for the UI.
  */
-export function recomputeProject(projectId: string): LayerStateSnapshot[] {
+export async function recomputeProject(projectId: string): Promise<LayerStateSnapshot[]> {
   recomputeDepth += 1;
   try {
     const db = getDb();
-    const snapshots = db.transaction(() => {
-      recomputeDocumentFileState(projectId);
-      refreshProjectDependencies(projectId);
-      recomputeRunReadiness(projectId);
-      const results = listLayers(projectId).map((layer) => recomputeLayer(layer.id));
+    const snapshots = await db.transaction(async () => {
+      await recomputeDocumentFileState(projectId);
+      await refreshProjectDependencies(projectId);
+      await recomputeRunReadiness(projectId);
+      const results = await Promise.all(
+        (await listLayers(projectId)).map((layer) => recomputeLayer(layer.id)),
+      );
 
       // The project's wave is the furthest any layer has reached, so the header
       // advances on its own instead of being edited by hand.
-      const project = getProject(projectId);
+      const project = await getProject(projectId);
       if (project) {
-        const wave = listLayers(projectId).reduce((max, layer) => Math.max(max, layer.currentWave), 1);
-        if (project.currentWave !== wave) updateProject(projectId, { currentWave: wave });
+        const wave = (await listLayers(projectId)).reduce((max, layer) => Math.max(max, layer.currentWave), 1);
+        if (project.currentWave !== wave) await updateProject(projectId, { currentWave: wave });
       }
       return results;
     });
     if (recomputeDepth === 1) {
       try {
-        writeProjectState(projectId);
+        await writeProjectState(projectId);
       } catch {
         // project-state.json is a derived cache; SQLite stays authoritative, so
         // a read-only or missing runtime directory must never fail a recompute.
@@ -735,21 +747,21 @@ export function recomputeProject(projectId: string): LayerStateSnapshot[] {
  * computed underneath so the UI can show "you pinned FROZEN, the data says
  * BLOCKED".
  */
-export function setLayerManualStatus(
+export async function setLayerManualStatus(
   layerId: string,
   status: LayerStatus | null,
   reason?: string,
-): LayerStateSnapshot {
+): Promise<LayerStateSnapshot> {
   const db = getDb();
-  return db.transaction(() => {
-    const before = getLayer(layerId);
+  return db.transaction(async () => {
+    const before = await getLayer(layerId);
     if (!before) throw new Error(`Cannot set manual status: unknown layer ${layerId}`);
-    updateLayer(layerId, {
+    await updateLayer(layerId, {
       statusSource: status ? 'MANUAL' : 'DERIVED',
       manualStatus: status,
       manualStatusReason: status ? (reason ?? null) : null,
     });
-    recordEvent({
+    await recordEvent({
       projectId: before.projectId,
       layerId,
       entityType: 'LAYER',
@@ -771,14 +783,17 @@ export function setLayerManualStatus(
  * Declare which versions a layer owes, e.g. `["v1","v1B","v1C"]`. This is what
  * turns a vague "keep researching" into `6 / 7` and a concrete next version.
  */
-export function setLayerExpectations(layerId: string, expectedVersions: string[]): LayerStateSnapshot {
+export async function setLayerExpectations(
+  layerId: string,
+  expectedVersions: string[],
+): Promise<LayerStateSnapshot> {
   const db = getDb();
-  return db.transaction(() => {
-    const before = getLayer(layerId);
+  return db.transaction(async () => {
+    const before = await getLayer(layerId);
     if (!before) throw new Error(`Cannot set expectations: unknown layer ${layerId}`);
     const normalized = sortVersions(unique(expectedVersions.map((version) => normalizeVersion(version))));
-    updateLayer(layerId, { expectedVersions: normalized });
-    recordEvent({
+    await updateLayer(layerId, { expectedVersions: normalized });
+    await recordEvent({
       projectId: before.projectId,
       layerId,
       entityType: 'LAYER',
@@ -794,9 +809,14 @@ export function setLayerExpectations(layerId: string, expectedVersions: string[]
  * Adopt reality as the expectation: used straight after a bulk import, when the
  * documents on disk are the best statement of what the layer actually contains.
  */
-export function deriveLayerExpectationsFromDocuments(layerId: string): LayerStateSnapshot {
-  const present = listDocumentsByLayer(layerId)
-    .filter((document) => documentPresence(document).present)
-    .map((document) => document.version);
+export async function deriveLayerExpectationsFromDocuments(layerId: string): Promise<LayerStateSnapshot> {
+  const documents = await listDocumentsByLayer(layerId);
+  // The presence check reads the store, so it cannot be a `.filter` predicate:
+  // an async predicate returns a promise, every promise is truthy, and the
+  // layer would adopt documents whose bytes are gone as its expectation.
+  const presence = await Promise.all(
+    documents.map(async (document) => (await documentPresence(document)).present),
+  );
+  const present = documents.filter((_, i) => presence[i]).map((document) => document.version);
   return setLayerExpectations(layerId, present);
 }

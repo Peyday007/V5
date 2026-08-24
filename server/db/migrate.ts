@@ -1,10 +1,32 @@
+/**
+ * Applying schema changes, to whichever database is underneath.
+ *
+ * Two directories, one runner. `migrations/` is the SQLite chain that every
+ * existing local Brain has already applied and whose files are therefore
+ * immutable; `pg-migrations/` is the cloud chain, which starts from a baseline
+ * describing the same schema and moves forward on its own numbering. The two
+ * are deliberately separate: pretending one file could describe both dialects
+ * would mean writing to the intersection of them, and the intersection is not
+ * expressive enough to say what this schema needs.
+ *
+ * What both chains share is the discipline. Every file is applied once, in
+ * order, inside a transaction, with its checksum recorded — so an applied
+ * migration that is later edited stops the boot rather than half-applying
+ * itself, and a migration interrupted mid-flight leaves nothing behind.
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { SqliteDriver } from './driver.ts';
+import type { Database, DatabaseDialect } from './types.ts';
 import { BACKUP_ROOT } from '../env.ts';
 
-const MIGRATIONS_DIR = fileURLToPath(new URL('./migrations', import.meta.url));
+const SQLITE_MIGRATIONS_DIR = fileURLToPath(new URL('./migrations', import.meta.url));
+const POSTGRES_MIGRATIONS_DIR = fileURLToPath(new URL('./pg-migrations', import.meta.url));
+
+/** Where the chain for one dialect lives. */
+export function migrationsDirFor(dialect: DatabaseDialect): string {
+  return dialect === 'postgres' ? POSTGRES_MIGRATIONS_DIR : SQLITE_MIGRATIONS_DIR;
+}
 
 export interface AppliedMigration {
   version: number;
@@ -15,6 +37,7 @@ export interface AppliedMigration {
 
 export interface MigrationReport {
   driver: string;
+  /** The local file, or the sanitized description of the cloud database. */
   databasePath: string;
   schemaVersion: number;
   applied: { version: number; name: string; durationMs: number }[];
@@ -43,7 +66,7 @@ function checksum(text: string): string {
   return hash.toString(16).padStart(16, '0');
 }
 
-export function loadMigrationFiles(dir: string = MIGRATIONS_DIR): MigrationFile[] {
+export function loadMigrationFiles(dir: string = SQLITE_MIGRATIONS_DIR): MigrationFile[] {
   if (!fs.existsSync(dir)) return [];
   const files = fs
     .readdirSync(dir)
@@ -70,10 +93,17 @@ export function loadMigrationFiles(dir: string = MIGRATIONS_DIR): MigrationFile[
   return migrations.sort((a, b) => a.version - b.version);
 }
 
-function ensureMigrationTable(db: SqliteDriver): void {
-  db.exec(`
+/**
+ * The ledger, in whichever dialect.
+ *
+ * Same four columns, same meaning, so the two chains can be reasoned about
+ * together even though their contents differ.
+ */
+async function ensureMigrationTable(db: Database): Promise<void> {
+  const versionType = db.dialect === 'postgres' ? 'integer' : 'INTEGER';
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
-      version    INTEGER PRIMARY KEY,
+      version    ${versionType} PRIMARY KEY,
       name       TEXT NOT NULL,
       checksum   TEXT NOT NULL,
       applied_at TEXT NOT NULL
@@ -84,13 +114,17 @@ function ensureMigrationTable(db: SqliteDriver): void {
 /**
  * Copy the database file aside before the first schema change is applied to an
  * existing database. Cheap insurance; only taken when there is something to lose.
+ *
+ * Local only. A managed Postgres has its own backups, and copying one from here
+ * would be both impossible and a worse promise than the one its provider makes.
  */
-function backupDatabase(db: SqliteDriver, databasePath: string): string | null {
+async function backupDatabase(db: Database, databasePath: string): Promise<string | null> {
+  if (db.dialect !== 'sqlite') return null;
   try {
     if (!fs.existsSync(databasePath) || fs.statSync(databasePath).size === 0) return null;
     // In WAL mode the newest committed pages may live only in the -wal sidecar, so a
     // plain file copy would silently back up a stale database. Fold the WAL in first.
-    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    await db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     fs.mkdirSync(BACKUP_ROOT, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const target = path.join(BACKUP_ROOT, `brain-${stamp}.db`);
@@ -107,15 +141,16 @@ function backupDatabase(db: SqliteDriver, databasePath: string): string | null {
  * Throws with a precise message if any migration fails — the caller surfaces
  * that as an application error rather than serving a half-migrated database.
  */
-export function runMigrations(
-  db: SqliteDriver,
+export async function runMigrations(
+  db: Database,
   databasePath: string,
-  dir: string = MIGRATIONS_DIR,
-): MigrationReport {
-  ensureMigrationTable(db);
+  dir?: string,
+): Promise<MigrationReport> {
+  const directory = dir ?? migrationsDirFor(db.dialect);
+  await ensureMigrationTable(db);
 
-  const files = loadMigrationFiles(dir);
-  const appliedRows = db.all<AppliedMigration>(
+  const files = loadMigrationFiles(directory);
+  const appliedRows = await db.all<AppliedMigration>(
     'SELECT version, name, checksum, applied_at FROM schema_migrations ORDER BY version',
   );
   const appliedByVersion = new Map(appliedRows.map((r) => [Number(r.version), r]));
@@ -134,26 +169,24 @@ export function runMigrations(
   const pending = files.filter((f) => !appliedByVersion.has(f.version));
   let backupPath: string | null = null;
   if (pending.length > 0 && appliedRows.length > 0) {
-    backupPath = backupDatabase(db, databasePath);
+    backupPath = await backupDatabase(db, databasePath);
   }
 
   const applied: MigrationReport['applied'] = [];
   for (const file of pending) {
     const startedAt = Date.now();
-    db.exec('BEGIN');
     try {
-      db.exec(file.sql);
-      db.run(
-        'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
-        [file.version, file.name, file.checksum, new Date().toISOString()],
-      );
-      db.exec('COMMIT');
+      // One transaction per file, so a failure leaves the schema exactly where
+      // it was. Postgres runs DDL transactionally, which is what makes this
+      // promise true on both backends rather than only on one.
+      await db.transaction(async () => {
+        await db.exec(file.sql);
+        await db.run(
+          'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
+          [file.version, file.name, file.checksum, new Date().toISOString()],
+        );
+      });
     } catch (error) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        /* the transaction may already be gone */
-      }
       const reason = error instanceof Error ? error.message : String(error);
       throw new Error(`Migration ${file.filename} failed and was rolled back: ${reason}`);
     }
@@ -171,9 +204,9 @@ export function runMigrations(
   };
 }
 
-export function getSchemaVersion(db: SqliteDriver): number {
-  ensureMigrationTable(db);
-  const row = db.get<{ version: number | null }>(
+export async function getSchemaVersion(db: Database): Promise<number> {
+  await ensureMigrationTable(db);
+  const row = await db.get<{ version: number | null }>(
     'SELECT MAX(version) AS version FROM schema_migrations',
   );
   return Number(row?.version ?? 0);

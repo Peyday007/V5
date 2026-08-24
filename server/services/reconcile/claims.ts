@@ -191,8 +191,8 @@ function firstUrl(text: string): string | null {
  * is how footnote-style writing actually reads. Anything further away is not
  * treated as that claim's source.
  */
-export function extractClaimCandidates(documentId: string): ExtractedClaimCandidate[] {
-  const run = getCurrentExtractionRun(documentId);
+export async function extractClaimCandidates(documentId: string): Promise<ExtractedClaimCandidate[]> {
+  const run = await getCurrentExtractionRun(documentId);
   if (!run) return [];
 
   // Flattened into one document-ordered list first, because a citation usually
@@ -212,7 +212,7 @@ export function extractClaimCandidates(documentId: string): ExtractedClaimCandid
   }
 
   const located: (Located & { blockUrls: { url: string; index: number }[] })[] = [];
-  for (const [index, block] of listBlocks(run.id).entries()) {
+  for (const [index, block] of (await listBlocks(run.id)).entries()) {
     const text = block.normalizedText || block.rawText;
     if (!text || text.trim().length === 0) continue;
     // Headings assert nothing; they title what follows.
@@ -325,20 +325,20 @@ function evidenceConfidence(candidate: ExtractedClaimCandidate): number {
  * is the source of truth and a stale claim row would be a claim the document no
  * longer makes.
  */
-export function inventoryDocument(documentId: string): ExistingClaim[] {
-  const document = getDocument(documentId);
+export async function inventoryDocument(documentId: string): Promise<ExistingClaim[]> {
+  const document = await getDocument(documentId);
   if (!document) return [];
 
-  const run = getCurrentExtractionRun(documentId);
-  const candidates = extractClaimCandidates(documentId);
-  clearExistingClaims(documentId);
+  const run = await getCurrentExtractionRun(documentId);
+  const candidates = await extractClaimCandidates(documentId);
+  await clearExistingClaims(documentId);
   if (candidates.length === 0) return [];
 
   // A previous audit's verdict on this document travels with its claims: a
   // document that already failed an audit does not get to satisfy a requirement
   // on the strength of the same prose.
   const priorAudit = document.layerId
-    ? (listAuditsByLayer(document.layerId).find(
+    ? ((await listAuditsByLayer(document.layerId)).find(
         (audit) => audit.auditedDocumentId === documentId,
       ) ?? null)
     : null;
@@ -370,8 +370,8 @@ export function inventoryDocument(documentId: string): ExistingClaim[] {
 }
 
 /** Everything one document claims, reading it first if nobody has yet. */
-export function claimsForDocument(documentId: string): ExistingClaim[] {
-  const existing = listExistingClaimsForDocument(documentId);
+export async function claimsForDocument(documentId: string): Promise<ExistingClaim[]> {
+  const existing = await listExistingClaimsForDocument(documentId);
   if (existing.length > 0) return existing;
   return inventoryDocument(documentId);
 }

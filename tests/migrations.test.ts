@@ -13,9 +13,9 @@ import { openDriver } from '../server/db/driver.ts';
  * Used to stand a database up at an older release so the upgrade path can be
  * tested against data rather than against emptiness.
  */
-function openDatabaseAt(dbPath: string, migrationsDir: string): { schemaVersion: number } {
-  closeDatabase();
-  const report = initDatabase({ dbPath, migrationsDir });
+async function openDatabaseAt(dbPath: string, migrationsDir: string): Promise<{ schemaVersion: number }> {
+  await closeDatabase();
+  const report = await initDatabase({ dbPath, migrationsDir });
   return { schemaVersion: report.migrations.schemaVersion };
 }
 
@@ -33,8 +33,8 @@ const EXPECTED_TABLES = [
   'schema_migrations',
 ];
 
-afterEach(() => {
-  closeDatabase();
+afterEach(async () => {
+  await closeDatabase();
 });
 
 function tempDbPath(): string {
@@ -42,28 +42,28 @@ function tempDbPath(): string {
 }
 
 describe('migrations', () => {
-  it('creates every table from an empty database', () => {
-    const { migrations } = initDatabase({ dbPath: tempDbPath() });
+  it('creates every table from an empty database', async () => {
+    const { migrations } = await initDatabase({ dbPath: tempDbPath() });
     expect(migrations.applied.length).toBeGreaterThan(0);
     expect(migrations.schemaVersion).toBe(loadMigrationFiles().at(-1)?.version);
 
-    const tables = getDb()
-      .all<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+    const tables = (await getDb()
+      .all<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"))
       .map((r) => r.name)
       .filter((n) => !n.startsWith('sqlite_'));
     for (const table of EXPECTED_TABLES) expect(tables).toContain(table);
   });
 
-  it('is a no-op on restart against an existing database', () => {
+  it('is a no-op on restart against an existing database', async () => {
     const dbPath = tempDbPath();
-    const first = initDatabase({ dbPath });
+    const first = await initDatabase({ dbPath });
     expect(first.migrations.applied.length).toBeGreaterThan(0);
-    closeDatabase();
+    await closeDatabase();
 
-    const second = initDatabase({ dbPath });
+    const second = await initDatabase({ dbPath });
     expect(second.migrations.applied).toHaveLength(0);
     expect(second.migrations.alreadyApplied).toBeGreaterThan(0);
-    expect(getSchemaVersion(getDb())).toBe(second.migrations.schemaVersion);
+    expect(await getSchemaVersion(getDb())).toBe(second.migrations.schemaVersion);
   });
 
   it('rejects duplicate or malformed migration filenames', () => {
@@ -72,7 +72,7 @@ describe('migrations', () => {
     expect(() => loadMigrationFiles(dir)).toThrow(/NNN_name\.sql/);
   });
 
-  it('upgrades a database that already holds a project, without losing it', () => {
+  it('upgrades a database that already holds a project, without losing it', async () => {
     // The migration path that matters is not the empty one — it is the user's
     // own database, with their documents in it, meeting a new release.
     const dbPath = tempDbPath();
@@ -87,35 +87,35 @@ describe('migrations', () => {
     }
 
     // Boot at the older schema and put real rows in it.
-    const older = openDatabaseAt(dbPath, staged);
+    const older = await openDatabaseAt(dbPath, staged);
     expect(older.schemaVersion).toBe(upTo);
     const ts = new Date().toISOString();
-    getDb().run(
+    await getDb().run(
       `INSERT INTO projects (id, name, slug, description, current_wave, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       ['proj_old', 'Existing project', 'existing-project', 'From before the upgrade', 1, ts, ts],
     );
-    getDb().run(
+    await getDb().run(
       `INSERT INTO layers (id, project_id, name, slug, order_index, status, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ['lyr_old', 'proj_old', 'World Model', 'world-model', 1, 'NOT_STARTED', ts, ts],
     );
-    closeDatabase();
+    await closeDatabase();
 
     // Now apply everything since. The data survives and the new tables exist.
-    const upgraded = initDatabase({ dbPath });
+    const upgraded = await initDatabase({ dbPath });
     expect(upgraded.migrations.applied.length).toBeGreaterThan(0);
     expect(upgraded.migrations.schemaVersion).toBe(all.at(-1)?.version);
 
-    const project = getDb().get<{ name: string }>('SELECT name FROM projects WHERE id = ?', [
+    const project = await getDb().get<{ name: string }>('SELECT name FROM projects WHERE id = ?', [
       'proj_old',
     ]);
     expect(project?.name).toBe('Existing project');
-    const layer = getDb().get<{ name: string }>('SELECT name FROM layers WHERE id = ?', ['lyr_old']);
+    const layer = await getDb().get<{ name: string }>('SELECT name FROM layers WHERE id = ?', ['lyr_old']);
     expect(layer?.name).toBe('World Model');
 
-    const tables = getDb()
-      .all<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table'")
+    const tables = (await getDb()
+      .all<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table'"))
       .map((row) => row.name);
     for (const table of [
       'import_jobs',
@@ -133,20 +133,20 @@ describe('migrations', () => {
     }
 
     // And the columns added to existing tables are really there.
-    const fragmentColumns = getDb()
-      .all<{ name: string }>('PRAGMA table_info(research_fragments)')
+    const fragmentColumns = (await getDb()
+      .all<{ name: string }>('PRAGMA table_info(research_fragments)'))
       .map((row) => row.name);
     expect(fragmentColumns).toContain('repair_plan');
     expect(fragmentColumns).toContain('cancelled_reason');
-    const orchestrationColumns = getDb()
-      .all<{ name: string }>('PRAGMA table_info(research_orchestrations)')
+    const orchestrationColumns = (await getDb()
+      .all<{ name: string }>('PRAGMA table_info(research_orchestrations)'))
       .map((row) => row.name);
     expect(orchestrationColumns).toContain('auto_approve');
   });
 
-  it('enforces foreign keys and WAL mode', () => {
-    initDatabase({ dbPath: tempDbPath() });
-    const fk = getDb().get<{ foreign_keys: number }>('PRAGMA foreign_keys');
+  it('enforces foreign keys and WAL mode', async () => {
+    await initDatabase({ dbPath: tempDbPath() });
+    const fk = await getDb().get<{ foreign_keys: number }>('PRAGMA foreign_keys');
     expect(Number(fk?.foreign_keys)).toBe(1);
   });
 });

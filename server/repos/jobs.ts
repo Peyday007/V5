@@ -17,7 +17,7 @@ import type {
 } from '../domain/types.ts';
 import { buildUpdate, fromBool, newId, nowIso, parseJson, toBool, toJson } from './util.ts';
 
-function mapJob(row: ResearchJobRow): ResearchJob {
+async function mapJob(row: ResearchJobRow): Promise<ResearchJob> {
   return {
     id: row.id,
     orchestrationId: row.orchestration_id,
@@ -39,11 +39,10 @@ function mapJob(row: ResearchJobRow): ResearchJob {
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    fragmentIds: getDb()
-      .all<{ fragment_id: string }>(
+    fragmentIds: (await getDb().all<{ fragment_id: string }>(
         'SELECT fragment_id FROM research_job_fragments WHERE job_id = ? ORDER BY ordinal',
         [row.id],
-      )
+      ))
       .map((entry) => entry.fragment_id),
   };
 }
@@ -59,12 +58,12 @@ export interface CreateJobInput {
   fragmentIds: string[];
 }
 
-export function createJob(input: CreateJobInput): ResearchJob {
+export async function createJob(input: CreateJobInput): Promise<ResearchJob> {
   const db = getDb();
   const ts = nowIso();
   const id = newId('job');
-  db.transaction(() => {
-    db.run(
+  await db.transaction(async () => {
+    await db.run(
       `INSERT INTO research_jobs (id, orchestration_id, project_id, rationale, provider, model,
          job_kind, status, priority, queued_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?)`,
@@ -72,48 +71,46 @@ export function createJob(input: CreateJobInput): ResearchJob {
         input.model ?? null, input.jobKind ?? 'INVESTIGATION', input.priority ?? 5, ts, ts, ts],
     );
     for (const [ordinal, fragmentId] of input.fragmentIds.entries()) {
-      db.run(
+      await db.run(
         `INSERT INTO research_job_fragments (job_id, fragment_id, ordinal) VALUES (?, ?, ?)`,
         [id, fragmentId, ordinal],
       );
     }
   });
-  return getJob(id)!;
+  return (await getJob(id))!;
 }
 
-export function getJob(id: string): ResearchJob | null {
-  const row = getDb().get<ResearchJobRow>('SELECT * FROM research_jobs WHERE id = ?', [id]);
-  return row ? mapJob(row) : null;
+export async function getJob(id: string): Promise<ResearchJob | null> {
+  const row = await getDb().get<ResearchJobRow>('SELECT * FROM research_jobs WHERE id = ?', [id]);
+  return row ? await mapJob(row) : null;
 }
 
-export function listJobs(orchestrationId: string): ResearchJob[] {
-  return getDb()
-    .all<ResearchJobRow>(
-      'SELECT * FROM research_jobs WHERE orchestration_id = ? ORDER BY priority, queued_at, rowid',
-      [orchestrationId],
-    )
-    .map(mapJob);
+export async function listJobs(orchestrationId: string): Promise<ResearchJob[]> {
+  const rows = await getDb().all<ResearchJobRow>(
+    'SELECT * FROM research_jobs WHERE orchestration_id = ? ORDER BY priority, queued_at, rowid',
+    [orchestrationId],
+  );
+  return await Promise.all(rows.map(mapJob));
 }
 
 /** The next job to run: highest priority, then oldest. */
-export function nextQueuedJob(orchestrationId: string): ResearchJob | null {
-  const row = getDb().get<ResearchJobRow>(
+export async function nextQueuedJob(orchestrationId: string): Promise<ResearchJob | null> {
+  const row = await getDb().get<ResearchJobRow>(
     `SELECT * FROM research_jobs WHERE orchestration_id = ? AND status = 'QUEUED'
       ORDER BY priority, queued_at, rowid LIMIT 1`,
     [orchestrationId],
   );
-  return row ? mapJob(row) : null;
+  return row ? await mapJob(row) : null;
 }
 
-export function jobsForFragment(fragmentId: string): ResearchJob[] {
-  return getDb()
-    .all<ResearchJobRow>(
-      `SELECT j.* FROM research_jobs j
-         JOIN research_job_fragments f ON f.job_id = j.id
-        WHERE f.fragment_id = ? ORDER BY j.queued_at`,
-      [fragmentId],
-    )
-    .map(mapJob);
+export async function jobsForFragment(fragmentId: string): Promise<ResearchJob[]> {
+  const rows = await getDb().all<ResearchJobRow>(
+    `SELECT j.* FROM research_jobs j
+       JOIN research_job_fragments f ON f.job_id = j.id
+      WHERE f.fragment_id = ? ORDER BY j.queued_at`,
+    [fragmentId],
+  );
+  return await Promise.all(rows.map(mapJob));
 }
 
 export interface JobFragmentOutcome {
@@ -130,13 +127,12 @@ export interface JobFragmentOutcome {
  * bundle where three fragments cleared their gate and one did not reads as
  * exactly that rather than as a failed job.
  */
-export function jobFragmentOutcomes(jobId: string): JobFragmentOutcome[] {
-  return getDb()
-    .all<{ fragment_id: string; ordinal: number; outcome: string | null; detail: string | null }>(
+export async function jobFragmentOutcomes(jobId: string): Promise<JobFragmentOutcome[]> {
+  return (await getDb().all<{ fragment_id: string; ordinal: number; outcome: string | null; detail: string | null }>(
       `SELECT fragment_id, ordinal, outcome, detail FROM research_job_fragments
         WHERE job_id = ? ORDER BY ordinal`,
       [jobId],
-    )
+    ))
     .map((row) => ({
       fragmentId: row.fragment_id,
       ordinal: Number(row.ordinal),
@@ -145,7 +141,7 @@ export function jobFragmentOutcomes(jobId: string): JobFragmentOutcome[] {
     }));
 }
 
-export function updateJob(
+export async function updateJob(
   id: string,
   patch: {
     status?: JobStatus;
@@ -159,7 +155,7 @@ export function updateJob(
     startedAt?: string | null;
     completedAt?: string | null;
   },
-): ResearchJob | null {
+): Promise<ResearchJob | null> {
   const { clause, values } = buildUpdate({
     status: patch.status,
     external_job_id: patch.externalJobId,
@@ -173,7 +169,7 @@ export function updateJob(
     completed_at: patch.completedAt,
   });
   if (!clause) return getJob(id);
-  getDb().run(`UPDATE research_jobs SET ${clause}, updated_at = ? WHERE id = ?`, [
+  await getDb().run(`UPDATE research_jobs SET ${clause}, updated_at = ? WHERE id = ?`, [
     ...(values as never[]),
     nowIso(),
     id,
@@ -182,13 +178,13 @@ export function updateJob(
 }
 
 /** What one fragment got out of a shared job. Separate per fragment, always. */
-export function recordFragmentOutcome(
+export async function recordFragmentOutcome(
   jobId: string,
   fragmentId: string,
   outcome: string,
   detail: string | null,
-): void {
-  getDb().run(
+): Promise<void> {
+  await getDb().run(
     'UPDATE research_job_fragments SET outcome = ?, detail = ? WHERE job_id = ? AND fragment_id = ?',
     [outcome, detail, jobId, fragmentId],
   );
@@ -202,14 +198,14 @@ export function recordFragmentOutcome(
  * did not receive it. The row stays, with the reason, so the history says what
  * actually happened rather than pretending the job is still in flight.
  */
-export function abandonRunningJobs(orchestrationId: string, reason: string): number {
-  const running = getDb().all<{ id: string }>(
+export async function abandonRunningJobs(orchestrationId: string, reason: string): Promise<number> {
+  const running = await getDb().all<{ id: string }>(
     "SELECT id FROM research_jobs WHERE orchestration_id = ? AND status = 'RUNNING'",
     [orchestrationId],
   );
   if (running.length === 0) return 0;
   const ts = nowIso();
-  getDb().run(
+  await getDb().run(
     `UPDATE research_jobs SET status = 'FAILED', failure_reason = ?, completed_at = ?, updated_at = ?
       WHERE orchestration_id = ? AND status = 'RUNNING'`,
     [reason, ts, ts, orchestrationId],
@@ -218,13 +214,13 @@ export function abandonRunningJobs(orchestrationId: string, reason: string): num
 }
 
 /** Cancel every job still waiting; used when the assignment is cancelled. */
-export function cancelQueuedJobs(orchestrationId: string, reason: string): number {
-  const pending = getDb().all<{ id: string }>(
+export async function cancelQueuedJobs(orchestrationId: string, reason: string): Promise<number> {
+  const pending = await getDb().all<{ id: string }>(
     "SELECT id FROM research_jobs WHERE orchestration_id = ? AND status IN ('QUEUED','RUNNING')",
     [orchestrationId],
   );
   if (pending.length === 0) return 0;
-  getDb().run(
+  await getDb().run(
     `UPDATE research_jobs SET status = 'CANCELLED', failure_reason = ?, updated_at = ?
       WHERE orchestration_id = ? AND status IN ('QUEUED','RUNNING')`,
     [reason, nowIso(), orchestrationId],
@@ -236,17 +232,17 @@ export function cancelQueuedJobs(orchestrationId: string, reason: string): numbe
 // Quota
 // ---------------------------------------------------------------------------
 
-export function recordQuotaPause(input: {
+export async function recordQuotaPause(input: {
   orchestrationId: string | null;
   provider: string;
   quotaState: string;
   detail: string;
   jobsCompleted: number;
   jobsPending: number;
-}): string {
+}): Promise<string> {
   const id = newId('qta');
   const ts = nowIso();
-  getDb().run(
+  await getDb().run(
     `INSERT INTO quota_pauses (id, orchestration_id, provider, quota_state, detail,
        jobs_completed, jobs_pending, paused_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -256,12 +252,12 @@ export function recordQuotaPause(input: {
   return id;
 }
 
-export function resolveQuotaPause(id: string): void {
-  getDb().run('UPDATE quota_pauses SET resumed_at = ? WHERE id = ?', [nowIso(), id]);
+export async function resolveQuotaPause(id: string): Promise<void> {
+  await getDb().run('UPDATE quota_pauses SET resumed_at = ? WHERE id = ?', [nowIso(), id]);
 }
 
-export function openQuotaPause(orchestrationId: string): { id: string; detail: string } | null {
-  const row = getDb().get<{ id: string; detail: string }>(
+export async function openQuotaPause(orchestrationId: string): Promise<{ id: string; detail: string } | null> {
+  const row = await getDb().get<{ id: string; detail: string }>(
     'SELECT id, detail FROM quota_pauses WHERE orchestration_id = ? AND resumed_at IS NULL ORDER BY paused_at DESC LIMIT 1',
     [orchestrationId],
   );
@@ -299,8 +295,8 @@ function mapConnection(row: ProviderConnectionRow): ProviderConnection {
   };
 }
 
-export function getConnection(provider: string): ProviderConnection | null {
-  const row = getDb().get<ProviderConnectionRow>(
+export async function getConnection(provider: string): Promise<ProviderConnection | null> {
+  const row = await getDb().get<ProviderConnectionRow>(
     'SELECT * FROM provider_connections WHERE provider = ?',
     [provider],
   );
@@ -323,13 +319,13 @@ export interface SaveConnectionInput {
 }
 
 /** Record a connection test. Success and failure timestamps are both kept. */
-export function saveConnection(input: SaveConnectionInput): ProviderConnection {
+export async function saveConnection(input: SaveConnectionInput): Promise<ProviderConnection> {
   const db = getDb();
   const ts = nowIso();
-  const existing = getConnection(input.provider);
+  const existing = await getConnection(input.provider);
 
   if (!existing) {
-    db.run(
+    await db.run(
       `INSERT INTO provider_connections (provider, installed, authenticated, automation_ready,
          executable_path, version, model, quota_state, message, diagnostics, last_checked_at,
          last_success_at, last_failure_at, last_failure_reason, created_at, updated_at)
@@ -341,10 +337,10 @@ export function saveConnection(input: SaveConnectionInput): ProviderConnection {
         input.succeeded ? ts : null, input.succeeded === false ? ts : null,
         input.failureReason ?? null, ts, ts],
     );
-    return getConnection(input.provider)!;
+    return (await getConnection(input.provider))!;
   }
 
-  db.run(
+  await db.run(
     `UPDATE provider_connections SET installed = ?, authenticated = ?, automation_ready = ?,
        executable_path = ?, version = ?, model = ?, quota_state = ?, message = ?, diagnostics = ?,
        last_checked_at = ?, last_success_at = ?, last_failure_at = ?, last_failure_reason = ?,
@@ -358,7 +354,7 @@ export function saveConnection(input: SaveConnectionInput): ProviderConnection {
       input.succeeded === false ? (input.failureReason ?? null) : existing.lastFailureReason,
       ts, input.provider],
   );
-  return getConnection(input.provider)!;
+  return (await getConnection(input.provider))!;
 }
 
 /**
@@ -374,12 +370,12 @@ export function saveConnection(input: SaveConnectionInput): ProviderConnection {
  * preference on an ordinary settings page — not something worth restarting a
  * server for.
  */
-export function setModelDefaults(
+export async function setModelDefaults(
   provider: string,
   input: { light: string | null; strong: string | null },
-): ProviderConnection | null {
-  ensureConnection(provider);
-  getDb().run(
+): Promise<ProviderConnection | null> {
+  await ensureConnection(provider);
+  await getDb().run(
     'UPDATE provider_connections SET light_model = ?, model = ?, updated_at = ? WHERE provider = ?',
     [input.light, input.strong, nowIso(), provider],
   );
@@ -393,10 +389,10 @@ export function setModelDefaults(
  * installed" but "has it ever actually done the work on this machine". A probe
  * never sets it.
  */
-export function recordVerifiedRun(provider: string, detail: string): ProviderConnection | null {
-  ensureConnection(provider);
+export async function recordVerifiedRun(provider: string, detail: string): Promise<ProviderConnection | null> {
+  await ensureConnection(provider);
   const ts = nowIso();
-  getDb().run(
+  await getDb().run(
     `UPDATE provider_connections SET verified_run_at = ?, verified_run_detail = ?,
        last_success_at = ?, updated_at = ? WHERE provider = ?`,
     [ts, detail, ts, ts, provider],
@@ -405,10 +401,10 @@ export function recordVerifiedRun(provider: string, detail: string): ProviderCon
 }
 
 /** Forget what Brain recorded about a connection, without touching the tool. */
-export function clearConnection(provider: string): ProviderConnection | null {
-  const existing = getConnection(provider);
+export async function clearConnection(provider: string): Promise<ProviderConnection | null> {
+  const existing = await getConnection(provider);
   if (!existing) return null;
-  getDb().run(
+  await getDb().run(
     `UPDATE provider_connections SET installed = 0, authenticated = 0, automation_ready = 0,
        executable_path = NULL, version = NULL, quota_state = NULL,
        message = 'Disconnected in Brain. Nothing was changed in the tool itself; use Detect to reconnect.',
@@ -419,18 +415,18 @@ export function clearConnection(provider: string): ProviderConnection | null {
 }
 
 /** A row to hang settings off, for a provider that has never been probed. */
-function ensureConnection(provider: string): void {
-  if (getConnection(provider)) return;
-  saveConnection({ provider, installed: false, authenticated: false, automationReady: false });
+async function ensureConnection(provider: string): Promise<void> {
+  if (await getConnection(provider)) return;
+  await saveConnection({ provider, installed: false, authenticated: false, automationReady: false });
 }
 
-export function setPaidOverage(
+export async function setPaidOverage(
   provider: string,
   enabled: boolean,
   note: string | null,
-): ProviderConnection | null {
-  ensureConnection(provider);
-  getDb().run(
+): Promise<ProviderConnection | null> {
+  await ensureConnection(provider);
+  await getDb().run(
     `UPDATE provider_connections SET paid_overage_enabled = ?, paid_overage_note = ?,
        paid_overage_set_at = ?, updated_at = ? WHERE provider = ?`,
     [fromBool(enabled), note, nowIso(), nowIso(), provider],

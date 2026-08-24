@@ -26,10 +26,10 @@ export const chatRouter = Router();
  * Chat is the one place the user may not have picked a project yet, so an
  * omitted id falls back to the default project rather than failing.
  */
-function resolveProjectId(value: unknown): string {
+async function resolveProjectId(value: unknown): Promise<string> {
   const explicit = optionalString(value, 'projectId');
-  if (explicit) return requireProject(explicit).id;
-  const fallback = getDefaultProject();
+  if (explicit) return (await requireProject(explicit)).id;
+  const fallback = await getDefaultProject();
   if (!fallback) {
     throw badRequest('No project exists yet, so there is nothing to chat about.');
   }
@@ -38,25 +38,25 @@ function resolveProjectId(value: unknown): string {
 
 chatRouter.get(
   '/',
-  handler((req) => {
+  handler(async (req) => {
     const query = queryOf(req);
-    const projectId = resolveProjectId(query['projectId']);
+    const projectId = await resolveProjectId(query['projectId']);
     return getChatHistory(projectId, optionalString(query['conversationId'], 'conversationId') ?? null);
   }),
 );
 
 chatRouter.post(
   '/',
-  handler((req) => {
+  handler(async (req) => {
     const body = bodyOf(req);
-    const projectId = resolveProjectId(body['projectId']);
+    const projectId = await resolveProjectId(body['projectId']);
     const content = requiredString(body['content'], 'content');
     const conversationId = optionalString(body['conversationId'], 'conversationId') ?? null;
 
-    const turn = handleChatMessage({ projectId, content, conversationId });
+    const turn = await handleChatMessage({ projectId, content, conversationId });
     // A chat turn can freeze a layer or create a run; recomputing here means the
     // next screen the user looks at is already correct.
-    recomputeProject(projectId);
+    await recomputeProject(projectId);
     return turn;
   }),
 );

@@ -85,11 +85,11 @@ export function shouldSplit(
  * fragment it came from, so the history reads as a division rather than as
  * fragments appearing from nowhere.
  */
-export function splitFragment(input: {
+export async function splitFragment(input: {
   fragment: ResearchFragment;
   signal: SplitSignal;
   startIndex: number;
-}): ResearchFragment[] {
+}): Promise<ResearchFragment[]> {
   const { fragment, signal } = input;
   const briefs: CreateFragmentInput[] = signal.questions.slice(0, 4).map((question, offset) => ({
     orchestrationId: fragment.orchestrationId,
@@ -138,7 +138,7 @@ export function splitFragment(input: {
     maxRepairs: fragment.maxRepairs,
   }));
 
-  return createFragments(briefs);
+  return await createFragments(briefs);
 }
 
 // ---------------------------------------------------------------------------

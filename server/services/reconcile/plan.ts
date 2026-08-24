@@ -74,23 +74,23 @@ export interface PlanInput {
 }
 
 /** Persist the boundary contract and the requirement graph. */
-export function persistPlan(input: PlanInput): {
+export async function persistPlan(input: PlanInput): Promise<{
   contract: BoundaryContract;
   requirements: Requirement[];
-} {
+}> {
   const contract =
-    contractFor(input.orchestrationId) ??
-    createBoundaryContract({
+    await contractFor(input.orchestrationId) ??
+    await createBoundaryContract({
       ...input.contract,
       orchestrationId: input.orchestrationId,
       projectId: input.project.id,
       layerId: input.layer.id,
     });
 
-  const existing = listRequirements(input.orchestrationId);
+  const existing = await listRequirements(input.orchestrationId);
   if (existing.length > 0) return { contract, requirements: existing };
 
-  const requirements = createRequirements(
+  const requirements = await createRequirements(
     input.requirements.map((requirement, index) => ({
       ...requirement,
       ordinal: index,
@@ -109,24 +109,24 @@ export function persistPlan(input: PlanInput): {
  * not evidence, and pretending otherwise is the failure the extraction gate
  * exists to prevent.
  */
-export function inventoryProject(projectId: string): {
+export async function inventoryProject(projectId: string): Promise<{
   claims: ExistingClaim[];
   documentsRead: number;
   documentsUnreadable: number;
-} {
+}> {
   let read = 0;
   let unreadable = 0;
   const claims: ExistingClaim[] = [];
 
-  for (const document of listDocuments(projectId)) {
+  for (const document of await listDocuments(projectId)) {
     if (!document.filesystemPath || document.fileMissing) continue;
-    const run = getCurrentExtractionRun(document.id);
+    const run = await getCurrentExtractionRun(document.id);
     if (!run || (run.status !== 'READY' && run.status !== 'READY_WITH_WARNINGS')) {
       unreadable += 1;
       continue;
     }
     read += 1;
-    claims.push(...claimsForDocument(document.id));
+    claims.push(...await claimsForDocument(document.id));
   }
 
   return { claims, documentsRead: read, documentsUnreadable: unreadable };
@@ -149,14 +149,14 @@ export interface ReconciliationResult {
 }
 
 /** Compare the goal against the archive and decide what is actually missing. */
-export function reconcile(input: {
+export async function reconcile(input: {
   orchestrationId: string;
   projectId: string;
   requirements: Requirement[];
   contract: BoundaryContract | null;
-}): ReconciliationResult {
-  const inventory = inventoryProject(input.projectId);
-  const { assessments, coverage } = buildCoverageMatrix({
+}): Promise<ReconciliationResult> {
+  const inventory = await inventoryProject(input.projectId);
+  const { assessments, coverage } = await buildCoverageMatrix({
     orchestrationId: input.orchestrationId,
     requirements: input.requirements,
     claims: inventory.claims,
@@ -326,11 +326,11 @@ function slug(value: string, fallback: string): string {
  * this is safe to call again after new evidence lands: it adds what the new
  * coverage says is still open and never duplicates a key.
  */
-export function planFragmentsFromGaps(input: {
+export async function planFragmentsFromGaps(input: {
   orchestrationId: string;
   reconciliation: ReconciliationResult;
-}): ResearchFragment[] {
-  const existing = currentFragments(input.orchestrationId);
+}): Promise<ResearchFragment[]> {
+  const existing = await currentFragments(input.orchestrationId);
   const taken = new Set(existing.map((fragment) => fragment.fragmentKey));
   const perRequirement = new Map<string, number>();
   for (const fragment of existing) {

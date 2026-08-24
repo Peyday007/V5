@@ -79,47 +79,45 @@ function mapFile(row: ImportFileRow): ImportFile {
   };
 }
 
-export function createImportJob(input: {
+export async function createImportJob(input: {
   projectId: string;
   sourceLabel: string;
   rootPath: string;
   scope?: DocumentScope;
-}): ImportJob {
+}): Promise<ImportJob> {
   const ts = nowIso();
   const id = newId('imp');
-  getDb().run(
+  await getDb().run(
     `INSERT INTO import_jobs (id, project_id, source_label, root_path, status, scope,
        created_at, updated_at)
      VALUES (?, ?, ?, ?, 'DISCOVERING', ?, ?, ?)`,
     [id, input.projectId, input.sourceLabel, input.rootPath, input.scope ?? 'LAYER', ts, ts],
   );
-  return getImportJob(id)!;
+  return (await getImportJob(id))!;
 }
 
-export function getImportJob(id: string): ImportJob | null {
-  const row = getDb().get<ImportJobRow>('SELECT * FROM import_jobs WHERE id = ?', [id]);
+export async function getImportJob(id: string): Promise<ImportJob | null> {
+  const row = await getDb().get<ImportJobRow>('SELECT * FROM import_jobs WHERE id = ?', [id]);
   return row ? mapJob(row) : null;
 }
 
-export function listImportJobs(projectId: string): ImportJob[] {
-  return getDb()
-    .all<ImportJobRow>('SELECT * FROM import_jobs WHERE project_id = ? ORDER BY created_at DESC', [
+export async function listImportJobs(projectId: string): Promise<ImportJob[]> {
+  return (await getDb().all<ImportJobRow>('SELECT * FROM import_jobs WHERE project_id = ? ORDER BY created_at DESC', [
       projectId,
-    ])
+    ]))
     .map(mapJob);
 }
 
 /** Jobs a dead process may have left looking alive. */
-export function listUnfinishedImportJobs(): ImportJob[] {
-  return getDb()
-    .all<ImportJobRow>(
+export async function listUnfinishedImportJobs(): Promise<ImportJob[]> {
+  return (await getDb().all<ImportJobRow>(
       `SELECT * FROM import_jobs WHERE status IN ('DISCOVERING','QUEUED','RUNNING')
        ORDER BY created_at`,
-    )
+    ))
     .map(mapJob);
 }
 
-export function updateImportJob(
+export async function updateImportJob(
   id: string,
   patch: {
     status?: ImportJobStatus;
@@ -129,7 +127,7 @@ export function updateImportJob(
     startedAt?: string | null;
     completedAt?: string | null;
   },
-): ImportJob | null {
+): Promise<ImportJob | null> {
   const { clause, values } = buildUpdate({
     status: patch.status,
     message: patch.message,
@@ -139,7 +137,7 @@ export function updateImportJob(
     completed_at: patch.completedAt,
   });
   if (!clause) return getImportJob(id);
-  getDb().run(`UPDATE import_jobs SET ${clause}, updated_at = ? WHERE id = ?`, [
+  await getDb().run(`UPDATE import_jobs SET ${clause}, updated_at = ? WHERE id = ?`, [
     ...(values as never[]),
     nowIso(),
     id,
@@ -163,20 +161,20 @@ export interface DiscoveredFileInput {
  * Written in one transaction so a crash during discovery leaves either the whole
  * list or none of it, never a half-enumerated folder that would look complete.
  */
-export function insertDiscoveredFiles(inputs: DiscoveredFileInput[]): number {
+export async function insertDiscoveredFiles(inputs: DiscoveredFileInput[]): Promise<number> {
   if (inputs.length === 0) return 0;
   const db = getDb();
   const ts = nowIso();
   let inserted = 0;
-  db.transaction(() => {
+  await db.transaction(async () => {
     for (const input of inputs) {
       // The same folder re-imported into the same job is one row per path.
-      const existing = db.get<{ id: string }>(
+      const existing = await db.get<{ id: string }>(
         'SELECT id FROM import_files WHERE job_id = ? AND relative_path = ?',
         [input.jobId, input.relativePath],
       );
       if (existing) continue;
-      db.run(
+      await db.run(
         `INSERT INTO import_files (id, job_id, project_id, absolute_path, relative_path, filename,
            file_size, source_modified_at, status, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DISCOVERED', ?, ?)`,
@@ -189,14 +187,13 @@ export function insertDiscoveredFiles(inputs: DiscoveredFileInput[]): number {
   return inserted;
 }
 
-export function getImportFile(id: string): ImportFile | null {
-  const row = getDb().get<ImportFileRow>('SELECT * FROM import_files WHERE id = ?', [id]);
+export async function getImportFile(id: string): Promise<ImportFile | null> {
+  const row = await getDb().get<ImportFileRow>('SELECT * FROM import_files WHERE id = ?', [id]);
   return row ? mapFile(row) : null;
 }
 
-export function listImportFiles(jobId: string): ImportFile[] {
-  return getDb()
-    .all<ImportFileRow>('SELECT * FROM import_files WHERE job_id = ? ORDER BY relative_path', [jobId])
+export async function listImportFiles(jobId: string): Promise<ImportFile[]> {
+  return (await getDb().all<ImportFileRow>('SELECT * FROM import_files WHERE job_id = ? ORDER BY relative_path', [jobId]))
     .map(mapFile);
 }
 
@@ -206,8 +203,8 @@ export function listImportFiles(jobId: string): ImportFile[] {
  * Taken one at a time from the database rather than from an in-memory list, so a
  * resumed job picks up exactly where the dead one stopped.
  */
-export function nextPendingFile(jobId: string): ImportFile | null {
-  const row = getDb().get<ImportFileRow>(
+export async function nextPendingFile(jobId: string): Promise<ImportFile | null> {
+  const row = await getDb().get<ImportFileRow>(
     `SELECT * FROM import_files
       WHERE job_id = ? AND status IN ('DISCOVERED','QUEUED','EXTRACTING','OCR')
       ORDER BY relative_path LIMIT 1`,
@@ -216,7 +213,7 @@ export function nextPendingFile(jobId: string): ImportFile | null {
   return row ? mapFile(row) : null;
 }
 
-export function updateImportFile(
+export async function updateImportFile(
   id: string,
   patch: {
     status?: ImportFileStatus;
@@ -237,7 +234,7 @@ export function updateImportFile(
     startedAt?: string | null;
     completedAt?: string | null;
   },
-): ImportFile | null {
+): Promise<ImportFile | null> {
   const { clause, values } = buildUpdate({
     status: patch.status,
     file_hash: patch.fileHash,
@@ -259,7 +256,7 @@ export function updateImportFile(
     completed_at: patch.completedAt,
   });
   if (!clause) return getImportFile(id);
-  getDb().run(`UPDATE import_files SET ${clause}, updated_at = ? WHERE id = ?`, [
+  await getDb().run(`UPDATE import_files SET ${clause}, updated_at = ? WHERE id = ?`, [
     ...(values as never[]),
     nowIso(),
     id,
@@ -273,9 +270,9 @@ export function updateImportFile(
  * Derived rather than incremented: the rows are the truth, and a counter that
  * disagrees with them would make the import report a fiction.
  */
-export function recountImportJob(jobId: string): ImportJob | null {
+export async function recountImportJob(jobId: string): Promise<ImportJob | null> {
   const db = getDb();
-  const counts = db.all<{ status: string; n: number }>(
+  const counts = await db.all<{ status: string; n: number }>(
     'SELECT status, COUNT(*) AS n FROM import_files WHERE job_id = ? GROUP BY status',
     [jobId],
   );
@@ -287,7 +284,7 @@ export function recountImportJob(jobId: string): ImportJob | null {
     (by.get('EXTRACTING') ?? 0) +
     (by.get('OCR') ?? 0);
 
-  db.run(
+  await db.run(
     `UPDATE import_jobs SET discovered = ?, processed = ?, registered = ?, duplicates = ?,
        unsupported = ?, unreadable = ?, failed = ?, needs_review = ?, updated_at = ?
      WHERE id = ?`,
@@ -299,19 +296,18 @@ export function recountImportJob(jobId: string): ImportJob | null {
 }
 
 /** Files that can be tried again: the failures, and nothing that succeeded. */
-export function retryableFiles(jobId: string): ImportFile[] {
-  return getDb()
-    .all<ImportFileRow>(
+export async function retryableFiles(jobId: string): Promise<ImportFile[]> {
+  return (await getDb().all<ImportFileRow>(
       `SELECT * FROM import_files WHERE job_id = ? AND status IN ('FAILED','UNREADABLE')
        ORDER BY relative_path`,
       [jobId],
-    )
+    ))
     .map(mapFile);
 }
 
 /** A file already registered in this project, by content. */
-export function findImportedByHash(projectId: string, hash: string): ImportFile | null {
-  const row = getDb().get<ImportFileRow>(
+export async function findImportedByHash(projectId: string, hash: string): Promise<ImportFile | null> {
+  const row = await getDb().get<ImportFileRow>(
     `SELECT * FROM import_files
       WHERE project_id = ? AND file_hash = ? AND status = 'REGISTERED'
       ORDER BY created_at LIMIT 1`,

@@ -115,12 +115,14 @@ async function drain(): Promise<void> {
  * Schedule an assignment. Returns the promise for an already-running one rather
  * than starting it twice.
  */
-export function enqueueResearch(
+export async function enqueueResearch(
   orchestrationId: string,
   options: RunOrchestrationOptions = {},
 ): Promise<OrchestrationOutcome> {
-  const existing = inFlight.get(orchestrationId);
-  if (existing) return existing;
+  // Read, not awaited: suspending here would return before the job is
+  // registered, and a caller checking the queue would see it empty.
+  const existing: Promise<OrchestrationOutcome> | undefined = inFlight.get(orchestrationId);
+  if (existing) return await existing;
 
   const promise = new Promise<OrchestrationOutcome>((resolve, reject) => {
     pending.push({ orchestrationId, options, resolve, reject });
@@ -128,7 +130,7 @@ export function enqueueResearch(
   inFlight.set(orchestrationId, promise);
   // Errors reach whoever awaited the promise; an unawaited enqueue must not take
   // the process down.
-  promise.catch(() => undefined);
+  void promise.catch(() => undefined);
   void drain();
   return promise;
 }
@@ -140,26 +142,26 @@ export function enqueueResearch(
  * process tree) or still queued (the status is written, and the orchestrator
  * checks it before every pass).
  */
-export function cancelResearch(orchestrationId: string, reason: string): ResearchOrchestration | null {
-  const orchestration = getOrchestration(orchestrationId);
+export async function cancelResearch(orchestrationId: string, reason: string): Promise<ResearchOrchestration | null> {
+  const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) return null;
   if (['COMPLETE', 'CANCELLED', 'FAILED'].includes(orchestration.status)) return orchestration;
 
-  updateOrchestration(orchestrationId, {
+  await updateOrchestration(orchestrationId, {
     status: 'CANCELLED',
     cancelledAt: new Date().toISOString(),
     cancelReason: reason,
   });
-  for (const fragment of currentFragments(orchestrationId)) {
+  for (const fragment of await currentFragments(orchestrationId)) {
     if (['QUEUED', 'PLANNED', 'RUNNING', 'VALIDATING'].includes(fragment.status)) {
-      updateFragment(fragment.id, { status: 'CANCELLED', blockedReason: reason });
+      await updateFragment(fragment.id, { status: 'CANCELLED', blockedReason: reason });
     }
   }
-  abandonRunningPasses(orchestrationId, `Cancelled: ${reason}`);
+  await abandonRunningPasses(orchestrationId, `Cancelled: ${reason}`);
 
   controllers.get(orchestrationId)?.abort();
 
-  recordEvent({
+  await recordEvent({
     projectId: orchestration.projectId,
     layerId: orchestration.layerId,
     entityType: 'RUN',
@@ -216,21 +218,21 @@ export function isRunning(orchestrationId: string): boolean {
  * a resumable job — the completed passes and accepted fragments are all still
  * there, so resuming is cheap.
  */
-export function recoverInterruptedResearch(): number {
-  const interrupted = listPendingOrchestrations().filter(
+export async function recoverInterruptedResearch(): Promise<number> {
+  const interrupted = (await listPendingOrchestrations()).filter(
     (orchestration) => !inFlight.has(orchestration.id),
   );
   let recovered = 0;
 
   for (const orchestration of interrupted) {
-    const closed = abandonRunningPasses(
+    const closed = await abandonRunningPasses(
       orchestration.id,
       'The server stopped while this pass was running, so its result was never received.',
     );
 
     // An external job this instance has no handle on cannot be resumed and must
     // not be left claiming to be running.
-    const abandonedJobs = abandonRunningJobs(
+    const abandonedJobs = await abandonRunningJobs(
       orchestration.id,
       'The server stopped while this job was running. Whatever the tool did, this instance never ' +
         'received it, so nothing from it was recorded.',
@@ -238,13 +240,13 @@ export function recoverInterruptedResearch(): number {
 
     // A fragment caught mid-job goes back to the queue: its passes were
     // abandoned, and its next attempt starts from the last completed one.
-    for (const fragment of currentFragments(orchestration.id)) {
+    for (const fragment of await currentFragments(orchestration.id)) {
       if (fragment.status === 'RUNNING' || fragment.status === 'VALIDATING') {
-        updateFragment(fragment.id, { status: 'QUEUED', startedAt: null });
+        await updateFragment(fragment.id, { status: 'QUEUED', startedAt: null });
       }
     }
 
-    updateOrchestration(orchestration.id, {
+    await updateOrchestration(orchestration.id, {
       status: 'INTERRUPTED',
       failureReason:
         orchestration.status === 'QUEUED'
@@ -254,7 +256,7 @@ export function recoverInterruptedResearch(): number {
             'Everything already completed is kept; resume to continue from there.',
     });
 
-    recordEvent({
+    await recordEvent({
       projectId: orchestration.projectId,
       layerId: orchestration.layerId,
       entityType: 'RUN',
@@ -279,11 +281,11 @@ export function recoverInterruptedResearch(): number {
  * Completed passes are not re-run and accepted fragments are not re-researched,
  * so resuming after a crash costs only the work that was actually lost.
  */
-export function resumeResearch(
+export async function resumeResearch(
   orchestrationId: string,
   options: RunOrchestrationOptions = {},
 ): Promise<OrchestrationOutcome> {
-  const orchestration = getOrchestration(orchestrationId);
+  const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) throw new Error(`Unknown research run ${orchestrationId}`);
   if (orchestration.status === 'COMPLETE') {
     throw new Error('That research run already finished.');
@@ -291,10 +293,10 @@ export function resumeResearch(
   // A run picked up by hand closes any quota pause it was holding: the pause
   // recorded why it stopped, and leaving it open would report a run as paused
   // while it is running.
-  const pause = openQuotaPause(orchestrationId);
-  if (pause) resolveQuotaPause(pause.id);
+  const pause = await openQuotaPause(orchestrationId);
+  if (pause) await resolveQuotaPause(pause.id);
 
-  updateOrchestration(orchestrationId, {
+  await updateOrchestration(orchestrationId, {
     status: 'QUEUED',
     failureReason: null,
     cancelledAt: null,

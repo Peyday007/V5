@@ -17,6 +17,8 @@ import type { Server } from 'node:http';
 import express from 'express';
 import type { Express, NextFunction, Request, Response } from 'express';
 import { closeDatabase, initDatabase } from './db/database.ts';
+import { DatabaseConfigurationError } from './db/types.ts';
+import { describePersistence, persistenceConfig } from './config.ts';
 import type { MigrationReport } from './db/migrate.ts';
 import {
   DATA_ROOT,
@@ -138,21 +140,37 @@ function buildApp(): Express {
 }
 
 /**
- * The migration failed, so there is no usable database — but a dead port tells
- * the user nothing. This app stays up and says exactly what went wrong.
+ * There is no usable database — but a dead port tells the user nothing. This app
+ * stays up and says exactly what went wrong.
+ *
+ * The two reasons are different problems with different fixes, so they are
+ * reported differently: a configuration error means cloud mode was asked for and
+ * could not be delivered, and the one thing Brain must not do about that is
+ * quietly serve the local file instead.
  */
 function serveMigrationFailure(error: Error): void {
-  const headline = 'Brain could not start: the application failed to migrate the database.';
-  const hint =
-    'Applied migrations are checksum-locked. If you edited a migration that had already run, ' +
-    'restore the original file and add a new server/db/migrations/NNN_name.sql instead.';
+  const configuration = error instanceof DatabaseConfigurationError;
+  const headline = configuration
+    ? 'Brain could not start: its persistence configuration is not usable.'
+    : 'Brain could not start: the application failed to migrate the database.';
+  const hint = configuration
+    ? `${error.detail} Nothing was written locally, and nothing fell back.`
+    : 'Applied migrations are checksum-locked. If you edited a migration that had already run, ' +
+      'restore the original file and add a new server/db/migrations/NNN_name.sql instead.';
 
   const app = express();
   app.disable('x-powered-by');
   app.use('/api', (_req: Request, res: Response) => {
     res.status(500).json({
       error: `${headline} ${error.message}`,
-      detail: { stage: 'MIGRATION', databasePath: DB_PATH, dataRoot: DATA_ROOT, hint },
+      detail: {
+        stage: configuration ? 'CONFIGURATION' : 'MIGRATION',
+        // Never the connection string: the point of the diagnostic is what to
+        // fix, and the value contains a password.
+        databasePath: configuration ? '(configured elsewhere)' : DB_PATH,
+        dataRoot: DATA_ROOT,
+        hint,
+      },
     });
   });
   app.use((_req: Request, res: Response) => {
@@ -184,10 +202,12 @@ function logBanner(migrations: MigrationReport): void {
   console.log('');
   console.log('  Brain is running.');
   console.log('');
+  const persistence = describePersistence(persistenceConfig());
   console.log(`  URL             http://localhost:${PORT}`);
   console.log(`  Driver          ${migrations.driver}`);
   console.log(`  Schema version  ${migrations.schemaVersion}`);
-  console.log(`  Database        ${migrations.databasePath}`);
+  console.log(`  Database        ${persistence.database.provider} · ${persistence.database.target}`);
+  console.log(`  Documents       ${persistence.storage.provider} · ${persistence.storage.target}`);
   console.log(`  Data root       ${DATA_ROOT}`);
   console.log(
     applied.length > 0
@@ -222,9 +242,9 @@ function installShutdown(server: Server): void {
     if (closing) return;
     closing = true;
     console.log(`[brain] ${signal} received — shutting down.`);
-    server.close(() => {
+    server.close(async () => {
       try {
-        closeDatabase();
+        await closeDatabase();
       } catch {
         // Closing a database that is already closed is not worth a crash on exit.
       }
@@ -237,20 +257,27 @@ function installShutdown(server: Server): void {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
-function main(): void {
+async function main(): Promise<void> {
   ensureDataDirs();
 
   let migrations: MigrationReport;
   try {
-    migrations = initDatabase().migrations;
+    migrations = (await initDatabase()).migrations;
   } catch (error) {
     const failure = error instanceof Error ? error : new Error(String(error));
     console.error('');
-    console.error('  Brain failed to migrate the database.');
-    console.error('');
-    console.error(`  ${failure.message}`);
-    console.error('');
-    console.error(`  Database  ${DB_PATH}`);
+    if (failure instanceof DatabaseConfigurationError) {
+      console.error('  Brain could not use the database it was configured for.');
+      console.error('');
+      console.error(`  ${failure.message}`);
+      if (failure.detail) console.error(`  ${failure.detail}`);
+    } else {
+      console.error('  Brain failed to migrate the database.');
+      console.error('');
+      console.error(`  ${failure.message}`);
+      console.error('');
+      console.error(`  Database  ${DB_PATH}`);
+    }
     console.error(`  Data root ${DATA_ROOT}`);
     console.error('');
     serveMigrationFailure(failure);
@@ -259,12 +286,12 @@ function main(): void {
 
   // First boot creates Deal Dispatch; later boots only backfill missing layers
   // and re-create the folder tree.
-  seedIfEmpty();
+  await seedIfEmpty();
 
   // An extraction still marked in-flight was interrupted by a crash or a
   // restart. Mark it so, before anything can mistake a half-read document for a
   // readable one, and leave it available to reprocess.
-  const interrupted = recoverInterruptedExtractions();
+  const interrupted = await recoverInterruptedExtractions();
   if (interrupted > 0) {
     console.log(
       `  ${interrupted} extraction run(s) were interrupted by the last shutdown and are ` +
@@ -276,7 +303,7 @@ function main(): void {
   // it is a lie, so it is closed as INTERRUPTED with its completed passes and
   // accepted fragments intact. Nothing restarts on its own — research spends the
   // user's quota, so resuming is their decision.
-  const interruptedResearch = recoverInterruptedResearch();
+  const interruptedResearch = await recoverInterruptedResearch();
   if (interruptedResearch > 0) {
     console.log(
       `  ${interruptedResearch} research run(s) were interrupted by the last shutdown and are ` +
@@ -286,7 +313,7 @@ function main(): void {
 
   // A folder import interrupted by the shutdown is paused rather than left
   // looking live. Nothing already imported is re-read when it resumes.
-  const pausedImports = recoverInterruptedImports();
+  const pausedImports = await recoverInterruptedImports();
   if (pausedImports > 0) {
     console.log(
       `  ${pausedImports} archive import(s) were interrupted and are paused. Resume them to ` +
@@ -296,22 +323,22 @@ function main(): void {
 
   // Documents that have never been read are queued now, so a folder dropped in
   // while the server was down becomes auditable without anyone asking.
-  const unread = queueUnreadDocuments();
+  const unread = await queueUnreadDocuments();
   if (unread > 0) console.log(`  reading ${unread} document(s) in the background`);
 
   // Derived state is rebuilt before the first request rather than lazily, so a
   // file deleted or added while the server was down is already accounted for.
-  for (const project of listProjects()) {
-    recomputeProject(project.id);
-    writeProjectState(project.id);
+  for (const project of await listProjects()) {
+    await recomputeProject(project.id);
+    await writeProjectState(project.id);
   }
   // One runtime file, so it describes the project the app opens on.
-  const primary = getDefaultProject();
-  if (primary) writeProjectState(primary.id);
+  const primary = await getDefaultProject();
+  if (primary) await writeProjectState(primary.id);
 
   const server = buildApp().listen(PORT, () => logBanner(migrations));
   server.on('error', onListenError);
   installShutdown(server);
 }
 
-main();
+await main();

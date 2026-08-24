@@ -81,7 +81,7 @@ import {
   recomputeProject,
   setLayerExpectations,
 } from '../stateEngine.ts';
-import { fileExists, fileSize, hashFile } from '../storage.ts';
+import { objectExists, objectSize, hashObject } from '../storage.ts';
 
 export interface ToolContext {
   projectId: string;
@@ -115,7 +115,7 @@ export type ToolName =
 export interface ToolDefinition {
   name: ToolName;
   description: string;
-  run(context: ToolContext, args: Record<string, unknown>): ToolResult;
+  run(context: ToolContext, args: Record<string, unknown>): Promise<ToolResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -286,18 +286,18 @@ function readEnum<T extends string>(value: string | null, allowed: readonly T[])
   return allowed.find((candidate) => candidate === normalized) ?? null;
 }
 
-function requireProject(projectId: string): Project {
-  const project = getProject(projectId);
+async function requireProject(projectId: string): Promise<Project> {
+  const project = await getProject(projectId);
   if (!project) throw new Error(`there is no project with id ${projectId} in the database`);
   return project;
 }
 
 /** Invariant 8/9: a document counts as having a file only if the file is there now. */
-function filePresent(document: Document): boolean {
-  return document.filesystemPath ? fileExists(document.filesystemPath) : false;
+async function filePresent(document: Document): Promise<boolean> {
+  return document.filesystemPath ? await objectExists(document.filesystemPath) : false;
 }
 
-function summarizeDocument(document: Document): DocumentSummary {
+async function summarizeDocument(document: Document): Promise<DocumentSummary> {
   return {
     id: document.id,
     canonicalName: document.canonicalName,
@@ -307,14 +307,14 @@ function summarizeDocument(document: Document): DocumentSummary {
     status: document.status,
     filename: document.filename,
     filesystemPath: document.filesystemPath,
-    filePresent: filePresent(document),
+    filePresent: await filePresent(document),
   };
 }
 
-function documentLine(document: Document): string {
+async function documentLine(document: Document): Promise<string> {
   const version = document.version.padEnd(6, ' ');
   const file = document.filesystemPath
-    ? filePresent(document)
+    ? await filePresent(document)
       ? (document.filename ?? path.posix.basename(document.filesystemPath))
       : `${document.filename ?? document.filesystemPath} — FILE MISSING FROM DISK`
     : 'no file registered';
@@ -397,13 +397,13 @@ function renderPromptBlock(run: ResearchRun): string[] {
   return lines;
 }
 
-function layerNameFor(layerId: string | null): string | null {
+async function layerNameFor(layerId: string | null): Promise<string | null> {
   if (!layerId) return null;
-  return getLayer(layerId)?.name ?? null;
+  return (await getLayer(layerId))?.name ?? null;
 }
 
-function knownLayersLine(projectId: string): string {
-  const names = listLayers(projectId).map((layer) => layer.name);
+async function knownLayersLine(projectId: string): Promise<string> {
+  const names = (await listLayers(projectId)).map((layer) => layer.name);
   return names.length > 0
     ? `Layers in this project: ${names.join(', ')}.`
     : 'This project has no layers.';
@@ -447,8 +447,8 @@ function flatten(value: string): string {
  * a token unique to one layer is decisive and a token every layer shares is
  * almost worthless. A tie returns null: guessing is worse than asking.
  */
-export function resolveLayerReference(projectId: string, text: string): Layer | null {
-  const layers = listLayers(projectId);
+export async function resolveLayerReference(projectId: string, text: string): Promise<Layer | null> {
+  const layers = await listLayers(projectId);
   if (layers.length === 0) return null;
 
   const raw = text.trim();
@@ -494,17 +494,17 @@ export function resolveLayerReference(projectId: string, text: string): Layer | 
 }
 
 /** Pull a layer out of tool arguments: explicit id, slug, or fuzzy free text. */
-function resolveLayerArgument(
+async function resolveLayerArgument(
   projectId: string,
   args: Args,
-): { layer: Layer | null; reference: string | null } {
+): Promise<{ layer: Layer | null; reference: string | null }> {
   const id = readString(args, 'layerId', 'layer_id');
   if (id) {
-    const byId = getLayer(id);
+    const byId = await getLayer(id);
     if (byId && byId.projectId === projectId) return { layer: byId, reference: id };
-    const bySlug = getLayerBySlug(projectId, slugify(id));
+    const bySlug = await getLayerBySlug(projectId, slugify(id));
     if (bySlug) return { layer: bySlug, reference: id };
-    return { layer: resolveLayerReference(projectId, id), reference: id };
+    return { layer: await resolveLayerReference(projectId, id), reference: id };
   }
   const text = readString(
     args,
@@ -518,18 +518,18 @@ function resolveLayerArgument(
     'query',
   );
   if (!text) return { layer: null, reference: null };
-  const bySlug = getLayerBySlug(projectId, slugify(text));
+  const bySlug = await getLayerBySlug(projectId, slugify(text));
   if (bySlug) return { layer: bySlug, reference: text };
-  return { layer: resolveLayerReference(projectId, text), reference: text };
+  return { layer: await resolveLayerReference(projectId, text), reference: text };
 }
 
-function unresolvedLayer(projectId: string, reference: string | null): ToolResult {
+async function unresolvedLayer(projectId: string, reference: string | null): Promise<ToolResult> {
   const detail = reference
     ? `"${reference}" does not identify exactly one layer in this project.`
     : 'no layer was named.';
-  return fail(`Could not resolve a layer: ${detail} ${knownLayersLine(projectId)}`, {
+  return fail(`Could not resolve a layer: ${detail} ${await knownLayersLine(projectId)}`, {
     reference,
-    layers: listLayers(projectId).map((layer) => ({ id: layer.id, name: layer.name })),
+    layers: (await listLayers(projectId)).map((layer) => ({ id: layer.id, name: layer.name })),
   });
 }
 
@@ -549,12 +549,12 @@ const getProjectState: ToolDefinition = {
   description:
     'Re-derive and return the whole project: every layer status with its reason, document counts, ' +
     'active runs, missing dependencies and inconsistent documents. Reads SQLite and the filesystem.',
-  run(context) {
-    const project = requireProject(context.projectId);
+  async run(context) {
+    const project = await requireProject(context.projectId);
     // Files first, then dependencies, then layer status: the live truth.
-    const layers = recomputeProject(project.id);
-    const documents = listDocuments(project.id);
-    const runs = listActiveRuns(project.id);
+    const layers = await recomputeProject(project.id);
+    const documents = await listDocuments(project.id);
+    const runs = await listActiveRuns(project.id);
     const missingDependencies = unique(layers.flatMap((layer) => layer.missingDependencies));
     const inconsistencies = unique(layers.flatMap((layer) => layer.inconsistentDocuments));
 
@@ -609,22 +609,22 @@ const getLayerState: ToolDefinition = {
   description:
     'Re-derive one layer: status and the rule that produced it, expected vs present versions, its ' +
     'documents with live file presence, its latest audit and its active runs.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
-    const { layer, reference } = resolveLayerArgument(project.id, args);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
+    const { layer, reference } = await resolveLayerArgument(project.id, args);
     if (!layer) return unresolvedLayer(project.id, reference);
 
-    const snapshot = recomputeLayer(layer.id);
-    const documents = listDocumentsByLayer(layer.id);
-    const audit = getLatestAuditForLayer(layer.id);
-    const runs = listRunsByLayer(layer.id).filter((run) =>
+    const snapshot = await recomputeLayer(layer.id);
+    const documents = await listDocumentsByLayer(layer.id);
+    const audit = await getLatestAuditForLayer(layer.id);
+    const runs = (await listRunsByLayer(layer.id)).filter((run) =>
       ['PLANNED', 'READY', 'RUNNING', 'BLOCKED', 'AUDIT_REQUIRED', 'REDO_REQUIRED'].includes(run.status),
     );
 
     const data: LayerStateData = {
       layer: { id: layer.id, name: layer.name, slug: layer.slug, orderIndex: layer.orderIndex },
       snapshot,
-      documents: documents.map(summarizeDocument),
+      documents: await Promise.all(documents.map(summarizeDocument)),
       latestAudit: audit
         ? { id: audit.id, verdict: audit.verdict, summary: audit.summary, createdAt: audit.createdAt }
         : null,
@@ -642,7 +642,7 @@ const getLayerState: ToolDefinition = {
         ? `Documents (${documents.length}):`
         : 'Documents: none are registered for this layer.',
     );
-    lines.push(...documents.map(documentLine));
+    lines.push(...(await Promise.all(documents.map(documentLine))));
     if (audit) {
       lines.push(`Latest audit: ${audit.verdict} on ${audit.createdAt} — ${audit.summary}`);
     } else {
@@ -661,9 +661,9 @@ const listDocumentsTool: ToolDefinition = {
   description:
     'List registered documents for the project or one layer, with their version, type, status and ' +
     'whether the physical file is actually on disk right now.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
-    const { layer, reference } = resolveLayerArgument(project.id, args);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
+    const { layer, reference } = await resolveLayerArgument(project.id, args);
     if (!layer && reference) return unresolvedLayer(project.id, reference);
 
     const status = readEnum(readString(args, 'status'), DOCUMENT_STATUSES);
@@ -672,11 +672,16 @@ const listDocumentsTool: ToolDefinition = {
     const version = versionArg ? normalizeVersion(versionArg) : null;
     const missingOnly = readBoolean(args, 'missingOnly', 'missing_only', 'inconsistentOnly') === true;
 
-    let documents = layer ? listDocumentsByLayer(layer.id) : listDocuments(project.id);
+    let documents = layer ? await listDocumentsByLayer(layer.id) : await listDocuments(project.id);
     if (status) documents = documents.filter((document) => document.status === status);
     if (documentType) documents = documents.filter((document) => document.documentType === documentType);
     if (version) documents = documents.filter((document) => normalizeVersion(document.version) === version);
-    if (missingOnly) documents = documents.filter((document) => !filePresent(document));
+    if (missingOnly) {
+      // `filePresent` reads the store, so this cannot be a `.filter` predicate:
+      // a promise is always truthy and the filter would keep every document.
+      const presence = await Promise.all(documents.map((document) => filePresent(document)));
+      documents = documents.filter((_, i) => !presence[i]);
+    }
 
     const scope = layer ? layer.name : project.name;
     const filters = [
@@ -690,7 +695,7 @@ const listDocumentsTool: ToolDefinition = {
     const data: DocumentsData = {
       layerId: layer?.id ?? null,
       count: documents.length,
-      documents: documents.map(summarizeDocument),
+      documents: await Promise.all(documents.map(summarizeDocument)),
     };
 
     if (documents.length === 0) {
@@ -702,9 +707,9 @@ const listDocumentsTool: ToolDefinition = {
     }
 
     const lines = [`${documents.length} document(s) registered for ${scope}${filterText}:`];
-    lines.push(...documents.map(documentLine));
+    lines.push(...(await Promise.all(documents.map(documentLine))));
     if (layer) {
-      const snapshot = computeLayerState(layer.id);
+      const snapshot = await computeLayerState(layer.id);
       lines.push(`Layer status: ${snapshot.status} — ${snapshot.reason}`);
     }
     return ok(data, lines.join('\n'));
@@ -716,9 +721,9 @@ const findDocument: ToolDefinition = {
   description:
     'Look a document up by canonical name, by layer + version, or by a fuzzy fragment. Returns ' +
     'nothing when nothing matches — the answer is then "there is no such document".',
-  run(context, args) {
-    const project = requireProject(context.projectId);
-    const { layer } = resolveLayerArgument(project.id, args);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
+    const { layer } = await resolveLayerArgument(project.id, args);
     const query = readString(
       args,
       'canonicalName',
@@ -739,15 +744,15 @@ const findDocument: ToolDefinition = {
     const found: Document[] = [];
 
     if (layer && version) {
-      const exact = findDocumentByCanonicalName(project.id, buildCanonicalName(layer.name, version));
+      const exact = await findDocumentByCanonicalName(project.id, buildCanonicalName(layer.name, version));
       if (exact) found.push(exact);
     }
     if (found.length === 0 && query) {
-      const exact = findDocumentByCanonicalName(project.id, query);
+      const exact = await findDocumentByCanonicalName(project.id, query);
       if (exact) found.push(exact);
     }
     if (found.length === 0) {
-      const pool = layer ? listDocumentsByLayer(layer.id) : listDocuments(project.id);
+      const pool = layer ? await listDocumentsByLayer(layer.id) : await listDocuments(project.id);
       const needle = query ? normalizeName(query) : '';
       const byName = needle
         ? pool.filter((document) => {
@@ -766,7 +771,7 @@ const findDocument: ToolDefinition = {
     const first = matches[0];
     const data: FindDocumentData = {
       query: query ?? version,
-      matches: matches.map(summarizeDocument),
+      matches: await Promise.all(matches.map(summarizeDocument)),
       dependencies: null,
     };
 
@@ -780,16 +785,16 @@ const findDocument: ToolDefinition = {
     }
 
     if (matches.length === 1 && first) {
-      const dependencies = checkDocumentDependencies(first.id);
+      const dependencies = await checkDocumentDependencies(first.id);
       data.dependencies = dependencies.items.length > 0 ? dependencies : null;
       const lines = [
         `Found 1 document:`,
-        documentLine(first),
-        `  Layer     : ${layerNameFor(first.layerId) ?? 'unfiled'}`,
+        await documentLine(first),
+        `  Layer     : ${await layerNameFor(first.layerId) ?? 'unfiled'}`,
         `  Registered: ${first.importedAt ?? first.createdAt}`,
         `  File      : ${
           first.filesystemPath
-            ? filePresent(first)
+            ? await filePresent(first)
               ? `${first.filesystemPath} (present, ${first.fileSize ?? 'unknown'} bytes)`
               : `${first.filesystemPath} (INCONSISTENT — the row exists but the file is gone)`
             : 'none registered'
@@ -811,45 +816,45 @@ const resolveDependencies: ToolDefinition = {
   description:
     'Check a source packet against live state: by run, by document, by explicit canonical names, ' +
     'by layer + run type, or across the whole project. Reports `6 / 7 READY` and what is missing.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
     const runId = readString(args, 'runId', 'run_id');
     const documentId = readString(args, 'documentId', 'document_id');
     const names = readStringArray(args, 'canonicalNames', 'canonical_names', 'documents', 'names');
-    const { layer } = resolveLayerArgument(project.id, args);
+    const { layer } = await resolveLayerArgument(project.id, args);
     const runType = readEnum(readString(args, 'runType', 'run_type'), RUN_TYPES);
 
     let result: DependencyCheckResult;
     let scope: string;
 
     if (runId) {
-      const run = getRun(runId);
+      const run = await getRun(runId);
       if (!run || run.projectId !== project.id) {
         return fail(`There is no run ${runId} in this project.`, { runId });
       }
-      result = checkRunDependencies(run.id);
+      result = await checkRunDependencies(run.id);
       scope = `run ${run.id} (${run.runType}${run.targetVersion ? ` → ${run.targetVersion}` : ''})`;
     } else if (documentId) {
-      const document = getDocument(documentId);
+      const document = await getDocument(documentId);
       if (!document || document.projectId !== project.id) {
         return fail(`There is no document ${documentId} in this project.`, { documentId });
       }
-      result = checkDocumentDependencies(document.id);
+      result = await checkDocumentDependencies(document.id);
       scope = document.canonicalName;
     } else if (names && names.length > 0) {
-      result = checkCanonicalNames(project.id, names);
+      result = await checkCanonicalNames(project.id, names);
       scope = 'the named documents';
     } else if (layer && runType) {
-      result = checkCanonicalNames(
+      result = await checkCanonicalNames(
         project.id,
-        defaultRequiredDocuments(project.id, layer.id, runType),
+        await defaultRequiredDocuments(project.id, layer.id, runType),
       );
       scope = `a ${runType} run on ${layer.name}`;
     } else {
       const declared = unique(
-        listDependenciesForProject(project.id).map((dependency) => dependency.requiredCanonicalName),
+        (await listDependenciesForProject(project.id)).map((dependency) => dependency.requiredCanonicalName),
       );
-      result = checkCanonicalNames(project.id, declared);
+      result = await checkCanonicalNames(project.id, declared);
       scope = `every dependency declared in ${project.name}`;
     }
 
@@ -862,9 +867,9 @@ const createDocumentTool: ToolDefinition = {
   description:
     'Create the record for a document the project expects to exist (status EXPECTED). It carries ' +
     'no file: a record is a promise, registration is what makes it real.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
-    const { layer, reference } = resolveLayerArgument(project.id, args);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
+    const { layer, reference } = await resolveLayerArgument(project.id, args);
     if (!layer) return unresolvedLayer(project.id, reference);
 
     const versionArg = readString(args, 'version', 'targetVersion', 'target_version');
@@ -877,11 +882,11 @@ const createDocumentTool: ToolDefinition = {
     const version = normalizeVersion(versionArg);
     const names = buildNames(layer.name, version);
 
-    const existing = findDocumentByCanonicalName(project.id, names.canonicalName);
+    const existing = await findDocumentByCanonicalName(project.id, names.canonicalName);
     if (existing) {
       return fail(
         `${names.canonicalName} already exists (${existing.documentType}/${existing.status}). Nothing was created.`,
-        summarizeDocument(existing),
+        await summarizeDocument(existing),
       );
     }
 
@@ -890,7 +895,7 @@ const createDocumentTool: ToolDefinition = {
       inferDocumentType(project, version);
     const status = readEnum(readString(args, 'status'), DOCUMENT_STATUSES) ?? 'EXPECTED';
 
-    const document = createDocument({
+    const document = await createDocument({
       projectId: project.id,
       layerId: layer.id,
       canonicalName: names.canonicalName,
@@ -902,7 +907,7 @@ const createDocumentTool: ToolDefinition = {
       conversationTitle: names.conversationTitle,
       notes: readString(args, 'notes'),
     });
-    recordEvent({
+    await recordEvent({
       projectId: project.id,
       layerId: layer.id,
       entityType: 'DOCUMENT',
@@ -917,10 +922,10 @@ const createDocumentTool: ToolDefinition = {
         source: 'chat',
       },
     });
-    const snapshot = recomputeLayer(layer.id);
+    const snapshot = await recomputeLayer(layer.id);
 
     return ok(
-      { document: summarizeDocument(document), snapshot, expectedFilename: names.filename },
+      { document: await summarizeDocument(document), snapshot, expectedFilename: names.filename },
       [
         `Created the record ${document.canonicalName} (${documentType}, ${status}) on ${layer.name}.`,
         `No file is attached yet. When the report exists, import it as "${names.filename}".`,
@@ -935,15 +940,15 @@ const registerDocument: ToolDefinition = {
   description:
     'Attach a file that already sits under the data root to a document record, hashing and sizing ' +
     'it, or mark an already-filed document COMPLETE. A file on disk is never registered by accident.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
     const documentId = readString(args, 'documentId', 'document_id');
     const canonicalName = readString(args, 'canonicalName', 'canonical_name', 'name', 'document');
 
     const document = documentId
-      ? getDocument(documentId)
+      ? await getDocument(documentId)
       : canonicalName
-        ? findDocumentByCanonicalName(project.id, canonicalName)
+        ? await findDocumentByCanonicalName(project.id, canonicalName)
         : null;
     if (!document || document.projectId !== project.id) {
       return fail(
@@ -958,23 +963,23 @@ const registerDocument: ToolDefinition = {
 
     if (relativePath) {
       const normalizedPath = relativePath.replace(/^\.\/+/, '').split(path.sep).join('/');
-      if (!fileExists(normalizedPath)) {
+      if (!await objectExists(normalizedPath)) {
         return fail(
           `No file exists at "${normalizedPath}" under the data root, so nothing was registered. ` +
             'Run scan_and_reconcile to see what is actually on disk.',
           { path: normalizedPath },
         );
       }
-      const updated = updateDocument(document.id, {
+      const updated = await updateDocument(document.id, {
         filesystemPath: normalizedPath,
         filename: readString(args, 'filename') ?? path.posix.basename(normalizedPath),
-        fileSize: fileSize(normalizedPath),
-        fileHash: hashFile(normalizedPath),
+        fileSize: await objectSize(normalizedPath),
+        fileHash: await hashObject(normalizedPath),
         fileMissing: false,
         status,
         importedAt: document.importedAt ?? nowIso(),
       });
-      recordEvent({
+      await recordEvent({
         projectId: project.id,
         layerId: document.layerId,
         entityType: 'DOCUMENT',
@@ -983,7 +988,7 @@ const registerDocument: ToolDefinition = {
         payload: { canonicalName: document.canonicalName, path: normalizedPath, status, source: 'chat' },
       });
       if (status === 'COMPLETE' || status === 'FROZEN') {
-        recordEvent({
+        await recordEvent({
           projectId: project.id,
           layerId: document.layerId,
           entityType: 'DOCUMENT',
@@ -992,26 +997,26 @@ const registerDocument: ToolDefinition = {
           payload: { canonicalName: document.canonicalName, status },
         });
       }
-      recomputeProject(project.id);
-      const fresh = getDocument(document.id) ?? updated ?? document;
+      await recomputeProject(project.id);
+      const fresh = await getDocument(document.id) ?? updated ?? document;
       return ok(
-        { document: summarizeDocument(fresh) },
+        { document: await summarizeDocument(fresh) },
         [
           `Registered ${fresh.canonicalName} against ${normalizedPath} (${fresh.fileSize ?? 0} bytes) and set it ${fresh.status}.`,
-          documentLine(fresh),
+          await documentLine(fresh),
         ].join('\n'),
       );
     }
 
-    if (!filePresent(document)) {
+    if (!await filePresent(document)) {
       return fail(
         `${document.canonicalName} has no file on disk, so it cannot be marked ${status}. ` +
           'Give a path under the data root, or import the file first.',
-        summarizeDocument(document),
+        await summarizeDocument(document),
       );
     }
-    updateDocument(document.id, { status, fileMissing: false });
-    recordEvent({
+    await updateDocument(document.id, { status, fileMissing: false });
+    await recordEvent({
       projectId: project.id,
       layerId: document.layerId,
       entityType: 'DOCUMENT',
@@ -1019,32 +1024,32 @@ const registerDocument: ToolDefinition = {
       eventType: 'DOCUMENT_COMPLETED',
       payload: { canonicalName: document.canonicalName, status, source: 'chat' },
     });
-    recomputeProject(project.id);
-    const fresh = getDocument(document.id) ?? document;
+    await recomputeProject(project.id);
+    const fresh = await getDocument(document.id) ?? document;
     return ok(
-      { document: summarizeDocument(fresh) },
-      [`${fresh.canonicalName} is now ${fresh.status}.`, documentLine(fresh)].join('\n'),
+      { document: await summarizeDocument(fresh) },
+      [`${fresh.canonicalName} is now ${fresh.status}.`, await documentLine(fresh)].join('\n'),
     );
   },
 };
 
 /** Shared by create_run and compile_prompt: compile, persist, attach the packet. */
-function compileOntoRun(
+async function compileOntoRun(
   project: Project,
   layer: Layer,
   runType: RunType,
   args: Args,
   existing: ResearchRun | null,
-): RunData {
+): Promise<RunData> {
   const targetVersion =
     readString(args, 'targetVersion', 'target_version', 'version') ??
     existing?.targetVersion ??
-    defaultTargetVersion(project.id, layer.id, runType);
+    await defaultTargetVersion(project.id, layer.id, runType);
   const requiredDocuments =
     readStringArray(args, 'requiredDocuments', 'required_documents', 'requiredAttachments') ??
-    defaultRequiredDocuments(project.id, layer.id, runType);
+    await defaultRequiredDocuments(project.id, layer.id, runType);
 
-  const compiled = compilePrompt({
+  const compiled = await compilePrompt({
     projectId: project.id,
     layerId: layer.id,
     runType,
@@ -1059,7 +1064,7 @@ function compileOntoRun(
 
   const run =
     existing ??
-    createRun({
+    await createRun({
       projectId: project.id,
       layerId: layer.id,
       targetVersion: compiled.targetVersion,
@@ -1070,7 +1075,7 @@ function compileOntoRun(
       conversationId: readString(args, 'conversationId', 'conversation_id'),
     });
 
-  updateRun(run.id, {
+  await updateRun(run.id, {
     targetVersion: compiled.targetVersion,
     prompt: compiled.prompt,
     promptSections: compiled.sections,
@@ -1078,15 +1083,15 @@ function compileOntoRun(
     expectedConversationTitle: compiled.expectedConversationTitle,
     expectedFilename: compiled.expectedFilename,
   });
-  setRunDependencies(run.id, compiled.requiredAttachments);
-  const dependencies = checkRunDependencies(run.id);
+  await setRunDependencies(run.id, compiled.requiredAttachments);
+  const dependencies = await checkRunDependencies(run.id);
   // A synthesis with nothing to consolidate is not "ready", it is premature —
   // invariant 4 in the direction the dependency checker cannot see.
   const emptySynthesis = runType === 'SYNTHESIS' && dependencies.items.length === 0;
-  updateRun(run.id, { status: dependencies.ready && !emptySynthesis ? 'READY' : 'BLOCKED' });
+  await updateRun(run.id, { status: dependencies.ready && !emptySynthesis ? 'READY' : 'BLOCKED' });
 
   if (!existing) {
-    recordEvent({
+    await recordEvent({
       projectId: project.id,
       layerId: layer.id,
       entityType: 'RUN',
@@ -1101,7 +1106,7 @@ function compileOntoRun(
     });
   }
   // Invariant 10: the exact prompt and its attachment list are recorded.
-  recordEvent({
+  await recordEvent({
     projectId: project.id,
     layerId: layer.id,
     entityType: 'RUN',
@@ -1117,9 +1122,9 @@ function compileOntoRun(
       source: 'chat',
     },
   });
-  recomputeLayer(layer.id);
+  await recomputeLayer(layer.id);
 
-  const fresh = getRun(run.id) ?? run;
+  const fresh = await getRun(run.id) ?? run;
   return {
     run: fresh,
     dependencies,
@@ -1150,9 +1155,9 @@ const createRunTool: ToolDefinition = {
   description:
     'Create a research/audit/synthesis/redo run for a layer, compile and persist its prompt and ' +
     'required attachments, attach its dependency rows, and set it READY or BLOCKED accordingly.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
-    const { layer, reference } = resolveLayerArgument(project.id, args);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
+    const { layer, reference } = await resolveLayerArgument(project.id, args);
     if (!layer) return unresolvedLayer(project.id, reference);
 
     const runType = readEnum(readString(args, 'runType', 'run_type', 'type'), RUN_TYPES);
@@ -1168,7 +1173,7 @@ const createRunTool: ToolDefinition = {
       );
     }
 
-    const data = compileOntoRun(project, layer, runType, args, null);
+    const data = await compileOntoRun(project, layer, runType, args, null);
     return ok(
       data,
       renderRunData(data, layer.name, `Created ${article(runType)} ${runType} run on ${layer.name}.`),
@@ -1181,11 +1186,11 @@ const updateRunTool: ToolDefinition = {
   description:
     'Move a run through its lifecycle — RUNNING, COMPLETE, FAILED, AUDIT_REQUIRED, APPROVED — ' +
     'stamping the matching timestamp, recording the event and re-deriving the layer.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
     const runId = readString(args, 'runId', 'run_id', 'id');
     if (!runId) return fail('No run id was given, so no run could be updated.');
-    const run = getRun(runId);
+    const run = await getRun(runId);
     if (!run || run.projectId !== project.id) {
       return fail(`There is no run ${runId} in this project.`, { runId });
     }
@@ -1200,7 +1205,7 @@ const updateRunTool: ToolDefinition = {
     const resultText = readString(args, 'resultText', 'result_text', 'result');
     const timestamp = nowIso();
 
-    const updated = updateRun(run.id, {
+    const updated = await updateRun(run.id, {
       status: status ?? undefined,
       resultText: resultText ?? undefined,
       provider: readString(args, 'provider') ?? undefined,
@@ -1223,7 +1228,7 @@ const updateRunTool: ToolDefinition = {
               ? 'RUN_COMPLETED'
               : null;
       if (eventType) {
-        recordEvent({
+        await recordEvent({
           projectId: project.id,
           layerId: run.layerId,
           entityType: 'RUN',
@@ -1233,9 +1238,9 @@ const updateRunTool: ToolDefinition = {
         });
       }
     }
-    if (run.layerId) recomputeLayer(run.layerId);
+    if (run.layerId) await recomputeLayer(run.layerId);
 
-    const layerName = layerNameFor(updated.layerId);
+    const layerName = await layerNameFor(updated.layerId);
     const lines = [
       status && status !== run.status
         ? `Run ${updated.id} moved ${run.status} → ${updated.status}.`
@@ -1243,7 +1248,7 @@ const updateRunTool: ToolDefinition = {
       renderRunHeader(updated, layerName),
     ];
     if (updated.failureReason) lines.push(`  Failure reason: ${updated.failureReason}`);
-    if (updated.layerId) lines.push(renderSnapshot(computeLayerState(updated.layerId)));
+    if (updated.layerId) lines.push(renderSnapshot(await computeLayerState(updated.layerId)));
     return ok({ run: updated }, lines.join('\n'));
   },
 };
@@ -1253,35 +1258,35 @@ const compilePromptTool: ToolDefinition = {
   description:
     'Compile the prompt for a run type on a layer. With a run id the prompt is recompiled and ' +
     'stored on that run; without one a run is created so the exact prompt is always recorded.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
     const runId = readString(args, 'runId', 'run_id');
 
     if (runId) {
-      const run = getRun(runId);
+      const run = await getRun(runId);
       if (!run || run.projectId !== project.id) {
         return fail(`There is no run ${runId} in this project.`, { runId });
       }
       if (!run.layerId) {
         return fail(`Run ${run.id} is not attached to a layer, so no prompt can be compiled for it.`);
       }
-      const layer = getLayer(run.layerId);
+      const layer = await getLayer(run.layerId);
       if (!layer) return fail(`Run ${run.id} points at a layer that no longer exists.`);
       const runType = readEnum(readString(args, 'runType', 'run_type', 'type'), RUN_TYPES) ?? run.runType;
-      const data = compileOntoRun(project, layer, runType, args, run);
+      const data = await compileOntoRun(project, layer, runType, args, run);
       return ok(
         data,
         renderRunData(data, layer.name, `Recompiled the ${runType} prompt for run ${run.id}.`),
       );
     }
 
-    const { layer, reference } = resolveLayerArgument(project.id, args);
+    const { layer, reference } = await resolveLayerArgument(project.id, args);
     if (!layer) return unresolvedLayer(project.id, reference);
     const runType = readEnum(readString(args, 'runType', 'run_type', 'type'), RUN_TYPES);
     if (!runType) {
       return fail(`No run type was given. Known run types: ${RUN_TYPES.join(', ')}.`);
     }
-    const data = compileOntoRun(project, layer, runType, args, null);
+    const data = await compileOntoRun(project, layer, runType, args, null);
     return ok(
       data,
       renderRunData(data, layer.name, `Compiled ${article(runType)} ${runType} prompt for ${layer.name}.`),
@@ -1294,23 +1299,23 @@ const createAuditTool: ToolDefinition = {
   description:
     'Record a structured audit (verdict plus failures, missing documents, required runs and ' +
     'patches), apply its consequences, and re-derive the layer. Accepts raw model JSON.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
     const runId = readString(args, 'runId', 'run_id');
     const documentId = readString(args, 'documentId', 'document_id', 'auditedDocumentId');
-    const run = runId ? getRun(runId) : null;
+    const run = runId ? await getRun(runId) : null;
     if (runId && (!run || run.projectId !== project.id)) {
       return fail(`There is no run ${runId} in this project.`, { runId });
     }
-    const document = documentId ? getDocument(documentId) : null;
+    const document = documentId ? await getDocument(documentId) : null;
     if (documentId && (!document || document.projectId !== project.id)) {
       return fail(`There is no document ${documentId} in this project.`, { documentId });
     }
 
-    const { layer: referenced, reference } = resolveLayerArgument(project.id, args);
+    const { layer: referenced, reference } = await resolveLayerArgument(project.id, args);
     const layerId = referenced?.id ?? run?.layerId ?? document?.layerId ?? null;
     if (!layerId) return unresolvedLayer(project.id, reference);
-    const layer = getLayer(layerId);
+    const layer = await getLayer(layerId);
     if (!layer) return unresolvedLayer(project.id, reference);
 
     const rawText = readString(args, 'json', 'text', 'raw', 'modelOutput', 'model_output');
@@ -1329,7 +1334,7 @@ const createAuditTool: ToolDefinition = {
       );
     }
 
-    const outcome = recordAudit({
+    const outcome = await recordAudit({
       projectId: project.id,
       layerId: layer.id,
       runId: run?.id ?? null,
@@ -1394,20 +1399,20 @@ const createRedoTool: ToolDefinition = {
   description:
     'Chain a corrected attempt to a run: new run row, incremented attempt number, same source ' +
     'packet, prompt recompiled with the audit findings. The failed attempt is never touched.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
     const runId = readString(args, 'runId', 'run_id');
-    const { layer } = resolveLayerArgument(project.id, args);
+    const { layer } = await resolveLayerArgument(project.id, args);
     const versionArg = readString(args, 'version', 'targetVersion', 'target_version');
     const version = versionArg ? normalizeVersion(versionArg) : null;
 
-    let parent = runId ? getRun(runId) : null;
+    let parent = runId ? await getRun(runId) : null;
     if (runId && (!parent || parent.projectId !== project.id)) {
       return fail(`There is no run ${runId} in this project.`, { runId });
     }
 
     if (!parent) {
-      const pool = (layer ? listRunsByLayer(layer.id) : listRuns(project.id)).filter(
+      const pool = (layer ? await listRunsByLayer(layer.id) : await listRuns(project.id)).filter(
         (candidate) => candidate.projectId === project.id,
       );
       const matching = version
@@ -1440,15 +1445,15 @@ const createRedoTool: ToolDefinition = {
     const reason =
       readString(args, 'reason', 'redoReason', 'redo_reason') ??
       `Redo of ${parent.targetVersion ?? parent.runType} requested from chat.`;
-    const redo = createRedoRun({
+    const redo = await createRedoRun({
       parentRunId: parent.id,
       auditId: readString(args, 'auditId', 'audit_id'),
       reason,
       automatic: readBoolean(args, 'automatic') === true,
     });
-    const dependencies = checkRunDependencies(redo.id);
-    const layerName = layerNameFor(redo.layerId);
-    const parentRun = getRun(parent.id);
+    const dependencies = await checkRunDependencies(redo.id);
+    const layerName = await layerNameFor(redo.layerId);
+    const parentRun = await getRun(parent.id);
 
     const data: RunData = {
       run: redo,
@@ -1475,14 +1480,14 @@ const markLayerFrozen: ToolDefinition = {
   description:
     'Freeze a layer on its canonical artifact, superseding the earlier documents. Refused when no ' +
     'canonical artifact exists or its file is missing.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
-    const { layer, reference } = resolveLayerArgument(project.id, args);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
+    const { layer, reference } = await resolveLayerArgument(project.id, args);
     if (!layer) return unresolvedLayer(project.id, reference);
     const canonicalDocumentId = readString(args, 'canonicalDocumentId', 'canonical_document_id', 'documentId');
 
     try {
-      const snapshot = freezeLayer(layer.id, canonicalDocumentId);
+      const snapshot = await freezeLayer(layer.id, canonicalDocumentId);
       return ok(
         { snapshot },
         [
@@ -1494,7 +1499,7 @@ const markLayerFrozen: ToolDefinition = {
       const message = error instanceof Error ? error.message : String(error);
       return fail(`${layer.name} was not frozen. ${message}`, {
         layerId: layer.id,
-        snapshot: computeLayerState(layer.id),
+        snapshot: await computeLayerState(layer.id),
       });
     }
   },
@@ -1505,10 +1510,10 @@ const calculateNextActionTool: ToolDefinition = {
   description:
     'Re-derive every layer and return the single next best action, plus the NOW / NEXT / LATER / ' +
     'BLOCKED plan. Deterministic and derived only from the database and the filesystem.',
-  run(context) {
-    const project = requireProject(context.projectId);
-    const nextBestAction = calculateNextAction(project.id);
-    const plan = buildPlan(project.id);
+  async run(context) {
+    const project = await requireProject(context.projectId);
+    const nextBestAction = await calculateNextAction(project.id);
+    const plan = await buildPlan(project.id);
 
     const data: NextActionData = {
       nextBestAction,
@@ -1553,9 +1558,9 @@ const scanAndReconcileTool: ToolDefinition = {
   description:
     'Walk the project folder, compare it with the database, and report unregistered files, ' +
     'missing physical files, changed checksums and orphaned records. Never deletes anything.',
-  run(context) {
-    const project = requireProject(context.projectId);
-    const report = scanAndReconcile(project.id);
+  async run(context) {
+    const project = await requireProject(context.projectId);
+    const report = await scanAndReconcile(project.id);
     const data: ReconcileData = { report };
 
     const lines = [
@@ -1588,9 +1593,9 @@ const setLayerExpectationsTool: ToolDefinition = {
   description:
     'Declare which versions a layer owes, e.g. ["v1","v1B","v1C"]. This is what turns "keep ' +
     'researching" into a countable 6 / 7 and a concrete next version.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
-    const { layer, reference } = resolveLayerArgument(project.id, args);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
+    const { layer, reference } = await resolveLayerArgument(project.id, args);
     if (!layer) return unresolvedLayer(project.id, reference);
 
     const versions = readStringArray(
@@ -1611,7 +1616,7 @@ const setLayerExpectationsTool: ToolDefinition = {
       );
     }
 
-    const snapshot = setLayerExpectations(
+    const snapshot = await setLayerExpectations(
       layer.id,
       versions.map((version) => normalizeVersion(version)),
     );
@@ -1630,9 +1635,9 @@ const listRunsTool: ToolDefinition = {
   description:
     'List research runs for the project or one layer, newest first, with their type, attempt ' +
     'number, status and target version.',
-  run(context, args) {
-    const project = requireProject(context.projectId);
-    const { layer, reference } = resolveLayerArgument(project.id, args);
+  async run(context, args) {
+    const project = await requireProject(context.projectId);
+    const { layer, reference } = await resolveLayerArgument(project.id, args);
     if (!layer && reference) return unresolvedLayer(project.id, reference);
 
     const statusArg = readString(args, 'status');
@@ -1643,8 +1648,8 @@ const listRunsTool: ToolDefinition = {
     const activeOnly = readBoolean(args, 'activeOnly', 'active_only', 'active') === true;
     const limit = Math.max(1, Math.min(readNumber(args, 'limit') ?? 15, 100));
 
-    const activeIds = new Set(listActiveRuns(project.id).map((run) => run.id));
-    let runs = layer ? listRunsByLayer(layer.id) : listRuns(project.id);
+    const activeIds = new Set((await listActiveRuns(project.id)).map((run) => run.id));
+    let runs = layer ? await listRunsByLayer(layer.id) : await listRuns(project.id);
     if (status) runs = runs.filter((run) => run.status === status);
     if (activeOnly) runs = runs.filter((run) => activeIds.has(run.id));
     const limited = runs.slice(0, limit);
@@ -1652,17 +1657,19 @@ const listRunsTool: ToolDefinition = {
     const data: RunsData = {
       layerId: layer?.id ?? null,
       count: runs.length,
-      runs: limited.map((run) => ({
-        id: run.id,
-        layerId: run.layerId,
-        layerName: layerNameFor(run.layerId),
-        runType: run.runType,
-        attemptNumber: run.attemptNumber,
-        status: run.status,
-        targetVersion: run.targetVersion,
-        createdAt: run.createdAt,
-        active: activeIds.has(run.id),
-      })),
+      runs: await Promise.all(
+        limited.map(async (run) => ({
+          id: run.id,
+          layerId: run.layerId,
+          layerName: await layerNameFor(run.layerId),
+          runType: run.runType,
+          attemptNumber: run.attemptNumber,
+          status: run.status,
+          targetVersion: run.targetVersion,
+          createdAt: run.createdAt,
+          active: activeIds.has(run.id),
+        })),
+      ),
     };
 
     const scope = layer ? layer.name : project.name;
@@ -1676,9 +1683,9 @@ const listRunsTool: ToolDefinition = {
       `${runs.length} run(s) recorded for ${scope}${status ? ` with status ${status}` : ''}` +
         `${runs.length > limited.length ? `, showing the ${limited.length} newest` : ''}:`,
       ...limited.map(
-        (run) =>
+        async (run) =>
           `  ${run.id} · ${run.runType} · attempt ${run.attemptNumber} · ${run.status}` +
-          `${run.targetVersion ? ` · ${run.targetVersion}` : ''} · ${layerNameFor(run.layerId) ?? 'no layer'}` +
+          `${run.targetVersion ? ` · ${run.targetVersion}` : ''} · ${await layerNameFor(run.layerId) ?? 'no layer'}` +
           ` · created ${run.createdAt}`,
       ),
     ];
@@ -1710,17 +1717,17 @@ export const TOOLS: Record<ToolName, ToolDefinition> = {
  * Execute a tool. Failures come back as a `ToolResult` rather than an exception
  * so a chat turn always has something honest to say instead of dying.
  */
-export function runTool(
+export async function runTool(
   name: ToolName,
   context: ToolContext,
   args: Record<string, unknown> = {},
-): ToolResult {
+): Promise<ToolResult> {
   const definition: ToolDefinition | undefined = TOOLS[name];
   if (!definition) {
     return fail(`There is no tool named "${name}".`, { tool: name });
   }
   try {
-    return definition.run(context, args ?? {});
+    return await definition.run(context, args ?? {});
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return fail(`The ${name} tool could not complete: ${message}`, { tool: name, error: message });

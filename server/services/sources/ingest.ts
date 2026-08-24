@@ -108,9 +108,9 @@ export interface IngestInput {
  * nobody has ruled on, and leaves decided links alone.
  */
 export async function ingestSource(input: IngestInput): Promise<IngestionReport> {
-  const document = getDocument(input.documentId);
+  const document = await getDocument(input.documentId);
   if (!document) throw new Error(`Cannot ingest: unknown document ${input.documentId}`);
-  const project = getProject(document.projectId);
+  const project = await getProject(document.projectId);
   if (!project) throw new Error(`Cannot ingest: unknown project ${document.projectId}`);
 
   const scope: DocumentScope = input.scope ?? document.scope ?? 'LAYER';
@@ -123,7 +123,7 @@ export async function ingestSource(input: IngestInput): Promise<IngestionReport>
   // racing leaves both runs superseded by the other — a document with no current
   // reading at all. The queue exists to make that impossible, so this joins it.
   const extraction = await enqueueExtraction(document.id, { force: input.force ?? false });
-  const run = getCurrentExtractionRun(document.id);
+  const run = await getCurrentExtractionRun(document.id);
   if (!run) throw new Error('Cannot ingest: the document produced no extraction run.');
 
   const warnings = [...run.warnings];
@@ -135,7 +135,7 @@ export async function ingestSource(input: IngestInput): Promise<IngestionReport>
       run.blockedReason ?? 'The document could not be read.',
       ...warnings,
     ]);
-    saveIngestionReport({
+    await saveIngestionReport({
       documentId: document.id,
       extractionRunId: run.id,
       scope,
@@ -144,9 +144,9 @@ export async function ingestSource(input: IngestInput): Promise<IngestionReport>
     return report;
   }
 
-  const blocks = listBlocks(run.id);
-  const chunks = listChunks(run.id);
-  const layers = listLayers(project.id);
+  const blocks = await listBlocks(run.id);
+  const chunks = await listChunks(run.id);
+  const layers = await listLayers(project.id);
 
   const segments = segmentBlocks(blocks);
 
@@ -154,11 +154,11 @@ export async function ingestSource(input: IngestInput): Promise<IngestionReport>
   // content hash of the passage they were made about, because the segment rows
   // themselves are about to be replaced — a decision belongs to the text, not to
   // the row that happened to carry it on the last read.
-  const decided = listDecidedLinks(document.id);
-  clearSegments(document.id);
-  clearProposedLinks(document.id);
+  const decided = await listDecidedLinks(document.id);
+  await clearSegments(document.id);
+  await clearProposedLinks(document.id);
 
-  const stored = insertSegments(
+  const stored = await insertSegments(
     segments.map((segment) => ({
       documentId: document.id,
       extractionRunId: run.id,
@@ -208,7 +208,7 @@ export async function ingestSource(input: IngestInput): Promise<IngestionReport>
       decidedAt: link.decidedAt,
     });
   }
-  insertLinks(restored);
+  await insertLinks(restored);
 
   const alreadyDecided = new Set(
     restored
@@ -258,7 +258,7 @@ export async function ingestSource(input: IngestInput): Promise<IngestionReport>
     }
   }
 
-  insertLinks(proposals);
+  await insertLinks(proposals);
 
   if (orphanedDecisions > 0) {
     warnings.push(
@@ -276,7 +276,7 @@ export async function ingestSource(input: IngestInput): Promise<IngestionReport>
   }
 
   // Record the scope and say plainly that the layer came from the content.
-  updateDocument(document.id, {
+  await updateDocument(document.id, {
     scope,
     classificationSource: 'CONTENT',
     classificationConfidence: highestConfidence(proposals),
@@ -289,21 +289,21 @@ export async function ingestSource(input: IngestInput): Promise<IngestionReport>
     blocks: blocks.length,
     chunks: chunks.length,
     segments,
-    links: listLinks(document.id),
+    links: await listLinks(document.id),
     layers,
     warnings,
     suspicious,
     lowConfidenceLinks,
   });
 
-  saveIngestionReport({
+  await saveIngestionReport({
     documentId: document.id,
     extractionRunId: run.id,
     scope,
     report,
   });
 
-  recordEvent({
+  await recordEvent({
     projectId: document.projectId,
     layerId: document.layerId,
     entityType: 'DOCUMENT',
@@ -449,12 +449,12 @@ function buildReport(input: {
  * that bear on a specific task, within a character budget, so a research or
  * classification call sees what it needs and nothing else.
  */
-export function selectRelevantSegments(input: {
+export async function selectRelevantSegments(input: {
   documentId: string;
   query: string;
   budgetChars?: number;
   limit?: number;
-}): { segmentId: string; title: string; score: number; text: string }[] {
+}): Promise<{ segmentId: string; title: string; score: number; text: string }[]> {
   const budget = input.budgetChars ?? 20_000;
   const limit = input.limit ?? 12;
   const terms = [
@@ -467,7 +467,7 @@ export function selectRelevantSegments(input: {
   ];
   if (terms.length === 0) return [];
 
-  const scored = listSegments(input.documentId)
+  const scored = (await listSegments(input.documentId))
     .map((segment) => {
       const lowered = segment.text.toLowerCase();
       const matched = terms.filter((term) => lowered.includes(term));

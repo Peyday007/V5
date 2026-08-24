@@ -19,12 +19,12 @@ export const healthRouter = Router();
 
 healthRouter.get(
   '/health',
-  handler(() => {
+  handler(async () => {
     const migrations = getMigrationReport();
     const db = getDb();
     return {
       ok: true,
-      schemaVersion: migrations?.schemaVersion ?? getSchemaVersion(db),
+      schemaVersion: migrations?.schemaVersion ?? await getSchemaVersion(db),
       driver: migrations?.driver ?? db.kind,
       databasePath: migrations?.databasePath ?? DB_PATH,
       dataRoot: DATA_ROOT,

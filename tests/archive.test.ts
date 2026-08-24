@@ -141,17 +141,17 @@ function buildArchive(): { total: number; supported: number } {
   return { total, supported };
 }
 
-beforeEach(() => {
-  fixture = freshProject();
+beforeEach(async () => {
+  fixture = await freshProject();
   archive = path.join(DATA_ROOT, 'test-archive');
   fs.rmSync(archive, { recursive: true, force: true });
   fs.mkdirSync(archive, { recursive: true });
 });
 
-afterEach(() => {
+afterEach(async () => {
   fs.rmSync(archive, { recursive: true, force: true });
   setOcrEngine(null);
-  teardown();
+  await teardown();
 });
 
 describe('discovery', () => {
@@ -192,13 +192,13 @@ describe('a folder of more than forty mixed documents', () => {
     const built = buildArchive();
     expect(built.total).toBeGreaterThan(40);
 
-    const job = startArchiveImport({ projectId: fixture.project.id, folder: archive });
+    const job = await startArchiveImport({ projectId: fixture.project.id, folder: archive });
     expect(job.discovered).toBe(built.total);
 
     await processArchiveImport(job.id);
     await whenExtractionIdle();
 
-    const report = importReport(job.id)!;
+    const report = (await importReport(job.id))!;
     expect(report.job.status).toBe('COMPLETE');
 
     // No file is left pending, and none is missing from the report.
@@ -230,11 +230,11 @@ describe('a folder of more than forty mixed documents', () => {
     write('a/note.txt', body('Custody transfer', 1));
     write('b/note-copy.txt', body('Custody transfer', 1));
 
-    const job = startArchiveImport({ projectId: fixture.project.id, folder: archive });
+    const job = await startArchiveImport({ projectId: fixture.project.id, folder: archive });
     await processArchiveImport(job.id);
     await whenExtractionIdle();
 
-    const files = listImportFiles(job.id);
+    const files = await listImportFiles(job.id);
     const duplicate = files.find((file) => file.status === 'DUPLICATE');
     expect(duplicate).toBeTruthy();
     expect(duplicate!.detail).toMatch(/identical/i);
@@ -250,11 +250,11 @@ describe('a folder of more than forty mixed documents', () => {
     write('notes/plan.txt', body('Custody transfer', 1));
     write('notes/plan-revised.txt', `${body('Custody transfer', 1)}\n\nRevised: notice now controls.`);
 
-    const job = startArchiveImport({ projectId: fixture.project.id, folder: archive });
+    const job = await startArchiveImport({ projectId: fixture.project.id, folder: archive });
     await processArchiveImport(job.id);
     await whenExtractionIdle();
 
-    const files = listImportFiles(job.id);
+    const files = await listImportFiles(job.id);
     expect(files.filter((file) => file.status === 'DUPLICATE')).toHaveLength(0);
     const documents = files
       .map((file) => file.documentId)
@@ -264,12 +264,12 @@ describe('a folder of more than forty mixed documents', () => {
 
   it('keeps the source path and timestamp on every registered document', async () => {
     write('world-model/deep/note.txt', body('Custody transfer', 3));
-    const job = startArchiveImport({ projectId: fixture.project.id, folder: archive });
+    const job = await startArchiveImport({ projectId: fixture.project.id, folder: archive });
     await processArchiveImport(job.id);
     await whenExtractionIdle();
 
-    const file = listImportFiles(job.id).find((entry) => entry.status === 'REGISTERED')!;
-    const document = getDocument(file.documentId!)!;
+    const file = (await listImportFiles(job.id)).find((entry) => entry.status === 'REGISTERED')!;
+    const document = (await getDocument(file.documentId!))!;
     expect(document.importJobId).toBe(job.id);
     expect(document.sourcePath).toBe('world-model/deep/note.txt');
     expect(document.sourceModifiedAt).toBeTruthy();
@@ -282,14 +282,14 @@ describe('an import that is interrupted', () => {
     for (let index = 1; index <= 8; index += 1) {
       write(`notes/note-${index}.txt`, body('Custody transfer', index));
     }
-    const job = startArchiveImport({ projectId: fixture.project.id, folder: archive });
+    const job = await startArchiveImport({ projectId: fixture.project.id, folder: archive });
 
     // Process a bounded batch, then cancel before the rest.
     await processArchiveImport(job.id, { limit: 3 });
-    cancelArchiveImport(job.id, 'Changed my mind.');
+    await cancelArchiveImport(job.id, 'Changed my mind.');
     await whenExtractionIdle();
 
-    const afterCancel = importReport(job.id)!;
+    const afterCancel = (await importReport(job.id))!;
     expect(afterCancel.job.status).toBe('CANCELLED');
     expect(afterCancel.job.registered).toBe(3);
     expect(afterCancel.files.filter((file) => file.status === 'DISCOVERED')).toHaveLength(5);
@@ -301,7 +301,7 @@ describe('an import that is interrupted', () => {
     await resumeArchiveImport(job.id);
     await whenExtractionIdle();
 
-    const done = importReport(job.id)!;
+    const done = (await importReport(job.id))!;
     expect(done.job.status).toBe('COMPLETE');
     expect(done.job.registered).toBe(8);
     const stillThere = done.files
@@ -314,49 +314,49 @@ describe('an import that is interrupted', () => {
     for (let index = 1; index <= 4; index += 1) {
       write(`notes/note-${index}.txt`, body('Custody transfer', index));
     }
-    const job = startArchiveImport({ projectId: fixture.project.id, folder: archive });
+    const job = await startArchiveImport({ projectId: fixture.project.id, folder: archive });
     await processArchiveImport(job.id, { limit: 2 });
     await whenExtractionIdle();
 
     // The shape a killed process leaves behind: a job that says RUNNING and a
     // file that says EXTRACTING, with nothing behind either.
-    updateImportJob(job.id, { status: 'RUNNING' });
-    const pending = listImportFiles(job.id).find((file) => file.status === 'DISCOVERED')!;
-    updateImportFile(pending.id, { status: 'EXTRACTING' });
+    await updateImportJob(job.id, { status: 'RUNNING' });
+    const pending = (await listImportFiles(job.id)).find((file) => file.status === 'DISCOVERED')!;
+    await updateImportFile(pending.id, { status: 'EXTRACTING' });
 
-    expect(recoverInterruptedImports()).toBe(1);
+    expect(await recoverInterruptedImports()).toBe(1);
 
-    const recovered = getImportJob(job.id)!;
+    const recovered = (await getImportJob(job.id))!;
     expect(recovered.status).toBe('PAUSED');
     expect(recovered.message).toMatch(/interrupted/i);
     expect(recovered.registered).toBe(2);
-    const requeued = listImportFiles(job.id).find((file) => file.id === pending.id)!;
+    const requeued = (await listImportFiles(job.id)).find((file) => file.id === pending.id)!;
     expect(requeued.status).toBe('QUEUED');
-    expect(listUnfinishedImportJobs()).toHaveLength(0);
+    expect(await listUnfinishedImportJobs()).toHaveLength(0);
 
     // And resuming finishes the job without re-reading the first two.
     await resumeArchiveImport(job.id);
     await whenExtractionIdle();
-    expect(getImportJob(job.id)!.registered).toBe(4);
+    expect((await getImportJob(job.id))!.registered).toBe(4);
   }, 120_000);
 
   it('retries only the files that failed', async () => {
     write('notes/good.txt', body('Custody transfer', 1));
     write('notes/broken.txt', body('Custody transfer', 2));
 
-    const job = startArchiveImport({ projectId: fixture.project.id, folder: archive });
+    const job = await startArchiveImport({ projectId: fixture.project.id, folder: archive });
     await processArchiveImport(job.id);
     await whenExtractionIdle();
 
     // Force one into the state a real extraction failure leaves.
-    const target = listImportFiles(job.id).find((file) => file.filename === 'broken.txt')!;
-    const survivor = listImportFiles(job.id).find((file) => file.filename === 'good.txt')!;
-    updateImportFile(target.id, { status: 'FAILED', detail: 'scripted failure' });
+    const target = (await listImportFiles(job.id)).find((file) => file.filename === 'broken.txt')!;
+    const survivor = (await listImportFiles(job.id)).find((file) => file.filename === 'good.txt')!;
+    await updateImportFile(target.id, { status: 'FAILED', detail: 'scripted failure' });
 
     await retryFailedFiles(job.id);
     await whenExtractionIdle();
 
-    const files = listImportFiles(job.id);
+    const files = await listImportFiles(job.id);
     const retried = files.find((file) => file.id === target.id)!;
     const untouched = files.find((file) => file.id === survivor.id)!;
     // The failure was tried again...
@@ -373,11 +373,11 @@ describe('files Brain cannot read', () => {
     setOcrEngine(null);
     write('scans/scan.pdf', buildPdf([imageOnlyPage()]));
 
-    const job = startArchiveImport({ projectId: fixture.project.id, folder: archive });
+    const job = await startArchiveImport({ projectId: fixture.project.id, folder: archive });
     await processArchiveImport(job.id);
     await whenExtractionIdle();
 
-    const file = listImportFiles(job.id)[0]!;
+    const file = (await listImportFiles(job.id))[0]!;
     expect(file.status).toBe('UNREADABLE');
     expect(file.detail ?? '').not.toBe('');
     // It is registered as a document, and honestly marked unreadable.
@@ -387,21 +387,21 @@ describe('files Brain cannot read', () => {
 
   it('marks a file whose bytes make no sense as failed or unreadable, with the reason', async () => {
     write('world-model/corrupt.pdf', Buffer.from('%PDF-1.4 followed by nothing parseable'));
-    const job = startArchiveImport({ projectId: fixture.project.id, folder: archive });
+    const job = await startArchiveImport({ projectId: fixture.project.id, folder: archive });
     await processArchiveImport(job.id);
     await whenExtractionIdle();
 
-    const file = listImportFiles(job.id)[0]!;
+    const file = (await listImportFiles(job.id))[0]!;
     expect(['FAILED', 'UNREADABLE']).toContain(file.status);
     expect(file.detail ?? '').not.toBe('');
   }, 60_000);
 
   it('records an unsupported type instead of pretending it was imported', async () => {
     write('assets/diagram.png', Buffer.from([0x89, 0x50, 0x4e, 0x47]));
-    const job = startArchiveImport({ projectId: fixture.project.id, folder: archive });
+    const job = await startArchiveImport({ projectId: fixture.project.id, folder: archive });
     await processArchiveImport(job.id);
 
-    const file = listImportFiles(job.id)[0]!;
+    const file = (await listImportFiles(job.id))[0]!;
     expect(file.status).toBe('UNSUPPORTED');
     expect(file.detail).toMatch(/cannot read/i);
     expect(file.documentId).toBeNull();
@@ -424,7 +424,7 @@ describe('a project-wide source folder', () => {
       'attach to those objects, and how state moves between them.',
     ].join('\n'));
 
-    const job = startArchiveImport({
+    const job = await startArchiveImport({
       projectId: fixture.project.id,
       folder: archive,
       scope: 'PROJECT_MASTER_TRANSCRIPT',
@@ -432,9 +432,9 @@ describe('a project-wide source folder', () => {
     await processArchiveImport(job.id);
     await whenExtractionIdle();
 
-    const file = listImportFiles(job.id)[0]!;
+    const file = (await listImportFiles(job.id))[0]!;
     expect(file.status).toBe('REGISTERED');
-    const document = getDocument(file.documentId!)!;
+    const document = (await getDocument(file.documentId!))!;
     // Not forced into a layer: it belongs to the project and links to several.
     expect(document.layerId).toBeNull();
     expect(document.scope).toBe('PROJECT_MASTER_TRANSCRIPT');

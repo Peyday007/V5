@@ -190,10 +190,10 @@ function parseFindings(raw: string): { ok: true; value: CandidateFinding[] } | {
  * rather than leaving a stale one attached to new evidence.
  */
 export async function extractDocumentFindings(input: ExtractFindingsInput): Promise<FindingsResult> {
-  const document = getDocument(input.documentId);
+  const document = await getDocument(input.documentId);
   if (!document) throw new Error(`Cannot extract findings: unknown document ${input.documentId}`);
 
-  const run = getCurrentExtractionRun(document.id);
+  const run = await getCurrentExtractionRun(document.id);
   if (!run || !isAuditable(run.status)) {
     throw new FindingsExtractionError(
       document.id,
@@ -220,7 +220,7 @@ export async function extractDocumentFindings(input: ExtractFindingsInput): Prom
     throw new FindingsExtractionError(document.id, null, status.reason);
   }
 
-  const chunks = listChunks(run.id);
+  const chunks = await listChunks(run.id);
   if (chunks.length === 0) {
     throw new FindingsExtractionError(
       document.id,
@@ -229,7 +229,7 @@ export async function extractDocumentFindings(input: ExtractFindingsInput): Prom
     );
   }
 
-  const blocks = listBlocks(run.id);
+  const blocks = await listBlocks(run.id);
   const timeoutMs = input.timeoutMs ?? DEFAULT_FINDINGS_TIMEOUT_MS;
   const maxChunks = input.maxChunks ?? chunks.length;
   const selected = chunks.slice(0, maxChunks);
@@ -246,7 +246,10 @@ export async function extractDocumentFindings(input: ExtractFindingsInput): Prom
     let raw: string;
     try {
       const response = await withTimeout(
-        provider.audit({ prompt: buildPrompt(document.canonicalName, chunk, pageLabel), model: input.model ?? null }),
+        provider.audit({
+          prompt: buildPrompt(document.canonicalName, chunk, pageLabel),
+          model: input.model ?? null,
+        }),
         timeoutMs,
         `Indexing ${pageLabel} of ${document.canonicalName}`,
       );
@@ -301,8 +304,8 @@ export async function extractDocumentFindings(input: ExtractFindingsInput): Prom
     }
   }
 
-  replaceFindings(run.id, accepted);
-  recordEvent({
+  await replaceFindings(run.id, accepted);
+  await recordEvent({
     projectId: document.projectId,
     layerId: document.layerId,
     entityType: 'DOCUMENT',
@@ -324,13 +327,13 @@ export async function extractDocumentFindings(input: ExtractFindingsInput): Prom
     provider: provider.name,
     chunksRead: selected.length,
     chunksSkipped: chunks.length - selected.length,
-    findings: listDocumentFindings(run.id),
+    findings: await listDocumentFindings(run.id),
     rejected,
   };
 }
 
 /** The stored index for a document's current extraction run. */
-export function documentFindings(documentId: string): DocumentFinding[] {
-  const run = getCurrentExtractionRun(documentId);
-  return run ? listDocumentFindings(run.id) : [];
+export async function documentFindings(documentId: string): Promise<DocumentFinding[]> {
+  const run = await getCurrentExtractionRun(documentId);
+  return run ? await listDocumentFindings(run.id) : [];
 }

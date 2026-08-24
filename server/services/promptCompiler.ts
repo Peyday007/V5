@@ -195,10 +195,10 @@ interface PromptContext extends LayerContext {
   packet: DependencyCheckResult;
 }
 
-function loadLayerContext(projectId: string, layerId: string): LayerContext {
-  const project = getProject(projectId);
+async function loadLayerContext(projectId: string, layerId: string): Promise<LayerContext> {
+  const project = await getProject(projectId);
   if (!project) throw new Error(`Cannot compile a prompt: unknown project ${projectId}`);
-  const layer = getLayer(layerId);
+  const layer = await getLayer(layerId);
   if (!layer) throw new Error(`Cannot compile a prompt: unknown layer ${layerId}`);
   if (layer.projectId !== project.id) {
     throw new Error(
@@ -206,7 +206,7 @@ function loadLayerContext(projectId: string, layerId: string): LayerContext {
     );
   }
 
-  const documents = listDocumentsByLayer(layerId);
+  const documents = await listDocumentsByLayer(layerId);
   const packetDocuments = documents.filter(
     (document) => PACKET_STATUSES.has(document.status) && document.documentType !== 'AUDIT',
   );
@@ -225,7 +225,7 @@ function loadLayerContext(projectId: string, layerId: string): LayerContext {
   return {
     project,
     layer,
-    layers: listLayers(project.id),
+    layers: await listLayers(project.id),
     policy: project.versionPolicy,
     documents,
     packetDocuments,
@@ -261,8 +261,8 @@ function canonicalNameForVersion(ctx: LayerContext, version: string): string {
   );
 }
 
-function canonicalDocumentsOfOtherLayers(ctx: LayerContext): string[] {
-  return listDocuments(ctx.project.id)
+async function canonicalDocumentsOfOtherLayers(ctx: LayerContext): Promise<string[]> {
+  return (await listDocuments(ctx.project.id))
     .filter(
       (document) =>
         document.layerId !== null &&
@@ -310,11 +310,11 @@ function resolveTargetVersion(ctx: LayerContext, runType: RunType): string {
   }
 }
 
-function resolveRequiredDocuments(
+async function resolveRequiredDocuments(
   ctx: LayerContext,
   runType: RunType,
   targetVersion: string,
-): string[] {
+): Promise<string[]> {
   const target = normalizeVersion(targetVersion);
   const synthesis = synthesisVersion(ctx.policy);
   const sourcesForSynthesis = (): string[] =>
@@ -345,29 +345,29 @@ function resolveRequiredDocuments(
       return names;
     }
     case 'CROSS_LAYER_AUDIT':
-      return [canonicalNameForVersion(ctx, target), ...canonicalDocumentsOfOtherLayers(ctx)];
+      return [canonicalNameForVersion(ctx, target), ...await canonicalDocumentsOfOtherLayers(ctx)];
   }
 }
 
 /** The version this run type would target for this layer right now. */
-export function defaultTargetVersion(
+export async function defaultTargetVersion(
   projectId: string,
   layerId: string,
   runType: RunType,
-): string {
-  const ctx = loadLayerContext(projectId, layerId);
+): Promise<string> {
+  const ctx = await loadLayerContext(projectId, layerId);
   return resolveTargetVersion(ctx, runType);
 }
 
 /** The canonical names this run type would require for this layer right now. */
-export function defaultRequiredDocuments(
+export async function defaultRequiredDocuments(
   projectId: string,
   layerId: string,
   runType: RunType,
-): string[] {
-  const ctx = loadLayerContext(projectId, layerId);
+): Promise<string[]> {
+  const ctx = await loadLayerContext(projectId, layerId);
   const targetVersion = resolveTargetVersion(ctx, runType);
-  return unique(resolveRequiredDocuments(ctx, runType, targetVersion));
+  return unique(await resolveRequiredDocuments(ctx, runType, targetVersion));
 }
 
 // ---------------------------------------------------------------------------
@@ -942,8 +942,8 @@ function crossLayerBoundariesSection(ctx: PromptContext): PromptSection {
   );
 }
 
-function auditFindingsSection(ctx: PromptContext, auditId: string): PromptSection {
-  const audit = getAudit(auditId);
+async function auditFindingsSection(ctx: PromptContext, auditId: string): Promise<PromptSection> {
+  const audit = await getAudit(auditId);
   if (!audit) throw new Error(`Cannot compile a prompt: unknown audit ${auditId}`);
 
   const group = (type: string): string[] =>
@@ -983,10 +983,10 @@ function auditFindingsSection(ctx: PromptContext, auditId: string): PromptSectio
   );
 }
 
-function previousAttemptSection(ctx: PromptContext, previousRunId: string): PromptSection {
-  const previous = getRun(previousRunId);
+async function previousAttemptSection(ctx: PromptContext, previousRunId: string): Promise<PromptSection> {
+  const previous = await getRun(previousRunId);
   if (!previous) throw new Error(`Cannot compile a prompt: unknown run ${previousRunId}`);
-  const audit = getLatestAuditForRun(previous.id);
+  const audit = await getLatestAuditForRun(previous.id);
 
   const reason =
     previous.failureReason?.trim() ||
@@ -1043,8 +1043,8 @@ function outputRequirementsSection(ctx: PromptContext): PromptSection {
  * Pure: it reads state and returns text, and the caller records both on the run
  * (invariant 10).
  */
-export function compilePrompt(input: CompilePromptInput): CompiledPrompt {
-  const base = loadLayerContext(input.projectId, input.layerId);
+export async function compilePrompt(input: CompilePromptInput): Promise<CompiledPrompt> {
+  const base = await loadLayerContext(input.projectId, input.layerId);
   const runType = input.runType;
   const requestedVersion = input.targetVersion?.trim();
   const targetVersion = normalizeVersion(
@@ -1052,12 +1052,12 @@ export function compilePrompt(input: CompilePromptInput): CompiledPrompt {
   );
   const names = buildNames(base.layer.name, targetVersion);
 
-  const requested = input.requiredDocuments ?? resolveRequiredDocuments(base, runType, targetVersion);
+  const requested = input.requiredDocuments ?? await resolveRequiredDocuments(base, runType, targetVersion);
   // A run never depends on the document it is about to create.
   const requiredDocuments = unique(requested).filter(
     (name) => !(PRODUCING_RUN_TYPES.has(runType) && namesMatch(name, names.canonicalName)),
   );
-  const packet = checkCanonicalNames(base.project.id, requiredDocuments);
+  const packet = await checkCanonicalNames(base.project.id, requiredDocuments);
 
   const ctx: PromptContext = {
     ...base,
@@ -1079,9 +1079,9 @@ export function compilePrompt(input: CompilePromptInput): CompiledPrompt {
   built.set('RESEARCH_QUESTIONS', researchQuestionsSection(ctx, input.researchQuestions));
   built.set('PROHIBITED_DUPLICATION', prohibitedDuplicationSection(ctx));
   built.set('CROSS_LAYER_BOUNDARIES', crossLayerBoundariesSection(ctx));
-  if (input.auditId) built.set('AUDIT_FINDINGS', auditFindingsSection(ctx, input.auditId));
+  if (input.auditId) built.set('AUDIT_FINDINGS', await auditFindingsSection(ctx, input.auditId));
   if (input.previousRunId) {
-    built.set('PREVIOUS_ATTEMPT', previousAttemptSection(ctx, input.previousRunId));
+    built.set('PREVIOUS_ATTEMPT', await previousAttemptSection(ctx, input.previousRunId));
   }
   built.set('OUTPUT_REQUIREMENTS', outputRequirementsSection(ctx));
   // Section 10 is not optional and is not the model's decision.

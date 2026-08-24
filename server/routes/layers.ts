@@ -86,12 +86,12 @@ function parseVersion(value: unknown, field: string): string | undefined {
  * one exists, otherwise a preview of what a synthesis would need right now. Both
  * answer the same question — "is this layer waiting on another document?".
  */
-function layerDependencies(layer: Layer): DependencyCheckResult {
-  const open = listRunsByLayer(layer.id).find((run) => OPEN_RUN_STATUSES.has(run.status));
+async function layerDependencies(layer: Layer): Promise<DependencyCheckResult> {
+  const open = (await listRunsByLayer(layer.id)).find((run) => OPEN_RUN_STATUSES.has(run.status));
   if (open) return checkRunDependencies(open.id);
   return checkCanonicalNames(
     layer.projectId,
-    defaultRequiredDocuments(layer.projectId, layer.id, 'SYNTHESIS'),
+    await defaultRequiredDocuments(layer.projectId, layer.id, 'SYNTHESIS'),
   );
 }
 
@@ -114,31 +114,31 @@ function versionList(value: unknown, field: string): string[] {
 
 layersRouter.get(
   '/:layerId',
-  handler((req) => {
-    const layer = requireLayer(pathId(req, 'layerId'));
+  handler(async (req) => {
+    const layer = await requireLayer(pathId(req, 'layerId'));
     return {
       layer,
-      state: computeLayerState(layer.id),
-      documents: listDocumentsByLayer(layer.id),
-      runs: listRunsByLayer(layer.id),
-      audits: listAuditsByLayer(layer.id),
-      dependencies: layerDependencies(layer),
-      events: listEventsByLayer(layer.id, 100),
+      state: await computeLayerState(layer.id),
+      documents: await listDocumentsByLayer(layer.id),
+      runs: await listRunsByLayer(layer.id),
+      audits: await listAuditsByLayer(layer.id),
+      dependencies: await layerDependencies(layer),
+      events: await listEventsByLayer(layer.id, 100),
     };
   }),
 );
 
 layersRouter.get(
   '/:layerId/prompt',
-  handler((req) => {
-    const layer = requireLayer(pathId(req, 'layerId'));
+  handler(async (req) => {
+    const layer = await requireLayer(pathId(req, 'layerId'));
     const query = queryOf(req);
     const runType = requiredEnum<RunType>(query['runType'], RUN_TYPES, 'runType');
     const targetVersion = parseVersion(query['targetVersion'], 'targetVersion') ?? null;
 
     // Preview only: nothing is written, so the user can look at the prompt for a
     // run they have not decided to make yet.
-    const compiled = compilePrompt({
+    const compiled = await compilePrompt({
       projectId: layer.projectId,
       layerId: layer.id,
       runType,
@@ -146,7 +146,7 @@ layersRouter.get(
     });
     return {
       compiled,
-      dependencies: checkCanonicalNames(layer.projectId, compiled.requiredAttachments),
+      dependencies: await checkCanonicalNames(layer.projectId, compiled.requiredAttachments),
     };
   }),
 );
@@ -157,8 +157,8 @@ layersRouter.get(
 
 layersRouter.patch(
   '/:layerId',
-  handler((req) => {
-    const layer = requireLayer(pathId(req, 'layerId'));
+  handler(async (req) => {
+    const layer = await requireLayer(pathId(req, 'layerId'));
     const body = bodyOf(req);
 
     const name = optionalString(body['name'], 'name');
@@ -167,10 +167,10 @@ layersRouter.patch(
     const parkedNote = 'parkedNote' in body ? nullableString(body['parkedNote'], 'parkedNote') : undefined;
 
     if (name !== undefined || notes !== undefined || parked !== undefined || parkedNote !== undefined) {
-      updateLayer(layer.id, { name, notes, parked, parkedNote });
+      await updateLayer(layer.id, { name, notes, parked, parkedNote });
       // Invariant 3: renaming a layer changes every canonical name derived from
       // it, and parking one removes it from the plan. Both belong in the history.
-      recordEvent({
+      await recordEvent({
         projectId: layer.projectId,
         layerId: layer.id,
         entityType: 'LAYER',
@@ -186,14 +186,14 @@ layersRouter.patch(
     }
 
     if ('expectedVersions' in body) {
-      setLayerExpectations(layer.id, versionList(body['expectedVersions'], 'expectedVersions'));
+      await setLayerExpectations(layer.id, versionList(body['expectedVersions'], 'expectedVersions'));
     }
 
     if ('manualStatus' in body) {
       const raw = body['manualStatus'];
       if (raw === null || raw === '') {
         // Releasing the pin hands the layer back to the derivation rules.
-        setLayerManualStatus(layer.id, null);
+        await setLayerManualStatus(layer.id, null);
       } else {
         const status = requiredEnum<LayerStatus>(raw, LAYER_STATUSES, 'manualStatus');
         // Invariant 6: freezing is a claim that a canonical artifact exists, and
@@ -205,23 +205,23 @@ layersRouter.patch(
               'which checks that a canonical document actually exists.',
           );
         }
-        setLayerManualStatus(
+        await setLayerManualStatus(
           layer.id,
           status,
           optionalString(body['manualStatusReason'], 'manualStatusReason'),
         );
       }
     } else if ('manualStatusReason' in body) {
-      updateLayer(layer.id, {
+      await updateLayer(layer.id, {
         manualStatusReason: nullableString(body['manualStatusReason'], 'manualStatusReason') ?? null,
       });
     }
 
-    recomputeProject(layer.projectId);
+    await recomputeProject(layer.projectId);
     return {
-      layer: requireLayer(layer.id),
-      state: computeLayerState(layer.id),
-      plan: buildPlan(layer.projectId),
+      layer: await requireLayer(layer.id),
+      state: await computeLayerState(layer.id),
+      plan: await buildPlan(layer.projectId),
     };
   }),
 );
@@ -234,9 +234,9 @@ layersRouter.patch(
  */
 layersRouter.get(
   '/:layerId/packet-manifest',
-  handler((req) => {
-    const layer = requireLayer(pathId(req, 'layerId'));
-    const context = buildAuditContext({ mode: 'LAYER_PACKET', layerId: layer.id });
+  handler(async (req) => {
+    const layer = await requireLayer(pathId(req, 'layerId'));
+    const context = await buildAuditContext({ mode: 'LAYER_PACKET', layerId: layer.id });
     return {
       layer,
       manifest: context.manifest,
@@ -248,79 +248,79 @@ layersRouter.get(
 
 layersRouter.post(
   '/:layerId/expectations/derive',
-  handler((req) => {
-    const layer = requireLayer(pathId(req, 'layerId'));
-    deriveLayerExpectationsFromDocuments(layer.id);
-    recomputeProject(layer.projectId);
+  handler(async (req) => {
+    const layer = await requireLayer(pathId(req, 'layerId'));
+    await deriveLayerExpectationsFromDocuments(layer.id);
+    await recomputeProject(layer.projectId);
     return {
-      layer: requireLayer(layer.id),
-      state: computeLayerState(layer.id),
-      plan: buildPlan(layer.projectId),
+      layer: await requireLayer(layer.id),
+      state: await computeLayerState(layer.id),
+      plan: await buildPlan(layer.projectId),
     };
   }),
 );
 
 layersRouter.post(
   '/:layerId/freeze',
-  handler((req) => {
-    const layer = requireLayer(pathId(req, 'layerId'));
+  handler(async (req) => {
+    const layer = await requireLayer(pathId(req, 'layerId'));
     const body = bodyOf(req);
     const canonicalDocumentId = optionalString(body['canonicalDocumentId'], 'canonicalDocumentId');
     if (canonicalDocumentId) {
-      const document = requireDocument(canonicalDocumentId);
+      const document = await requireDocument(canonicalDocumentId);
       if (document.layerId !== layer.id) {
         throw badRequest(`"${document.canonicalName}" belongs to a different layer.`);
       }
     }
 
-    asInvariantViolation(() => freezeLayer(layer.id, canonicalDocumentId ?? null));
-    recomputeProject(layer.projectId);
-    return { state: computeLayerState(layer.id), plan: buildPlan(layer.projectId) };
+    await asInvariantViolation(() => freezeLayer(layer.id, canonicalDocumentId ?? null));
+    await recomputeProject(layer.projectId);
+    return { state: await computeLayerState(layer.id), plan: await buildPlan(layer.projectId) };
   }),
 );
 
 layersRouter.post(
   '/:layerId/reopen',
-  handler((req) => {
-    const layer = requireLayer(pathId(req, 'layerId'));
+  handler(async (req) => {
+    const layer = await requireLayer(pathId(req, 'layerId'));
     const reason = requiredString(bodyOf(req)['reason'], 'reason');
 
-    asInvariantViolation(() => reopenLayer(layer.id, reason));
-    recomputeProject(layer.projectId);
-    return { state: computeLayerState(layer.id), plan: buildPlan(layer.projectId) };
+    await asInvariantViolation(() => reopenLayer(layer.id, reason));
+    await recomputeProject(layer.projectId);
+    return { state: await computeLayerState(layer.id), plan: await buildPlan(layer.projectId) };
   }),
 );
 
 layersRouter.post(
   '/:layerId/synthesis',
-  handler((req) => {
-    const layer = requireLayer(pathId(req, 'layerId'));
+  handler(async (req) => {
+    const layer = await requireLayer(pathId(req, 'layerId'));
     const body = bodyOf(req);
     const override = optionalBoolean(body['override'], 'override') ?? false;
     const overrideReason = nullableString(body['overrideReason'], 'overrideReason') ?? null;
 
     // An incomplete packet throws DependencyError, which the error middleware
     // turns into 409 + the full check result (invariant 4).
-    const prepared = asInvariantViolation(() =>
+    const prepared = await asInvariantViolation(() =>
       prepareSynthesis({ layerId: layer.id, override, overrideReason }),
     );
 
-    recomputeProject(layer.projectId);
+    await recomputeProject(layer.projectId);
     return {
       run: prepared.run,
       document: prepared.document,
       dependencies: prepared.dependencies,
       compiled: prepared.compiled,
-      plan: buildPlan(layer.projectId),
+      plan: await buildPlan(layer.projectId),
     };
   }),
 );
 
 layersRouter.post(
   '/:layerId/runs',
-  handler((req) => {
-    const layer = requireLayer(pathId(req, 'layerId'));
-    const project = projectOfLayer(layer);
+  handler(async (req) => {
+    const layer = await requireLayer(pathId(req, 'layerId'));
+    const project = await projectOfLayer(layer);
     const body = bodyOf(req);
 
     const runType = requiredEnum<RunType>(body['runType'], RUN_TYPES, 'runType');
@@ -355,21 +355,21 @@ layersRouter.post(
             `if that is really what you want.`,
         );
       }
-      const prepared = prepareSynthesis({ layerId: layer.id, override: false, overrideReason: null });
+      const prepared = await prepareSynthesis({ layerId: layer.id, override: false, overrideReason: null });
       const run =
         providerName || model
-          ? (updateRun(prepared.run.id, { provider: providerName, model }) ?? prepared.run)
+          ? (await updateRun(prepared.run.id, { provider: providerName, model }) ?? prepared.run)
           : prepared.run;
-      recomputeProject(layer.projectId);
+      await recomputeProject(layer.projectId);
       return {
         run,
         compiled: prepared.compiled,
         dependencies: prepared.dependencies,
-        plan: buildPlan(layer.projectId),
+        plan: await buildPlan(layer.projectId),
       };
     }
 
-    const compiled = compilePrompt({
+    const compiled = await compilePrompt({
       projectId: project.id,
       layerId: layer.id,
       runType,
@@ -380,10 +380,10 @@ layersRouter.post(
       researchQuestions,
     });
 
-    const created = getDb().transaction(() => {
+    const created = await getDb().transaction(async () => {
       // The prompt and its attachment list are stored with the run at creation
       // time, so what was asked for is always recoverable (invariant 10).
-      const run = createRun({
+      const run = await createRun({
         projectId: project.id,
         layerId: layer.id,
         runType,
@@ -398,14 +398,14 @@ layersRouter.post(
         expectedFilename: compiled.expectedFilename,
       });
 
-      setRunDependencies(run.id, compiled.requiredAttachments, {
+      await setRunDependencies(run.id, compiled.requiredAttachments, {
         dependencyType: runType === 'AUDIT' || runType === 'CROSS_LAYER_AUDIT' ? 'AUDIT_INPUT' : 'SOURCE_PACKET',
       });
-      const dependencies = checkRunDependencies(run.id);
+      const dependencies = await checkRunDependencies(run.id);
       const status: RunStatus = dependencies.ready ? 'READY' : 'BLOCKED';
-      const stored = updateRun(run.id, { status }) ?? run;
+      const stored = await updateRun(run.id, { status }) ?? run;
 
-      recordEvent({
+      await recordEvent({
         projectId: project.id,
         layerId: layer.id,
         entityType: 'RUN',
@@ -419,7 +419,7 @@ layersRouter.post(
           dependencies: dependencies.summary,
         },
       });
-      recordEvent({
+      await recordEvent({
         projectId: project.id,
         layerId: layer.id,
         entityType: 'RUN',
@@ -436,12 +436,12 @@ layersRouter.post(
       return { run: stored, dependencies };
     });
 
-    recomputeProject(project.id);
+    await recomputeProject(project.id);
     return {
       run: created.run,
       compiled,
       dependencies: created.dependencies,
-      plan: buildPlan(project.id),
+      plan: await buildPlan(project.id),
     };
   }),
 );
