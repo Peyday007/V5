@@ -12,12 +12,17 @@ frozen) into this file — that lives in SQLite.
 The authoritative operational state is:
 
 ```
-DATABASE  (data/brain.db)
+DATABASE  (data/brain.db, or Postgres in cloud mode)
     +
-FILESYSTEM  (data/projects/<project-slug>/documents/...)
+DOCUMENT STORE  (data/projects/<slug>/documents/..., or the bucket)
     =
 authoritative state
 ```
+
+Which of the two it is depends on configuration, and **no code above
+`server/db/` or `server/services/storage/` may care.** Read rows through the
+repositories and bytes through the storage layer, and the same code is correct
+in both modes. A path built by hand is correct in exactly one of them.
 
 AI memory is **not** authoritative. Never state that a document exists because you
 remember seeing it in a conversation. Verify first.
@@ -48,8 +53,9 @@ this SQL", you have a bug to fix instead.
 
 ## 3. Every schema change requires a migration.
 
-Schema lives in `server/db/migrations/NNN_name.sql` and is applied automatically on
-boot, in order, each in its own transaction, with the applied version recorded in
+Schema lives in `server/db/migrations/NNN_name.sql` (SQLite) and
+`server/db/pg-migrations/NNN_name.sql` (Postgres), applied automatically on boot,
+in order, each in its own transaction, with the applied version recorded in
 `schema_migrations`.
 
 - To change the schema, **add a new numbered migration file**. Never edit an applied one.
@@ -57,6 +63,14 @@ boot, in order, each in its own transaction, with the applied version recorded i
   makes the application refuse to boot with an explicit error — that is deliberate.
 - Update the matching `*Row` type in `server/domain/types.ts` and the repository mapper
   in the same change, or the type contract silently drifts from the database.
+- **A schema change is not done until both chains have it.** The Postgres
+  baseline is generated from the SQLite schema
+  (`node scripts/generate-pg-baseline.mjs > server/db/pg-migrations/001_baseline.sql`)
+  so the two cannot drift into describing different things; a later change adds
+  a numbered file to each. The two chains are numbered independently and their
+  versions do not mean the same thing.
+- The four deliberate differences between them are listed in `docs/CLOUD.md`.
+  There must be no fifth that is not written down.
 
 ## 4. Every research artifact must be registered.
 
@@ -346,6 +360,34 @@ rather than untangled.
   says nothing about whether the tool works on this machine, and the worker is
   UNVERIFIED until a real job has actually run there.
 
+## 17. Configuration is a request. Only a real operation is a fact.
+
+Brain can keep its state locally or in the cloud, and the second one is only
+worth having if it is honest about which it is doing.
+
+- **Cloud mode never falls back to local.** A Postgres that cannot be reached or
+  a bucket that does not answer stops the boot with the reason. A server that
+  fell back would look healthy, accept research, write it where nobody else can
+  see it, and report itself as cloud-backed the whole time — and nobody would
+  find out until they looked for the work from somewhere else.
+- Having the environment variables set is not the same fact as the database
+  answering. Boot runs a real query and a real bucket listing, and only then may
+  anything say cloud mode is active.
+- Secrets are server-side. The connection string and the service-role key appear
+  in the Postgres connection and one `Authorization` header, and nowhere else —
+  not in a log line, not in an API response, not in the frontend bundle. A
+  diagnostic names the host, the database or the bucket; never the credential.
+- A request never chooses a location. Storage keys are built from Brain's own
+  identifiers, a caller-supplied filename is sanitised to a leaf and kept as
+  metadata, and a key that is absolute or climbs is refused rather than
+  normalised into something that happens to be safe.
+- In cloud mode `data/runtime/project-state.json` is a cache rebuilt from the
+  database, never the source of truth. `data/brain.db`, `data/projects/…` and
+  `data/backups/…` are not authoritative there at all.
+- The migration into the cloud is a copy. It never writes to the local source,
+  never deletes it, and success triggers no cleanup — the local Brain stays the
+  recoverable original until a person archives it themselves.
+
 ---
 
 ## Repository map
@@ -354,11 +396,19 @@ rather than untangled.
 server/
   index.ts              boot: migrate -> seed -> recompute -> serve
   env.ts                every path the app uses
+  config.ts             which database and which store, validated; no silent fallback
   db/
+    types.ts            the async Database interface both backends implement
     driver.ts           SQLite driver abstraction (node:sqlite, or better-sqlite3 if installed)
-    database.ts         connection, pragmas, nested transactions
+    dialect.ts          ? -> $n and rowid -> seq, by walking the statement
+    adapters/
+      sqlite.ts         the local adapter
+      postgres.ts       the cloud adapter: pooled, TLS, transactions pinned to a client
+      transactions.ts   per-frame savepoints, so concurrent siblings cannot collide
+    database.ts         opening the configured database and proving it works
     migrate.ts          automatic, checksum-verified, transactional migration runner
-    migrations/*.sql    the schema, one numbered file per change
+    migrations/*.sql    the SQLite schema, one numbered file per change
+    pg-migrations/*.sql the Postgres schema, generated from it
   domain/
     types.ts            enums, row types, view types — the contract
     version.ts          version parsing/ordering/next-version (never sort strings)
@@ -366,7 +416,14 @@ server/
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
   services/
-    storage.ts          filesystem document store
+    storage.ts          document keys, confinement, and writing through the store
+    storage/
+      types.ts          the StorageProvider interface
+      keys.ts           keys from Brain's identifiers; filenames are metadata
+      local.ts          the data folder
+      supabase.ts       the bucket, over REST
+      index.ts          choosing one, and proving it answers
+    cloudMigration.ts   the copy into the cloud, and its verification
     dependencies.ts     dependency checker
     stateEngine.ts      derived document/layer/project state
     planner.ts          Master Planner and next best action
@@ -432,7 +489,11 @@ server/
   providers/            AIProvider abstraction: mock, Claude, OpenAI, Antigravity
     antigravity/        runtime probe, bounded process, job workspaces, PTY path
   routes/               HTTP API
+    files.ts            serving a stored document through the storage layer
 client/                 React UI (three panes: layers / workflow / planner)
+scripts/
+  generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
+  migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
@@ -457,3 +518,12 @@ npm test
 
 Then verify the two boot paths that matter: migrating from an empty database, and
 restarting against an existing one.
+
+If the change touched persistence, run the suite against Postgres too — it is
+the same 490 tests against the other backend, and it is the only thing that
+proves one repository layer over two databases is true rather than merely
+compiling:
+
+```
+BRAIN_TEST_DATABASE_URL=postgresql://... npm test
+```

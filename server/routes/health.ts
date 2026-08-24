@@ -7,7 +7,8 @@
  * misconfigured install is diagnosable without reading logs.
  */
 import { Router } from 'express';
-import { getDb, getMigrationReport } from '../db/database.ts';
+import { getDb, getMigrationReport, activeDatabaseConfig } from '../db/database.ts';
+import { getStorage, activeStorageConfig } from '../services/storage/index.ts';
 import { getSchemaVersion } from '../db/migrate.ts';
 import { DATA_ROOT, DB_PATH } from '../env.ts';
 import { defaultProviderName, listProviderStatuses } from '../providers/index.ts';
@@ -28,6 +29,18 @@ healthRouter.get(
       driver: migrations?.driver ?? db.kind,
       databasePath: migrations?.databasePath ?? DB_PATH,
       dataRoot: DATA_ROOT,
+      // Where this instance's state actually lives, so "is this one cloud-backed"
+      // is answerable without reading the logs of the machine it runs on.
+      //
+      // Descriptions only: the database is a host and a database name, the store
+      // is a host and a bucket. Neither the connection string nor the service-role
+      // key is here, and neither may ever be — this response goes to the browser.
+      persistence: {
+        database: activeDatabaseConfig()?.provider ?? 'sqlite',
+        databaseTarget: migrations?.databasePath ?? DB_PATH,
+        storage: activeStorageConfig()?.provider ?? getStorage().kind,
+        storageTarget: getStorage().describe(),
+      },
       migrations,
       providers: listProviderStatuses(),
       // Whether scanned pages can be read here, and if not, the exact one-time

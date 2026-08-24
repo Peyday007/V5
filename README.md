@@ -56,6 +56,30 @@ Documents are stored under the **platform-controlled** filename, e.g.
 `data/projects/deal-dispatch/documents/discovery-logic/Discovery Logic v1G.pdf`.
 Original files are preserved; nothing is ever overwritten in place.
 
+### Or in the cloud
+
+The table above is the default and needs no configuration. Brain can also keep
+its state in Postgres and an object store instead, so a project stops being the
+property of one laptop:
+
+```bash
+BRAIN_DATABASE_PROVIDER=postgres
+BRAIN_DATABASE_URL=postgresql://…
+BRAIN_STORAGE_PROVIDER=supabase
+SUPABASE_URL=https://<project>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=…
+BRAIN_STORAGE_BUCKET=brain
+```
+
+Cloud mode never falls back to local: if the database or the bucket cannot be
+reached, Brain refuses to start and says why, rather than quietly writing your
+research somewhere nobody else can see it. Moving an existing Brain across is
+`npm run migrate:cloud` — a copy that never modifies the local original and is
+safe to re-run.
+
+**[docs/CLOUD.md](docs/CLOUD.md)** covers setup, migration, verification and
+recovery.
+
 ---
 
 ## How automatic migrations work
