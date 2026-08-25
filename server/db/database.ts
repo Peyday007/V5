@@ -90,8 +90,25 @@ function hintFor(reason: string): string {
       'deliberately.'
     );
   }
+  if (/self.signed|unable to verify|certificate|CERT_|SELF_SIGNED/i.test(reason)) {
+    return (
+      ' The database answered but its TLS certificate was not trusted. This is usually a ' +
+      '`sslmode=require` in the connection string: the driver treats that as full chain ' +
+      'verification, and a managed database whose certificate is signed by a private CA then ' +
+      'fails. Remove the `sslmode` parameter — Brain encrypts the connection either way, and ' +
+      'without it the connection is made without demanding a chain Node cannot see. Keep ' +
+      '`sslmode=verify-full` only if you have installed that provider’s CA yourself.'
+    );
+  }
   if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN/i.test(reason)) {
     return ' Check the host and port in BRAIN_DATABASE_URL, and that the server is running.';
+  }
+  if (/ENETUNREACH|EHOSTUNREACH/i.test(reason)) {
+    return (
+      ' The address resolved but nothing could be reached. On a host with no IPv6 route this ' +
+      'is what a direct Supabase connection looks like: use the Session pooler string instead, ' +
+      'which is reachable over IPv4.'
+    );
   }
   if (/password|authentication|role .* does not exist/i.test(reason)) {
     return ' The host answered, so the address is right and the credentials are not.';

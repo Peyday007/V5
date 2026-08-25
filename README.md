@@ -77,8 +77,9 @@ research somewhere nobody else can see it. Moving an existing Brain across is
 `npm run migrate:cloud` — a copy that never modifies the local original and is
 safe to re-run.
 
-**[docs/CLOUD.md](docs/CLOUD.md)** covers setup, migration, verification and
-recovery.
+**[docs/CLOUD.md](docs/CLOUD.md)** covers how cloud mode works — configuration,
+migration, verification and recovery. **[docs/DEPLOY.md](docs/DEPLOY.md)** is the
+runbook for standing up the first hosted Brain on Supabase and Fly.io.
 
 ---
 

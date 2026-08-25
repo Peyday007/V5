@@ -1,0 +1,73 @@
+# Fly.io deployment for the Brain.
+#
+# `app` and `primary_region` are placeholders until `fly launch --no-deploy`
+# fills them in — that command writes the real app name it reserved. Everything
+# else here is a decision, and each one is explained, because the defaults Fly
+# suggests are wrong for this application in ways that would not be obvious
+# until work started disappearing.
+
+app = "brain-REPLACE-ME"
+primary_region = "iad"        # pick the region nearest your Supabase project
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  # Nothing authoritative is kept here. In cloud mode the database is Postgres
+  # and the documents are in the bucket; this path holds only scratch — OCR
+  # intermediates and the like — and losing it loses nothing.
+  BRAIN_DATA_DIR = "/app/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+
+  # The two settings that matter most, and the reason this file has comments.
+  #
+  # Brain does work *after* a request returns: document extraction and research
+  # orchestration run on background queues, and audit/research progress is
+  # delivered over Server-Sent Events, which holds a response open. Fly's
+  # default is to stop a machine when no request is in flight — which would
+  # suspend a half-finished extraction and drop every open stream.
+  #
+  # So the machine stays up. It costs a few dollars a month and it is the
+  # difference between a Brain that finishes what it starts and one that
+  # abandons work whenever the traffic pauses.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # One machine, deliberately, for now. The queues are per-instance and nothing
+  # yet coordinates two of them: a second machine would run its own extraction
+  # queue against the same database. Step 4 adds the leases that make more than
+  # one safe. Postgres and the bucket are already shared, so scaling out later
+  # is a configuration change rather than a migration.
+  [http_service.concurrency]
+    type = "requests"
+    # Generous: SSE connections are long-lived and nearly free, and counting
+    # them against a small limit would refuse ordinary requests while somebody
+    # watches a research run.
+    hard_limit = 250
+    soft_limit = 200
+
+  # Liveness only, and unauthenticated on purpose: a platform probe should not
+  # hold a secret, and /healthz answers "is the process up" without naming the
+  # project, the database or the bucket. Readiness — did Postgres answer, did
+  # the bucket answer — is /api/health, which sits behind the access gate
+  # because it says where this Brain's data lives.
+  [[http_service.checks]]
+    grace_period = "45s"      # migrations run before the first request
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  # 1 GB rather than the 256 MB default. Reading a PDF decodes it in memory and
+  # OCR spawns tesseract per page; 256 MB gets an out-of-memory kill partway
+  # through a large import, which looks like a mysterious restart rather than
+  # like a memory limit.
+  memory = "1gb"

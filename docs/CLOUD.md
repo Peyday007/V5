@@ -238,6 +238,11 @@ problem during development.
 
 ## Deploying it
 
+> **[docs/DEPLOY.md](DEPLOY.md)** is the step-by-step runbook: creating the
+> Supabase project and private bucket, which of the three connection strings to
+> use, migrating your real data, and deploying to Fly.io. This section is the
+> shape; that one is the procedure.
+
 The Brain deploys as **one container**. That is the smallest thing that actually
 works here, and the shape comes from the code rather than from taste:
 
