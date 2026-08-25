@@ -83,6 +83,18 @@ BRAIN_DATABASE_URL=postgresql://postgres@127.0.0.1:5432/brain?sslmode=disable
 `SUPABASE_URL` must be `https://`. There is no opt-out, because the service-role
 key is a bearer token with full access to the bucket.
 
+#### Where to put them
+
+Create `.env` in the repository root — it is gitignored, and `.env.example`
+shows the shape without holding a value. `npm run dev`, `npm start` and
+`npm run migrate:cloud` load it automatically.
+
+```bash
+cp .env.example .env    # then fill it in
+```
+
+Nothing needs to go on a command line, so nothing lands in shell history.
+
 #### Where the secrets live
 
 Server-side only. They are read from the environment by the server process, and

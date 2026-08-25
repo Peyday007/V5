@@ -9,16 +9,16 @@
   },
   "scripts": {
     "dev": "concurrently -n server,client -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
-    "dev:server": "tsx watch --clear-screen=false server/index.ts",
+    "dev:server": "tsx watch --env-file-if-exists=.env --clear-screen=false server/index.ts",
     "dev:client": "vite",
     "build": "npm run typecheck && vite build",
-    "start": "cross-env NODE_ENV=production tsx server/index.ts",
+    "start": "cross-env NODE_ENV=production tsx --env-file-if-exists=.env server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
     "db:reset": "node --input-type=module -e \"import{rmSync}from'node:fs';rmSync('data/brain.db',{force:true});rmSync('data/brain.db-wal',{force:true});rmSync('data/brain.db-shm',{force:true});console.log('database removed')\"",
-    "migrate:cloud": "tsx scripts/migrate-cloud.ts"
+    "migrate:cloud": "tsx --env-file-if-exists=.env scripts/migrate-cloud.ts"
   },
   "dependencies": {
     "cross-env": "^7.0.3",
