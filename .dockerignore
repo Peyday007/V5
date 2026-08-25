@@ -1,0 +1,27 @@
+# Everything the image must never contain.
+#
+# The first two entries are the ones that matter: `.env` holds live credentials
+# and `data/` holds somebody's research. A container image is copied, pushed to
+# a registry and pulled by machines you do not control — neither belongs in one.
+.env
+.env.*
+!.env.example
+data/
+
+node_modules
+client/dist
+dist
+
+.git
+.gitignore
+tests
+docs
+*.md
+!README.md
+
+# Build and editor noise.
+.vscode
+.idea
+*.log
+coverage
+.DS_Store

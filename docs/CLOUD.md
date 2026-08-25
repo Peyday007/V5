@@ -236,6 +236,84 @@ problem during development.
 
 ---
 
+## Deploying it
+
+The Brain deploys as **one container**. That is the smallest thing that actually
+works here, and the shape comes from the code rather than from taste:
+
+- the client calls the API with **same-origin relative paths**, and the server
+  already serves the built SPA in production. One origin means no CORS, no API
+  base URL to configure, and no second thing to deploy or keep in step;
+- the app uses **Server-Sent Events** for audit and research progress, which
+  needs a long-running process holding an open response. That rules out
+  request/response serverless runtimes regardless of anything else.
+
+```bash
+docker build -t brain .
+docker run -p 8080:8080 --env-file .env brain
+```
+
+The image carries `poppler-utils` and `tesseract-ocr`, so a scanned PDF is
+evidence rather than a reported gap. It runs as a non-root user, and nothing
+authoritative lives inside it: the database is Postgres and the documents are in
+the bucket, so the container is disposable and can be replaced at any time
+without losing a row or a byte.
+
+### What the host must provide
+
+| Need | Why |
+| --- | --- |
+| Long-running Node process | SSE holds responses open |
+| HTTPS | the access token is sent as a Basic credential |
+| Outbound to `*.supabase.co` | database and storage |
+| Encrypted environment variables | the connection string and the service-role key |
+| `PORT` injected | the server reads it; 8080 is the fallback |
+| SIGTERM on redeploy | the shutdown path drains the queues and closes the database |
+
+`/healthz` is the liveness probe: unauthenticated, returns `ok`, and names
+nothing. Readiness — did the database answer, did the bucket answer — is
+`/api/health`, which is behind the gate because it says where this Brain's data
+lives.
+
+The container runs `node --import tsx server/index.ts` rather than `npm start`,
+and the difference matters: **npm does not forward SIGTERM to its child**. With
+npm in between, every redeploy would abandon in-flight extraction and research
+instead of draining it.
+
+---
+
+## Keeping it private
+
+A Brain with a URL is a Brain anyone can find. Behind that URL are every
+document, every claim, and an endpoint that accepts uploads.
+
+So: **a cloud-backed Brain refuses to start without `BRAIN_ACCESS_TOKEN`.** Not
+a warning and not a default — it does not boot. Forgetting to protect a
+deployment should cost a failed deploy, which you notice, rather than an
+exposure, which you may not.
+
+```bash
+BRAIN_ACCESS_TOKEN=$(openssl rand -base64 32)   # 16 chars minimum, enforced
+BRAIN_ACCESS_USER=brain                          # optional, cosmetic
+```
+
+Local mode is exempt. Requiring a password for `npm run dev` against a SQLite
+file would be theatre that people work around, and workarounds reach production.
+
+The mechanism is HTTP Basic, chosen for what it does *not* require: no login
+page, no session store, no cookie handling, and no change to the client. The
+browser prompts once and then attaches credentials to everything the app does —
+including `EventSource` streams and document downloads. A bearer token is also
+accepted, so a script does not have to base64 anything.
+
+**This is deliberately coarse and deliberately temporary.** One shared
+credential; everyone who has it sees everything. It exists so the first Cloud
+Brain is not public. Step 4 replaces it with real identities — per-worker
+credentials, per-user authorisation, revocation — and `server/routes/access.ts`
+should be deleted then, not extended.
+
+---
+
 ## The local runtime snapshot
 
 `data/runtime/project-state.json` is a derived mirror of what Brain believes,

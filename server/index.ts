@@ -16,7 +16,7 @@ import path from 'node:path';
 import type { Server } from 'node:http';
 import express from 'express';
 import type { Express, NextFunction, Request, Response } from 'express';
-import { closeDatabase, initDatabase } from './db/database.ts';
+import { closeDatabase, initDatabase, activeDatabaseConfig } from './db/database.ts';
 import { DatabaseConfigurationError } from './db/types.ts';
 import { describePersistence, persistenceConfig } from './config.ts';
 import type { MigrationReport } from './db/migrate.ts';
@@ -32,9 +32,10 @@ import { getDefaultProject, listProjects } from './repos/projects.ts';
 import { errorMiddleware } from './routes/helpers.ts';
 import { createApiRouter } from './routes/index.ts';
 import { seedIfEmpty } from './seed.ts';
-import { initStorage } from './services/storage/index.ts';
+import { initStorage, activeStorageConfig } from './services/storage/index.ts';
 import { StorageConfigurationError } from './services/storage/types.ts';
 import { serveStoredObject } from './routes/files.ts';
+import { accessGate, accessGateConfig, describeAccessGate, AccessGateError, type AccessGateConfig } from './routes/access.ts';
 import { writeProjectState } from './services/runtimeState.ts';
 import { recomputeProject } from './services/stateEngine.ts';
 import { recoverInterruptedExtractions } from './services/documents/extraction.ts';
@@ -84,9 +85,31 @@ function isServerPath(requestPath: string): boolean {
   return requestPath === '/api' || requestPath.startsWith('/api/') || requestPath.startsWith('/files');
 }
 
-function buildApp(): Express {
+function buildApp(gate: AccessGateConfig): Express {
   const app = express();
   app.disable('x-powered-by');
+  // Behind a load balancer, which is where any deployed Brain lives. Without
+  // this `req.protocol` reads http on a site served over https, and every
+  // client address is the balancer's.
+  app.set('trust proxy', 1);
+
+  /**
+   * Liveness, before the gate and before anything else.
+   *
+   * A hosting platform must be able to ask "is this process up?" without
+   * holding a secret. The answer is a fixed string: it names no project, no
+   * configuration and no version, so answering it to the whole internet gives
+   * nothing away. Readiness — did the database answer, did the bucket answer —
+   * is `/api/health`, and that is behind the gate because it says where this
+   * Brain's data lives.
+   */
+  app.get('/healthz', (_req: Request, res: Response) => {
+    res.type('text/plain').send('ok');
+  });
+
+  // Everything below this line is private when a token is configured: the API,
+  // the documents, and the app itself.
+  app.use(accessGate(gate));
 
   // Prompts and pasted audit text are large; uploads go through multer instead.
   app.use(express.json({ limit: '10mb' }));
@@ -193,7 +216,7 @@ function onListenError(error: NodeJS.ErrnoException): void {
   process.exit(1);
 }
 
-function logBanner(migrations: MigrationReport): void {
+function logBanner(migrations: MigrationReport, gate: AccessGateConfig): void {
   const applied = migrations.applied;
   console.log('');
   console.log('  Brain is running.');
@@ -204,6 +227,7 @@ function logBanner(migrations: MigrationReport): void {
   console.log(`  Schema version  ${migrations.schemaVersion}`);
   console.log(`  Database        ${persistence.database.provider} · ${persistence.database.target}`);
   console.log(`  Documents       ${persistence.storage.provider} · ${persistence.storage.target}`);
+  console.log(`  Access          ${describeAccessGate(gate)}`);
   console.log(`  Data root       ${DATA_ROOT}`);
   console.log(
     applied.length > 0
@@ -308,6 +332,30 @@ async function main(): Promise<void> {
     return;
   }
 
+  // The gate, decided the moment cloud persistence is a proven fact and before
+  // any of the work below. A deployment missing its token should cost a failed
+  // boot in seconds — which somebody notices — rather than an open Brain.
+  let gate: AccessGateConfig;
+  try {
+    gate = accessGateConfig({
+      cloud:
+        activeDatabaseConfig()?.provider === 'postgres' ||
+        activeStorageConfig()?.provider === 'supabase',
+    });
+  } catch (error) {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    console.error('');
+    console.error('  Brain will not start unprotected.');
+    console.error('');
+    console.error(`  ${failure.message}`);
+    if (failure instanceof AccessGateError && failure.detail) {
+      console.error(`  ${failure.detail}`);
+    }
+    console.error('');
+    serveMigrationFailure(failure);
+    return;
+  }
+
   // First boot creates Deal Dispatch; later boots only backfill missing layers
   // and re-create the folder tree.
   await seedIfEmpty();
@@ -360,7 +408,7 @@ async function main(): Promise<void> {
   const primary = await getDefaultProject();
   if (primary) await writeProjectState(primary.id);
 
-  const server = buildApp().listen(PORT, () => logBanner(migrations));
+  const server = buildApp(gate).listen(PORT, () => logBanner(migrations, gate));
   server.on('error', onListenError);
   installShutdown(server);
 }
