@@ -528,6 +528,7 @@ export async function runCloudMigration(
         order,
         counts,
         documents,
+        projectId,
         log,
       });
       if (!verification.ok) {
@@ -834,9 +835,11 @@ async function verifyMigration(input: {
   order: string[];
   counts: Map<string, number>;
   documents: DocumentRowLite[];
+  /** Set when the migration was scoped to one project. */
+  projectId: string | null;
   log: (line: string) => void;
 }): Promise<VerificationReport> {
-  const { source, target, targetStore, order, counts, documents, log } = input;
+  const { source, target, targetStore, order, counts, documents, projectId, log } = input;
 
   const rowCounts: VerificationReport['rowCounts'] = [];
   for (const table of order) {
@@ -852,52 +855,71 @@ async function verifyMigration(input: {
   // actually depends on — a document to its layer, an audit to its gaps, a
   // claim to the pass that produced it, a document to its own lineage.
   const relationships: VerificationReport['relationships'] = [];
-  const probes: { description: string; sql: string }[] = [
+  //
+  // Each probe carries the column that ties it back to a project, because a
+  // project-scoped migration must be judged against that project only. Without
+  // it the source side would count every project's rows and the target side one
+  // project's, and a perfectly correct scoped migration would report as a
+  // failure — which is exactly what it did before this was added.
+  const probes: { description: string; sql: string; scope: string }[] = [
     {
       description: 'documents resolve to a layer',
       sql: `SELECT COUNT(*) AS n FROM documents d
               JOIN layers l ON l.id = d.layer_id`,
+      scope: 'd.project_id',
     },
     {
       description: 'layers resolve to a project',
       sql: `SELECT COUNT(*) AS n FROM layers l
               JOIN projects p ON p.id = l.project_id`,
+      scope: 'l.project_id',
     },
     {
       description: 'audit gaps resolve to their audit',
       sql: `SELECT COUNT(*) AS n FROM audit_gaps g
               JOIN audits a ON a.id = g.audit_id`,
+      scope: 'a.project_id',
     },
     {
       description: 'superseded documents still point at their successor',
       sql: `SELECT COUNT(*) AS n FROM documents d
               JOIN documents s ON s.id = d.superseded_by_document_id`,
+      scope: 'd.project_id',
     },
     {
       description: 'extraction runs resolve to their document',
       sql: `SELECT COUNT(*) AS n FROM extraction_runs r
               JOIN documents d ON d.id = r.document_id`,
+      scope: 'r.project_id',
     },
     {
       description: 'research claims resolve to the pass that produced them',
+      // Claims carry no project of their own, so the tie is through the
+      // orchestration that produced them.
       sql: `SELECT COUNT(*) AS n FROM research_claims c
-              JOIN research_passes p ON p.id = c.pass_id`,
+              JOIN research_passes p ON p.id = c.pass_id
+              JOIN research_orchestrations o ON o.id = c.orchestration_id`,
+      scope: 'o.project_id',
     },
     {
       description: 'a redo attempt still names its parent run',
       sql: `SELECT COUNT(*) AS n FROM research_runs r
               JOIN research_runs parent ON parent.id = r.parent_run_id`,
+      scope: 'r.project_id',
     },
     {
       description: 'events resolve to their project',
       sql: `SELECT COUNT(*) AS n FROM project_events e
               JOIN projects p ON p.id = e.project_id`,
+      scope: 'e.project_id',
     },
   ];
 
   for (const probe of probes) {
-    const sourceCount = (await source.get<{ n: number }>(probe.sql))?.n ?? 0;
-    const targetCount = (await target.get<{ n: number }>(probe.sql))?.n ?? 0;
+    const sql = projectId ? `${probe.sql} WHERE ${probe.scope} = ?` : probe.sql;
+    const params = projectId ? [projectId] : undefined;
+    const sourceCount = (await source.get<{ n: number }>(sql, params))?.n ?? 0;
+    const targetCount = (await target.get<{ n: number }>(sql, params))?.n ?? 0;
     relationships.push({
       description: probe.description,
       source: sourceCount,

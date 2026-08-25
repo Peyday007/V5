@@ -9,7 +9,7 @@
  * has not read from the database (invariants 7 and 12).
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { freshProject, teardown, type TestProject } from './helpers.ts';
+import { freshProject, teardown, type TestProject, testDatabaseKind} from './helpers.ts';
 import { importFile } from '../server/services/importer.ts';
 import {
   computeLayerState,
@@ -142,6 +142,13 @@ describe('the first real session', () => {
   it('keeps the derived runtime snapshot in step with the database', async () => {
     await drop('World Model v1.pdf');
     await recomputeProject(fixture.project.id);
+
+    if (testDatabaseKind === 'postgres') {
+      // In cloud mode there is no local snapshot to keep in step — the database
+      // is the one copy that can be right for every instance.
+      expect(readProjectState()).toBeNull();
+      return;
+    }
 
     const snapshot = readProjectState();
     expect(snapshot?.project.slug).toBe('deal-dispatch');

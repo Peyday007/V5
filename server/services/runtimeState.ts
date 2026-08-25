@@ -6,12 +6,27 @@
  * a shell script, a person with `cat`) can read project state without touching
  * SQLite. It is DERIVED: the database stays authoritative, this file is always
  * safe to delete, and it is rewritten from scratch whenever state changes.
+ *
+ * **It is not written in cloud mode, and that is deliberate.**
+ *
+ * The file earns its place on a single machine, where the database is a file
+ * beside it and a person may reasonably want to read state without opening
+ * SQLite. In cloud mode it earns nothing and costs something real: it would be
+ * instance-local state describing shared truth. Two Brains against one Postgres
+ * would each write their own copy, each stale the moment the other committed
+ * anything, and the first person to `cat` one would be reading a different
+ * project than the database holds.
+ *
+ * Nothing reads it as input — no route, no service, no client code — so
+ * declining to write it removes a source of confusion rather than a capability.
+ * Cloud state is rebuilt from Postgres, which is the only copy that can be
+ * right for everybody.
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_ROOT, DB_PATH, PROJECT_STATE_FILE, RUNTIME_ROOT } from '../env.ts';
-import { getMigrationReport } from '../db/database.ts';
+import { getMigrationReport, activeDatabaseConfig } from '../db/database.ts';
 import type { Document, LayerStateSnapshot, PlannerItem } from '../domain/types.ts';
 import { listDocuments } from '../repos/documents.ts';
 import { listLayers } from '../repos/layers.ts';
@@ -66,8 +81,27 @@ export interface RuntimeProjectState {
  * reader never sees a half-written document and a crash mid-write leaves the
  * previous snapshot intact.
  */
+/**
+ * Whether this Brain keeps a local snapshot at all.
+ *
+ * Asked of the database Brain actually opened, not of the environment: the
+ * point of the whole persistence boundary is that "am I cloud-backed" is a fact
+ * about a connection that answered, never about a variable being set.
+ */
+export function writesRuntimeSnapshot(): boolean {
+  return (activeDatabaseConfig()?.provider ?? 'sqlite') !== 'postgres';
+}
+
+/**
+ * Write the snapshot, in local mode.
+ *
+ * In cloud mode this builds the state and returns it — callers that want the
+ * derived view still get it — and writes nothing. The return value is the same
+ * either way, so no caller has to know which mode it is in.
+ */
 export async function writeProjectState(projectId: string): Promise<RuntimeProjectState> {
   const state = await buildProjectState(projectId);
+  if (!writesRuntimeSnapshot()) return state;
   const directory = path.dirname(PROJECT_STATE_FILE);
   fs.mkdirSync(RUNTIME_ROOT, { recursive: true });
   if (path.resolve(directory) !== path.resolve(RUNTIME_ROOT)) {
@@ -99,6 +133,10 @@ export async function writeProjectState(projectId: string): Promise<RuntimeProje
  * to be regenerated, never an error worth failing a request over.
  */
 export function readProjectState(): RuntimeProjectState | null {
+  // Never in cloud mode, whatever is on this disk. A file left behind by an
+  // earlier local run — or put there by anything else — describes a database
+  // this instance is not using, and a stale answer is worse than none.
+  if (!writesRuntimeSnapshot()) return null;
   let raw: string;
   try {
     raw = fs.readFileSync(PROJECT_STATE_FILE, 'utf8');

@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { databaseConfig, storageConfig, describePersistence } from '../server/config.ts';
+import { PROJECT_STATE_FILE } from '../server/env.ts';
 import { DatabaseConfigurationError } from '../server/db/types.ts';
 import { initDatabase, closeDatabase, getDb } from '../server/db/database.ts';
 import { toPostgresSql, splitStatements } from '../server/db/dialect.ts';
@@ -339,6 +340,104 @@ describe('a transaction', () => {
 
     const rows = await db.all<{ id: string }>('SELECT id FROM tx_probe ORDER BY id');
     expect(rows.map((r) => r.id)).toEqual(['m1', 'm3', 'm5']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The derived snapshot
+// ---------------------------------------------------------------------------
+
+describe('the local runtime snapshot', () => {
+  it('is written in local mode, where it is a convenience worth having', async () => {
+    // Closed first, deliberately. `initDatabase` returns the open database when
+    // there is one, so a test that needs a *particular* configuration has to
+    // start from nothing rather than inherit whatever the last test opened.
+    await closeDatabase();
+    await initDatabase({ dbPath: path.join(root, 'brain.db') });
+    const { seedDealDispatch } = await import('../server/seed.ts');
+    const { project } = await seedDealDispatch();
+    const { writeProjectState, readProjectState, writesRuntimeSnapshot } = await import(
+      '../server/services/runtimeState.ts'
+    );
+
+    expect(writesRuntimeSnapshot()).toBe(true);
+    const written = await writeProjectState(project.id);
+    expect(written.project.id).toBe(project.id);
+    expect(fs.existsSync(PROJECT_STATE_FILE)).toBe(true);
+    expect(readProjectState()?.project.id).toBe(project.id);
+  });
+
+  onPostgres('in cloud mode', () => {
+    beforeEach(async () => {
+      await closeDatabase();
+      const schema = 'brain_snapshot_probe';
+      const pg = await import('pg');
+      const admin = new pg.default.Client({ connectionString: POSTGRES_URL! });
+      await admin.connect();
+      try {
+        await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+        await admin.query(`CREATE SCHEMA ${schema}`);
+      } finally {
+        await admin.end();
+      }
+      await initDatabase({
+        config: { provider: 'postgres', connectionString: POSTGRES_URL!, poolSize: 4, schema },
+      });
+      // An earlier local-mode test in this file wrote one. Cloud mode must be
+      // judged on whether it creates the file, not on whether one exists.
+      fs.rmSync(PROJECT_STATE_FILE, { force: true });
+    });
+
+    it('is not written at all, because instance-local state cannot describe shared truth', async () => {
+      const { seedDealDispatch } = await import('../server/seed.ts');
+      const { project } = await seedDealDispatch();
+      const { writeProjectState, writesRuntimeSnapshot } = await import(
+        '../server/services/runtimeState.ts'
+      );
+
+      expect(writesRuntimeSnapshot()).toBe(false);
+      // The derived view is still built and returned — callers lose nothing.
+      const state = await writeProjectState(project.id);
+      expect(state.project.id).toBe(project.id);
+      expect(state.layers.length).toBeGreaterThan(0);
+      // It just does not become a file on this particular machine.
+      expect(fs.existsSync(PROJECT_STATE_FILE)).toBe(false);
+    });
+
+    it('cannot change cloud truth, however hostile the file on this disk is', async () => {
+      const { seedDealDispatch } = await import('../server/seed.ts');
+      const { project } = await seedDealDispatch();
+      const { readProjectState, writeProjectState } = await import(
+        '../server/services/runtimeState.ts'
+      );
+
+      // Plant a file claiming a different project, in a different state. This is
+      // the leftover-from-an-earlier-local-run case, and the tampering case.
+      fs.mkdirSync(path.dirname(PROJECT_STATE_FILE), { recursive: true });
+      fs.writeFileSync(
+        PROJECT_STATE_FILE,
+        JSON.stringify({
+          generatedAt: '1999-01-01T00:00:00.000Z',
+          project: { id: 'prj_not_real', slug: 'lies', name: 'Lies', status: 'FROZEN' },
+          layers: [{ layerId: 'lyr_lies', status: 'FROZEN' }],
+          nextBestAction: 'nothing to do',
+        }),
+      );
+
+      // It is not read.
+      expect(readProjectState()).toBeNull();
+
+      // And the state Brain derives comes from the database regardless.
+      const state = await writeProjectState(project.id);
+      expect(state.project.id).toBe(project.id);
+      expect(state.project.name).not.toBe('Lies');
+      expect(state.layers.some((l) => l.status === 'FROZEN')).toBe(false);
+
+      // The planted file is left alone rather than silently rewritten: cloud
+      // mode does not own this path, so it does not touch it.
+      const planted = JSON.parse(fs.readFileSync(PROJECT_STATE_FILE, 'utf8'));
+      expect(planted.project.id).toBe('prj_not_real');
+    });
   });
 });
 

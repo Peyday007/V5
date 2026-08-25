@@ -381,9 +381,11 @@ worth having if it is honest about which it is doing.
   identifiers, a caller-supplied filename is sanitised to a leaf and kept as
   metadata, and a key that is absolute or climbs is refused rather than
   normalised into something that happens to be safe.
-- In cloud mode `data/runtime/project-state.json` is a cache rebuilt from the
-  database, never the source of truth. `data/brain.db`, `data/projects/…` and
-  `data/backups/…` are not authoritative there at all.
+- In cloud mode `data/runtime/project-state.json` is not written at all, and
+  `readProjectState` returns null whatever is on that disk. It is a local
+  convenience for a single machine; several instances each keeping their own
+  copy of shared truth is worse than none of them keeping one. `data/brain.db`,
+  `data/projects/…` and `data/backups/…` are not authoritative there either.
 - The migration into the cloud is a copy. It never writes to the local source,
   never deletes it, and success triggers no cleanup — the local Brain stays the
   recoverable original until a person archives it themselves.

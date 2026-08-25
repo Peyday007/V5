@@ -87,19 +87,23 @@ function treeFingerprint(dir: string): string {
  * under test is the copy, and a fixture that used the whole import pipeline
  * would be testing the pipeline as well.
  */
-async function buildSourceBrain(): Promise<{ projectId: string; documentIds: string[] }> {
+async function buildSourceBrain(
+  options: { slug?: string; name?: string; suffix?: string } = {},
+): Promise<{ projectId: string; documentIds: string[] }> {
   const db = openSqlite(sourceDbPath);
   await runMigrations(db, sourceDbPath);
 
   const store = new LocalStorageProvider(sourceRoot);
   const at = '2026-03-01T09:00:00.000Z';
-  const projectId = 'prj_migration_probe';
-  const layerId = 'lyr_migration_probe';
+  const slug = options.slug ?? 'probe';
+  const suffix = options.suffix ?? '';
+  const projectId = `prj_migration_probe${suffix}`;
+  const layerId = `lyr_migration_probe${suffix}`;
 
   await db.run(
     `INSERT INTO projects (id, slug, name, description, north_star, version_policy, created_at, updated_at)
-     VALUES (?, 'probe', 'Probe', '', '', '{}', ?, ?)`,
-    [projectId, at, at],
+     VALUES (?, ?, ?, '', '', '{}', ?, ?)`,
+    [projectId, slug, options.name ?? 'Probe', at, at],
   );
   await db.run(
     `INSERT INTO layers (id, project_id, slug, name, order_index, status, status_source,
@@ -110,9 +114,9 @@ async function buildSourceBrain(): Promise<{ projectId: string; documentIds: str
 
   const documentIds: string[] = [];
   for (const [index, version] of ['v1', 'v2'].entries()) {
-    const documentId = `doc_probe_${version}`;
+    const documentId = `doc_probe${suffix}_${version}`;
     const bytes = Buffer.from(`the contents of World Model ${version}, at length`.repeat(20));
-    const key = `projects/probe/documents/world-model/World Model ${version}.pdf`;
+    const key = `projects/${slug}/documents/world-model/World Model ${version}.pdf`;
     await store.put({ key, body: bytes, contentType: 'application/pdf' });
 
     await db.run(
@@ -151,7 +155,7 @@ async function buildSourceBrain(): Promise<{ projectId: string; documentIds: str
     documentIds[1],
   ]);
 
-  const auditId = 'aud_probe';
+  const auditId = `aud_probe${suffix}`;
   await db.run(
     `INSERT INTO audits (id, project_id, layer_id, audited_document_id, verdict, summary,
        freeze_eligible, source, raw, created_at, mode)
@@ -161,14 +165,14 @@ async function buildSourceBrain(): Promise<{ projectId: string; documentIds: str
   await db.run(
     `INSERT INTO audit_gaps (id, audit_id, ordinal, classification, title, detail,
        justification, source_pass, created_at)
-     VALUES ('gap_probe', ?, 0, 'MINOR', 'One loose end', 'detail', 'because', 'JUDGE', ?)`,
-    [auditId, at],
+     VALUES (?, ?, 0, 'MINOR', 'One loose end', 'detail', 'because', 'JUDGE', ?)`,
+    [`gap_probe${suffix}`, auditId, at],
   );
   for (const [index, type] of ['PROJECT_CREATED', 'DOCUMENT_IMPORTED', 'AUDIT_RECORDED'].entries()) {
     await db.run(
       `INSERT INTO project_events (id, project_id, entity_type, entity_id, event_type, payload, created_at)
        VALUES (?, ?, 'PROJECT', ?, ?, '{}', ?)`,
-      [`evt_probe_${index}`, projectId, projectId, type, at],
+      [`evt_probe${suffix}_${index}`, projectId, projectId, type, at],
     );
   }
 
@@ -395,6 +399,128 @@ onPostgres('migrating a Brain into the cloud', () => {
     await expect(migrate({ mode: 'DRY_RUN', project: 'no-such-project' })).rejects.toThrow(
       /no project/i,
     );
+  });
+
+  describe('with two projects in the source', () => {
+    // Project B is built alongside A, with its own layer, documents, audit,
+    // gap and events — so "only A moved" is a claim about a populated source
+    // rather than about an empty one.
+    beforeEach(async () => {
+      await buildSourceBrain({ slug: 'second', name: 'Second', suffix: '_b' });
+    });
+
+    it('migrates only the project asked for, and leaves the other behind', async () => {
+      const report = await migrate({ project: 'probe' });
+      expect(report.ok, JSON.stringify(report.problems)).toBe(true);
+      expect(report.scope.projectName).toBe('Probe');
+
+      const projects = await queryTarget<{ id: string }>('SELECT id FROM projects');
+      expect(projects.map((p) => p.id)).toEqual(['prj_migration_probe']);
+
+      // Every one of A's entity types crossed…
+      for (const [table, expected] of [
+        ['layers', 1],
+        ['documents', 2],
+        ['audits', 1],
+        ['audit_gaps', 1],
+        ['project_events', 3],
+      ] as const) {
+        expect(await queryTarget(`SELECT * FROM ${table}`), table).toHaveLength(expected);
+      }
+
+      // …and none of B's did, at any depth. Asserted by identity rather than by
+      // a name pattern: `audit_gaps` carries no project_id of its own, so
+      // reaching it means scoping followed the relationships rather than just
+      // filtering the tables that made it easy.
+      expect(
+        await queryTarget('SELECT id FROM documents WHERE project_id = $1', [
+          'prj_migration_probe_b',
+        ]),
+      ).toHaveLength(0);
+      expect(
+        await queryTarget('SELECT id FROM layers WHERE project_id = $1', [
+          'prj_migration_probe_b',
+        ]),
+      ).toHaveLength(0);
+      expect(await queryTarget('SELECT id FROM audit_gaps WHERE id = $1', ['gap_probe_b'])).toHaveLength(0);
+      expect(await queryTarget('SELECT id FROM documents WHERE id = $1', ['doc_probe_b_v1'])).toHaveLength(0);
+    });
+
+    it("keeps A's relationships intact and A's files present, B's absent", async () => {
+      await migrate({ project: 'probe' });
+
+      const rows = await queryTarget<{
+        id: string;
+        layer_id: string;
+        superseded_by_document_id: string | null;
+        storage_key: string;
+        file_hash: string;
+      }>('SELECT * FROM documents ORDER BY version');
+      expect(rows[0]!.superseded_by_document_id).toBe('doc_probe_v2');
+      // The layer it points at came across too, so the join still resolves.
+      const layers = await queryTarget<{ id: string }>('SELECT id FROM layers');
+      expect(layers[0]!.id).toBe(rows[0]!.layer_id);
+
+      const store = new LocalStorageProvider(targetRoot);
+      for (const row of rows) {
+        expect(sha256(await store.get(row.storage_key))).toBe(row.file_hash);
+      }
+      // B's objects were never uploaded.
+      expect(await store.exists('projects/second/documents/world-model/World Model v1.pdf')).toBe(
+        false,
+      );
+    });
+
+    it('does not disturb the other project once it has also been migrated', async () => {
+      await migrate({ project: 'probe' });
+      await migrate({ project: 'second' });
+
+      expect(await queryTarget('SELECT id FROM projects')).toHaveLength(2);
+      expect(await queryTarget('SELECT id FROM documents')).toHaveLength(4);
+
+      // Re-running A now that B is there must touch nothing at all.
+      const again = await migrate({ project: 'probe' });
+      expect(again.tables.reduce((n, t) => n + t.inserted, 0)).toBe(0);
+      expect(again.ok).toBe(true);
+      expect(await queryTarget('SELECT id FROM projects')).toHaveLength(2);
+      expect(await queryTarget('SELECT id FROM documents')).toHaveLength(4);
+
+      const verify = await migrate({ mode: 'VERIFY_ONLY', project: 'probe' });
+      expect(verify.ok).toBe(true);
+    });
+
+    it('resumes a project-scoped migration that was interrupted partway', async () => {
+      // Interrupt for real: let the rows land, then take the uploaded objects
+      // away, which is the shape of a run that died during the file stage.
+      const first = await migrate({ project: 'probe' });
+      expect(first.files.filter((f) => f.status === 'COPIED')).toHaveLength(2);
+      fs.rmSync(targetRoot, { recursive: true, force: true });
+      fs.mkdirSync(targetRoot, { recursive: true });
+
+      const resumed = await migrate({ project: 'probe' });
+      // It continued rather than restarting: no row was written twice…
+      expect(resumed.tables.reduce((n, t) => n + t.inserted, 0)).toBe(0);
+      expect(resumed.tables.reduce((n, t) => n + t.skipped, 0)).toBeGreaterThan(0);
+      // …and the work that had actually been lost was redone.
+      expect(resumed.files.filter((f) => f.status === 'COPIED')).toHaveLength(2);
+      expect(resumed.ok).toBe(true);
+      expect(resumed.verification!.checksums.matched).toBe(2);
+
+      // Still one copy of everything, and B still untouched.
+      expect(await queryTarget('SELECT id FROM documents')).toHaveLength(2);
+      expect(await queryTarget('SELECT id FROM projects')).toHaveLength(1);
+    });
+
+    it('leaves the two-project source byte-identical throughout', async () => {
+      const before = treeFingerprint(sourceRoot);
+      const databaseBefore = sha256(fs.readFileSync(sourceDbPath));
+      await migrate({ mode: 'DRY_RUN', project: 'probe' });
+      await migrate({ project: 'probe' });
+      await migrate({ project: 'second' });
+      await migrate({ mode: 'VERIFY_ONLY' });
+      expect(treeFingerprint(sourceRoot)).toBe(before);
+      expect(sha256(fs.readFileSync(sourceDbPath))).toBe(databaseBefore);
+    });
   });
 
   it('records what it did in the target, for the report rather than for safety', async () => {

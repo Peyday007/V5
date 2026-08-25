@@ -224,6 +224,30 @@ problem during development.
 
 ---
 
+## The local runtime snapshot
+
+`data/runtime/project-state.json` is a derived mirror of what Brain believes,
+written so an outside tool or a person with `cat` can read project state without
+opening SQLite.
+
+**In cloud mode it is not written at all**, and nothing reads it.
+
+That is a decision, not an omission. The file earns its place on a single
+machine, where the database is a file beside it. In cloud mode it would be
+instance-local state describing shared truth: two Brains against one Postgres
+would each write their own copy, each stale the moment the other committed
+anything, and the first person to read one would be looking at a different
+project than the database holds.
+
+Nothing consumes it as input — no route, no service, no client code — so not
+writing it removes a source of confusion rather than a capability. A cloud
+instance rebuilds derived state from Postgres, which is the only copy that can
+be right for everybody. `readProjectState()` returns null in cloud mode
+regardless of what is on that disk, so a file left over from an earlier local
+run cannot influence anything.
+
+---
+
 ## Recovery
 
 **The local Brain is the recovery plan.** It is untouched, complete, and still

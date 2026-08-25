@@ -4,7 +4,7 @@
  * audit/redo/synthesis/freeze lifecycle.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { addDocument, deletePhysicalFile, freshProject, teardown, type TestProject } from './helpers.ts';
+import { addDocument, deletePhysicalFile, freshProject, teardown, type TestProject, testDatabaseKind} from './helpers.ts';
 import {
   checkCanonicalNames,
   checkRunDependencies,
@@ -673,7 +673,19 @@ describe('runtime state file', () => {
     await recomputeProject(fixture.project.id);
 
     const written = await writeProjectState(fixture.project.id);
+    // The derived view is built either way, and is the same either way.
+    expect(written.project.slug).toBe('deal-dispatch');
+    expect(written.layers).toHaveLength(8);
+    expect(written.documents.some((d) => d.canonicalName === 'Taxonomy v1B')).toBe(true);
+
     const read = readProjectState();
+    if (testDatabaseKind === 'postgres') {
+      // Cloud mode keeps no local snapshot: instance-local state cannot
+      // describe truth several instances share. Nothing reads it, so nothing
+      // is lost by not writing it.
+      expect(read).toBeNull();
+      return;
+    }
     expect(read).not.toBeNull();
     expect(read?.project.slug).toBe('deal-dispatch');
     expect(read?.layers).toHaveLength(8);
