@@ -456,6 +456,61 @@ is actually run.
 
 ---
 
+# Part 3.5 — Getting the terminal out of the loop
+
+Everything in Part 3 assumed a person with a terminal and a checkout. That is
+true of *shipping a version* and has never been true of *using the Brain*, and
+the two kept getting confused because the same person was doing both.
+
+`.github/workflows/deploy.yml` ends it. GitHub checks out the repository, runs
+the typecheck, the whole test suite and the production build, and only then
+deploys to Fly — and a person's entire involvement is pressing **Run workflow**
+in a browser.
+
+It also refuses to ship a tree that does not pass its own tests, which no
+`fly deploy` from a laptop has ever done.
+
+## 3.5.1 A Fly deploy token
+
+<https://fly.io/dashboard> → **Tokens** (account menu, top right) →
+**Create deploy token**. Scope it to the app if it offers to; name it
+`github-actions`.
+
+Copy it. It is shown once.
+
+## 3.5.2 Give it to GitHub
+
+Your repository → **Settings** → **Secrets and variables** → **Actions** →
+**New repository secret**.
+
+- **Name**: `FLY_API_TOKEN`
+- **Secret**: paste
+
+GitHub encrypts it, will not show it again, and masks it in every log line.
+
+## 3.5.3 Optional: let the workflow pre-flight the database
+
+Add a second secret, `BRAIN_DATABASE_URL`, with the same session-pooler string
+Fly already holds. The workflow will then read the cloud database before each
+deploy and refuse to ship if anything would block a migration.
+
+**The cost is real**: the database credential then exists in two systems instead
+of one. The workflow is written to skip the step entirely when the secret is
+absent, so this is a decision rather than a default. Skipping it costs you a
+check that would have caught a problem before the deploy rather than during it.
+
+## 3.5.4 Deploy from the browser
+
+Repository → **Actions** → **Deploy** → **Run workflow** → pick the branch →
+**Run workflow**.
+
+Watch it. The last step asks the deployed Brain two questions: does `/healthz`
+answer, and does an anonymous `/api/projects` still get a 401. A deploy that
+went out and left the Brain open fails the workflow rather than being
+discovered later.
+
+---
+
 # Part 4 — Upgrading a running Brain to accounts
 
 Step 4 replaced the shared token with real accounts. This is what that costs a
@@ -516,9 +571,23 @@ and the migration, run against that same database, fails with
 
 ## 4.3 Choose the first administrator
 
-Generate a password — do not choose one. It is temporary: it will exist in Fly's
-secret store and in your terminal, and the account cannot do anything except
+Generate a password — do not choose one. It is temporary by construction: it
+will sit in Fly's secret store, and the account it creates can do nothing except
 replace it.
+
+**In a browser**: generate one in your password manager (24+ characters, its
+generator is better than your imagination), save it there, then
+<https://fly.io/dashboard> → your app → **Secrets** → add two:
+
+| Name | Value |
+|---|---|
+| `BRAIN_BOOTSTRAP_ADMIN_EMAIL` | your email address |
+| `BRAIN_BOOTSTRAP_ADMIN_PASSWORD` | the generated password |
+
+Setting a secret restarts the app, which is fine — the bootstrap only acts on a
+Brain with no accounts, so it is safe to arrive before the migration or after it.
+
+From a terminal, if you would rather:
 
 ```powershell
 $b = New-Object byte[] 24
@@ -529,16 +598,22 @@ Set-Clipboard $pw
 Remove-Variable b,pw
 ```
 
-The password goes to the clipboard, never to the screen. Paste it into your
-password manager now — you need it exactly once.
+The password goes to the clipboard, never to the screen. Either way, put it in
+your password manager now — you need it exactly once.
 
 ## 4.4 Deploy
+
+**In a browser**, if you did Part 3.5: repository → **Actions** → **Deploy** →
+**Run workflow**.
+
+From a terminal, if you would rather:
 
 ```bash
 fly deploy --ha=false
 ```
 
-The migrations run at boot, before the port opens. Then:
+Either way the migrations run at boot, before the port opens. The logs are at
+<https://fly.io/dashboard> → your app → **Monitoring**, or:
 
 ```bash
 fly logs
@@ -570,6 +645,8 @@ a new password; every other route answers `403 PASSWORD_CHANGE_REQUIRED` until
 you have chosen one. Choose it, and store it.
 
 ## 4.6 Remove the bootstrap secret
+
+<https://fly.io/dashboard> → your app → **Secrets** → remove both. Or:
 
 ```bash
 fly secrets unset BRAIN_BOOTSTRAP_ADMIN_PASSWORD BRAIN_BOOTSTRAP_ADMIN_EMAIL

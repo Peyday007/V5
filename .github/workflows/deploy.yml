@@ -1,0 +1,145 @@
+# Deploying the Brain without a terminal.
+#
+# The product has never needed one: the Brain is a website, and importing,
+# auditing, researching and administering all happen in a browser. What still
+# needed a terminal was *shipping a new version* — `fly deploy` from a machine
+# holding the repository, which meant somebody's laptop. That is a release
+# pipeline, and a release pipeline is not the operator's job.
+#
+# So: GitHub builds and deploys, and a person's whole involvement is pressing
+# "Run workflow" in a browser.
+#
+# ---------------------------------------------------------------------------
+# Why a button rather than deploy-on-push
+# ---------------------------------------------------------------------------
+#
+# `workflow_dispatch` only, deliberately. Pushing a commit and changing what is
+# running are two different decisions, and this repository gets several commits
+# per step — a mid-step push should not become a live deployment of a
+# half-finished feature. The test gate below catches code that is broken; it
+# cannot catch code that is merely unfinished.
+#
+# To deploy on every push instead, add:
+#
+#     push:
+#       branches: [claude/zealous-hypatia-78a2yp]
+#
+# under `on:`. One line, and the trade is the paragraph above.
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'What is being deployed, for the run log'
+        required: false
+        default: 'manual deploy'
+
+# Two deploys of one app at once is a race whose loser is whichever image
+# finishes second. The second run waits rather than being cancelled: a deploy
+# that has already started changing a machine should be allowed to finish.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Typecheck and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `ci` rather than `install`: the lockfile is the input, and a deploy that
+      # resolved a different dependency tree than the one that was tested is not
+      # the thing that was tested.
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      # The whole suite, against SQLite. The Postgres run needs a server and is
+      # a local/pre-merge concern; what this gate exists for is refusing to ship
+      # a tree that does not pass its own tests.
+      - run: npm test
+
+      # A build failure here is a failed workflow rather than a failed
+      # deployment: the image is built again inside Fly, but finding out now
+      # costs a minute and finding out there costs a rollback.
+      - run: npm run build
+
+  deploy:
+    name: Deploy to Fly
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      # `secrets` is not one of the contexts an `if:` on a step may read, so
+      # whether the optional pre-flight runs is decided here, once, into a
+      # plain environment variable it *can* read.
+      HAS_DATABASE_URL: ${{ secrets.BRAIN_DATABASE_URL != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Optional, and off unless the database URL is also a GitHub secret.
+      #
+      # It reports what the cloud database holds and refuses the deploy if
+      # anything would block the migration. It is genuinely useful and it has a
+      # genuine cost: it puts the database credential in a second place. That is
+      # a decision for a person, so the step is written to do nothing at all
+      # when the secret is absent rather than to nag about it.
+      - name: Pre-flight against the cloud database
+        if: env.HAS_DATABASE_URL == 'true'
+        env:
+          BRAIN_DATABASE_PROVIDER: postgres
+          BRAIN_DATABASE_URL: ${{ secrets.BRAIN_DATABASE_URL }}
+        run: |
+          npm ci
+          npm run preflight
+
+      # --ha=false, for the reason in fly.toml: the extraction and research
+      # queues are per-instance and nothing coordinates two of them yet. Step 5
+      # adds the claiming and leases that make a second machine safe.
+      - name: Deploy
+        run: flyctl deploy --ha=false --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # Liveness only, and unauthenticated on purpose — it is the one endpoint
+      # that answers without a credential, and it answers `ok` and nothing else.
+      # A deploy that reports success while the machine cannot serve a request
+      # is a deploy that reported the wrong thing.
+      - name: Wait for it to answer
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          echo "checking https://$app.fly.dev/healthz"
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://$app.fly.dev/healthz" || true)
+            if [ "$code" = "200" ]; then
+              echo "healthy after ${attempt} attempt(s)"
+              # And the gate is still shut: everything that is not liveness
+              # must refuse an anonymous caller. A deploy that opened the Brain
+              # to the internet should fail here rather than be discovered.
+              private=$(curl -s -o /dev/null -w '%{http_code}' "https://$app.fly.dev/api/projects" || true)
+              if [ "$private" != "401" ]; then
+                echo "::error::/api/projects answered $private to an anonymous caller; expected 401"
+                exit 1
+              fi
+              echo "anonymous /api/projects -> 401, as it should be"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::/healthz never answered 200"
+          exit 1
