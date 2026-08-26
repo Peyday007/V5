@@ -31,6 +31,26 @@ You will also need:
   requires a card even inside the free allowance);
 - the **Fly CLI**: `curl -L https://fly.io/install.sh | sh`, then `fly auth login`.
 
+On Windows the installer is `iwr https://fly.io/install.ps1 -useb | iex`, and it
+has two traps:
+
+- **It reads a variable called `$v` as the version to install.** If anything
+  earlier in your session left `$v` set — a `ForEach-Object { $n,$v = $_ -split
+  '=',2 }` over your `.env` will do it — the installer tries to fetch a release
+  named after that value and prints it in the error. If that value was a
+  secret, it is now in your scrollback: rotate it, do not just clear the
+  variable. Run `Remove-Variable v -ErrorAction SilentlyContinue` first.
+- **The last step needs Administrator** to create a `fly` → `flyctl` symlink,
+  and cancelling the UAC prompt fails the install even though the binary
+  downloaded fine. A copy does the same job without privilege:
+
+  ```powershell
+  $fb = "$HOME\.fly\bin"
+  Copy-Item "$fb\flyctl.exe" "$fb\fly.exe"
+  $env:Path = "$env:Path;$fb"
+  fly version
+  ```
+
 ---
 
 # Part 1 — Supabase
@@ -180,6 +200,24 @@ connected to an empty cloud database, and the next part fills it.
 
 # Part 2 — Migrate your real Brain
 
+## 2.0 If there is nothing to migrate, say so and skip to Part 3
+
+This part copies an **existing** local Brain. A fresh `git clone` does not have
+one: `data/` is gitignored, so it arrives empty and there is nothing to copy.
+
+```bash
+ls data/brain.db
+```
+
+No such file means Part 2 is a no-op — not a step you passed. Go to Part 3; your
+Cloud Brain starts empty and everything you put in it from then on lives in
+Supabase. If your archive is on a different machine, run Part 2 from there
+later: the migration copies, never deletes, and is safe to run twice.
+
+Record which of the two happened. "Migration verified" and "migration not
+exercised" are different claims, and only one of them is true for any given
+deployment.
+
 ## 2.1 Back it up first
 
 ```bash
@@ -240,46 +278,78 @@ hold none of your data.)
 ## 3.1 Reserve the app
 
 ```bash
-fly launch --no-deploy
+fly apps create <a-name-nobody-else-has-taken>
 ```
 
-Answer:
+The name becomes the URL — `https://<name>.fly.dev` — so it is public. Choose
+accordingly.
 
-- **copy existing configuration?** → **Yes** (use the committed `fly.toml`)
-- **tweak settings?** → **No**
-- **Postgres / Redis?** → **No** to both. Supabase is the database.
+Then put it in `fly.toml`:
 
-This writes the real app name and region into `fly.toml`. Set the region to
-match your Supabase region if it did not ask.
+```toml
+app = "<the name you just created>"
+```
+
+**Not `fly launch`.** The runbook used to say that, and it is wrong for this
+repository. Current flyctl rescans the project and rewrites `fly.toml` from its
+own guesses, which drops `auto_stop_machines = false`, `min_machines_running =
+1` and the health-check grace period. Without those, Fly suspends the machine
+when traffic pauses — killing half-finished extractions and dropping open SSE
+streams — and the failure looks like work randomly disappearing rather than
+like a configuration change. Reserve the name, edit one line, keep the file.
+
+Set `primary_region` to the Fly region nearest your Supabase project. `iad`
+(Ashburn) is a few milliseconds from Supabase's `us-east-1` and `us-east-2`.
 
 ## 3.2 Set the secrets
 
-Secrets go to Fly's encrypted store, never into `fly.toml`, never into git:
-
-```bash
-fly secrets set \
-  BRAIN_DATABASE_PROVIDER=postgres \
-  BRAIN_DATABASE_URL="postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres" \
-  BRAIN_STORAGE_PROVIDER=supabase \
-  SUPABASE_URL="https://<ref>.supabase.co" \
-  SUPABASE_SERVICE_ROLE_KEY="<service_role key>" \
-  BRAIN_STORAGE_BUCKET=brain \
-  BRAIN_ACCESS_TOKEN="<the same token as .env>"
-```
-
-To keep them out of shell history, either prefix each command with a space (if
-your shell honours `HISTCONTROL=ignorespace`) or read them from the `.env` you
-already wrote:
+Secrets go to Fly's encrypted store, never into `fly.toml`, never into git. On
+macOS or Linux, feed it the `.env` you already wrote so no value ever touches a
+command line or your shell history:
 
 ```bash
 fly secrets import < .env
 ```
 
+### On Windows PowerShell, that command cannot work
+
+Two separate reasons, and both are worth knowing before you spend twenty
+minutes on them:
+
+1. **PowerShell has no `<` redirection.** The syntax is a bash-ism; PowerShell
+   rejects it outright.
+2. **Piping instead does not fix it.** `Get-Content .env | fly secrets import`
+   fails with `"\ufeffBRAIN_DATABASE_PROVIDER" is not a valid secret name`.
+   Windows PowerShell 5.1 prepends a byte-order mark when piping text to a
+   native executable, and setting `$OutputEncoding` to a BOM-less UTF-8 does
+   **not** suppress it. The file itself is clean — checking its first bytes
+   proves that — so the BOM is coming from the pipe.
+
+Pass the settings as arguments instead. The line you type contains `@kv`, a
+variable reference, so your command history records that and not the values:
+
+```powershell
+$kv = @((Get-Content .env) | Where-Object { $_ -match '^[A-Z][A-Z0-9_]*=.+' })
+Write-Host "sending $($kv.Count) settings"
+fly secrets set --app <name> @kv
+Remove-Variable kv
+```
+
+Expect `sending 7 settings`, then `Secrets are staged for the first
+deployment`. "Staged" is correct before the first deploy — there is no machine
+yet to restart.
+
 ## 3.3 Deploy
 
 ```bash
-fly deploy
+fly deploy --ha=false
 ```
+
+`--ha=false` is not optional here. Left alone, Fly creates **two** machines for
+redundancy, and two machines is currently wrong: the extraction and research
+queues are per-instance and nothing coordinates them, so the second one would
+run its own queue against the same database. Step 4 adds the leases that make
+more than one safe.
 
 The build runs `npm run build`, so a type error fails the image rather than the
 deployment. First deploy takes a few minutes; the image installs poppler and
@@ -291,6 +361,13 @@ fly logs
 
 You are looking for the same banner from 1.6, this time with schema migrations
 already applied.
+
+Failures land in one of two places, and the difference tells you where to look:
+
+| Where it fails | What it means |
+|---|---|
+| during **Building image** | a build problem — a type error, a missing dependency. Nothing shipped |
+| after **Creating 1 machine**, health checks red | the image is fine and the app will not start. Almost always a wrong secret; `fly logs` names which backend refused |
 
 ## 3.4 Verify the deployment
 
@@ -321,6 +398,38 @@ curl -s -u "brain:$BRAIN_ACCESS_TOKEN" https://$APP.fly.dev/api/health | jq .per
 That last one should report `"database": "postgres"` and `"storage":
 "supabase"`, with the host and bucket named and no credential anywhere in the
 response.
+
+The same three checks in PowerShell — the anonymous ones first, because
+"is it private" is the question you want answered before any other:
+
+```powershell
+$u='https://<name>.fly.dev'
+foreach($p in '/healthz','/','/api/health'){
+  try   { "{0,-14} {1}" -f $p, (Invoke-WebRequest "$u$p" -UseBasicParsing -TimeoutSec 20).StatusCode }
+  catch { "{0,-14} {1}" -f $p, $_.Exception.Response.StatusCode.value__ }
+}
+```
+
+Expect exactly `200`, `401`, `401`. `/api/health` returning 200 is a failure,
+not a convenience: it names your database host and your bucket, which is why it
+sits behind the gate rather than beside `/healthz`.
+
+Then the authenticated one, reading the token out of `.env` so it is never
+typed or displayed:
+
+```powershell
+$tk = (((Get-Content .env) -match '^BRAIN_ACCESS_TOKEN=') -replace '^BRAIN_ACCESS_TOKEN=','')[0]
+$h  = @{ Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("brain:$tk")) }
+$r  = Invoke-RestMethod 'https://<name>.fly.dev/api/health' -Headers $h
+$r.persistence | ConvertTo-Json
+$r.ocr | ConvertTo-Json -Depth 2
+Remove-Variable tk,h
+```
+
+Worth reading the OCR block too. On a Windows laptop it usually reports *not
+available*; in the container it reports `tesseract` and `pdftoppm` with their
+versions, because the image installs them. That is a capability the deployed
+Brain has and your local one does not.
 
 ## 3.5 Prove the state is really independent of your laptop
 
@@ -388,8 +497,23 @@ authorisation system is built. When Step 4 lands,
 
 ## A note if Claude is doing this for you
 
-Claude Code's environment blocks outbound HTTPS to `*.supabase.co` by default
-(the gateway answers 403 to CONNECT). Credentials alone are not enough — that
-egress has to be opened on the environment before Claude can reach Supabase to
-verify anything or run the migration. Until then this runbook is meant for you
-to run from your own machine, where there is no such restriction.
+Claude Code's environment blocks outbound HTTPS to `*.supabase.co` and
+`api.supabase.com` by default — the gateway answers 403 to CONNECT, while raw
+TCP to :443 succeeds, so it is proxy policy rather than a network fault. Claude
+therefore cannot reach Supabase to provision anything, run the migration, or
+verify a deployment from inside that environment, credentials or not.
+
+This runbook is written to be *driven* by Claude and *run* by you, one command
+at a time from your own machine. That split worked: every step below Part 1 was
+executed on a Windows laptop with Claude reading the output and choosing the
+next command. The Windows-specific corrections in 3.1, 3.2 and the installer
+notes above all came out of that run, not out of anticipation.
+
+Two rules that earned their place during it:
+
+- **Never echo a secret to check it.** Report a length and a suffix instead —
+  `109 chars, ends with :5432/postgres` is enough to catch a wrong pooler port
+  and reveals nothing.
+- **Rotate on exposure, do not rationalise.** A secret that reached a terminal
+  scrollback or a screenshot is spent, even if nothing was listening on it yet.
+  Rotating costs one command.

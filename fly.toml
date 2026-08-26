@@ -1,12 +1,16 @@
 # Fly.io deployment for the Brain.
 #
-# `app` and `primary_region` are placeholders until `fly launch --no-deploy`
-# fills them in — that command writes the real app name it reserved. Everything
-# else here is a decision, and each one is explained, because the defaults Fly
-# suggests are wrong for this application in ways that would not be obvious
-# until work started disappearing.
+# `app` names the reserved Fly application; `primary_region` is where its one
+# machine runs. Everything else here is a decision, and each one is explained,
+# because the defaults Fly suggests are wrong for this application in ways that
+# would not be obvious until work started disappearing.
+#
+# Reserve the name with `fly apps create <name>` and edit `app` here. Do not use
+# `fly launch`: it rescans the project and rewrites this file from its own
+# guesses, which silently drops the three settings below that keep background
+# work alive.
 
-app = "brain-REPLACE-ME"
+app = "northline-brain"
 primary_region = "iad"        # pick the region nearest your Supabase project
 
 [build]
