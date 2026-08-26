@@ -465,12 +465,28 @@ secret removed again.
 **Nothing here deletes anything**, and the migration is additive — six new
 tables and three unique indexes the cloud schema should always have had.
 
-## 4.1 Back up first
+## 4.1 Back up first, or record what is there
 
-Supabase → **Database → Backups**, or a manual dump. Record the identifier.
+Supabase → **Database → Backups**. On a paid plan, note the most recent one and
+move on.
 
-The migration adds tables and constraints; it does not modify a row of research.
-The one way it can fail is loudly, which is the next paragraph.
+**On the free plan there are no scheduled backups**, and "back it up first" is
+advice you cannot follow when there is nothing to click. Run this instead:
+
+```bash
+npm run preflight
+```
+
+It reads the cloud database, writes nothing to it, and does the two things the
+backup would have been for: it records the row count of every table to a local
+file with a sha-256, so the same command afterwards can be compared against it;
+and it checks for the one thing that can actually make the migration fail.
+
+**It is not a backup and does not restore anything.** Saying otherwise would be
+worse than having nothing, because somebody would rely on it. What makes that
+acceptable here is the shape of the change: the migration adds tables and
+indexes, alters no existing column, and runs inside a transaction — so its
+failure mode is *loud and complete*, not partial.
 
 ## 4.2 Know what the unique indexes will do
 
@@ -483,6 +499,20 @@ If your cloud database contains two rows Brain has always treated as one, the
 index cannot be created and **the migration fails, loudly, having changed
 nothing**. That is the correct outcome: a person has to decide which of the two
 is real. The error names the constraint and the duplicate key.
+
+`npm run preflight` finds exactly this before you deploy, and names the rows.
+Verified against the real thing: with two projects sharing a slug it reports
+
+```
+    two projects with the same slug: "deal-dispatch" appears 2 times
+```
+
+and the migration, run against that same database, fails with
+
+```
+    ERROR: could not create unique index "uq_projects__slug"
+    DETAIL: Key (slug)=(deal-dispatch) is duplicated.
+```
 
 ## 4.3 Choose the first administrator
 

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Brain — local-first research operations platform (project state, dependencies, prompts, audits, synthesis, freeze).",
+  "description": "Brain \u2014 local-first research operations platform (project state, dependencies, prompts, audits, synthesis, freeze).",
   "engines": {
     "node": ">=22.5.0"
   },
@@ -19,7 +19,8 @@
     "lint": "tsc --noEmit",
     "db:reset": "node --input-type=module -e \"import{rmSync}from'node:fs';rmSync('data/brain.db',{force:true});rmSync('data/brain.db-wal',{force:true});rmSync('data/brain.db-shm',{force:true});console.log('database removed')\"",
     "migrate:cloud": "tsx --env-file-if-exists=.env scripts/migrate-cloud.ts",
-    "start:container": "node --import tsx server/index.ts"
+    "start:container": "node --import tsx server/index.ts",
+    "preflight": "tsx --env-file-if-exists=.env scripts/preflight.ts"
   },
   "dependencies": {
     "cross-env": "^7.0.3",
