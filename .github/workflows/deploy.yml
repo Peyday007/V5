@@ -55,6 +55,21 @@ jobs:
           node-version: '22'
           cache: npm
 
+      # The same two binaries the runtime image installs.
+      #
+      # Without them the OCR suite skips itself — cleanly and with a printed
+      # reason, which is honest but is not a test run. The image that gets
+      # deployed can read a scanned page; a gate that never checks whether the
+      # code around that still works is checking a different program from the
+      # one being shipped.
+      - name: Install the OCR tooling the runtime image has
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            poppler-utils tesseract-ocr tesseract-ocr-eng
+          tesseract --version | head -1
+          pdftoppm -v 2>&1 | head -1
+
       # `ci` rather than `install`: the lockfile is the input, and a deploy that
       # resolved a different dependency tree than the one that was tested is not
       # the thing that was tested.
