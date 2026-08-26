@@ -131,6 +131,33 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      # When a deploy fails, say why here rather than sending somebody to a
+      # dashboard.
+      #
+      # Brain deliberately stays up and answers 500 to everything — including
+      # /healthz — when it cannot migrate its database, because an app that
+      # looked healthy with a dead database would have real traffic routed to
+      # it. The cost of that correct decision is that the deploy log shows a
+      # five-minute health-check timeout and not one word about the cause: the
+      # cause is in the application's own log, which is somewhere else.
+      #
+      # So fetch it. The first failure of this workflow cost a round trip to the
+      # Fly dashboard to read a single sentence, and that is the round trip this
+      # step exists to remove.
+      - name: Why it failed
+        if: failure()
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          echo "::group::The application's own log"
+          # `|| true` throughout: this step is diagnosis, and a diagnosis that
+          # fails must not replace the failure it was explaining.
+          timeout 60 flyctl logs --no-tail 2>&1 | tail -120 || true
+          echo "::endgroup::"
+          echo "::group::Machine state"
+          flyctl status 2>&1 | tail -40 || true
+          echo "::endgroup::"
+
       # Liveness only, and unauthenticated on purpose — it is the one endpoint
       # that answers without a credential, and it answers `ok` and nothing else.
       # A deploy that reports success while the machine cannot serve a request
