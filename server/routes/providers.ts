@@ -21,7 +21,13 @@ import {
   updateModelDefaults,
   updatePaidOverage,
 } from '../services/providers/connection.ts';
-import { badRequest, handler, optionalBoolean, optionalString } from './helpers.ts';
+import {
+  badRequest,
+  brainAdminOnly,
+  handler,
+  optionalBoolean,
+  optionalString,
+} from './helpers.ts';
 
 export const providersRouter = Router();
 
@@ -36,6 +42,24 @@ function requireProvider(value: string): string {
   }
   return name;
 }
+
+/**
+ * Provider connections are Brain-wide administration, not project work.
+ *
+ * They decide which worker the Brain will drive, which models it will use, and
+ * — in the case of paid overages — whether it may spend the operator's money.
+ * None of that belongs to a project, so none of it is reachable through project
+ * membership: it needs a Brain administrator. A reviewer with read access to one
+ * project must not be able to turn on paid overages for the whole installation.
+ */
+//
+// Scoped to the path, not to the router. This router is mounted at the root of
+// `/api` because its routes carry their own `/providers` prefix, which means a
+// bare `providersRouter.use(...)` would run for **every** API request — and a
+// Brain-administrator guard applied to every API request refuses every ordinary
+// member of every project. Measured, not theorised: it is what the
+// authorization suite failed with.
+providersRouter.use('/providers/connections', brainAdminOnly());
 
 providersRouter.get(
   '/providers/connections/:provider',

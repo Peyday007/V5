@@ -124,6 +124,12 @@ There must be no workflow where the user has to remember "now go update the data
 18. No money spent without the user turning paid overages on themselves.
 19. No expensive run started from the browser without a plan a person approved.
 20. No synthesis over a packet that does not cover the goal's mandatory part.
+21. No request served without an authenticated principal and an explicit
+    authorization decision.
+22. No secret stored in a form it can be recovered from, and no credential in a
+    log, an audit row, a response, an error or a URL.
+23. No resource refused in a way that distinguishes "you may not" from "it is
+    not there".
 
 ## 8. Model prose never mutates project state.
 
@@ -360,7 +366,47 @@ rather than untangled.
   says nothing about whether the tool works on this machine, and the worker is
   UNVERIFIED until a real job has actually run there.
 
-## 17. Configuration is a request. Only a real operation is a fact.
+## 17. Every request has a principal, and the server decides what it may do.
+
+Since Step 4 there are no anonymous callers. A person signs in and holds a
+server-side session; a worker presents a Brain-issued credential. Both resolve to
+a principal built from rows the server owns, and nothing the caller sent about
+itself contributes to it — not a header naming a user, not a body field naming a
+project, not an id in a path.
+
+- **Authorization is deterministic server code at execution time.** A hidden
+  button, an omitted tool schema, a route guard in the browser and an
+  instruction in a prompt are not authorization. The model is never the
+  security boundary.
+- One policy module decides (`services/identity/policy.ts`) and the resolvers in
+  `routes/helpers.ts` are where it is applied, because they were already called
+  by every route that addresses a project-scoped resource. Do not write a role
+  check into a route handler; add to the policy instead.
+- **A resource the caller may not have is reported as one that does not exist.**
+  The same 404 as a real miss. A distinguishable refusal is an oracle for
+  enumerating a Brain you have no access to.
+- Deny by default, and fail closed. A missing principal, an unknown project, an
+  unreachable database — all refusals. Never a downgrade to anonymous, local,
+  test or administrator identity.
+- **Nothing stores a secret.** A password becomes a scrypt verifier; a session
+  and a worker credential become a sha-256 digest. A worker credential is shown
+  exactly once at issue and is not recoverable afterwards by anyone, including
+  an administrator. No credential may appear in a log, an audit row, an API
+  response, an error message, a URL or a test snapshot.
+- Membership and scopes are read on every request rather than baked into a
+  token, so revoking access takes effect on the next request rather than at the
+  next sign-in.
+- A Brain worker identity is not a Claude account. Brain issues the worker a
+  Brain credential; it never stores a provider password, session, cookie or
+  token.
+- Identity mutations are audited to `identity_events`, which is append-only, has
+  no foreign keys — an audit row a cascade can delete is not an audit row — and
+  records denial *categories* rather than what was tried.
+
+Step 4 is identity and authorization only. Concurrency safety is Step 5's
+claiming and leases and Step 6's idempotency; see `docs/ROADMAP.md`.
+
+## 18. Configuration is a request. Only a real operation is a fact.
 
 Brain can keep its state locally or in the cloud, and the second one is only
 worth having if it is honest about which it is doing.
@@ -438,6 +484,12 @@ server/
     inference.ts        filename -> layer/version/type
     importer.ts         PDF import and registration
     reconcile.ts        scan & reconcile
+    identity/
+      secrets.ts        scrypt for passwords, sha-256 for generated credentials
+      context.ts        the request's principal, and why it is also on the request
+      policy.ts         roles, scopes, and the one authorization decision
+      authenticate.ts   cookie or bearer -> principal, from server rows only
+      bootstrap.ts      the first administrator, once, into an empty Brain
     agent/              chat tools and the local intent router
     archive/
       import.ts         folder-scale import: discovery, resume, retry, provenance
@@ -491,6 +543,10 @@ server/
   providers/            AIProvider abstraction: mock, Claude, OpenAI, Antigravity
     antigravity/        runtime probe, bounded process, job workspaces, PTY path
   routes/               HTTP API
+    guard.ts            request context, authentication, deny-by-default
+    auth.ts             sign in, sign out, change a password
+    admin.ts            people, workers, credentials, membership, the identity audit
+    access.ts           the optional shared-token outer layer (not the security model)
     files.ts            serving a stored document through the storage layer
 client/                 React UI (three panes: layers / workflow / planner)
 scripts/

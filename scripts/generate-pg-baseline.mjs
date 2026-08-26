@@ -64,8 +64,45 @@ function buildSchema() {
   for (const name of columns.keys()) {
     foreignKeys.set(name, db.prepare(`PRAGMA foreign_key_list(${name})`).all());
   }
+  // Uniqueness declared as part of a table — `slug TEXT NOT NULL UNIQUE`, or a
+  // trailing `UNIQUE (project_id, slug)`. SQLite backs each with an implicit
+  // index that PRAGMA index_list reports with origin 'u'; nothing in the CREATE
+  // TABLE text says so, which is exactly why walking columns and foreign keys
+  // missed all three of them and the cloud schema went two chains without them.
+  //
+  // origin 'pk' is the primary key, already emitted inline. origin 'c' is an
+  // explicit CREATE UNIQUE INDEX, already present in sqlite_master and emitted
+  // with the other indexes.
+  const uniques = new Map();
+  for (const name of columns.keys()) {
+    const found = [];
+    for (const index of db.prepare(`PRAGMA index_list(${name})`).all()) {
+      if (index.unique !== 1 || index.origin !== 'u') continue;
+      const parts = db
+        .prepare(`PRAGMA index_info(${JSON.stringify(index.name)})`)
+        .all()
+        .sort((a, b) => a.seqno - b.seqno)
+        .map((part) => part.name);
+      if (parts.length > 0) found.push(parts);
+    }
+    // PRAGMA order is not the declaration order; sorting keeps a regenerated
+    // file from churning against the committed one.
+    found.sort((a, b) => a.join(',').localeCompare(b.join(',')));
+    uniques.set(name, found);
+  }
   db.close();
-  return { objects, columns, foreignKeys };
+  return { objects, columns, foreignKeys, uniques };
+}
+
+/**
+ * The name a table-level UNIQUE becomes in Postgres.
+ *
+ * Derived from the table and its columns rather than chosen, so the same
+ * constraint always produces the same index name and a hand-written repair
+ * migration can say `IF NOT EXISTS` against it and mean it.
+ */
+function uniqueIndexName(table, parts) {
+  return `uq_${table}__${parts.join('_')}`;
 }
 
 /** The CHECK constraints, lifted verbatim — there are few and they are simple. */
@@ -117,7 +154,7 @@ function indexSql(sql) {
 }
 
 function main() {
-  const { objects, columns, foreignKeys } = buildSchema();
+  const { objects, columns, foreignKeys, uniques } = buildSchema();
   const out = [];
 
   out.push('-- ---------------------------------------------------------------------------');
@@ -145,6 +182,11 @@ function main() {
   out.push('--     exist, and a nondeterministic ICU one at strength level 2 is what gives');
   out.push('--     the same answer. Defining it here is what lets the repositories stay');
   out.push("--     free of `if (dialect === ...)`.");
+  out.push('--');
+  out.push('-- Uniqueness declared inline in SQLite becomes a unique index here. That is a');
+  out.push('-- change of spelling rather than a fifth difference: both backends refuse the');
+  out.push('-- same second row. It is called out because it was once missing entirely —');
+  out.push('-- see pg-migrations/004_unique_parity.sql.');
   out.push('-- ---------------------------------------------------------------------------');
   out.push('');
   out.push('-- Must exist before any table that might reference it, and before the first');
@@ -188,6 +230,23 @@ function main() {
         `ALTER TABLE ${object.name} ADD CONSTRAINT ${object.name}_${fk.from}_fkey ` +
           `FOREIGN KEY (${fk.from}) REFERENCES ${fk.table}(${fk.to})${onDelete} ` +
           `DEFERRABLE INITIALLY IMMEDIATE;`,
+      );
+    }
+  }
+  out.push('');
+
+  out.push('');
+  out.push('-- Uniqueness declared inside a CREATE TABLE, which Postgres cannot read out');
+  out.push('-- of the same syntax. Emitted as unique indexes, which enforce exactly the');
+  out.push('-- same thing. IF NOT EXISTS so that a deployment which received these from a');
+  out.push('-- repair migration instead of from this baseline is not a second failure.');
+  for (const object of objects) {
+    if (object.type !== 'table') continue;
+    if (object.name === 'schema_migrations') continue;
+    for (const parts of uniques.get(object.name) ?? []) {
+      out.push(
+        `CREATE UNIQUE INDEX IF NOT EXISTS ${uniqueIndexName(object.name, parts)} ` +
+          `ON ${object.name} (${parts.join(', ')});`,
       );
     }
   }

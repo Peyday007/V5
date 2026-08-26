@@ -9,12 +9,40 @@
  */
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import multer from 'multer';
-import type { Document, Layer, Project, ResearchRun } from '../domain/types.ts';
+import type {
+  Audit,
+  DenialReason,
+  Document,
+  DocumentChunk,
+  ImportJob,
+  Layer,
+  Project,
+  ResearchOrchestration,
+  ResearchRun,
+  WorkerScope,
+} from '../domain/types.ts';
+import { getAudit } from '../repos/audits.ts';
+import { getChunk } from '../repos/extraction.ts';
+import { getImportJob } from '../repos/imports.ts';
+import { getOrchestration } from '../repos/research.ts';
 import { getDocument } from '../repos/documents.ts';
 import { getLayer } from '../repos/layers.ts';
 import { getProject } from '../repos/projects.ts';
 import { getRun } from '../repos/runs.ts';
 import { DependencyError } from '../services/synthesis.ts';
+import {
+  contextFromRequest,
+  currentContext,
+  currentPrincipal,
+  runInRequestContext,
+} from '../services/identity/context.ts';
+import {
+  decideBrainAdmin,
+  decideProjectAccess,
+  requirementFor,
+  type AccessLevel,
+} from '../services/identity/policy.ts';
+import { recordIdentityEvent } from '../repos/identity.ts';
 
 /** Never let these reach an id, a header or a filename. */
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
@@ -65,15 +93,48 @@ export type RouteHandler = (req: Request, res: Response, next: NextFunction) => 
  */
 export function handler(fn: RouteHandler): RequestHandler {
   return (req, res, next) => {
-    void (async (): Promise<void> => {
-      try {
-        const payload: unknown = await fn(req, res, next);
-        if (payload === undefined || res.headersSent) return;
-        res.json(payload);
-      } catch (error) {
-        next(error);
-      }
-    })();
+    // Re-enter the request's own context before the route body runs.
+    //
+    // Not belt-and-braces: `multer` finishes from a socket-driven event, and an
+    // AsyncLocalStorage store does not survive that. Without this, an
+    // authenticated upload arrives at `requireProject` with no principal and is
+    // told the project does not exist. Re-entering here makes every route body
+    // — all eighty-four of them — run inside its request's context by
+    // construction, whatever the middleware in front of it did.
+    const context = contextFromRequest(req);
+    const run = (): void => {
+      void (async (): Promise<void> => {
+        try {
+          const payload: unknown = await fn(req, res, next);
+          if (payload === undefined || res.headersSent) return;
+          res.json(payload);
+        } catch (error) {
+          next(error);
+        }
+      })();
+    };
+    if (context) runInRequestContext(context, run);
+    else run();
+  };
+}
+
+/**
+ * The same re-entry, for the handlers that cannot use `handler()`.
+ *
+ * Server-sent-event routes write their own response and return nothing, so they
+ * are mounted as plain Express handlers — and they are exactly the routes where
+ * losing the principal would matter most.
+ */
+export function withRequestContext(
+  fn: (req: Request, res: Response) => void | Promise<void>,
+): RequestHandler {
+  return (req, res) => {
+    const context = contextFromRequest(req);
+    const run = (): void => {
+      void fn(req, res);
+    };
+    if (context) runInRequestContext(context, run);
+    else run();
   };
 }
 
@@ -244,30 +305,148 @@ export function optionalRecord(
 }
 
 // ---------------------------------------------------------------------------
-// Entity lookups — an unknown id is a 404, never a 500
+// Entity lookups — and the point at which authorization happens
 // ---------------------------------------------------------------------------
+//
+// These four functions were already called by every route that addresses a
+// project-scoped resource, which is what makes them the right place to decide
+// whether the caller may have it. The alternative — a check written into each
+// of eighty-four handlers — is eighty-four chances to forget one, and the one
+// that gets forgotten is not discovered by anybody friendly.
+//
+// **A resource the caller may not have is reported as one that does not
+// exist.** Not 403, not "forbidden": the same 404, with the same sentence, as
+// an id that was never real. A distinguishable refusal is an oracle — feed it
+// ids until one of them answers differently and you have enumerated a Brain you
+// have no access to. The audit records the difference; the caller does not
+// learn it.
+
+/**
+ * What this request needs, derived from its own method and path.
+ *
+ * Read from the request context rather than passed in, so that a handler cannot
+ * accidentally ask for a weaker check than the route it belongs to implies.
+ */
+function requirementForCurrentRequest(): { level: AccessLevel; scope?: WorkerScope } {
+  const context = currentContext();
+  if (!context) {
+    // No context means this is not running inside a request — boot, a queue, a
+    // test calling a repository directly. Those have no principal, and the
+    // check below will refuse. ADMIN is the strictest thing to ask for, so a
+    // missing context can never be the reason something was allowed.
+    return { level: 'ADMIN' };
+  }
+  return requirementFor(context.method, context.path);
+}
+
+async function auditAccessDenial(projectId: string, reason: string): Promise<void> {
+  const context = currentContext();
+  const principal = context?.principal ?? null;
+  try {
+    await recordIdentityEvent({
+      actorType: principal ? principal.type : 'ANONYMOUS',
+      actorId: principal?.id ?? null,
+      credentialId: principal?.credentialId ?? null,
+      action: 'AUTHORIZE',
+      targetType: 'ROUTE',
+      targetId: context ? `${context.method} ${context.path}` : null,
+      projectId,
+      result: 'DENIED',
+      reason: reason as DenialReason,
+      requestId: context?.requestId ?? null,
+      userAgent: context?.userAgent ?? null,
+      remoteAddr: context?.remoteAddr ?? null,
+    });
+  } catch {
+    /* an unwritable audit must not change the decision it was recording */
+  }
+}
+
+/**
+ * The single gate. Everything below funnels through it.
+ *
+ * `notFound` rather than a 403, for the reason at the top of this section.
+ */
+export async function authorizeProject(projectId: string, label: string): Promise<void> {
+  const requirement = requirementForCurrentRequest();
+  const decision = decideProjectAccess(
+    currentPrincipal(),
+    projectId,
+    requirement.level,
+    requirement.scope,
+  );
+  if (decision.allowed) return;
+  await auditAccessDenial(projectId, decision.reason ?? 'NOT_A_MEMBER');
+  throw notFound(`No ${label} with that id.`);
+}
+
+/** Brain-wide administration — users, workers, credentials, provider setup. */
+export async function requireBrainAdmin(): Promise<void> {
+  const decision = decideBrainAdmin(currentPrincipal());
+  if (decision.allowed) return;
+  const context = currentContext();
+  const principal = context?.principal ?? null;
+  try {
+    await recordIdentityEvent({
+      actorType: principal ? principal.type : 'ANONYMOUS',
+      actorId: principal?.id ?? null,
+      credentialId: principal?.credentialId ?? null,
+      action: 'AUTHORIZE_ADMIN',
+      targetType: 'ROUTE',
+      targetId: context ? `${context.method} ${context.path}` : null,
+      result: 'DENIED',
+      reason: decision.reason,
+      requestId: context?.requestId ?? null,
+      userAgent: context?.userAgent ?? null,
+      remoteAddr: context?.remoteAddr ?? null,
+    });
+  } catch {
+    /* see above */
+  }
+  throw notFound('No such route.');
+}
+
+/**
+ * The same check as middleware, for a whole router.
+ *
+ * `handler()` is for routes that return a body; a guard returns nothing and has
+ * to call `next()`, so it cannot be expressed as one without the request
+ * hanging when the guard passes.
+ */
+export function brainAdminOnly(): RequestHandler {
+  return (_req, _res, next) => {
+    void requireBrainAdmin().then(
+      () => next(),
+      (error: unknown) => next(error),
+    );
+  };
+}
 
 export async function requireProject(projectId: string): Promise<Project> {
   const project = await getProject(projectId);
   if (!project) throw notFound(`No project with id "${projectId}".`);
+  await authorizeProject(project.id, 'project');
   return project;
 }
 
 export async function requireLayer(layerId: string): Promise<Layer> {
   const layer = await getLayer(layerId);
   if (!layer) throw notFound(`No layer with id "${layerId}".`);
+  await authorizeProject(layer.projectId, 'layer');
   return layer;
 }
 
 export async function requireRun(runId: string): Promise<ResearchRun> {
   const run = await getRun(runId);
   if (!run) throw notFound(`No research run with id "${runId}".`);
+  await authorizeProject(run.projectId, 'research run');
   return run;
 }
 
 export async function requireDocument(documentId: string): Promise<Document> {
   const document = await getDocument(documentId);
   if (!document) throw notFound(`No document with id "${documentId}".`);
+  await authorizeProject(document.projectId, 'document');
   return document;
 }
 
@@ -471,4 +650,49 @@ export function asInvariantViolation<T>(run: () => T): T {
 /** Unmatched API paths answer JSON, so the client never has to parse HTML. */
 export function apiNotFound(req: Request, res: Response): void {
   res.status(404).json({ error: `No API route for ${req.method} ${req.originalUrl}.` });
+}
+
+// ---------------------------------------------------------------------------
+// Resources addressed by their own id, and the lineage that authorizes them
+// ---------------------------------------------------------------------------
+//
+// An audit, a research orchestration, an import job and a text chunk are each
+// reachable by an id of their own, without a project or a layer anywhere in the
+// URL. That is exactly the shape the direct-object rule exists for: guessing
+// `/api/audits/aud_…` must not be a way around a membership check just because
+// the path does not happen to mention a project.
+//
+// Each of these traces the resource back to the project that owns it and then
+// asks the same question the four resolvers above ask. A chunk goes through its
+// document, because a chunk knows which document it came from and nothing else.
+
+export async function requireAudit(auditId: string): Promise<Audit> {
+  const audit = await getAudit(auditId);
+  if (!audit) throw notFound(`No audit with id "${auditId}".`);
+  await authorizeProject(audit.projectId, 'audit');
+  return audit;
+}
+
+export async function requireOrchestration(
+  orchestrationId: string,
+): Promise<ResearchOrchestration> {
+  const orchestration = await getOrchestration(orchestrationId);
+  if (!orchestration) throw notFound(`No research run with id "${orchestrationId}".`);
+  await authorizeProject(orchestration.projectId, 'research run');
+  return orchestration;
+}
+
+export async function requireImportJob(jobId: string): Promise<ImportJob> {
+  const job = await getImportJob(jobId);
+  if (!job) throw notFound(`No import job with id "${jobId}".`);
+  await authorizeProject(job.projectId, 'import job');
+  return job;
+}
+
+export async function requireChunk(chunkId: string): Promise<DocumentChunk> {
+  const chunk = await getChunk(chunkId);
+  if (!chunk) throw notFound(`No chunk with id "${chunkId}".`);
+  // Through the document, which is the only thing a chunk knows about.
+  await requireDocument(chunk.documentId);
+  return chunk;
 }

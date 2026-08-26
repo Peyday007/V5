@@ -15,9 +15,12 @@ the tag in git is the record of *when*, this file is the record of *what*.
 |---|---|---|
 | 1–2 | The Brain itself: state engine and planner, the primary/adversarial/judge audit pipeline, document understanding and OCR, the staged research engine, archive ingestion | — |
 | **3** | **Off one computer.** Postgres and Supabase Storage behind one repository layer, `migrate:cloud`, the access gate, the container, the deployment | `step-3-cloud-brain-foundation` |
+| **4** | **Who is asking, and may they.** Human sessions, worker identities and credentials, roles, scopes, project membership, execution-time authorization, the identity audit | `step-4-identities-access-control` |
 
-Step 3's evidence — what was proven, what merely passes its tests, and what
-nobody has run — is in [`STEP-3-EVIDENCE.md`](STEP-3-EVIDENCE.md).
+Step 3's evidence is in [`STEP-3-EVIDENCE.md`](STEP-3-EVIDENCE.md); Step 4's is
+in [`STEP-4-EVIDENCE.md`](STEP-4-EVIDENCE.md), and the model it built is
+described in [`IDENTITY.md`](IDENTITY.md). Both evidence files say what was
+proven, what merely passes its tests, and what nobody has run.
 
 ## Ahead
 
@@ -26,7 +29,6 @@ order is a dependency order, not a preference.
 
 | Step | What it contains |
 |---|---|
-| **4** | Identities, credentials, authorization, and the explicit carry-forward register |
 | **5** | Distributed queue, atomic claiming, leases, and heartbeats |
 | **6** | Idempotency and safe concurrent effects |
 | **7** | Remote MCP |
@@ -39,8 +41,8 @@ order is a dependency order, not a preference.
 
 - **Step 4 is not Step 5.** Knowing *who* a worker is does not make it safe for
   two of them to take the same job. Identity is authorization; claiming is
-  concurrency. `server/routes/access.ts` — the temporary shared-token gate — is
-  Step 4's to delete and replace, and it has nothing to do with leases.
+  concurrency. Step 4 replaced the shared-token gate with real accounts and
+  added nothing about leases, on purpose.
 - **Step 5 is not Step 6.** A lease stops two workers starting the same job. It
   does not make the *effects* of a job safe to apply twice, which is what
   happens when a lease expires mid-flight and the work is retried. Idempotency

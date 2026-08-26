@@ -311,13 +311,21 @@ browser prompts once and then attaches credentials to everything the app does �
 including `EventSource` streams and document downloads. A bearer token is also
 accepted, so a script does not have to base64 anything.
 
-**This is deliberately coarse and deliberately temporary.** One shared
-credential; everyone who has it sees everything. It exists so the first Cloud
-Brain is not public. **Step 4** replaces it with real identities — per-worker
-credentials, per-user authorisation, revocation, and the carry-forward register
-— and `server/routes/access.ts` should be deleted then, not extended.
+**Step 4 landed, and this is no longer the security model.** Real
+authentication now sits behind it: every API route and every document byte
+resolves to a principal and an explicit authorization decision — see
+[`IDENTITY.md`](IDENTITY.md).
 
-Step 4 is identity and nothing else. Knowing which worker is calling does not
+What remains here is an **optional outer layer**: one shared credential in front
+of the whole site, off unless `BRAIN_ACCESS_TOKEN` is set. It is kept rather than
+deleted because a second, cruder lock is a reasonable thing to want while a Brain
+is not meant to be discoverable at all, and because removing it would silently
+open any installation that had been relying on it. It is no longer *required*:
+a cloud-backed Brain used to refuse to boot without it, and now boots and warns
+loudly if it has no accounts instead — the failure being guarded against moved
+from "reachable by everyone" to "reachable by no one".
+
+Step 4 was identity and nothing else. Knowing which worker is calling does not
 make it safe for two of them to claim the same job; that is **Step 5**, which
 adds the distributed queue, atomic claiming, leases and heartbeats. The full
 register is in [`ROADMAP.md`](ROADMAP.md).

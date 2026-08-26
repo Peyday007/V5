@@ -49,12 +49,13 @@ import {
   bodyOf,
   conflict,
   handler,
-  nullableString,
   notFound,
+  nullableString,
   optionalBoolean,
   optionalEnum,
   optionalString,
   pathId,
+  requireChunk,
   requireDocument,
   requireLayerOfProject,
   requireProject,
@@ -514,9 +515,13 @@ documentsRouter.patch(
 documentsRouter.get(
   '/chunks/:chunkId',
   handler(async (req) => {
-    const chunkId = pathId(req, 'chunkId');
-    const resolved = await resolveCitation(chunkId);
-    if (!resolved) throw notFound(`No stored passage with id ${chunkId}.`);
+    // A passage is addressed by its own id. It reaches a project only through
+    // its document, so that is the lineage the check has to follow — otherwise
+    // a citation id would be a way to read a paragraph of somebody else's
+    // research without ever naming their project.
+    const chunk = await requireChunk(pathId(req, 'chunkId'));
+    const resolved = await resolveCitation(chunk.id);
+    if (!resolved) throw notFound(`No stored passage with id "${chunk.id}".`);
     return resolved;
   }),
 );

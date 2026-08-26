@@ -33,7 +33,10 @@ async function resolveProjectId(value: unknown): Promise<string> {
   if (!fallback) {
     throw badRequest('No project exists yet, so there is nothing to chat about.');
   }
-  return fallback.id;
+  // The fallback is a convenience, and a convenience must not be a way in: the
+  // Brain's default project is not necessarily one this caller may see, so it
+  // goes through the same check an explicit id would.
+  return (await requireProject(fallback.id)).id;
 }
 
 chatRouter.get(

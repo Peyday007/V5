@@ -12,7 +12,7 @@
 import { Router } from 'express';
 import type { Response } from 'express';
 import type { AuditMode } from '../domain/types.ts';
-import { getAudit, listAuditPasses, listPipelinePasses } from '../repos/audits.ts';
+import { listAuditPasses, listPipelinePasses } from '../repos/audits.ts';
 import { getDocument, listDocumentsByLayer } from '../repos/documents.ts';
 import { listAuditEvidence } from '../repos/extraction.ts';
 import { retrieveEvidence } from '../services/documents/retrieval.ts';
@@ -33,11 +33,13 @@ import {
   optionalInteger,
   optionalString,
   pathId,
-  requiredString,
+  requireAudit,
   requireDocument,
   requireLayer,
   requireRun,
+  requiredString,
   unprocessable,
+  withRequestContext,
 } from './helpers.ts';
 
 export const auditsRouter = Router();
@@ -181,14 +183,33 @@ function sseSend(res: Response, event: string, data: unknown): void {
 }
 
 function streamHandler(resolve: (req: Parameters<typeof pathId>[0]) => Promise<AuditTarget>) {
-  return async (req: Parameters<typeof pathId>[0] & { body?: unknown }, res: Response): Promise<void> => {
+  return withRequestContext(async (req, res: Response): Promise<void> => {
+    // Resolve — and therefore authorize — *before* the stream is opened.
+    //
+    // Once `text/event-stream` headers are written there is no status code left
+    // to send, and every refusal after that point would have to be delivered as
+    // a 200 carrying a `failed` event. A caller with no right to this layer must
+    // get a refusal, not a subscription that immediately apologises. This is the
+    // whole of what "protect the stream for its entire connection setup" means.
+    let target: AuditTarget;
+    try {
+      target = await resolve(req);
+    } catch (error) {
+      const status = typeof (error as { status?: unknown }).status === 'number'
+        ? (error as { status: number }).status
+        : 500;
+      res.status(status).json({
+        error: error instanceof Error ? error.message : 'That audit could not be started.',
+      });
+      return;
+    }
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders?.();
 
     try {
-      const target = await resolve(req);
       const body = (req.body ?? {}) as Record<string, unknown>;
       const { providerName, model } = providerOptions(body);
       const outcome = await runDynamicAudit({
@@ -213,7 +234,7 @@ function streamHandler(resolve: (req: Parameters<typeof pathId>[0]) => Promise<A
     } finally {
       res.end();
     }
-  };
+  });
 }
 
 auditsRouter.post(
@@ -236,9 +257,9 @@ auditsRouter.post(
 auditsRouter.get(
   '/audits/:auditId',
   handler(async (req) => {
-    const auditId = pathId(req, 'auditId');
-    const audit = await getAudit(auditId);
-    if (!audit) throw notFound(`No audit with id ${auditId}.`);
+    // Addressed by its own id with no project in the path, so the lineage
+    // resolver is what keeps a guessed id from being a way in.
+    const audit = await requireAudit(pathId(req, 'auditId'));
     return {
       audit,
       passes: await listAuditPasses(audit.id),

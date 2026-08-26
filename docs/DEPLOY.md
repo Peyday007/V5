@@ -456,6 +456,152 @@ is actually run.
 
 ---
 
+# Part 4 — Upgrading a running Brain to accounts
+
+Step 4 replaced the shared token with real accounts. This is what that costs a
+Brain that is already deployed: one migration, one secret, one sign-in, and one
+secret removed again.
+
+**Nothing here deletes anything**, and the migration is additive — six new
+tables and three unique indexes the cloud schema should always have had.
+
+## 4.1 Back up first
+
+Supabase → **Database → Backups**, or a manual dump. Record the identifier.
+
+The migration adds tables and constraints; it does not modify a row of research.
+The one way it can fail is loudly, which is the next paragraph.
+
+## 4.2 Know what the unique indexes will do
+
+`004_unique_parity.sql` adds the three constraints the cloud schema was missing:
+`projects.slug`, `layers (project_id, slug)` and
+`documents (project_id, canonical_name)`. The local SQLite chain has always had
+them; the generator that produced the cloud baseline silently dropped them.
+
+If your cloud database contains two rows Brain has always treated as one, the
+index cannot be created and **the migration fails, loudly, having changed
+nothing**. That is the correct outcome: a person has to decide which of the two
+is real. The error names the constraint and the duplicate key.
+
+## 4.3 Choose the first administrator
+
+Generate a password — do not choose one. It is temporary: it will exist in Fly's
+secret store and in your terminal, and the account cannot do anything except
+replace it.
+
+```powershell
+$b = New-Object byte[] 24
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+$pw = [Convert]::ToBase64String($b)
+fly secrets set --app <name> BRAIN_BOOTSTRAP_ADMIN_EMAIL="you@example.com" BRAIN_BOOTSTRAP_ADMIN_PASSWORD="$pw"
+Set-Clipboard $pw
+Remove-Variable b,pw
+```
+
+The password goes to the clipboard, never to the screen. Paste it into your
+password manager now — you need it exactly once.
+
+## 4.4 Deploy
+
+```bash
+fly deploy --ha=false
+```
+
+The migrations run at boot, before the port opens. Then:
+
+```bash
+fly logs
+```
+
+The banner has two new lines:
+
+```
+  Sign-in         application accounts (email and password, server-side sessions)
+  Outer gate      shared token in front of the site (optional outer layer; accounts are the real gate)
+
+    Created the first Brain administrator: you@example.com
+    It must choose a new password before it can do anything else.
+    Remove BRAIN_BOOTSTRAP_ADMIN_PASSWORD from this deployment now.
+```
+
+If it says **NO ACCOUNTS** instead, the bootstrap did not run — the log line
+below the banner says why, and it is almost always that only one of the two
+variables was set.
+
+## 4.5 Sign in and take ownership
+
+Open the site. If `BRAIN_ACCESS_TOKEN` is still set you will get the browser's
+Basic prompt first — that is the outer layer, unchanged — and then Brain's own
+sign-in screen.
+
+Sign in with the bootstrap address and password. Brain will immediately require
+a new password; every other route answers `403 PASSWORD_CHANGE_REQUIRED` until
+you have chosen one. Choose it, and store it.
+
+## 4.6 Remove the bootstrap secret
+
+```bash
+fly secrets unset BRAIN_BOOTSTRAP_ADMIN_PASSWORD BRAIN_BOOTSTRAP_ADMIN_EMAIL
+```
+
+They are already inert — the bootstrap only runs into a Brain with no accounts —
+but a temporary password should not be a permanent secret.
+
+## 4.7 Optional: drop the outer layer
+
+The shared token is no longer what protects anything. If you would rather have
+one lock than two:
+
+```bash
+fly secrets unset BRAIN_ACCESS_TOKEN
+```
+
+Keep it if you would rather the sign-in page itself not be reachable from the
+open internet. Both are defensible; what is not defensible is believing the
+token is what makes the Brain private. It is not, and has not been since Step 4.
+
+## 4.8 Verify from outside
+
+```bash
+APP=<name>
+
+curl -s https://$APP.fly.dev/healthz                                        # -> ok
+curl -s -o /dev/null -w '%{http_code}\n' https://$APP.fly.dev/api/health   # -> 401
+curl -s -o /dev/null -w '%{http_code}\n' https://$APP.fly.dev/api/projects # -> 401
+```
+
+`/` answers 200 because the sign-in page has to be reachable — the bundle
+contains no project data, only a program that asks the API, and the API is the
+thing behind the gate.
+
+Then in the browser, signed in: your projects are there, a document opens, and
+the header shows who you are with a SIGN OUT button.
+
+## 4.9 A worker credential, if you want one now
+
+You do not need one until Step 8. If you want to prove the contract:
+
+**Settings** are not in the UI for this — it is an API, on purpose, because Step
+4 is not the fleet UI:
+
+```bash
+# as the administrator, with your session cookie
+curl -s -X POST https://$APP.fly.dev/api/admin/workers \
+  -H 'content-type: application/json' -b cookies.txt \
+  -d '{"name":"first-worker","displayName":"First Worker"}'
+
+curl -s -X POST https://$APP.fly.dev/api/admin/workers/<id>/credentials \
+  -H 'content-type: application/json' -b cookies.txt -d '{"expiresInDays":90}'
+```
+
+The second one returns the credential **once**. It is not recoverable
+afterwards, by anyone. Grant it a project and some scopes with
+`POST /api/admin/projects/<id>/members`; see
+[`IDENTITY.md`](IDENTITY.md) for the scope list.
+
+---
+
 ## Rollback
 
 **Your local Brain is the rollback.** It is untouched, complete, and still runs:
@@ -474,6 +620,10 @@ That is the whole procedure. Nothing was deleted.
 | Migration stopped partway | Run it again. Finished work is recognised, not repeated |
 | A file clashed in the bucket | Two documents claim one key. Nothing was overwritten. Decide which is right, remove the other, re-run |
 | Token leaked | `fly secrets set BRAIN_ACCESS_TOKEN="$(openssl rand -base64 32)"` — it redeploys automatically |
+| A worker credential leaked | Revoke that credential (`POST /api/admin/workers/<id>/credentials/<cid>/revoke`) and issue another. Immediate, and durable across a redeploy |
+| Somebody's password leaked | Another administrator resets it (`POST /api/admin/users/<id>/password`). Every session that person held ends |
+| Locked out of every account | Disable nothing and delete nothing: with no administrator left, an empty `users` table is what the bootstrap needs, so this requires direct database access. The refusal to disable the last administrator exists to keep this hypothetical |
+| Step 4 migration failed on a unique index | Two rows the Brain has always treated as one. Nothing was changed. Decide which is real, remove the other, redeploy |
 | Service-role key leaked | Rotate it in Supabase (Settings → API), then `fly secrets set` the new one. Rotating the *database password* invalidates every connection string you have written down |
 
 Work done in the cloud after migrating stays there. Migrating back is not
@@ -485,20 +635,20 @@ something this tool does.
 
 Worth being precise, so nobody mistakes the gate for a security model:
 
-- **One shared credential.** Everyone who has the token sees everything. There
-  are no users, no roles, and no way to revoke one person's access without
-  changing it for all of them.
 - **One instance.** The background queues are per-instance and uncoordinated.
-- **No worker identities** — Step 4. **No distributed queue, atomic claiming,
-  leases or heartbeats** — Step 5. **No idempotency guarantees for concurrent
-  effects** — Step 6. **No remote MCP** — Step 7. **No connected worker** —
-  Step 8. **No fleet** — Step 11. Those are separate steps and the separation
-  is deliberate; see [`ROADMAP.md`](ROADMAP.md).
+- **No distributed queue, atomic claiming, leases or heartbeats** — Step 5.
+  **No idempotency guarantees for concurrent effects** — Step 6. **No remote
+  MCP** — Step 7. **No connected worker** — Step 8. **No fleet** — Step 11.
+  Those are separate steps and the separation is deliberate; see
+  [`ROADMAP.md`](ROADMAP.md).
+- **No second factor**, for people or for machines. Revocation is the answer to
+  a leaked credential, and it is immediate.
+- **The sign-in throttle is per-instance.** Fine with one; worth knowing before
+  there are several.
 
-The gate exists so the first Cloud Brain is not public while the real
-authorisation system is built. When **Step 4** lands,
-`server/routes/access.ts` should be deleted rather than extended — Step 4 is
-identity and authorization only, and adds nothing about concurrency.
+Since Step 4 there *are* users, roles, per-worker credentials and per-principal
+revocation — see [`IDENTITY.md`](IDENTITY.md), including the section on what the
+model does not defend against.
 
 ---
 

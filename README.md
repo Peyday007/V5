@@ -83,9 +83,16 @@ runbook for standing up the first hosted Brain on Supabase and Fly.io, and
 **[docs/STEP-3-EVIDENCE.md](docs/STEP-3-EVIDENCE.md)** records what the first
 deployment actually proved and what it did not.
 
-A hosted Brain runs **one** instance behind **one** shared credential. Both are
-deliberate and both are temporary: identities are Step 4, and the atomic
-claiming and leases that make a second instance safe are Step 5.
+A hosted Brain is private: every API route and every document byte resolves to an
+authenticated principal — a person holding a session, or a worker holding a
+Brain-issued credential — and to an explicit authorization decision made by
+server code when the operation runs.
+**[docs/IDENTITY.md](docs/IDENTITY.md)** is the whole model: principals, roles
+and scopes, project membership, credential lifecycle, the audit, and the threat
+model including what it does *not* defend against.
+
+It still runs **one** instance, deliberately: the atomic claiming and leases that
+make a second one safe are Step 5.
 **[docs/ROADMAP.md](docs/ROADMAP.md)** is the register of which step owns what,
 and the separations in it are load-bearing rather than cosmetic.
 

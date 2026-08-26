@@ -207,7 +207,46 @@ function post<T>(path: string, body?: unknown): Promise<T> {
 // Endpoints
 // ---------------------------------------------------------------------------
 
+export interface SessionUser {
+  id: string;
+  email: string;
+  displayName: string;
+  isBrainAdmin: boolean;
+  mustChangePassword: boolean;
+}
+
+export interface SessionResponse {
+  authenticated: boolean;
+  user: SessionUser | null;
+}
+
 export const Api = {
+  // -------------------------------------------------------------------------
+  // Who is using this Brain
+  //
+  // Cookies are same-origin, so nothing here attaches a credential by hand:
+  // `fetch` sends the session cookie because the browser decides to, which is
+  // the same reason `EventSource` and a document link work without any of this
+  // code knowing about them.
+  // -------------------------------------------------------------------------
+
+  /** Reachable without being signed in; answers "no" rather than failing. */
+  session(): Promise<SessionResponse> {
+    return api<SessionResponse>('/api/auth/session');
+  },
+
+  login(email: string, password: string): Promise<{ user: SessionUser }> {
+    return post<{ user: SessionUser }>('/api/auth/login', { email, password });
+  },
+
+  logout(): Promise<{ ok: boolean }> {
+    return post<{ ok: boolean }>('/api/auth/logout');
+  },
+
+  changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }> {
+    return post<{ ok: boolean }>('/api/auth/password', { currentPassword, newPassword });
+  },
+
   /** Boot probe: schema version, driver, data root, migration report, providers. */
   health(): Promise<HealthResponse> {
     return api<HealthResponse>('/api/health');

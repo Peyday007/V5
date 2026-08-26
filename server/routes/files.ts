@@ -23,12 +23,24 @@
  *
  * A missing object is a 404 and nothing more. The store's own wording could
  * name a path or a bucket, so it is not passed through.
+ *
+ * And since Step 4, the fourth thing: **the project in the path is resolved and
+ * the caller's access to it is checked before a single byte is read.** This is
+ * the route that hands over the actual research — the PDFs, the transcripts, the
+ * reports — and it is addressed by a project *slug* rather than by an id, which
+ * makes it the one place where guessing a readable name would otherwise be
+ * enough. A caller who may not have the project gets the same 404 as a caller
+ * who asked for a file that was never there.
  */
 import type { Request, Response } from 'express';
 import path from 'node:path';
 import { getStorage } from '../services/storage/index.ts';
 import { ObjectNotFoundError } from '../services/storage/types.ts';
 import { assertSafeKey, contentTypeFor } from '../services/storage/keys.ts';
+import { getProjectBySlug } from '../repos/projects.ts';
+import { currentContext, currentPrincipal } from '../services/identity/context.ts';
+import { decideProjectAccess } from '../services/identity/policy.ts';
+import { recordIdentityEvent } from '../repos/identity.ts';
 
 /**
  * Map a `/files/...` request onto a document key.
@@ -51,11 +63,64 @@ function keyForRequest(requestPath: string): string {
   return key;
 }
 
+/** The project slug is the second segment of the key: `projects/<slug>/documents/…`. */
+function slugForKey(key: string): string | null {
+  return key.split('/')[1] ?? null;
+}
+
+/**
+ * May the caller read documents belonging to the project this key names?
+ *
+ * Read-level, and for a worker that means the `documents:read` scope — a worker
+ * granted only `project:read` can see that a document exists without being
+ * handed its contents.
+ */
+async function mayReadDocuments(key: string): Promise<boolean> {
+  const slug = slugForKey(key);
+  if (!slug) return false;
+  const project = await getProjectBySlug(slug);
+  if (!project) return false;
+
+  const decision = decideProjectAccess(currentPrincipal(), project.id, 'READ', 'documents:read');
+  if (decision.allowed) return true;
+
+  const context = currentContext();
+  const principal = context?.principal ?? null;
+  try {
+    await recordIdentityEvent({
+      actorType: principal ? principal.type : 'ANONYMOUS',
+      actorId: principal?.id ?? null,
+      credentialId: principal?.credentialId ?? null,
+      action: 'AUTHORIZE_FILE',
+      targetType: 'FILE',
+      targetId: key,
+      projectId: project.id,
+      result: 'DENIED',
+      reason: decision.reason,
+      requestId: context?.requestId ?? null,
+      userAgent: context?.userAgent ?? null,
+      remoteAddr: context?.remoteAddr ?? null,
+    });
+  } catch {
+    /* an unwritable audit does not change the refusal */
+  }
+  return false;
+}
+
 export async function serveStoredObject(req: Request, res: Response): Promise<void> {
   let key: string;
   try {
     key = keyForRequest(req.path);
   } catch {
+    res.status(404).json({ error: `No file at /files${req.path}.` });
+    return;
+  }
+
+  // Before the storage layer is touched at all: an unauthorized read must not
+  // even reach the bucket, or its latency and its errors become a side channel
+  // for whether a document exists.
+  if (!await mayReadDocuments(key)) {
+    res.setHeader('Cache-Control', 'no-store');
     res.status(404).json({ error: `No file at /files${req.path}.` });
     return;
   }

@@ -1,10 +1,16 @@
 /**
- * The gate in front of a deployed Brain.
+ * The optional outer layer in front of a deployed Brain.
  *
- * The property under test is narrow and absolute: a Brain that is cloud-backed
- * either has a token or does not start. Everything else here — the header
- * shapes, the constant-time comparison, the liveness exemption — exists to make
- * that gate usable without making it leaky.
+ * Step 3 made this the only protection a deployment had, and it behaved
+ * accordingly: a cloud-backed Brain refused to boot without a token. Step 4
+ * put real authentication behind it — every API route and every document byte
+ * resolves to a principal — so the token is no longer required, and these tests
+ * changed with it.
+ *
+ * What did not change is everything that made it non-leaky: the constant-time
+ * comparison, the refusal that says nothing, the liveness exemption, and the
+ * rule that the token never appears in a message about itself. Those are still
+ * the property under test.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import express from 'express';
@@ -63,23 +69,23 @@ const basic = (user: string, pass: string) =>
   `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
 
 describe('deciding whether there is a gate at all', () => {
-  it('refuses to start a cloud-backed Brain with no token', () => {
-    let thrown: AccessGateError | null = null;
-    try {
-      accessGateConfig({ cloud: true });
-    } catch (error) {
-      thrown = error as AccessGateError;
-    }
-    expect(thrown).toBeInstanceOf(AccessGateError);
-    expect(thrown!.message).toMatch(/no BRAIN_ACCESS_TOKEN/i);
-    // And says what to do about it, including how to generate one.
-    expect(thrown!.detail).toMatch(/openssl rand/i);
+  it('no longer stops a cloud-backed Brain that has no token', () => {
+    // The Step 3 behaviour, deliberately reversed. It existed because without a
+    // token the deployment was reachable and unprotected; with application
+    // accounts behind it, a Brain with no token is reachable and
+    // *authenticated*. Keeping the old refusal would mean a deployment could
+    // not drop a credential it no longer needs.
+    const config = accessGateConfig({ cloud: true });
+    expect(config.token).toBeNull();
   });
 
-  it('leaves local development alone', () => {
+  it('says plainly that the token is not what protects the Brain', () => {
     const config = accessGateConfig({ cloud: false });
     expect(config.token).toBeNull();
-    expect(describeAccessGate(config)).toMatch(/local development only/i);
+    const described = describeAccessGate(config);
+    expect(described).toMatch(/accounts are the gate/i);
+    // And never implies that having no token means having no protection.
+    expect(described).not.toMatch(/unprotected|open ·/i);
   });
 
   it('refuses a token too short to be worth having, without repeating it', () => {
@@ -99,8 +105,8 @@ describe('deciding whether there is a gate at all', () => {
     const config = accessGateConfig({ cloud: true });
     expect(config.token).toBe(TOKEN);
     expect(describeAccessGate(config)).not.toContain(TOKEN);
-    // The banner also says out loud that this is temporary.
-    expect(describeAccessGate(config)).toMatch(/step 4/i);
+    // And describes itself as what it now is: an extra layer, not the gate.
+    expect(describeAccessGate(config)).toMatch(/outer layer/i);
   });
 });
 

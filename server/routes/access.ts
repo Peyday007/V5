@@ -25,17 +25,34 @@
  * including `EventSource` streams and document downloads, which a bearer-token
  * scheme in application code would each have had to be taught separately.
  *
- * This is a **temporary, coarse gate**: one shared credential, everyone who has
- * it sees everything. It exists so the first Cloud Brain is not public while the
- * real thing is built. Step 4 replaces it with actual identities — per-worker
- * credentials, per-user authorisation, revocation, and the carry-forward
- * register — and this file should be deleted when that lands, not extended.
+ * ---------------------------------------------------------------------------
+ * Step 4 landed, and this is no longer the security model.
+ * ---------------------------------------------------------------------------
  *
- * Step 4 is identity and authorization, and nothing else. Knowing which worker
- * is calling does not make it safe for two of them to claim one job: that is
- * Step 5's distributed queue, atomic claiming, leases and heartbeats, and
- * making the *effects* of a re-run job safe is Step 6's again. Nothing in this
- * file should ever grow toward either of them. See `docs/ROADMAP.md`.
+ * Real authentication now sits behind this: every `/api` route and every
+ * document byte resolves to a principal and an explicit authorization decision
+ * (`routes/guard.ts`, `services/identity/`). What is left here is an **optional
+ * outer layer** — one shared credential in front of the whole site, off unless
+ * somebody sets `BRAIN_ACCESS_TOKEN`.
+ *
+ * It is kept rather than deleted for two reasons, and neither is inertia:
+ *
+ *   * a second, cruder lock in front of a deployment is a reasonable thing to
+ *     want while a Brain is not meant to be discoverable at all — it keeps the
+ *     sign-in page itself off the open internet;
+ *   * deleting it would silently open every installation that had been relying
+ *     on it, at the moment they upgraded.
+ *
+ * What did change is that it is no longer **required**. A cloud-backed Brain
+ * used to refuse to boot without a token, because without one it was reachable
+ * and unprotected. That is no longer true: without a token it is reachable and
+ * *authenticated*, and the invariant has moved rather than been dropped — boot
+ * now reports loudly when a Brain has no accounts, because a Brain nobody can
+ * sign in to is the other way to have a deployment nobody can use.
+ *
+ * This file grants nothing and identifies nobody. It cannot authorize, it has no
+ * notion of a project, and it must never acquire one: if it starts to look like
+ * it is deciding who may do what, that logic belongs in the policy module.
  */
 import crypto from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
@@ -83,16 +100,12 @@ function read(name: string): string | null {
 export function accessGateConfig(options: { cloud: boolean }): AccessGateConfig {
   const token = read('BRAIN_ACCESS_TOKEN');
 
-  if (!token && options.cloud) {
-    throw new AccessGateError(
-      'This Brain is configured for cloud persistence but has no BRAIN_ACCESS_TOKEN.',
-      'A cloud-backed Brain has a URL, and behind that URL are every document, every ' +
-        'claim and an endpoint that accepts uploads. Set BRAIN_ACCESS_TOKEN to a long ' +
-        'random secret — `openssl rand -base64 32` — in the host’s environment ' +
-        'settings. Brain will not start without one, because a deployment you forgot to ' +
-        'protect is worse than a deployment that failed.',
-    );
-  }
+  // `options.cloud` no longer makes a token mandatory. It is kept in the
+  // signature because the banner and the documentation still distinguish a
+  // deployed Brain from a local one, and because reinstating a requirement here
+  // — if this ever became the only lock again — should be a one-line change
+  // rather than a re-plumb.
+  void options;
 
   if (token && token.length < 16) {
     throw new AccessGateError(
@@ -182,6 +195,6 @@ export function accessGate(config: AccessGateConfig): RequestHandler {
 /** For the boot banner. Never the token — only whether there is one. */
 export function describeAccessGate(config: AccessGateConfig): string {
   return config.token
-    ? `private · shared token (temporary; Step 4 replaces this with identities)`
-    : 'open · no token set (local development only)';
+    ? 'shared token in front of the site (optional outer layer; accounts are the real gate)'
+    : 'none (accounts are the gate; set BRAIN_ACCESS_TOKEN to add an outer layer)';
 }

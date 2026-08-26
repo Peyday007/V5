@@ -7,7 +7,7 @@
  * below it (invariant 7).
  */
 import type { PlannerResult, Project } from '../../../server/domain/types.ts';
-import type { HealthResponse } from '../lib/api.ts';
+import type { HealthResponse, SessionUser } from '../lib/api.ts';
 import { Badge, Pill } from './Badge.tsx';
 import { ResearchStatus } from './ResearchStatus.tsx';
 
@@ -60,6 +60,9 @@ export function TopBar(props: {
   project: Project | null;
   plan: PlannerResult | null;
   health: HealthResponse | null;
+  /** Who is signed in. The header is the only place this is shown. */
+  user: SessionUser | null;
+  onSignOut(): void;
   onImport(): void;
   onSources(): void;
   onWhatNext(): void;
@@ -68,7 +71,7 @@ export function TopBar(props: {
   onRefresh(): void;
   busy: boolean;
 }): JSX.Element {
-  const { project, plan, health, busy } = props;
+  const { project, plan, health, user, busy } = props;
   const statuses = countByStatus(plan);
   const total = plan?.layers.length ?? 0;
   const frozen = plan?.layers.filter((layer) => layer.status === 'FROZEN').length ?? 0;
@@ -118,6 +121,16 @@ export function TopBar(props: {
         <button type="button" className="btn" onClick={props.onSettings} disabled={busy}>
           SETTINGS
         </button>
+        {user ? (
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={props.onSignOut}
+            title={`${user.email}${user.isBrainAdmin ? ' · Brain administrator' : ''}`}
+          >
+            SIGN OUT {user.displayName.toUpperCase()}
+          </button>
+        ) : null}
         <button type="button" className="btn btn--ghost" onClick={props.onRefresh} disabled={busy}>
           REFRESH
         </button>

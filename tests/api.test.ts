@@ -4,6 +4,12 @@
  * These boot the real server as a child process against a throwaway data root,
  * so they exercise exactly what `npm start` does: migrate from empty, seed,
  * recompute, then serve. Nothing here reaches into server internals.
+ *
+ * Since Step 4 they also sign in first, which is worth as much as everything
+ * else in this file: it means the whole API surface is exercised through real
+ * authentication, by a real session cookie, against the real guard — and that a
+ * regression which broke the application for an authorized user would fail here
+ * rather than in production.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
@@ -22,11 +28,27 @@ let server: ChildProcessByStdio<null, Readable, Readable>;
 let dataDir: string;
 let projectId: string;
 let serverLog = '';
+/** The session cookie every request below carries. */
+let sessionCookie = '';
+
+const ADMIN_EMAIL = 'api-test@example.invalid';
+const BOOTSTRAP_PASSWORD = 'bootstrap-password-1';
+const CHOSEN_PASSWORD = 'a-chosen-password-2';
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return sessionCookie ? { ...extra, cookie: sessionCookie } : extra;
+}
 
 async function get<T>(path: string): Promise<T> {
-  const response = await fetch(`${BASE}${path}`);
+  const response = await fetch(`${BASE}${path}`, { headers: authHeaders() });
   if (!response.ok) throw new Error(`GET ${path} -> ${response.status} ${await response.text()}`);
   return (await response.json()) as T;
+}
+
+/** Anonymous, for the tests that are about what an unauthenticated caller sees. */
+async function getAnonymous(path: string): Promise<{ status: number; body: string }> {
+  const response = await fetch(`${BASE}${path}`);
+  return { status: response.status, body: await response.text() };
 }
 
 async function send<T>(
@@ -36,7 +58,7 @@ async function send<T>(
 ): Promise<{ status: number; body: T }> {
   const response = await fetch(`${BASE}${path}`, {
     method,
-    headers: body === undefined ? {} : { 'content-type': 'application/json' },
+    headers: authHeaders(body === undefined ? {} : { 'content-type': 'application/json' }),
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await response.text();
@@ -48,7 +70,11 @@ async function uploadPdfs(names: string[]): Promise<{ results: { registered: boo
   for (const name of names) {
     form.append('files', new Blob([`%PDF-1.4 contents of ${name}`], { type: 'application/pdf' }), name);
   }
-  const response = await fetch(`${BASE}/api/projects/${projectId}/import`, { method: 'POST', body: form });
+  const response = await fetch(`${BASE}/api/projects/${projectId}/import`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: form,
+  });
   if (!response.ok) throw new Error(`import -> ${response.status} ${await response.text()}`);
   return (await response.json()) as { results: { registered: boolean; filename: string }[] };
 }
@@ -68,6 +94,9 @@ beforeAll(async () => {
         BRAIN_DATA_DIR: dataDir,
         PORT: String(PORT),
         NODE_ENV: 'test',
+        // The one way into a Brain that has never had an account.
+        BRAIN_BOOTSTRAP_ADMIN_EMAIL: ADMIN_EMAIL,
+        BRAIN_BOOTSTRAP_ADMIN_PASSWORD: BOOTSTRAP_PASSWORD,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
@@ -75,16 +104,37 @@ beforeAll(async () => {
   server.stdout.on('data', (chunk: Buffer) => (serverLog += chunk.toString()));
   server.stderr.on('data', (chunk: Buffer) => (serverLog += chunk.toString()));
 
+  // Liveness is the open endpoint now; readiness is behind the gate, so waiting
+  // on /api/health would be waiting on a 401 forever.
   const deadline = Date.now() + 45_000;
   for (;;) {
     if (Date.now() > deadline) throw new Error(`server never became healthy:\n${serverLog}`);
     try {
-      const health = await get<{ ok: boolean }>('/api/health');
-      if (health.ok) break;
+      const response = await fetch(`${BASE}/healthz`);
+      if (response.ok) break;
     } catch {
       /* not up yet */
     }
     await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+
+  // Sign in with the bootstrap password, then immediately choose another —
+  // which is not a convenience, it is the only way past the must-change gate.
+  const login = await fetch(`${BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: ADMIN_EMAIL, password: BOOTSTRAP_PASSWORD }),
+  });
+  if (!login.ok) throw new Error(`sign-in failed: ${login.status} ${await login.text()}\n${serverLog}`);
+  sessionCookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  if (!sessionCookie) throw new Error('sign-in returned no session cookie');
+
+  const changed = await send('POST', '/api/auth/password', {
+    currentPassword: BOOTSTRAP_PASSWORD,
+    newPassword: CHOSEN_PASSWORD,
+  });
+  if (changed.status !== 200) {
+    throw new Error(`could not choose a password: ${changed.status} ${JSON.stringify(changed.body)}`);
   }
 
   const { projects } = await get<{ projects: { id: string; slug: string }[] }>('/api/projects');
@@ -149,14 +199,28 @@ describe('import over HTTP', () => {
     expect(documents.map((d) => d.canonicalName)).toContain('World Model v1');
   });
 
-  it('serves the stored file back', async () => {
+  it('serves the stored file back to a signed-in caller', async () => {
     const { documents } = await get<{ documents: { id: string; canonicalName: string }[] }>(
       `/api/projects/${projectId}/documents`,
     );
     const document = documents.find((d) => d.canonicalName === 'World Model v1')!;
-    const response = await fetch(`${BASE}/api/documents/${document.id}/file`);
+    const response = await fetch(`${BASE}/api/documents/${document.id}/file`, {
+      headers: authHeaders(),
+    });
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('%PDF-1.4');
+  });
+
+  it('does not serve it to anybody else', async () => {
+    const { documents } = await get<{ documents: { id: string; canonicalName: string }[] }>(
+      `/api/projects/${projectId}/documents`,
+    );
+    const document = documents.find((d) => d.canonicalName === 'World Model v1')!;
+    // The bytes are the thing worth stealing, so this is checked over real HTTP
+    // against the real server rather than against a unit of the guard.
+    const anonymous = await getAnonymous(`/api/documents/${document.id}/file`);
+    expect(anonymous.status).toBe(401);
+    expect(anonymous.body).not.toContain('%PDF');
   });
 });
 

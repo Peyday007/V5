@@ -15,6 +15,7 @@ import { defaultProviderName, listProviderStatuses } from '../providers/index.ts
 import { ocrStatus } from '../services/documents/ocr.ts';
 import { antigravityStatus, recheckAntigravity } from '../providers/antigravity/runtime.ts';
 import { handler } from './helpers.ts';
+import { currentPrincipal } from '../services/identity/context.ts';
 
 export const healthRouter = Router();
 
@@ -23,6 +24,27 @@ healthRouter.get(
   handler(async () => {
     const migrations = getMigrationReport();
     const db = getDb();
+
+    // Since Step 4 this answer depends on who is asking.
+    //
+    // Everything below names where this Brain's data lives — the database host,
+    // the bucket, the data root, the local paths of the OCR binaries. That is
+    // exactly what an operator needs and exactly what a project member has no
+    // business knowing about the installation they happen to have access to. So
+    // an administrator gets the full readiness report and everybody else gets
+    // the two facts the interface actually renders: is it up, and can it read a
+    // scanned page.
+    const principal = currentPrincipal();
+    const isAdmin = principal?.type === 'HUMAN' && principal.isBrainAdmin;
+    if (!isAdmin) {
+      return {
+        ok: true,
+        schemaVersion: migrations?.schemaVersion ?? (await getSchemaVersion(db)),
+        providers: listProviderStatuses(),
+        ocr: ocrStatus(),
+      };
+    }
+
     return {
       ok: true,
       schemaVersion: migrations?.schemaVersion ?? await getSchemaVersion(db),

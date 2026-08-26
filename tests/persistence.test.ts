@@ -534,6 +534,49 @@ onPostgres('against a real Postgres', () => {
     }
   });
 
+  it('refuses the same second row the local chain refuses', async () => {
+    // Found by inspection at the start of Step 4, and the reason this test
+    // exists: the generator that produced the cloud baseline walked columns and
+    // foreign keys and never emitted uniqueness, so `projects.slug`,
+    // `layers (project_id, slug)` and `documents (project_id, canonical_name)`
+    // were enforced locally and not in the cloud. Comparing table *names* — which
+    // is all the check above this one did — could never have caught it.
+    //
+    // `users.email` and `worker_credentials.prefix` are on the same list now,
+    // and they are the ones that would matter most: two rows where
+    // authentication expects one means "which principal is this" has two
+    // answers, and an ambiguous principal is not a principal.
+    const uniques = (
+      await getDb().all<{ table_name: string; columns: string }>(
+        `SELECT c.relname AS table_name,
+                array_to_string(array(
+                  SELECT a.attname FROM unnest(ix.indkey) k
+                   JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k
+                ), ',') AS columns
+           FROM pg_index ix
+           JOIN pg_class c ON c.oid = ix.indrelid
+           JOIN pg_class i ON i.oid = ix.indexrelid
+           JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname = current_schema() AND ix.indisunique AND i.relname LIKE 'uq_%'`,
+      )
+    )
+      .map((row) => `${row.table_name}(${row.columns})`)
+      .sort();
+
+    expect(uniques).toEqual(
+      [
+        'documents(project_id,canonical_name)',
+        'layers(project_id,slug)',
+        'project_memberships(project_id,principal_type,principal_id)',
+        'projects(slug)',
+        'user_sessions(token_verifier)',
+        'users(email)',
+        'worker_credentials(prefix)',
+        'workers(name)',
+      ].sort(),
+    );
+  });
+
   it('hands back numbers where SQLite hands back numbers', async () => {
     const db = getDb();
     // int8, numeric and float8 would otherwise arrive as strings, and every

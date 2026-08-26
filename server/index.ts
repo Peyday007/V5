@@ -29,13 +29,16 @@ import {
   ensureDataDirs,
 } from './env.ts';
 import { getDefaultProject, listProjects } from './repos/projects.ts';
-import { errorMiddleware } from './routes/helpers.ts';
+import { errorMiddleware, withRequestContext } from './routes/helpers.ts';
 import { createApiRouter } from './routes/index.ts';
 import { seedIfEmpty } from './seed.ts';
 import { initStorage, activeStorageConfig } from './services/storage/index.ts';
 import { StorageConfigurationError } from './services/storage/types.ts';
 import { serveStoredObject } from './routes/files.ts';
 import { accessGate, accessGateConfig, describeAccessGate, AccessGateError, type AccessGateConfig } from './routes/access.ts';
+import { requestContext, requireAuthentication } from './routes/guard.ts';
+import { authRouter } from './routes/auth.ts';
+import { bootstrapFirstAdmin, hasAnyAccount } from './services/identity/bootstrap.ts';
 import { writeProjectState } from './services/runtimeState.ts';
 import { recomputeProject } from './services/stateEngine.ts';
 import { recoverInterruptedExtractions } from './services/documents/extraction.ts';
@@ -107,14 +110,29 @@ function buildApp(gate: AccessGateConfig): Express {
     res.type('text/plain').send('ok');
   });
 
-  // Everything below this line is private when a token is configured: the API,
-  // the documents, and the app itself.
+  // The optional outer layer. Since Step 4 this is no longer what protects the
+  // Brain — every API route and every document byte is behind real
+  // authentication below — and it is off unless somebody sets a token. It stays
+  // supported because a second, cruder lock in front of a deployment is a
+  // reasonable thing to want, and because removing it would silently open any
+  // installation that had been relying on it.
   app.use(accessGate(gate));
 
   // Prompts and pasted audit text are large; uploads go through multer instead.
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
+  // Every request gets a correlation id and a place to hang its principal,
+  // before anything can try to read one.
+  app.use(requestContext());
+
+  // The real gate. Mounted on both the API and the documents, because the bytes
+  // are the thing most worth protecting and serving them from a route that
+  // merely looked safe is exactly how that gets missed.
+  app.use('/api', requireAuthentication());
+  app.use('/files', requireAuthentication());
+
+  app.use('/api', authRouter);
   app.use('/api', createApiRouter());
 
   // Read-only window onto the stored documents so one can be linked to directly.
@@ -124,7 +142,7 @@ function buildApp(gate: AccessGateConfig): Express {
   // the storage layer instead, so the same URL works whether the bytes are on
   // disk or in a bucket — and so the bucket is never addressed by the client.
   // Writes only ever happen through the import endpoints.
-  app.use('/files', serveStoredObject);
+  app.use('/files', withRequestContext(serveStoredObject));
 
   if (IS_PRODUCTION) {
     const hasBuild = fs.existsSync(CLIENT_INDEX);
@@ -216,7 +234,17 @@ function onListenError(error: NodeJS.ErrnoException): void {
   process.exit(1);
 }
 
-function logBanner(migrations: MigrationReport, gate: AccessGateConfig): void {
+interface IdentityBanner {
+  accounts: boolean;
+  bootstrapped: string | null;
+  bootstrapNote: string | null;
+}
+
+function logBanner(
+  migrations: MigrationReport,
+  gate: AccessGateConfig,
+  identity: IdentityBanner,
+): void {
   const applied = migrations.applied;
   console.log('');
   console.log('  Brain is running.');
@@ -227,7 +255,14 @@ function logBanner(migrations: MigrationReport, gate: AccessGateConfig): void {
   console.log(`  Schema version  ${migrations.schemaVersion}`);
   console.log(`  Database        ${persistence.database.provider} · ${persistence.database.target}`);
   console.log(`  Documents       ${persistence.storage.provider} · ${persistence.storage.target}`);
-  console.log(`  Access          ${describeAccessGate(gate)}`);
+  console.log(
+    `  Sign-in         ${
+      identity.accounts
+        ? 'application accounts (email and password, server-side sessions)'
+        : 'NO ACCOUNTS — nobody can sign in to this Brain yet'
+    }`,
+  );
+  console.log(`  Outer gate      ${describeAccessGate(gate)}`);
   console.log(`  Data root       ${DATA_ROOT}`);
   console.log(
     applied.length > 0
@@ -237,6 +272,21 @@ function logBanner(migrations: MigrationReport, gate: AccessGateConfig): void {
       : `  Migrations      up to date (${migrations.alreadyApplied} already applied)`,
   );
   if (migrations.backupPath) console.log(`  Backup          ${migrations.backupPath}`);
+  if (identity.bootstrapped) {
+    console.log('');
+    console.log(`    Created the first Brain administrator: ${identity.bootstrapped}`);
+    console.log('    It must choose a new password before it can do anything else.');
+    console.log('    Remove BRAIN_BOOTSTRAP_ADMIN_PASSWORD from this deployment now.');
+  } else if (identity.bootstrapNote) {
+    console.log('');
+    console.log(`    Bootstrap administrator not created: ${identity.bootstrapNote}`);
+  }
+  if (!identity.accounts) {
+    console.log('');
+    console.log('    This Brain has no accounts, so nobody can sign in. Create the first one by');
+    console.log('    setting BRAIN_BOOTSTRAP_ADMIN_EMAIL and BRAIN_BOOTSTRAP_ADMIN_PASSWORD and');
+    console.log('    restarting; both are read once, into an empty Brain, and never again.');
+  }
 
   // The capability check happens at startup, not when the first scan arrives:
   // finding out halfway through a fifty-page import that OCR was never going to
@@ -408,7 +458,17 @@ async function main(): Promise<void> {
   const primary = await getDefaultProject();
   if (primary) await writeProjectState(primary.id);
 
-  const server = buildApp(gate).listen(PORT, () => logBanner(migrations, gate));
+  // The first administrator, if this Brain has never had one. Runs before the
+  // port opens, so an installation that cannot be signed into says so in the
+  // boot log rather than at the first person who tries.
+  const bootstrap = await bootstrapFirstAdmin();
+  const identity: IdentityBanner = {
+    accounts: await hasAnyAccount(),
+    bootstrapped: bootstrap.created ? bootstrap.email : null,
+    bootstrapNote: bootstrap.created ? null : bootstrap.reason,
+  };
+
+  const server = buildApp(gate).listen(PORT, () => logBanner(migrations, gate, identity));
   server.on('error', onListenError);
   installShutdown(server);
 }

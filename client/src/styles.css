@@ -1753,3 +1753,98 @@ legend {
 .research-review h4 { margin: 0 0 4px; font-size: 12px; letter-spacing: 0.04em; }
 .review-list { margin: 4px 0; padding-left: 16px; display: grid; gap: 6px; }
 .review-list li { line-height: 1.4; }
+
+/* ---------------------------------------------------------------------------
+   Sign-in
+   
+   The only screen a person sees before they have proved who they are, so it
+   shows nothing about this Brain: no project name, no counts, no version. A
+   login page that says "Deal Dispatch" tells an unauthenticated visitor what
+   they have found.
+   --------------------------------------------------------------------------- */
+
+.app--booting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  color: var(--muted, #8a8f98);
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.signin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.signin__card {
+  width: 100%;
+  max-width: 380px;
+  padding: 28px;
+  border: 1px solid var(--line, #2a2f3a);
+  border-radius: 10px;
+  background: var(--panel, #12151c);
+}
+
+.signin__title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  letter-spacing: 0.28em;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.signin__lede {
+  margin: 0 0 20px;
+  color: var(--muted, #8a8f98);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.signin__label {
+  display: block;
+  margin: 14px 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--muted, #8a8f98);
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.signin__input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line, #2a2f3a);
+  border-radius: 6px;
+  background: var(--bg, #0b0d12);
+  color: inherit;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.signin__input:focus {
+  outline: none;
+  border-color: var(--accent, #4c8dff);
+}
+
+.signin__hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #8a8f98);
+}
+
+.signin__error {
+  margin-top: 16px;
+  padding: 9px 11px;
+  border: 1px solid var(--bad, #d05353);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.signin__submit {
+  width: 100%;
+  margin-top: 20px;
+}

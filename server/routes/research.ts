@@ -60,8 +60,12 @@ import {
   optionalString,
   optionalStringArray,
   pathId,
+  requireImportJob,
   requireLayer,
+  requireOrchestration,
+  requireProject,
   requiredString,
+  withRequestContext,
 } from './helpers.ts';
 
 /** A body field that has to be an object before it can be read as one. */
@@ -73,8 +77,10 @@ export const researchRouter = Router();
 
 /** Everything one research job is, in the shape the UI renders. */
 async function orchestrationView(orchestrationId: string) {
-  const orchestration = await getOrchestration(orchestrationId);
-  if (!orchestration) throw notFound(`No research run with id ${orchestrationId}.`);
+  // Authorizing here rather than in each caller: this is the shared reader for
+  // almost every research route, and a research run is addressed by its own id
+  // with no project anywhere in the path.
+  const orchestration = await requireOrchestration(orchestrationId);
 
   const fragments = await listFragments(orchestration.id);
   const live = await currentFragments(orchestration.id);
@@ -195,10 +201,13 @@ researchRouter.get(
 
 researchRouter.get(
   '/projects/:projectId/research',
-  handler(async (req) => ({
-    orchestrations: await listOrchestrationsByProject(pathId(req, 'projectId')),
-    queueDepth: researchQueueDepth(),
-  })),
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    return {
+      orchestrations: await listOrchestrationsByProject(project.id),
+      queueDepth: researchQueueDepth(),
+    };
+  }),
 );
 
 /**
@@ -270,10 +279,7 @@ researchRouter.get(
 researchRouter.get(
   '/research/:orchestrationId/review',
   handler(async (req) => {
-    const orchestrationId = pathId(req, 'orchestrationId');
-    if (!await getOrchestration(orchestrationId)) {
-      throw notFound(`No research run with id ${orchestrationId}.`);
-    }
+    const orchestrationId = (await requireOrchestration(pathId(req, 'orchestrationId'))).id;
     return buildReview(orchestrationId);
   }),
 );
@@ -288,9 +294,7 @@ researchRouter.get(
 researchRouter.post(
   '/research/:orchestrationId/review',
   handler(async (req) => {
-    const orchestrationId = pathId(req, 'orchestrationId');
-    const orchestration = await getOrchestration(orchestrationId);
-    if (!orchestration) throw notFound(`No research run with id ${orchestrationId}.`);
+    const orchestrationId = (await requireOrchestration(pathId(req, 'orchestrationId'))).id;
     const body = bodyOf(req);
 
     const outcome = await applyReviewDecisions(orchestrationId, {
@@ -329,7 +333,7 @@ researchRouter.post(
 researchRouter.get(
   '/research/:orchestrationId/fragments/:fragmentId',
   handler(async (req) => {
-    const orchestrationId = pathId(req, 'orchestrationId');
+    const orchestrationId = (await requireOrchestration(pathId(req, 'orchestrationId'))).id;
     const fragmentId = pathId(req, 'fragmentId');
     const fragment = (await listFragments(orchestrationId)).find((entry) => entry.id === fragmentId);
     if (!fragment) throw notFound(`No fragment ${fragmentId} in this research run.`);
@@ -349,7 +353,7 @@ researchRouter.get(
 researchRouter.post(
   '/research/:orchestrationId/cancel',
   handler(async (req) => {
-    const orchestrationId = pathId(req, 'orchestrationId');
+    const orchestrationId = (await requireOrchestration(pathId(req, 'orchestrationId'))).id;
     const reason = optionalString(bodyOf(req)['reason'], 'reason') ?? 'Cancelled from the browser.';
     const cancelled = await cancelResearch(orchestrationId, reason);
     if (!cancelled) throw notFound(`No research run with id ${orchestrationId}.`);
@@ -361,9 +365,7 @@ researchRouter.post(
 researchRouter.post(
   '/research/:orchestrationId/resume',
   handler(async (req) => {
-    const orchestrationId = pathId(req, 'orchestrationId');
-    const orchestration = await getOrchestration(orchestrationId);
-    if (!orchestration) throw notFound(`No research run with id ${orchestrationId}.`);
+    const orchestrationId = (await requireOrchestration(pathId(req, 'orchestrationId'))).id;
     void resumeResearch(orchestrationId);
     return orchestrationView(orchestrationId);
   }),
@@ -379,8 +381,9 @@ researchRouter.post(
 researchRouter.get(
   '/imports/:jobId',
   handler(async (req) => {
-    const report = await importReport(pathId(req, 'jobId'));
-    if (!report) throw notFound(`No import job with id ${pathId(req, 'jobId')}.`);
+    const job = await requireImportJob(pathId(req, 'jobId'));
+    const report = await importReport(job.id);
+    if (!report) throw notFound(`No import job with id "${job.id}".`);
     return report;
   }),
 );
@@ -388,9 +391,7 @@ researchRouter.get(
 researchRouter.post(
   '/imports/:jobId/resume',
   handler(async (req) => {
-    const jobId = pathId(req, 'jobId');
-    const report = await importReport(jobId);
-    if (!report) throw notFound(`No import job with id ${jobId}.`);
+    const jobId = (await requireImportJob(pathId(req, 'jobId'))).id;
     void resumeArchiveImport(jobId);
     return importReport(jobId);
   }),
@@ -399,7 +400,7 @@ researchRouter.post(
 researchRouter.post(
   '/imports/:jobId/cancel',
   handler(async (req) => {
-    const jobId = pathId(req, 'jobId');
+    const jobId = (await requireImportJob(pathId(req, 'jobId'))).id;
     const reason = optionalString(bodyOf(req)['reason'], 'reason') ?? 'Cancelled from the browser.';
     const cancelled = await cancelArchiveImport(jobId, reason);
     if (!cancelled) throw notFound(`No import job with id ${jobId}.`);
@@ -411,9 +412,7 @@ researchRouter.post(
 researchRouter.post(
   '/imports/:jobId/retry',
   handler(async (req) => {
-    const jobId = pathId(req, 'jobId');
-    const report = await importReport(jobId);
-    if (!report) throw notFound(`No import job with id ${jobId}.`);
+    const jobId = (await requireImportJob(pathId(req, 'jobId'))).id;
     void retryFailedFiles(jobId);
     return importReport(jobId);
   }),
@@ -430,11 +429,23 @@ function sseSend(res: Response, event: string, data: unknown): void {
  * late — or reconnects — sees where the work is rather than waiting for the next
  * pass to start.
  */
-researchRouter.get('/research/:orchestrationId/stream', async (req, res: Response) => {
+researchRouter.get(
+  '/research/:orchestrationId/stream',
+  withRequestContext(async (req, res: Response) => {
   const orchestrationId = String(req.params['orchestrationId'] ?? '');
-  const orchestration = await getOrchestration(orchestrationId);
-  if (!orchestration) {
-    res.status(404).json({ error: `No research run with id ${orchestrationId}.` });
+  // Authorized before a single header is written. After `text/event-stream`
+  // there is no status code left to send, so a refusal would have to be
+  // delivered as a successful subscription that immediately says no — which is
+  // a subscription an unauthorized caller nonetheless holds open.
+  try {
+    await requireOrchestration(orchestrationId);
+  } catch (error) {
+    const status = typeof (error as { status?: unknown }).status === 'number'
+      ? (error as { status: number }).status
+      : 500;
+    res.status(status).json({
+      error: error instanceof Error ? error.message : 'No research run with that id.',
+    });
     return;
   }
 
@@ -459,4 +470,5 @@ researchRouter.get('/research/:orchestrationId/stream', async (req, res: Respons
     unsubscribe();
     res.end();
   });
-});
+  }),
+);

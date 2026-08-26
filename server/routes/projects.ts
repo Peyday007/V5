@@ -43,6 +43,8 @@ import {
 } from '../services/archive/import.ts';
 import { listImportJobs } from '../repos/imports.ts';
 import { optionalBoolean } from './helpers.ts';
+import { currentPrincipal } from '../services/identity/context.ts';
+import { visibleProjectIds } from '../services/identity/policy.ts';
 import { buildPlan } from '../services/planner.ts';
 import { applyReconcileFix, scanAndReconcile } from '../services/reconcile.ts';
 import { recomputeProject } from '../services/stateEngine.ts';
@@ -126,9 +128,21 @@ function mergeVersionPolicy(value: unknown, current: VersionPolicy): VersionPoli
 // Reads
 // ---------------------------------------------------------------------------
 
+/**
+ * The projects this caller may see — filtered, not refused.
+ *
+ * Filtering rather than a 403 is the point: somebody with access to one project
+ * out of five should be shown one project, and should not be able to tell that
+ * there are four others. The count of what exists is itself information, and
+ * "you have no access to this list" would leak that the list is non-empty.
+ */
 projectsRouter.get(
   '/',
-  handler(async () => ({ projects: await listProjects() })),
+  handler(async () => {
+    const all = await listProjects();
+    const visible = new Set(visibleProjectIds(currentPrincipal(), all.map((p) => p.id)));
+    return { projects: all.filter((project) => visible.has(project.id)) };
+  }),
 );
 
 projectsRouter.get(

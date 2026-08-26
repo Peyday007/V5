@@ -6,6 +6,7 @@
  * produce `{ error, detail? }` instead of an HTML stack trace.
  */
 import { Router } from 'express';
+import { adminRouter } from './admin.ts';
 import { auditsRouter } from './audits.ts';
 import { chatRouter } from './chat.ts';
 import { documentsRouter } from './documents.ts';
@@ -19,6 +20,11 @@ import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
   const router = Router();
+
+  // Identity administration, behind its own Brain-administrator guard. First,
+  // because /api/admin/projects/:id/members must not be swallowed by the
+  // projects router's own :projectId routes.
+  router.use('/admin', adminRouter);
 
   router.use(healthRouter);
   // Audit routes carry their own prefixes (/runs/:id/..., /layers/:id/...),

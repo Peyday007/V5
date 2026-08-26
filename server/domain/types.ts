@@ -214,6 +214,12 @@ export const EVENT_TYPES = [
   'AUTO_REDO_CREATED',
   'RECONCILE_COMPLETED',
   'CHAT_ACTION',
+  // Who was let into this project, and who was removed. The authoritative
+  // identity record is `identity_events`; these two exist so that a project's
+  // own history answers "who could see this, and since when" without anybody
+  // having to know there is a second log.
+  'ACCESS_GRANTED',
+  'ACCESS_REVOKED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -2440,4 +2446,301 @@ export interface ReconcileReport {
   issues: ReconcileIssue[];
   healthy: boolean;
   generatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Identity, credentials and authorization (Step 4)
+//
+// Two kinds of principal, kept apart on purpose. A person signs in and holds a
+// session; a worker is issued a credential and presents it. Everything below
+// exists so that "who is asking, and may they" is answerable from server-held
+// state alone — never from anything the caller supplied about itself.
+// ---------------------------------------------------------------------------
+
+/** What kind of thing is making a request. */
+export const PRINCIPAL_TYPES = ['HUMAN', 'WORKER'] as const;
+export type PrincipalType = (typeof PRINCIPAL_TYPES)[number];
+
+/**
+ * What a person may do inside one project.
+ *
+ * Ordered, and the order is the authority ordering: every role can do what the
+ * ones after it can. `roleAtLeast` in the policy module is the only place that
+ * ordering is interpreted, so adding a role means editing one array.
+ */
+export const PROJECT_ROLES = ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] as const;
+export type ProjectRole = (typeof PROJECT_ROLES)[number];
+
+/**
+ * What a worker may do inside one project.
+ *
+ * Deliberately finer-grained than a role: a worker is given exactly the verbs
+ * its job needs, and a worker that only files findings has no way to reopen a
+ * layer even by accident.
+ *
+ * There is no queue-claiming scope and no MCP scope. Those belong to Steps 5
+ * and 7, and a scope that grants nothing is worse than an absent one — code
+ * starts checking for it, and the check reads as protection.
+ */
+export const WORKER_SCOPES = [
+  'project:read',
+  'documents:read',
+  'research:read',
+  'research:write',
+  'research:propose',
+  'claims:write',
+  'sources:write',
+  'contradictions:write',
+  'checkpoints:write',
+  'blockers:report',
+  'work:complete',
+] as const;
+export type WorkerScope = (typeof WORKER_SCOPES)[number];
+
+/** How a request proved who it was. */
+export const AUTH_METHODS = ['SESSION_COOKIE', 'WORKER_BEARER'] as const;
+export type AuthMethod = (typeof AUTH_METHODS)[number];
+
+export const WORKER_STATUSES = ['ACTIVE', 'DISABLED'] as const;
+export type WorkerStatus = (typeof WORKER_STATUSES)[number];
+
+/** Who or what performed an audited action. */
+export const ACTOR_TYPES = ['HUMAN', 'WORKER', 'SYSTEM', 'ANONYMOUS'] as const;
+export type ActorType = (typeof ACTOR_TYPES)[number];
+
+export const IDENTITY_RESULTS = ['SUCCESS', 'DENIED', 'FAILED'] as const;
+export type IdentityResult = (typeof IDENTITY_RESULTS)[number];
+
+/**
+ * Why something was refused — a category, never a sentence containing evidence.
+ *
+ * The audit is readable by administrators, and a denial reason that
+ * distinguished "no such user" from "wrong password" would turn the log into
+ * an oracle for exactly the question an attacker is asking.
+ */
+export const DENIAL_REASONS = [
+  'NO_CREDENTIALS',
+  'INVALID_CREDENTIALS',
+  'EXPIRED',
+  'REVOKED',
+  'PRINCIPAL_DISABLED',
+  'NOT_A_MEMBER',
+  'INSUFFICIENT_ROLE',
+  'MISSING_SCOPE',
+  'NOT_BRAIN_ADMIN',
+  'UNSAFE_TRANSPORT',
+  'LAST_ADMIN',
+  'PASSWORD_CHANGE_REQUIRED',
+  'INTERNAL_ERROR',
+] as const;
+export type DenialReason = (typeof DENIAL_REASONS)[number];
+
+// --- rows -------------------------------------------------------------------
+
+export interface UserRow {
+  id: string;
+  email: string;
+  display_name: string;
+  password_algorithm: string;
+  password_verifier: string;
+  password_updated_at: string;
+  must_change_password: number;
+  is_brain_admin: number;
+  disabled_at: string | null;
+  created_by_type: string | null;
+  created_by_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserSessionRow {
+  id: string;
+  user_id: string;
+  token_verifier: string;
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  last_seen_at: string | null;
+  user_agent: string | null;
+  created_ip: string | null;
+}
+
+export interface WorkerRow {
+  id: string;
+  name: string;
+  display_name: string;
+  worker_type: string;
+  description: string | null;
+  status: string;
+  disabled_at: string | null;
+  created_by_type: string;
+  created_by_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkerCredentialRow {
+  id: string;
+  worker_id: string;
+  prefix: string;
+  verifier: string;
+  issued_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+  last_used_at: string | null;
+  issued_by_type: string;
+  issued_by_id: string;
+  rotated_from: string | null;
+}
+
+export interface ProjectMembershipRow {
+  id: string;
+  project_id: string;
+  principal_type: string;
+  principal_id: string;
+  role: string | null;
+  scopes: string;
+  granted_by_type: string;
+  granted_by_id: string;
+  granted_at: string;
+  revoked_at: string | null;
+  updated_at: string;
+}
+
+export interface IdentityEventRow {
+  id: string;
+  created_at: string;
+  actor_type: string;
+  actor_id: string | null;
+  credential_id: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  project_id: string | null;
+  result: string;
+  reason: string | null;
+  request_id: string | null;
+  metadata: string;
+  user_agent: string | null;
+  remote_addr: string | null;
+}
+
+// --- views ------------------------------------------------------------------
+
+/**
+ * A person, as everything above the repository sees them.
+ *
+ * There is no password field and no verifier field, deliberately: the only code
+ * that may see either lives in the repository and in the hashing module, and a
+ * view type without them is what keeps a verifier from being accidentally
+ * serialized into an API response.
+ */
+export interface User {
+  id: string;
+  email: string;
+  displayName: string;
+  isBrainAdmin: boolean;
+  mustChangePassword: boolean;
+  disabled: boolean;
+  disabledAt: string | null;
+  passwordUpdatedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Worker {
+  id: string;
+  name: string;
+  displayName: string;
+  workerType: string;
+  description: string | null;
+  status: WorkerStatus;
+  disabled: boolean;
+  disabledAt: string | null;
+  createdByType: ActorType;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * What an administrator may see about a credential.
+ *
+ * The prefix is here because it is how a person tells two credentials apart in
+ * a list and how they recognise one in the audit. The verifier is not, and no
+ * shape anywhere in the application carries it out of the repository.
+ */
+export interface WorkerCredentialSummary {
+  id: string;
+  workerId: string;
+  prefix: string;
+  issuedAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  revokedReason: string | null;
+  lastUsedAt: string | null;
+  issuedByType: ActorType;
+  issuedById: string;
+  rotatedFrom: string | null;
+  /** Derived, so a caller never has to re-implement the three conditions. */
+  active: boolean;
+}
+
+export interface ProjectMembership {
+  id: string;
+  projectId: string;
+  principalType: PrincipalType;
+  principalId: string;
+  role: ProjectRole | null;
+  scopes: WorkerScope[];
+  grantedByType: ActorType;
+  grantedById: string;
+  grantedAt: string;
+  revokedAt: string | null;
+  active: boolean;
+}
+
+export interface IdentityEvent {
+  id: string;
+  createdAt: string;
+  actorType: ActorType;
+  actorId: string | null;
+  credentialId: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  projectId: string | null;
+  result: IdentityResult;
+  reason: DenialReason | null;
+  requestId: string | null;
+  metadata: Record<string, unknown>;
+  userAgent: string | null;
+  remoteAddr: string | null;
+}
+
+/**
+ * Everything an authorization decision is allowed to consider.
+ *
+ * Assembled by the authentication step from server-held rows only. Nothing a
+ * caller sent contributes to it — not a header naming a user, not a body field
+ * naming a project, not an id in a path. That is what makes acting as somebody
+ * else impossible rather than merely discouraged.
+ */
+export interface Principal {
+  type: PrincipalType;
+  id: string;
+  /** For a person their email, for a worker its canonical name. */
+  handle: string;
+  displayName: string;
+  /** Brain-wide administration. Always false for a worker. */
+  isBrainAdmin: boolean;
+  mustChangePassword: boolean;
+  /** The session id or worker-credential id this request authenticated with. */
+  credentialId: string;
+  authMethod: AuthMethod;
+  /** Live memberships only; a revoked one is not in here at all. */
+  memberships: ProjectMembership[];
+  /** Correlates every audit row written while serving this request. */
+  requestId: string;
 }

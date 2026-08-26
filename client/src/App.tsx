@@ -19,8 +19,9 @@ import type {
   ReconcileIssue,
   ReconcileReport,
 } from '../../server/domain/types.ts';
-import type { HealthResponse } from './lib/api.ts';
+import type { HealthResponse, SessionUser } from './lib/api.ts';
 import { Api, ApiError } from './lib/api.ts';
+import { SignIn } from './components/SignIn.tsx';
 import { Pill } from './components/Badge.tsx';
 import { ImportPanel } from './components/ImportPanel.tsx';
 import { SourceReview } from './components/SourceReview.tsx';
@@ -86,6 +87,14 @@ function summariseMigrations(health: HealthResponse | null): string {
 }
 
 export default function App(): JSX.Element {
+  /**
+   * Who is signed in, as far as this tab knows.
+   *
+   * `undefined` means "not asked yet", which is a third state and a necessary
+   * one: rendering the sign-in form while the answer is still in flight makes
+   * every reload flash a login screen at somebody who is already signed in.
+   */
+  const [user, setUser] = useState<SessionUser | null | undefined>(undefined);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
   const [project, setProject] = useState<Project | null>(null);
@@ -171,8 +180,63 @@ export default function App(): JSX.Element {
   useEffect(() => {
     if (bootedRef.current) return;
     bootedRef.current = true;
-    void boot();
+    void (async (): Promise<void> => {
+      // Who am I, before anything else. Every other call below is behind the
+      // gate, so asking them first would just produce a 401 and a misleading
+      // "cannot reach the server".
+      let session: Awaited<ReturnType<typeof Api.session>>;
+      try {
+        session = await Api.session();
+      } catch (err) {
+        setUser(null);
+        setBootError(describeError(err));
+        setLoading(false);
+        return;
+      }
+      setUser(session.user);
+      if (!session.authenticated || session.user?.mustChangePassword) {
+        setLoading(false);
+        return;
+      }
+      await boot();
+    })();
   }, [boot]);
+
+  /**
+   * Signed in — or finished choosing a password.
+   *
+   * The project is only loaded once the account is fully usable; an account
+   * that still owes a password change is refused by the server for everything
+   * except the change itself, so fetching a project here would produce a 403
+   * behind the form.
+   */
+  const handleSignedIn = useCallback(
+    (signedIn: SessionUser): void => {
+      setUser(signedIn);
+      setBootError(null);
+      if (signedIn.mustChangePassword) return;
+      setLoading(true);
+      void boot();
+    },
+    [boot],
+  );
+
+  const handleSignOut = useCallback((): void => {
+    void (async (): Promise<void> => {
+      try {
+        await Api.logout();
+      } finally {
+        // Whatever the server said, this tab is done: the cookie is gone or the
+        // session is revoked, and continuing to render a project would be
+        // showing state nobody can refresh.
+        setUser(null);
+        setProject(null);
+        setLayers([]);
+        setPlan(null);
+        bootedRef.current = false;
+      }
+    })();
+  }, []);
 
   const handleChanged = useCallback((): void => {
     void refresh();
@@ -262,12 +326,26 @@ export default function App(): JSX.Element {
 
   const bannerAction = banner?.action ?? null;
 
+  // Still asking.
+  if (user === undefined) {
+    return <div className="app app--booting">Loading…</div>;
+  }
+
+  // Not signed in, or signed in with a password that is not yet theirs. Both
+  // are the sign-in screen's business, and neither renders any project data —
+  // there is none in this component to render, because nothing was fetched.
+  if (user === null || user.mustChangePassword) {
+    return <SignIn onSignedIn={handleSignedIn} pendingUser={user} />;
+  }
+
   return (
     <div className="app">
       <TopBar
         project={project}
         plan={plan}
         health={health}
+        user={user}
+        onSignOut={handleSignOut}
         onImport={() => setImportOpen(true)}
         onSources={() => setSourcesOpen(true)}
         onWhatNext={() => void handleWhatNext()}
