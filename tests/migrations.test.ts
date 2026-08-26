@@ -144,6 +144,46 @@ describe('migrations', () => {
     expect(orchestrationColumns).toContain('auto_approve');
   });
 
+  it('does not mistake a Windows checkout for an edited migration', async () => {
+    // The failure this exists for, reproduced: the Brain was first migrated
+    // from a Windows laptop, where Git had rewritten LF to CRLF on checkout, so
+    // the checksum recorded in the database was taken over CRLF bytes. The
+    // container then read the identical commit with LF, computed a different
+    // number, and refused to boot naming a file nobody had touched.
+    //
+    // The guard has to keep refusing a real edit and stop refusing this.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-crlf-'));
+    const body = 'CREATE TABLE crlf_check (id TEXT PRIMARY KEY);\nCREATE INDEX i1 ON crlf_check (id);\n';
+    fs.writeFileSync(path.join(dir, '001_only.sql'), body, 'utf8');
+
+    const dbPath = path.join(dir, 'brain.db');
+    await closeDatabase();
+    await initDatabase({ dbPath, migrationsDir: dir });
+
+    // Rewrite the file exactly as a Windows checkout would present it. Not a
+    // simulated checksum — the actual bytes, run through the actual loader.
+    fs.writeFileSync(path.join(dir, '001_only.sql'), body.replace(/\n/g, '\r\n'), 'utf8');
+
+    await closeDatabase();
+    // Must not throw: the content is the same, only the line endings differ.
+    const second = await initDatabase({ dbPath, migrationsDir: dir });
+    expect(second.migrations.schemaVersion).toBe(1);
+
+    // And a genuine edit is still refused.
+    fs.writeFileSync(
+      path.join(dir, '001_only.sql'),
+      `${body}CREATE INDEX i2 ON crlf_check (id);\n`,
+      'utf8',
+    );
+    await closeDatabase();
+    await expect(initDatabase({ dbPath, migrationsDir: dir })).rejects.toThrow(
+      /changed after it was applied/i,
+    );
+
+    await closeDatabase();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   it('enforces foreign keys and WAL mode', async () => {
     await initDatabase({ dbPath: tempDbPath() });
     const fk = await getDb().get<{ foreign_keys: number }>('PRAGMA foreign_keys');

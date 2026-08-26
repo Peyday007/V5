@@ -1,0 +1,34 @@
+# Line endings, decided here rather than by whichever machine cloned the repo.
+#
+# This is not tidiness. `server/db/migrate.ts` checksums every migration so that
+# editing an applied one stops the boot, and that checksum used to be taken over
+# the bytes on disk. Git for Windows rewrites LF to CRLF on checkout, so the
+# same commit produced different bytes on a Windows laptop and in a Linux
+# container — and the first deploy that involved both refused to start, naming a
+# migration nobody had touched.
+#
+# The checksum now normalises line endings, so that specific failure cannot
+# recur. This file is the other half: it stops the working tree from diverging
+# in the first place, for every tool that reads these files rather than only the
+# one that was taught to cope.
+* text=auto eol=lf
+
+# Explicit for the files where it has already cost something, and for the ones
+# whose bytes are the point.
+*.sql   text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+Dockerfile text eol=lf
+*.toml  text eol=lf
+
+# Binary, and never to be touched.
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.docx  binary

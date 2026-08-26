@@ -53,9 +53,8 @@ interface MigrationFile {
   checksum: string;
 }
 
-/** Stable, dependency-free checksum used to detect edited migrations. */
-function checksum(text: string): string {
-  // FNV-1a, 64-bit, hex encoded.
+/** FNV-1a, 64-bit, hex encoded. Dependency-free and stable across versions. */
+function fnv1a(text: string): string {
   let hash = 0xcbf29ce484222325n;
   const prime = 0x100000001b3n;
   const mask = 0xffffffffffffffffn;
@@ -64,6 +63,49 @@ function checksum(text: string): string {
     hash = (hash * prime) & mask;
   }
   return hash.toString(16).padStart(16, '0');
+}
+
+/**
+ * The line endings a migration is checksummed with, and why it is not simply
+ * the bytes on disk.
+ *
+ * This checksum answers one question — *did somebody edit an applied
+ * migration?* — and for a long time it answered a subtly different one: *are
+ * these the same bytes?* Those are the same question only while the file is
+ * checked out on one operating system.
+ *
+ * They stopped being the same the moment this project had both a Windows
+ * laptop and a Linux container building from one repository. Git for Windows
+ * converts LF to CRLF on checkout, so the laptop applied `001_baseline.sql`
+ * and recorded a checksum over CRLF bytes; the container read the same commit
+ * with LF, computed a different number, and the immutability guard did exactly
+ * what it was built to do — refused to boot, naming a file nobody had touched.
+ *
+ * Measured rather than reasoned about: the recorded value was the CRLF hash of
+ * that file and the "current" value was the LF hash of the identical content.
+ *
+ * So the checksum is taken over content with line endings normalised. A real
+ * edit still changes it; a checkout on a different platform no longer does.
+ */
+function normalizeEndings(text: string): string {
+  return text.replace(/\r\n/g, '\n');
+}
+
+function checksum(text: string): string {
+  return fnv1a(normalizeEndings(text));
+}
+
+/**
+ * Is `recorded` this file, written down before the normalisation above existed?
+ *
+ * Only two encodings can have produced it — the raw bytes as they were on that
+ * machine, and those bytes with CRLF endings — so those are the only two
+ * accepted. Anything else is a genuine edit and must still stop the boot; this
+ * is a compatibility path, not a weakening of the check.
+ */
+function matchesLegacyChecksum(recorded: string, sql: string): boolean {
+  const normalized = normalizeEndings(sql);
+  return recorded === fnv1a(sql) || recorded === fnv1a(normalized.replace(/\n/g, '\r\n'));
 }
 
 export function loadMigrationFiles(dir: string = SQLITE_MIGRATIONS_DIR): MigrationFile[] {
@@ -157,13 +199,29 @@ export async function runMigrations(
 
   for (const file of files) {
     const previous = appliedByVersion.get(file.version);
-    if (previous && previous.checksum !== file.checksum) {
-      throw new Error(
-        `Migration ${file.filename} changed after it was applied ` +
-          `(recorded checksum ${previous.checksum}, current ${file.checksum}). ` +
-          `Applied migrations are immutable — add a new migration instead of editing this one.`,
+    if (!previous || previous.checksum === file.checksum) continue;
+
+    // Same content, recorded before line endings were normalised out of the
+    // checksum. Heal the row rather than refusing: the file has not been
+    // edited, and leaving the old value would mean every future boot from the
+    // other platform hit the same false alarm.
+    if (matchesLegacyChecksum(previous.checksum, file.sql)) {
+      await db.run('UPDATE schema_migrations SET checksum = ? WHERE version = ?', [
+        file.checksum,
+        file.version,
+      ]);
+      console.log(
+        `  ${file.filename}: checksum rewritten to its line-ending-independent form ` +
+          '(the file is unchanged; it was first applied from a checkout with different line endings).',
       );
+      continue;
     }
+
+    throw new Error(
+      `Migration ${file.filename} changed after it was applied ` +
+        `(recorded checksum ${previous.checksum}, current ${file.checksum}). ` +
+        `Applied migrations are immutable — add a new migration instead of editing this one.`,
+    );
   }
 
   const pending = files.filter((f) => !appliedByVersion.has(f.version));
