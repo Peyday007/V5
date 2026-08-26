@@ -53,6 +53,7 @@ import {
   roleAtLeast,
   visibleProjectIds,
 } from '../server/services/identity/policy.ts';
+import { bootstrapFirstAdmin } from '../server/services/identity/bootstrap.ts';
 import type { Principal, ProjectMembership } from '../server/domain/types.ts';
 
 let fixture: TestProject;
@@ -552,6 +553,96 @@ describe('what each route asks for', () => {
     expect(requirementFor('POST', '/api/runs/run_1/fail').scope).toBe('blockers:report');
     // And leaves everything else without one, which is what refuses a worker.
     expect(requirementFor('POST', '/api/layers/lay_1/freeze').scope).toBeUndefined();
+  });
+});
+
+describe('recovering an account nobody ever managed to use', () => {
+  const ENV = ['BRAIN_BOOTSTRAP_ADMIN_EMAIL', 'BRAIN_BOOTSTRAP_ADMIN_PASSWORD'] as const;
+  let saved: Record<string, string | undefined> = {};
+
+  function withBootstrap(email: string, password: string): void {
+    saved = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
+    process.env.BRAIN_BOOTSTRAP_ADMIN_EMAIL = email;
+    process.env.BRAIN_BOOTSTRAP_ADMIN_PASSWORD = password;
+  }
+  function restore(): void {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+
+  it('resets a bootstrapped account that never finished setup, and lets it straight in', async () => {
+    // The lockout this exists for: the password that reached the person was not
+    // the password that reached the database, and the Brain's only account is
+    // the one nobody can sign in to.
+    const stranded = await createUser({
+      email: 'stranded@example.invalid',
+      displayName: 'Stranded',
+      password: 'a-password-nobody-has',
+      isBrainAdmin: true,
+      mustChangePassword: true,
+    });
+
+    withBootstrap('stranded@example.invalid', 'the-operator-chose-this');
+    try {
+      const outcome = await bootstrapFirstAdmin();
+      expect(outcome.reset).toBe(true);
+      expect(outcome.created).toBe(false);
+    } finally {
+      restore();
+    }
+
+    const found = await getPasswordVerifierByEmail('stranded@example.invalid');
+    expect(await verifyPassword('the-operator-chose-this', found!.verifier)).toBe(true);
+    expect(await verifyPassword('a-password-nobody-has', found!.verifier)).toBe(false);
+    // And no second gate on the way back in: the owner just chose this one.
+    expect((await getUser(stranded.id))!.mustChangePassword).toBe(false);
+  });
+
+  it('will not touch an account somebody is actually using', async () => {
+    // The condition that keeps this from being a back door. Once a real password
+    // has been chosen, the path is closed for good.
+    const inUse = await createUser({
+      email: 'inuse@example.invalid',
+      displayName: 'In Use',
+      password: 'chosen-by-its-owner',
+      isBrainAdmin: true,
+      mustChangePassword: false,
+    });
+
+    withBootstrap('inuse@example.invalid', 'an-attempted-takeover');
+    try {
+      const outcome = await bootstrapFirstAdmin();
+      expect(outcome.reset).toBe(false);
+      expect(outcome.created).toBe(false);
+    } finally {
+      restore();
+    }
+
+    const found = await getPasswordVerifierByEmail('inuse@example.invalid');
+    expect(await verifyPassword('chosen-by-its-owner', found!.verifier)).toBe(true);
+    expect(await verifyPassword('an-attempted-takeover', found!.verifier)).toBe(false);
+    expect((await getUser(inUse.id))!.mustChangePassword).toBe(false);
+  });
+
+  it('still refuses a reset password that is too short', async () => {
+    await createUser({
+      email: 'short@example.invalid',
+      displayName: 'Short',
+      password: 'a-real-password-here',
+      isBrainAdmin: true,
+      mustChangePassword: true,
+    });
+    withBootstrap('short@example.invalid', 'tiny');
+    try {
+      const outcome = await bootstrapFirstAdmin();
+      expect(outcome.reset).toBe(false);
+      expect(outcome.reason).toMatch(/at least 12 characters/i);
+      expect(outcome.reason).not.toContain('tiny');
+    } finally {
+      restore();
+    }
   });
 });
 

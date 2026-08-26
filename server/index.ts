@@ -237,6 +237,8 @@ function onListenError(error: NodeJS.ErrnoException): void {
 interface IdentityBanner {
   accounts: boolean;
   bootstrapped: string | null;
+  /** An account that had never been used was reset from the deployment secret. */
+  bootstrapReset: string | null;
   bootstrapNote: string | null;
 }
 
@@ -277,6 +279,15 @@ function logBanner(
     console.log(`    Created the first Brain administrator: ${identity.bootstrapped}`);
     console.log('    It must choose a new password before it can do anything else.');
     console.log('    Remove BRAIN_BOOTSTRAP_ADMIN_PASSWORD from this deployment now.');
+  } else if (identity.bootstrapReset) {
+    console.log('');
+    console.log(`    Reset the password for ${identity.bootstrapReset}.`);
+    console.log('    That account had been created but never used, so the deployment secret');
+    console.log('    replaced its password. Every session it held has been ended.');
+    console.log('');
+    console.log('    Sign in with it now, then REMOVE BRAIN_BOOTSTRAP_ADMIN_PASSWORD and');
+    console.log('    BRAIN_BOOTSTRAP_ADMIN_EMAIL: a password that lives in a deployment');
+    console.log('    secret is a password two systems know.');
   } else if (identity.bootstrapNote) {
     console.log('');
     console.log(`    Bootstrap administrator not created: ${identity.bootstrapNote}`);
@@ -465,7 +476,8 @@ async function main(): Promise<void> {
   const identity: IdentityBanner = {
     accounts: await hasAnyAccount(),
     bootstrapped: bootstrap.created ? bootstrap.email : null,
-    bootstrapNote: bootstrap.created ? null : bootstrap.reason,
+    bootstrapReset: bootstrap.reset ? bootstrap.email : null,
+    bootstrapNote: bootstrap.created || bootstrap.reset ? null : bootstrap.reason,
   };
 
   const server = buildApp(gate).listen(PORT, () => logBanner(migrations, gate, identity));
