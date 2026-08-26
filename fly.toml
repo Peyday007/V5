@@ -45,9 +45,10 @@ primary_region = "iad"        # pick the region nearest your Supabase project
 
   # One machine, deliberately, for now. The queues are per-instance and nothing
   # yet coordinates two of them: a second machine would run its own extraction
-  # queue against the same database. Step 4 adds the leases that make more than
-  # one safe. Postgres and the bucket are already shared, so scaling out later
-  # is a configuration change rather than a migration.
+  # queue against the same database. Step 5 adds the atomic claiming and leases
+  # that make more than one safe, and Step 11 is where a second one is actually
+  # run. Postgres and the bucket are already shared, so scaling out later is a
+  # configuration change rather than a migration. See docs/ROADMAP.md.
   [http_service.concurrency]
     type = "requests"
     # Generous: SSE connections are long-lived and nearly free, and counting

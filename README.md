@@ -79,7 +79,15 @@ safe to re-run.
 
 **[docs/CLOUD.md](docs/CLOUD.md)** covers how cloud mode works — configuration,
 migration, verification and recovery. **[docs/DEPLOY.md](docs/DEPLOY.md)** is the
-runbook for standing up the first hosted Brain on Supabase and Fly.io.
+runbook for standing up the first hosted Brain on Supabase and Fly.io, and
+**[docs/STEP-3-EVIDENCE.md](docs/STEP-3-EVIDENCE.md)** records what the first
+deployment actually proved and what it did not.
+
+A hosted Brain runs **one** instance behind **one** shared credential. Both are
+deliberate and both are temporary: identities are Step 4, and the atomic
+claiming and leases that make a second instance safe are Step 5.
+**[docs/ROADMAP.md](docs/ROADMAP.md)** is the register of which step owns what,
+and the separations in it are load-bearing rather than cosmetic.
 
 ---
 

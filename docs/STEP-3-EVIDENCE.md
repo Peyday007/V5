@@ -18,7 +18,7 @@ The claim being made is narrow and it is the only one worth making:
 | | |
 |---|---|
 | Application | `northline-brain` on Fly.io, region `iad` |
-| Machines | 1, deliberately (`--ha=false`; queues are per-instance until Step 4) |
+| Machines | 1, deliberately (`--ha=false`; queues are per-instance until Step 5's claiming and leases) |
 | URL | `https://northline-brain.fly.dev` |
 | Database | Supabase Postgres, session pooler, `aws-0-us-east-2.pooler.supabase.com:5432/postgres` |
 | Documents | Supabase Storage, **private** bucket `brain`, project `<project-ref>.supabase.co` |
@@ -80,7 +80,8 @@ Listing these is the point of the document.
   If an archive exists on another machine, Part 2 of `docs/DEPLOY.md` should be
   run from there.
 - **More than one instance.** One machine, on purpose. `fly scale count 2` was
-  not run and must not be until Step 4's leases exist.
+  not run and must not be until Step 5's atomic claiming and leases exist; Step
+  11 is where a second worker is actually run.
 - **The real Antigravity worker inside the container.** Unchanged and still
   UNVERIFIED; the deployed Brain reports `RESEARCH: SETUP REQUIRED`.
 - **Sustained operation.** This is hours old. Nothing here says anything about
@@ -124,6 +125,33 @@ being suspended. Roughly $2–5/month, plus Supabase's free tier.
   users, no roles, no revocation of one person without changing it for all.
 - **One uncoordinated instance.** The extraction and research queues are
   per-instance.
-- **No worker identities, no leases, no MCP.** Deliberately — Step 4.
+- **No worker identities** — Step 4. **No distributed queue, atomic claiming,
+  leases or heartbeats** — Step 5. **No idempotency guarantees for concurrent
+  effects** — Step 6. **No remote MCP** — Step 7. **No connected worker** —
+  Step 8. **No fleet controls** — Step 11.
 
-`server/routes/access.ts` should be **deleted** when Step 4 lands, not extended.
+Those are separate steps and the separation is deliberate. Identity is not
+concurrency: knowing which worker is calling does nothing to stop two of them
+claiming one job, and a lease that stops them starting it does nothing to make
+its effects safe to apply twice. The register is in [`ROADMAP.md`](ROADMAP.md).
+
+`server/routes/access.ts` should be **deleted** when **Step 4** lands, not
+extended. Step 4 is identity, credentials, authorization and the carry-forward
+register — and nothing about concurrency.
+
+---
+
+## What comes next
+
+| Step | What it contains |
+|---|---|
+| 4 | Identities, credentials, authorization, and the explicit carry-forward register |
+| 5 | Distributed queue, atomic claiming, leases, and heartbeats |
+| 6 | Idempotency and safe concurrent effects |
+| 7 | Remote MCP |
+| 8 | Connect one Claude Max worker |
+| 9 | Manual end-to-end research packet |
+| 10 | Scheduled firing and interruption recovery |
+| 11 | Additional workers and fleet controls |
+
+Step 3 is closed. None of the above is started.

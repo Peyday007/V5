@@ -313,9 +313,14 @@ accepted, so a script does not have to base64 anything.
 
 **This is deliberately coarse and deliberately temporary.** One shared
 credential; everyone who has it sees everything. It exists so the first Cloud
-Brain is not public. Step 4 replaces it with real identities — per-worker
-credentials, per-user authorisation, revocation — and `server/routes/access.ts`
-should be deleted then, not extended.
+Brain is not public. **Step 4** replaces it with real identities — per-worker
+credentials, per-user authorisation, revocation, and the carry-forward register
+— and `server/routes/access.ts` should be deleted then, not extended.
+
+Step 4 is identity and nothing else. Knowing which worker is calling does not
+make it safe for two of them to claim the same job; that is **Step 5**, which
+adds the distributed queue, atomic claiming, leases and heartbeats. The full
+register is in [`ROADMAP.md`](ROADMAP.md).
 
 ---
 

@@ -348,8 +348,9 @@ fly deploy --ha=false
 `--ha=false` is not optional here. Left alone, Fly creates **two** machines for
 redundancy, and two machines is currently wrong: the extraction and research
 queues are per-instance and nothing coordinates them, so the second one would
-run its own queue against the same database. Step 4 adds the leases that make
-more than one safe.
+run its own queue against the same database. Step 5 adds the atomic claiming
+and leases that make more than one safe; Step 11 is where a second one is
+actually run.
 
 The build runs `npm run build`, so a type error fails the image rather than the
 deployment. First deploy takes a few minutes; the image installs poppler and
@@ -450,7 +451,8 @@ For the strongest version, run a second machine briefly
 (`fly scale count 2`, check, then `fly scale count 1`) and confirm it sees
 everything the first one wrote. Do not leave two running: the extraction and
 research queues are per-instance and nothing coordinates them yet — that is
-Step 4's job.
+Step 5's job (claiming and leases), and Step 11 is where more than one worker
+is actually run.
 
 ---
 
@@ -487,11 +489,16 @@ Worth being precise, so nobody mistakes the gate for a security model:
   are no users, no roles, and no way to revoke one person's access without
   changing it for all of them.
 - **One instance.** The background queues are per-instance and uncoordinated.
-- **No worker identities, no leases, no MCP.** Deliberately — that is Step 4.
+- **No worker identities** — Step 4. **No distributed queue, atomic claiming,
+  leases or heartbeats** — Step 5. **No idempotency guarantees for concurrent
+  effects** — Step 6. **No remote MCP** — Step 7. **No connected worker** —
+  Step 8. **No fleet** — Step 11. Those are separate steps and the separation
+  is deliberate; see [`ROADMAP.md`](ROADMAP.md).
 
 The gate exists so the first Cloud Brain is not public while the real
-authorisation system is built. When Step 4 lands,
-`server/routes/access.ts` should be deleted rather than extended.
+authorisation system is built. When **Step 4** lands,
+`server/routes/access.ts` should be deleted rather than extended — Step 4 is
+identity and authorization only, and adds nothing about concurrency.
 
 ---
 

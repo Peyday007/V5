@@ -28,8 +28,14 @@
  * This is a **temporary, coarse gate**: one shared credential, everyone who has
  * it sees everything. It exists so the first Cloud Brain is not public while the
  * real thing is built. Step 4 replaces it with actual identities — per-worker
- * credentials, per-user authorisation, and revocation — and this file should be
- * deleted when that lands, not extended.
+ * credentials, per-user authorisation, revocation, and the carry-forward
+ * register — and this file should be deleted when that lands, not extended.
+ *
+ * Step 4 is identity and authorization, and nothing else. Knowing which worker
+ * is calling does not make it safe for two of them to claim one job: that is
+ * Step 5's distributed queue, atomic claiming, leases and heartbeats, and
+ * making the *effects* of a re-run job safe is Step 6's again. Nothing in this
+ * file should ever grow toward either of them. See `docs/ROADMAP.md`.
  */
 import crypto from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
