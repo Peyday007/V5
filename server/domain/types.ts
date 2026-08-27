@@ -2494,6 +2494,18 @@ export const WORKER_SCOPES = [
   'checkpoints:write',
   'blockers:report',
   'work:complete',
+
+  // Step 5 — the distributed queue. Each of these permits an operation that
+  // exists and is enforced today; none is reserved for a later step.
+  //
+  // Administering the queue — enqueueing, cancelling — is deliberately absent.
+  // That is a human authority derived from the project roles Step 4 already
+  // defines, and giving a worker a scope for it would let a leaked worker
+  // credential create work for the fleet rather than only perform it.
+  'queue:read',
+  'queue:claim',
+  'queue:heartbeat',
+  'queue:complete',
 ] as const;
 export type WorkerScope = (typeof WORKER_SCOPES)[number];
 
@@ -2744,3 +2756,180 @@ export interface Principal {
   /** Correlates every audit row written while serving this request. */
   requestId: string;
 }
+
+// ---------------------------------------------------------------------------
+// THE DISTRIBUTED WORK QUEUE (Step 5)
+//
+// A work item is a unit of dispatchable work. A lease is one period of one
+// worker owning it. Ownership is proven by a lease id and a fencing generation
+// together — never by a worker saying which item it holds.
+// ---------------------------------------------------------------------------
+
+export const WORK_ITEM_STATES = ['QUEUED', 'LEASED', 'SUCCEEDED', 'FAILED', 'CANCELLED'] as const;
+export type WorkItemState = (typeof WORK_ITEM_STATES)[number];
+
+/** The states nothing may move out of. */
+export const TERMINAL_WORK_STATES: readonly WorkItemState[] = ['SUCCEEDED', 'FAILED', 'CANCELLED'];
+
+export const LEASE_OUTCOMES = [
+  'SUCCEEDED',
+  'FAILED',
+  /** The lease ran out before the worker finished, and the item was reclaimed. */
+  'EXPIRED',
+  'CANCELLED',
+  /** The worker gave it back deliberately. */
+  'RELEASED',
+] as const;
+export type LeaseOutcome = (typeof LEASE_OUTCOMES)[number];
+
+/**
+ * Why an attempt failed, as a closed set.
+ *
+ * A category rather than a message, because this is the field the planner and
+ * the metrics read. The free-text detail is stored beside it, bounded and
+ * sanitized, and nothing branches on it.
+ */
+export const WORK_FAILURE_CATEGORIES = [
+  'WORKER_ERROR',
+  'INVALID_INPUT',
+  'DEPENDENCY_UNAVAILABLE',
+  'TIMEOUT',
+  'LEASE_EXPIRED',
+  'ATTEMPTS_EXHAUSTED',
+  'CANCELLED',
+  'UNKNOWN',
+] as const;
+export type WorkFailureCategory = (typeof WORK_FAILURE_CATEGORIES)[number];
+
+export interface WorkItemRow {
+  id: string;
+  project_id: string;
+  work_type: string;
+  state: string;
+  priority: number;
+  available_at: string;
+  payload: string;
+  required_scopes: string;
+  target_worker_id: string | null;
+  attempt_count: number;
+  max_attempts: number;
+  lease_generation: number;
+  lease_id: string | null;
+  worker_id: string | null;
+  lease_credential_id: string | null;
+  leased_at: string | null;
+  heartbeat_at: string | null;
+  lease_expires_at: string | null;
+  result_ref: string | null;
+  result_summary: string | null;
+  failure_category: string | null;
+  cancelled_reason: string | null;
+  correlation_id: string | null;
+  created_by_type: string;
+  created_by_id: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface WorkLeaseRow {
+  id: string;
+  work_item_id: string;
+  project_id: string;
+  attempt_number: number;
+  lease_generation: number;
+  worker_id: string;
+  credential_id: string | null;
+  claimed_at: string;
+  expires_at: string;
+  last_heartbeat_at: string | null;
+  heartbeat_count: number;
+  ended_at: string | null;
+  outcome: string | null;
+  detail: string | null;
+  request_id: string | null;
+}
+
+export interface WorkItem {
+  id: string;
+  projectId: string;
+  workType: string;
+  state: WorkItemState;
+  priority: number;
+  availableAt: string;
+  payload: Record<string, unknown>;
+  requiredScopes: WorkerScope[];
+  targetWorkerId: string | null;
+  attemptCount: number;
+  maxAttempts: number;
+  /** The fencing token. Advances on every claim and every cancellation. */
+  leaseGeneration: number;
+  leaseId: string | null;
+  workerId: string | null;
+  leaseCredentialId: string | null;
+  leasedAt: string | null;
+  heartbeatAt: string | null;
+  leaseExpiresAt: string | null;
+  resultRef: string | null;
+  resultSummary: string | null;
+  failureCategory: WorkFailureCategory | null;
+  cancelledReason: string | null;
+  correlationId: string | null;
+  createdByType: ActorType;
+  createdById: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
+export interface WorkLease {
+  id: string;
+  workItemId: string;
+  projectId: string;
+  attemptNumber: number;
+  leaseGeneration: number;
+  workerId: string;
+  credentialId: string | null;
+  claimedAt: string;
+  expiresAt: string;
+  lastHeartbeatAt: string | null;
+  heartbeatCount: number;
+  endedAt: string | null;
+  outcome: LeaseOutcome | null;
+  detail: string | null;
+  requestId: string | null;
+}
+
+/**
+ * What a worker is handed when it wins a claim.
+ *
+ * The lease id and generation are in here because every subsequent operation
+ * has to present them back. They are not secrets — they prove nothing on their
+ * own, because the server also checks that the authenticated worker is the one
+ * the lease was issued to.
+ */
+export interface ClaimedWork {
+  workItemId: string;
+  projectId: string;
+  workType: string;
+  payload: Record<string, unknown>;
+  priority: number;
+  attemptNumber: number;
+  maxAttempts: number;
+  leaseId: string;
+  leaseGeneration: number;
+  leaseExpiresAt: string;
+  correlationId: string | null;
+}
+
+/** Why an ownership-proving operation was refused. */
+export const LEASE_REJECTIONS = [
+  'NOT_FOUND',
+  'NOT_LEASED',
+  'NOT_THE_OWNER',
+  'STALE_GENERATION',
+  'LEASE_EXPIRED',
+  'ALREADY_TERMINAL',
+  'CANCELLED',
+] as const;
+export type LeaseRejection = (typeof LEASE_REJECTIONS)[number];

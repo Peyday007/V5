@@ -198,6 +198,27 @@ const OVERRIDES: Override[] = [
   { pattern: /^\/api\/runs\/[^/]+\/fail$/, method: 'POST', level: 'WRITE', scope: 'blockers:report' },
   { pattern: /^\/api\/layers\/[^/]+\/research$/, method: 'POST', level: 'WRITE', scope: 'research:propose' },
   { pattern: /^\/api\/research\/[^/]+\/review$/, method: 'POST', level: 'WRITE', scope: 'research:propose' },
+
+  // ---------------------------------------------------------------------
+  // Step 5 — the distributed queue
+  // ---------------------------------------------------------------------
+  //
+  // Creating and cancelling work is ADMIN, and names no worker scope, so a
+  // worker is refused outright however many scopes it holds. A worker may only
+  // take work that already exists and report what happened to it.
+  //
+  // The claim, heartbeat, completion and failure routes address a work item
+  // rather than a project, so their project is resolved from the item's own row
+  // before this requirement is applied — a worker cannot reach another
+  // project's item by guessing its id, because the resolver authorizes the
+  // project the row actually belongs to.
+  { pattern: /^\/api\/projects\/[^/]+\/work$/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/work\/[^/]+\/cancel$/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/work(\/|$)/, method: 'GET', level: 'READ', scope: 'queue:read' },
+  { pattern: /^\/api\/work\/claim$/, method: 'POST', level: 'WRITE', scope: 'queue:claim' },
+  { pattern: /^\/api\/work\/[^/]+\/heartbeat$/, method: 'POST', level: 'WRITE', scope: 'queue:heartbeat' },
+  { pattern: /^\/api\/work\/[^/]+\/(complete|fail|release)$/, method: 'POST', level: 'WRITE', scope: 'queue:complete' },
+  { pattern: /^\/api\/work\/[^/]+$/, method: 'GET', level: 'READ', scope: 'queue:read' },
 ];
 
 export interface Requirement {

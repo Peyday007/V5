@@ -129,7 +129,11 @@ There must be no workflow where the user has to remember "now go update the data
 22. No secret stored in a form it can be recovered from, and no credential in a
     log, an audit row, a response, an error or a URL.
 23. No resource refused in a way that distinguishes "you may not" from "it is
-    not there".
+    not there" — including the body of the refusal, not only its status.
+24. No two workers holding a valid lease on one work item, and no queue-state
+    change without proving current ownership in the same statement that makes it.
+25. No claim treated as permission to perform an effect that is unsafe to repeat,
+    until Step 6's idempotency exists.
 
 ## 8. Model prose never mutates project state.
 
@@ -435,6 +439,40 @@ worth having if it is honest about which it is doing.
 - The migration into the cloud is a copy. It never writes to the local source,
   never deletes it, and success triggers no cleanup — the local Brain stays the
   recoverable original until a person archives it themselves.
+
+## 19. Ownership of queued work is decided by the database, in one statement.
+
+Step 5's queue (`server/repos/workQueue.ts`, `docs/QUEUE.md`) hands work to
+authenticated workers across more than one Brain instance. Its whole design is
+one sentence: **a claim is a compare-and-swap on `lease_generation`.**
+
+- Two workers may both read generation 7 and both try to take the item. The
+  `UPDATE` says `WHERE lease_generation = 7`, so exactly one matches. A losing
+  claim is an ordinary outcome, not an error.
+- The generation is also the fencing token. Heartbeat, complete, fail and
+  release are each a single guarded `UPDATE` carrying the whole proof — item,
+  lease id, generation, the worker id **from the authenticated principal**, the
+  `LEASED` state, and an unexpired lease. Never read-then-write; there is no
+  window for a race to live in.
+- Never infer ownership from a worker saying it owns something. A body field
+  naming a worker is ignored.
+- An expired lease is claimable work, so recovery never depends on one process
+  staying alive. The sweeper is for metrics; delete it and nothing breaks.
+- Cancellation advances the generation, which is what makes it win. A late
+  completion from the previous owner matches nothing.
+- A lease exists **iff** the item is `LEASED`, enforced by a CHECK constraint,
+  and a generation is issued once per item, enforced by a UNIQUE index. The
+  invariants the comments rely on are impossible, not merely untested.
+- Lease decisions use the Brain's clock through `queueNow()` — never a worker's.
+  The assumption is written down there and nowhere else.
+
+**The queue is at-least-once, not exactly-once.** A lease can expire after a
+worker performed an effect and before it recorded completion, so the item is
+redelivered and the effect repeats. Fencing protects queue state; protecting the
+effect is Step 6. Until Step 6 exists the only registered work type is
+`SYNTHETIC_ECHO`, and a successful claim is not permission to perform an
+unprotected external effect. A queue item describes Brain-authorized work; there
+is no work type meaning "run this".
 
 ---
 

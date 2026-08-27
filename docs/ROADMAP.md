@@ -16,11 +16,14 @@ the tag in git is the record of *when*, this file is the record of *what*.
 | 1–2 | The Brain itself: state engine and planner, the primary/adversarial/judge audit pipeline, document understanding and OCR, the staged research engine, archive ingestion | — |
 | **3** | **Off one computer.** Postgres and Supabase Storage behind one repository layer, `migrate:cloud`, the access gate, the container, the deployment | `step-3-cloud-brain-foundation` |
 | **4** | **Who is asking, and may they.** Human sessions, worker identities and credentials, roles, scopes, project membership, execution-time authorization, the identity audit | `step-4-identities-access-control` |
+| **5** | **Who owns this work, right now.** Durable queued work, atomic claiming by compare-and-swap, time-bounded leases, fencing generations, heartbeats, expiry and reclaim, bounded retry, cancellation, attempt history | `step-5-distributed-queue-leases` |
 
 Step 3's evidence is in [`STEP-3-EVIDENCE.md`](STEP-3-EVIDENCE.md); Step 4's is
 in [`STEP-4-EVIDENCE.md`](STEP-4-EVIDENCE.md), and the model it built is
-described in [`IDENTITY.md`](IDENTITY.md). Both evidence files say what was
-proven, what merely passes its tests, and what nobody has run.
+described in [`IDENTITY.md`](IDENTITY.md). Step 5's evidence is in
+[`STEP-5-EVIDENCE.md`](STEP-5-EVIDENCE.md) and its design in
+[`QUEUE.md`](QUEUE.md). Each evidence file says what was proven, what merely passes its tests, and what
+nobody has run.
 
 ## Ahead
 
@@ -29,7 +32,6 @@ order is a dependency order, not a preference.
 
 | Step | What it contains |
 |---|---|
-| **5** | Distributed queue, atomic claiming, leases, and heartbeats |
 | **6** | Idempotency and safe concurrent effects |
 | **7** | Remote MCP |
 | **8** | Connect one Claude Max worker |
@@ -57,11 +59,26 @@ order is a dependency order, not a preference.
   Brain runs a single instance deliberately: the extraction and research queues
   are per-instance and nothing coordinates them.
 
-## Why one instance, until Step 5 and Step 11
+## Why one instance, until Step 11
 
-`fly.toml` pins `min_machines_running = 1` and `auto_stop_machines = false`, and
-deployment uses `--ha=false`. That is not a cost decision. Two machines today
-would each run their own extraction and research queue against one shared
-database, with nothing preventing both from claiming the same work. Step 5 adds
-the atomic claiming and leases that make a second instance safe; Step 11 is
-where a second one is actually run.
+`fly.toml` pins one machine and `--ha=false` is passed on every deploy.
+
+Until Step 5 that was a correctness requirement: the research and extraction
+queues were arrays inside one process, so a second machine would have kept its
+own and both would have started the same work.
+
+Step 5 built the substrate that makes a second machine safe for *queued work* —
+durable rows, atomic claiming, leases and fencing — and proved it against real
+Postgres with concurrent connections. It did **not** turn a second machine on,
+and two things still hold it back:
+
+- The research and extraction pipelines were deliberately **not** migrated onto
+  the queue, because the queue is at-least-once and moving quota-spending work
+  onto it before Step 6 would mean a redelivered job spending the allowance
+  twice. Those two queues are still per-instance.
+- The sign-in throttle is still an in-memory map per process. With several
+  instances each brakes separately, so the effective limit multiplies by the
+  instance count. Harmless at one machine; wrong at two.
+
+Both are Step 11's to resolve, at the point a second machine is actually run.
+

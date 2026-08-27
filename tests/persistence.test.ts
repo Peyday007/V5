@@ -529,6 +529,8 @@ onPostgres('against a real Postgres', () => {
       'research_fragments',
       'research_passes',
       'research_claims',
+      'work_items',
+      'work_leases',
     ]) {
       expect(pgTables, expected).toContain(expected);
     }
@@ -573,6 +575,11 @@ onPostgres('against a real Postgres', () => {
         'users(email)',
         'worker_credentials(prefix)',
         'workers(name)',
+        // Step 5. This one is not bookkeeping: it is the statement that a
+        // fencing generation is issued exactly once per work item. If the
+        // claim logic above it were wrong and two workers both believed they
+        // had won, the second insert would fail rather than produce two owners.
+        'work_leases(work_item_id,lease_generation)',
       ].sort(),
     );
   });

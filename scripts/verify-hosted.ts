@@ -65,6 +65,8 @@ import {
   setWorkerStatus,
 } from '../server/repos/identity.ts';
 import { createProject, getProjectBySlug, listProjects, updateProject } from '../server/repos/projects.ts';
+import { cancelWork, enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
+import { getDb } from '../server/db/database.ts';
 import type { Project } from '../server/domain/types.ts';
 
 /* ------------------------------------------------------------------------ */
@@ -177,6 +179,9 @@ interface Fixtures {
   expiredCredential: string;
   expiredCredentialId: string;
   workerId: string;
+  /** A second, independent worker, so a hosted claim can actually be a race. */
+  rivalCredential: string;
+  rivalWorkerId: string;
 }
 
 async function setUp(): Promise<Fixtures> {
@@ -245,7 +250,7 @@ async function setUp(): Promise<Fixtures> {
     // Read only. A worker that could write would be testing a wider grant than
     // the narrowest one that proves authentication works.
     role: null,
-    scopes: ['project:read', 'documents:read'],
+    scopes: ['project:read', 'documents:read', 'queue:read', 'queue:claim', 'queue:heartbeat', 'queue:complete'],
     grantedByType: 'SYSTEM',
     grantedById: 'verify-hosted',
   });
@@ -268,7 +273,39 @@ async function setUp(): Promise<Fixtures> {
     issuedById: 'verify-hosted',
   });
 
+  // A second worker with the same grant. Two credentials competing over the
+  // public edge is the only way to prove atomic claiming *hosted*: one worker
+  // claiming twice would pass against a queue with no concurrency control at
+  // all.
+  const rival =
+    (await getWorkerByName(`${WORKER_NAME}-rival`)) ??
+    (await createWorker({
+      name: `${WORKER_NAME}-rival`,
+      displayName: 'Hosted verification worker (rival)',
+      workerType: 'GENERIC',
+      description: 'Created by scripts/verify-hosted.ts. Disabled between runs.',
+      createdByType: 'SYSTEM',
+      createdById: 'verify-hosted',
+    }));
+  await setWorkerStatus(rival.id, 'ACTIVE');
+  await grantMembership({
+    projectId: scope.id,
+    principalType: 'WORKER',
+    principalId: rival.id,
+    role: null,
+    scopes: ['project:read', 'documents:read', 'queue:read', 'queue:claim', 'queue:heartbeat', 'queue:complete'],
+    grantedByType: 'SYSTEM',
+    grantedById: 'verify-hosted',
+  });
+  const rivalIssued = await issueWorkerCredential({
+    workerId: rival.id,
+    issuedByType: 'SYSTEM',
+    issuedById: 'verify-hosted',
+  });
+
   return {
+    rivalCredential: rivalIssued.plaintext,
+    rivalWorkerId: rival.id,
     memberPassword,
     memberId,
     scope,
@@ -415,10 +452,15 @@ async function humanAuthorization(fixtures: Fixtures, cookie: string): Promise<v
     );
 
     const missing = await call('/api/projects/prj_does_not_exist_at_all', { cookie });
+    // The body as well as the status. Comparing only the status is what let a
+    // real oracle through: both were 404 while the messages differed, so the
+    // refusal still confirmed which ids exist.
     record(
       'a project that exists-but-is-forbidden is indistinguishable from one that does not exist',
-      denied.status === missing.status,
-      `forbidden ${denied.status} · absent ${missing.status}`,
+      denied.status === missing.status && denied.body === missing.body,
+      denied.status === missing.status && denied.body === missing.body
+        ? `both ${denied.status}, identical body`
+        : `forbidden ${denied.status} ${denied.body} · absent ${missing.status} ${missing.body}`,
     );
 
     const files = await call(`/files/${fixtures.holdout.slug}/documents/anything.pdf`, { cookie });
@@ -539,6 +581,282 @@ async function revocationEndsAccess(fixtures: Fixtures, cookie: string): Promise
   expectStatus('a disabled account cannot sign in', disabledLogin.status, 401);
 }
 
+
+/* ------------------------------------------------------------------------ */
+/* The distributed queue (Step 5)                                            */
+/* ------------------------------------------------------------------------ */
+
+/** Push a lease into the past, the way an unresponsive worker would. */
+async function expireLeaseOf(workItemId: string): Promise<void> {
+  await getDb().run(
+    "UPDATE work_items SET lease_expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?",
+    [workItemId],
+  );
+  await getDb().run(
+    "UPDATE work_leases SET expires_at = '2000-01-01T00:00:00.000Z' WHERE work_item_id = ? AND ended_at IS NULL",
+    [workItemId],
+  );
+}
+
+interface HostedClaim {
+  workItemId: string;
+  leaseId: string;
+  leaseGeneration: number;
+}
+
+async function claimAs(bearer: string, body: Record<string, unknown> = {}): Promise<HostedClaim[]> {
+  const reply = await call('/api/work/claim', { method: 'POST', bearer, body });
+  const claimed = (reply.json as { claimed?: HostedClaim[] } | null)?.claimed;
+  return Array.isArray(claimed) ? claimed : [];
+}
+
+async function queueChecks(fixtures: Fixtures, cookie: string): Promise<void> {
+  console.log('\nThe distributed queue');
+
+  const seed = async (note: string): Promise<string> => {
+    const item = await enqueueWork({
+      projectId: fixtures.scope.id,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { note },
+      requiredScopes: ['queue:claim'],
+      createdByType: 'SYSTEM',
+      createdById: 'verify-hosted',
+    });
+    return item.id;
+  };
+
+  // --- anonymous ---------------------------------------------------------
+  const anonClaim = await call('/api/work/claim', { method: 'POST', body: {} });
+  expectStatus('the queue refuses an anonymous claim', anonClaim.status, 401);
+
+  // --- enqueue authority -------------------------------------------------
+  const workerEnqueue = await call(`/api/projects/${fixtures.scope.id}/work`, {
+    method: 'POST',
+    bearer: fixtures.credential,
+    body: { workType: 'SYNTHETIC_ECHO', payload: { note: 'a worker should not be able to do this' } },
+  });
+  expectStatus('a worker may not create work', workerEnqueue.status, 404);
+
+  const memberEnqueue = await call(`/api/projects/${fixtures.scope.id}/work`, {
+    method: 'POST',
+    cookie,
+    origin: base,
+    body: { workType: 'SYNTHETIC_ECHO', payload: { note: 'nor may an ordinary member' } },
+  });
+  expectStatus('an ordinary member may not create work', memberEnqueue.status, 404);
+
+  const shell = await call(`/api/projects/${fixtures.scope.id}/work`, {
+    method: 'POST',
+    bearer: fixtures.credential,
+    body: { workType: 'RUN_SHELL_COMMAND', payload: { cmd: 'id' } },
+  });
+  record(
+    'there is no work type that means "run this"',
+    shell.status === 404 || shell.status === 400,
+    `${shell.status}`,
+  );
+
+  // --- competing claim ---------------------------------------------------
+  const contested = await seed('two workers want this');
+  const [mine, theirs] = await Promise.all([
+    claimAs(fixtures.credential, { limit: 5 }),
+    claimAs(fixtures.rivalCredential, { limit: 5 }),
+  ]);
+  const winners = [...mine, ...theirs].filter((c) => c.workItemId === contested);
+  record(
+    'two workers racing over the edge produce exactly one lease',
+    winners.length === 1,
+    `${winners.length} lease(s) issued`,
+  );
+  const held = winners[0];
+  if (!held) {
+    record('the contested item was claimed at all', false, 'no worker got it');
+    return;
+  }
+  const owner = mine.some((c) => c.workItemId === contested)
+    ? fixtures.credential
+    : fixtures.rivalCredential;
+  const stranger = owner === fixtures.credential ? fixtures.rivalCredential : fixtures.credential;
+
+  const row = await getWorkItem(contested);
+  record(
+    'the claim advanced the attempt and the fencing generation exactly once',
+    row?.attemptCount === 1 && row?.leaseGeneration === 1,
+    `attempt ${row?.attemptCount}, generation ${row?.leaseGeneration}`,
+  );
+
+  // --- heartbeats --------------------------------------------------------
+  const beat = await call(`/api/work/${contested}/heartbeat`, {
+    method: 'POST',
+    bearer: owner,
+    body: { leaseId: held.leaseId, leaseGeneration: held.leaseGeneration },
+  });
+  expectStatus('the owner may extend its lease', beat.status, 200);
+
+  const foreign = await call(`/api/work/${contested}/heartbeat`, {
+    method: 'POST',
+    bearer: stranger,
+    body: { leaseId: held.leaseId, leaseGeneration: held.leaseGeneration },
+  });
+  expectStatus('another worker may not extend it', foreign.status, 409);
+
+  const guessed = await call(`/api/work/${contested}/heartbeat`, {
+    method: 'POST',
+    bearer: owner,
+    body: { leaseId: 'wls_invented_out_of_thin_air', leaseGeneration: held.leaseGeneration },
+  });
+  expectStatus('a guessed lease id is refused', guessed.status, 409);
+
+  // --- expiry and reclaim ------------------------------------------------
+  await expireLeaseOf(contested);
+  const lateBeat = await call(`/api/work/${contested}/heartbeat`, {
+    method: 'POST',
+    bearer: owner,
+    body: { leaseId: held.leaseId, leaseGeneration: held.leaseGeneration },
+  });
+  expectStatus('an expired lease cannot be revived by a late heartbeat', lateBeat.status, 409);
+
+  const reclaimed = (await claimAs(stranger, { limit: 25 })).find(
+    (c) => c.workItemId === contested,
+  );
+  record(
+    'an expired lease is reclaimed by another worker',
+    reclaimed !== undefined,
+    reclaimed ? 'reclaimed' : 'nobody could take it',
+  );
+  record(
+    'the reclaim issued a higher fencing generation and a new lease id',
+    !!reclaimed &&
+      reclaimed.leaseGeneration > held.leaseGeneration &&
+      reclaimed.leaseId !== held.leaseId,
+    reclaimed ? `generation ${held.leaseGeneration} -> ${reclaimed.leaseGeneration}` : '',
+  );
+
+  // --- the stale owner ---------------------------------------------------
+  for (const [label, route] of [
+    ['complete', 'complete'],
+    ['fail', 'fail'],
+    ['release', 'release'],
+  ] as const) {
+    const stale = await call(`/api/work/${contested}/${route}`, {
+      method: 'POST',
+      bearer: owner,
+      body: { leaseId: held.leaseId, leaseGeneration: held.leaseGeneration, category: 'UNKNOWN' },
+    });
+    expectStatus(`the previous owner may not ${label} after reclaim`, stale.status, 409);
+  }
+
+  if (reclaimed) {
+    const done = await call(`/api/work/${contested}/complete`, {
+      method: 'POST',
+      bearer: stranger,
+      body: {
+        leaseId: reclaimed.leaseId,
+        leaseGeneration: reclaimed.leaseGeneration,
+        summary: 'echoed',
+      },
+    });
+    expectStatus('the current owner may complete it', done.status, 200);
+
+    const again = await call(`/api/work/${contested}/complete`, {
+      method: 'POST',
+      bearer: stranger,
+      body: { leaseId: reclaimed.leaseId, leaseGeneration: reclaimed.leaseGeneration },
+    });
+    expectStatus('completing twice is refused', again.status, 409);
+  }
+
+  // --- retry and terminal failure ---------------------------------------
+  const failing = await enqueueWork({
+    projectId: fixtures.scope.id,
+    workType: 'SYNTHETIC_ECHO',
+    payload: { note: 'this one fails' },
+    requiredScopes: ['queue:claim'],
+    maxAttempts: 1,
+    createdByType: 'SYSTEM',
+    createdById: 'verify-hosted',
+  });
+  const toFail = (await claimAs(fixtures.credential, { limit: 25 })).find(
+    (c) => c.workItemId === failing.id,
+  );
+  if (toFail) {
+    const failed = await call(`/api/work/${failing.id}/fail`, {
+      method: 'POST',
+      bearer: fixtures.credential,
+      body: {
+        leaseId: toFail.leaseId,
+        leaseGeneration: toFail.leaseGeneration,
+        category: 'WORKER_ERROR',
+      },
+    });
+    expectStatus('a worker may report failure', failed.status, 200);
+    const after = await getWorkItem(failing.id);
+    record(
+      'the last attempt failing is terminal, not another retry',
+      after?.state === 'FAILED' && after?.failureCategory === 'ATTEMPTS_EXHAUSTED',
+      `${after?.state} · ${after?.failureCategory}`,
+    );
+  } else {
+    record('the failing item was claimed', false, 'it was not handed out');
+  }
+
+  // --- cancellation ------------------------------------------------------
+  const doomed = await seed('cancel me');
+  const doomedClaim = (await claimAs(fixtures.credential, { limit: 25 })).find(
+    (c) => c.workItemId === doomed,
+  );
+  const cancelled = await cancelWork(doomed, 'hosted verification');
+  record('an administrator can cancel leased work', cancelled.ok, '');
+  if (doomedClaim) {
+    const zombie = await call(`/api/work/${doomed}/complete`, {
+      method: 'POST',
+      bearer: fixtures.credential,
+      body: { leaseId: doomedClaim.leaseId, leaseGeneration: doomedClaim.leaseGeneration },
+    });
+    expectStatus('a cancelled item cannot be completed by its old owner', zombie.status, 409);
+  }
+  const afterCancel = await getWorkItem(doomed);
+  record(
+    'cancellation is terminal and not reclaimable',
+    afterCancel?.state === 'CANCELLED',
+    `${afterCancel?.state}`,
+  );
+
+  // --- isolation ---------------------------------------------------------
+  if (fixtures.holdout) {
+    const theirWork = await enqueueWork({
+      projectId: fixtures.holdout.id,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { note: 'belongs to the real project' },
+      requiredScopes: ['queue:claim'],
+      createdByType: 'SYSTEM',
+      createdById: 'verify-hosted',
+    });
+    const peek = await call(`/api/work/${theirWork.id}`, { bearer: fixtures.credential });
+    const absent = await call('/api/work/wki_no_such_item_exists', { bearer: fixtures.credential });
+    expectStatus('a work item in another project is refused', peek.status, 404);
+    record(
+      'and is indistinguishable from a work item that does not exist',
+      peek.status === absent.status && peek.body === absent.body,
+      peek.body === absent.body ? 'identical body' : `${peek.body} vs ${absent.body}`,
+    );
+
+    const narrowed = await claimAs(fixtures.credential, { projectId: fixtures.holdout.id });
+    record(
+      'a worker cannot claim into a project it is not a member of',
+      narrowed.length === 0,
+      `${narrowed.length} claim(s)`,
+    );
+    await cancelWork(theirWork.id, 'hosted verification cleanup');
+  }
+
+  // --- metrics -----------------------------------------------------------
+  const metrics = await call(`/api/projects/${fixtures.scope.id}/work/metrics`, { cookie });
+  expectStatus('a member may read queue metrics for its own project', metrics.status, 200);
+  const anonMetrics = await call(`/api/projects/${fixtures.scope.id}/work/metrics`);
+  expectStatus('and an anonymous caller may not', anonMetrics.status, 401);
+}
+
 /* ------------------------------------------------------------------------ */
 /* Running it                                                                */
 /* ------------------------------------------------------------------------ */
@@ -576,6 +894,7 @@ async function main(): Promise<void> {
     const cookie = await humanAuthentication(fixtures);
     await humanAuthorization(fixtures, cookie);
     await workerAuthentication(fixtures);
+    await queueChecks(fixtures, cookie);
     await revocationEndsAccess(fixtures, cookie);
 
     // Whatever happened above, the fixtures do not stay usable.
@@ -583,6 +902,7 @@ async function main(): Promise<void> {
     await revokeCredential(fixtures.expiredCredentialId, 'hosted verification finished');
     await setUserDisabled(fixtures.memberId, true);
     await setWorkerStatus(fixtures.workerId, 'DISABLED');
+    await setWorkerStatus(fixtures.rivalWorkerId, 'DISABLED');
     // Archived rather than left ACTIVE, so it can never be picked as anybody's
     // default project and never sits in a list beside the real work. The next
     // run finds it by slug regardless of status and reuses it.

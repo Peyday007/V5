@@ -7,6 +7,7 @@
  */
 import { Router } from 'express';
 import { adminRouter } from './admin.ts';
+import { workRouter } from './work.ts';
 import { auditsRouter } from './audits.ts';
 import { chatRouter } from './chat.ts';
 import { documentsRouter } from './documents.ts';
@@ -25,6 +26,10 @@ export function createApiRouter(): Router {
   // because /api/admin/projects/:id/members must not be swallowed by the
   // projects router's own :projectId routes.
   router.use('/admin', adminRouter);
+  // Mounted at the root because its routes carry their own prefixes: some are
+  // project-scoped (/projects/:id/work) and some address an item directly
+  // (/work/:id), and the two must sit beside each other.
+  router.use(workRouter);
 
   router.use(healthRouter);
   // Audit routes carry their own prefixes (/runs/:id/..., /layers/:id/...),

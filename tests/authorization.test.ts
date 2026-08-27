@@ -718,6 +718,36 @@ describe('signing out', () => {
  * every other test authenticates by sending a cookie to a route that requires
  * one — this is the only route that must accept both answers.
  */
+/**
+ * Found while building Step 5's queue, in code that predates it.
+ *
+ * Every resolver refused a missing row with `No project with id "prj_abc".` and
+ * a forbidden one with `No project with that id.`. Both are 404s, so every test
+ * asserting on the status passed — including this suite's own isolation tests
+ * and Step 4's hosted check — while the body quietly confirmed which ids exist.
+ * An attacker enumerating a Brain reads the message, not the status.
+ */
+describe('a refusal reveals nothing about what exists', () => {
+  it('answers identically for a forbidden project and an imaginary one', async () => {
+    const forbidden = await call('GET', `/api/projects/${projectB}`, { cookie: aliceCookie });
+    const imaginary = await call('GET', '/api/projects/prj_no_such_thing', { cookie: aliceCookie });
+
+    expect(forbidden.status).toBe(404);
+    expect(imaginary.status).toBe(404);
+    expect(JSON.stringify(forbidden.body)).toBe(JSON.stringify(imaginary.body));
+    expect(JSON.stringify(forbidden.body)).not.toContain(projectB);
+  });
+
+  it('answers identically for a forbidden layer and an imaginary one', async () => {
+    const forbidden = await call('GET', `/api/layers/${layerB}`, { cookie: aliceCookie });
+    const imaginary = await call('GET', '/api/layers/lyr_no_such_thing', { cookie: aliceCookie });
+
+    expect(forbidden.status).toBe(404);
+    expect(JSON.stringify(forbidden.body)).toBe(JSON.stringify(imaginary.body));
+    expect(JSON.stringify(forbidden.body)).not.toContain(layerB);
+  });
+});
+
 describe('asking who I am', () => {
   it('recognises a valid session', async () => {
     const cookie = await signIn('alice@example.invalid', ALICE_PASSWORD);

@@ -20,8 +20,10 @@ import type {
   ResearchOrchestration,
   ResearchRun,
   WorkerScope,
+  WorkItem,
 } from '../domain/types.ts';
 import { getAudit } from '../repos/audits.ts';
+import { getWorkItem } from '../repos/workQueue.ts';
 import { getChunk } from '../repos/extraction.ts';
 import { getImportJob } from '../repos/imports.ts';
 import { getOrchestration } from '../repos/research.ts';
@@ -367,6 +369,19 @@ async function auditAccessDenial(projectId: string, reason: string): Promise<voi
  *
  * `notFound` rather than a 403, for the reason at the top of this section.
  */
+/**
+ * The refusal text every resolver shares.
+ *
+ * A resolver that says `No project with id "prj_abc".` when the row is missing
+ * and `No project with that id.` when the caller may not have it has told the
+ * caller which ids exist. Both are 404s, so the status alone looks right and the
+ * oracle lives in the body — which is exactly the kind of leak that survives a
+ * test asserting `expect(status).toBe(404)`.
+ *
+ * So the two messages are byte-identical, and the id is never echoed back. If
+ * you are about to add an id to one of these for a better error message: that
+ * is the bug.
+ */
 export async function authorizeProject(projectId: string, label: string): Promise<void> {
   const requirement = requirementForCurrentRequest();
   const decision = decideProjectAccess(
@@ -424,28 +439,28 @@ export function brainAdminOnly(): RequestHandler {
 
 export async function requireProject(projectId: string): Promise<Project> {
   const project = await getProject(projectId);
-  if (!project) throw notFound(`No project with id "${projectId}".`);
+  if (!project) throw notFound('No project with that id.');
   await authorizeProject(project.id, 'project');
   return project;
 }
 
 export async function requireLayer(layerId: string): Promise<Layer> {
   const layer = await getLayer(layerId);
-  if (!layer) throw notFound(`No layer with id "${layerId}".`);
+  if (!layer) throw notFound('No layer with that id.');
   await authorizeProject(layer.projectId, 'layer');
   return layer;
 }
 
 export async function requireRun(runId: string): Promise<ResearchRun> {
   const run = await getRun(runId);
-  if (!run) throw notFound(`No research run with id "${runId}".`);
+  if (!run) throw notFound('No research run with that id.');
   await authorizeProject(run.projectId, 'research run');
   return run;
 }
 
 export async function requireDocument(documentId: string): Promise<Document> {
   const document = await getDocument(documentId);
-  if (!document) throw notFound(`No document with id "${documentId}".`);
+  if (!document) throw notFound('No document with that id.');
   await authorizeProject(document.projectId, 'document');
   return document;
 }
@@ -668,30 +683,45 @@ export function apiNotFound(req: Request, res: Response): void {
 
 export async function requireAudit(auditId: string): Promise<Audit> {
   const audit = await getAudit(auditId);
-  if (!audit) throw notFound(`No audit with id "${auditId}".`);
+  if (!audit) throw notFound('No audit with that id.');
   await authorizeProject(audit.projectId, 'audit');
   return audit;
+}
+
+/**
+ * A work item, resolved and authorized by the project it actually belongs to.
+ *
+ * This is why a worker cannot reach another project's work by guessing an id:
+ * the project is read from the row, never from the request, and
+ * `authorizeProject` refuses with the same 404 as a work item that does not
+ * exist. A route that forgets to call this cannot obtain a work item at all.
+ */
+export async function requireWorkItem(workItemId: string): Promise<WorkItem> {
+  const item = await getWorkItem(workItemId);
+  if (!item) throw notFound('No work item with that id.');
+  await authorizeProject(item.projectId, 'work item');
+  return item;
 }
 
 export async function requireOrchestration(
   orchestrationId: string,
 ): Promise<ResearchOrchestration> {
   const orchestration = await getOrchestration(orchestrationId);
-  if (!orchestration) throw notFound(`No research run with id "${orchestrationId}".`);
+  if (!orchestration) throw notFound('No research run with that id.');
   await authorizeProject(orchestration.projectId, 'research run');
   return orchestration;
 }
 
 export async function requireImportJob(jobId: string): Promise<ImportJob> {
   const job = await getImportJob(jobId);
-  if (!job) throw notFound(`No import job with id "${jobId}".`);
+  if (!job) throw notFound('No import job with that id.');
   await authorizeProject(job.projectId, 'import job');
   return job;
 }
 
 export async function requireChunk(chunkId: string): Promise<DocumentChunk> {
   const chunk = await getChunk(chunkId);
-  if (!chunk) throw notFound(`No chunk with id "${chunkId}".`);
+  if (!chunk) throw notFound('No chunk with that id.');
   // Through the document, which is the only thing a chunk knows about.
   await requireDocument(chunk.documentId);
   return chunk;
