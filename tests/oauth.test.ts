@@ -208,7 +208,16 @@ async function callTool(
   return {
     status: response.status,
     structured: (result['structuredContent'] ?? {}) as Record<string, unknown>,
-    isError: result['isError'] === true,
+    // A transport refusal is an error too.
+    //
+    // `isError` comes off the JSON-RPC `result`, and a 401 or 403 has no result
+    // at all — so a plain `result['isError'] === true` reads false both when the
+    // call succeeded and when it was rejected outright. Every
+    // `expect(...isError).toBe(false)` in these suites is a "prove this works
+    // before we break it" line, and that is precisely where a false pass does
+    // the most damage: it makes the refusal on the next line look like proof of
+    // something when nothing was ever working.
+    isError: result['isError'] === true || !response.ok,
   };
 }
 
