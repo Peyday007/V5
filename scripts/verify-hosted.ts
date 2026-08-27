@@ -64,7 +64,7 @@ import {
   setUserPassword,
   setWorkerStatus,
 } from '../server/repos/identity.ts';
-import { createProject, getProjectBySlug, listProjects } from '../server/repos/projects.ts';
+import { createProject, getProjectBySlug, listProjects, updateProject } from '../server/repos/projects.ts';
 import type { Project } from '../server/domain/types.ts';
 
 /* ------------------------------------------------------------------------ */
@@ -583,6 +583,10 @@ async function main(): Promise<void> {
     await revokeCredential(fixtures.expiredCredentialId, 'hosted verification finished');
     await setUserDisabled(fixtures.memberId, true);
     await setWorkerStatus(fixtures.workerId, 'DISABLED');
+    // Archived rather than left ACTIVE, so it can never be picked as anybody's
+    // default project and never sits in a list beside the real work. The next
+    // run finds it by slug regardless of status and reuses it.
+    await updateProject(fixtures.scope.id, { status: 'ARCHIVED' });
 
     const passed = checks.filter((check) => check.ok).length;
     failed = passed !== checks.length;
