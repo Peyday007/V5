@@ -146,7 +146,9 @@ no query string. It is exactly the canonical Step 7 endpoint.
 
 ## 3. Brain worker identity
 
-One permanent worker, `claude-max-worker-01`, created through the authenticated
+One permanent worker — this plan called it `claude-max-worker-01`; the one
+actually created was named differently, and nothing depends on the name —
+created through the authenticated
 administrator surface. Not a human user, not the user's Claude account, not an
 API key, not a shared password, not a synthetic test worker.
 
@@ -240,7 +242,7 @@ change to a closed step.
 
 ## 8. Worker operating contract
 
-`docs/workers/CLAUDE-MAX-WORKER-01.md`, version-controlled, covering identity,
+`docs/workers/WORKER-CONTRACT.md`, version-controlled, covering identity,
 the startup sequence, authority, lease behaviour, idempotency, research
 behaviour, completion, failure, and prompt-injection resistance. The repository
 copy is authoritative; the Claude Project instructions point at it and carry the

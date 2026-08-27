@@ -19,7 +19,7 @@ the tag in git is the record of *when*, this file is the record of *what*.
 | **5** | **Who owns this work, right now.** Durable queued work, atomic claiming by compare-and-swap, time-bounded leases, fencing generations, heartbeats, expiry and reclaim, bounded retry, cancellation, attempt history | `step-5-distributed-queue-leases` |
 | **6** | **A retry is not a second effect.** Idempotency keys, canonical fingerprints, reservation and replay, concurrent duplicate suppression, fenced effect commits, the external adapter contract, uncertain-outcome handling and administrative reconciliation | `step-6-idempotency-safe-effects` |
 | **7** | **A door, not a second set of rules.** One authoritative remote MCP endpoint serving both protocol eras statelessly, worker authentication at the boundary, execution-time authorization, a permanent tool surface over existing services, Step 6 idempotency on every mutation, bounded results, safe error categories and an MCP audit | `step-7-authoritative-remote-mcp` |
-| **8** | **A worker signs in.** OAuth 2.1 authorization so a Claude connector can authenticate at all, a consent screen where a human approves a named worker, tokens that resolve to the worker rather than the approver, the operator console — including the two things a worker must never do for itself, creating a project and queueing its own work — and the first real Claude Max worker | *in progress* |
+| **8** | **A worker signs in.** OAuth 2.1 authorization so a Claude connector can authenticate at all, a consent screen where a human approves a named worker, tokens that resolve to the worker rather than the approver, the operator console — including the two things a worker must never do for itself, creating a project and queueing its own work — and the first real Claude Max worker | `step-8-first-claude-max-worker` |
 
 Step 3's evidence is in [`STEP-3-EVIDENCE.md`](STEP-3-EVIDENCE.md); Step 4's is
 in [`STEP-4-EVIDENCE.md`](STEP-4-EVIDENCE.md), and the model it built is
@@ -29,7 +29,9 @@ described in [`IDENTITY.md`](IDENTITY.md). Step 5's evidence is in
 [`STEP-6-EVIDENCE.md`](STEP-6-EVIDENCE.md) and its design in
 [`EFFECTS.md`](EFFECTS.md). Step 7's is in
 [`STEP-7-EVIDENCE.md`](STEP-7-EVIDENCE.md) and its design in
-[`MCP.md`](MCP.md). Each evidence file says what was proven, what merely passes its tests, and what
+[`MCP.md`](MCP.md). Step 8's is in [`STEP-8-EVIDENCE.md`](STEP-8-EVIDENCE.md),
+with the runbook and the worker's own contract in [`workers/`](workers/). Each
+evidence file says what was proven, what merely passes its tests, and what
 nobody has run.
 
 ## Ahead

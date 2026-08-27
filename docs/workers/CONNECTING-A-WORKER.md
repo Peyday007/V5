@@ -43,17 +43,21 @@ attack.
 
 | Field | Value |
 |---|---|
-| Canonical name | `claude-max-worker-01` |
-| Display name | `Claude Max Worker 01` |
+| Canonical name | lower case, digits and hyphens — e.g. `worker-01` |
+| Display name | anything readable — e.g. `Worker 01` |
 
 A worker is not a person and not your Claude account. It is an identity the
-Brain owns.
+Brain owns. Number them rather than naming them after whoever lent the account:
+the Brain never sees Claude accounts, and a name that implies otherwise will
+mislead somebody reading an audit row later.
+
+Below, `<worker>` means whatever canonical name you chose here.
 
 ## 2. Grant it exactly what it needs
 
 In **Grant access** on the same screen:
 
-- **Worker** — `claude-max-worker-01`
+- **Worker** — `<worker>`
 - **Project** — the Step 8 acceptance project (**not** Deal Dispatch)
 - **Scopes** — tick only these six:
 
@@ -93,7 +97,7 @@ Your browser goes to the Brain:
 
 1. **Sign in** with your ordinary Brain account, if you are not already.
 2. **Connect a worker** — a list of your workers, each showing exactly what it
-   can reach. Choose `claude-max-worker-01`.
+   can reach. Choose `<worker>`.
 3. **Approve.**
 
 You come back to Claude, connected.
@@ -113,7 +117,7 @@ Allow.
 
 ## 6. Give the worker its contract
 
-Paste [`CLAUDE-MAX-WORKER-01.md`](CLAUDE-MAX-WORKER-01.md) into the project or
+Paste [`WORKER-CONTRACT.md`](WORKER-CONTRACT.md) into the project or
 task instructions, or point at it. The repository copy is authoritative; if the
 two ever disagree, the repository is right and the pasted one is stale.
 
@@ -146,7 +150,7 @@ machine that could create its own work could also create work nobody asked for.
 Ask the worker to run `brain_whoami`. You should see:
 
 - `principalType: WORKER`
-- `handle: claude-max-worker-01`
+- `handle` matching the worker you approved
 - exactly one project, with exactly the six scopes
 
 If it says anything else — especially if it names *you* — stop and say so. That
