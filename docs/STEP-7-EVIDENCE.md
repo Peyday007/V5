@@ -186,10 +186,69 @@ The MCP gateway, driven by real external clients
   PASS  and never names the id it refused
 ```
 
-> **Status: pending the deploy.** These pass against a locally hosted Brain in
-> production mode (`HOSTED-VERIFICATION: PASS 114/114`). They are not claimed as
-> proven on `northline-brain.fly.dev` until the deploy workflow prints the pass
-> line, and this note stays here until it does.
+### Executed, on the deployment
+
+**Deploy run 11, commit `58a6db1`, 2026-08-27.** Target
+`https://northline-brain.fly.dev`, Postgres at
+`aws-0-us-east-2.pooler.supabase.com`, documents in the `brain` bucket.
+
+```
+Phase       before the restart
+...
+The MCP gateway, driven by real external clients
+  PASS  and is told both protocol eras — ["2026-07-28","2025-11-25"]
+  PASS  and lists the permanent tool surface — 14 tool(s)
+  PASS  the official SDK client connects to the deployed Brain — initialize completed
+  PASS  and is served the identical tool surface — 14 tool(s)
+  PASS  and completes it — SUCCEEDED
+  PASS  a repeat of that completion replays rather than performing a second effect — ALREADY_RECORDED
+...
+HOSTED-VERIFICATION: PASS 114/114
+```
+
+Then a real restart — not a side effect of anything else:
+
+```
+Restarting machine 891ed44a46e4e8
+  Waiting for 891ed44a46e4e8 to become healthy (started, 0/1)     × 14
+Machine 891ed44a46e4e8 restarted successfully!
+```
+
+Twenty-one seconds during which the process serving those checks did not
+exist. Then, against the new process:
+
+```
+Phase       after the restart
+
+Surviving a restart
+  PASS  the work left before the restart is still there — all three found
+  PASS  a live lease survived the restart, still owned and still counting down
+        — LEASED, expires 2026-08-27T08:54:43.271Z
+  PASS  the fencing generation and attempt count are unchanged — generation 1, attempt 1
+...
+The MCP gateway, driven by real external clients
+  [all 24 checks PASS again]
+...
+HOSTED-VERIFICATION: PASS 120/120
+```
+
+**114/114 before, 120/120 after** — the six extra are the beacon checks that
+only exist in the post-restart phase. Both passes include all 24 MCP checks.
+The `Holdout` was `deal-dispatch`, so the cross-project isolation checks were
+genuinely exercised rather than skipped.
+
+The workflow's own verdict:
+
+```
+hosted verification: success
+after the restart:   success
+The live Brain refused everything it should have, twice, either side of a real restart,
+and the work left before it was still there afterwards.
+```
+
+**This is what a stateless gateway surviving a restart looks like: nothing had
+to be restored, because there was nothing to restore.** The queue state
+persisted because it is rows; the gateway persisted because it holds nothing.
 
 ---
 
@@ -201,7 +260,7 @@ The MCP gateway, driven by real external clients
 | `tests/mcpExternalClient.test.ts` — two real clients, out of process | 18 |
 | **Whole suite, SQLite** | **762 passed, 25 skipped** |
 | **Whole suite, real Postgres 16** | **787 passed, 0 skipped** |
-| Hosted harness | 96 → **114 checks** |
+| Hosted harness | 96 → **114 checks** (120 in the post-restart phase) |
 
 Both backends, because one repository layer over two databases is a claim that
 only a run against the second one can support.
