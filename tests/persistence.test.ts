@@ -588,6 +588,14 @@ onPostgres('against a real Postgres', () => {
         // one process.
         'idempotency_operations(scope_hash,key_fingerprint)',
         'effect_attempts(operation_id,attempt_number)',
+        // Step 8. All three are authentication lookups, which is the category
+        // where a duplicate row is worst: two rows where authentication expects
+        // one means "which principal is this" has two answers, and an ambiguous
+        // principal is not a principal. The local chain spells these as inline
+        // UNIQUE on the column; this list is what proves the cloud agrees.
+        'oauth_clients(client_id)',
+        'oauth_authorization_codes(code_digest)',
+        'oauth_tokens(token_digest)',
       ].sort(),
     );
   });

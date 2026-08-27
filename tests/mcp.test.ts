@@ -455,9 +455,26 @@ describe('authentication', () => {
     expect(response.status).toBe(401);
   });
 
-  it('never points at OAuth metadata it does not serve', async () => {
+  it('points at OAuth metadata that actually resolves', async () => {
+    // Step 7 asserted the opposite, and was right to: advertising a flow that
+    // does not exist sends a conformant client round a loop it cannot finish.
+    // Step 8 built the flow, so the pointer is now true — and it is the only
+    // way an MCP client discovers where to authenticate.
+    //
+    // The assertion is deliberately stronger than "a header is present": it
+    // follows the pointer and requires the document to be real, because a
+    // header naming a 404 would be exactly the lie the old test guarded.
     const response = await mcp('server/discover', {}, { bearer: null });
-    expect(response.headers.get('www-authenticate')).toBeNull();
+    const challenge = response.headers.get('www-authenticate') ?? '';
+    expect(challenge).toContain('resource_metadata=');
+
+    const url = /resource_metadata="([^"]+)"/.exec(challenge)?.[1];
+    expect(url).toBeTruthy();
+    const metadata = await fetch(url!);
+    expect(metadata.status).toBe(200);
+    const document = (await metadata.json()) as Record<string, unknown>;
+    expect(document['resource']).toBe(MCP);
+    expect(Array.isArray(document['authorization_servers'])).toBe(true);
   });
 
   it('refuses a session cookie even when it is perfectly valid', async () => {

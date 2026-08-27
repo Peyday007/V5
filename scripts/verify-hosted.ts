@@ -1323,11 +1323,31 @@ async function mcpChecks(fixtures: Fixtures): Promise<void> {
     }),
   });
   expectStatus('the live gateway refuses a request with no credential', anonymous.status, 401);
+
+  /**
+   * Step 7 checked that no OAuth pointer was emitted, because none was served.
+   * Step 8 serves one, so the check is inverted — and strengthened: the pointer
+   * is followed, and the document it names has to be real. A header naming a
+   * 404 would be the same lie the old check was guarding against.
+   */
+  const challenge = anonymous.headers.get('www-authenticate') ?? '';
   record(
-    'and points at no OAuth metadata it does not serve',
-    anonymous.headers.get('www-authenticate') === null,
-    'no WWW-Authenticate',
+    'and points a client at where to authenticate',
+    challenge.includes('resource_metadata='),
+    challenge ? 'WWW-Authenticate present' : 'missing',
   );
+  const metadataUrl = /resource_metadata="([^"]+)"/.exec(challenge)?.[1];
+  if (metadataUrl) {
+    const metadata = await fetch(metadataUrl);
+    const document = metadata.ok ? ((await metadata.json()) as Record<string, unknown>) : {};
+    record(
+      'and that metadata document actually resolves',
+      metadata.status === 200 && document['resource'] === url,
+      `${metadata.status} · ${String(document['resource'] ?? 'none')}`,
+    );
+  } else {
+    record('and that metadata document actually resolves', false, 'no pointer to follow');
+  }
 
   const expired = new ModernMcpClient({ url, credential: fixtures.expiredCredential });
   expectStatus('and refuses an expired credential', (await expired.discover()).status, 401);
