@@ -19,6 +19,7 @@ the tag in git is the record of *when*, this file is the record of *what*.
 | **5** | **Who owns this work, right now.** Durable queued work, atomic claiming by compare-and-swap, time-bounded leases, fencing generations, heartbeats, expiry and reclaim, bounded retry, cancellation, attempt history | `step-5-distributed-queue-leases` |
 | **6** | **A retry is not a second effect.** Idempotency keys, canonical fingerprints, reservation and replay, concurrent duplicate suppression, fenced effect commits, the external adapter contract, uncertain-outcome handling and administrative reconciliation | `step-6-idempotency-safe-effects` |
 | **7** | **A door, not a second set of rules.** One authoritative remote MCP endpoint serving both protocol eras statelessly, worker authentication at the boundary, execution-time authorization, a permanent tool surface over existing services, Step 6 idempotency on every mutation, bounded results, safe error categories and an MCP audit | `step-7-authoritative-remote-mcp` |
+| **8** | **A worker signs in.** OAuth 2.1 authorization so a Claude connector can authenticate at all, a consent screen where a human approves a named worker, tokens that resolve to the worker rather than the approver, the operator console, and the first real Claude Max worker | *in progress* |
 
 Step 3's evidence is in [`STEP-3-EVIDENCE.md`](STEP-3-EVIDENCE.md); Step 4's is
 in [`STEP-4-EVIDENCE.md`](STEP-4-EVIDENCE.md), and the model it built is
@@ -38,7 +39,6 @@ order is a dependency order, not a preference.
 
 | Step | What it contains |
 |---|---|
-| **8** | Connect one Claude Max worker |
 | **9** | Manual end-to-end research packet |
 | **10** | Scheduled firing and interruption recovery |
 | **11** | Additional workers and fleet controls |

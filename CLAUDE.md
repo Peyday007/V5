@@ -556,12 +556,17 @@ way in without adding a way around.
   `initialize` handshake outright, and the legacy front-end runs stateless by
   choice. So every request re-authenticates and re-authorizes from current rows,
   revocation lands on the next call, and a restart has nothing to restore.
-- **Authentication is the Step 4 worker credential and nothing else.** A session
-  cookie is refused here even when valid — a browser is not an MCP client, and a
-  cookie on a mutating JSON-RPC endpoint is a CSRF surface. `Origin` is
-  validated, no CORS headers are emitted, and no OAuth is advertised that is not
-  implemented: authorization is OPTIONAL in MCP, and a discovery pointer to a
-  facade that cannot issue a usable token is worse than a plain refusal.
+- **Authentication is a bearer credential — never a cookie.** A session cookie
+  is refused here even when valid: a browser is not an MCP client, and a cookie
+  on a mutating JSON-RPC endpoint is a CSRF surface. `Origin` is validated and
+  no CORS headers are emitted.
+
+  Step 7 accepted exactly one bearer, the Step 4 worker credential, and
+  advertised no OAuth — on the reasoning that a discovery pointer to a facade
+  that cannot issue a usable token is worse than a plain refusal. **Step 8 built
+  the flow, so the pointer is now real and is emitted.** See §22. The half of
+  that sentence which still holds is the half worth keeping: never advertise a
+  mechanism that is not served.
 - **A refusal names nothing.** Absent and forbidden are one message, and it is
   the same *body* both times — invariant 23 again, at a new boundary.
 - **Every mutation goes through Step 6**, keyed from the work item and the
@@ -574,6 +579,62 @@ way in without adding a way around.
 Step 7 is the gateway only. Connecting a real worker is Step 8, and proving the
 first is not evidence for the second — the same separation Step 3 drew between
 the research engine passing its tests and a real job having actually run.
+
+
+
+## 22. A worker signs in. It does not hold a pasted key.
+
+Step 8 (`server/routes/oauth.ts`, `server/routes/operator.ts`,
+`docs/workers/`) connects the first real Claude worker, and the shape of it was
+decided by one fact about the outside world: **Claude's custom connector has no
+field for a static `Authorization` header.** Its only authentication affordance
+is OAuth. A Brain that cannot speak OAuth cannot be connected to Claude at all,
+however correct its bearer design is.
+
+- **The operator authenticates; the worker is authorized.** A person signs in to
+  the Brain on a Brain-hosted consent screen, sees which named worker is being
+  connected and exactly what it can reach, and approves. What the client
+  receives is a token whose principal is **that worker**.
+- **A token resolves to the worker, never to the approver.** The human is
+  recorded on the authorization code, for the audit, and is deliberately absent
+  from the token. There is no column on `oauth_tokens` that could make an
+  approver into a principal by accident. Everything downstream —
+  `decideProjectAccess`, scopes, fencing, audit attribution — only ever sees a
+  `Principal` of type `WORKER`, so this is a third *way in* rather than a third
+  kind of principal.
+- **Step 7's reasoning about OAuth was wrong, and the correction is recorded
+  rather than hidden.** It argued there was no resource owner to redirect. There
+  is one — the operator, in a browser, at the moment the connector is
+  registered. The mistake was conflating that moment with the later tool calls,
+  which genuinely have nobody present. OAuth is built for exactly that shape: a
+  human authorizes once, a machine acts many times.
+- **The bearer credential was not replaced.** `brnw_` still works, for a client
+  that cannot do OAuth. Nothing about Step 7's contract was withdrawn.
+- **Nothing about the Claude account enters the Brain.** Not a password, a
+  cookie, a session or an Anthropic token. Brain stores a token it minted
+  itself, against a worker it owns, on the authority of a human it
+  authenticated. A Brain worker identity is still not a Claude account.
+- **Secrets are digests.** Client secrets, authorization codes and tokens are
+  all sha-256. Codes are single-use, redeemed by a guarded `UPDATE` so two
+  requests carrying the same intercepted code cannot both succeed. PKCE is S256
+  only — `plain` makes the challenge equal to the verifier. Redirect URIs match
+  exactly, and an invalid one renders rather than redirects, because bouncing an
+  error to an unvalidated URI is how an open redirector is built.
+- **Registration is unauthenticated, and confers nothing.** The connector makes
+  client credentials optional, so a client given neither must be able to
+  register itself. A registered client cannot read, call a tool, or obtain a
+  token without a human approving it in a browser.
+- **The operator console is server-rendered and has no JavaScript.** It is the
+  surface you need when the client bundle is broken or access has to be
+  repaired, so it must not depend on the front-end having built. It exposes no
+  operation an administrator could not already perform, and it answers **404**
+  to anyone who is not a signed-in administrator — including a worker holding a
+  valid token, because a machine reaching the screen that grants credentials
+  would be a machine widening its own access.
+
+Step 8 connects **one** worker and proves a bounded cycle. The first production
+research packet is Step 9, scheduling is Step 10, and a second worker is
+Step 11.
 
 
 ---
@@ -693,6 +754,9 @@ server/
     legacy.ts           the 2025-11-25 front-end, over the official SDK
     endpoint.ts         POST /mcp: auth, origin, limits, era selection
   routes/               HTTP API
+    oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
+    operator.ts         the operator console: workers, access, connections (Step 8)
+    pages.ts            shared chrome for the server-rendered pages
     guard.ts            request context, authentication, deny-by-default
     auth.ts             sign in, sign out, change a password
     admin.ts            people, workers, credentials, membership, the identity audit
