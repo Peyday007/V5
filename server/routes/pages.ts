@@ -77,7 +77,14 @@ const CSS = `
   .pill.off { background:#fdecec; color:#8a1f1f; }
   fieldset { border:1px solid #e3e6ea; border-radius:10px; padding:14px 16px; margin:18px 0 0; }
   legend { font-size:12px; font-weight:600; color:#5b636e; text-transform:uppercase; letter-spacing:.04em; padding:0 6px; }
-  .scopes { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:6px 14px; }
+  .access { display:flex; align-items:center; justify-content:space-between; gap:10px;
+    margin-top:6px; padding:6px 0 0; border-top:1px dashed #e3e6ea; }
+  .access button { padding:3px 10px; font-size:12px; }
+  .scopegroup { margin-bottom:14px; }
+  .scopegroup:last-child { margin-bottom:0; }
+  .grouphead { font-size:12px; font-weight:600; margin-bottom:6px; }
+  .grouphead .note { font-weight:400; margin:0; }
+  .scopes { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:6px 14px; }
   .scopes label { display:flex; align-items:center; gap:7px; font-weight:400; font-size:13px; margin:0; }
   .scopes input { margin:0; }
   @media (prefers-color-scheme: dark) {
@@ -90,6 +97,7 @@ const CSS = `
     button.secondary { background:#16191d; color:#e8eaed; border-color:#3a414a; }
     button.danger { background:#16191d; color:#f3b6b6; border-color:#5c2326; }
     .grant, fieldset { background:#0e1013; border-color:#2a2f36; }
+    .access { border-top-color:#2a2f36; }
     code, .pill { background:#22262c; }
     .err { background:#2b1416; border-color:#5c2326; color:#f3b6b6; }
     .ok { background:#10231a; border-color:#1f4a30; color:#a7dcb8; }

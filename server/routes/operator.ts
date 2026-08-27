@@ -32,6 +32,7 @@ import {
   listMembershipsForPrincipal,
   listWorkers,
   recordIdentityEvent,
+  revokeMembership,
   setWorkerStatus,
 } from '../repos/identity.ts';
 import { listTokensForWorker, revokeTokensForWorker } from '../repos/oauth.ts';
@@ -182,6 +183,33 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
     }),
   );
 
+  /**
+   * One line per membership, each with its own way out.
+   *
+   * Granting without revoking is not access control, it is a ratchet. This
+   * console could give a worker a project and had no way to take it back —
+   * revoking existed only over HTTP, so the first misclick on the dropdown was
+   * a mistake the screen that caused it could not undo. That happened, on the
+   * project holding real research.
+   */
+  const membershipLines = (
+    worker: { id: string },
+    rows: { projectId: string; name: string; scopes: string[] }[],
+  ): string =>
+    rows
+      .map(
+        (row) => `
+        <div class="access">
+          <span class="meta">${esc(row.name)} <code>${esc(row.scopes.join(' '))}</code></span>
+          <form method="post" action="${OPERATOR_BASE}/memberships/revoke">
+            <input type="hidden" name="worker_id" value="${esc(worker.id)}">
+            <input type="hidden" name="project_id" value="${esc(row.projectId)}">
+            <button type="submit" class="danger">Remove</button>
+          </form>
+        </div>`,
+      )
+      .join('');
+
   const workerRows = described
     .map(
       ({ worker, rows, liveConnections }) => `
@@ -190,10 +218,9 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
           <div class="who"><strong>${esc(worker.displayName)}</strong>
             <span class="pill${worker.disabled ? ' off' : ''}">${worker.disabled ? 'disabled' : 'active'}</span></div>
           <div class="meta"><code>${esc(worker.name)}</code>${
-            rows.length === 0
-              ? ' · no project yet'
-              : ` · ${rows.map((r) => `${esc(r.name)} (${esc(r.scopes.join(' '))})`).join('; ')}`
+            rows.length === 0 ? ' · no project yet' : ''
           }${liveConnections > 0 ? ` · ${liveConnections} live connection(s)` : ''}</div>
+          ${membershipLines(worker, rows)}
         </div>
         <form method="post" action="${OPERATOR_BASE}/workers/${esc(worker.id)}/disabled">
           <input type="hidden" name="disabled" value="${worker.disabled ? 'false' : 'true'}">
@@ -204,9 +231,25 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
     )
     .join('');
 
-  const projectOptions = projects
-    .map((project) => `<option value="${esc(project.id)}">${esc(project.name)}</option>`)
-    .join('');
+  /**
+   * Every select starts on a placeholder that cannot be submitted.
+   *
+   * A `<select>` with no placeholder is pre-set to its first option, so a form
+   * submitted without touching it silently grants whatever happened to sort
+   * first. That is how a worker meant for a throwaway project was granted the
+   * one holding real research: the dropdown was never opened, and the page gave
+   * no sign that a choice had been made for you.
+   *
+   * `disabled selected value=""` plus `required` turns that silent default into
+   * a refusal the browser makes before anything is sent.
+   */
+  const CHOOSE = '<option value="" disabled selected>— choose —</option>';
+
+  const projectOptions =
+    CHOOSE +
+    projects
+      .map((project) => `<option value="${esc(project.id)}">${esc(project.name)}</option>`)
+      .join('');
 
   /**
    * Queued and in-flight work, per project.
@@ -243,14 +286,74 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
     )
     .join('');
 
-  const workerOptions = workers
-    .filter((worker) => !worker.disabled)
-    .map((worker) => `<option value="${esc(worker.id)}">${esc(worker.name)}</option>`)
-    .join('');
+  const workerOptions =
+    CHOOSE +
+    workers
+      .filter((worker) => !worker.disabled)
+      .map((worker) => `<option value="${esc(worker.id)}">${esc(worker.name)}</option>`)
+      .join('');
 
-  const scopeBoxes = WORKER_SCOPES.map(
-    (scope) =>
-      `<label><input type="checkbox" name="scopes" value="${esc(scope)}"> <code>${esc(scope)}</code></label>`,
+  /**
+   * The scopes, grouped, with the ones a remote worker actually uses marked.
+   *
+   * Eleven checkboxes in one flat list put `work:complete` immediately beside
+   * `queue:complete`, and somebody ticking six of them quickly got the wrong
+   * one — losing `queue:heartbeat` and gaining a scope no MCP tool reads.
+   *
+   * `work:complete` is not dead: one HTTP route requires it. It is simply not
+   * part of the remote tool surface, and a picker that cannot say so is a
+   * picker that invites exactly this. Marking which six a connector needs costs
+   * nothing and is the difference between choosing and guessing.
+   */
+  const MCP_SURFACE: readonly WorkerScope[] = [
+    'project:read',
+    'documents:read',
+    'queue:read',
+    'queue:claim',
+    'queue:heartbeat',
+    'queue:complete',
+  ];
+
+  const SCOPE_GROUPS: { title: string; note: string; scopes: readonly WorkerScope[] }[] = [
+    {
+      title: 'Reading',
+      note: 'What the worker may see.',
+      scopes: ['project:read', 'documents:read'],
+    },
+    {
+      title: 'The queue',
+      note: 'Taking work and finishing it. Enqueueing and cancelling are deliberately absent.',
+      scopes: ['queue:read', 'queue:claim', 'queue:heartbeat', 'queue:complete'],
+    },
+    {
+      title: 'Research',
+      note: 'Writing research back. No remote tool uses any of these yet.',
+      scopes: [
+        'research:read',
+        'research:write',
+        'research:propose',
+        'claims:write',
+        'sources:write',
+        'contradictions:write',
+        'checkpoints:write',
+        'blockers:report',
+        'work:complete',
+      ],
+    },
+  ];
+
+  const scopeBoxes = SCOPE_GROUPS.map(
+    (group) => `
+      <div class="scopegroup">
+        <div class="grouphead">${esc(group.title)}<span class="note"> — ${esc(group.note)}</span></div>
+        <div class="scopes">${group.scopes
+          .map(
+            (scope) =>
+              `<label><input type="checkbox" name="scopes" value="${esc(scope)}">` +
+              ` <code>${esc(scope)}</code>${MCP_SURFACE.includes(scope) ? ' <span class="pill">connector</span>' : ''}</label>`,
+          )
+          .join('')}</div>
+      </div>`,
   ).join('');
 
   const secretCard = flash.secret
@@ -303,8 +406,11 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
          <label for="project_id">Project</label>
          <select id="project_id" name="project_id" required>${projectOptions}</select>
          <fieldset><legend>Scopes</legend><div class="scopes">${scopeBoxes}</div></fieldset>
-         <button type="submit">Grant</button>
+         <button type="submit">Set scopes</button>
        </form>
+       <p class="note"><strong>This replaces that worker's scopes on that project</strong> — it does
+         not add to them. The boxes always start empty, so whatever you tick is the complete new
+         list, and unticking one is how you take it away.</p>
        <p class="note">Grant the fewest scopes the work actually needs. A worker administers
          nothing regardless of what is ticked here — administration is refused to a worker
          principal outright.</p>`)
@@ -629,6 +735,57 @@ export function operatorRouter(): Router {
       });
       res.type('html').send(
         await consolePage(person, { ok: `${worker.name} can now reach that project.` }),
+      );
+    })();
+  });
+
+  /**
+   * Take a project away from a worker.
+   *
+   * Granting without revoking is a ratchet rather than access control, and this
+   * console was one: it could hand a worker any project and had no way back,
+   * because revoking lived only on the HTTP API. So the first mis-set dropdown
+   * granted a test worker the project holding real research, and the screen
+   * that did it could not undo it.
+   *
+   * Revoking is not a weaker membership. The row is marked revoked and
+   * `listMembershipsForPrincipal` reads live rows only, so the project stops
+   * existing for that worker on its very next call — memberships are read per
+   * request rather than frozen into a token, so there is nothing to wait for
+   * and nothing to reconnect.
+   */
+  router.post('/memberships/revoke', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      const person = await administrator(req);
+      if (!person || !originIsSameSite(req)) {
+        denied(res);
+        return;
+      }
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const workerId = typeof body['worker_id'] === 'string' ? body['worker_id'] : '';
+      const projectId = typeof body['project_id'] === 'string' ? body['project_id'] : '';
+
+      const worker = await getWorker(workerId);
+      const project = await getProject(projectId);
+      if (!worker || !project) {
+        res.status(404).type('html').send(await consolePage(person, { err: 'No such worker or project.' }));
+        return;
+      }
+
+      const removed = await revokeMembership(project.id, 'WORKER', worker.id);
+      await audit({
+        actor: person,
+        action: 'REVOKE_MEMBERSHIP',
+        targetId: worker.id,
+        result: removed ? 'SUCCESS' : 'FAILED',
+        metadata: { projectId: project.id },
+      });
+      res.type('html').send(
+        await consolePage(person, {
+          ok: removed
+            ? `${worker.name} can no longer reach "${project.name}". It takes effect on its next call.`
+            : `${worker.name} already had no access to "${project.name}".`,
+        }),
       );
     })();
   });

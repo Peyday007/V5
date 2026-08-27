@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { WORKER_SCOPES } from '../server/domain/types.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = 6500 + Math.floor(Math.random() * 150);
@@ -930,6 +931,79 @@ describe('the operator console', () => {
   it('refuses a canonical name that is not one', async () => {
     const bad = await post('/operator/workers', { name: 'Not A Name!', displayName: 'x' }, { cookie: adminCookie });
     expect(bad.status).toBe(400);
+  });
+
+  it('can take a project away again, not only give one', async () => {
+    // Granting without revoking is a ratchet rather than access control. This
+    // console was one, and the first mis-set dropdown granted a test worker the
+    // project holding real research with no way back from the screen that did
+    // it.
+    const granted = await post(
+      '/operator/memberships',
+      { worker_id: workerId, project_id: projectId, scopes: ['project:read'] },
+      { cookie: adminCookie },
+    );
+    expect(granted.status).toBe(200);
+
+    const access = await connectedToken();
+    expect((await callTool(access, 'brain_whoami')).isError).toBe(false);
+
+    const revoked = await post(
+      '/operator/memberships/revoke',
+      { worker_id: workerId, project_id: projectId },
+      { cookie: adminCookie },
+    );
+    expect(revoked.status).toBe(200);
+    expect(revoked.html).toContain('can no longer reach');
+
+    // It lands on the next call rather than at the next sign-in: memberships
+    // are read per request, so there is nothing to expire and nothing to
+    // reconnect. The same token now sees no projects at all.
+    const who = await callTool(access, 'brain_whoami');
+    expect(who.isError).toBe(false);
+    expect((who.structured['memberships'] as unknown[]).length).toBe(0);
+
+    // Put it back for the tests that follow.
+    await post(
+      '/operator/memberships',
+      {
+        worker_id: workerId,
+        project_id: projectId,
+        scopes: ['project:read', 'documents:read', 'queue:read', 'queue:claim', 'queue:heartbeat', 'queue:complete'],
+      },
+      { cookie: adminCookie },
+    );
+  });
+
+  it('will not let anybody but an administrator take a project away', async () => {
+    expect(
+      (await post('/operator/memberships/revoke', { worker_id: workerId, project_id: projectId }, { cookie: memberCookie }))
+        .status,
+    ).toBe(404);
+    const access = await connectedToken();
+    expect(
+      (await post('/operator/memberships/revoke', { worker_id: workerId, project_id: projectId }, { bearer: access }))
+        .status,
+    ).toBe(404);
+  });
+
+  it('offers every scope that exists, so a new one cannot go missing from the picker', async () => {
+    // The picker is grouped by hand for legibility, which means a scope added
+    // to WORKER_SCOPES later would simply not appear — ungrantable, with
+    // nothing to notice. Grouping buys clarity; this is what it costs.
+    const shown = await operatorPage({ cookie: adminCookie });
+    for (const scope of WORKER_SCOPES) {
+      expect(shown.html, `the picker is missing ${scope}`).toContain(`value="${scope}"`);
+    }
+  });
+
+  it('makes the operator choose a project rather than defaulting to one', async () => {
+    // A select with no placeholder is pre-set to its first option, so a form
+    // submitted without opening the dropdown grants whatever sorts first. That
+    // is exactly how a worker meant for a throwaway project was granted the one
+    // holding real research.
+    const shown = await operatorPage({ cookie: adminCookie });
+    expect(shown.html).toContain('<option value="" disabled selected>');
   });
 
   it('refuses an unknown scope rather than dropping it', async () => {
