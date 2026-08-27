@@ -694,11 +694,34 @@ async function claimAs(bearer: string, body: Record<string, unknown> = {}): Prom
 async function queueChecks(fixtures: Fixtures, cookie: string): Promise<void> {
   console.log('\nThe distributed queue');
 
+  /**
+   * Seed one item, at a priority that puts it at the front of the queue.
+   *
+   * The priority is not decoration, and getting it wrong cost a red deploy.
+   *
+   * A claim takes candidates `ORDER BY priority DESC, available_at, created_at`
+   * and stops at a bounded window. The verification project is reused across
+   * every run and accumulates leftover QUEUED items — the persistence beacon
+   * deliberately leaves one behind each time. So a freshly seeded item is the
+   * *newest*, sorts last, and once the backlog passed ten rows the two racing
+   * workers filled up on older items and never reached the contested one. Both
+   * claimed work; neither claimed *that* work, and the check read "0 leases
+   * issued" as though atomic claiming had broken.
+   *
+   * It looked like flakiness because the first pass drained ten items and the
+   * second could then reach the new one. It was not flaky. It was a backlog
+   * crossing a threshold, and it would have failed every deploy from then on.
+   *
+   * Priority 9 makes the check independent of whatever is already queued, which
+   * is what a check of *claiming* should be — the backlog is a property of the
+   * fixture, not of the thing under test.
+   */
   const seed = async (note: string): Promise<string> => {
     const item = await enqueueWork({
       projectId: fixtures.scope.id,
       workType: 'SYNTHETIC_ECHO',
       payload: { note },
+      priority: 9,
       requiredScopes: ['queue:claim'],
       createdByType: 'SYSTEM',
       createdById: 'verify-hosted',
