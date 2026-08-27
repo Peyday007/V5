@@ -65,7 +65,14 @@ import {
   setWorkerStatus,
 } from '../server/repos/identity.ts';
 import { createProject, getProjectBySlug, listProjects, updateProject } from '../server/repos/projects.ts';
-import { cancelWork, enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
+import {
+  cancelWork,
+  claimWork,
+  completeWork,
+  enqueueWork,
+  getWorkItem,
+  releaseWork,
+} from '../server/repos/workQueue.ts';
 import { getDb } from '../server/db/database.ts';
 import type { Project } from '../server/domain/types.ts';
 
@@ -476,6 +483,18 @@ async function humanAuthorization(fixtures: Fixtures, cookie: string): Promise<v
   const own = await call(`/api/projects/${fixtures.scope.id}`, { cookie });
   expectStatus('the project it is a member of is served', own.status, 200);
 
+  // Not just a 200: the parts of the application that existed before this step
+  // still run on the live Brain. Fetching a project drives the planner, the
+  // layer repository and the state engine in one request, so a schema change
+  // that broke any of them shows up here rather than the next time somebody
+  // opens the site.
+  const shape = own.json as { project?: unknown; layers?: unknown[]; plan?: unknown } | null;
+  record(
+    'the existing project, layer and planner path still works',
+    !!shape?.project && Array.isArray(shape.layers) && !!shape.plan,
+    shape?.project ? `${(shape.layers ?? []).length} layer(s), plan present` : 'incomplete response',
+  );
+
   const admin = await call('/api/admin/users', { cookie });
   expectStatus('the administration API is refused to a member', admin.status, 404);
 
@@ -857,12 +876,193 @@ async function queueChecks(fixtures: Fixtures, cookie: string): Promise<void> {
   expectStatus('and an anonymous caller may not', anonMetrics.status, 401);
 }
 
+
+/* ------------------------------------------------------------------------ */
+/* The persistence beacon                                                    */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Proving that queue state survives a restart, rather than assuming it.
+ *
+ * Running the checks twice proves the queue works twice. It says nothing about
+ * persistence unless something *stopped* in between — and the workflow's
+ * restart used to be a side effect of removing the bootstrap secrets, which
+ * silently stopped happening the moment those secrets were gone. The run still
+ * printed "either side of a restart". That is the kind of claim that decays
+ * into a lie without anybody editing a line.
+ *
+ * So: the first pass deliberately leaves three work items behind, one in each
+ * durable state, including a *live lease*. The machine is then restarted. The
+ * second pass asserts all three are exactly where they were — same states, same
+ * fencing generation, same attempt count, attempt history intact.
+ *
+ * Nothing in the container can fake that. The process that created them is
+ * gone.
+ */
+const BEACON = 'verify-hosted-beacon';
+
+async function clearBeacons(): Promise<void> {
+  const rows = await getDb().all<{ id: string }>(
+    'SELECT id FROM work_items WHERE correlation_id LIKE ?',
+    [`${BEACON}%`],
+  );
+  for (const row of rows) {
+    await getDb().run('DELETE FROM work_leases WHERE work_item_id = ?', [row.id]);
+    await getDb().run('DELETE FROM work_items WHERE id = ?', [row.id]);
+  }
+}
+
+interface BeaconShape {
+  leasedGeneration: number;
+  leasedAttempts: number;
+}
+
+async function leaveBeacon(fixtures: Fixtures): Promise<BeaconShape> {
+  await clearBeacons();
+
+  const make = async (suffix: string) =>
+    await enqueueWork({
+      projectId: fixtures.scope.id,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { note: 'persistence beacon' },
+      requiredScopes: ['queue:claim'],
+      correlationId: `${BEACON}:${suffix}`,
+      createdByType: 'SYSTEM',
+      createdById: 'verify-hosted',
+    });
+
+  await make('queued');
+  const toLease = await make('leased');
+  const toFinish = await make('done');
+
+  // A live lease, held for an hour, so the restart genuinely interrupts an
+  // owner rather than tidily finding everything finished.
+  const claimed = await claimWork({
+    workerId: fixtures.workerId,
+    scopes: [{ projectId: fixtures.scope.id, scopes: ['queue:claim'] }],
+    workTypes: ['SYNTHETIC_ECHO'],
+    limit: 25,
+    leaseMs: 60 * 60 * 1000,
+  });
+  const leased = claimed.find((c) => c.workItemId === toLease.id);
+  const finished = claimed.find((c) => c.workItemId === toFinish.id);
+
+  if (finished) {
+    await completeWork(
+      {
+        workItemId: finished.workItemId,
+        workerId: fixtures.workerId,
+        leaseId: finished.leaseId,
+        leaseGeneration: finished.leaseGeneration,
+      },
+      { summary: 'beacon' },
+    );
+  }
+  // Anything else this claim swept up goes back, so only the three beacons are
+  // left in the states this says they are in.
+  for (const other of claimed) {
+    if (other.workItemId === toLease.id || other.workItemId === toFinish.id) continue;
+    await releaseWork({
+      workItemId: other.workItemId,
+      workerId: fixtures.workerId,
+      leaseId: other.leaseId,
+      leaseGeneration: other.leaseGeneration,
+    });
+  }
+
+  return {
+    leasedGeneration: leased?.leaseGeneration ?? -1,
+    leasedAttempts: leased?.attemptNumber ?? -1,
+  };
+}
+
+/**
+ * @param required true after the workflow's restart, where a missing beacon is
+ *   a real failure. False for a standalone run, where there may simply never
+ *   have been a previous pass — and a check that fails the first time somebody
+ *   runs it by hand teaches people to ignore it.
+ */
+async function checkBeacon(required: boolean): Promise<void> {
+  console.log('\nSurviving a restart');
+
+  const byCorrelation = async (suffix: string) =>
+    await getDb().get<{
+      id: string;
+      state: string;
+      lease_generation: number;
+      attempt_count: number;
+      lease_expires_at: string | null;
+    }>('SELECT * FROM work_items WHERE correlation_id = ?', [`${BEACON}:${suffix}`]);
+
+  const queued = await byCorrelation('queued');
+  const leased = await byCorrelation('leased');
+  const done = await byCorrelation('done');
+
+  if (!queued || !leased || !done) {
+    if (!required) {
+      console.log('  ....  no previous pass left anything here; nothing to compare');
+      return;
+    }
+    record(
+      'the work left before the restart is still there',
+      false,
+      'no beacon found — the pass before the restart did not leave one, or it did not survive',
+    );
+    return;
+  }
+  record('the work left before the restart is still there', true, 'all three found');
+  record('queued work is still queued', queued.state === 'QUEUED', queued.state);
+  record('finished work is still finished', done.state === 'SUCCEEDED', done.state);
+  record(
+    'a live lease survived the restart, still owned and still counting down',
+    leased.state === 'LEASED' && leased.lease_expires_at !== null,
+    `${leased.state}, expires ${leased.lease_expires_at ?? 'never'}`,
+  );
+  record(
+    'the fencing generation and attempt count are unchanged',
+    Number(leased.lease_generation) === 1 && Number(leased.attempt_count) === 1,
+    `generation ${leased.lease_generation}, attempt ${leased.attempt_count}`,
+  );
+
+  const attempts = await getDb().all<{ id: string; ended_at: string | null }>(
+    'SELECT * FROM work_leases WHERE work_item_id = ?',
+    [leased.id],
+  );
+  record(
+    'its attempt history survived too, still open',
+    attempts.length === 1 && attempts[0]?.ended_at === null,
+    `${attempts.length} attempt row(s)`,
+  );
+
+  await clearBeacons();
+}
+
 /* ------------------------------------------------------------------------ */
 /* Running it                                                                */
 /* ------------------------------------------------------------------------ */
 
+type Phase = 'leave' | 'check' | 'both';
+
+/**
+ * Which side of the restart this pass is on.
+ *
+ * `both` is the default, for a manual run: check whatever a previous run left,
+ * then leave a fresh beacon. The workflow is explicit — `--leave-beacon` before
+ * the restart, `--check-beacon` after — so the assertion is about *this* run's
+ * restart rather than about whatever happened to be lying around.
+ */
+function resolvePhase(): Phase {
+  const argv = process.argv.slice(2);
+  if (argv.includes('--check-beacon')) return 'check';
+  if (argv.includes('--leave-beacon')) return 'leave';
+  return 'both';
+}
+
 function resolveBase(): string {
-  const explicit = process.argv[2] ?? process.env['BRAIN_PUBLIC_URL'] ?? '';
+  const explicit =
+    process.argv.slice(2).find((arg) => !arg.startsWith('--')) ??
+    process.env['BRAIN_PUBLIC_URL'] ??
+    '';
   if (explicit) return explicit.replace(/\/+$/, '');
   const app = process.env['FLY_APP_NAME'];
   if (app) return `https://${app}.fly.dev`;
@@ -890,12 +1090,29 @@ async function main(): Promise<void> {
     console.log(`  Scope       ${fixtures.scope.slug}`);
     console.log(`  Holdout     ${fixtures.holdout ? fixtures.holdout.slug : '(none — only one project)'}`);
 
+    const phase = resolvePhase();
+    console.log(`  Phase       ${phase === 'leave' ? 'before the restart' : phase === 'check' ? 'after the restart' : 'standalone'}`);
+
+    // Before anything else creates work: was the previous pass's work still
+    // here when this process started?
+    if (phase === 'check' || phase === 'both') await checkBeacon(phase === 'check');
+
     await anonymousIsRefused(fixtures);
     const cookie = await humanAuthentication(fixtures);
     await humanAuthorization(fixtures, cookie);
     await workerAuthentication(fixtures);
     await queueChecks(fixtures, cookie);
     await revocationEndsAccess(fixtures, cookie);
+
+    // Last, so the beacon is not swept up by the checks above.
+    if (phase === 'leave' || phase === 'both') {
+      const shape = await leaveBeacon(fixtures);
+      console.log('');
+      console.log(
+        `Left three work items behind for the pass after the restart ` +
+          `(a live lease at generation ${shape.leasedGeneration}, attempt ${shape.leasedAttempts}).`,
+      );
+    }
 
     // Whatever happened above, the fixtures do not stay usable.
     await revokeCredential(fixtures.credentialId, 'hosted verification finished');

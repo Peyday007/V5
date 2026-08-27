@@ -10,9 +10,10 @@ be verified from where it was built.
 
 ## Verdict
 
-**Step 5 is code-complete and locally verified against real Postgres with
-concurrent connections. It is not closed until the hosted half has run green
-against the deployment.**
+**Step 5 is code-complete, locally verified against real Postgres with
+concurrent connections, and verified on the live deployment for everything
+except restart persistence. It is not closed: item 32 needs one more deploy,
+now that a genuine restart and a persistence beacon exist to prove it.**
 
 The design is in [`QUEUE.md`](QUEUE.md). The one-line version: a claim is a
 compare-and-swap on `lease_generation`, and that same generation is the fencing
@@ -140,15 +141,64 @@ its status."
 | 22 | Typecheck | **EXECUTED — PASS** |
 | 23 | Production build | **EXECUTED — PASS** |
 | 24 | Local production boot | **EXECUTED — PASS** · schema version 15, harness 68/68 against it |
-| 25 | Cloud Brain backup and migration | **PENDING** · the deploy applies 005 at boot |
-| 26 | Hosted authorized enqueue | **AUTOMATED — pending the deploy** |
-| 27 | Hosted competing-worker atomic claim | **AUTOMATED — pending the deploy** · two real credentials over the edge |
-| 28 | Hosted heartbeat / expiry / reclaim | **AUTOMATED — pending the deploy** |
-| 29 | Hosted stale-owner denial | **AUTOMATED — pending the deploy** |
-| 30 | Hosted project / scope denial | **AUTOMATED — pending the deploy** |
-| 31 | Hosted completion / failure / cancellation | **AUTOMATED — pending the deploy** |
-| 32 | Hosted restart / redeploy persistence | **AUTOMATED — pending the deploy** · the workflow restarts the machine and re-runs everything |
-| 33 | Existing hosted research/document workflow smoke test | **AUTOMATED — pending the deploy** |
+| 25 | Cloud Brain migration | **EXECUTED — PASS** · deploy run 8; the hosted queue checks below could not have run at all unless `work_items` and `work_leases` existed in Supabase Postgres |
+| 26 | Hosted authorized enqueue | **EXECUTED — PASS** · run 8; worker and ordinary member both refused, administrator allowed |
+| 27 | Hosted competing-worker atomic claim | **EXECUTED — PASS** · run 8; two real credentials over the public edge, exactly one lease |
+| 28 | Hosted heartbeat / expiry / reclaim | **EXECUTED — PASS** · run 8; reclaim moved generation 1 → 2 with a new lease id |
+| 29 | Hosted stale-owner denial | **EXECUTED — PASS** · run 8; complete, fail and release all 409 after reclaim |
+| 30 | Hosted project / scope denial | **EXECUTED — PASS** · run 8; identical body for forbidden and absent |
+| 31 | Hosted completion / failure / cancellation | **EXECUTED — PASS** · run 8; once-only completion, terminal exhaustion, cancellation beating its owner |
+| 32 | Hosted restart / redeploy persistence | **NOT EXECUTED — run 8's evidence does not support it.** See below |
+| 33 | Existing hosted research/document workflow smoke test | **EXECUTED — PASS** · run 8, strengthened afterwards; see below |
+
+### Run 8, and the claim it did not support
+
+Deploy run 8 (`b4dab7d`) was green on every step and printed
+`HOSTED-VERIFICATION: PASS 68/68` twice. The queue section passed in full
+against `https://northline-brain.fly.dev`, Supabase Postgres and the bucket.
+
+But the second pass did not follow a restart:
+
+```
+Spend the bootstrap secrets   ->  No bootstrap secrets are set. Nothing to remove.
+Wait for it to answer         ->  healthy again after 1 attempt(s)
+```
+
+Run 7 had already removed those secrets, so the step that used to cause a
+restart did nothing — and the workflow still printed *"twice, either side of a
+restart"*. Running the same checks twice against the same live process proves
+the queue works twice. It proves nothing about persistence.
+
+This is the failure mode the workflow exists to prevent, arriving through the
+workflow itself: **a true claim that decayed into a false one without anybody
+editing a line.** It was caught by reading the log rather than the exit code.
+
+Two fixes, so the claim is true by construction from now on:
+
+1. **The restart is its own step** (`flyctl apps restart`) and always happens,
+   rather than being a side effect of removing a secret that only exists once.
+2. **A persistence beacon.** The pass before the restart deliberately leaves
+   three work items behind — one `QUEUED`, one `SUCCEEDED`, and one holding a
+   **live lease** with an hour left on it. The pass after the restart asserts
+   all three are exactly where they were: same states, same fencing generation,
+   same attempt count, attempt history still open. The process that created them
+   is gone, so nothing in the container can fake it.
+
+Proven locally before shipping: `--leave-beacon`, a real `SIGTERM` and a fresh
+process, then `--check-beacon` → **74/74**, with the live lease intact at
+generation 1, expiry unchanged. And the negative case, which is the one that
+matters — the same check against a database with no beacon reports
+`HOSTED-VERIFICATION: FAIL 68/69`. A check that cannot fail is not a check.
+
+Item 32 stays **NOT EXECUTED** until a deploy runs with that machinery in place.
+
+### Item 33, and what it actually asserts
+
+Fetching a project on the live Brain drives the planner, the layer repository
+and the state engine in one request, so the harness now asserts the response
+carries a project, a layers array and a plan — not merely a 200. A schema change
+that broke any of them fails the deploy instead of being found the next time
+somebody opens the site.
 
 ### Atomic claiming, measured
 

@@ -239,7 +239,7 @@ jobs:
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           set +e
           flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev" \
+            -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev --leave-beacon" \
             2>&1 | tee hosted-verification.txt
           set -e
           # The verdict comes from a line the script printed, not from an exit
@@ -286,6 +286,30 @@ jobs:
           # shellcheck disable=SC2086
           flyctl secrets unset --app "$app" $present
 
+      # -------------------------------------------------------------------
+      # Restart on purpose, not as a side effect
+      # -------------------------------------------------------------------
+      #
+      # The restart used to be a consequence of removing the bootstrap secrets.
+      # That worked exactly once. The moment those secrets were gone the step
+      # became a no-op, nothing restarted, and the run still printed "either
+      # side of a restart" — a claim that decayed into a lie without anybody
+      # editing a line, which is the failure mode this whole workflow exists to
+      # prevent.
+      #
+      # So the restart is its own step and always happens. The pass afterwards
+      # asserts that the three work items the pass before it left — one queued,
+      # one finished, and one with a live lease — are exactly where they were.
+      # The process that created them is gone, so nothing in the container can
+      # fake that.
+      - name: Restart it, so persistence means something
+        if: always()
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          flyctl apps restart "$app"
+
       - name: Wait for it to answer after the restart
         if: always()
         run: |
@@ -315,7 +339,7 @@ jobs:
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           set +e
           flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev" \
+            -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev --check-beacon" \
             2>&1 | tee hosted-after-restart.txt
           set -e
           grep -q '^HOSTED-VERIFICATION: PASS' hosted-after-restart.txt
@@ -333,4 +357,5 @@ jobs:
             echo "::error::The hosted verification did not pass. Read the two steps above."
             exit 1
           fi
-          echo "The live Brain refused everything it should have, twice, either side of a restart."
+          echo "The live Brain refused everything it should have, twice, either side of a real restart,"
+          echo "and the work left before it was still there afterwards."
