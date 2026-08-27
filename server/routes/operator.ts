@@ -43,21 +43,74 @@ import { card, esc, page } from './pages.ts';
 export const OPERATOR_BASE = '/operator';
 
 /**
- * Only a Brain administrator, and only by browser session.
+ * Who is at the console, and what to do about it.
  *
- * A bearer token is refused outright. A worker holding a credential must never
- * be able to reach the screen that grants credentials — that is the machine
- * widening its own access, and it is the single worst thing this console could
- * allow.
+ * Three outcomes rather than two, and the third one exists because the first
+ * version of this got it wrong.
+ *
+ *   `ADMIN`      — proceed.
+ *   `ANONYMOUS`  — nobody is signed in. Offer a sign-in form.
+ *   `DENIED`     — somebody *is* signed in and may not be here. 404.
+ *
+ * The original returned only admin-or-nothing and rendered a bare "Not found"
+ * for both of the last two. That hid the console from strangers, which was the
+ * point — and it also meant an administrator whose eight-hour session had
+ * quietly expired saw a page telling them the console did not exist, with
+ * nothing to click and no way to find out why. A security control that is
+ * indistinguishable from a broken deployment costs more than it saves.
+ *
+ * Offering a sign-in form to an anonymous visitor discloses nothing: the Brain
+ * already serves a sign-in page at its root to the whole internet. What must
+ * stay hidden is whether this *particular path* is anything, to somebody who
+ * has already proved they are not an administrator — and that case still gets
+ * the 404.
+ *
+ * A bearer token is refused outright in all three cases. A worker holding a
+ * credential must never reach the screen that grants credentials; that is a
+ * machine widening its own access, and it is the worst thing this console
+ * could allow.
  */
-async function administrator(req: Request): Promise<Principal | null> {
-  if (req.header('authorization')) return null;
+type ConsoleAccess =
+  | { state: 'ADMIN'; principal: Principal }
+  | { state: 'ANONYMOUS' }
+  | { state: 'DENIED' };
+
+async function consoleAccess(req: Request): Promise<ConsoleAccess> {
+  if (req.header('authorization')) return { state: 'DENIED' };
   const outcome = await authenticateRequest(req);
-  if (!outcome.ok) return null;
-  if (outcome.principal.type !== 'HUMAN') return null;
-  if (!outcome.principal.isBrainAdmin) return null;
-  if (outcome.principal.mustChangePassword) return null;
-  return outcome.principal;
+  if (!outcome.ok) {
+    // No credential at all is "not signed in". A *rejected* one — expired,
+    // revoked, disabled — is also not signed in, and offering the form is the
+    // useful answer to both.
+    return { state: 'ANONYMOUS' };
+  }
+  if (outcome.principal.type !== 'HUMAN') return { state: 'DENIED' };
+  if (!outcome.principal.isBrainAdmin) return { state: 'DENIED' };
+  if (outcome.principal.mustChangePassword) return { state: 'DENIED' };
+  return { state: 'ADMIN', principal: outcome.principal };
+}
+
+/** The mutating routes need admin or nothing; there is no form to offer a POST. */
+async function administrator(req: Request): Promise<Principal | null> {
+  const access = await consoleAccess(req);
+  return access.state === 'ADMIN' ? access.principal : null;
+}
+
+function signInPage(error: string | null): string {
+  return page(
+    'Sign in',
+    card(`<h1>Sign in</h1>
+      <p class="sub">The worker console needs a Brain administrator.</p>
+      ${error ? `<div class="err">${esc(error)}</div>` : ''}
+      <form method="post" action="${OPERATOR_BASE}/signin">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="username" required autofocus>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button type="submit">Sign in</button>
+      </form>
+      <p class="note">This is the same account you use for the Brain.</p>`),
+  );
 }
 
 async function audit(input: {
@@ -229,15 +282,54 @@ export function operatorRouter(): Router {
 
   router.get('/', (req: Request, res: Response) => {
     void (async (): Promise<void> => {
-      const person = await administrator(req);
-      // Not a 401 with a prompt: an operator console that announces itself to
-      // anybody who guesses the path is a map of what to attack. The same
-      // answer as a route that does not exist.
-      if (!person) {
+      const access = await consoleAccess(req);
+      if (access.state === 'ANONYMOUS') {
+        res.status(401).type('html').send(signInPage(null));
+        return;
+      }
+      // Somebody who is signed in and may not be here gets the same answer as a
+      // route that does not exist. A console that confirms its own existence to
+      // a non-administrator is a map of what to attack.
+      if (access.state === 'DENIED') {
         denied(res);
         return;
       }
-      res.type('html').send(await consolePage(person));
+      res.type('html').send(await consolePage(access.principal));
+    })();
+  });
+
+  /**
+   * Sign in, and land back on the console.
+   *
+   * Delegated to the application's own sign-in endpoint rather than
+   * reimplemented, so there is one implementation of "is this password right",
+   * with one throttle behind it. The redirect afterwards is what makes the
+   * browser re-ask with the cookie it has just been given.
+   */
+  router.post('/signin', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      if (!originIsSameSite(req)) {
+        denied(res);
+        return;
+      }
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const email = typeof body['email'] === 'string' ? body['email'] : '';
+      const password = typeof body['password'] === 'string' ? body['password'] : '';
+      const origin = `${req.protocol}://${req.get('host') ?? 'localhost'}`;
+
+      const signIn = await fetch(`${origin}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!signIn.ok) {
+        // One message for every reason, as everywhere else.
+        res.status(401).type('html').send(signInPage('That email address and password were not accepted.'));
+        return;
+      }
+      const setCookie = signIn.headers.get('set-cookie');
+      if (setCookie) res.setHeader('Set-Cookie', setCookie);
+      res.redirect(303, OPERATOR_BASE);
     })();
   });
 

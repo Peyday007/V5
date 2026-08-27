@@ -842,11 +842,51 @@ describe('the operator console', () => {
     expect(shown.html).toContain('Create a worker');
   });
 
-  it('is not there at all for anybody else', async () => {
-    // A 404, not a 401 with a prompt. A console that announces itself to
-    // whoever guesses the path is a map of what to attack.
-    expect((await operatorPage()).status).toBe(404);
-    expect((await operatorPage({ cookie: memberCookie })).status).toBe(404);
+  it('offers a sign-in form to somebody who is not signed in', async () => {
+    // The first version returned a bare 404 here, which hid the console from
+    // strangers and also told an administrator whose session had expired that
+    // the page did not exist, with nothing to click. A control that is
+    // indistinguishable from a broken deployment costs more than it saves.
+    //
+    // This discloses nothing: the Brain already serves a sign-in page at its
+    // root to the whole internet.
+    const anonymous = await operatorPage();
+    expect(anonymous.status).toBe(401);
+    expect(anonymous.html).toContain('Sign in');
+  });
+
+  it('still does not exist for somebody signed in who may not be here', async () => {
+    // The case that must stay hidden: a caller who has already proved they are
+    // not an administrator learns nothing about whether this path is anything.
+    const member = await operatorPage({ cookie: memberCookie });
+    expect(member.status).toBe(404);
+    expect(member.html).not.toContain('Sign in');
+    expect(member.html).not.toContain('Create a worker');
+  });
+
+  it('signs an administrator in and lands them on the console', async () => {
+    const form = new URLSearchParams({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    const response = await fetch(`${BASE}/operator/signin`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: BASE },
+      body: form.toString(),
+      redirect: 'manual',
+    });
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/operator');
+    expect(response.headers.get('set-cookie')).toContain('brain_session=');
+  });
+
+  it('refuses a wrong password with one message', async () => {
+    const form = new URLSearchParams({ email: ADMIN_EMAIL, password: 'not-the-password-01' });
+    const response = await fetch(`${BASE}/operator/signin`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: BASE },
+      body: form.toString(),
+      redirect: 'manual',
+    });
+    expect(response.status).toBe(401);
+    expect(await response.text()).toContain('were not accepted');
   });
 
   it('is refused to a worker holding a perfectly good token', async () => {
