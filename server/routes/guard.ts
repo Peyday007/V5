@@ -41,7 +41,26 @@ import {
  * Both answer with the least they can: the first refuses without saying which
  * half was wrong, the second says no.
  */
-const PUBLIC_API_PATHS = new Set(['/api/auth/login', '/api/auth/session']);
+/**
+ * Two different kinds of "no credential required", and conflating them was a
+ * bug.
+ *
+ * `/api/auth/login` is genuinely unauthenticated: it is how a credential is
+ * obtained, and it must work while the browser is still carrying a stale or
+ * revoked cookie from last time.
+ *
+ * `/api/auth/session` is not. It is the client's first call on every page load,
+ * and its whole job is to answer "am I already signed in?" — which it cannot do
+ * unless the guard actually resolves the principal first. Skipping
+ * authentication for it made it answer `authenticated: false` to a perfectly
+ * valid cookie, every time, so a signed-in person was shown the sign-in form
+ * again on every refresh. It needs authentication to *run* and to *not refuse*,
+ * which is a third thing, and now has its own set.
+ */
+const UNAUTHENTICATED_PATHS = new Set(['/api/auth/login']);
+
+/** Authenticated when a credential is presented; anonymous when one is not. */
+const OPTIONAL_AUTH_PATHS = new Set(['/api/auth/session']);
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -145,7 +164,7 @@ export function requireAuthentication(): RequestHandler {
         return;
       }
 
-      if (PUBLIC_API_PATHS.has(context.path)) {
+      if (UNAUTHENTICATED_PATHS.has(context.path)) {
         next();
         return;
       }
@@ -162,6 +181,15 @@ export function requireAuthentication(): RequestHandler {
       }
 
       if (!outcome.ok) {
+        // On an optional-auth path a missing or stale credential is the
+        // ordinary case rather than a refusal — it is the question being
+        // asked. It is not audited either: a browser holding an expired cookie
+        // asks this on every page load, and an audit trail of that is noise
+        // that hides the denials worth reading.
+        if (OPTIONAL_AUTH_PATHS.has(context.path)) {
+          next();
+          return;
+        }
         if (worthAuditing(outcome.reason, req.method)) {
           await auditDenial(req, context, outcome.reason);
         }

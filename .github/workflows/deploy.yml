@@ -205,3 +205,132 @@ jobs:
           done
           echo "::error::/healthz never answered 200"
           exit 1
+
+      # -------------------------------------------------------------------
+      # The part a green deploy has never actually proven
+      # -------------------------------------------------------------------
+      #
+      # Everything above says the machine is up and that one anonymous request
+      # was refused. Neither says the live Brain's authorization works — that
+      # a member of one project cannot reach another, that a worker credential
+      # authenticates and a revoked one does not, that a refusal is a 404 and
+      # not an oracle. The test suite proves all of it against SQLite on a
+      # loopback socket, which is a different program from this one in every
+      # way authorization can go wrong.
+      #
+      # So it is proven here, against the deployment, over the internet.
+      #
+      # It runs inside the machine because a hosted authorization test needs
+      # two things at once: to mint principals, and to arrive from outside.
+      # A runner has only the second, and gets the first only by being handed
+      # an administrator's password — which would put a live credential in a
+      # second system permanently. Inside the container both are free, the
+      # fixtures are created and disabled within the run, and every assertion
+      # is still made from outside through the edge.
+      #
+      # `continue-on-error` so that a failure here does not skip the secret
+      # removal below; the run is still failed, explicitly, at the end.
+      - name: Prove the live Brain is actually shut
+        id: hosted
+        continue-on-error: true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev" \
+            2>&1 | tee hosted-verification.txt
+          set -e
+          # The verdict comes from a line the script printed, not from an exit
+          # code that had to survive an SSH session, a shell and a CLI.
+          if grep -q '^HOSTED-VERIFICATION: PASS' hosted-verification.txt; then
+            grep '^HOSTED-VERIFICATION' hosted-verification.txt
+            exit 0
+          fi
+          if ! grep -q '^HOSTED-VERIFICATION' hosted-verification.txt; then
+            echo "::error::The hosted verification never ran. If the output above says the SSH connection failed, the Fly token cannot open a console on this app; nothing else in this deploy is affected."
+            exit 1
+          fi
+          echo "::error::The live Brain failed its own authorization checks. The failing lines are above."
+          exit 1
+
+      # -------------------------------------------------------------------
+      # A bootstrap password is meant to be spent, not kept
+      # -------------------------------------------------------------------
+      #
+      # BRAIN_BOOTSTRAP_ADMIN_PASSWORD exists to get the first account created
+      # on a Brain that has none. The moment somebody has signed in, it is a
+      # copy of a live password sitting in a deployment store, and the boot log
+      # has said so every single time. Leaving the removal to a person means it
+      # is still there in six months.
+      #
+      # Removing a secret restarts the machine, which is the other thing worth
+      # having: it is a real, unannounced restart of the production Brain, and
+      # the checks below run against what came back. An account that did not
+      # survive it would be found here rather than by somebody signing in.
+      - name: Spend the bootstrap secrets
+        if: always()
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          # `secrets list` prints names and digests, never values.
+          present=$(flyctl secrets list --app "$app" 2>/dev/null | awk '{print $1}' \
+            | grep -E '^BRAIN_BOOTSTRAP_ADMIN_(EMAIL|PASSWORD|RESET)$' || true)
+          if [ -z "$present" ]; then
+            echo "No bootstrap secrets are set. Nothing to remove."
+            exit 0
+          fi
+          echo "Removing: $present"
+          # shellcheck disable=SC2086
+          flyctl secrets unset --app "$app" $present
+
+      - name: Wait for it to answer after the restart
+        if: always()
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://$app.fly.dev/healthz" || true)
+            if [ "$code" = "200" ]; then
+              echo "healthy again after ${attempt} attempt(s)"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::/healthz never answered 200 after the restart"
+          exit 1
+
+      # The same checks a second time, against a Brain that has just been
+      # restarted with its bootstrap secrets gone. Accounts, memberships,
+      # workers and credentials live in Postgres, so they must all still be
+      # exactly where they were — and if they are not, this is where that is
+      # discovered.
+      - name: Prove it survived the restart
+        id: hosted_after
+        continue-on-error: true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev" \
+            2>&1 | tee hosted-after-restart.txt
+          set -e
+          grep -q '^HOSTED-VERIFICATION: PASS' hosted-after-restart.txt
+
+      # Both verification steps are `continue-on-error` so that neither can skip
+      # the secret removal. The run's verdict is decided here instead.
+      - name: The verdict
+        if: always()
+        run: |
+          before='${{ steps.hosted.outcome }}'
+          after='${{ steps.hosted_after.outcome }}'
+          echo "hosted verification: $before"
+          echo "after the restart:   $after"
+          if [ "$before" != "success" ] || [ "$after" != "success" ]; then
+            echo "::error::The hosted verification did not pass. Read the two steps above."
+            exit 1
+          fi
+          echo "The live Brain refused everything it should have, twice, either side of a restart."

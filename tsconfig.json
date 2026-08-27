@@ -20,6 +20,6 @@
     "resolveJsonModule": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["server/**/*.ts", "client/**/*.ts", "client/**/*.tsx", "tests/**/*.ts", "vite.config.ts"],
+  "include": ["server/**/*.ts", "scripts/**/*.ts", "client/**/*.ts", "client/**/*.tsx", "tests/**/*.ts", "vite.config.ts"],
   "exclude": ["node_modules", "client/dist", "data"]
 }

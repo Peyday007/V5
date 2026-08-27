@@ -20,6 +20,7 @@
     "db:reset": "node --input-type=module -e \"import{rmSync}from'node:fs';rmSync('data/brain.db',{force:true});rmSync('data/brain.db-wal',{force:true});rmSync('data/brain.db-shm',{force:true});console.log('database removed')\"",
     "migrate:cloud": "tsx --env-file-if-exists=.env scripts/migrate-cloud.ts",
     "start:container": "node --import tsx server/index.ts",
+    "verify:hosted": "node --import tsx scripts/verify-hosted.ts",
     "preflight": "tsx --env-file-if-exists=.env scripts/preflight.ts"
   },
   "dependencies": {

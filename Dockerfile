@@ -58,6 +58,10 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY tsconfig.json ./
 COPY server ./server
+# The operator tools run *inside* the deployment, because that is the only place
+# that can both mint a test principal and reach the public URL. See
+# scripts/verify-hosted.ts for why that combination is the whole point.
+COPY scripts ./scripts
 COPY --from=build /app/client/dist ./client/dist
 
 # Not root. The process needs no privilege: it opens a socket and talks to two

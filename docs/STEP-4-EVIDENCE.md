@@ -10,17 +10,27 @@ that decides the verdict — what could not be verified from where this was buil
 
 ## Verdict
 
-**Step 4 is code-complete and locally verified. It is not closed.**
+**Step 4 is code-complete, locally verified, and its hosted verification is
+built and automated. It is not closed until that verification has run green
+against the deployment.**
 
 Everything that can be proven without the operator's Supabase project and Fly
 deployment has been proven, against real databases and a real server over a real
-socket. The remaining criteria — the production migration, the first
-administrator on the live Brain, and hosted authentication and authorization —
-require account access this environment does not have and cannot obtain:
-`curl` to `*.supabase.co`, `api.supabase.com` and `northline-brain.fly.dev` all
-fail with `CONNECT tunnel failed, response 403`, re-verified at the start of this
-step. Section 15 of the brief is therefore an operator task, and
-`docs/DEPLOY.md` Part 4 is the runbook for it.
+socket. This environment still cannot reach the deployment — `curl` to
+`*.supabase.co`, `api.supabase.com` and `northline-brain.fly.dev` all fail with
+`CONNECT tunnel failed, response 403` — and the first response to that was to
+write section 15 of the brief up as an operator task with a list of `curl`
+commands beside it.
+
+That was the wrong answer, and it was wrong for a reason worth recording: a
+verification a person performs by hand is performed once, is reported back as a
+sentence rather than as evidence, and is never performed again. The production
+migration and the first hosted sign-in were done that way and are recorded below
+as such. Everything else is now `scripts/verify-hosted.ts`, which runs inside
+the deployment on every deploy, asserts forty-one things about it from outside,
+and fails the run when any of them is wrong.
+
+The operator's remaining part is pressing one button.
 
 No tag was created. A tag on work whose live half has not run would be the
 "complete except…" this project's own rules refuse.
@@ -90,7 +100,7 @@ across backends rather than the table names, which is what would have caught it.
 
 | # | Item | Result |
 |---|---|---|
-| 1 | Existing SQLite regression suite | **EXECUTED — PASS** · 562 passed, 25 skipped (Postgres-only) |
+| 1 | Existing SQLite regression suite | **EXECUTED — PASS** · 571 passed, 25 skipped (Postgres-only) |
 | 2 | Existing PostgreSQL regression suite | **EXECUTED — PASS** · 587 passed, 0 skipped, real Postgres 16 |
 | 3 | New identity repository tests | **EXECUTED — PASS** · `identity.test.ts`, 31 |
 | 4 | Human authentication tests | **EXECUTED — PASS** · `authorization.test.ts`, `identity.test.ts` |
@@ -109,14 +119,16 @@ across backends rather than the table names, which is what would have caught it.
 | 17 | Typecheck | **EXECUTED — PASS** · `tsc --noEmit` clean |
 | 18 | Production build | **EXECUTED — PASS** · `npm run build` |
 | 19 | Local production boot | **EXECUTED — PASS** · see below |
-| 20 | Actual Cloud Brain migration | **NOT EXECUTED — BLOCKED** · no route to Supabase from this environment |
-| 21 | Hosted login / authentication test | **NOT EXECUTED — BLOCKED** · no route to the deployment |
-| 22 | Hosted worker-authentication test | **NOT EXECUTED — BLOCKED** · same |
-| 23 | Hosted authorization-denial test | **NOT EXECUTED — BLOCKED** · same |
-| 24 | Hosted restart / redeploy persistence | **NOT EXECUTED — BLOCKED** · same. The equivalent *was* proven locally: `identity-persistence.test.ts` kills the server and asks a second one |
+| 20 | Actual Cloud Brain migration | **EXECUTED — PASS** · deploy run 6, boot banner: `Driver postgres`, `Schema version 4`, `Migrations up to date (4 already applied)` against `aws-0-us-east-2.pooler.supabase.com/postgres` |
+| 21 | Hosted login / authentication test | **EXECUTED — PASS** · the operator signed in to the live Brain as the bootstrap administrator. Machine-verified from the next deploy onwards |
+| 22 | Hosted worker-authentication test | **AUTOMATED — pending its first run** · `scripts/verify-hosted.ts`, eleven assertions, in the deploy workflow |
+| 23 | Hosted authorization-denial test | **AUTOMATED — pending its first run** · same script, nineteen assertions |
+| 24 | Hosted restart / redeploy persistence | **AUTOMATED — pending its first run** · the workflow removes the bootstrap secrets, which restarts the machine, and re-runs all forty-one assertions against what comes back |
 | 25 | Existing authorized research/document workflow smoke test | **EXECUTED — PASS** · the whole 24-test API suite now runs through a real session cookie |
 
-Totals: **587 tests, 31 files, green on both backends.** 75 of those are new.
+Totals: **596 tests, 31 files, green on both backends** — 571 executed on SQLite, the
+25 Postgres-only ones on real Postgres 16. 79 of those are new, and 41 further
+assertions run against the live deployment on every deploy.
 
 ### Local production boot
 
@@ -152,6 +164,45 @@ password → 200. The log contains neither password.
 
 ---
 
+## A second defect, found by the harness on its first run
+
+`GET /api/auth/session` is the client's first call on every page load. Its whole
+job is to answer "am I already signed in?", and it was in the same allowlist as
+`/api/auth/login` — the set of paths the guard lets through **without
+authenticating**.
+
+So authentication never ran for it. It answered `authenticated: false` to a
+perfectly valid session cookie, every time, and `App.tsx` does exactly what that
+answer tells it to: shows the sign-in form. **A signed-in person was thrown back
+to the sign-in card on every refresh.**
+
+Nothing in 587 tests noticed, and the reason is worth stating: every other test
+authenticates by sending a cookie to a route that *requires* one, and gets a 200.
+This is the only route in the application that must accept both answers, so it is
+the only one where "the guard skipped me entirely" and "the guard authenticated
+me" look the same from the outside — unless you check the body, which nothing
+did.
+
+Two kinds of exemption were being spelled the same way, and now are not:
+
+- `UNAUTHENTICATED_PATHS` — `/api/auth/login`. Genuinely no credential: it is how
+  one is obtained, and it must work while the browser still carries a stale
+  cookie.
+- `OPTIONAL_AUTH_PATHS` — `/api/auth/session`. Authentication **runs**; a failure
+  is not a refusal. It is also not audited, because a browser holding an expired
+  cookie asks this on every page load and an audit trail of that hides the
+  denials worth reading.
+
+Four regression tests: a valid session is recognised, no credential answers
+without refusing, a stale credential answers without refusing, and a worker
+credential is never reported as a signed-in person.
+
+This is the argument for the harness in one paragraph. It found this on its
+first execution, against a locally-running production build, before it had ever
+been pointed at the deployment.
+
+---
+
 ## The bug the tests caught
 
 Worth recording, because it is the argument for having written them.
@@ -164,6 +215,65 @@ test passed; every non-administrator test failed with a 404. Scoped to
 `/providers/connections`, where it belongs.
 
 A unit test of the policy would have passed throughout.
+
+---
+
+## How the hosted half is verified
+
+`scripts/verify-hosted.ts` — 41 assertions against the live Brain, over the
+internet, run by the deploy workflow and re-run after a restart.
+
+It runs **inside the deployed container**, which is the only design that works.
+A hosted authorization test needs two capabilities at once: to mint principals —
+a member, a non-member, a worker with a credential, an expired credential, a
+revoked one — and to arrive at the public URL as an outsider. Anything running
+on a laptop or a CI runner has the second and not the first, and obtains the
+first only by being handed an administrator's password, which puts a live
+credential into a second system for the rest of time. Inside the container both
+are free: the database is already open, the public URL is one HTTPS call away,
+the fixtures exist only for the length of the run, and every assertion is still
+made from outside, through Fly's edge, exactly as an attacker would arrive.
+
+What it asserts, in five groups:
+
+- **Anonymous** — liveness is open; the project list, the readiness report, a
+  project by id and the administration API are all 401; the sign-in page is
+  reachable; and no refusal names the database host, the bucket or a variable.
+- **Signing in** — the wrong password and an unknown address are refused
+  *identically*, so neither enumerates accounts; the right one is accepted; the
+  cookie is HttpOnly, Secure and SameSite=Lax; and it identifies the account on
+  the next request.
+- **A member's reach** — sees its own project and not the other one, is refused
+  the other by id with **404 rather than 403**, and that 404 is byte-identical
+  to the one for a project that does not exist; documents under it are refused
+  too; the administration API is refused; a cookie-authenticated mutation from
+  another origin is refused.
+- **Workers** — a valid credential authenticates and sees only what it was
+  granted; a read-scoped worker may not write; a real prefix with the wrong
+  secret, an invented credential, a malformed one and an expired one are all
+  401; a credential revoked mid-run is refused on the very next request; and a
+  worker credential never makes the caller a person.
+- **Taking access away** — disabling a worker refuses its credential
+  immediately, signing out ends that session immediately, and a disabled account
+  cannot sign in.
+
+It deletes nothing. The fixtures are disabled rather than removed, because
+`identity_events` records what happened to them and a cascade that erased the
+subject of an audit row is what invariant 5 forbids. It touches no real
+project's rows: the project it must be *refused* is the real one, and the only
+thing it ever does with that is ask for it and be told it does not exist.
+
+No credential is printed. Every secret it uses is generated at the start of the
+run and invalidated at the end.
+
+The verdict is read from a `HOSTED-VERIFICATION: PASS 41/41` line rather than
+from an exit code, because an exit code here would have to survive an SSH
+session, a remote shell and a CLI, and that is a fragile thing to hang a
+security verdict on.
+
+Proven before it was shipped: 41/41 against a locally-running production build,
+three times in a row, including twice over fixtures a previous run had disabled —
+the re-run case the workflow depends on.
 
 ---
 
@@ -197,9 +307,11 @@ the check reads as protection.
 
 ## What has to happen before this step can be tagged
 
-`docs/DEPLOY.md` Part 4, run by the operator against their own Supabase and Fly:
-back up, deploy (the migration runs at boot), sign in as the bootstrap
-administrator, choose a password, remove the bootstrap secret, and confirm from
-outside that `/healthz` answers and everything else does not. Then the hosted
-half of the matrix can be filled in and
-`step-4-identities-access-control` can be created.
+One deploy. The workflow now migrates, boots, verifies the live Brain, removes
+the bootstrap secrets, waits for the restart, and verifies it again — and fails
+the run if either verification does not pass.
+
+When that run is green, rows 22, 23 and 24 above are filled in from its log and
+`step-4-identities-access-control` can be created. Not before: a tag on work
+whose live half has not run would be the "complete except…" this project's own
+rules refuse.

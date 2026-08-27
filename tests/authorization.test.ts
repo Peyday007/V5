@@ -706,3 +706,56 @@ describe('signing out', () => {
     expect((await call('GET', '/api/auth/me', { cookie: second })).status).toBe(200);
   });
 });
+
+/**
+ * The client's first call on every page load, and the one that decides whether
+ * a person sees their Brain or a sign-in form.
+ *
+ * It was exempt from the guard entirely, which is not the same exemption it
+ * needed. Authentication never ran for it, so it answered `authenticated:
+ * false` to a valid cookie every time, and a signed-in person was shown the
+ * sign-in form again on every refresh. Nothing in the suite noticed, because
+ * every other test authenticates by sending a cookie to a route that requires
+ * one — this is the only route that must accept both answers.
+ */
+describe('asking who I am', () => {
+  it('recognises a valid session', async () => {
+    const cookie = await signIn('alice@example.invalid', ALICE_PASSWORD);
+    const session = await call<{ authenticated: boolean; user: { email: string } | null }>(
+      'GET',
+      '/api/auth/session',
+      { cookie },
+    );
+    expect(session.status).toBe(200);
+    expect(session.body.authenticated).toBe(true);
+    expect(session.body.user?.email).toBe('alice@example.invalid');
+  });
+
+  it('answers without refusing when there is no credential at all', async () => {
+    const session = await call<{ authenticated: boolean; user: unknown }>(
+      'GET',
+      '/api/auth/session',
+    );
+    expect(session.status).toBe(200);
+    expect(session.body.authenticated).toBe(false);
+    expect(session.body.user).toBeNull();
+  });
+
+  it('answers without refusing when the credential is stale', async () => {
+    const cookie = await signIn('alice@example.invalid', ALICE_PASSWORD);
+    await call('POST', '/api/auth/logout', { cookie });
+
+    const session = await call<{ authenticated: boolean }>('GET', '/api/auth/session', { cookie });
+    expect(session.status).toBe(200);
+    expect(session.body.authenticated).toBe(false);
+  });
+
+  // A worker is a principal, but it is not a person, and the client's sign-in
+  // decision must not be reachable by one.
+  it('does not report a worker as a signed-in person', async () => {
+    const session = await call<{ authenticated: boolean }>('GET', '/api/auth/session', {
+      bearer: workerCredential,
+    });
+    expect(session.body.authenticated).toBe(false);
+  });
+});

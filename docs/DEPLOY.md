@@ -646,14 +646,42 @@ you have chosen one. Choose it, and store it.
 
 ## 4.6 Remove the bootstrap secret
 
-<https://fly.io/dashboard> → your app → **Secrets** → remove both. Or:
+**The deploy workflow does this for you.** After it has verified the live Brain
+it runs `fly secrets unset` on `BRAIN_BOOTSTRAP_ADMIN_EMAIL`,
+`BRAIN_BOOTSTRAP_ADMIN_PASSWORD` and `BRAIN_BOOTSTRAP_ADMIN_RESET`, and prints
+which of them were there. A temporary password should not become a permanent
+secret because somebody forgot the last step of a runbook, and that is the kind
+of thing a runbook is worst at.
+
+Removing a secret restarts the machine, which is the second reason it happens
+there: the restart is real and unannounced, and the workflow re-runs the whole
+hosted verification against what comes back. An account, membership, worker or
+credential that did not survive a restart is found by the deploy rather than by
+you.
+
+If you ever need to do it by hand: <https://fly.io/dashboard> → your app →
+**Secrets**, or
 
 ```bash
-fly secrets unset BRAIN_BOOTSTRAP_ADMIN_PASSWORD BRAIN_BOOTSTRAP_ADMIN_EMAIL
+fly secrets unset BRAIN_BOOTSTRAP_ADMIN_PASSWORD BRAIN_BOOTSTRAP_ADMIN_EMAIL \
+  BRAIN_BOOTSTRAP_ADMIN_RESET
 ```
 
-They are already inert — the bootstrap only runs into a Brain with no accounts —
-but a temporary password should not be a permanent secret.
+### If you are locked out of the only account
+
+There is no "forgot password" — that needs an email sender this application does
+not have and should not acquire. The way back in is the bootstrap:
+
+1. Set `BRAIN_BOOTSTRAP_ADMIN_EMAIL` and `BRAIN_BOOTSTRAP_ADMIN_PASSWORD` to the
+   address and the new password you want.
+2. Set `BRAIN_BOOTSTRAP_ADMIN_RESET` to `true`. Without it the bootstrap will
+   not touch an account somebody has already chosen a password for, and will
+   say so in the boot log rather than failing silently.
+3. Deploy. The boot log will read `Reset the password for <address>.`
+4. Sign in. The workflow removes all three secrets on the way out.
+
+It grants nothing new: only somebody who can set this deployment's secrets can
+use it, and that person already controls the deployment entirely.
 
 ## 4.7 Optional: drop the outer layer
 
@@ -669,6 +697,28 @@ open internet. Both are defensible; what is not defensible is believing the
 token is what makes the Brain private. It is not, and has not been since Step 4.
 
 ## 4.8 Verify from outside
+
+**The deploy workflow does this too, and far more thoroughly than a person
+would.** `scripts/verify-hosted.ts` runs inside the deployed container and makes
+forty-one assertions against the public URL — anonymous refusals, sign-in,
+project isolation, the 404-not-403 rule, worker credentials, expiry, revocation,
+sign-out, and disabling an account. It creates the principals it needs, disables
+them again, and prints no credential. Read the results in the **Prove the live
+Brain is actually shut** step of the run.
+
+It runs inside the machine for one reason: a hosted authorization test needs to
+mint principals *and* to arrive from outside. A CI runner has only the second,
+and gets the first only by being handed an administrator's password — which
+would put a live credential into a second system permanently.
+
+To run it yourself against any deployment:
+
+```bash
+fly ssh console --app <name> -C "sh /app/scripts/verify-hosted.sh https://<name>.fly.dev"
+```
+
+The three checks worth knowing by hand, if you want to see it with your own
+eyes:
 
 ```bash
 APP=<name>
