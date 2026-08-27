@@ -18,6 +18,7 @@ the tag in git is the record of *when*, this file is the record of *what*.
 | **4** | **Who is asking, and may they.** Human sessions, worker identities and credentials, roles, scopes, project membership, execution-time authorization, the identity audit | `step-4-identities-access-control` |
 | **5** | **Who owns this work, right now.** Durable queued work, atomic claiming by compare-and-swap, time-bounded leases, fencing generations, heartbeats, expiry and reclaim, bounded retry, cancellation, attempt history | `step-5-distributed-queue-leases` |
 | **6** | **A retry is not a second effect.** Idempotency keys, canonical fingerprints, reservation and replay, concurrent duplicate suppression, fenced effect commits, the external adapter contract, uncertain-outcome handling and administrative reconciliation | `step-6-idempotency-safe-effects` |
+| **7** | **A door, not a second set of rules.** One authoritative remote MCP endpoint serving both protocol eras statelessly, worker authentication at the boundary, execution-time authorization, a permanent tool surface over existing services, Step 6 idempotency on every mutation, bounded results, safe error categories and an MCP audit | `step-7-authoritative-remote-mcp` |
 
 Step 3's evidence is in [`STEP-3-EVIDENCE.md`](STEP-3-EVIDENCE.md); Step 4's is
 in [`STEP-4-EVIDENCE.md`](STEP-4-EVIDENCE.md), and the model it built is
@@ -25,7 +26,9 @@ described in [`IDENTITY.md`](IDENTITY.md). Step 5's evidence is in
 [`STEP-5-EVIDENCE.md`](STEP-5-EVIDENCE.md) and its design in
 [`QUEUE.md`](QUEUE.md). Step 6's is in
 [`STEP-6-EVIDENCE.md`](STEP-6-EVIDENCE.md) and its design in
-[`EFFECTS.md`](EFFECTS.md). Each evidence file says what was proven, what merely passes its tests, and what
+[`EFFECTS.md`](EFFECTS.md). Step 7's is in
+[`STEP-7-EVIDENCE.md`](STEP-7-EVIDENCE.md) and its design in
+[`MCP.md`](MCP.md). Each evidence file says what was proven, what merely passes its tests, and what
 nobody has run.
 
 ## Ahead
@@ -35,7 +38,6 @@ order is a dependency order, not a preference.
 
 | Step | What it contains |
 |---|---|
-| **7** | Remote MCP |
 | **8** | Connect one Claude Max worker |
 | **9** | Manual end-to-end research packet |
 | **10** | Scheduled firing and interruption recovery |
@@ -56,7 +58,8 @@ order is a dependency order, not a preference.
   to it are different claims, and only the second one is evidence that the
   first works — the same distinction Step 3 drew between the research engine
   passing its tests against a scripted provider and a real job having actually
-  run.
+  run. Step 7 landed with two real external MCP clients driving the deployed
+  endpoint; CF-7 is untouched by that and remains Step 8's.
 - **Step 11 is the only one that runs more than one worker.** Until it lands,
   Brain runs a single instance deliberately: the extraction and research queues
   are per-instance and nothing coordinates them.

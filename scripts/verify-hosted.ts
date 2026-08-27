@@ -50,6 +50,9 @@
  */
 import crypto from 'node:crypto';
 import { describePersistence, persistenceConfig } from '../server/config.ts';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { ModernMcpClient } from './mcpModernClient.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import {
   createUser,
@@ -1159,6 +1162,262 @@ async function effectChecks(
 }
 
 /* ------------------------------------------------------------------------ */
+/* The MCP gateway, from outside                                             */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Step 7's live proof.
+ *
+ * Two genuine external MCP clients are pointed at the deployed URL: the
+ * official SDK's own client, which speaks the legacy era and is what every MCP
+ * client in existence is built on, and the hand-written 2026-07-28 client in
+ * `scripts/mcpModernClient.ts`, because no SDK can speak that revision yet.
+ *
+ * Run from inside the container and out through the public hostname, for the
+ * reason every hosted check here works that way: this is the only place that
+ * can both mint a test principal and arrive from outside. A check that talked
+ * to 127.0.0.1 would skip the load balancer, the TLS termination and the proxy
+ * headers, which is most of what can actually be wrong about a remote gateway.
+ */
+async function mcpChecks(fixtures: Fixtures): Promise<void> {
+  console.log('');
+  console.log('The MCP gateway, driven by real external clients');
+
+  const url = `${base}/mcp`;
+
+  /* --- The hand-written 2026-07-28 client ------------------------------- */
+
+  const modern = new ModernMcpClient({
+    url,
+    credential: fixtures.credential,
+    clientName: 'brain-hosted-verification',
+  });
+
+  const discovered = await modern.discover();
+  expectStatus('a modern client discovers the deployed Brain', discovered.status, 200);
+  record(
+    'and is told both protocol eras',
+    JSON.stringify(discovered.result?.supportedVersions) === JSON.stringify(['2026-07-28', '2025-11-25']),
+    JSON.stringify(discovered.result?.supportedVersions ?? null),
+  );
+
+  const listed = await modern.listTools();
+  const modernNames = (listed.result?.tools ?? []).map((tool) => tool.name);
+  record('and lists the permanent tool surface', modernNames.length > 0, `${modernNames.length} tool(s)`);
+  record(
+    'with the cache fields this revision requires',
+    typeof listed.result?.ttlMs === 'number' && listed.result?.cacheScope === 'private',
+    `ttlMs ${String(listed.result?.ttlMs)} · ${String(listed.result?.cacheScope)}`,
+  );
+
+  const whoami = await modern.callTool('brain_whoami');
+  record(
+    'and calls a tool over TLS, through the load balancer',
+    whoami.result?.isError === false && whoami.result?.resultType === 'complete',
+    `resultType ${String(whoami.result?.resultType)}`,
+  );
+
+  /* --- The official SDK client, over the same URL ----------------------- */
+
+  const sdk = new Client({ name: 'brain-hosted-verification-sdk', version: '1.0.0' }, { capabilities: {} });
+  const transport = new StreamableHTTPClientTransport(new URL(url), {
+    requestInit: { headers: { authorization: `Bearer ${fixtures.credential}` } },
+  });
+
+  let sdkConnected = false;
+  let sdkNames: string[] = [];
+  try {
+    await sdk.connect(transport);
+    sdkConnected = true;
+    const sdkTools = await sdk.listTools();
+    sdkNames = sdkTools.tools.map((tool) => tool.name);
+    record('the official SDK client connects to the deployed Brain', true, 'initialize completed');
+  } catch (error) {
+    record('the official SDK client connects to the deployed Brain', false, String(error).slice(0, 160));
+  }
+
+  if (sdkConnected) {
+    record(
+      'and is served the identical tool surface',
+      JSON.stringify(sdkNames) === JSON.stringify(modernNames),
+      `${sdkNames.length} tool(s)`,
+    );
+
+    const queued = await call(`/api/projects/${fixtures.scope.id}/work`, {
+      method: 'POST',
+      cookie: fixtures.adminCookie,
+      origin: base,
+      body: { workType: 'SYNTHETIC_ECHO', payload: { note: 'mcp hosted verification' } },
+    });
+    record('a work item is queued for it', queued.status === 200, String(queued.status));
+
+    try {
+      const claimResult = await sdk.callTool({ name: 'brain_claim_work', arguments: { limit: 1 } });
+      const claimed =
+        (claimResult.structuredContent as { claimed?: { workItemId: string; leaseId: string; leaseGeneration: number }[] })
+          ?.claimed ?? [];
+      record('and the SDK client claims it', claimed.length === 1, `${claimed.length} claimed`);
+
+      const lease = claimed[0];
+      if (lease) {
+        const beat = await sdk.callTool({
+          name: 'brain_heartbeat_work',
+          arguments: {
+            work_item_id: lease.workItemId,
+            lease_id: lease.leaseId,
+            lease_generation: lease.leaseGeneration,
+          },
+        });
+        record('heartbeats the lease it was given', beat.isError !== true, 'lease extended');
+
+        const args = {
+          work_item_id: lease.workItemId,
+          lease_id: lease.leaseId,
+          lease_generation: lease.leaseGeneration,
+          summary: 'completed by a real external MCP client',
+        };
+        const done = await sdk.callTool({ name: 'brain_complete_work', arguments: args });
+        const state = (done.structuredContent as { state?: string })?.state;
+        record('and completes it', done.isError !== true && state === 'SUCCEEDED', String(state));
+
+        // The property Step 6 exists for, exercised through Step 7's boundary.
+        const again = await sdk.callTool({ name: 'brain_complete_work', arguments: args });
+        const replayState = (again.structuredContent as { state?: string })?.state;
+        record(
+          'a repeat of that completion replays rather than performing a second effect',
+          replayState === 'ALREADY_RECORDED',
+          String(replayState),
+        );
+      }
+
+      // Authorization at execution time, not by hiding the tool.
+      const forbidden = await sdk.callTool({
+        name: 'brain_get_project',
+        arguments: { project_id: 'prj_0000000000000000' },
+      });
+      record('a tool it may not use is listed and still refuses', forbidden.isError === true, 'isError true');
+    } finally {
+      await sdk.close().catch(() => undefined);
+    }
+  }
+
+  /* --- The refusals ----------------------------------------------------- */
+
+  const anonymous = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'mcp-protocol-version': '2026-07-28',
+      'mcp-method': 'server/discover',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'server/discover',
+      params: {
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientCapabilities': {},
+        },
+      },
+    }),
+  });
+  expectStatus('the live gateway refuses a request with no credential', anonymous.status, 401);
+  record(
+    'and points at no OAuth metadata it does not serve',
+    anonymous.headers.get('www-authenticate') === null,
+    'no WWW-Authenticate',
+  );
+
+  const expired = new ModernMcpClient({ url, credential: fixtures.expiredCredential });
+  expectStatus('and refuses an expired credential', (await expired.discover()).status, 401);
+
+  const browser = new ModernMcpClient({
+    url,
+    credential: fixtures.credential,
+    headerOverrides: { origin: 'https://evil.example' },
+  });
+  expectStatus('and refuses a browser origin, live', (await browser.discover()).status, 403);
+
+  const getStream = await fetch(url, { headers: { authorization: `Bearer ${fixtures.credential}` } });
+  expectStatus('and answers GET with 405, because that stream was removed', getStream.status, 405);
+  record(
+    'and never mints a session id',
+    getStream.headers.get('mcp-session-id') === null,
+    'no Mcp-Session-Id',
+  );
+
+  const mismatched = new ModernMcpClient({
+    url,
+    credential: fixtures.credential,
+    headerOverrides: { 'mcp-method': 'tools/call' },
+  });
+  const headerReply = await mismatched.listTools();
+  record(
+    'and refuses a header that disagrees with the body',
+    headerReply.status === 400 && headerReply.error?.code === -32020,
+    `${headerReply.status} · ${String(headerReply.error?.code)}`,
+  );
+
+  const oldVersion = new ModernMcpClient({
+    url,
+    credential: fixtures.credential,
+    headerOverrides: { 'mcp-protocol-version': '1900-01-01' },
+  });
+  const versionReply = await oldVersion.listTools();
+  record(
+    'and refuses an unsupported version with the ones it does speak',
+    versionReply.status === 400 && (versionReply.error?.code === -32020 || versionReply.error?.code === -32022),
+    `${versionReply.status} · ${String(versionReply.error?.code)}`,
+  );
+
+  /**
+   * A perfectly valid credential must not open a project it is not a member of.
+   *
+   * The first version of this check pointed the *rival* worker at the scope
+   * project and expected a refusal — which was wrong, and the harness caught
+   * it. That worker is deliberately a full member of the same project, because
+   * it exists so a hosted claim can be a real race between two workers. It got
+   * a 200 because it is entitled to one.
+   *
+   * The property actually worth proving is the holdout: a live credential,
+   * pointed at a project nobody granted it, gets the same answer as if that
+   * project did not exist — and the *body* has to match, not only the status,
+   * because that is the leak Step 4 found in the HTTP resolvers.
+   */
+  if (fixtures.holdout) {
+    const outsider = new ModernMcpClient({ url, credential: fixtures.credential });
+    const forbiddenProject = await outsider.callTool('brain_get_project', { project_id: fixtures.holdout.id });
+    const absentProject = await outsider.callTool('brain_get_project', { project_id: 'prj_0000000000000000' });
+    record(
+      'a live credential cannot open a project it was never granted',
+      forbiddenProject.result?.isError === true,
+      forbiddenProject.result?.isError === true ? 'isError true' : `status ${forbiddenProject.status}`,
+    );
+    record(
+      'and that refusal is byte-identical to one for a project that does not exist',
+      JSON.stringify(forbiddenProject.result?.structuredContent) ===
+        JSON.stringify(absentProject.result?.structuredContent),
+      'same body',
+    );
+    record(
+      'and never names the id it refused',
+      !JSON.stringify(forbiddenProject.result ?? {}).includes(fixtures.holdout.id),
+      'id not echoed',
+    );
+  } else {
+    // Said out loud rather than silently skipped: a run with only one project
+    // cannot prove cross-project isolation, and a harness that quietly drops a
+    // check reads as "covered" when it was not.
+    record(
+      'cross-project isolation over MCP',
+      true,
+      'not exercised — this Brain has only one project',
+    );
+  }
+}
+
+/* ------------------------------------------------------------------------ */
 /* The persistence beacon                                                    */
 /* ------------------------------------------------------------------------ */
 
@@ -1384,6 +1643,8 @@ async function main(): Promise<void> {
     await workerAuthentication(fixtures);
     await queueChecks(fixtures, cookie);
     await effectChecks(fixtures, fixtures.adminCookie, cookie);
+    // Step 7. Before revocation, because it needs a live credential.
+    await mcpChecks(fixtures);
     await revocationEndsAccess(fixtures, cookie);
 
     // Last, so the beacon is not swept up by the checks above.

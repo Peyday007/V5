@@ -139,6 +139,13 @@ There must be no workflow where the user has to remember "now go update the data
     happen; an unknown outcome is recorded as unknown and never auto-retried.
 27. No idempotency scope built from anything the caller sent, and no logical
     effect key that changes between attempts.
+28. No capability exposed remotely that is not already an authorized operation
+    locally, and no tool list treated as an access control.
+29. No protocol version advertised that is not served, and no result carrying
+    fields from a revision its reader did not ask for.
+30. No remote refusal that distinguishes absent from forbidden, and no remote
+    error carrying a payload, an argument, a credential or an identifier the
+    caller did not already hold.
 
 ## 8. Model prose never mutates project state.
 
@@ -521,6 +528,54 @@ never a process-local lock.
 - Deleting an operation record must never make a successful effect silently
   repeatable.
 
+
+## 21. The protocol is a door, not a second set of rules.
+
+Step 7 (`server/mcp/`, `docs/MCP.md`) puts one endpoint on the outside of
+Brain — `POST /mcp` — and everything about it is arranged so that it adds a
+way in without adding a way around.
+
+- **Nothing is exposed that was not already an authorized operation.** Every
+  tool is a thin wrapper over a service that already existed, with the scope it
+  already required. A remote protocol that grows its own back door is a second
+  security model, and the second one is always the weaker.
+- **The tool list is not an access control.** Every caller sees the same
+  `tools/list`; which tools a caller may *succeed* with is decided at execution
+  time by `services/identity/policy.ts`, the same module every HTTP route uses.
+  Filtering the list per principal would make it a permission oracle and would
+  leave the real check one forgotten filter away from being skipped. There is no
+  MCP policy module and there must never be one.
+- **Brain is a dual-era server, and that is forced rather than chosen.** The
+  current revision is `2026-07-28`; the official SDK's latest release speaks
+  `2025-11-25` and contains no reference to the newer one. Every client that
+  exists is therefore a legacy client, and the specification's own matrix marks
+  legacy-client-against-modern-server as failing with no fall-forward. So the
+  modern era is implemented against the published schema and the legacy era is
+  served by the SDK, from one registry.
+- **There is no session, in either era.** `2026-07-28` removed sessions and the
+  `initialize` handshake outright, and the legacy front-end runs stateless by
+  choice. So every request re-authenticates and re-authorizes from current rows,
+  revocation lands on the next call, and a restart has nothing to restore.
+- **Authentication is the Step 4 worker credential and nothing else.** A session
+  cookie is refused here even when valid — a browser is not an MCP client, and a
+  cookie on a mutating JSON-RPC endpoint is a CSRF surface. `Origin` is
+  validated, no CORS headers are emitted, and no OAuth is advertised that is not
+  implemented: authorization is OPTIONAL in MCP, and a discovery pointer to a
+  facade that cannot issue a usable token is worse than a plain refusal.
+- **A refusal names nothing.** Absent and forbidden are one message, and it is
+  the same *body* both times — invariant 23 again, at a new boundary.
+- **Every mutation goes through Step 6**, keyed from the work item and the
+  operation. An `Idempotency-Key` header is refused rather than ignored: here it
+  would name a POST, and a POST is a transport frame rather than an effect.
+- **A tool's own failure is a result, not a protocol error.** The schema is
+  explicit, and the reason is practical: a refusal delivered as a transport
+  failure is one the consumer cannot see or react to.
+
+Step 7 is the gateway only. Connecting a real worker is Step 8, and proving the
+first is not evidence for the second — the same separation Step 3 drew between
+the research engine passing its tests and a real job having actually run.
+
+
 ---
 
 ## Repository map
@@ -627,6 +682,16 @@ server/
       findings.ts       the structured index, anchored to real quotes
   providers/            AIProvider abstraction: mock, Claude, OpenAI, Antigravity
     antigravity/        runtime probe, bounded process, job workspaces, PTY path
+  mcp/                  the remote MCP gateway (Step 7)
+    protocol.ts         versions, header rules, error codes, result envelopes
+    validate.ts         _meta and header-body validation, era detection
+    errors.ts           the closed set of tool error categories
+    limits.ts           sizes, pages, rate and concurrency
+    tools.ts            the permanent tool surface, over existing services
+    execute.ts          one call: rate slot, authorize, bound, audit
+    modern.ts           the 2026-07-28 dispatcher
+    legacy.ts           the 2025-11-25 front-end, over the official SDK
+    endpoint.ts         POST /mcp: auth, origin, limits, era selection
   routes/               HTTP API
     guard.ts            request context, authentication, deny-by-default
     auth.ts             sign in, sign out, change a password
