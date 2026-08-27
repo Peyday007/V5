@@ -10,10 +10,9 @@ be verified from where it was built.
 
 ## Verdict
 
-**Step 5 is code-complete, locally verified against real Postgres with
-concurrent connections, and verified on the live deployment for everything
-except restart persistence. It is not closed: item 32 needs one more deploy,
-now that a genuine restart and a persistence beacon exist to prove it.**
+**Step 5 is COMPLETE.** All 33 criteria are executed and passing — locally,
+against real Postgres 16 with concurrent connections, and on the live
+deployment either side of a real restart.
 
 The design is in [`QUEUE.md`](QUEUE.md). The one-line version: a claim is a
 compare-and-swap on `lease_generation`, and that same generation is the fencing
@@ -148,7 +147,7 @@ its status."
 | 29 | Hosted stale-owner denial | **EXECUTED — PASS** · run 8; complete, fail and release all 409 after reclaim |
 | 30 | Hosted project / scope denial | **EXECUTED — PASS** · run 8; identical body for forbidden and absent |
 | 31 | Hosted completion / failure / cancellation | **EXECUTED — PASS** · run 8; once-only completion, terminal exhaustion, cancellation beating its owner |
-| 32 | Hosted restart / redeploy persistence | **NOT EXECUTED — run 8's evidence does not support it.** See below |
+| 32 | Hosted restart / redeploy persistence | **EXECUTED — PASS** · deploy run 9; a live lease survived a real `flyctl apps restart` with its generation, attempt count and open attempt row intact |
 | 33 | Existing hosted research/document workflow smoke test | **EXECUTED — PASS** · run 8, strengthened afterwards; see below |
 
 ### Run 8, and the claim it did not support
@@ -190,7 +189,29 @@ generation 1, expiry unchanged. And the negative case, which is the one that
 matters — the same check against a database with no beacon reports
 `HOSTED-VERIFICATION: FAIL 68/69`. A check that cannot fail is not a check.
 
-Item 32 stays **NOT EXECUTED** until a deploy runs with that machinery in place.
+### Run 9, with the machinery in place
+
+The restart step took 19 seconds — a real one — and the pass after it reported:
+
+```
+Phase       after the restart
+
+Surviving a restart
+  PASS  the work left before the restart is still there — all three found
+  PASS  queued work is still queued — QUEUED
+  PASS  finished work is still finished — SUCCEEDED
+  PASS  a live lease survived the restart, still owned and still counting down
+        — LEASED, expires 2026-08-27T06:36:05.229Z
+  PASS  the fencing generation and attempt count are unchanged — generation 1, attempt 1
+  PASS  its attempt history survived too, still open — 1 attempt row(s)
+
+75/75 checks passed.
+HOSTED-VERIFICATION: PASS 75/75
+```
+
+A lease issued by a process that no longer exists, still owned, still counting
+down, its attempt row still open. That is item 32, and nothing in the container
+could have faked it.
 
 ### Item 33, and what it actually asserts
 
