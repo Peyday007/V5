@@ -202,6 +202,31 @@ export function mcpRouter(): Router {
         return;
       }
 
+      /**
+       * An `Idempotency-Key` header is refused, not ignored.
+       *
+       * On the HTTP API that header names one request and Step 6 honours it.
+       * Here it would name one *POST*, and a POST is a transport frame rather
+       * than an effect — the effect is the tool call inside it, and its key is
+       * derived from the work item. Silently ignoring the header would leave
+       * the caller believing it has idempotency at the transport level when
+       * the guarantee actually lives a layer down and is keyed differently.
+       *
+       * That is the same reasoning `effects/http.ts` applies to a key in a
+       * query string, and the same conclusion: refuse, so the caller finds out.
+       * The `idempotency_key` *tool argument* is the supported way to say this.
+       */
+      if (req.header('idempotency-key') !== undefined) {
+        refuse(
+          res,
+          400,
+          TRANSPORT_REFUSED,
+          'An Idempotency-Key header is not honoured on this endpoint. Pass idempotency_key ' +
+            'as a tool argument instead: the key belongs to the effect, not to the POST.',
+        );
+        return;
+      }
+
       let auth: Awaited<ReturnType<typeof principalFor>>;
       try {
         auth = await principalFor(req);
