@@ -158,6 +158,26 @@ jobs:
           flyctl status 2>&1 | tail -40 || true
           echo "::endgroup::"
 
+      # The boot banner, on every run rather than only on a failure.
+      #
+      # A deploy that succeeds can still leave the Brain in a state nobody
+      # wanted — an administrator that was not created, a bootstrap variable
+      # that did nothing, a reset that did not fire. All of that is in the
+      # application's own log and none of it is in the deploy's exit code, and
+      # going to find it cost four rounds of guessing once already.
+      #
+      # The banner names hosts, buckets and account addresses, and never a
+      # credential; that property has tests behind it.
+      - name: What the Brain said when it started
+        if: always()
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          echo "::group::Boot log"
+          sleep 10
+          timeout 60 flyctl logs --no-tail 2>&1 | tail -60 || true
+          echo "::endgroup::"
+
       # Liveness only, and unauthenticated on purpose — it is the one endpoint
       # that answers without a credential, and it answers `ok` and nothing else.
       # A deploy that reports success while the machine cannot serve a request

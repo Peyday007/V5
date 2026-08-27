@@ -557,13 +557,19 @@ describe('what each route asks for', () => {
 });
 
 describe('recovering an account nobody ever managed to use', () => {
-  const ENV = ['BRAIN_BOOTSTRAP_ADMIN_EMAIL', 'BRAIN_BOOTSTRAP_ADMIN_PASSWORD'] as const;
+  const ENV = [
+    'BRAIN_BOOTSTRAP_ADMIN_EMAIL',
+    'BRAIN_BOOTSTRAP_ADMIN_PASSWORD',
+    'BRAIN_BOOTSTRAP_ADMIN_RESET',
+  ] as const;
   let saved: Record<string, string | undefined> = {};
 
-  function withBootstrap(email: string, password: string): void {
+  function withBootstrap(email: string, password: string, force = false): void {
     saved = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
     process.env.BRAIN_BOOTSTRAP_ADMIN_EMAIL = email;
     process.env.BRAIN_BOOTSTRAP_ADMIN_PASSWORD = password;
+    if (force) process.env.BRAIN_BOOTSTRAP_ADMIN_RESET = 'true';
+    else delete process.env.BRAIN_BOOTSTRAP_ADMIN_RESET;
   }
   function restore(): void {
     for (const [k, v] of Object.entries(saved)) {
@@ -624,6 +630,49 @@ describe('recovering an account nobody ever managed to use', () => {
     expect(await verifyPassword('chosen-by-its-owner', found!.verifier)).toBe(true);
     expect(await verifyPassword('an-attempted-takeover', found!.verifier)).toBe(false);
     expect((await getUser(inUse.id))!.mustChangePassword).toBe(false);
+  });
+
+  it('can still reach an account it already reset once', async () => {
+    // The failure this exists for, and it is the worst kind: a recovery that
+    // disables itself. Resetting clears must_change_password, which is the
+    // condition the reset requires — so an operator who recovers onto a
+    // password they do not actually hold has stranded the account for good.
+    const account = await createUser({
+      email: 'twice@example.invalid',
+      displayName: 'Twice',
+      password: 'the-first-password',
+      isBrainAdmin: true,
+      mustChangePassword: true,
+    });
+
+    withBootstrap('twice@example.invalid', 'the-second-password');
+    try {
+      expect((await bootstrapFirstAdmin()).reset).toBe(true);
+    } finally {
+      restore();
+    }
+    expect((await getUser(account.id))!.mustChangePassword).toBe(false);
+
+    // Without the flag it is now refused, and says what to do about it.
+    withBootstrap('twice@example.invalid', 'the-third-password');
+    try {
+      const refused = await bootstrapFirstAdmin();
+      expect(refused.reset).toBe(false);
+      expect(refused.reason).toMatch(/BRAIN_BOOTSTRAP_ADMIN_RESET/);
+    } finally {
+      restore();
+    }
+
+    // With it, the account is reachable again.
+    withBootstrap('twice@example.invalid', 'the-third-password', true);
+    try {
+      expect((await bootstrapFirstAdmin()).reset).toBe(true);
+    } finally {
+      restore();
+    }
+    const found = await getPasswordVerifierByEmail('twice@example.invalid');
+    expect(await verifyPassword('the-third-password', found!.verifier)).toBe(true);
+    expect(await verifyPassword('the-second-password', found!.verifier)).toBe(false);
   });
 
   it('still refuses a reset password that is too short', async () => {

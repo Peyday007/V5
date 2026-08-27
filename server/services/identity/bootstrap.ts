@@ -95,8 +95,26 @@ export async function bootstrapFirstAdmin(): Promise<BootstrapOutcome> {
   // friction that caused the lockout in the first place. The boot log says
   // plainly that the secret must now be removed, because it is still a secret
   // sitting in a deployment store.
+  //
+  // `BRAIN_BOOTSTRAP_ADMIN_RESET` is the break-glass, and it exists because the
+  // rule above is not enough on its own.
+  //
+  // Resetting an account clears `must_change_password` — which is the very
+  // condition the reset requires. So a recovery that lands on a password the
+  // operator does not actually have disables the only way back, and the account
+  // is stranded permanently. That is a worse failure than the one the recovery
+  // was built for, and it was shipped before anybody noticed.
+  //
+  // With the flag set, the named account is reset whatever state it is in. It
+  // is a deliberate act by somebody who can already set this deployment's
+  // secrets and therefore already controls everything; what the flag adds is
+  // that it cannot happen by leaving a variable lying around, because it has to
+  // be turned on and then turned off again.
+  const forced = (read('BRAIN_BOOTSTRAP_ADMIN_RESET') ?? '').toLowerCase();
+  const forceReset = forced === '1' || forced === 'true' || forced === 'yes';
+
   const existing = await getUserByEmail(email);
-  if (existing && existing.mustChangePassword) {
+  if (existing && (existing.mustChangePassword || forceReset)) {
     try {
       await setUserPassword(existing.id, password, { mustChangePassword: false });
     } catch (error) {
@@ -110,6 +128,18 @@ export async function bootstrapFirstAdmin(): Promise<BootstrapOutcome> {
     if (!existing.isBrainAdmin) await setBrainAdmin(existing.id, true);
     if (existing.disabled) await setUserDisabled(existing.id, false);
     return { created: false, reset: true, email: existing.email, reason: null };
+  }
+
+  if (existing) {
+    return {
+      created: false,
+      reset: false,
+      email: null,
+      reason:
+        `${existing.email} already has a password somebody chose. Set ` +
+        'BRAIN_BOOTSTRAP_ADMIN_RESET=true alongside the other two variables to replace it, ' +
+        'then remove all three.',
+    };
   }
 
   // Only into an empty Brain. Not "if this address is missing" — that would let
