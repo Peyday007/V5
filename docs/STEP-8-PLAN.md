@@ -306,3 +306,88 @@ Whether this account's **Add custom connector** dialog offers a request-header
 field decides Branch A or Branch B, and it is a property of the account's
 feature rollout rather than of the documentation. It needs one look at the
 dialog before any account change is made.
+
+---
+
+## Decision, taken 2026-08-27
+
+The one unsettled fact is settled. A screenshot of the **Add custom connector**
+dialog on this account shows exactly four inputs:
+
+| Field | |
+|---|---|
+| `Name` | "Shown in the connectors list." |
+| `Remote MCP server URL` | "The HTTPS address where the server accepts MCP requests" |
+| `OAuth Client ID (optional)` | under **Advanced settings** |
+| `OAuth Client Secret (optional)` | under **Advanced settings** |
+
+**There is no request-header field, no API-key field and no Authorization
+field.** Branch A is not available on this account. **Step 8 takes Branch B.**
+
+### And Branch B is the better answer anyway
+
+The operator's stated requirement was that workers should not "plug into an
+adaptor" but should "plug in the same way I plug in", each being "its own named
+worker".
+
+The bearer design was the adaptor version: a long-lived secret, generated in one
+place, carried by hand, pasted into a configuration box. OAuth is the sign-in
+version — connecting a worker sends the operator to a **Brain-hosted** screen,
+they authenticate to the Brain with the account they already use, they see which
+named worker is being connected and with what access, and they approve. Brain
+issues the token to itself. No secret is ever copied by a human.
+
+So the requirement and the only available mechanism point the same way, which is
+worth recording because it is not a coincidence — it is what the MCP
+authorization profile was designed for.
+
+### The correction this makes to Step 7
+
+Step 7's evidence argued against OAuth on the grounds that:
+
+> **There is no resource owner to redirect.** OAuth's authorization code flow
+> exists to get a *person* in front of a consent screen. Step 8's client is a
+> worker holding a machine credential; there is no browser and no human in that
+> loop.
+
+**That is wrong, and Step 8 is where it shows.** There *is* a browser and there
+*is* a human in the connection loop — the operator, at the moment the connector
+is registered. The mistake was conflating two different moments: the *connection*
+is authorized by a person in a browser, and only the *subsequent tool calls* are
+made by a machine with no human present. OAuth is exactly the mechanism for that
+shape, and Step 7 reasoned about the second moment as though it were the first.
+
+Step 7's evidence file is corrected to say so rather than rewritten to look as
+though it never happened.
+
+### The invariant that must survive
+
+**A token issued by this flow resolves to the *worker* principal, not to the
+human who approved it.** The operator is the resource owner granting the
+authorization; they are not the identity Claude then acts as. Everything
+downstream — `decideProjectAccess`, scopes, queue fencing, audit attribution —
+is untouched, because it only ever sees a `Principal` of type `WORKER`.
+
+Brain still stores no Claude account credential, cookie or token. What it stores
+is a token **it minted itself**, against a worker **it owns**, on the authority
+of a human **it authenticated**.
+
+### Selected surface: Cowork
+
+The operator has Cowork available. It is built for bounded multi-step tool work,
+which is what a Brain worker does, and the static-header limitation that would
+have ruled it out under Branch A is irrelevant under OAuth.
+
+### What this adds to Step 8
+
+| Work | Why |
+|---|---|
+| `017_oauth.sql` / `007_oauth.sql` | clients, authorization codes, tokens — digests only |
+| Protected resource metadata (RFC 9728) | the specification makes it mandatory for a server that supports authorization |
+| Authorization server metadata (RFC 8414) | how the client finds the endpoints |
+| Dynamic client registration (RFC 7591) | the connector's client id and secret are *optional*, so a client given neither must register itself |
+| `/oauth/authorize` with Brain sign-in and worker consent | the screen that makes this a sign-in rather than an adaptor |
+| `/oauth/token` with PKCE | required by OAuth 2.1 |
+| Token resolution at `/mcp` | alongside the existing `brnw_` credential, which stays supported |
+| A worker administration screen | a credential must never reach a terminal, a CI log or a chat |
+| Full Step 4–7 regression re-runs | Branch B changes a closed step's gateway |
