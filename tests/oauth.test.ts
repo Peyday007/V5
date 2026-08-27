@@ -896,6 +896,28 @@ describe('the operator console', () => {
     expect((await operatorPage({ bearer: access })).status).toBe(404);
   });
 
+  it('creates an empty project to point a worker at', async () => {
+    // Until this existed the only project was the seeded one holding real
+    // research, so the only way to give a test worker somewhere to work would
+    // have been to grant it that.
+    const made = await post('/operator/projects', { name: 'Step 8 Acceptance' }, { cookie: adminCookie });
+    expect(made.status).toBe(200);
+    expect(made.html).toContain('Step 8 Acceptance');
+
+    const again = await post('/operator/projects', { name: 'Step 8 Acceptance' }, { cookie: adminCookie });
+    expect(again.status).toBe(409);
+  });
+
+  it('refuses a project name that is not one', async () => {
+    expect((await post('/operator/projects', { name: 'x' }, { cookie: adminCookie })).status).toBe(400);
+  });
+
+  it('will not let anybody but an administrator create a project', async () => {
+    expect((await post('/operator/projects', { name: 'Sneaky' }, { cookie: memberCookie })).status).toBe(404);
+    const access = await connectedToken();
+    expect((await post('/operator/projects', { name: 'Sneakier' }, { bearer: access })).status).toBe(404);
+  });
+
   it('creates a worker, and refuses a duplicate name', async () => {
     const made = await post('/operator/workers', { name: 'console-made-worker', displayName: 'Console Made' }, { cookie: adminCookie });
     expect(made.status).toBe(200);

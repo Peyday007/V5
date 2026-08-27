@@ -35,7 +35,7 @@ import {
   setWorkerStatus,
 } from '../repos/identity.ts';
 import { listTokensForWorker, revokeTokensForWorker } from '../repos/oauth.ts';
-import { listProjects } from '../repos/projects.ts';
+import { createProject, getProjectBySlug, listProjects } from '../repos/projects.ts';
 import { WORKER_SCOPES } from '../domain/types.ts';
 import type { Principal, WorkerScope } from '../domain/types.ts';
 import { card, esc, page } from './pages.ts';
@@ -242,6 +242,15 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
        </form>
        <p class="note">A worker is not a person and not a Claude account. It is an identity this
          Brain owns, which you then grant access to one project at a time.</p>`)}
+     ${card(`<h2>Create a project</h2>
+       <form method="post" action="${OPERATOR_BASE}/projects">
+         <label for="project_name">Name</label>
+         <input id="project_name" name="name" type="text" required placeholder="Step 8 Acceptance">
+         <button type="submit" class="secondary">Create</button>
+       </form>
+       <p class="note">An empty project with no layers, for pointing a worker at something
+         isolated. A test worker should never be granted the project holding real research —
+         a mistake there writes fabricated findings into work you rely on.</p>`)}
      ${
        workers.length > 0 && projects.length > 0
          ? card(`<h2>Grant access</h2>
@@ -368,6 +377,57 @@ export function operatorRouter(): Router {
       await audit({ actor: person, action: 'CREATE_WORKER', targetId: worker.id, result: 'SUCCESS', metadata: { name } });
       res.type('html').send(
         await consolePage(person, { ok: `Created ${name}. Now grant it a project.` }),
+      );
+    })();
+  });
+
+  /**
+   * Create an empty project.
+   *
+   * This is the one thing here that is not identity, and it earns its place by
+   * what it prevents. Until now a project could only come from the seeder, so
+   * the only project that existed was the one holding real research — and the
+   * sole way to give a test worker somewhere to work would have been to grant
+   * it that one. An isolated project is what stops a worker's first bounded run
+   * writing fabricated findings into work somebody depends on.
+   *
+   * It creates a project and nothing else: no layers, no documents, no seed.
+   */
+  router.post('/projects', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      const person = await administrator(req);
+      if (!person || !originIsSameSite(req)) {
+        denied(res);
+        return;
+      }
+      const name = typeof (req.body as Record<string, unknown>)['name'] === 'string'
+        ? String((req.body as Record<string, unknown>)['name']).trim()
+        : '';
+      if (name.length < 2 || name.length > 120) {
+        res.status(400).type('html').send(
+          await consolePage(person, { err: 'A project name is between 2 and 120 characters.' }),
+        );
+        return;
+      }
+
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (await getProjectBySlug(slug)) {
+        res.status(409).type('html').send(
+          await consolePage(person, { err: `There is already a project at "${slug}".` }),
+        );
+        return;
+      }
+
+      const project = await createProject({ name });
+      await audit({
+        actor: person,
+        action: 'CREATE_PROJECT',
+        targetId: project.id,
+        result: 'SUCCESS',
+        metadata: { slug: project.slug },
+      });
+      res.type('html').send(
+        await consolePage(person, { ok: `Created "${project.name}". It has no layers and no documents.` }),
       );
     })();
   });
