@@ -37,6 +37,7 @@ import { StorageConfigurationError } from './services/storage/types.ts';
 import { serveStoredObject } from './routes/files.ts';
 import { accessGate, accessGateConfig, describeAccessGate, AccessGateError, type AccessGateConfig } from './routes/access.ts';
 import { requestContext, requireAuthentication } from './routes/guard.ts';
+import { MCP_PATH, mcpRouter } from './mcp/endpoint.ts';
 import { authRouter } from './routes/auth.ts';
 import { bootstrapFirstAdmin, hasAnyAccount } from './services/identity/bootstrap.ts';
 import { writeProjectState } from './services/runtimeState.ts';
@@ -85,7 +86,16 @@ const CLIENT_INDEX = path.join(CLIENT_DIST, 'index.html');
 
 /** True for any path the SPA fallback must not swallow. */
 function isServerPath(requestPath: string): boolean {
-  return requestPath === '/api' || requestPath.startsWith('/api/') || requestPath.startsWith('/files');
+  return (
+    requestPath === '/api' ||
+    requestPath.startsWith('/api/') ||
+    requestPath.startsWith('/files') ||
+    // Without this the SPA fallback would answer a stray GET /mcp with the
+    // client bundle, and a dual-era client probing the endpoint would read HTML
+    // where it expected either a JSON-RPC error or a 405.
+    requestPath === '/mcp' ||
+    requestPath.startsWith('/mcp/')
+  );
 }
 
 function buildApp(gate: AccessGateConfig): Express {
@@ -118,13 +128,20 @@ function buildApp(gate: AccessGateConfig): Express {
   // installation that had been relying on it.
   app.use(accessGate(gate));
 
+  // Every request gets a correlation id and a place to hang its principal,
+  // before anything can try to read one. Ahead of the body parsers, so that a
+  // request refused for its *size* still has an id in the log.
+  app.use(requestContext());
+
+  // The MCP endpoint, mounted before the application-wide body parser so that
+  // it can enforce its own, much smaller, limit. It is deliberately outside
+  // `/api`: it authenticates itself, worker-bearer only, and answers a
+  // different protocol.
+  app.use(MCP_PATH, mcpRouter());
+
   // Prompts and pasted audit text are large; uploads go through multer instead.
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
-
-  // Every request gets a correlation id and a place to hang its principal,
-  // before anything can try to read one.
-  app.use(requestContext());
 
   // The real gate. Mounted on both the API and the documents, because the bytes
   // are the thing most worth protecting and serving them from a route that

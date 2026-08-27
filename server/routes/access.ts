@@ -69,6 +69,27 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
  */
 const OPEN_PATHS = new Set(['/healthz']);
 
+/**
+ * Paths that carry their own authentication and must not also meet a Basic
+ * prompt.
+ *
+ * `/mcp` is the whole set, and the reason is mechanical rather than a matter of
+ * preference: an HTTP request has one `Authorization` header, this gate wants
+ * `Basic <shared token>` in it, and an MCP client must put
+ * `Bearer brnw_…` there. They cannot both have it, and an MCP client has no way
+ * to send a second one.
+ *
+ * This is not a hole. Since Step 4 the shared token has explicitly not been the
+ * security model — it is an optional outer layer, off unless somebody sets one
+ * — and `/mcp` is behind real authentication that resolves a worker principal
+ * from server-held rows, refuses a session cookie, refuses a credential in a
+ * query string, validates `Origin`, and authorizes every single tool call
+ * through the same policy module every HTTP route uses. The outer token would
+ * add a second lock to a door that already has a better one, at the cost of
+ * making the door unopenable by the clients it exists for.
+ */
+const OWN_AUTHENTICATION_PATHS = new Set(['/mcp']);
+
 export interface AccessGateConfig {
   /** The shared secret. Absent means no gate. */
   token: string | null;
@@ -171,7 +192,7 @@ export function accessGate(config: AccessGateConfig): RequestHandler {
   const realm = 'Brain';
 
   return (req: Request, res: Response, next: NextFunction) => {
-    if (OPEN_PATHS.has(req.path)) {
+    if (OPEN_PATHS.has(req.path) || OWN_AUTHENTICATION_PATHS.has(req.path)) {
       next();
       return;
     }
