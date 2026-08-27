@@ -10,9 +10,8 @@ that decides the verdict — what could not be verified from where this was buil
 
 ## Verdict
 
-**Step 4 is code-complete, locally verified, and its hosted verification is
-built and automated. It is not closed until that verification has run green
-against the deployment.**
+**Step 4 is COMPLETE.** Every criterion is executed and passing, locally and
+against the live deployment.
 
 Everything that can be proven without the operator's Supabase project and Fly
 deployment has been proven, against real databases and a real server over a real
@@ -32,7 +31,8 @@ and fails the run when any of them is wrong.
 
 The operator's remaining part is pressing one button.
 
-No tag was created. A tag on work whose live half has not run would be the
+Tagged `step-4-identities-access-control` after — and only after — the hosted
+half ran green. A tag on work whose live half had not run would have been the
 "complete except…" this project's own rules refuse.
 
 ---
@@ -120,10 +120,10 @@ across backends rather than the table names, which is what would have caught it.
 | 18 | Production build | **EXECUTED — PASS** · `npm run build` |
 | 19 | Local production boot | **EXECUTED — PASS** · see below |
 | 20 | Actual Cloud Brain migration | **EXECUTED — PASS** · deploy run 6, boot banner: `Driver postgres`, `Schema version 4`, `Migrations up to date (4 already applied)` against `aws-0-us-east-2.pooler.supabase.com/postgres` |
-| 21 | Hosted login / authentication test | **EXECUTED — PASS** · the operator signed in to the live Brain as the bootstrap administrator. Machine-verified from the next deploy onwards |
-| 22 | Hosted worker-authentication test | **AUTOMATED — pending its first run** · `scripts/verify-hosted.ts`, eleven assertions, in the deploy workflow |
-| 23 | Hosted authorization-denial test | **AUTOMATED — pending its first run** · same script, nineteen assertions |
-| 24 | Hosted restart / redeploy persistence | **AUTOMATED — pending its first run** · the workflow removes the bootstrap secrets, which restarts the machine, and re-runs all forty-one assertions against what comes back |
+| 21 | Hosted login / authentication test | **EXECUTED — PASS** · the operator signed in to the live Brain; then machine-verified in deploy run 7 — wrong password 401, unknown address 401 and identical, right password 200, cookie HttpOnly + Secure + SameSite=Lax and recognised on the next request |
+| 22 | Hosted worker-authentication test | **EXECUTED — PASS** · deploy run 7, eleven assertions against `https://northline-brain.fly.dev` |
+| 23 | Hosted authorization-denial test | **EXECUTED — PASS** · same run, nineteen assertions, holdout project `deal-dispatch` |
+| 24 | Hosted restart / redeploy persistence | **EXECUTED — PASS** · same run. Removing the bootstrap secrets stopped and restarted machine `891ed44a46e4e8` (`state: stopped` → `state: started` → `healthy: 1/1`), and all forty-one assertions passed again against what came back |
 | 25 | Existing authorized research/document workflow smoke test | **EXECUTED — PASS** · the whole 24-test API suite now runs through a real session cookie |
 
 Totals: **596 tests, 31 files, green on both backends** — 571 executed on SQLite, the
@@ -305,13 +305,34 @@ the check reads as protection.
 
 ---
 
-## What has to happen before this step can be tagged
+## Closed
 
-One deploy. The workflow now migrates, boots, verifies the live Brain, removes
-the bootstrap secrets, waits for the restart, and verifies it again — and fails
-the run if either verification does not pass.
+Deploy run 7 (`f53eaba`, 2026-08-27T01:45Z) — both jobs green, every step green:
 
-When that run is green, rows 22, 23 and 24 above are filled in from its log and
-`step-4-identities-access-control` can be created. Not before: a tag on work
-whose live half has not run would be the "complete except…" this project's own
-rules refuse.
+```
+Prove the live Brain is actually shut     HOSTED-VERIFICATION: PASS 41/41
+Spend the bootstrap secrets               Removing: BRAIN_BOOTSTRAP_ADMIN_EMAIL
+                                                    BRAIN_BOOTSTRAP_ADMIN_PASSWORD
+                                                    BRAIN_BOOTSTRAP_ADMIN_RESET
+                                          > Waiting for 891ed44a46e4e8 to have state: stopped
+                                          > Waiting for 891ed44a46e4e8 to have state: started
+                                          > Waiting for 891ed44a46e4e8 to become healthy: 1/1
+Prove it survived the restart             HOSTED-VERIFICATION: PASS 41/41
+The verdict                               hosted verification: success
+                                          after the restart:   success
+```
+
+Target `https://northline-brain.fly.dev`, database
+`postgres · aws-0-us-east-2.pooler.supabase.com/postgres`, documents
+`supabase · somjwbtqwmnxndmpujgn.supabase.co · bucket brain`.
+
+The restart is genuine rather than incidental: `flyctl secrets unset` blocked
+until the machine had stopped, started and passed its health check, and only
+then did the second run of the checks begin. That is what makes row 24 evidence
+rather than a hopeful re-run against a process that never went away.
+
+No bootstrap secret remains set on the deployment. The administrator's password
+exists in exactly one place, as a scrypt verifier, and in the operator's own
+keeping.
+
+Tagged `step-4-identities-access-control`.
