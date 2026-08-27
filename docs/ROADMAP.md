@@ -42,6 +42,33 @@ order is a dependency order, not a preference.
 | **9** | Manual end-to-end research packet |
 | **10** | Scheduled firing and interruption recovery |
 | **11** | Additional workers and fleet controls |
+| **12** | The control centre — the Brain drives the fleet, not a person |
+
+### What Step 12 is actually for
+
+Step 8 built `/operator` because worker administration existed only over HTTP
+and a credential has to be shown once inside a browser. Two things ended up on
+that screen that do not belong there, and they are Step 12's to move:
+
+- **Creating a project** and **queueing a work item** are scaffolding. They
+  exist because neither had a UI anywhere and the alternative was `curl`. In
+  the finished product the planner decides what work exists; nobody hand-queues
+  an item.
+- **Setting a worker's projects and scopes** is a real and permanent decision,
+  but it belongs in the Brain proper rather than a separate console.
+
+The distinction Step 12 must preserve while moving them: **the Brain dispatches;
+a worker never widens its own reach.** Assignment is already automatic — a
+worker asks the queue what is next and the Brain answers by priority, so no
+person matches workers to projects and none should. What stays a deliberate act
+is the trust boundary itself: which research a borrowed account may touch, set
+once when the account is connected. That is the platform being the authority,
+not a human being a bottleneck, and the difference is worth keeping when the
+screen is rebuilt.
+
+`/operator` should end up small: the consent screen, and issuing a credential
+for a client that cannot do OAuth. Both have to keep working when the front-end
+does not, which is why they are plain server-rendered HTML.
 
 ### The separations that matter most
 

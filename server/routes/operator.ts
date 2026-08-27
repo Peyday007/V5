@@ -555,6 +555,10 @@ export function operatorRouter(): Router {
   /**
    * Create an empty project.
    *
+   * **Scaffolding**, for the same reason as queueing below: projects had come
+   * only from the seeder, so there was no way to make one without a terminal.
+   * It belongs in the Brain proper, and Step 12 moves it.
+   *
    * This is the one thing here that is not identity, and it earns its place by
    * what it prevents. Until now a project could only come from the seeder, so
    * the only project that existed was the one holding real research — and the
@@ -606,6 +610,12 @@ export function operatorRouter(): Router {
 
   /**
    * Queue one bounded item, so a worker has something to claim.
+   *
+   * **Scaffolding.** In the finished product the planner decides what work
+   * exists and workers pull it from the queue; nobody hand-queues an item. This
+   * box exists because there was no way to put work in the queue from a browser
+   * at all, and the alternative was `curl`. Step 12 removes it — see
+   * docs/ROADMAP.md. Do not build on it.
    *
    * The same gap as project creation, one step further along: an operator with
    * a connected worker and an empty queue has nothing to point it at, and the
