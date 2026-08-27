@@ -798,3 +798,155 @@ describe('secrets', () => {
     expect(approved.location!.startsWith(REDIRECT)).toBe(true);
   });
 });
+
+/* ------------------------------------------------------------------------ */
+/* The operator console                                                      */
+/* ------------------------------------------------------------------------ */
+
+describe('the operator console', () => {
+  async function operatorPage(options: { cookie?: string; bearer?: string } = {}): Promise<{
+    status: number;
+    html: string;
+  }> {
+    const headers: Record<string, string> = {};
+    if (options.cookie) headers.cookie = options.cookie;
+    if (options.bearer) headers.authorization = `Bearer ${options.bearer}`;
+    const response = await fetch(`${BASE}/operator`, { headers });
+    return { status: response.status, html: await response.text() };
+  }
+
+  async function post(
+    route: string,
+    fields: Record<string, string | string[]>,
+    options: { cookie?: string; bearer?: string; origin?: string } = {},
+  ): Promise<{ status: number; html: string }> {
+    const form = new URLSearchParams();
+    for (const [name, value] of Object.entries(fields)) {
+      if (Array.isArray(value)) value.forEach((v) => form.append(name, v));
+      else form.append(name, value);
+    }
+    const headers: Record<string, string> = {
+      'content-type': 'application/x-www-form-urlencoded',
+      origin: options.origin ?? BASE,
+    };
+    if (options.cookie) headers.cookie = options.cookie;
+    if (options.bearer) headers.authorization = `Bearer ${options.bearer}`;
+    const response = await fetch(`${BASE}${route}`, { method: 'POST', headers, body: form.toString() });
+    return { status: response.status, html: await response.text() };
+  }
+
+  it('shows an administrator the workers and their access', async () => {
+    const shown = await operatorPage({ cookie: adminCookie });
+    expect(shown.status).toBe(200);
+    expect(shown.html).toContain('claude-max-worker-01');
+    expect(shown.html).toContain('Create a worker');
+  });
+
+  it('is not there at all for anybody else', async () => {
+    // A 404, not a 401 with a prompt. A console that announces itself to
+    // whoever guesses the path is a map of what to attack.
+    expect((await operatorPage()).status).toBe(404);
+    expect((await operatorPage({ cookie: memberCookie })).status).toBe(404);
+  });
+
+  it('is refused to a worker holding a perfectly good token', async () => {
+    const access = await connectedToken();
+    // A machine reaching the screen that grants credentials is the single worst
+    // thing this console could allow.
+    expect((await operatorPage({ bearer: access })).status).toBe(404);
+  });
+
+  it('creates a worker, and refuses a duplicate name', async () => {
+    const made = await post('/operator/workers', { name: 'console-made-worker', displayName: 'Console Made' }, { cookie: adminCookie });
+    expect(made.status).toBe(200);
+    expect(made.html).toContain('console-made-worker');
+
+    const again = await post('/operator/workers', { name: 'console-made-worker', displayName: 'Again' }, { cookie: adminCookie });
+    expect(again.status).toBe(409);
+  });
+
+  it('refuses a canonical name that is not one', async () => {
+    const bad = await post('/operator/workers', { name: 'Not A Name!', displayName: 'x' }, { cookie: adminCookie });
+    expect(bad.status).toBe(400);
+  });
+
+  it('refuses an unknown scope rather than dropping it', async () => {
+    // Silently ignoring a typo would look like a successful narrower grant.
+    const bad = await post(
+      '/operator/memberships',
+      { worker_id: workerId, project_id: projectId, scopes: ['queue:read', 'queue:invented'] },
+      { cookie: adminCookie },
+    );
+    expect(bad.status).toBe(400);
+  });
+
+  it('refuses a cross-site post', async () => {
+    const forged = await post(
+      '/operator/workers',
+      { name: 'forged-worker', displayName: 'Forged' },
+      { cookie: adminCookie, origin: 'https://evil.example' },
+    );
+    expect(forged.status).toBe(404);
+  });
+
+  it('shows an issued credential exactly once, and never again', async () => {
+    const issued = await post('/operator/credentials', { worker_id: workerId }, { cookie: adminCookie });
+    expect(issued.status).toBe(200);
+    const shown = /brnw_[0-9a-f]{16}\.[A-Za-z0-9_-]+/.exec(issued.html)?.[0];
+    expect(shown).toBeTruthy();
+
+    // It works, so it really was the credential and not a placeholder.
+    const who = await callTool(shown!, 'brain_whoami');
+    expect(who.isError).toBe(false);
+
+    // And it is nowhere on the page the next time it is loaded.
+    const later = await operatorPage({ cookie: adminCookie });
+    expect(later.html).not.toContain(shown!);
+  });
+
+  it('ends live connections when a worker is disabled', async () => {
+    const created = await post('/operator/workers', { name: 'ending-worker', displayName: 'Ending' }, { cookie: adminCookie });
+    expect(created.status).toBe(200);
+    const list = await api<{ workers: { id: string; name: string }[] }>('GET', '/api/admin/workers', {
+      cookie: adminCookie,
+    });
+    const target = list.body.workers.find((w) => w.name === 'ending-worker')!;
+    await api('POST', `/api/admin/projects/${projectId}/members`, {
+      cookie: adminCookie,
+      body: { principalId: target.id, principalType: 'WORKER', scopes: ['project:read'] },
+    });
+
+    const access = await connectedToken(target.id);
+    expect((await callTool(access, 'brain_whoami')).isError).toBe(false);
+
+    const disabled = await post(
+      `/operator/workers/${target.id}/disabled`,
+      { disabled: 'true' },
+      { cookie: adminCookie },
+    );
+    expect(disabled.status).toBe(200);
+    expect(disabled.html).toContain('connection(s) were ended');
+
+    const after = await fetch(`${BASE}/mcp`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${access}`,
+        'mcp-protocol-version': '2026-07-28',
+        'mcp-method': 'server/discover',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'server/discover',
+        params: {
+          _meta: {
+            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/clientCapabilities': {},
+          },
+        },
+      }),
+    });
+    expect(after.status).toBe(401);
+  });
+});

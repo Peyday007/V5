@@ -55,6 +55,7 @@ import {
 import { getWorker, listWorkers, listMembershipsForPrincipal, recordIdentityEvent } from '../repos/identity.ts';
 import { getProject } from '../repos/projects.ts';
 import type { Principal } from '../domain/types.ts';
+import { card, esc, page } from './pages.ts';
 
 export const OAUTH_BASE = '/oauth';
 
@@ -78,67 +79,15 @@ export function issuerFor(req: Request): string {
 /* HTML                                                                      */
 /* ------------------------------------------------------------------------ */
 
-/** Everything interpolated into a page goes through this. No exceptions. */
-function esc(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-const PAGE_CSS = `
-  :root { color-scheme: light dark; }
-  * { box-sizing: border-box; }
-  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background:#f6f7f9; color:#14161a; padding:24px; }
-  .card { width:100%; max-width:520px; background:#fff; border:1px solid #e3e6ea; border-radius:14px;
-    padding:28px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
-  h1 { font-size:20px; margin:0 0 6px; letter-spacing:-.01em; }
-  p.sub { margin:0 0 20px; color:#5b636e; font-size:14px; }
-  label { display:block; font-size:13px; font-weight:600; margin:14px 0 5px; }
-  input[type=email], input[type=password], select {
-    width:100%; padding:9px 11px; border:1px solid #cfd4da; border-radius:8px; font-size:14px;
-    background:#fff; color:inherit; }
-  button { width:100%; margin-top:20px; padding:11px; border:0; border-radius:8px;
-    background:#14161a; color:#fff; font-size:14px; font-weight:600; cursor:pointer; }
-  button.secondary { background:#fff; color:#14161a; border:1px solid #cfd4da; margin-top:8px; }
-  .grant { background:#f6f7f9; border:1px solid #e3e6ea; border-radius:10px; padding:14px; margin:18px 0 4px; }
-  .grant dt { font-size:12px; color:#5b636e; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
-  .grant dd { margin:2px 0 12px; font-size:14px; }
-  .grant dd:last-child { margin-bottom:0; }
-  code { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background:#eceef1;
-    padding:1px 5px; border-radius:4px; }
-  .err { background:#fdecec; border:1px solid #f5c2c2; color:#8a1f1f; padding:10px 12px;
-    border-radius:8px; font-size:13px; margin-bottom:16px; }
-  .note { font-size:12.5px; color:#5b636e; margin-top:16px; }
-  @media (prefers-color-scheme: dark) {
-    body { background:#0e1013; color:#e8eaed; }
-    .card { background:#16191d; border-color:#2a2f36; box-shadow:none; }
-    p.sub, .grant dt, .note { color:#9aa3ad; }
-    input[type=email], input[type=password], select { background:#0e1013; border-color:#3a414a; color:#e8eaed; }
-    button { background:#e8eaed; color:#14161a; }
-    button.secondary { background:#16191d; color:#e8eaed; border-color:#3a414a; }
-    .grant { background:#0e1013; border-color:#2a2f36; }
-    code { background:#22262c; }
-    .err { background:#2b1416; border-color:#5c2326; color:#f3b6b6; }
-  }
-`;
-
-function page(title: string, body: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow">
-<title>${esc(title)}</title><style>${PAGE_CSS}</style></head>
-<body><div class="card">${body}</div></body></html>`;
-}
-
 function errorPage(res: Response, status: number, title: string, detail: string): void {
   res.status(status).type('html').send(
-    page(title, `<h1>${esc(title)}</h1><div class="err">${esc(detail)}</div>
-      <p class="note">Nothing was authorized. You can close this window.</p>`),
+    page(
+      title,
+      card(
+        `<h1>${esc(title)}</h1><div class="err">${esc(detail)}</div>
+         <p class="note">Nothing was authorized. You can close this window.</p>`,
+      ),
+    ),
   );
 }
 
@@ -753,7 +702,7 @@ function signInPage(
 ): string {
   return page(
     'Sign in to connect a worker',
-    `<h1>Sign in to the Brain</h1>
+    card(`<h1>Sign in to the Brain</h1>
      <p class="sub">${esc(clientName)} is asking to connect as one of your workers.
        Sign in to choose which one.</p>
      ${error ? `<div class="err">${esc(error)}</div>` : ''}
@@ -766,7 +715,7 @@ function signInPage(
        <button type="submit">Sign in</button>
      </form>
      <p class="note">This is the same account you use for the Brain. Your password is
-       never shared with ${esc(clientName)}.</p>`,
+       never shared with ${esc(clientName)}.</p>`),
   );
 }
 
@@ -816,7 +765,7 @@ async function consentPage(
 
   return page(
     'Connect a worker',
-    `<h1>Connect a worker</h1>
+    card(`<h1>Connect a worker</h1>
      <p class="sub"><strong>${esc(clientName)}</strong> is asking to act as one of your Brain
        workers. It will get that worker's access — nothing more, and nothing of yours.</p>
      ${error ? `<div class="err">${esc(error)}</div>` : ''}
@@ -833,7 +782,7 @@ async function consentPage(
      }
      <p class="note">Approving as <strong>${esc(person.handle)}</strong>.
        ${esc(clientName)} never sees your password or your own access — it receives a
-       token for the worker you choose, which you can revoke at any time.</p>`,
+       token for the worker you choose, which you can revoke at any time.</p>`),
   );
 }
 

@@ -39,6 +39,7 @@ import { accessGate, accessGateConfig, describeAccessGate, AccessGateError, type
 import { requestContext, requireAuthentication } from './routes/guard.ts';
 import { MCP_PATH, mcpRouter } from './mcp/endpoint.ts';
 import { OAUTH_BASE, oauthRouter, wellKnownRouter } from './routes/oauth.ts';
+import { OPERATOR_BASE, operatorRouter } from './routes/operator.ts';
 import { authRouter } from './routes/auth.ts';
 import { bootstrapFirstAdmin, hasAnyAccount } from './services/identity/bootstrap.ts';
 import { writeProjectState } from './services/runtimeState.ts';
@@ -97,7 +98,9 @@ function isServerPath(requestPath: string): boolean {
     requestPath === '/mcp' ||
     requestPath.startsWith('/mcp/') ||
     requestPath.startsWith('/oauth/') ||
-    requestPath.startsWith('/.well-known/')
+    requestPath.startsWith('/.well-known/') ||
+    requestPath === '/operator' ||
+    requestPath.startsWith('/operator/')
   );
 }
 
@@ -155,6 +158,16 @@ function buildApp(gate: AccessGateConfig): Express {
     express.json({ limit: '64kb' }),
     express.urlencoded({ extended: false, limit: '64kb' }),
     oauthRouter(),
+  );
+
+  // The operator console. Behind its own Brain-administrator check, and
+  // deliberately server-rendered: it is the surface you need when the client
+  // bundle is broken or access has to be repaired, so it must not depend on
+  // the front-end having built.
+  app.use(
+    OPERATOR_BASE,
+    express.urlencoded({ extended: false, limit: '64kb' }),
+    operatorRouter(),
   );
 
   // Prompts and pasted audit text are large; uploads go through multer instead.
