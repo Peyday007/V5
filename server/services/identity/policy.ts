@@ -219,6 +219,19 @@ const OVERRIDES: Override[] = [
   { pattern: /^\/api\/work\/[^/]+\/heartbeat$/, method: 'POST', level: 'WRITE', scope: 'queue:heartbeat' },
   { pattern: /^\/api\/work\/[^/]+\/(complete|fail|release)$/, method: 'POST', level: 'WRITE', scope: 'queue:complete' },
   { pattern: /^\/api\/work\/[^/]+$/, method: 'GET', level: 'READ', scope: 'queue:read' },
+
+  // ---------------------------------------------------------------------
+  // Step 6 — effects
+  // ---------------------------------------------------------------------
+  //
+  // Committing an effect is what a worker holding a lease is for, so it names
+  // the completion scope. Resolving an uncertain one is a judgement about the
+  // outside world and is ADMIN with no worker scope at all: a worker may record
+  // that something is unknown, and may never decide what it means.
+  { pattern: /^\/api\/work\/[^/]+\/effect$/, method: 'POST', level: 'WRITE', scope: 'queue:complete' },
+  { pattern: /^\/api\/operations\/[^/]+\/resolve$/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/operations\/[^/]+$/, method: 'GET', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/operations$/, method: 'GET', level: 'ADMIN' },
 ];
 
 export interface Requirement {

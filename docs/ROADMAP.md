@@ -17,12 +17,15 @@ the tag in git is the record of *when*, this file is the record of *what*.
 | **3** | **Off one computer.** Postgres and Supabase Storage behind one repository layer, `migrate:cloud`, the access gate, the container, the deployment | `step-3-cloud-brain-foundation` |
 | **4** | **Who is asking, and may they.** Human sessions, worker identities and credentials, roles, scopes, project membership, execution-time authorization, the identity audit | `step-4-identities-access-control` |
 | **5** | **Who owns this work, right now.** Durable queued work, atomic claiming by compare-and-swap, time-bounded leases, fencing generations, heartbeats, expiry and reclaim, bounded retry, cancellation, attempt history | `step-5-distributed-queue-leases` |
+| **6** | **A retry is not a second effect.** Idempotency keys, canonical fingerprints, reservation and replay, concurrent duplicate suppression, fenced effect commits, the external adapter contract, uncertain-outcome handling and administrative reconciliation | `step-6-idempotency-safe-effects` |
 
 Step 3's evidence is in [`STEP-3-EVIDENCE.md`](STEP-3-EVIDENCE.md); Step 4's is
 in [`STEP-4-EVIDENCE.md`](STEP-4-EVIDENCE.md), and the model it built is
 described in [`IDENTITY.md`](IDENTITY.md). Step 5's evidence is in
 [`STEP-5-EVIDENCE.md`](STEP-5-EVIDENCE.md) and its design in
-[`QUEUE.md`](QUEUE.md). Each evidence file says what was proven, what merely passes its tests, and what
+[`QUEUE.md`](QUEUE.md). Step 6's is in
+[`STEP-6-EVIDENCE.md`](STEP-6-EVIDENCE.md) and its design in
+[`EFFECTS.md`](EFFECTS.md). Each evidence file says what was proven, what merely passes its tests, and what
 nobody has run.
 
 ## Ahead
@@ -32,7 +35,6 @@ order is a dependency order, not a preference.
 
 | Step | What it contains |
 |---|---|
-| **6** | Idempotency and safe concurrent effects |
 | **7** | Remote MCP |
 | **8** | Connect one Claude Max worker |
 | **9** | Manual end-to-end research packet |

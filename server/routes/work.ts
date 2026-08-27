@@ -50,6 +50,17 @@ import {
   listWorkTypes,
   workType,
 } from '../services/queue/workTypes.ts';
+import { idempotencyKeyOf, runIdempotentRequest } from '../services/effects/http.ts';
+import { getWorkItem as loadWorkItem } from '../repos/workQueue.ts';
+import { logicalEffectKey } from '../services/effects/fingerprint.ts';
+import {
+  EffectFenceLost,
+  OperationConflict,
+  OperationInProgress,
+  TerminalEffectFailure,
+  runIdempotent,
+  type OperationNamespace,
+} from '../services/effects/engine.ts';
 import {
   badRequest,
   bodyOf,
@@ -66,6 +77,20 @@ import {
 } from './helpers.ts';
 
 export const workRouter: Router = Router();
+
+/**
+ * Enqueueing is scoped to the project, not to the person.
+ *
+ * Two administrators who both mean "queue this one job" mean one job, and the
+ * second should join the first rather than create a duplicate. That is the
+ * whole reason `principalScope` is a declaration rather than a default.
+ */
+const ENQUEUE_NAMESPACE: OperationNamespace = {
+  name: 'queue.enqueue',
+  version: 1,
+  principalScope: 'PROJECT',
+  retention: 'STANDARD',
+};
 
 /* ------------------------------------------------------------------------ */
 /* Audit                                                                     */
@@ -223,33 +248,79 @@ workRouter.post(
     }
 
     const principal = currentPrincipal();
-    try {
-      const item = await enqueueWork({
+    const enqueueInput = {
+      projectId: project.id,
+      workType: definition.type,
+      payload,
+      priority: optionalInteger(body['priority'], 'priority', { min: 0, max: 9 }),
+      requiredScopes: definition.requiredScopes,
+      maxAttempts:
+        optionalInteger(body['maxAttempts'], 'maxAttempts', { min: 1, max: 20 }) ??
+        definition.defaultMaxAttempts,
+      targetWorkerId: optionalString(body['targetWorkerId'], 'targetWorkerId') ?? null,
+      correlationId: optionalString(body['correlationId'], 'correlationId') ?? null,
+      createdByType: principal ? principal.type : ('SYSTEM' as const),
+      createdById: principal?.id ?? null,
+    };
+
+    const run = async (): Promise<{ item: Record<string, unknown> }> => {
+      try {
+        const item = await enqueueWork(enqueueInput);
+        await audit({
+          action: 'QUEUE_ENQUEUE',
+          workItemId: item.id,
+          projectId: project.id,
+          result: 'SUCCESS',
+          metadata: { workType: item.workType, priority: item.priority },
+        });
+        return { item: publicItem(item) };
+      } catch (error) {
+        if (error instanceof PayloadTooLarge) throw badRequest(error.message);
+        throw error;
+      }
+    };
+
+    // Without a key this behaves exactly as it did before: enqueueing twice
+    // creates two items, which is sometimes what a caller means. The key is how
+    // they say they meant one.
+    const key = idempotencyKeyOf(req);
+    if (!key) return await run();
+
+    const reply = await runIdempotentRequest<{ item: Record<string, unknown> }>(
+      {
+        namespace: ENQUEUE_NAMESPACE,
         projectId: project.id,
-        workType: definition.type,
-        payload,
-        priority: optionalInteger(body['priority'], 'priority', { min: 0, max: 9 }),
-        requiredScopes: definition.requiredScopes,
-        maxAttempts:
-          optionalInteger(body['maxAttempts'], 'maxAttempts', { min: 1, max: 20 }) ??
-          definition.defaultMaxAttempts,
-        targetWorkerId: optionalString(body['targetWorkerId'], 'targetWorkerId') ?? null,
-        correlationId: optionalString(body['correlationId'], 'correlationId') ?? null,
-        createdByType: principal ? principal.type : 'SYSTEM',
-        createdById: principal?.id ?? null,
-      });
-      await audit({
-        action: 'QUEUE_ENQUEUE',
-        workItemId: item.id,
-        projectId: project.id,
-        result: 'SUCCESS',
-        metadata: { workType: item.workType, priority: item.priority },
-      });
-      return { item: publicItem(item) };
-    } catch (error) {
-      if (error instanceof PayloadTooLarge) throw badRequest(error.message);
-      throw error;
-    }
+        key,
+        // The semantic input, and nothing about this particular request.
+        payload: {
+          workType: definition.type,
+          payload,
+          priority: enqueueInput.priority ?? null,
+          maxAttempts: enqueueInput.maxAttempts,
+          targetWorkerId: enqueueInput.targetWorkerId,
+        },
+        principalType: principal ? principal.type : 'SYSTEM',
+        principalId: principal?.id ?? 'system',
+        correlationId: currentContext()?.requestId ?? null,
+        // Re-read through the same resolver every other read uses, so a
+        // principal who has since lost the project gets nothing.
+        replay: async (operation) => {
+          if (!operation.resultRef) return null;
+          const item = await loadWorkItem(operation.resultRef);
+          if (!item || item.projectId !== project.id) return null;
+          return { item: publicItem(item) };
+        },
+      },
+      async () => {
+        const produced = await run();
+        return {
+          resultRef: String(produced.item['id']),
+          resultStatus: 200,
+          value: produced,
+        };
+      },
+    );
+    return { ...reply.value, replayed: reply.replayed, operationId: reply.operationId };
   }),
 );
 
@@ -477,6 +548,158 @@ workRouter.post(
     });
     if (!result.ok) refuse(result);
     return { item: publicItem(result.item) };
+  }),
+);
+
+/* ------------------------------------------------------------------------ */
+/* Committing an effect under a lease                                        */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * The namespace for an effect performed while holding a work item.
+ *
+ * Scoped to the project rather than the worker, because "the effect this work
+ * item represents" is the same effect whichever worker ends up performing it.
+ * A reclaimed item redelivered to a different worker must find the effect the
+ * first one already committed, not perform it again — and it can only do that
+ * if the key does not mention who is holding the lease.
+ */
+const WORK_EFFECT_NAMESPACE: OperationNamespace = {
+  name: 'queue.work.effect',
+  version: 1,
+  principalScope: 'PROJECT',
+  retention: 'EXTENDED',
+};
+
+/**
+ * Record the result of a work item's effect, and complete the item, atomically.
+ *
+ * This is Step 6's answer to Step 5's at-least-once delivery. The logical effect
+ * key is derived from the *work item*, so every attempt — a redelivery after an
+ * expired lease, a different worker after a reclaim, a restart — computes the
+ * same key and finds the same operation. The first attempt to get there commits;
+ * every later one replays.
+ *
+ * The fence runs inside the same transaction as the effect, as a write. A worker
+ * whose lease expired while it was working matches nothing and commits nothing,
+ * which is the property Step 5 could not provide on its own.
+ */
+workRouter.post(
+  '/work/:workItemId/effect',
+  handler(async (req) => {
+    const item = await requireWorkItem(pathId(req, 'workItemId'));
+    const proof = proofFrom(req, item.id);
+    const body = bodyOf(req);
+    const principal = currentPrincipal();
+
+    const summary = optionalString(body['summary'], 'summary') ?? null;
+    const discriminator = optionalString(body['effect'], 'effect') ?? null;
+
+    // Stable across attempts, leases, generations, workers and restarts. That
+    // stability is the entire mechanism; deriving it from the lease would make
+    // every redelivery a fresh effect.
+    const key = logicalEffectKey({
+      workItemId: item.id,
+      namespace: WORK_EFFECT_NAMESPACE.name,
+      discriminator: discriminator ?? undefined,
+    });
+
+    try {
+      const outcome = await runIdempotent<{ recorded: true; summary: string | null }>(
+        {
+          namespace: WORK_EFFECT_NAMESPACE,
+          projectId: item.projectId,
+          key,
+          // The identity of this effect is the work item and which effect it
+          // is — never the result the worker happens to report.
+          //
+          // Including the summary here was a bug, and an instructive one: after
+          // a reclaim, the new owner writes a different summary for the same
+          // work, so the fingerprints differed, the reservation looked like a
+          // conflicting reuse of the key, and legitimate recovery was refused.
+          // A result is an output. Outputs do not belong in an identity.
+          payload: { workItemId: item.id, effect: discriminator },
+          principalType: principal ? principal.type : 'SYSTEM',
+          principalId: principal?.id ?? 'system',
+          correlationId: currentContext()?.requestId ?? null,
+          // The fence. Re-proved as a write inside the effect's own transaction.
+          fence: proof,
+        },
+        async () => {
+          // The domain effect. Completing the queue item happens in this same
+          // transaction, so the effect and the completion land together or not
+          // at all — there is no state where one exists without the other.
+          const completed = await completeWork(proof, { summary });
+          if (!completed.ok) {
+            throw new TerminalEffectFailure(
+              'NOT_AUTHORIZED',
+              'The work item could not be completed under this lease.',
+            );
+          }
+          return {
+            resultRef: item.id,
+            resultStatus: 200,
+            resultSummary: summary,
+            value: { recorded: true as const, summary },
+          };
+        },
+      );
+
+      switch (outcome.status) {
+        case 'EXECUTED':
+          await audit({
+            action: 'EFFECT_COMMITTED',
+            workItemId: item.id,
+            projectId: item.projectId,
+            result: 'SUCCESS',
+            metadata: { operationId: outcome.operation.id, leaseGeneration: proof.leaseGeneration },
+          });
+          return { committed: true, replayed: false, operationId: outcome.operation.id };
+        case 'REPLAYED':
+          // A redelivered work item finding the effect it already performed.
+          // This is the case the whole step exists for.
+          await audit({
+            action: 'EFFECT_REPLAYED',
+            workItemId: item.id,
+            projectId: item.projectId,
+            result: 'SUCCESS',
+            metadata: { operationId: outcome.operation.id },
+          });
+          return { committed: true, replayed: true, operationId: outcome.operation.id };
+        case 'UNCERTAIN':
+          throw conflict('That effect had an unknown outcome and must be reconciled.', {
+            reason: 'RECONCILIATION_REQUIRED',
+            operationId: outcome.operation.id,
+          });
+        case 'TERMINAL_FAILURE':
+          throw conflict('That effect has already failed terminally.', {
+            reason: 'ALREADY_TERMINAL',
+            operationId: outcome.operation.id,
+          });
+      }
+    } catch (error) {
+      if (error instanceof EffectFenceLost) {
+        await audit({
+          action: 'EFFECT_COMMITTED',
+          workItemId: item.id,
+          projectId: item.projectId,
+          result: 'DENIED',
+          metadata: { reason: 'LEASE_LOST' },
+        });
+        throw conflict('This lease is no longer current.', { reason: 'LEASE_LOST' });
+      }
+      if (error instanceof OperationConflict) {
+        throw conflict('That effect key has already been used for a different request.', {
+          reason: 'FINGERPRINT_CONFLICT',
+        });
+      }
+      if (error instanceof OperationInProgress) {
+        throw conflict('An equivalent effect is already being committed.', {
+          reason: 'IN_PROGRESS',
+        });
+      }
+      throw error;
+    }
   }),
 );
 

@@ -744,6 +744,31 @@ export async function cancelWork(
   return item ? { ok: true, item } : { ok: false, reason: 'NOT_FOUND' };
 }
 
+/**
+ * Re-prove ownership as a *write*, for use inside somebody else's transaction.
+ *
+ * This is the fence at the commit boundary, and it is the reason Step 6 can
+ * promise that a stale worker cannot commit an effect. Checking ownership with
+ * a SELECT and then writing would leave a window: the lease can expire, or the
+ * item be reclaimed or cancelled, between the check and the commit.
+ *
+ * So it is a guarded UPDATE. Called inside the same transaction as the domain
+ * mutation, it either matches — in which case this worker still owns the item
+ * and the row is locked for the rest of the transaction — or it does not, and
+ * the caller aborts. There is no interval in between.
+ *
+ * The `updated_at` touch is deliberate: an UPDATE that changes nothing is not a
+ * lock, and the point of this statement is to take one.
+ */
+export async function proveLeaseOwnership(proof: OwnershipProof): Promise<boolean> {
+  const now = queueNow();
+  const result = await getDb().run(
+    `UPDATE work_items SET updated_at = ? WHERE ${OWNED}`,
+    [now, ...ownedParams(proof, now)],
+  );
+  return result.changes === 1;
+}
+
 /* ------------------------------------------------------------------------- */
 /* Expiry sweeping — visibility only                                          */
 /* ------------------------------------------------------------------------- */

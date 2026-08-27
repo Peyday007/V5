@@ -132,8 +132,13 @@ There must be no workflow where the user has to remember "now go update the data
     not there" — including the body of the refusal, not only its status.
 24. No two workers holding a valid lease on one work item, and no queue-state
     change without proving current ownership in the same statement that makes it.
-25. No claim treated as permission to perform an effect that is unsafe to repeat,
-    until Step 6's idempotency exists.
+25. No claim treated as permission to perform an effect that is unsafe to
+    repeat, and no effect performed outside the class whose guarantee it can
+    actually keep.
+26. No timeout, reset or late error treated as evidence that an effect did not
+    happen; an unknown outcome is recorded as unknown and never auto-retried.
+27. No idempotency scope built from anything the caller sent, and no logical
+    effect key that changes between attempts.
 
 ## 8. Model prose never mutates project state.
 
@@ -473,6 +478,48 @@ effect is Step 6. Until Step 6 exists the only registered work type is
 `SYNTHETIC_ECHO`, and a successful claim is not permission to perform an
 unprotected external effect. A queue item describes Brain-authorized work; there
 is no work type meaning "run this".
+
+## 20. A retry is not a second effect.
+
+Step 5's queue is at-least-once and says so. Step 6
+(`server/services/effects/`, `docs/EFFECTS.md`) is what stops that meaning
+"twice". The whole mechanism is one constraint:
+
+    UNIQUE (scope_hash, key_fingerprint)
+
+A logical operation reserves itself with `INSERT ... ON CONFLICT DO NOTHING`.
+Exactly one caller inserts; every other equivalent caller reads the row it
+collided with and replays, waits, or is refused. The arbiter is the database,
+never a process-local lock.
+
+- **There is no universal exactly-once**, and claiming it would be a lie about
+  at least one provider. The guarantee is per effect class: same-database
+  commits once transactionally; a native-idempotent provider gets one stable
+  key; a reconcilable one is asked rather than repeated; an opaque one stops at
+  `UNCERTAIN` and waits for a person.
+- **A timeout is not evidence.** Neither is a connection reset, nor an error
+  from a provider that already accepted the work. The only evidence is a
+  receipt or the provider's own answer. An unknown outcome is recorded as
+  unknown and is never automatically resent.
+- **A key arrives in a header, never a query string**, and a key in the query
+  is refused rather than ignored — ignoring it leaves the caller believing they
+  have a property they do not.
+- **The scope is built from server-controlled facts only.** Nothing the caller
+  sent contributes, so a key is never a way to reach another project.
+- **A queue effect's key is derived from the work item**, never from the lease,
+  attempt, generation, credential, request or clock. A key that changes on the
+  retry is not an idempotency key.
+- **Inputs identify an operation; outputs do not.** Putting a result into a
+  fingerprint makes a reclaimed item's new owner look like a conflicting
+  request and blocks legitimate recovery.
+- **The fence is at the commit boundary**, as a guarded write inside the
+  effect's own transaction — not a `SELECT`, which would leave a window.
+- **A replay re-reads and re-authorizes.** No response body is stored, so a
+  principal who lost access cannot be handed the result. One-time credentials
+  are never replayable, and worker credential issuance is permanently outside
+  this mechanism.
+- Deleting an operation record must never make a successful effect silently
+  repeatable.
 
 ---
 

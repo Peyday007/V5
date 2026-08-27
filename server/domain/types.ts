@@ -2933,3 +2933,185 @@ export const LEASE_REJECTIONS = [
   'CANCELLED',
 ] as const;
 export type LeaseRejection = (typeof LEASE_REJECTIONS)[number];
+
+// ---------------------------------------------------------------------------
+// IDEMPOTENCY AND EFFECT CONTROL (Step 6)
+//
+// Step 5's queue is at-least-once. These types are how an effect performed
+// under it stops being repeatable. The guarantee is per effect class rather
+// than universal, and `EffectClass` is what records which one was claimed.
+// ---------------------------------------------------------------------------
+
+export const OPERATION_STATES = ['RESERVED', 'SUCCEEDED', 'FAILED', 'UNCERTAIN'] as const;
+export type OperationState = (typeof OPERATION_STATES)[number];
+
+export const TERMINAL_OPERATION_STATES: readonly OperationState[] = ['SUCCEEDED', 'FAILED'];
+
+/**
+ * What kind of guarantee an effect can honestly be given.
+ *
+ * These are not interchangeable, and flattening them into one "idempotent"
+ * label is the misleading thing this enum exists to prevent.
+ */
+export const EFFECT_CLASSES = [
+  /** Wholly inside the Brain's database. Commits exactly once, transactionally. */
+  'SAME_DATABASE',
+  /** Database plus the private object store. Digest-keyed, recoverable. */
+  'DATABASE_AND_STORAGE',
+  /** External, with native idempotency: one stable provider key across retries. */
+  'EXTERNAL_IDEMPOTENT',
+  /** External, no native key, but authoritative state can be queried. */
+  'EXTERNAL_RECONCILABLE',
+  /** External, neither. One attempt, then a person decides. */
+  'EXTERNAL_OPAQUE',
+] as const;
+export type EffectClass = (typeof EFFECT_CLASSES)[number];
+
+export const EFFECT_PHASES = ['INTENT', 'SENT', 'CONFIRMED', 'FAILED', 'UNCERTAIN'] as const;
+export type EffectPhase = (typeof EFFECT_PHASES)[number];
+
+export const EFFECT_OUTCOMES = ['SUCCEEDED', 'FAILED', 'UNCERTAIN', 'ABANDONED'] as const;
+export type EffectOutcome = (typeof EFFECT_OUTCOMES)[number];
+
+/**
+ * Why an operation is refused, as a closed set.
+ *
+ * `FINGERPRINT_CONFLICT` is the interesting one: the same key arriving with
+ * materially different input. It is never executed and the previous payload is
+ * never disclosed — the caller learns that the key is taken, and nothing else.
+ */
+export const OPERATION_REJECTIONS = [
+  'FINGERPRINT_CONFLICT',
+  'IN_PROGRESS',
+  'NOT_THE_OWNER',
+  'LEASE_LOST',
+  'CANCELLED',
+  'ALREADY_TERMINAL',
+  'RECONCILIATION_REQUIRED',
+] as const;
+export type OperationRejection = (typeof OPERATION_REJECTIONS)[number];
+
+/** Why an operation failed, or why its outcome is unknown. */
+export const EFFECT_FAILURE_CATEGORIES = [
+  'INVALID_INPUT',
+  'NOT_AUTHORIZED',
+  'DEPENDENCY_UNAVAILABLE',
+  'PROVIDER_REJECTED',
+  'TIMEOUT',
+  'INTERNAL_ERROR',
+  'ABANDONED',
+] as const;
+export type EffectFailureCategory = (typeof EFFECT_FAILURE_CATEGORIES)[number];
+
+/**
+ * How long a record must outlive the effect it describes.
+ *
+ * `PERMANENT` is for effects whose identity must never expire while the same
+ * effect could still be attempted somewhere — deleting one of those would make
+ * a completed external effect silently repeatable, which is the exact failure
+ * this table exists to prevent.
+ */
+export const RETENTION_CLASSES = ['STANDARD', 'EXTENDED', 'PERMANENT'] as const;
+export type RetentionClass = (typeof RETENTION_CLASSES)[number];
+
+export interface IdempotencyOperationRow {
+  id: string;
+  scope_hash: string;
+  key_fingerprint: string;
+  namespace: string;
+  namespace_version: number;
+  project_id: string;
+  created_by_type: string;
+  created_by_id: string | null;
+  correlation_id: string | null;
+  work_item_id: string | null;
+  lease_generation: number | null;
+  request_fingerprint: string;
+  fingerprint_version: number;
+  state: string;
+  attempt_count: number;
+  failure_category: string | null;
+  uncertainty_reason: string | null;
+  recover_after: string | null;
+  result_ref: string | null;
+  result_status: number | null;
+  result_summary: string | null;
+  retention_class: string;
+  reserved_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EffectAttemptRow {
+  id: string;
+  operation_id: string;
+  attempt_number: number;
+  executor_type: string;
+  executor_id: string | null;
+  work_item_id: string | null;
+  lease_id: string | null;
+  lease_generation: number | null;
+  adapter: string | null;
+  provider_key: string | null;
+  phase: string;
+  receipt_ref: string | null;
+  receipt_meta: string;
+  started_at: string;
+  ended_at: string | null;
+  outcome: string | null;
+  detail: string | null;
+  request_id: string | null;
+}
+
+export interface IdempotencyOperation {
+  id: string;
+  scopeHash: string;
+  keyFingerprint: string;
+  namespace: string;
+  namespaceVersion: number;
+  projectId: string;
+  createdByType: ActorType;
+  createdById: string | null;
+  correlationId: string | null;
+  workItemId: string | null;
+  leaseGeneration: number | null;
+  requestFingerprint: string;
+  fingerprintVersion: number;
+  state: OperationState;
+  attemptCount: number;
+  failureCategory: EffectFailureCategory | null;
+  uncertaintyReason: string | null;
+  recoverAfter: string | null;
+  resultRef: string | null;
+  resultStatus: number | null;
+  resultSummary: string | null;
+  retentionClass: RetentionClass;
+  reservedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EffectAttempt {
+  id: string;
+  operationId: string;
+  attemptNumber: number;
+  executorType: ActorType;
+  executorId: string | null;
+  workItemId: string | null;
+  leaseId: string | null;
+  leaseGeneration: number | null;
+  adapter: string | null;
+  providerKey: string | null;
+  phase: EffectPhase;
+  receiptRef: string | null;
+  receiptMeta: Record<string, unknown>;
+  startedAt: string;
+  endedAt: string | null;
+  outcome: EffectOutcome | null;
+  detail: string | null;
+  requestId: string | null;
+}

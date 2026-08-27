@@ -43,6 +43,39 @@ import {
 } from '../services/archive/import.ts';
 import { listImportJobs } from '../repos/imports.ts';
 import { optionalBoolean } from './helpers.ts';
+import { currentContext } from '../services/identity/context.ts';
+import { idempotencyKeyOf, runIdempotentRequest } from '../services/effects/http.ts';
+import type { OperationNamespace } from '../services/effects/engine.ts';
+import { hashBuffer } from '../services/storage.ts';
+import { getDocument } from '../repos/documents.ts';
+
+/**
+ * Importing is scoped to the project.
+ *
+ * Two people uploading the same file into the same layer mean one document, not
+ * two — the existing content-hash duplicate check already believed that, and
+ * this makes it true under concurrency rather than only in sequence.
+ */
+const IMPORT_NAMESPACE: OperationNamespace = {
+  name: 'documents.import',
+  version: 1,
+  principalScope: 'PROJECT',
+  retention: 'EXTENDED',
+};
+
+/**
+ * What an import returns, originally or on replay.
+ *
+ * The two differ on purpose. An original execution reports what the import
+ * *did*; a replay reports what currently *exists*. Pretending a replay can
+ * produce the first would mean inventing an account of an import nobody
+ * watched.
+ */
+interface ImportReply {
+  results?: ImportResult[];
+  documents?: unknown[];
+  plan: unknown;
+}
 import { currentPrincipal } from '../services/identity/context.ts';
 import { visibleProjectIds } from '../services/identity/policy.ts';
 import { buildPlan } from '../services/planner.ts';
@@ -490,20 +523,88 @@ projectsRouter.post(
 
     // Every file is stored even when it cannot be filed confidently (invariant 8:
     // storing is not registering), so one ambiguous name never loses an upload.
-    const results: ImportResult[] = await Promise.all(
-      files.map((file) =>
-        importFile({
-          projectId: project.id,
-          originalFilename: file.originalname,
-          contents: file.buffer,
+    const doImport = async (): Promise<ImportReply> => {
+      const results: ImportResult[] = await Promise.all(
+        files.map((file) =>
+          importFile({
+            projectId: project.id,
+            originalFilename: file.originalname,
+            contents: file.buffer,
+            layerId: layer?.id ?? null,
+            version,
+            documentType,
+          }),
+        ),
+      );
+      await recomputeProject(project.id);
+      return { results, plan: await buildPlan(project.id) };
+    };
+
+    const key = idempotencyKeyOf(req);
+    if (!key) return await doImport();
+
+    // A database-plus-Storage effect. The fingerprint is over the *content* of
+    // every file rather than its name or its upload order, so the same bytes
+    // filed the same way are the same operation however the browser retried —
+    // and two different documents can never collide onto one key.
+    const principal = currentPrincipal();
+    const reply = await runIdempotentRequest<ImportReply>(
+      {
+        namespace: IMPORT_NAMESPACE,
+        projectId: project.id,
+        key,
+        payload: {
+          files: files
+            .map((file) => ({
+              name: file.originalname,
+              digest: hashBuffer(file.buffer),
+              bytes: file.buffer.length,
+            }))
+            // Sorted, because "the same two files" is the same import whichever
+            // order multipart happened to deliver them in.
+            .sort((a, b) => (a.digest < b.digest ? -1 : a.digest > b.digest ? 1 : 0)),
           layerId: layer?.id ?? null,
           version,
           documentType,
-        }),
-      ),
+        },
+        principalType: principal ? principal.type : 'SYSTEM',
+        principalId: principal?.id ?? 'system',
+        correlationId: currentContext()?.requestId ?? null,
+        // Re-read the documents this import produced, through the project the
+        // caller is authorized for. A stored response body would have made this
+        // check impossible, which is why none is stored.
+        // A replay returns the *documents*, re-read and re-authorized — not a
+        // reconstructed ImportResult. An ImportResult carries what happened
+        // during the import (the inference, the stored path, whether anything
+        // was superseded), and that is not recoverable from the documents
+        // afterwards. Fabricating those fields to make the shape match would be
+        // inventing an account of an import nobody watched. The client learns
+        // it is a replay and gets the canonical records instead.
+        replay: async (operation) => {
+          if (!operation.resultRef) return null;
+          const ids = operation.resultRef.split(',').filter(Boolean);
+          const found = await Promise.all(ids.map((id) => getDocument(id)));
+          const visible = found.filter(
+            (document) => document !== null && document.projectId === project.id,
+          );
+          if (visible.length !== ids.length) return null;
+          return { documents: visible, plan: await buildPlan(project.id) };
+        },
+      },
+      async () => {
+        const produced = await doImport();
+        return {
+          // The canonical records this produced, so a replay re-reads them
+          // rather than replaying a body.
+          resultRef: (produced.results ?? [])
+            .map((result) => (result as { document?: { id?: string } }).document?.id ?? '')
+            .filter(Boolean)
+            .join(','),
+          resultStatus: 200,
+          value: produced,
+        };
+      },
     );
-
-    await recomputeProject(project.id);
-    return { results, plan: await buildPlan(project.id) };
+    return { ...reply.value, replayed: reply.replayed, operationId: reply.operationId };
   }),
 );

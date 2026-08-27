@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { adminRouter } from './admin.ts';
 import { workRouter } from './work.ts';
+import { operationsRouter } from './operations.ts';
 import { auditsRouter } from './audits.ts';
 import { chatRouter } from './chat.ts';
 import { documentsRouter } from './documents.ts';
@@ -30,6 +31,7 @@ export function createApiRouter(): Router {
   // project-scoped (/projects/:id/work) and some address an item directly
   // (/work/:id), and the two must sit beside each other.
   router.use(workRouter);
+  router.use(operationsRouter);
 
   router.use(healthRouter);
   // Audit routes carry their own prefixes (/runs/:id/..., /layers/:id/...),

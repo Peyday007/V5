@@ -531,6 +531,8 @@ onPostgres('against a real Postgres', () => {
       'research_claims',
       'work_items',
       'work_leases',
+      'idempotency_operations',
+      'effect_attempts',
     ]) {
       expect(pgTables, expected).toContain(expected);
     }
@@ -580,6 +582,12 @@ onPostgres('against a real Postgres', () => {
         // claim logic above it were wrong and two workers both believed they
         // had won, the second insert would fail rather than produce two owners.
         'work_leases(work_item_id,lease_generation)',
+        // Step 6. The first of these is the entire duplicate-suppression
+        // mechanism: one logical operation per scoped idempotency key, enforced
+        // by the database so it holds across Brain instances rather than inside
+        // one process.
+        'idempotency_operations(scope_hash,key_fingerprint)',
+        'effect_attempts(operation_id,attempt_number)',
       ].sort(),
     );
   });

@@ -85,6 +85,7 @@ import type { Project } from '../server/domain/types.ts';
  * accounts cannot collide with a person's and cannot be mailed by accident.
  */
 const MEMBER_EMAIL = 'verification-member@brain.invalid';
+const OWNER_EMAIL = 'verification-owner@brain.invalid';
 const WORKER_NAME = 'verification-worker';
 const FIXTURE_SLUG = 'verification-scope';
 
@@ -130,9 +131,17 @@ let base = '';
 
 async function call(
   path: string,
-  init: { method?: string; cookie?: string; bearer?: string; body?: unknown; origin?: string } = {},
+  init: {
+    method?: string;
+    cookie?: string;
+    bearer?: string;
+    body?: unknown;
+    origin?: string;
+    extraHeaders?: Record<string, string>;
+  } = {},
 ): Promise<Reply> {
   const headers: Record<string, string> = { accept: 'application/json' };
+  for (const [name, value] of Object.entries(init.extraHeaders ?? {})) headers[name] = value;
   if (init.cookie) headers['cookie'] = init.cookie;
   if (init.bearer) headers['authorization'] = `Bearer ${init.bearer}`;
   if (init.body !== undefined) headers['content-type'] = 'application/json';
@@ -189,6 +198,15 @@ interface Fixtures {
   /** A second, independent worker, so a hosted claim can actually be a race. */
   rivalCredential: string;
   rivalWorkerId: string;
+  /**
+   * A project administrator, for the verification project only.
+   *
+   * Enqueueing and inspecting operations are ADMIN-level, and the member
+   * account must stay an ordinary member so the checks that it *cannot* do
+   * those things keep meaning something. Two accounts, two authorities.
+   */
+  adminCookie: string;
+  adminId: string;
 }
 
 async function setUp(): Promise<Fixtures> {
@@ -234,6 +252,37 @@ async function setUp(): Promise<Fixtures> {
     principalType: 'HUMAN',
     principalId: memberId,
     role: 'MEMBER',
+    grantedByType: 'SYSTEM',
+    grantedById: 'verify-hosted',
+  });
+
+  // The project administrator. OWNER of the verification project and nothing
+  // else — deliberately not a Brain administrator, so the isolation checks
+  // above still have something to isolate.
+  const ownerPassword = freshPassword();
+  const existingOwner = await getUserByEmail(OWNER_EMAIL);
+  let ownerId: string;
+  if (existingOwner) {
+    await setUserPassword(existingOwner.id, ownerPassword, { mustChangePassword: false });
+    if (existingOwner.disabled) await setUserDisabled(existingOwner.id, false);
+    await revokeSessionsForUser(existingOwner.id);
+    ownerId = existingOwner.id;
+  } else {
+    ownerId = (
+      await createUser({
+        email: OWNER_EMAIL,
+        displayName: 'Hosted verification owner',
+        password: ownerPassword,
+        isBrainAdmin: false,
+        mustChangePassword: false,
+      })
+    ).id;
+  }
+  await grantMembership({
+    projectId: scope.id,
+    principalType: 'HUMAN',
+    principalId: ownerId,
+    role: 'OWNER',
     grantedByType: 'SYSTEM',
     grantedById: 'verify-hosted',
   });
@@ -310,7 +359,17 @@ async function setUp(): Promise<Fixtures> {
     issuedById: 'verify-hosted',
   });
 
+  // Sign the owner in over the real edge, the same way anything else would.
+  const ownerLogin = await call('/api/auth/login', {
+    method: 'POST',
+    origin: base,
+    body: { email: OWNER_EMAIL, password: ownerPassword },
+  });
+  const ownerCookie = sessionPair(ownerLogin.cookie) ?? '';
+
   return {
+    adminCookie: ownerCookie,
+    adminId: ownerId,
     rivalCredential: rivalIssued.plaintext,
     rivalWorkerId: rival.id,
     memberPassword,
@@ -877,6 +936,228 @@ async function queueChecks(fixtures: Fixtures, cookie: string): Promise<void> {
 }
 
 
+
+/* ------------------------------------------------------------------------ */
+/* Idempotency and safe effects (Step 6)                                     */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * A fresh key namespace for every run.
+ *
+ * The counter alone was not enough: it resets with the process, so the second
+ * run of this script reused the first run's keys, every keyed mutation replayed
+ * instead of executing, and the checks that assert "this is an original
+ * execution" failed. The deploy runs this twice, so a harness that only works
+ * the first time is a harness that fails every deploy.
+ *
+ * Deliberately unlike the persistence beacon, which must survive between runs.
+ * Keys must not; results must.
+ */
+const RUN_NONCE = crypto.randomBytes(6).toString('hex');
+let hostedKeySeq = 0;
+function hostedKey(label: string): string {
+  hostedKeySeq += 1;
+  return `hosted-${label}-${RUN_NONCE}-${String(hostedKeySeq).padStart(4, '0')}`;
+}
+
+async function enqueueWithKey(
+  fixtures: Fixtures,
+  cookie: string,
+  key: string | null,
+  note: string,
+): Promise<Reply> {
+  const headers: Record<string, string> = {};
+  if (key) headers['idempotency-key'] = key;
+  return await call(`/api/projects/${fixtures.scope.id}/work`, {
+    method: 'POST',
+    cookie,
+    origin: base,
+    body: { workType: 'SYNTHETIC_ECHO', payload: { note } },
+    extraHeaders: headers,
+  });
+}
+
+async function effectChecks(
+  fixtures: Fixtures,
+  adminCookie: string,
+  memberCookie: string,
+): Promise<void> {
+  console.log('\nIdempotency and safe effects');
+
+  // --- where a key may arrive -------------------------------------------
+  const inQuery = await call(
+    `/api/projects/${fixtures.scope.id}/work?idempotency_key=abcdefghij`,
+    { method: 'POST', cookie: adminCookie, origin: base, body: { workType: 'SYNTHETIC_ECHO', payload: {} } },
+  );
+  expectStatus('a key in the URL is refused rather than ignored', inQuery.status, 400);
+
+  const malformed = await call(`/api/projects/${fixtures.scope.id}/work`, {
+    method: 'POST',
+    cookie: adminCookie,
+    origin: base,
+    body: { workType: 'SYNTHETIC_ECHO', payload: {} },
+    extraHeaders: { 'idempotency-key': 'has spaces !!' },
+  });
+  expectStatus('a malformed key is refused', malformed.status, 400);
+
+  // --- original and replay ----------------------------------------------
+  const key = hostedKey('replay');
+  const first = await enqueueWithKey(fixtures, adminCookie, key, 'idempotent');
+  expectStatus('a keyed mutation executes', first.status, 200);
+  const firstId = (first.json as { item?: { id?: string }; replayed?: boolean } | null)?.item?.id;
+  const firstReplayed = (first.json as { replayed?: boolean } | null)?.replayed;
+  record('and reports itself as an original execution', firstReplayed === false, `${firstReplayed}`);
+
+  const second = await enqueueWithKey(fixtures, adminCookie, key, 'idempotent');
+  const secondBody = second.json as { item?: { id?: string }; replayed?: boolean } | null;
+  expectStatus('a repeat of the same key is accepted', second.status, 200);
+  record(
+    'and returns the same work item without creating another',
+    secondBody?.item?.id === firstId && secondBody?.replayed === true,
+    `${secondBody?.item?.id === firstId ? 'same item' : 'DIFFERENT item'}, replayed ${secondBody?.replayed}`,
+  );
+
+  // --- concurrent duplicates --------------------------------------------
+  const raceKey = hostedKey('race');
+  const raced = await Promise.all(
+    Array.from({ length: 6 }, () => enqueueWithKey(fixtures, adminCookie, raceKey, 'raced')),
+  );
+  const ids = raced
+    .map((reply) => (reply.json as { item?: { id?: string } } | null)?.item?.id)
+    .filter((id): id is string => typeof id === 'string');
+  record(
+    'six concurrent duplicates over the edge create exactly one work item',
+    new Set(ids).size === 1,
+    `${new Set(ids).size} distinct item(s) from ${raced.length} request(s)`,
+  );
+  record(
+    'and every request that did not get it was told so, not failed',
+    raced.every((reply) => reply.status === 200 || reply.status === 409),
+    raced.map((r) => r.status).join(' '),
+  );
+
+  // --- fingerprint conflict ---------------------------------------------
+  const conflict = await enqueueWithKey(fixtures, adminCookie, key, 'a-completely-different-note');
+  expectStatus('the same key with a different request is refused', conflict.status, 409);
+  record(
+    'and the refusal does not disclose the earlier request',
+    !conflict.body.includes('idempotent'),
+    '',
+  );
+
+  // --- isolation ---------------------------------------------------------
+  if (fixtures.holdout) {
+    const elsewhere = await call(`/api/projects/${fixtures.holdout.id}/work`, {
+      method: 'POST',
+      cookie: adminCookie,
+      origin: base,
+      body: { workType: 'SYNTHETIC_ECHO', payload: { note: 'idempotent' } },
+      extraHeaders: { 'idempotency-key': key },
+    });
+    // Authorization is decided before idempotency is even considered, so a key
+    // is never a way to reach a project. That the same key is *independent*
+    // across projects is a property of the scope hash and is proven in the unit
+    // suite; what matters here is that holding one buys no access.
+    expectStatus(
+      'a key does not open a project the caller may not touch',
+      elsewhere.status,
+      404,
+    );
+  }
+
+  // --- committing under a lease -----------------------------------------
+  const target = await enqueueWithKey(fixtures, adminCookie, hostedKey('effect'), 'under a lease');
+  const targetId = (target.json as { item?: { id?: string } } | null)?.item?.id;
+  if (!targetId) {
+    record('a work item was created to commit an effect against', false, 'none');
+    return;
+  }
+  const claimed = await claimAs(fixtures.credential, { limit: 25 });
+  const mine = claimed.find((c) => c.workItemId === targetId);
+  record('a worker claimed it', mine !== undefined, mine ? 'claimed' : 'not claimed');
+  if (!mine) return;
+
+  const commit = await call(`/api/work/${targetId}/effect`, {
+    method: 'POST',
+    bearer: fixtures.credential,
+    body: { leaseId: mine.leaseId, leaseGeneration: mine.leaseGeneration, summary: 'committed' },
+  });
+  expectStatus('the owner commits the effect', commit.status, 200);
+  record(
+    'and it is recorded as an original execution',
+    (commit.json as { replayed?: boolean } | null)?.replayed === false,
+    '',
+  );
+
+  const redelivered = await call(`/api/work/${targetId}/effect`, {
+    method: 'POST',
+    bearer: fixtures.credential,
+    body: { leaseId: mine.leaseId, leaseGeneration: mine.leaseGeneration, summary: 'committed' },
+  });
+  record(
+    'a redelivery replays the effect rather than repeating it',
+    redelivered.status === 200 &&
+      (redelivered.json as { replayed?: boolean } | null)?.replayed === true,
+    `${redelivered.status}, replayed ${(redelivered.json as { replayed?: boolean } | null)?.replayed}`,
+  );
+
+  // --- a stale lease cannot commit ---------------------------------------
+  const fenced = await enqueueWithKey(fixtures, adminCookie, hostedKey('fence'), 'fenced');
+  const fencedId = (fenced.json as { item?: { id?: string } } | null)?.item?.id;
+  if (fencedId) {
+    const held = (await claimAs(fixtures.credential, { limit: 25 })).find(
+      (c) => c.workItemId === fencedId,
+    );
+    if (held) {
+      await expireLeaseOf(fencedId);
+      const stolen = (await claimAs(fixtures.rivalCredential, { limit: 25 })).find(
+        (c) => c.workItemId === fencedId,
+      );
+      const stale = await call(`/api/work/${fencedId}/effect`, {
+        method: 'POST',
+        bearer: fixtures.credential,
+        body: { leaseId: held.leaseId, leaseGeneration: held.leaseGeneration, summary: 'stale' },
+      });
+      expectStatus('a worker whose lease was reclaimed cannot commit an effect', stale.status, 409);
+      if (stolen) {
+        const fresh = await call(`/api/work/${fencedId}/effect`, {
+          method: 'POST',
+          bearer: fixtures.rivalCredential,
+          body: {
+            leaseId: stolen.leaseId,
+            leaseGeneration: stolen.leaseGeneration,
+            summary: 'the real one',
+          },
+        });
+        expectStatus('and the current owner still can', fresh.status, 200);
+      }
+    }
+  }
+
+  // --- the operation record ----------------------------------------------
+  const operations = await call(`/api/projects/${fixtures.scope.id}/operations`, {
+    cookie: adminCookie,
+  });
+  expectStatus('an administrator can inspect operations', operations.status, 200);
+  record(
+    'and the record contains neither the key nor the request it described',
+    !operations.body.includes(key) && !operations.body.includes('a-completely-different-note'),
+    '',
+  );
+
+  const anonOperations = await call(`/api/projects/${fixtures.scope.id}/operations`);
+  expectStatus('an anonymous caller cannot', anonOperations.status, 401);
+
+  const memberOperations = await call(`/api/projects/${fixtures.scope.id}/operations`, {
+    cookie: memberCookie,
+  });
+  record(
+    'nor can an ordinary member of the project',
+    memberOperations.status === 404 || memberOperations.status === 401,
+    `${memberOperations.status}`,
+  );
+}
+
 /* ------------------------------------------------------------------------ */
 /* The persistence beacon                                                    */
 /* ------------------------------------------------------------------------ */
@@ -1102,6 +1383,7 @@ async function main(): Promise<void> {
     await humanAuthorization(fixtures, cookie);
     await workerAuthentication(fixtures);
     await queueChecks(fixtures, cookie);
+    await effectChecks(fixtures, fixtures.adminCookie, cookie);
     await revocationEndsAccess(fixtures, cookie);
 
     // Last, so the beacon is not swept up by the checks above.
@@ -1118,6 +1400,7 @@ async function main(): Promise<void> {
     await revokeCredential(fixtures.credentialId, 'hosted verification finished');
     await revokeCredential(fixtures.expiredCredentialId, 'hosted verification finished');
     await setUserDisabled(fixtures.memberId, true);
+    await setUserDisabled(fixtures.adminId, true);
     await setWorkerStatus(fixtures.workerId, 'DISABLED');
     await setWorkerStatus(fixtures.rivalWorkerId, 'DISABLED');
     // Archived rather than left ACTIVE, so it can never be picked as anybody's
