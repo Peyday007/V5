@@ -7,9 +7,9 @@
 
 ## Verdict
 
-**Step 6 is code-complete and locally verified against real Postgres 16 with
-concurrent connections. It is not closed until the hosted half has run green
-against the deployment.**
+**Step 6 is COMPLETE.** All 42 criteria are executed and passing — locally,
+against real Postgres 16 with concurrent connections, and on the live
+deployment either side of a real restart.
 
 The design is in [`EFFECTS.md`](EFFECTS.md). The one-line version: a logical
 operation reserves itself with `INSERT ... ON CONFLICT DO NOTHING`, and the
@@ -133,15 +133,49 @@ whole class of duplication risk before this step begins.
 | 31 | Production build | **EXECUTED — PASS** |
 | 32 | Local production boot | **EXECUTED — PASS** · schema version 16, harness 96/96 against it |
 | 33 | Local restart persistence test | **EXECUTED — PASS** · the Step 5 beacon, unchanged and still passing |
-| 34 | Cloud Brain migration | **AUTOMATED — pending the deploy** |
-| 35 | Hosted original/replay test | **AUTOMATED — pending the deploy** |
-| 36 | Hosted concurrent duplicate test | **AUTOMATED — pending the deploy** |
-| 37 | Hosted fingerprint-conflict test | **AUTOMATED — pending the deploy** |
-| 38 | Hosted queue-redelivery effect test | **AUTOMATED — pending the deploy** |
-| 39 | Hosted stale-lease denial test | **AUTOMATED — pending the deploy** |
-| 40 | Hosted project-isolation test | **AUTOMATED — pending the deploy** |
-| 41 | Hosted restart/redeploy persistence test | **AUTOMATED — pending the deploy** |
-| 42 | Existing hosted research/document workflow smoke test | **AUTOMATED — pending the deploy** |
+| 34 | Cloud Brain migration | **EXECUTED — PASS** · deploy run 10; the hosted effect checks could not have run unless `idempotency_operations` and `effect_attempts` existed in Supabase Postgres |
+| 35 | Hosted original/replay test | **EXECUTED — PASS** · run 10; original reported `replayed false`, the repeat returned the same item with `replayed true` |
+| 36 | Hosted concurrent duplicate test | **EXECUTED — PASS** · run 10; six concurrent requests over the edge → one distinct work item |
+| 37 | Hosted fingerprint-conflict test | **EXECUTED — PASS** · run 10; refused 409, and the refusal disclosed nothing of the earlier request |
+| 38 | Hosted queue-redelivery effect test | **EXECUTED — PASS** · run 10; the redelivery replayed the effect rather than repeating it |
+| 39 | Hosted stale-lease denial test | **EXECUTED — PASS** · run 10; the reclaimed worker was refused 409 and the current owner still committed |
+| 40 | Hosted project-isolation test | **EXECUTED — PASS** · run 10; a key does not open a project the caller may not touch |
+| 41 | Hosted restart/redeploy persistence test | **EXECUTED — PASS** · run 10; a real `flyctl apps restart`, then 96/96 again with the beacon intact |
+| 42 | Existing hosted research/document workflow smoke test | **EXECUTED — PASS** · run 10; project, layers and plan all served |
+
+### Run 10, on the live Brain
+
+Deploy run 10 (`a01a944`) was green on every step, with a real 19-second
+restart between the two verification passes. Both reported
+`HOSTED-VERIFICATION: PASS 96/96`.
+
+```
+Idempotency and safe effects
+  PASS  a key in the URL is refused rather than ignored — 400
+  PASS  a malformed key is refused — 400
+  PASS  a keyed mutation executes — 200
+  PASS  and reports itself as an original execution — false
+  PASS  a repeat of the same key is accepted — 200
+  PASS  and returns the same work item without creating another — same item, replayed true
+  PASS  six concurrent duplicates over the edge create exactly one work item
+        — 1 distinct item(s) from 6 request(s)
+  PASS  and every request that did not get it was told so, not failed — 409 200 200 409 409 409
+  PASS  the same key with a different request is refused — 409
+  PASS  and the refusal does not disclose the earlier request
+  PASS  a key does not open a project the caller may not touch — 404
+  PASS  the owner commits the effect — 200
+  PASS  a redelivery replays the effect rather than repeating it — 200, replayed true
+  PASS  a worker whose lease was reclaimed cannot commit an effect — 409
+  PASS  and the current owner still can — 200
+  PASS  an administrator can inspect operations — 200
+  PASS  and the record contains neither the key nor the request it described
+  PASS  an anonymous caller cannot — 401
+  PASS  nor can an ordinary member of the project — 404
+```
+
+The `409 200 200 409 409 409` is worth reading carefully: of six simultaneous
+requests, one executed, one arrived after the first had committed and replayed
+it, and four were told the operation was already running. **One work item.**
 
 ### Duplicate suppression, measured
 
