@@ -35,9 +35,11 @@ import {
   setWorkerStatus,
 } from '../repos/identity.ts';
 import { listTokensForWorker, revokeTokensForWorker } from '../repos/oauth.ts';
-import { createProject, getProjectBySlug, listProjects } from '../repos/projects.ts';
+import { createProject, getProject, getProjectBySlug, listProjects } from '../repos/projects.ts';
+import { PayloadTooLarge, enqueueWork, listWorkItems } from '../repos/workQueue.ts';
+import { InvalidWorkPayload, workType } from '../services/queue/workTypes.ts';
 import { WORKER_SCOPES } from '../domain/types.ts';
-import type { Principal, WorkerScope } from '../domain/types.ts';
+import type { Principal, WorkItem, WorkerScope } from '../domain/types.ts';
 import { card, esc, page } from './pages.ts';
 
 export const OPERATOR_BASE = '/operator';
@@ -116,6 +118,12 @@ function signInPage(error: string | null): string {
 async function audit(input: {
   actor: Principal;
   action: string;
+  /**
+   * What the id names. Most of this console acts on workers, but not all of it
+   * — and an audit row that says WORKER over a project id is a record that
+   * cannot be read back correctly, which is worse than no record at all.
+   */
+  targetType?: 'WORKER' | 'PROJECT' | 'WORK_ITEM';
   targetId: string | null;
   result: 'SUCCESS' | 'DENIED' | 'FAILED';
   metadata?: Record<string, unknown>;
@@ -126,7 +134,7 @@ async function audit(input: {
       actorId: input.actor.id,
       credentialId: input.actor.credentialId,
       action: input.action,
-      targetType: 'WORKER',
+      targetType: input.targetType ?? 'WORKER',
       targetId: input.targetId,
       result: input.result,
       // Ids and categories only — never a credential, never a token.
@@ -200,6 +208,41 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
     .map((project) => `<option value="${esc(project.id)}">${esc(project.name)}</option>`)
     .join('');
 
+  /**
+   * Queued and in-flight work, per project.
+   *
+   * Shown because "did the item get created" is otherwise unanswerable from a
+   * browser, and an operator who cannot see the queue has no way to tell a
+   * worker that has not started from an item that was never enqueued.
+   */
+  const queues = await Promise.all(
+    projects.map(async (project) => ({
+      project,
+      items: await listWorkItems(project.id, {
+        states: ['QUEUED', 'LEASED', 'SUCCEEDED', 'FAILED'],
+        limit: 8,
+      }),
+    })),
+  );
+  const queueRows = queues
+    .filter((entry) => entry.items.length > 0)
+    .map(
+      (entry) => `
+      <div class="row">
+        <div>
+          <div class="who"><strong>${esc(entry.project.name)}</strong></div>
+          <div class="meta">${entry.items
+            .map(
+              (item) =>
+                `<code>${esc(item.id)}</code> ${esc(item.workType)} · ${esc(item.state)}` +
+                (item.attemptCount > 0 ? ` · attempt ${item.attemptCount}` : ''),
+            )
+            .join('<br>')}</div>
+        </div>
+      </div>`,
+    )
+    .join('');
+
   const workerOptions = workers
     .filter((worker) => !worker.disabled)
     .map((worker) => `<option value="${esc(worker.id)}">${esc(worker.name)}</option>`)
@@ -267,6 +310,28 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
          principal outright.</p>`)
          : ''
      }
+     ${
+       projects.length > 0
+         ? card(`<h2>Give a worker something to do</h2>
+       <form method="post" action="${OPERATOR_BASE}/work">
+         <label for="work_project">Project</label>
+         <select id="work_project" name="project_id" required>${projectOptions}</select>
+         <label for="work_note">Note</label>
+         <input id="work_note" name="note" type="text" maxlength="500"
+           placeholder="Step 8 acceptance item">
+         <button type="submit">Queue a synthetic echo</button>
+       </form>
+       <p class="note"><code>SYNTHETIC_ECHO</code> is the only registered work type, and that is
+         deliberate: this queue is at-least-once, so until more of the pipeline is protected the
+         only work it may carry is work that costs nothing to perform twice. It carries a short
+         note and asks a worker to hand it back, which exercises claiming, the lease, heartbeats,
+         fencing and completion without touching a document or spending anything.</p>
+       <p class="note">A worker cannot enqueue its own work. Enqueueing is a project write with no
+         scope that grants it, so a machine credential is refused here however it is configured —
+         which is why this box exists at all.</p>`)
+         : ''
+     }
+     ${queueRows ? card(`<h2>The queue</h2>${queueRows}`) : ''}
      ${
        workers.length > 0
          ? card(`<h2>Issue a credential</h2>
@@ -422,12 +487,95 @@ export function operatorRouter(): Router {
       await audit({
         actor: person,
         action: 'CREATE_PROJECT',
+        targetType: 'PROJECT',
         targetId: project.id,
         result: 'SUCCESS',
         metadata: { slug: project.slug },
       });
       res.type('html').send(
         await consolePage(person, { ok: `Created "${project.name}". It has no layers and no documents.` }),
+      );
+    })();
+  });
+
+  /**
+   * Queue one bounded item, so a worker has something to claim.
+   *
+   * The same gap as project creation, one step further along: an operator with
+   * a connected worker and an empty queue has nothing to point it at, and the
+   * only way to put an item there was `curl` — a terminal, for the operation
+   * whose whole purpose is proving the browser path works.
+   *
+   * A worker cannot do this for itself. Enqueueing is a project write and no
+   * worker scope grants it, so `decideProjectAccess` refuses a worker principal
+   * whatever is ticked on its membership. That is the right shape — a machine
+   * that could create its own work could also create work nobody asked for —
+   * and it is exactly why a human needs a button.
+   *
+   * It goes through the same registry the HTTP route uses, so an unregistered
+   * type or an oversized payload is refused here for the same reason and with
+   * the same message.
+   */
+  router.post('/work', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      const person = await administrator(req);
+      if (!person || !originIsSameSite(req)) {
+        denied(res);
+        return;
+      }
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const projectId = typeof body['project_id'] === 'string' ? body['project_id'] : '';
+      const note = typeof body['note'] === 'string' ? body['note'].trim() : '';
+
+      const project = await getProject(projectId);
+      if (!project) {
+        res.status(404).type('html').send(await consolePage(person, { err: 'No such project.' }));
+        return;
+      }
+
+      const definition = workType('SYNTHETIC_ECHO');
+      let payload: Record<string, unknown>;
+      try {
+        payload = definition.validate({ note: note || 'acceptance item' });
+      } catch (error) {
+        if (error instanceof InvalidWorkPayload) {
+          res.status(400).type('html').send(await consolePage(person, { err: error.message }));
+          return;
+        }
+        throw error;
+      }
+
+      let item: WorkItem;
+      try {
+        item = await enqueueWork({
+          projectId: project.id,
+          workType: definition.type,
+          payload,
+          requiredScopes: definition.requiredScopes,
+          maxAttempts: definition.defaultMaxAttempts,
+          createdByType: person.type,
+          createdById: person.id,
+        });
+      } catch (error) {
+        if (error instanceof PayloadTooLarge) {
+          res.status(400).type('html').send(await consolePage(person, { err: error.message }));
+          return;
+        }
+        throw error;
+      }
+
+      await audit({
+        actor: person,
+        action: 'QUEUE_ENQUEUE',
+        targetType: 'WORK_ITEM',
+        targetId: item.id,
+        result: 'SUCCESS',
+        metadata: { projectId: project.id, workType: item.workType },
+      });
+      res.type('html').send(
+        await consolePage(person, {
+          ok: `Queued ${item.id} in "${project.name}". A worker holding queue:claim there can take it.`,
+        }),
       );
     })();
   });

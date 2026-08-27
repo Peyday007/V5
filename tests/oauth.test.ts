@@ -942,6 +942,94 @@ describe('the operator console', () => {
     expect(bad.status).toBe(400);
   });
 
+  it('queues a bounded work item for a worker to claim', async () => {
+    // The gap this closes: an operator with a connected worker and an empty
+    // queue had nothing to point it at, and the only way to put an item there
+    // was curl — a terminal, for the operation whose whole point is proving the
+    // browser path works.
+    const queued = await post(
+      '/operator/work',
+      { project_id: projectId, note: 'Step 8 acceptance item' },
+      { cookie: adminCookie },
+    );
+    expect(queued.status).toBe(200);
+    expect(queued.html).toContain('A worker holding queue:claim there can take it');
+
+    // Not merely rendered — the item is really in the queue, read back from the
+    // authoritative Brain rather than from the page that claimed to have made it.
+    const listed = await api<{ items: { workType: string; state: string; payload: { note?: string } }[] }>(
+      'GET',
+      `/api/projects/${projectId}/work?state=QUEUED`,
+      { cookie: adminCookie },
+    );
+    expect(listed.status).toBe(200);
+    const mine = listed.body.items.find((item) => item.payload.note === 'Step 8 acceptance item');
+    expect(mine).toBeTruthy();
+    expect(mine!.workType).toBe('SYNTHETIC_ECHO');
+    expect(mine!.state).toBe('QUEUED');
+  });
+
+  it('records what the id actually names, rather than calling everything a worker', async () => {
+    // The console's audit helper hard-coded WORKER, which was true for every
+    // operation it originally had and became a lie the moment it gained two
+    // that act on something else. An audit row you cannot read back correctly
+    // is worse than no row: it resolves to a worker that does not exist.
+    const audit = await api<{ events: { action: string; targetType: string | null; targetId: string | null }[] }>(
+      'GET',
+      '/api/admin/identity-events?limit=200',
+      { cookie: adminCookie },
+    );
+    expect(audit.status).toBe(200);
+
+    const enqueued = audit.body.events.find((event) => event.action === 'QUEUE_ENQUEUE');
+    expect(enqueued?.targetType).toBe('WORK_ITEM');
+
+    const created = audit.body.events.find((event) => event.action === 'CREATE_PROJECT');
+    expect(created?.targetType).toBe('PROJECT');
+
+    // And the operation that really is about a worker still says so.
+    const granted = audit.body.events.find((event) => event.action === 'GRANT_MEMBERSHIP');
+    expect(granted?.targetType).toBe('WORKER');
+  });
+
+  it('will not queue work into a project that does not exist', async () => {
+    const missing = await post(
+      '/operator/work',
+      { project_id: 'prj_does_not_exist', note: 'nowhere' },
+      { cookie: adminCookie },
+    );
+    expect(missing.status).toBe(404);
+  });
+
+  it('will not let a worker queue its own work, however good its token', async () => {
+    // A machine that could create its own work could also create work nobody
+    // asked for. The console refuses a bearer token outright, and the HTTP
+    // route refuses it in policy — both, because either alone is one mistake
+    // away from being skipped.
+    const access = await connectedToken();
+    expect((await post('/operator/work', { project_id: projectId }, { bearer: access })).status).toBe(404);
+
+    // First prove the refusal below is about *enqueueing* rather than about
+    // this project. The worker is a full member of it holding queue:claim, and
+    // reading the same project's queue works — so a blanket "no access here"
+    // cannot be what produces the 404.
+    const reading = await fetch(`${BASE}/api/projects/${projectId}/work?state=QUEUED`, {
+      headers: { authorization: `Bearer ${access}` },
+    });
+    expect(reading.status).toBe(200);
+
+    const direct = await fetch(`${BASE}/api/projects/${projectId}/work`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${access}` },
+      body: JSON.stringify({ workType: 'SYNTHETIC_ECHO', payload: { note: 'self-dealt' } }),
+    });
+    expect(direct.status).toBe(404);
+  });
+
+  it('will not let an ordinary member queue work from the console', async () => {
+    expect((await post('/operator/work', { project_id: projectId }, { cookie: memberCookie })).status).toBe(404);
+  });
+
   it('refuses a cross-site post', async () => {
     const forged = await post(
       '/operator/workers',

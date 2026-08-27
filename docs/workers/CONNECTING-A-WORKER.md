@@ -117,6 +117,28 @@ Paste [`CLAUDE-MAX-WORKER-01.md`](CLAUDE-MAX-WORKER-01.md) into the project or
 task instructions, or point at it. The repository copy is authoritative; if the
 two ever disagree, the repository is right and the pasted one is stale.
 
+## 7. Give it something to do
+
+Back on **`/operator`**, in **Give a worker something to do**:
+
+- **Project** — the same acceptance project
+- **Note** — anything short, e.g. `Step 8 acceptance item`
+
+Click **Queue a synthetic echo**. The green line names the item's id, and **The
+queue** card below lists it as `QUEUED`.
+
+`SYNTHETIC_ECHO` is the only registered work type, deliberately. The queue is
+at-least-once — a lease can expire after a worker did something and before it
+recorded that it did — so the only work it may carry is work that costs nothing
+to perform twice. This one carries a short note and asks for it back, which
+exercises claiming, the lease, heartbeats, fencing and completion without
+touching a document or spending anything.
+
+**A worker cannot do this for itself.** Enqueueing is a project write and no
+worker scope grants it, so a machine credential is refused however its
+membership is configured. That is why there is a button rather than a tool: a
+machine that could create its own work could also create work nobody asked for.
+
 ---
 
 ## Checking it worked

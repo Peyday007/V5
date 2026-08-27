@@ -627,10 +627,24 @@ however correct its bearer design is.
 - **The operator console is server-rendered and has no JavaScript.** It is the
   surface you need when the client bundle is broken or access has to be
   repaired, so it must not depend on the front-end having built. It exposes no
-  operation an administrator could not already perform, and it answers **404**
-  to anyone who is not a signed-in administrator — including a worker holding a
-  valid token, because a machine reaching the screen that grants credentials
-  would be a machine widening its own access.
+  operation an administrator could not already perform.
+- **It has three answers, not two.** Nobody signed in gets a sign-in form, which
+  discloses nothing — the Brain already serves one at its root to the whole
+  internet. Somebody who *is* signed in and may not be here gets **404**, because
+  that is the case worth hiding: a caller who has already proved they are not an
+  administrator learns nothing about whether the path is anything. A bearer token
+  is refused in all three, since a machine reaching the screen that grants
+  credentials would be a machine widening its own access. The first version
+  answered 404 to both of the last two, which also told an administrator with an
+  expired session that the console did not exist — a control indistinguishable
+  from a broken deployment costs more than it saves.
+- **A worker cannot create its own work.** Enqueueing is a project write and no
+  worker scope grants it, so `decideProjectAccess` refuses a worker principal
+  however its membership is configured. The console has the button instead,
+  because a machine that could create its own work could also create work nobody
+  asked for. The same reasoning put project creation there: the only project that
+  existed held real research, and a test worker's first bounded run must not be
+  able to write into work somebody depends on.
 
 Step 8 connects **one** worker and proves a bounded cycle. The first production
 research packet is Step 9, scheduling is Step 10, and a second worker is
@@ -755,7 +769,7 @@ server/
     endpoint.ts         POST /mcp: auth, origin, limits, era selection
   routes/               HTTP API
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
-    operator.ts         the operator console: workers, access, connections (Step 8)
+    operator.ts         the operator console: workers, access, projects, queued work
     pages.ts            shared chrome for the server-rendered pages
     guard.ts            request context, authentication, deny-by-default
     auth.ts             sign in, sign out, change a password
