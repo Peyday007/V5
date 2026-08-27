@@ -222,3 +222,82 @@ export function parseWorkerCredential(presented: string): ParsedWorkerCredential
   if (!/^brnw_[0-9a-f]{16}$/.test(prefix)) return null;
   return { prefix, secret };
 }
+
+/* ------------------------------------------------------------------------- */
+/* OAuth tokens and codes                                                     */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * `brnt_<prefix>.<secret>` — a Brain-issued OAuth token.
+ *
+ * Deliberately the same shape as a worker credential, for the same two reasons:
+ * the marker makes a leaked token recognisable on sight, and the prefix is a
+ * single indexed lookup so authentication does not have to verify every row.
+ *
+ * A different marker from `brnw_` because the two are not interchangeable. A
+ * worker credential is a long-lived secret an administrator issued; a token is
+ * short-lived, minted by the Brain for itself, and tied to the client and the
+ * authorization that produced it. Sharing a marker would make a log line
+ * ambiguous about which of those had leaked.
+ */
+export const OAUTH_TOKEN_MARKER = 'brnt_';
+
+export interface GeneratedOAuthToken {
+  plaintext: string;
+  prefix: string;
+  digest: string;
+}
+
+export function generateOAuthToken(): GeneratedOAuthToken {
+  const prefix = `${OAUTH_TOKEN_MARKER}${crypto.randomBytes(PREFIX_BYTES).toString('hex')}`;
+  const secret = crypto.randomBytes(SECRET_BYTES).toString('base64url');
+  return { plaintext: `${prefix}.${secret}`, prefix, digest: digestSecret(secret) };
+}
+
+export interface ParsedOAuthToken {
+  prefix: string;
+  secret: string;
+}
+
+export function parseOAuthToken(presented: string): ParsedOAuthToken | null {
+  if (typeof presented !== 'string') return null;
+  const trimmed = presented.trim();
+  if (!trimmed.startsWith(OAUTH_TOKEN_MARKER)) return null;
+  const dot = trimmed.indexOf('.');
+  if (dot <= OAUTH_TOKEN_MARKER.length) return null;
+  const prefix = trimmed.slice(0, dot);
+  const secret = trimmed.slice(dot + 1);
+  if (secret.length < 16 || /[^A-Za-z0-9_-]/.test(secret)) return null;
+  if (!/^brnt_[0-9a-f]{16}$/.test(prefix)) return null;
+  return { prefix, secret };
+}
+
+/**
+ * An authorization code, and a client secret.
+ *
+ * Both are opaque random strings kept only as digests. The code is
+ * single-use and short-lived; the client secret is optional, because a public
+ * client authenticating with PKCE alone is the ordinary case here.
+ */
+export function generateOpaqueSecret(): { plaintext: string; digest: string } {
+  const plaintext = crypto.randomBytes(SECRET_BYTES).toString('base64url');
+  return { plaintext, digest: digestSecret(plaintext) };
+}
+
+/**
+ * PKCE, S256 only.
+ *
+ * `plain` is still in the OAuth 2.1 draft for legacy reasons and is refused
+ * here: it makes the challenge equal to the verifier, so an attacker who can
+ * see the authorization request can complete the exchange. Accepting it "for
+ * compatibility" would mean the protection is only as strong as the weakest
+ * client that ever connects.
+ */
+export function verifyPkceS256(verifier: string, challenge: string): boolean {
+  if (typeof verifier !== 'string' || typeof challenge !== 'string') return false;
+  // RFC 7636 bounds the verifier; a short one is brute-forceable.
+  if (verifier.length < 43 || verifier.length > 128) return false;
+  if (/[^A-Za-z0-9._~-]/.test(verifier)) return false;
+  const computed = crypto.createHash('sha256').update(verifier).digest('base64url');
+  return constantTimeEquals(computed, challenge);
+}

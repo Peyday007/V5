@@ -2510,7 +2510,13 @@ export const WORKER_SCOPES = [
 export type WorkerScope = (typeof WORKER_SCOPES)[number];
 
 /** How a request proved who it was. */
-export const AUTH_METHODS = ['SESSION_COOKIE', 'WORKER_BEARER'] as const;
+/**
+ * `OAUTH_BEARER` is a token this Brain minted for a worker after a human
+ * approved the connection. It is a third *way in*, not a third kind of
+ * principal: it resolves to the same WORKER principal a `brnw_` credential
+ * would, so nothing downstream has to know which door was used.
+ */
+export const AUTH_METHODS = ['SESSION_COOKIE', 'WORKER_BEARER', 'OAUTH_BEARER'] as const;
 export type AuthMethod = (typeof AUTH_METHODS)[number];
 
 export const WORKER_STATUSES = ['ACTIVE', 'DISABLED'] as const;
@@ -3114,4 +3120,111 @@ export interface EffectAttempt {
   outcome: EffectOutcome | null;
   detail: string | null;
   requestId: string | null;
+}
+
+/* ------------------------------------------------------------------------- */
+/* OAuth (Step 8)                                                             */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The contract for connecting a worker through Claude's custom connector.
+ *
+ * Claude offers no way to send a static Authorization header, so the Step 7
+ * bearer design cannot be used from it. OAuth is the only affordance, and it
+ * turns out to be the better one: connecting a worker sends the operator to a
+ * Brain-hosted screen where they authenticate as themselves and approve a named
+ * worker, rather than carrying a long-lived secret into a configuration box.
+ *
+ * The invariant every type below exists to preserve: **a token resolves to the
+ * worker, never to the human who approved it.**
+ */
+
+export const OAUTH_TOKEN_KINDS = ['ACCESS', 'REFRESH'] as const;
+export type OAuthTokenKind = (typeof OAUTH_TOKEN_KINDS)[number];
+
+export interface OAuthClientRow {
+  id: string;
+  client_id: string;
+  secret_digest: string | null;
+  client_name: string;
+  redirect_uris: string;
+  token_auth_method: string;
+  created_at: string;
+  disabled_at: string | null;
+}
+
+export interface OAuthClient {
+  id: string;
+  clientId: string;
+  /** True when the client registered a secret. The secret itself never leaves the database. */
+  confidential: boolean;
+  clientName: string;
+  redirectUris: string[];
+  tokenAuthMethod: string;
+  createdAt: string;
+  disabledAt: string | null;
+}
+
+export interface OAuthAuthorizationCodeRow {
+  id: string;
+  code_digest: string;
+  client_id: string;
+  worker_id: string;
+  approved_by_user_id: string;
+  redirect_uri: string;
+  code_challenge: string;
+  code_challenge_method: string;
+  resource: string | null;
+  scope: string;
+  created_at: string;
+  expires_at: string;
+  redeemed_at: string | null;
+}
+
+export interface OAuthAuthorizationCode {
+  id: string;
+  clientId: string;
+  /** The identity the token will carry. Chosen by the human, never by the client. */
+  workerId: string;
+  /** Who approved it. For the audit only — this never becomes the principal. */
+  approvedByUserId: string;
+  redirectUri: string;
+  codeChallenge: string;
+  codeChallengeMethod: string;
+  resource: string | null;
+  scope: string;
+  createdAt: string;
+  expiresAt: string;
+  redeemedAt: string | null;
+}
+
+export interface OAuthTokenRow {
+  id: string;
+  token_digest: string;
+  token_prefix: string;
+  kind: OAuthTokenKind;
+  client_id: string;
+  worker_id: string;
+  scope: string;
+  resource: string | null;
+  created_at: string;
+  expires_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  parent_token_id: string | null;
+}
+
+export interface OAuthToken {
+  id: string;
+  kind: OAuthTokenKind;
+  clientId: string;
+  /** The principal. There is no user id here, deliberately. */
+  workerId: string;
+  scope: string;
+  resource: string | null;
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  parentTokenId: string | null;
 }

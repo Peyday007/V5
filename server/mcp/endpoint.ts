@@ -129,7 +129,10 @@ async function principalFor(
 
   const outcome = await authenticateRequest(req);
   if (!outcome.ok) return { ok: false, reason: outcome.reason };
-  if (outcome.principal.authMethod !== 'WORKER_BEARER') {
+  // Two doors, one principal. `WORKER_BEARER` is a credential an administrator
+  // issued directly; `OAUTH_BEARER` is a token this Brain minted after a human
+  // approved the connection. A session cookie is neither, and is refused below.
+  if (outcome.principal.authMethod === 'SESSION_COOKIE') {
     return { ok: false, reason: 'INVALID_CREDENTIALS' };
   }
   return { ok: true, principal: outcome.principal };
@@ -238,11 +241,25 @@ export function mcpRouter(): Router {
 
       if (!auth.ok) {
         if (auth.reason !== 'NO_CREDENTIALS') await auditRefusal(req, auth.reason);
-        // One sentence, and no `WWW-Authenticate` discovery pointer. Brain
-        // implements no OAuth, and pointing a client at metadata that does not
-        // exist would send it round a flow that cannot end in a usable token.
-        // "Invalid", "expired", "revoked" and "unknown" are one message.
-        refuse(res, 401, TRANSPORT_REFUSED, 'Not authorized. Present a Brain worker credential as a bearer token.');
+        /**
+         * The discovery pointer, which Step 7 deliberately did not emit.
+         *
+         * Step 7's reasoning was sound for what it knew: advertising OAuth that
+         * does not exist sends a client round a flow that cannot end in a
+         * usable token. Step 8 built the flow, so the pointer is now true — and
+         * it is the *only* way a conformant MCP client discovers where to
+         * authenticate. Without it Claude's connector has nothing to go on and
+         * simply fails.
+         *
+         * The refusal itself is unchanged: one sentence, and "invalid",
+         * "expired", "revoked" and "unknown" are still the same message.
+         */
+        const issuer = `${req.protocol}://${req.get('host') ?? 'localhost'}`;
+        res.setHeader(
+          'WWW-Authenticate',
+          `Bearer realm="brain", resource_metadata="${issuer}/.well-known/oauth-protected-resource"`,
+        );
+        refuse(res, 401, TRANSPORT_REFUSED, 'Not authorized. Connect through this Brain, or present a worker credential.');
         return;
       }
 

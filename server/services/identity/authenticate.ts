@@ -29,7 +29,8 @@ import {
   markCredentialUsed,
   touchSession,
 } from '../../repos/identity.ts';
-import { constantTimeEquals, digestSecret, parseWorkerCredential } from './secrets.ts';
+import { constantTimeEquals, digestSecret, parseOAuthToken, parseWorkerCredential } from './secrets.ts';
+import { findLiveToken, touchToken } from '../../repos/oauth.ts';
 
 /** The cookie a signed-in person carries. */
 export const SESSION_COOKIE = 'brain_session';
@@ -145,7 +146,14 @@ export async function authenticateRequest(req: Request): Promise<AuthOutcome> {
   if (hasCredentialInQuery(req)) return { ok: false, reason: 'UNSAFE_TRANSPORT' };
 
   const bearer = bearerToken(req);
-  if (bearer) return await authenticateWorker(bearer, req);
+  if (bearer) {
+    // Two kinds of bearer, told apart by their marker rather than by trying
+    // each in turn: `brnw_` is a credential an administrator issued directly,
+    // `brnt_` is a token this Brain minted after a human approved a connection.
+    // Both resolve to the same WORKER principal.
+    if (parseOAuthToken(bearer)) return await authenticateOAuth(bearer);
+    return await authenticateWorker(bearer, req);
+  }
 
   const cookies = parseCookies(req.header('cookie'));
   const secret = cookies[SESSION_COOKIE];
@@ -223,6 +231,51 @@ async function authenticateWorker(presented: string, _req: Request): Promise<Aut
       mustChangePassword: false,
       credentialId: credential.id,
       authMethod: 'WORKER_BEARER',
+      memberships: await membershipsFor('WORKER', worker.id),
+      requestId: '',
+    },
+  };
+}
+
+/**
+ * A Brain-minted OAuth access token.
+ *
+ * The principal is the **worker the token was issued for**, never the person
+ * who approved the connection. That human is recorded on the authorization
+ * code, for the audit, and is deliberately absent from the token — so approving
+ * a connection can never make a remote client act as the approver.
+ *
+ * Membership and scopes are read live here, exactly as they are for a `brnw_`
+ * credential, so revoking a worker's access lands on its next call rather than
+ * when the token happens to expire.
+ */
+async function authenticateOAuth(presented: string): Promise<AuthOutcome> {
+  const parsed = parseOAuthToken(presented);
+  if (!parsed) return { ok: false, reason: 'INVALID_CREDENTIALS' };
+
+  // Unknown, revoked and expired are one answer. The differences between them
+  // are exactly what somebody probing would like to learn.
+  const token = await findLiveToken(parsed.prefix, parsed.secret, 'ACCESS');
+  if (!token) return { ok: false, reason: 'INVALID_CREDENTIALS' };
+
+  const worker = await getWorker(token.workerId);
+  if (!worker) return { ok: false, reason: 'INVALID_CREDENTIALS' };
+  if (worker.disabled) return { ok: false, reason: 'PRINCIPAL_DISABLED' };
+
+  void touchToken(token.id);
+
+  return {
+    ok: true,
+    principal: {
+      type: 'WORKER',
+      id: worker.id,
+      handle: worker.name,
+      displayName: worker.displayName,
+      isBrainAdmin: false,
+      mustChangePassword: false,
+      // The token row, so an audit line points at the grant that can be revoked.
+      credentialId: token.id,
+      authMethod: 'OAUTH_BEARER',
       memberships: await membershipsFor('WORKER', worker.id),
       requestId: '',
     },

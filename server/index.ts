@@ -38,6 +38,7 @@ import { serveStoredObject } from './routes/files.ts';
 import { accessGate, accessGateConfig, describeAccessGate, AccessGateError, type AccessGateConfig } from './routes/access.ts';
 import { requestContext, requireAuthentication } from './routes/guard.ts';
 import { MCP_PATH, mcpRouter } from './mcp/endpoint.ts';
+import { OAUTH_BASE, oauthRouter, wellKnownRouter } from './routes/oauth.ts';
 import { authRouter } from './routes/auth.ts';
 import { bootstrapFirstAdmin, hasAnyAccount } from './services/identity/bootstrap.ts';
 import { writeProjectState } from './services/runtimeState.ts';
@@ -94,7 +95,9 @@ function isServerPath(requestPath: string): boolean {
     // client bundle, and a dual-era client probing the endpoint would read HTML
     // where it expected either a JSON-RPC error or a 405.
     requestPath === '/mcp' ||
-    requestPath.startsWith('/mcp/')
+    requestPath.startsWith('/mcp/') ||
+    requestPath.startsWith('/oauth/') ||
+    requestPath.startsWith('/.well-known/')
   );
 }
 
@@ -135,9 +138,24 @@ function buildApp(gate: AccessGateConfig): Express {
 
   // The MCP endpoint, mounted before the application-wide body parser so that
   // it can enforce its own, much smaller, limit. It is deliberately outside
-  // `/api`: it authenticates itself, worker-bearer only, and answers a
-  // different protocol.
+  // `/api`: it authenticates itself, bearer only, and answers a different
+  // protocol.
   app.use(MCP_PATH, mcpRouter());
+
+  // How a client discovers where to authenticate. Unauthenticated by
+  // necessity — a caller with no token has to be able to find out how to get
+  // one — and disclosing nothing but the endpoints already being served.
+  app.use('/.well-known', wellKnownRouter(MCP_PATH));
+
+  // The authorization server. Its own body parsers, because the token endpoint
+  // is form-encoded by specification and the consent screen posts a form, while
+  // dynamic client registration is JSON.
+  app.use(
+    OAUTH_BASE,
+    express.json({ limit: '64kb' }),
+    express.urlencoded({ extended: false, limit: '64kb' }),
+    oauthRouter(),
+  );
 
   // Prompts and pasted audit text are large; uploads go through multer instead.
   app.use(express.json({ limit: '10mb' }));

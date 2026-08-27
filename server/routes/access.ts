@@ -90,6 +90,18 @@ const OPEN_PATHS = new Set(['/healthz']);
  */
 const OWN_AUTHENTICATION_PATHS = new Set(['/mcp']);
 
+/**
+ * Path prefixes that must be reachable without the outer shared token.
+ *
+ * The OAuth endpoints and the two metadata documents are how a client finds out
+ * how to authenticate at all. Putting an HTTP Basic prompt in front of them
+ * would mean a connector could never discover the flow, and the consent screen
+ * itself already requires a signed-in Brain administrator — a second, cruder
+ * password in front of a page whose whole job is authentication protects
+ * nothing and breaks the one flow it sits on.
+ */
+const OWN_AUTHENTICATION_PREFIXES = ['/oauth/', '/.well-known/'];
+
 export interface AccessGateConfig {
   /** The shared secret. Absent means no gate. */
   token: string | null;
@@ -192,7 +204,11 @@ export function accessGate(config: AccessGateConfig): RequestHandler {
   const realm = 'Brain';
 
   return (req: Request, res: Response, next: NextFunction) => {
-    if (OPEN_PATHS.has(req.path) || OWN_AUTHENTICATION_PATHS.has(req.path)) {
+    if (
+      OPEN_PATHS.has(req.path) ||
+      OWN_AUTHENTICATION_PATHS.has(req.path) ||
+      OWN_AUTHENTICATION_PREFIXES.some((prefix) => req.path.startsWith(prefix))
+    ) {
       next();
       return;
     }
