@@ -36,8 +36,32 @@ import type {
   ResearchOrchestration,
   WorkItem,
 } from '../domain/types.ts';
-import { CONTRADICTION_STATES } from '../domain/types.ts';
-import type { OperationNamespace } from '../services/effects/engine.ts';
+import {
+  ASSIGNMENT_VERDICTS,
+  AUDIT_VERDICTS,
+  CONSISTENCY_RELATIONS,
+  CONTRADICTION_STATES,
+  GAP_CLASSIFICATIONS,
+} from '../domain/types.ts';
+import {
+  TerminalEffectFailure,
+  type OperationNamespace,
+} from '../services/effects/engine.ts';
+import {
+  parseAdversarialPass,
+  parseJudgePass,
+  parsePrimaryPass,
+  type JudgePassOutput,
+} from '../services/audit/schema.ts';
+import { recordAuditPasses } from '../services/audit/pipeline.ts';
+import {
+  auditBriefFor,
+  AuditBriefUnavailable,
+  earlierAuditRole,
+  ROLE_PASS_ORDINAL,
+} from '../services/research/auditBrief.ts';
+import { recomputeProject } from '../services/stateEngine.ts';
+import { AUDIT_ROLES, type AuditRole } from '../services/queue/workTypes.ts';
 import { assignmentFor } from '../services/research/assignment.ts';
 import {
   gateFragment,
@@ -298,6 +322,43 @@ async function recordPass(input: {
     parsed: input.raw,
   });
   return pass.id;
+}
+
+/**
+ * The gap shape, identical for the primary's candidates and the judge's
+ * classifications, because they are the same thing at two stages.
+ */
+const GAP_SCHEMA = {
+  type: 'object',
+  properties: {
+    classification: { type: 'string', enum: [...GAP_CLASSIFICATIONS] },
+    title: { type: 'string' },
+    detail: { type: 'string' },
+    justification: { type: 'string' },
+    owning_layer: { type: 'string' },
+    research_question: { type: 'string' },
+    expected_contribution: { type: 'string' },
+  },
+  required: ['classification', 'title'],
+  additionalProperties: false,
+} as const;
+
+const AUDIT_NAMESPACE = namespace('research.audit');
+
+/**
+ * Which audit role this item is, from its stored payload.
+ *
+ * The payload was validated at enqueue time against a closed set, so this
+ * cannot be a value the registry does not know — but it is checked again
+ * rather than cast, because a row that predates a registry change would
+ * otherwise be read as whatever the code now expects.
+ */
+function auditRoleOf(item: WorkItem): AuditRole {
+  const role = item.payload['role'];
+  if (typeof role !== 'string' || !AUDIT_ROLES.includes(role as AuditRole)) {
+    throw notFoundError();
+  }
+  return role as AuditRole;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -1195,6 +1256,287 @@ const submitSynthesisTool: McpTool = {
   },
 };
 
+/* ------------------------------------------------------------------------ */
+/* The audit                                                                 */
+/* ------------------------------------------------------------------------ */
+
+const getAuditBriefTool: McpTool = {
+  name: 'brain_get_audit_brief',
+  title: 'Read the brief for an audit role',
+  description:
+    'The exact brief for the audit role this work item names — primary auditor, adversarial ' +
+    'critic, or judge — composed by the Brain from the project\'s audit profile, the layer\'s ' +
+    'criteria and the extracted text of the filed packet. The adversarial role also receives ' +
+    'what the primary found; the judge receives both. A role whose predecessor has not run is ' +
+    'refused rather than improvised.',
+  inputSchema: {
+    type: 'object',
+    properties: { work_item_id: { type: 'string' } },
+    required: ['work_item_id'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Read the audit brief', ...READ_ONLY },
+  run: async (args, { principal }) => {
+    const { item, orchestration } = await resolveResearch(
+      principal,
+      args,
+      'research:read',
+      'RESEARCH_AUDIT',
+    );
+    const role = auditRoleOf(item);
+    try {
+      const { brief } = await auditBriefFor({ orchestration, role });
+      return { projectId: item.projectId, value: { brief } };
+    } catch (error) {
+      // Not a NOT_FOUND: the caller is entitled to this item and the reason it
+      // cannot be served is about the packet's state, which is something the
+      // worker can report rather than guess at.
+      if (error instanceof AuditBriefUnavailable) throw conflictError(error.message);
+      throw error;
+    }
+  },
+};
+
+const submitAuditTool: McpTool = {
+  name: 'brain_submit_audit',
+  title: 'Submit one audit role\'s findings',
+  description:
+    'Record what this audit role concluded. The primary and adversarial roles submit findings; ' +
+    'the judge submits the structured verdict, and only the judge\'s output changes anything. ' +
+    'The judge is validated strictly: enums must match exactly, the gap counts are recomputed ' +
+    'from the gaps you classified and must agree, and an advancing verdict is refused outright ' +
+    'while a foundational gap is open. A judgement that fails validation records nothing.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      work_item_id: { type: 'string' },
+      lease_id: { type: 'string' },
+      lease_generation: { type: 'integer' },
+      primary: {
+        type: 'object',
+        description: 'Required when this item\'s role is PRIMARY.',
+        properties: {
+          assignment_satisfied: { type: 'string', enum: [...ASSIGNMENT_VERDICTS] },
+          requirement_findings: { type: 'array', items: { type: 'string' } },
+          structural_findings: { type: 'array', items: { type: 'string' } },
+          boundary_findings: { type: 'array', items: { type: 'string' } },
+          consistency_findings: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                relation: { type: 'string', enum: [...CONSISTENCY_RELATIONS] },
+                detail: { type: 'string' },
+              },
+              required: ['relation', 'detail'],
+              additionalProperties: false,
+            },
+          },
+          candidate_gaps: { type: 'array', items: GAP_SCHEMA },
+          notes: { type: 'string' },
+        },
+        required: ['assignment_satisfied'],
+        additionalProperties: false,
+      },
+      adversarial: {
+        type: 'object',
+        description: 'Required when this item\'s role is ADVERSARIAL.',
+        properties: {
+          attacks: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                attack: { type: 'string' },
+                material: { type: 'boolean' },
+                reasoning: { type: 'string' },
+              },
+              required: ['attack', 'material', 'reasoning'],
+              additionalProperties: false,
+            },
+          },
+          strongest_reason_not_to_advance: { type: 'string' },
+        },
+        required: ['attacks', 'strongest_reason_not_to_advance'],
+        additionalProperties: false,
+      },
+      judge: {
+        type: 'object',
+        description: 'Required when this item\'s role is JUDGE. Nothing else changes state.',
+        properties: {
+          verdict: { type: 'string', enum: [...AUDIT_VERDICTS] },
+          summary: { type: 'string' },
+          next_action: { type: 'string' },
+          gap_classifications: { type: 'array', items: GAP_SCHEMA },
+          required_patches: { type: 'array', items: { type: 'string' } },
+          other_layer_handoffs: { type: 'array', items: { type: 'string' } },
+          blocking_dependencies: { type: 'array', items: { type: 'string' } },
+          synthesis_ready: { type: 'boolean' },
+          freeze_ready: { type: 'boolean' },
+          confidence: { type: 'number', minimum: 0, maximum: 1 },
+          foundational_gap_count: { type: 'integer', minimum: 0 },
+          targeted_research_runs_required: { type: 'integer', minimum: 0 },
+        },
+        required: [
+          'verdict',
+          'summary',
+          'next_action',
+          'gap_classifications',
+          'foundational_gap_count',
+          'targeted_research_runs_required',
+        ],
+        additionalProperties: false,
+      },
+      idempotency_key: { type: 'string' },
+    },
+    required: ['work_item_id', 'lease_id', 'lease_generation'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Submit audit findings', ...MUTATING },
+  run: async (args, { principal, requestId }) => {
+    const workerId = workerOnly(principal);
+    const { item, orchestration } = await resolveResearch(
+      principal,
+      args,
+      'research:write',
+      'RESEARCH_AUDIT',
+    );
+    const proof = proofFrom(args, item.id, workerId);
+    const role = auditRoleOf(item);
+
+    // The role decides which argument is required, and the wrong one is
+    // refused rather than ignored. A judge's verdict arriving on a primary
+    // item would otherwise be silently dropped while the response said the
+    // submission succeeded.
+    const field = role === 'PRIMARY' ? 'primary' : role === 'ADVERSARIAL' ? 'adversarial' : 'judge';
+    const payload = args[field];
+    if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+      throw invalidInput(`This work item's role is ${role}, so "${field}" is required.`);
+    }
+    for (const other of ['primary', 'adversarial', 'judge']) {
+      if (other !== field && args[other] !== undefined) {
+        throw invalidInput(`This work item's role is ${role}; do not send "${other}".`);
+      }
+    }
+
+    // Validated by the parser the in-process pipeline uses, on the JSON it
+    // would have received. Structured arguments give the client a real schema;
+    // routing them through the same validator means there is no second
+    // standard for a model's audit output to be judged by. §8's rule about
+    // enums, template placeholders and inferred approval holds here because it
+    // is literally the same code.
+    const json = JSON.stringify(payload);
+    const parsed =
+      role === 'PRIMARY'
+        ? parsePrimaryPass(json)
+        : role === 'ADVERSARIAL'
+          ? parseAdversarialPass(json)
+          : parseJudgePass(json);
+    if (!parsed.ok) {
+      // An invalid response is an audit failure: nothing is recorded and no
+      // state moves. The reason is returned because the worker can act on it.
+      throw invalidInput(`The ${role} output is not valid: ${parsed.error}`);
+    }
+
+    const outcome = await idempotentEffect(
+      {
+        namespace: AUDIT_NAMESPACE,
+        principal,
+        projectId: item.projectId,
+        proof,
+        suppliedKey: optionalIdempotencyKey(args),
+        requestId,
+        discriminator: role,
+        payload: { workItemId: item.id, operation: 'submit-audit', role },
+      },
+      async () => {
+        const passId = await recordPass({
+          orchestration,
+          fragmentId: null,
+          passKey: 'AUDIT',
+          ordinal: ROLE_PASS_ORDINAL[role],
+          attempt: orchestration.attempt,
+          workerId,
+          assignment: orchestration.assignment,
+          raw: payload,
+        });
+
+        // The first two roles record and stop. Only the judge advances state,
+        // which is §8 and is the whole reason the roles are separate.
+        if (role !== 'JUDGE') {
+          return {
+            resultRef: passId,
+            resultSummary: `${role} pass recorded`,
+            value: { role, recorded: true, advancesState: false },
+          };
+        }
+
+        const primaryRaw = await earlierAuditRole(orchestration.id, 'PRIMARY');
+        const adversarialRaw = await earlierAuditRole(orchestration.id, 'ADVERSARIAL');
+        if (!primaryRaw || !adversarialRaw) {
+          throw new TerminalEffectFailure(
+            'NOT_AUTHORIZED',
+            'The judge cannot record a verdict before the primary and adversarial passes.',
+          );
+        }
+        const primary = parsePrimaryPass(primaryRaw);
+        const adversarial = parseAdversarialPass(adversarialRaw);
+        if (!primary.ok || !adversarial.ok) {
+          throw new TerminalEffectFailure(
+            'NOT_AUTHORIZED',
+            'An earlier audit pass is not valid, so the judge has nothing sound to weigh.',
+          );
+        }
+
+        const { context } = await auditBriefFor({ orchestration, role: 'JUDGE' });
+
+        // The same recording path `runDynamicAudit` uses. The cross-checked
+        // counts and the refusal to advance a layer with an open foundational
+        // gap already happened in parseJudgePass above.
+        const recorded = await recordAuditPasses({
+          context,
+          pipelineId: `pipe_wk_${item.id.slice(-16)}`,
+          runId: orchestration.runId,
+          mode: 'SINGLE_DOCUMENT',
+          primary: primary.value,
+          adversarial: adversarial.value,
+          judge: parsed.value as JudgePassOutput,
+          providerName: 'WORKER',
+          model: workerId,
+        });
+
+        await updateOrchestration(orchestration.id, {
+          status: 'COMPLETE',
+          auditId: recorded.audit.id,
+          verdict: recorded.audit.verdict,
+          completedAt: new Date().toISOString(),
+        });
+        await recomputeProject(orchestration.projectId);
+
+        return {
+          resultRef: recorded.audit.id,
+          resultSummary: `audit ${recorded.audit.verdict}`,
+          value: {
+            role,
+            recorded: true,
+            advancesState: true,
+            auditId: recorded.audit.id,
+            verdict: recorded.audit.verdict,
+            orchestrationStatus: 'COMPLETE',
+          },
+        };
+      },
+    );
+
+    return {
+      projectId: item.projectId,
+      value: outcome.value,
+      replayed: outcome.replayed,
+      operationId: outcome.operationId,
+    };
+  },
+};
+
 /** In the order a packet performs them, which is the order they are served in. */
 export const RESEARCH_TOOLS: readonly McpTool[] = [
   getAssignmentTool,
@@ -1205,4 +1547,6 @@ export const RESEARCH_TOOLS: readonly McpTool[] = [
   reportContradictionTool,
   reportBlockerTool,
   submitSynthesisTool,
+  getAuditBriefTool,
+  submitAuditTool,
 ];

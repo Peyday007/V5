@@ -395,6 +395,47 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
   );
   const judge = await parseOrFail(context, pipelineId, 'JUDGE', judgeRaw.raw, parseJudgePass);
 
+  return await recordAuditPasses({
+    context,
+    pipelineId,
+    runId: input.runId ?? null,
+    mode: input.mode,
+    primary,
+    adversarial,
+    judge,
+    providerName: provider.name,
+    model,
+  });
+}
+
+/**
+ * Everything after the three passes: record the verdict, attach its evidence,
+ * and say so in the event log.
+ *
+ * Extracted from `runDynamicAudit` in Step 9 because a Claude Max worker cannot
+ * be called as an `AIProvider` — it pulls work rather than answering prompts —
+ * so the three passes arrive one work item at a time instead of in one loop.
+ * What must not differ between the two is what happens to the judge's answer.
+ *
+ * So this is the whole recording path and both callers use it. The
+ * cross-checked counts, the refusal to advance a layer with an open
+ * foundational gap, `toStructuredResult`, the gap routing and the citation
+ * trail are all here, and there is no second version of any of them for the
+ * remote path to be judged by.
+ */
+export async function recordAuditPasses(input: {
+  context: AuditContext;
+  pipelineId: string;
+  runId: string | null;
+  mode: 'SINGLE_DOCUMENT' | 'LAYER_PACKET';
+  primary: PrimaryPassOutput;
+  adversarial: AdversarialPassOutput;
+  judge: JudgePassOutput;
+  /** Which provider produced the verdict. Recorded, never inferred. */
+  providerName: string;
+  model: string | null;
+}): Promise<DynamicAuditOutcome> {
+  const { context, pipelineId, primary, adversarial, judge } = input;
   // Only now does anything change.
   const auditedDocumentIds = context.artifacts
     .map((artifact) => artifact.documentId)
@@ -406,12 +447,12 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
     runId: input.runId ?? context.run?.id ?? null,
     auditedDocumentId: input.mode === 'SINGLE_DOCUMENT' ? (auditedDocumentIds[0] ?? null) : null,
     result: toStructuredResult(judge, primary),
-    source: `DYNAMIC_AUDIT:${provider.name}`,
+    source: `DYNAMIC_AUDIT:${input.providerName}`,
     mode: input.mode,
     profileId: context.profile?.id ?? null,
     auditedDocumentIds,
-    provider: provider.name,
-    model,
+    provider: input.providerName,
+    model: input.model,
     pipelineId,
     evidenceManifest: context.manifest,
     gaps: await toGapInputs(judge.gapClassifications, context.project.id),
@@ -451,7 +492,7 @@ export async function runDynamicAudit(input: RunDynamicAuditInput): Promise<Dyna
     payload: {
       mode: input.mode,
       verdict: judge.verdict,
-      provider: provider.name,
+      provider: input.providerName,
       foundationalGaps: judge.foundationalGapCount,
       targetedResearchRuns: judge.targetedResearchRunsRequired,
       pipelineId,

@@ -437,6 +437,31 @@ const heartbeatTool: McpTool = {
   },
 };
 
+/**
+ * Advance the packet a completed item belonged to, without letting that fail
+ * the completion.
+ *
+ * Ordering matters here and the choice is deliberate. The completion is the
+ * fact — the worker did the work, and the queue must record it. Deciding what
+ * work should exist next is a consequence, and a consequence that throws must
+ * not un-record the fact that caused it. So this runs after the effect has
+ * committed, and a failure is logged rather than propagated.
+ *
+ * Nothing is lost when it does fail: `advancePacket` derives everything from
+ * rows, so the next completion, the next approval or the next boot sweep
+ * reaches the same conclusion. That is the whole reason it reads only
+ * persisted state.
+ */
+async function advanceAfter(item: { orchestrationId: string | null }): Promise<void> {
+  if (!item.orchestrationId) return;
+  try {
+    const { advancePacket } = await import('../services/research/packetRunner.ts');
+    await advancePacket(item.orchestrationId);
+  } catch (error) {
+    console.error('[brain] could not advance the packet after a completion:', error);
+  }
+}
+
 const completeTool: McpTool = {
   name: 'brain_complete_work',
   title: 'Complete a work item',
@@ -485,6 +510,8 @@ const completeTool: McpTool = {
       },
       async () => await completeWork(proof, { resultRef, summary }),
     );
+
+    await advanceAfter(item);
 
     return {
       projectId: item.projectId,
@@ -557,6 +584,8 @@ const failTool: McpTool = {
           retryable: retryable as boolean | undefined,
         }),
     );
+
+    await advanceAfter(item);
 
     return {
       projectId: item.projectId,

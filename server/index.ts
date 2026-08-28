@@ -48,6 +48,7 @@ import { recoverInterruptedExtractions } from './services/documents/extraction.t
 import { ocrStatus } from './services/documents/ocr.ts';
 import { queueUnreadDocuments } from './services/documents/queue.ts';
 import { recoverInterruptedResearch } from './services/research/queue.ts';
+import { resumePulledPackets } from './services/research/packetRunner.ts';
 import { recoverInterruptedImports } from './services/archive/import.ts';
 
 /**
@@ -490,6 +491,20 @@ async function main(): Promise<void> {
       `  ${interruptedResearch} research run(s) were interrupted by the last shutdown and are ` +
         'marked INTERRUPTED. Resume them to continue from the last completed pass.',
     );
+  }
+
+  // Worker-driven packets resume differently, and the difference is the point.
+  // A push-model research run needs a process to continue it, so an interrupted
+  // one is closed and left for a person. A pulled packet's next step is a
+  // function of its rows, so re-deriving it *is* resuming it — and if the
+  // shutdown happened between a completion and the enqueue that should have
+  // followed, this is what closes that gap.
+  //
+  // Nothing is spent by this. It queues work; a worker still has to claim it,
+  // and a plan a person has not approved stays exactly where it is.
+  const resumed = await resumePulledPackets();
+  if (resumed > 0) {
+    console.log(`  ${resumed} worker-driven research packet(s) picked back up from their rows`);
   }
 
   // A folder import interrupted by the shutdown is paused rather than left
