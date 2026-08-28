@@ -27,7 +27,6 @@
  */
 import crypto from 'node:crypto';
 import type {
-  ClaimType,
   Layer,
   Project,
   ResearchJob,
@@ -57,17 +56,13 @@ import {
   createFragments,
   createOrchestration,
   currentFragments,
-  decideClaim,
   finishPass,
   getFragment,
   getOrchestration,
-  insertClaims,
   listClaimsForFragment,
   listFragments,
   listPasses,
-  markContradiction,
   startPass,
-  updateClaimDerivedFrom,
   updateFragment,
   updateOrchestration,
 } from '../../repos/research.ts';
@@ -76,7 +71,11 @@ import { enqueueExtraction } from '../documents/queue.ts';
 import { isAuditable } from '../documents/quality.ts';
 import { registerRunArtifact, targetVersionForRun } from '../runArtifacts.ts';
 import { selectRelevantSegments } from '../sources/ingest.ts';
-import { applyGate, fragmentPasses, type GateResult } from './gate.ts';
+import { fragmentPasses, type GateResult } from './gate.ts';
+import { gateFragment, recordFragmentClaims, type ClaimVerification } from './submission.ts';
+// One ledger builder, so a packet filed by a worker and one filed in process
+// carry the same evidence trail rather than two similar ones.
+import { appendLedger } from './filing.ts';
 import { bundleFragments, modelFor, type Bundle } from './bundling.ts';
 import { executionOrder, quotaDecision, type QuotaDecision } from './quota.ts';
 import { planContradictionFragments, reconcileAcceptedFragment } from './replan.ts';
@@ -116,8 +115,6 @@ import {
   parseVerificationPass,
   type ParseResult,
 } from './schema.ts';
-import { validateClaim } from './sources.ts';
-import { independenceGroup } from './standards.ts';
 
 /** How many times one fragment may be repaired before a person is needed. */
 export const MAX_FRAGMENT_ATTEMPTS = 3;
@@ -806,63 +803,17 @@ async function judgeFragment(input: {
 }): Promise<GateResult> {
   const { orchestration, fragment, job, output, provider, options } = input;
 
-  const stored = await insertClaims(
-    output.claims.map((claim) => {
-      const validated = validateClaim(claim);
-      const claimType = (claim.claimType ?? 'SOURCED_FACT') as ClaimType;
-      return {
-        orchestrationId: orchestration.id,
-        fragmentId: fragment.id,
-        passId: input.passId,
-        passKey: input.passKey,
-        claim: claim.claim,
-        claimType,
-        sourceGroup: independenceGroup({
-          sourceUrl: validated.normalizedUrl ?? claim.sourceUrl ?? null,
-          sourcePublisher: claim.sourcePublisher ?? null,
-          evidenceExcerpt: claim.evidenceExcerpt ?? null,
-        }),
-        primarySource: claim.primarySource ?? false,
-        geography: fragment.geography,
-        timeframe: fragment.timeframe,
-        population: fragment.population,
-        definition: fragment.definitions,
-        requirementIds: fragment.requirementIds,
-        jobId: job.id,
-        sourceUrl: validated.normalizedUrl ?? claim.sourceUrl ?? null,
-        sourceTitle: claim.sourceTitle ?? null,
-        sourcePublisher: claim.sourcePublisher ?? null,
-        sourceDate: claim.sourceDate ?? null,
-        evidenceExcerpt: claim.evidenceExcerpt ?? null,
-        evidenceLocator: claim.evidenceLocator ?? null,
-        evidenceLane: claim.evidenceLane ?? null,
-        retrievedAt: claim.retrievedAt ?? null,
-        confidence: claim.confidence,
-        validationState: validated.validationState,
-        validationDetail: validated.validationDetail,
-        sourced: validated.sourced,
-        derived: claim.derived,
-        derivedFrom: claim.derivedFrom,
-        contentHash: validated.contentHash,
-      };
-    }),
-  );
-
-  // Resolve derivation references from whatever the worker called them to real
-  // claim ids, so the gate can check that a calculation's inputs were accepted.
-  const byRef = new Map<string, string>();
-  stored.forEach((claim, index) => {
-    byRef.set(String(index), claim.id);
-    byRef.set(claim.claim.trim().toLowerCase().slice(0, 80), claim.id);
+  // The same function the MCP submission path calls. Deliberately not a helper
+  // each path supplements: one acceptance path means a remote worker cannot get
+  // a claim past a bar the local path would have held it to.
+  await recordFragmentClaims({
+    orchestration,
+    fragment,
+    passId: input.passId,
+    passKey: input.passKey,
+    jobId: job.id,
+    claims: output.claims,
   });
-  for (const [index, claim] of stored.entries()) {
-    const source = output.claims[index];
-    if (!source || !source.derived || source.derivedFrom.length === 0) continue;
-    const resolved = source.derivedFrom
-      .map((ref) => byRef.get(ref.trim().toLowerCase().slice(0, 80)) ?? byRef.get(ref.trim()))
-      .filter((id): id is string => Boolean(id));
-    await updateClaimDerivedFrom(claim.id, resolved);
-  }
 
   await updateFragment(fragment.id, { status: 'VALIDATING' });
 
@@ -883,54 +834,30 @@ async function judgeFragment(input: {
     parseVerificationPass,
   );
 
-  const verdicts = new Map<
-    string,
-    { supportsClaim: boolean; scopeMatch: (typeof verification.value.claimVerdicts)[number]['scopeMatch']; note: string }
-  >();
+  // The verification pass answers per claim *index*; the gate works in claim
+  // ids. Translating here rather than inside the shared function keeps the
+  // index convention local to the path that has one — a worker submitting over
+  // MCP names claims by id and has no index to be wrong about.
+  const verifications: ClaimVerification[] = [];
   for (const verdict of verification.value.claimVerdicts) {
     const claim = claims[verdict.claimIndex];
     if (!claim) continue;
-    verdicts.set(claim.id, {
+    verifications.push({
+      claimId: claim.id,
       supportsClaim: verdict.supportsClaim,
       scopeMatch: verdict.scopeMatch,
       note: verdict.note,
+      contradictionState: verdict.contradictionState,
     });
-    if (verdict.contradictionState !== 'UNCHALLENGED') {
-      await markContradiction(claim.id, verdict.contradictionState, verdict.note || null);
-    }
   }
 
-  const gate = applyGate({
+  return await gateFragment({
     fragment,
-    claims: await listClaimsForFragment(fragment.id),
-    verification: {
-      verdicts,
-      sufficiency: verification.value.sufficiency,
-      missingLanes: verification.value.missingLanes,
-      unresolvedGaps: verification.value.unresolvedGaps,
-    },
+    verifications,
+    sufficiency: verification.value.sufficiency,
+    missingLanes: verification.value.missingLanes,
+    unresolvedGaps: verification.value.unresolvedGaps,
   });
-
-  for (const judgement of gate.claims) {
-    await decideClaim(judgement.claimId, {
-      accepted: judgement.accepted,
-      rejectionReason: judgement.reason,
-      scopeMatch: verdicts.get(judgement.claimId)?.scopeMatch ?? null,
-    });
-  }
-
-  const passed = fragmentPasses(gate);
-  await updateFragment(fragment.id, {
-    status: passed ? 'ACCEPTED' : 'BLOCKED',
-    integrityVerdict: gate.integrity,
-    sufficiencyVerdict: gate.sufficiency,
-    verdictDetail: gate,
-    blockedReason: passed ? null : gate.reasons.join(' '),
-    completedAt: new Date().toISOString(),
-    acceptedAt: passed ? new Date().toISOString() : null,
-  });
-
-  return gate;
 }
 
 /**
@@ -1841,34 +1768,4 @@ function auditCapable(provider: AIProvider): AIProvider | null {
  * claims it rests on travel inside it rather than only in the database. Every
  * citation in the report resolves here, and every entry here resolves to a URL.
  */
-function appendLedger(report: string, claims: ResearchClaim[]): string {
-  const lines = [
-    report.trim(),
-    '',
-    '---',
-    '',
-    '## Evidence ledger',
-    '',
-    'Every claim below passed the fragment evidence gate: it has a canonical source URL, the',
-    'source was verified to support it, the exact passage is preserved, and its scope matches',
-    'the fragment that produced it.',
-    '',
-  ];
-  for (const claim of claims) {
-    lines.push(
-      `- **[${claim.id}]** ${claim.claim}`,
-      `  - Source: ${claim.sourcePublisher ?? 'unknown publisher'} — ${claim.sourceTitle ?? 'untitled'}` +
-        `${claim.sourceDate ? ` (${claim.sourceDate})` : ''}`,
-      `  - URL: ${claim.sourceUrl}`,
-      `  - Passage: "${(claim.evidenceExcerpt ?? '').replace(/\s+/g, ' ').slice(0, 400)}"` +
-        `${claim.evidenceLocator ? ` — ${claim.evidenceLocator}` : ''}`,
-      claim.retrievedAt ? `  - Retrieved: ${claim.retrievedAt}` : '',
-      claim.contradictionState !== 'UNCHALLENGED'
-        ? `  - Contradiction state: ${claim.contradictionState}${claim.contradictionNote ? ` — ${claim.contradictionNote}` : ''}`
-        : '',
-    );
-  }
-  return lines.filter((line) => line !== '').join('\n');
-}
-
 export { listPasses };
