@@ -1055,11 +1055,11 @@ describe('the operator console', () => {
     // browser path works.
     const queued = await post(
       '/operator/work',
-      { project_id: projectId, note: 'Step 8 acceptance item' },
+      { project_id: projectId, echo_only: 'true' },
       { cookie: adminCookie },
     );
     expect(queued.status).toBe(200);
-    expect(queued.html).toContain('A worker holding queue:claim there can take it');
+    expect(queued.html).toContain('proves the queue and nothing more');
 
     // Not merely rendered — the item is really in the queue, read back from the
     // authoritative Brain rather than from the page that claimed to have made it.
@@ -1069,7 +1069,7 @@ describe('the operator console', () => {
       { cookie: adminCookie },
     );
     expect(listed.status).toBe(200);
-    const mine = listed.body.items.find((item) => item.payload.note === 'Step 8 acceptance item');
+    const mine = listed.body.items.find((item) => item.workType === 'SYNTHETIC_ECHO');
     expect(mine).toBeTruthy();
     expect(mine!.workType).toBe('SYNTHETIC_ECHO');
     expect(mine!.state).toBe('QUEUED');
@@ -1103,7 +1103,7 @@ describe('the operator console', () => {
     // same whether the passage was read or ignored. This is the smallest item
     // that cannot be faked.
     const queued = await post(
-      '/operator/work/summarize',
+      '/operator/work',
       {
         project_id: projectId,
         passage: 'The lease generation is also the fencing token, which is why a late completion from a previous owner matches nothing.',
@@ -1125,21 +1125,55 @@ describe('the operator console', () => {
     expect(mine!.payload['question']).toBe('What does the generation do?');
   });
 
+  it('grants a project from the row you are already looking at', async () => {
+    // Granting used to be its own card with its own worker dropdown, which meant
+    // picking the worker twice — once in the list you were reading and again in
+    // a select below it. The worker is now whichever row you are on.
+    const made = await post(
+      '/operator/workers',
+      { name: 'row-granted-worker', displayName: 'Row Granted' },
+      { cookie: adminCookie },
+    );
+    expect(made.status).toBe(200);
+    const list = await api<{ workers: { id: string; name: string }[] }>('GET', '/api/admin/workers', {
+      cookie: adminCookie,
+    });
+    const target = list.body.workers.find((w) => w.name === 'row-granted-worker')!;
+
+    const granted = await post(
+      '/operator/memberships',
+      { worker_id: target.id, project_id: projectId },
+      { cookie: adminCookie },
+    );
+    expect(granted.status).toBe(200);
+    expect(granted.html).toContain('can now reach that project');
+
+    // And *that* project stops being offered for this worker, so the choice
+    // cannot be a no-op that looks like it did something. Other projects stay
+    // on offer, which is why this asserts on the one just granted rather than
+    // on the picker disappearing.
+    const shown = await operatorPage({ cookie: adminCookie });
+    const start = shown.html.indexOf('row-granted-worker');
+    const row = shown.html.slice(start, start + 2000);
+    expect(row).toContain(`name="project_id" value="${projectId}"`);
+    expect(row).not.toContain(`<option value="${projectId}"`);
+  });
+
   it('refuses a reading with nothing to read', async () => {
     const empty = await post(
-      '/operator/work/summarize',
+      '/operator/work',
       { project_id: projectId, passage: '   ' },
       { cookie: adminCookie },
     );
     expect(empty.status).toBe(400);
-    expect(empty.html).toContain('non-empty string');
+    expect(empty.html).toContain('Paste a passage');
   });
 
   it('refuses a passage past the bound rather than truncating it', async () => {
     // Truncating would hand the worker a different passage from the one queued,
     // and its summary would be of text nobody chose.
     const huge = await post(
-      '/operator/work/summarize',
+      '/operator/work',
       { project_id: projectId, passage: 'x'.repeat(4001) },
       { cookie: adminCookie },
     );
@@ -1149,19 +1183,19 @@ describe('the operator console', () => {
 
   it('will not let anybody but an administrator queue a reading', async () => {
     expect(
-      (await post('/operator/work/summarize', { project_id: projectId, passage: 'hello' }, { cookie: memberCookie }))
+      (await post('/operator/work', { project_id: projectId, passage: 'hello' }, { cookie: memberCookie }))
         .status,
     ).toBe(404);
     const access = await connectedToken();
     expect(
-      (await post('/operator/work/summarize', { project_id: projectId, passage: 'hello' }, { bearer: access })).status,
+      (await post('/operator/work', { project_id: projectId, passage: 'hello' }, { bearer: access })).status,
     ).toBe(404);
   });
 
   it('will not queue work into a project that does not exist', async () => {
     const missing = await post(
       '/operator/work',
-      { project_id: 'prj_does_not_exist', note: 'nowhere' },
+      { project_id: 'prj_does_not_exist', echo_only: 'true' },
       { cookie: adminCookie },
     );
     expect(missing.status).toBe(404);
@@ -1173,7 +1207,7 @@ describe('the operator console', () => {
     // route refuses it in policy — both, because either alone is one mistake
     // away from being skipped.
     const access = await connectedToken();
-    expect((await post('/operator/work', { project_id: projectId }, { bearer: access })).status).toBe(404);
+    expect((await post('/operator/work', { project_id: projectId, echo_only: 'true' }, { bearer: access })).status).toBe(404);
 
     // First prove the refusal below is about *enqueueing* rather than about
     // this project. The worker is a full member of it holding queue:claim, and
@@ -1193,7 +1227,7 @@ describe('the operator console', () => {
   });
 
   it('will not let an ordinary member queue work from the console', async () => {
-    expect((await post('/operator/work', { project_id: projectId }, { cookie: memberCookie })).status).toBe(404);
+    expect((await post('/operator/work', { project_id: projectId, echo_only: 'true' }, { cookie: memberCookie })).status).toBe(404);
   });
 
   it('refuses a cross-site post', async () => {

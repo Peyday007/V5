@@ -82,6 +82,12 @@ const CSS = `
   fieldset { border:1px solid #e3e6ea; border-radius:10px; padding:14px 16px; margin:18px 0 0; }
   legend { font-size:12px; font-weight:600; color:#5b636e; text-transform:uppercase; letter-spacing:.04em; padding:0 6px; }
   .actions { display:flex; gap:8px; align-items:center; }
+  .inline { display:flex; gap:8px; align-items:center; width:100%; }
+  .inline select { margin:0; }
+  .inline button { margin-top:0; width:auto; white-space:nowrap; }
+  label.check { display:flex; align-items:center; gap:8px; font-weight:400; font-size:13px;
+    margin:14px 0 0; }
+  label.check input { width:auto; margin:0; }
   .access { display:flex; align-items:center; justify-content:space-between; gap:10px;
     margin-top:6px; padding:6px 0 0; border-top:1px dashed #e3e6ea; }
   .access button { padding:3px 10px; font-size:12px; }

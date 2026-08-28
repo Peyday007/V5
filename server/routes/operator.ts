@@ -200,12 +200,15 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
   const membershipLines = (
     worker: { id: string },
     rows: { projectId: string; name: string; scopes: string[] }[],
-  ): string =>
-    rows
+  ): string => {
+    const held = new Set(rows.map((row) => row.projectId));
+    const available = projects.filter((project) => !held.has(project.id));
+
+    const lines = rows
       .map(
         (row) => `
         <div class="access">
-          <span class="meta">${esc(row.name)} <code>${esc(row.scopes.join(' '))}</code></span>
+          <span class="meta">${esc(row.name)}</span>
           <form method="post" action="${OPERATOR_BASE}/memberships/revoke">
             <input type="hidden" name="worker_id" value="${esc(worker.id)}">
             <input type="hidden" name="project_id" value="${esc(row.projectId)}">
@@ -214,6 +217,26 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
         </div>`,
       )
       .join('');
+
+    // Granting lives on the worker's own row rather than in a card of its own.
+    // A separate card meant choosing the worker twice — once in its dropdown and
+    // again in your head, against the list right above it — and two screens'
+    // worth of controls for one decision. Here the worker is already chosen by
+    // being the row you are looking at, and only the projects it does not have
+    // are offered, so the choice cannot be a no-op.
+    if (available.length === 0) return lines;
+    return `${lines}
+        <div class="access">
+          <form method="post" action="${OPERATOR_BASE}/memberships" class="inline">
+            <input type="hidden" name="worker_id" value="${esc(worker.id)}">
+            <select name="project_id" required aria-label="Project to grant">
+              <option value="" disabled selected>— add a project —</option>
+              ${available.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}
+            </select>
+            <button type="submit" class="secondary">Grant</button>
+          </form>
+        </div>`;
+  };
 
   const workerRows = described
     .map(
@@ -370,53 +393,29 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
          isolated. A test worker should never be granted the project holding real research —
          a mistake there writes fabricated findings into work you rely on.</p>`)}
      ${
-       workers.length > 0 && projects.length > 0
-         ? card(`<h2>Grant access</h2>
-       <form method="post" action="${OPERATOR_BASE}/memberships">
-         <label for="worker_id">Worker</label>
-         <select id="worker_id" name="worker_id" required>${workerOptions}</select>
-         <label for="project_id">Project</label>
-         <select id="project_id" name="project_id" required>${projectOptions}</select>
-         <button type="submit">Grant</button>
-       </form>
-       <p class="note">The Brain sets what the worker may do — exactly what the remote tools
-         require and nothing else. There is no list to compose, because composing it was a job with
-         no judgement in it and two ways to get wrong, and both happened here within ten minutes of
-         this screen existing.</p>
-       <p class="note">A worker administers nothing regardless. It cannot create work, cancel work,
-         or reach a project it was not granted — that is decided in the policy, not here.</p>`)
-         : ''
-     }
-     ${
        projects.length > 0
          ? card(`<h2>Give a worker something to do</h2>
        <form method="post" action="${OPERATOR_BASE}/work">
          <label for="work_project">Project</label>
          <select id="work_project" name="project_id" required>${projectOptions}</select>
-         <label for="work_note">Note</label>
-         <input id="work_note" name="note" type="text" maxlength="500"
-           placeholder="Step 8 acceptance item">
-         <button type="submit">Queue a synthetic echo</button>
-       </form>
-       <form method="post" action="${OPERATOR_BASE}/work/summarize">
-         <label for="sum_project">Project</label>
-         <select id="sum_project" name="project_id" required>${projectOptions}</select>
-         <label for="sum_passage">Passage for the worker to read</label>
-         <textarea id="sum_passage" name="passage" rows="4" maxlength="4000" required
-           placeholder="Paste a paragraph. The worker has to actually read it."></textarea>
-         <label for="sum_question">Question (optional)</label>
-         <input id="sum_question" name="question" type="text" maxlength="500"
+         <label for="work_passage">Passage for the worker to read</label>
+         <textarea id="work_passage" name="passage" rows="4" maxlength="4000"
+           placeholder="Paste a paragraph. The worker has to actually read it to finish."></textarea>
+         <label for="work_question">Question (optional)</label>
+         <input id="work_question" name="question" type="text" maxlength="500"
            placeholder="What should it tell you about the passage?">
-         <button type="submit" class="secondary">Queue a real reading</button>
+         <label class="check"><input type="checkbox" name="echo_only" value="true">
+           Queue a plain echo instead — proves the queue, spends nothing, and ignores the
+           passage</label>
+         <button type="submit">Queue it</button>
        </form>
-       <p class="note">Two kinds. <code>SYNTHETIC_ECHO</code> hands a note back, so it proves the
-         queue and nothing else — a worker that never read it would look identical to one that did.
-         <code>SUMMARIZE_PASSAGE</code> cannot be faked: the worker has to read the passage and
-         produce something that depends on it, which costs a little of that account's allowance.
-         That cost is the point, because a test that spends nothing has not tested the part where
-         spending happens.</p>
-       <p class="note">Both stay inside the boundary this queue requires. It is at-least-once, so
-         everything it carries must be safe to perform twice — the passage travels in the item,
+       <p class="note">A reading cannot be faked: the worker has to read the passage and produce
+         something that depends on it, which costs a little of that account's allowance. That cost
+         is the point, because a test that spends nothing has not tested the part where spending
+         happens. An echo hands a note back, so a worker that never read it looks identical to one
+         that did — useful for the queue itself, useless for proving work happened.</p>
+       <p class="note">Both stay inside what this queue requires. It is at-least-once, so
+         everything it carries must be safe to perform twice: the passage travels in the item,
          nothing is fetched, no document is touched, and a repeat cannot record a second result.</p>
        <p class="note">A worker cannot enqueue its own work. Enqueueing is a project write with no
          scope that grants it, so a machine credential is refused here however it is configured —
@@ -627,7 +626,9 @@ export function operatorRouter(): Router {
       }
       const body = (req.body ?? {}) as Record<string, unknown>;
       const projectId = typeof body['project_id'] === 'string' ? body['project_id'] : '';
-      const note = typeof body['note'] === 'string' ? body['note'].trim() : '';
+      const passage = typeof body['passage'] === 'string' ? body['passage'].trim() : '';
+      const question = typeof body['question'] === 'string' ? body['question'].trim() : '';
+      const echoOnly = body['echo_only'] === 'true';
 
       const project = await getProject(projectId);
       if (!project) {
@@ -635,10 +636,26 @@ export function operatorRouter(): Router {
         return;
       }
 
-      const definition = workType('SYNTHETIC_ECHO');
+      // An echo with a passage would silently throw the passage away, and a
+      // reading with nothing to read cannot be done at all. Say so rather than
+      // quietly queueing something other than what was asked for.
+      if (!echoOnly && passage.length === 0) {
+        res.status(400).type('html').send(
+          await consolePage(person, {
+            err: 'Paste a passage for the worker to read, or tick the box to queue a plain echo instead.',
+          }),
+        );
+        return;
+      }
+
+      const definition = workType(echoOnly ? 'SYNTHETIC_ECHO' : 'SUMMARIZE_PASSAGE');
       let payload: Record<string, unknown>;
       try {
-        payload = definition.validate({ note: note || 'acceptance item' });
+        payload = definition.validate(
+          echoOnly
+            ? { note: 'queue check' }
+            : { passage, ...(question.length > 0 ? { question } : {}) },
+        );
       } catch (error) {
         if (error instanceof InvalidWorkPayload) {
           res.status(400).type('html').send(await consolePage(person, { err: error.message }));
@@ -676,7 +693,9 @@ export function operatorRouter(): Router {
       });
       res.type('html').send(
         await consolePage(person, {
-          ok: `Queued ${item.id} in "${project.name}". A worker holding queue:claim there can take it.`,
+          ok: echoOnly
+            ? `Queued ${item.id} in "${project.name}". It hands a note back, so it proves the queue and nothing more.`
+            : `Queued ${item.id} in "${project.name}". A connected worker will have to read the passage to finish it.`,
         }),
       );
     })();
@@ -743,90 +762,6 @@ export function operatorRouter(): Router {
    * request rather than frozen into a token, so there is nothing to wait for
    * and nothing to reconnect.
    */
-  /**
-   * Queue work that the worker has to actually read.
-   *
-   * `SYNTHETIC_ECHO` proves the queue. It cannot prove that a worker did
-   * anything, because handing a note back looks the same whether the passage
-   * was read or ignored — which is right for testing claiming and leases, and
-   * useless for finding out whether real work flows through the connection.
-   *
-   * This one costs a little of the connected account's allowance, and that is
-   * the point: an end-to-end test that spends nothing has not tested the part
-   * where spending happens.
-   *
-   * It is still inside the boundary the queue requires. The passage travels in
-   * the item, bounded, so nothing is fetched and no document is touched, and a
-   * redelivery re-reads the same text — the wording of a second summary may
-   * differ, and it cannot be recorded, because completion is idempotent by work
-   * item.
-   */
-  router.post('/work/summarize', (req: Request, res: Response) => {
-    void (async (): Promise<void> => {
-      const person = await administrator(req);
-      if (!person || !originIsSameSite(req)) {
-        denied(res);
-        return;
-      }
-      const body = (req.body ?? {}) as Record<string, unknown>;
-      const project = await getProject(typeof body['project_id'] === 'string' ? body['project_id'] : '');
-      if (!project) {
-        res.status(404).type('html').send(await consolePage(person, { err: 'No such project.' }));
-        return;
-      }
-
-      const definition = workType('SUMMARIZE_PASSAGE');
-      let payload: Record<string, unknown>;
-      try {
-        payload = definition.validate({
-          passage: typeof body['passage'] === 'string' ? body['passage'].trim() : '',
-          ...(typeof body['question'] === 'string' && body['question'].trim().length > 0
-            ? { question: body['question'].trim() }
-            : {}),
-        });
-      } catch (error) {
-        if (error instanceof InvalidWorkPayload) {
-          res.status(400).type('html').send(await consolePage(person, { err: error.message }));
-          return;
-        }
-        throw error;
-      }
-
-      let item: WorkItem;
-      try {
-        item = await enqueueWork({
-          projectId: project.id,
-          workType: definition.type,
-          payload,
-          requiredScopes: definition.requiredScopes,
-          maxAttempts: definition.defaultMaxAttempts,
-          createdByType: person.type,
-          createdById: person.id,
-        });
-      } catch (error) {
-        if (error instanceof PayloadTooLarge) {
-          res.status(400).type('html').send(await consolePage(person, { err: error.message }));
-          return;
-        }
-        throw error;
-      }
-
-      await audit({
-        actor: person,
-        action: 'QUEUE_ENQUEUE',
-        targetType: 'WORK_ITEM',
-        targetId: item.id,
-        result: 'SUCCESS',
-        metadata: { projectId: project.id, workType: item.workType },
-      });
-      res.type('html').send(
-        await consolePage(person, {
-          ok: `Queued ${item.id} in "${project.name}". A connected worker will have to read the passage to finish it.`,
-        }),
-      );
-    })();
-  });
-
   router.post('/memberships/revoke', (req: Request, res: Response) => {
     void (async (): Promise<void> => {
       const person = await administrator(req);
