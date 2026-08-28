@@ -44,6 +44,14 @@ import { InvalidWorkPayload, workType } from '../services/queue/workTypes.ts';
 import { CONNECTOR_SCOPES } from '../domain/types.ts';
 import type { Principal, WorkItem, WorkerScope } from '../domain/types.ts';
 import { generateInvitationToken } from '../services/identity/secrets.ts';
+import { listLayers } from '../repos/layers.ts';
+import { createRun } from '../repos/runs.ts';
+import {
+  createOrchestration,
+  currentFragments,
+  listOrchestrationsByProject,
+} from '../repos/research.ts';
+import { advancePacket, approvePlan } from '../services/research/packetRunner.ts';
 import { card, esc, page } from './pages.ts';
 
 export const OPERATOR_BASE = '/operator';
@@ -343,6 +351,111 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
     )
     .join('');
 
+  /**
+   * Research packets, and the one screen where a person has to make a decision.
+   *
+   * A packet in PLANNING with proposed fragments is stopped: the worker read the
+   * assignment, decomposed it, and nothing more will happen until somebody
+   * approves. That is §16 — a browser-initiated run is planned in full and then
+   * stops before anything is spent — and this is where it stops.
+   *
+   * The whole plan is shown rather than a count. "Approve 6 fragments" is not a
+   * decision anybody can make; the six questions, their boundaries and their
+   * evidence bars are, and they are exactly what the allowance will be spent on.
+   */
+  const packetGroups = await Promise.all(
+    projects.map(async (project) => ({
+      project,
+      packets: await Promise.all(
+        (await listOrchestrationsByProject(project.id)).slice(0, 6).map(async (orchestration) => ({
+          orchestration,
+          fragments: await currentFragments(orchestration.id),
+        })),
+      ),
+    })),
+  );
+
+  const packetRows = packetGroups
+    .filter((group) => group.packets.length > 0)
+    .map((group) => {
+      const rows = group.packets
+        .map(({ orchestration, fragments }) => {
+          const awaiting = fragments.filter((fragment) => fragment.status === 'PLANNED');
+          const counts = ['ACCEPTED', 'BLOCKED', 'QUEUED', 'VALIDATING']
+            .map((state) => ({ state, n: fragments.filter((f) => f.status === state).length }))
+            .filter((entry) => entry.n > 0)
+            .map((entry) => `${entry.n} ${entry.state.toLowerCase()}`)
+            .join(', ');
+
+          const plan =
+            awaiting.length === 0
+              ? ''
+              : `
+          <div class="result">
+            <strong>${awaiting.length} fragment(s) proposed. Nothing has been spent yet.</strong>
+            ${awaiting
+              .map(
+                (fragment) => `
+            <div class="access">
+              <span class="meta"><strong>${esc(fragment.fragmentKey)}</strong> — ${esc(fragment.question)}
+                <br>${esc(
+                  [
+                    fragment.geography,
+                    fragment.timeframe,
+                    fragment.population,
+                    `${fragment.minIndependentSources} independent source(s)`,
+                    `lanes: ${fragment.requiredEvidence.join(', ') || 'none declared'}`,
+                  ]
+                    .filter((part) => Boolean(part))
+                    .join(' · '),
+                )}</span>
+            </div>`,
+              )
+              .join('')}
+            <form method="post" action="${OPERATOR_BASE}/packets/${esc(orchestration.id)}/approve">
+              <button type="submit">Approve this plan and start researching</button>
+            </form>
+            <p class="note">Approving queues one job per fragment. Each one costs a little of the
+              connected account's allowance, and a fragment that cannot clear its own evidence bar
+              contributes nothing to the report rather than contributing something weaker.</p>
+          </div>`;
+
+          return `
+        <div class="row">
+          <div>
+            <div class="who"><strong>${esc(orchestration.title)}</strong></div>
+            <div class="meta"><code>${esc(orchestration.id)}</code> · ${esc(orchestration.status)}${
+              counts ? ` · ${esc(counts)}` : ''
+            }${orchestration.verdict ? ` · audit ${esc(orchestration.verdict)}` : ''}</div>
+            ${
+              orchestration.failureReason
+                ? `<div class="result">${esc(orchestration.failureReason)}</div>`
+                : ''
+            }
+            ${plan}
+          </div>
+        </div>`;
+        })
+        .join('');
+      return `<div class="row"><div><div class="who"><strong>${esc(group.project.name)}</strong></div></div></div>${rows}`;
+    })
+    .join('');
+
+  const layerOptions = (
+    await Promise.all(
+      projects.map(async (project) =>
+        (await listLayers(project.id)).map(
+          (layer) =>
+            `<option value="${esc(project.id)}:${esc(layer.id)}">${esc(project.name)} — ${esc(
+              layer.name,
+            )}</option>`,
+        ),
+      ),
+    )
+  )
+    .flat()
+    .join('');
+
   const workerOptions =
     CHOOSE +
     workers
@@ -442,6 +555,34 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
          which is why this box exists at all.</p>`)
          : ''
      }
+     ${
+       layerOptions
+         ? card(`<h2>Start a research packet</h2>
+       <form method="post" action="${OPERATOR_BASE}/packets">
+         <label for="packet_layer">Layer this answers for</label>
+         <select id="packet_layer" name="target" required>
+           <option value="" disabled selected>— choose a layer —</option>
+           ${layerOptions}
+         </select>
+         <label for="packet_title">Title</label>
+         <input id="packet_title" name="title" type="text" required maxlength="200"
+           placeholder="Licensure of success-fee business brokerage">
+         <label for="packet_assignment">The assignment</label>
+         <textarea id="packet_assignment" name="assignment" rows="8" required maxlength="8000"
+           placeholder="The question, and the boundaries that make an answer checkable: which geography, which timeframe, which population, whose definitions, what would count as done, and what is explicitly out of scope."></textarea>
+         <button type="submit">Plan it</button>
+       </form>
+       <p class="note">This queues one planning job and stops. The worker reads the assignment and
+         proposes the bounded fragments that would answer it; <strong>nothing is researched and
+         nothing is spent</strong> until you have read the plan and approved it here.</p>
+       <p class="note">Write the boundaries into the assignment rather than leaving them implied.
+         They become each fragment's evidence bar, and a fragment with no declared scope cannot be
+         judged — the plan will be refused rather than accepted loosely.</p>
+       <p class="note">A worker cannot start a packet. Enqueueing is a project write that no worker
+         scope grants, which is why this box exists.</p>`)
+         : ''
+     }
+     ${packetRows ? card(`<h2>Research packets</h2>${packetRows}`) : ''}
      ${queueRows ? card(`<h2>The queue</h2>${queueRows}`) : ''}
      ${
        workers.length > 0
@@ -716,6 +857,149 @@ export function operatorRouter(): Router {
           ok: echoOnly
             ? `Queued ${item.id} in "${project.name}". It hands a note back, so it proves the queue and nothing more.`
             : `Queued ${item.id} in "${project.name}". A connected worker will have to read the passage to finish it.`,
+        }),
+      );
+    })();
+  });
+
+  /**
+   * Start a research packet: create the run, the orchestration, and stop.
+   *
+   * The one thing this must not do is start researching. It queues a single
+   * planning job, and the plan comes back for a person to read. §16 is explicit
+   * that a browser-initiated run is planned in full and then stops before
+   * anything is spent, and the temptation here is a single extra call — advance
+   * straight through PLANNING — which would spend the allowance on a
+   * decomposition nobody had seen.
+   *
+   * Like project creation and hand-queueing, this is a person doing something a
+   * worker must not be able to do for itself. Enqueueing is a project write and
+   * no worker scope grants it.
+   */
+  router.post('/packets', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      const person = await administrator(req);
+      if (!person || !originIsSameSite(req)) {
+        denied(res);
+        return;
+      }
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const target = typeof body['target'] === 'string' ? body['target'] : '';
+      const title = typeof body['title'] === 'string' ? body['title'].trim() : '';
+      const assignment = typeof body['assignment'] === 'string' ? body['assignment'].trim() : '';
+
+      const [projectId, layerId] = target.split(':');
+      if (!projectId || !layerId) {
+        res.status(400).type('html').send(await consolePage(person, { err: 'Choose a layer.' }));
+        return;
+      }
+      if (!title || !assignment) {
+        res
+          .status(400)
+          .type('html')
+          .send(await consolePage(person, { err: 'A packet needs a title and an assignment.' }));
+        return;
+      }
+
+      const project = await getProject(projectId);
+      const layer = (await listLayers(projectId)).find((candidate) => candidate.id === layerId);
+      if (!project || !layer) {
+        res.status(404).type('html').send(await consolePage(person, { err: 'No such layer.' }));
+        return;
+      }
+
+      // The run is the assignment Brain issued, and the orchestration is how it
+      // gets carried out. A run always exists — that is what lets an artifact
+      // filed by a worker land through exactly the path a hand-uploaded report
+      // does, with the same naming, the same versioning and the same lineage.
+      const run = await createRun({
+        projectId: project.id,
+        layerId: layer.id,
+        // FOUNDATION, matching what the in-process orchestrator creates. The
+        // run type describes what the work is *for* the layer, and a packet
+        // researched by a worker is the same kind of contribution as one
+        // researched in process.
+        runType: 'FOUNDATION',
+        status: 'PLANNED',
+        provider: 'WORKER',
+        prompt: assignment,
+      });
+
+      const orchestration = await createOrchestration({
+        projectId: project.id,
+        layerId: layer.id,
+        runId: run.id,
+        title,
+        assignment,
+        provider: 'WORKER',
+        // Nothing about this packet runs without a person, which is what the
+        // flag means here. It is not a preference; it is the §16 gate.
+        autoApprove: false,
+      });
+
+      const advanced = await advancePacket(orchestration.id);
+
+      await audit({
+        actor: person,
+        action: 'QUEUE_ENQUEUE',
+        targetType: 'PROJECT',
+        targetId: project.id,
+        result: 'SUCCESS',
+        metadata: {
+          orchestrationId: orchestration.id,
+          layer: layer.slug,
+          enqueued: advanced.enqueued.length,
+        },
+      });
+
+      res.type('html').send(
+        await consolePage(person, {
+          ok:
+            `Planning "${title}". A worker will decompose it into fragments and bring the plan ` +
+            'back here. Nothing is researched and nothing is spent until you approve it.',
+        }),
+      );
+    })();
+  });
+
+  /**
+   * Approve a plan, and only then does anything cost anything.
+   *
+   * This is the single point in the whole packet where a human decision is
+   * load-bearing. Everything before it is free; everything after it spends the
+   * connected account's allowance, one fragment at a time.
+   */
+  router.post('/packets/:orchestrationId/approve', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      const person = await administrator(req);
+      if (!person || !originIsSameSite(req)) {
+        denied(res);
+        return;
+      }
+      const orchestrationId = req.params['orchestrationId'] ?? '';
+
+      const result = await approvePlan({ orchestrationId, approvedByUserId: person.id });
+      if (result.status === 'GONE') {
+        res.status(404).type('html').send(await consolePage(person, { err: 'No such packet.' }));
+        return;
+      }
+
+      await audit({
+        actor: person,
+        action: 'QUEUE_ENQUEUE',
+        targetType: 'WORK_ITEM',
+        targetId: orchestrationId,
+        result: 'SUCCESS',
+        metadata: { approvedPlan: true, enqueued: result.enqueued.length },
+      });
+
+      res.type('html').send(
+        await consolePage(person, {
+          ok:
+            result.enqueued.length > 0
+              ? `Approved. ${result.enqueued.length} research job(s) queued — a connected worker ` +
+                'will claim them.'
+              : `Approved, but nothing was queued: ${result.waitingOn ?? 'nothing was waiting'}.`,
         }),
       );
     })();
