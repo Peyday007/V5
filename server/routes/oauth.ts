@@ -726,7 +726,17 @@ async function consentPage(
   person: Principal,
   error: string | null,
 ): Promise<string> {
-  const workers = (await listWorkers()).filter((worker) => !worker.disabled);
+  /**
+   * Disabled workers are not offered, but their existence changes what to say.
+   *
+   * Filtering first and then reporting an empty list as "no workers yet" tells
+   * an operator whose only worker is disabled that the Brain has none — and
+   * sends them off to create a duplicate at the exact moment they were trying
+   * to restore the one they have. Which is what happened.
+   */
+  const allWorkers = await listWorkers();
+  const workers = allWorkers.filter((worker) => !worker.disabled);
+  const someAreDisabled = allWorkers.length > workers.length;
 
   // Each worker is shown with what it can actually reach, because "approve this
   // connection" is only a meaningful decision if the access it grants is on the
@@ -771,7 +781,10 @@ async function consentPage(
      ${error ? `<div class="err">${esc(error)}</div>` : ''}
      ${
        workers.length === 0
-         ? `<div class="err">This Brain has no workers yet. Create one first.</div>`
+         ? someAreDisabled
+           ? `<div class="err">Every worker in this Brain is disabled. Enable one in the operator
+              console and try again — you do not need to create another.</div>`
+           : `<div class="err">This Brain has no workers yet. Create one first.</div>`
          : `<form method="post" action="${OAUTH_BASE}/authorize/approve">
        ${hiddenFields(params)}
        <label for="worker_id">Connect as</label>

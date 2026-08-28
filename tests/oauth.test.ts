@@ -1137,6 +1137,48 @@ describe('the operator console', () => {
     expect(later.html).not.toContain(shown!);
   });
 
+  it('does not tell an operator to create a worker they already have', async () => {
+    // The consent screen filtered out disabled workers and then reported the
+    // empty list as "no workers yet". So an operator whose only worker was
+    // disabled — which is exactly the state you are in while trying to restore
+    // it — was told the Brain had none, and sent off to create a duplicate.
+    const made = await post(
+      '/operator/workers',
+      { name: 'only-disabled-worker', displayName: 'Only Disabled' },
+      { cookie: adminCookie },
+    );
+    expect(made.status).toBe(200);
+    const list = await api<{ workers: { id: string; name: string; disabled?: boolean }[] }>(
+      'GET',
+      '/api/admin/workers',
+      { cookie: adminCookie },
+    );
+
+    // Disable every worker, so the consent screen has none to offer.
+    for (const worker of list.body.workers) {
+      await api('POST', `/api/admin/workers/${worker.id}/disabled`, {
+        cookie: adminCookie,
+        body: { disabled: true },
+      });
+    }
+
+    const { challenge } = pkce();
+    const consent = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge).toString()}`, {
+      headers: { cookie: adminCookie },
+    });
+    const html = await consent.text();
+    expect(html).toContain('Every worker in this Brain is disabled');
+    expect(html).not.toContain('has no workers yet');
+
+    // Put them back, for everything after this.
+    for (const worker of list.body.workers) {
+      await api('POST', `/api/admin/workers/${worker.id}/disabled`, {
+        cookie: adminCookie,
+        body: { disabled: false },
+      });
+    }
+  });
+
   it('ends live connections when a worker is disabled', async () => {
     const created = await post('/operator/workers', { name: 'ending-worker', displayName: 'Ending' }, { cookie: adminCookie });
     expect(created.status).toBe(200);

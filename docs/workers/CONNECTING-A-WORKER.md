@@ -71,6 +71,13 @@ meaningless.
 A worker administers nothing regardless of what is ticked — administration is
 refused to a worker principal outright, in the policy, not here.
 
+**The scope names imply more granularity than exists.** There is no
+`queue:fail` and no `queue:release`: finishing an item, failing it and giving it
+back are all gated by `queue:complete`, because they are one authority — the
+right to stop holding this item. A worker with `queue:complete` can therefore
+report a blocker and hand work back, which is what you want. Reading the names
+alone suggests otherwise, and that inference has already been made once.
+
 ## 3. Register the connector in Claude
 
 Go to **Settings → Connectors → Add custom connector**.
