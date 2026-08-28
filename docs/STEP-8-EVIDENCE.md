@@ -259,9 +259,9 @@ Pointing one of those assertions at a garbage bearer now reports
 | 31 | Real Claude completion or controlled failure | **EXECUTED — PASS** — `SUCCEEDED` |
 | 32 | Real Claude terminal-state readback | **EXECUTED — PASS** |
 | 33 | Real Claude stale-lease denial | **EXECUTED — PASS** — a genuinely dead generation, not a fabricated one |
-| 34 | Credential revocation/rotation test | **NOT EXECUTED** — see below |
+| 34 | Credential revocation/rotation test | **EXECUTED — PASS** — disabled twice, refused on the next call both times. See the caveat below: the console's revoked-token counter reported zero and is unexplained |
 | 35 | Membership/scope removal test | **EXECUTED — PASS** — both, live, effective on the next call |
-| 36 | Connector reconnect test | **NOT EXECUTED** — see below |
+| 36 | Connector reconnect test | **EXECUTED — PASS** — reconnected through the consent screen after a disable and obtained a working token |
 | 37 | Brain restart/redeploy persistence test | **EXECUTED — PASS** — every field byte-identical across a real restart |
 | 38 | Fresh Claude-session persistence read | **EXECUTED — PASS** — a new session, a new token, same state, replay still `ALREADY_RECORDED` |
 | 39 | Audit-attribution verification | **AUTOMATED** — `identity_events` records the token row as `credentialId`; not read back from production |
@@ -272,27 +272,32 @@ Pointing one of those assertions at a garbage bearer now reports
 | 44 | No Step 11 fleet work began | **CONFIRMED** — one worker |
 | 45 | No Step 12 UI work began | **CONFIRMED** — the console is Step 8's own administration surface, and its scope is written down |
 
-### Items 34 and 36, honestly
+### Item 34, with its caveat stated rather than buried
 
-The worker was disabled and the next call was refused — but the console reported
-**zero** tokens revoked, meaning nothing live was there to revoke. The token had
-already aged out. So what was observed is an expiry, not a revocation, and the
-two are indistinguishable from the client: the Brain answers 401 for every
-reason deliberately, and the client renders any 401 as "token expired".
+**What was observed:** the worker was disabled and its next call was refused.
+Twice, on separate attempts, the second immediately after a call that had
+succeeded. That is the property the item exists for — cutting an account off
+stops it — and it happened on production.
 
-The property itself is not in doubt. It does not depend on revocation at all:
+**What was not observed:** the console reported **zero** tokens revoked both
+times, printing `is disabled.` rather than `is disabled and N connection(s) were
+ended.`
+
+There are two locks, and the refusal only proves one of them fired:
 
 ```ts
 if (worker.disabled) return { ok: false, reason: 'PRINCIPAL_DISABLED' };
 ```
 
-That runs on every request against the worker's current row. A disabled worker
-is refused while holding a perfectly valid unrevoked token, and deleting that
-line makes two tests fail with `expected 200 to be 401`. What is missing is
-having watched it on production, and reconnecting afterwards.
+That runs on every request against the worker's current row and does not
+consult the token at all. Deleting the line makes two tests fail with
+`expected 200 to be 401`. Token revocation is the second lock, and the counter
+says it found nothing to revoke — while a connection had answered seconds
+earlier.
 
-Recorded as NOT EXECUTED rather than inferred from a refusal that has another
-explanation.
+The item passes on what happened. The counter is recorded as **CF-9**, open and
+unexplained, because a security control that reports the wrong number is worth
+chasing even when the outcome was correct.
 
 ---
 
@@ -302,7 +307,7 @@ explanation.
 |---|---|
 | **CF-7 — the real Claude worker is UNVERIFIED** | **CLOSED.** A real Claude Max session completed a bounded cycle against the deployed Brain |
 | **CF-8 — a one-hour access token versus long research jobs** | **Step 10.** Refresh tokens are issued for thirty days and the rotation grant is implemented and tested, so a client that refreshes never sees a prompt. What is unverified is whether the surfaces we intend to use actually refresh — the observed "requires re-authorization" turned out to be CF-11 rather than a refresh failure, so nothing has yet exercised this path live. Harmless for a bounded echo; decide it before anything runs unattended |
-| **CF-9 — the console's live-connection count disagreed with the revoke** | **Open.** The count filters access tokens that are unrevoked and unexpired; the revoke matches every unrevoked token, a strictly larger set. They should not disagree, and they did. Most likely a stale render, but unexplained and not explained away |
+| **CF-9 — disabling a live worker reports zero tokens revoked** | **Open, and now reproduced.** Twice: connect, call successfully, disable, and `revokeTokensForWorker` reports 0 changes — while an unrevoked access and refresh pair should exist. The same code path returns a non-zero count in tests on **both** backends, so it is not a missing feature and not obviously a driver difference in `changes`. Not a security hole: the status check refuses the worker regardless, and it did. But a control that reports a number contradicting observable state is either lying about the number or not doing the work, and neither is acceptable to leave undiagnosed. Reproduce with a connect-call-disable cycle against a Postgres-backed deployment and read `oauth_tokens` directly |
 | **CF-10 — a dropped connector does not re-attach to a running session** | **Known client limitation.** The tool list is assembled when a session starts, so re-enabling the toggle does not restore it. Work around it with a fresh session |
 | **CF-11 — where a worker runs decides whether it can authorize at all** | **Step 11.** A claude.ai chat inherits the account's connector authorization. A Claude Code session authorizes per session and cannot do it non-interactively — it answers "that server needs OAuth authorization before any of its tools become available" and stops. So a fleet of unattended workers cannot be Claude Code sessions unless something carries authorization into them. This is about the surface, not the Brain: the same worker identity and the same token work fine from a chat |
 | CF-5 — a real archive migration | operator task |
