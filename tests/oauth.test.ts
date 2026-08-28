@@ -23,7 +23,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CONNECTOR_SCOPES } from '../server/domain/types.ts';
+import { CONNECTOR_SCOPES, WORKER_SCOPES } from '../server/domain/types.ts';
+import type { WorkerScope } from '../server/domain/types.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = 6500 + Math.floor(Math.random() * 150);
@@ -1046,6 +1047,33 @@ describe('the operator console', () => {
       body: JSON.stringify({ workType: 'SYNTHETIC_ECHO', payload: {} }),
     });
     expect(enqueue.status).toBe(404);
+  });
+
+  it('withholds only the scopes a decision was made about', async () => {
+    // Exercising the surface cannot cover the research scopes, because a tool
+    // refused for a missing scope and one refused for a missing work item
+    // return the same body on purpose. So this compares lists — which the test
+    // above rightly warns can agree while both are wrong — and earns it by
+    // naming the *exclusions* rather than the inclusions.
+    //
+    // The judgement being recorded is: a connector gets everything except the
+    // scopes that would let it administer something. Adding a scope to
+    // WORKER_SCOPES therefore fails this test until somebody decides which side
+    // it belongs on, which is the decision that would otherwise be made by
+    // whoever forgot to make it.
+    const WITHHELD: WorkerScope[] = [
+      // Completing a *run* is a project write a person does through the API.
+      // No remote tool uses it, and the last time it sat next to a scope that
+      // does, somebody ticked it by mistake.
+      'work:complete',
+      // Writing sources directly, rather than as part of a claim. Nothing
+      // exposes it and inventing a use for it here would be granting reach for
+      // a tool that does not exist.
+      'sources:write',
+    ];
+
+    const expected = WORKER_SCOPES.filter((scope) => !WITHHELD.includes(scope));
+    expect([...CONNECTOR_SCOPES].sort()).toEqual([...expected].sort());
   });
 
   it('queues a bounded work item for a worker to claim', async () => {

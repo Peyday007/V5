@@ -2512,18 +2512,31 @@ export type WorkerScope = (typeof WORKER_SCOPES)[number];
 /**
  * What a remote worker gets, decided here rather than by a person ticking boxes.
  *
- * Scopes are real — they bound what a stolen credential reaches, and they will
- * matter more once research tools land and "reads evidence" stops being the
- * same thing as "writes findings". But composing them by hand was a job with no
- * judgement in it and two ways to get it wrong, and both happened within ten
- * minutes of the screen existing: a worker was granted the wrong project, and
- * `work:complete` was ticked in place of `queue:heartbeat` because the names sit
- * next to each other and one of them is used by no remote tool at all.
+ * Scopes are real — they bound what a stolen credential reaches. But composing
+ * them by hand was a job with no judgement in it and two ways to get it wrong,
+ * and both happened within ten minutes of the screen existing: a worker was
+ * granted the wrong project, and `work:complete` was ticked in place of
+ * `queue:heartbeat` because the names sit next to each other and one of them is
+ * used by no remote tool at all.
  *
  * So the Brain composes the set and a person chooses the project. This is
  * exactly what every tool in the remote surface requires and nothing else — not
  * a convenient superset, and not a subset that would make some tool fail
  * confusingly at the worst moment.
+ *
+ * **Step 9 is what the earlier version of this comment was waiting for.** It
+ * said these would matter more "once research tools land and reads evidence
+ * stops being the same thing as writes findings". They have landed, so the
+ * research scopes are here — and the reason they belong in the same set rather
+ * than a second, larger one is worth stating: a worker that can only read is a
+ * worker that cannot do the job, and the honest bound on a stolen credential is
+ * not "it may not write" but "everything it writes is stored unaccepted and
+ * judged by the gate". That is a property of the Brain, not of the scope list.
+ *
+ * What is still deliberately absent is every scope that would let a worker
+ * *administer* anything: enqueueing, cancelling, membership, resolving an
+ * uncertain operation. None of them has a worker scope at all, so none of them
+ * could be added here by accident.
  *
  * The administration API still accepts an explicit list, for the case that has
  * not come up yet. The console does not ask, because asking produced errors
@@ -2536,6 +2549,23 @@ export const CONNECTOR_SCOPES: readonly WorkerScope[] = [
   'queue:claim',
   'queue:heartbeat',
   'queue:complete',
+
+  // Step 9. One per tool that needs it, and no more:
+  //   research:read        brain_get_assignment, brain_get_audit_brief
+  //   research:propose     brain_propose_fragments
+  //   claims:write         brain_submit_claims
+  //   research:write       brain_submit_verification, brain_submit_synthesis,
+  //                        brain_submit_audit
+  //   contradictions:write brain_report_contradiction
+  //   checkpoints:write    brain_checkpoint_work
+  //   blockers:report      brain_report_blocker
+  'research:read',
+  'research:propose',
+  'research:write',
+  'claims:write',
+  'contradictions:write',
+  'checkpoints:write',
+  'blockers:report',
 ];
 
 /** How a request proved who it was. */

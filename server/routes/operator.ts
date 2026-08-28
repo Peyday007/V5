@@ -212,11 +212,45 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
     const held = new Set(rows.map((row) => row.projectId));
     const available = projects.filter((project) => !held.has(project.id));
 
+    /**
+     * A membership whose scopes are not what the Brain now grants gets one
+     * extra button, and only until it is pressed.
+     *
+     * The Brain composes the scope set, so when that set changes — Step 9 added
+     * the seven research scopes to it — every worker connected before the
+     * change is holding the old one. Nothing tells them: the worker claims a
+     * research item happily and is then refused by every tool that would let it
+     * record anything, with the same NOT_FOUND a missing item gives. That is
+     * indistinguishable from a bug, from the outside.
+     *
+     * Re-granting fixes it, because `grantMembership` upserts the scopes. But
+     * the picker below deliberately offers only projects the worker does *not*
+     * have, on the reasoning that granting one it already has is a no-op —
+     * which stopped being true the moment the set could change. So rather than
+     * widen the picker and make every grant ambiguous, the row itself says when
+     * it is out of date and offers the one action that fixes it.
+     */
+    const outOfDate = (scopes: string[]): boolean =>
+      [...scopes].sort().join(',') !== [...CONNECTOR_SCOPES].sort().join(',');
+
     const lines = rows
       .map(
         (row) => `
         <div class="access">
-          <span class="meta">${esc(row.name)}</span>
+          <span class="meta">${esc(row.name)}${
+            outOfDate(row.scopes)
+              ? ' — <strong>connected before the research tools existed</strong>'
+              : ''
+          }</span>
+          ${
+            outOfDate(row.scopes)
+              ? `<form method="post" action="${OPERATOR_BASE}/memberships" class="inline">
+            <input type="hidden" name="worker_id" value="${esc(worker.id)}">
+            <input type="hidden" name="project_id" value="${esc(row.projectId)}">
+            <button type="submit" class="secondary">Update access</button>
+          </form>`
+              : ''
+          }
           <form method="post" action="${OPERATOR_BASE}/memberships/revoke">
             <input type="hidden" name="worker_id" value="${esc(worker.id)}">
             <input type="hidden" name="project_id" value="${esc(row.projectId)}">
