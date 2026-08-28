@@ -64,6 +64,8 @@ import type {
   LeaseRejection,
   WorkFailureCategory,
   WorkItem,
+  WorkItemCheckpoint,
+  WorkItemCheckpointRow,
   WorkItemRow,
   WorkItemState,
   WorkLease,
@@ -163,6 +165,8 @@ export function mapWorkItem(row: WorkItemRow): WorkItem {
     failureCategory: row.failure_category as WorkFailureCategory | null,
     cancelledReason: row.cancelled_reason,
     correlationId: row.correlation_id,
+    orchestrationId: row.orchestration_id,
+    fragmentId: row.fragment_id,
     createdByType: row.created_by_type as ActorType,
     createdById: row.created_by_id,
     createdAt: row.created_at,
@@ -240,6 +244,13 @@ export interface EnqueueInput {
   maxAttempts?: number;
   availableAt?: string;
   correlationId?: string | null;
+  /**
+   * The research assignment this item belongs to. A pointer, never a copy of
+   * the assignment: what the worker must research is read from the fragment
+   * row through a scoped tool, not from the payload.
+   */
+  orchestrationId?: string | null;
+  fragmentId?: string | null;
   createdByType: ActorType;
   createdById?: string | null;
 }
@@ -263,10 +274,12 @@ export async function enqueueWork(input: EnqueueInput): Promise<WorkItem> {
        required_scopes, target_worker_id, attempt_count, max_attempts, lease_generation,
        lease_id, worker_id, lease_credential_id, leased_at, heartbeat_at, lease_expires_at,
        result_ref, result_summary, failure_category, cancelled_reason, correlation_id,
+       orchestration_id, fragment_id,
        created_by_type, created_by_id, created_at, updated_at, completed_at)
      VALUES (?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?, 0, ?, 0,
              NULL, NULL, NULL, NULL, NULL, NULL,
              NULL, NULL, NULL, NULL, ?,
+             ?, ?,
              ?, ?, ?, ?, NULL)`,
     [
       id,
@@ -279,6 +292,8 @@ export async function enqueueWork(input: EnqueueInput): Promise<WorkItem> {
       input.targetWorkerId ?? null,
       Math.max(1, input.maxAttempts ?? 3),
       input.correlationId ?? null,
+      input.orchestrationId ?? null,
+      input.fragmentId ?? null,
       input.createdByType,
       input.createdById ?? null,
       at,
@@ -851,4 +866,92 @@ export async function queueMetrics(projectId: string): Promise<QueueMetrics> {
     oldestQueuedAt: oldestQueued?.at ?? null,
     oldestLeaseAt: oldestLease?.at ?? null,
   };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Checkpoints                                                                */
+/* ------------------------------------------------------------------------- */
+
+/** Long enough to say where the work got to; far too short to hold a source. */
+export const MAX_CHECKPOINT_CHARS = 2000;
+
+/** How many notes one attempt may leave, so a loop cannot fill the table. */
+export const MAX_CHECKPOINTS_PER_ATTEMPT = 50;
+
+export class TooManyCheckpoints extends Error {
+  constructor(limit: number) {
+    super(`One attempt may write at most ${limit} checkpoints.`);
+    this.name = 'TooManyCheckpoints';
+  }
+}
+
+/**
+ * Write a durable note against work this worker currently owns.
+ *
+ * The ownership proof is inside the `INSERT`, not in a `SELECT` before it. An
+ * `INSERT ... SELECT` whose source row is the work item under the full `OWNED`
+ * guard inserts exactly one row when the lease is current and zero rows when it
+ * is not — so a worker whose lease expired mid-research cannot append to the
+ * record of the attempt that replaced it. Reading first and inserting second
+ * would leave the window between them, which is the window this whole queue is
+ * built to not have.
+ *
+ * `project_id`, `attempt_number`, `lease_generation` and `worker_id` all come
+ * from the item's own row rather than from the caller. A worker that could name
+ * its own generation could forge the authorship of a note.
+ */
+export async function checkpointWork(
+  proof: OwnershipProof,
+  note: string,
+): Promise<LeaseResult> {
+  const trimmed = bounded(note, MAX_CHECKPOINT_CHARS);
+  if (!trimmed) return { ok: false, rejection: 'NOT_FOUND' };
+
+  const db = getDb();
+  const now = queueNow();
+
+  const existing = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM work_item_checkpoints
+      WHERE work_item_id = ? AND lease_generation = ?`,
+    [proof.workItemId, proof.leaseGeneration],
+  );
+  if (Number(existing?.n ?? 0) >= MAX_CHECKPOINTS_PER_ATTEMPT) {
+    throw new TooManyCheckpoints(MAX_CHECKPOINTS_PER_ATTEMPT);
+  }
+
+  const written = await db.run(
+    `INSERT INTO work_item_checkpoints
+       (id, work_item_id, project_id, attempt_number, lease_generation, worker_id, note, created_at)
+     SELECT ?, id, project_id, attempt_count, lease_generation, worker_id, ?, ?
+       FROM work_items
+      WHERE ${OWNED}`,
+    [newId('wkc'), trimmed, now, ...ownedParams(proof, now)],
+  );
+
+  return await settle(proof, written.changes);
+}
+
+/**
+ * Every note left on this item, oldest first.
+ *
+ * Deliberately not filtered by generation. The next claimant is supposed to
+ * read what earlier attempts found — that is the entire reason the table
+ * exists — and each row says which attempt wrote it, so nothing is confused
+ * about whose finding is whose.
+ */
+export async function listCheckpoints(workItemId: string): Promise<WorkItemCheckpoint[]> {
+  const rows = await getDb().all<WorkItemCheckpointRow>(
+    `SELECT * FROM work_item_checkpoints WHERE work_item_id = ? ORDER BY created_at, id`,
+    [workItemId],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    workItemId: row.work_item_id,
+    projectId: row.project_id,
+    attemptNumber: row.attempt_number,
+    leaseGeneration: row.lease_generation,
+    workerId: row.worker_id,
+    note: row.note,
+    createdAt: row.created_at,
+  }));
 }

@@ -20,9 +20,14 @@ import { createWorker } from '../server/repos/identity.ts';
 import { freshProject } from './helpers.ts';
 import {
   cancelWork,
+  checkpointWork,
   claimWork,
   completeWork,
   enqueueWork,
+  listCheckpoints,
+  MAX_CHECKPOINT_CHARS,
+  MAX_CHECKPOINTS_PER_ATTEMPT,
+  TooManyCheckpoints,
   failWork,
   getWorkItem,
   heartbeatWork,
@@ -519,5 +524,101 @@ describe('metrics', () => {
     // An expired lease is work waiting to be picked up, and says so.
     expect(expired.claimable).toBe(1);
     expect(claim!.workItemId).toBe(id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Checkpoints
+//
+// The queue is at-least-once, so a lease can expire in the middle of an hour of
+// research and the item goes to somebody who knows nothing about what the first
+// attempt found. Step 6 stops the effect repeating. These are the tests for the
+// part that stops the *thinking* being thrown away.
+//
+// The ownership proof is inside the INSERT rather than in a SELECT before it,
+// so the interesting cases are the same ones the rest of this file is about:
+// what a worker whose lease is gone can still write.
+// ---------------------------------------------------------------------------
+
+describe('checkpoints', () => {
+  it('records a note against work the writer currently owns', async () => {
+    const id = await add(projectA);
+    const [claim] = await claimWork({ workerId: workerOne, scopes: scopesFor([projectA]) });
+    const proof = proofOf(claim!, workerOne);
+
+    const wrote = await checkpointWork(proof, 'Searched the 2019 register; nothing under that name.');
+    expect(wrote.ok).toBe(true);
+
+    const notes = await listCheckpoints(id);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.note).toContain('2019 register');
+    // The authorship comes from the item's own row, never from the caller.
+    expect(notes[0]!.leaseGeneration).toBe(claim!.leaseGeneration);
+    expect(notes[0]!.workerId).toBe(workerOne);
+    expect(notes[0]!.attemptNumber).toBe(1);
+    expect(notes[0]!.projectId).toBe(projectA);
+  });
+
+  it('refuses a worker whose lease has expired, and writes nothing', async () => {
+    const id = await add(projectA);
+    const [claim] = await claimWork({ workerId: workerOne, scopes: scopesFor([projectA]) });
+    const stale = proofOf(claim!, workerOne);
+
+    await expireLease(id);
+    await claimWork({ workerId: workerTwo, scopes: scopesFor([projectA]) });
+
+    const refused = await checkpointWork(stale, 'I am still working on this.');
+    expect(refused.ok).toBe(false);
+    expect(await listCheckpoints(id)).toHaveLength(0);
+  });
+
+  it('lets the next claimant read what the previous attempt found', async () => {
+    const id = await add(projectA);
+    const [first] = await claimWork({ workerId: workerOne, scopes: scopesFor([projectA]) });
+    await checkpointWork(proofOf(first!, workerOne), 'Two of the four lanes are covered.');
+
+    await expireLease(id);
+    const [second] = await claimWork({ workerId: workerTwo, scopes: scopesFor([projectA]) });
+    await checkpointWork(proofOf(second!, workerTwo), 'Picked up from the first attempt.');
+
+    // Deliberately not filtered by generation: reading the earlier attempt is
+    // the entire reason the table exists.
+    const notes = await listCheckpoints(id);
+    expect(notes).toHaveLength(2);
+    expect(notes.map((n) => n.leaseGeneration)).toEqual([1, 2]);
+    expect(notes.map((n) => n.workerId)).toEqual([workerOne, workerTwo]);
+    expect(notes.map((n) => n.attemptNumber)).toEqual([1, 2]);
+  });
+
+  it('cannot be forged by naming somebody else as the owner', async () => {
+    const id = await add(projectA);
+    const [claim] = await claimWork({ workerId: workerOne, scopes: scopesFor([projectA]) });
+    const impostor = { ...proofOf(claim!, workerOne), workerId: workerTwo };
+
+    const refused = await checkpointWork(impostor, 'Signed by somebody who does not hold this.');
+    expect(refused.ok).toBe(false);
+    expect(await listCheckpoints(id)).toHaveLength(0);
+  });
+
+  it('bounds one attempt so a loop cannot fill the table', async () => {
+    const id = await add(projectA);
+    const [claim] = await claimWork({ workerId: workerOne, scopes: scopesFor([projectA]) });
+    const proof = proofOf(claim!, workerOne);
+
+    for (let i = 0; i < MAX_CHECKPOINTS_PER_ATTEMPT; i += 1) {
+      expect((await checkpointWork(proof, `note ${i}`)).ok).toBe(true);
+    }
+    await expect(checkpointWork(proof, 'one too many')).rejects.toThrow(TooManyCheckpoints);
+    expect(await listCheckpoints(id)).toHaveLength(MAX_CHECKPOINTS_PER_ATTEMPT);
+  });
+
+  it('truncates a long note rather than storing a source in it', async () => {
+    const id = await add(projectA);
+    const [claim] = await claimWork({ workerId: workerOne, scopes: scopesFor([projectA]) });
+
+    await checkpointWork(proofOf(claim!, workerOne), 'x'.repeat(MAX_CHECKPOINT_CHARS * 3));
+    const notes = await listCheckpoints(id);
+    expect(notes[0]!.note.length).toBe(MAX_CHECKPOINT_CHARS);
+    expect(notes[0]!.note.endsWith('…')).toBe(true);
   });
 });

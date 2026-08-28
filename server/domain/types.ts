@@ -2899,11 +2899,24 @@ export interface WorkItemRow {
   failure_category: string | null;
   cancelled_reason: string | null;
   correlation_id: string | null;
+  orchestration_id: string | null;
+  fragment_id: string | null;
   created_by_type: string;
   created_by_id: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+}
+
+export interface WorkItemCheckpointRow {
+  id: string;
+  work_item_id: string;
+  project_id: string;
+  attempt_number: number;
+  lease_generation: number;
+  worker_id: string | null;
+  note: string;
+  created_at: string;
 }
 
 export interface WorkLeaseRow {
@@ -2949,11 +2962,46 @@ export interface WorkItem {
   failureCategory: WorkFailureCategory | null;
   cancelledReason: string | null;
   correlationId: string | null;
+  /**
+   * The research assignment this item belongs to, when it is research work.
+   *
+   * A pointer rather than a copy. The worker cannot learn what to research by
+   * reading the queue — it has to ask the Brain under the scope that permits
+   * it — and the fragment row it is sent to is the same row the gate reads its
+   * lanes and its evidence bar from, so the declaration cannot drift from what
+   * judges it. Null for every work type that carries its whole subject in its
+   * payload.
+   */
+  orchestrationId: string | null;
+  fragmentId: string | null;
   createdByType: ActorType;
   createdById: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+}
+
+/**
+ * A durable note a worker wrote while it still held the lease.
+ *
+ * The queue is at-least-once, so a lease can expire mid-research and the item
+ * is redelivered to somebody who knows nothing about what the first attempt
+ * found. Step 6 stops the effect repeating; this is what stops the thinking
+ * being thrown away.
+ *
+ * Append-only, and identified by the generation that wrote it: a note from
+ * generation 3 read by generation 4 is useful, and a note whose author cannot
+ * be identified is not.
+ */
+export interface WorkItemCheckpoint {
+  id: string;
+  workItemId: string;
+  projectId: string;
+  attemptNumber: number;
+  leaseGeneration: number;
+  workerId: string | null;
+  note: string;
+  createdAt: string;
 }
 
 export interface WorkLease {
