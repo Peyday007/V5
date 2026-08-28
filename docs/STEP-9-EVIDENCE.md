@@ -126,7 +126,7 @@ reads. The tests now assert both, and three fail instead of one.
 
 ## Faults found before the packet ran
 
-Four, and they are recorded rather than quietly fixed because three of them are
+Six, and they are recorded rather than quietly fixed because most of them are
 the kind that would have been found by a live run going wrong instead.
 
 **1. The runner could create a second work item for one fragment.** The guard
@@ -159,6 +159,50 @@ fixed in one place and missed in another. Both times it looked like flakiness,
 because the first pass drains the queue and the second then reaches the item.
 The workaround is priority 9; the repair is cancelling the scope's leftovers at
 the start of a run, so no check in that file depends on the queue's history.
+
+**5. A worker's proposal became research without anybody reading the archive.**
+The in-process orchestrator has always reconciled a goal against what the
+project already holds and created fragments only for the gaps. `brain_propose_fragments`
+went straight to `createFragments`, so the *newer* path — the one a real worker
+uses — could spend the allowance re-establishing a fact already in the project.
+§13 held on one of two paths and nothing said so.
+
+It is now the same decider on both, put behind `services/research/coverageGate.ts`
+so there is no second implementation to disagree with the first. Two details
+were only visible once it was wired up: without a boundary contract the
+staleness and geography checks abstain, and SATISFIED is the one status that
+*stops* research — so an old well-sourced claim could have suppressed a
+fragment that should have run. The contract is now assembled from the scope the
+proposed fragments themselves declare, and only from what they agree on. And a
+packet whose fragments are *all* answered by the archive would have fallen
+through to "no fragment cleared its evidence gate", which is the same terminal
+state describing the opposite outcome; it now ends saying what actually
+happened.
+
+**6. The test harness leaked a data root per file.** `process.on('exit')` does
+not fire when vitest signals a worker, so every interrupted run left one
+temporary root per test file behind: 4,762 of them, 26 GB. What that produces
+is a hundred unrelated tests failing on "No space left on device", and it had
+already killed one full Postgres run halfway through — which is exactly the
+shape of failure that gets misread as flakiness and re-run rather than
+diagnosed.
+
+## Verified on both backends
+
+The suite has now completed against Postgres as well as SQLite, which is the
+only thing that makes "one repository layer over two databases" a fact rather
+than something that compiles:
+
+| Backend | Files | Result |
+|---|---|---|
+| SQLite | 40 | 911 passed, 25 skipped |
+| Postgres 16 | 40 | **936 passed, 0 skipped, 0 failed** |
+
+The twenty-five SQLite skips are the tests that only mean something against a
+real Postgres, so the second column is the same suite with more of it running,
+not a different one. Both boot paths were checked afterwards: 21 migrations
+applied from an empty database, and `up to date (21 already applied)` on a
+restart against it.
 
 ## What the test packet found in its first hour
 
