@@ -1137,6 +1137,114 @@ describe('the operator console', () => {
     expect(later.html).not.toContain(shown!);
   });
 
+  it('removes a worker for good, and cuts off what it was holding', async () => {
+    // Disabling never removed anything, so a worker created by mistake stayed
+    // on the console permanently. Remove has to mean remove — and it has to
+    // mean revoked, not merely hidden, or "removed" would be a worker that
+    // still holds live access nobody can see.
+    const created = await post(
+      '/operator/workers',
+      { name: 'retiring-worker', displayName: 'Retiring' },
+      { cookie: adminCookie },
+    );
+    expect(created.status).toBe(200);
+    const list = await api<{ workers: { id: string; name: string }[] }>('GET', '/api/admin/workers', {
+      cookie: adminCookie,
+    });
+    const target = list.body.workers.find((w) => w.name === 'retiring-worker')!;
+    await api('POST', `/api/admin/projects/${projectId}/members`, {
+      cookie: adminCookie,
+      body: { principalId: target.id, principalType: 'WORKER', scopes: ['project:read'] },
+    });
+
+    const access = await connectedToken(target.id);
+    expect((await callTool(access, 'brain_whoami')).isError).toBe(false);
+
+    const removed = await post(
+      `/operator/workers/${target.id}/archive`,
+      { confirm: 'retiring-worker' },
+      { cookie: adminCookie },
+    );
+    expect(removed.status).toBe(200);
+    expect(removed.html).toContain('cannot be brought back');
+
+    // Gone from the console on the next load, rather than sitting there saying
+    // disabled. Checked on a fresh page: the response above names the worker in
+    // its own confirmation line, which is wanted.
+    const after = await operatorPage({ cookie: adminCookie });
+    expect(after.html).not.toContain('retiring-worker');
+
+    // Its live token stops working. On its own this proves little: an archived
+    // worker is not ACTIVE, so the status check refuses it whether or not
+    // anything was revoked. Removing the revocations from archiveWorker leaves
+    // this assertion green, which is exactly the false confidence worth naming.
+    expect((await callTool(access, 'brain_whoami')).status).toBe(401);
+
+    // So assert the part only revocation can produce. A membership is not
+    // something the status check touches, and the listing returns revoked rows
+    // rather than hiding them, so this distinguishes "removed" from "hidden".
+    const members = await api<{ members: { principalId: string; active: boolean }[] }>(
+      'GET',
+      `/api/admin/projects/${projectId}/members`,
+      { cookie: adminCookie },
+    );
+    const theirs = members.body.members.find((m) => m.principalId === target.id);
+    expect(theirs, 'the membership row should still exist').toBeTruthy();
+    expect(theirs!.active, 'and it should be revoked, not merely hidden').toBe(false);
+
+    // And it cannot be brought back through the administration API, which knows
+    // nothing about archiving and would otherwise happily set it ACTIVE again.
+    await api('POST', `/api/admin/workers/${target.id}/disabled`, {
+      cookie: adminCookie,
+      body: { disabled: false },
+    });
+    expect((await callTool(access, 'brain_whoami')).status).toBe(401);
+
+    // And it is not offered on the consent screen either.
+    const { challenge } = pkce();
+    const consent = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge).toString()}`, {
+      headers: { cookie: adminCookie },
+    });
+    expect(await consent.text()).not.toContain('retiring-worker');
+  });
+
+  it('will not remove a worker on a confirmation that does not match', async () => {
+    // Disable and Remove sit next to each other and one cannot be undone.
+    const list = await api<{ workers: { id: string; name: string }[] }>('GET', '/api/admin/workers', {
+      cookie: adminCookie,
+    });
+    const target = list.body.workers.find((w) => w.name === 'console-made-worker');
+    if (!target) return;
+
+    const wrong = await post(
+      `/operator/workers/${target.id}/archive`,
+      { confirm: 'not-its-name' },
+      { cookie: adminCookie },
+    );
+    expect(wrong.status).toBe(400);
+    expect(wrong.html).toContain('Nothing was removed');
+
+    // Still there, still usable.
+    const shown = await operatorPage({ cookie: adminCookie });
+    expect(shown.html).toContain('console-made-worker');
+  });
+
+  it('will not let anybody but an administrator remove a worker', async () => {
+    const list = await api<{ workers: { id: string; name: string }[] }>('GET', '/api/admin/workers', {
+      cookie: adminCookie,
+    });
+    const target = list.body.workers.find((w) => w.name === 'console-made-worker');
+    if (!target) return;
+    expect(
+      (await post(`/operator/workers/${target.id}/archive`, { confirm: target.name }, { cookie: memberCookie }))
+        .status,
+    ).toBe(404);
+    const access = await connectedToken();
+    expect(
+      (await post(`/operator/workers/${target.id}/archive`, { confirm: target.name }, { bearer: access })).status,
+    ).toBe(404);
+  });
+
   it('does not tell an operator to create a worker they already have', async () => {
     // The consent screen filtered out disabled workers and then reported the
     // empty list as "no workers yet". So an operator whose only worker was

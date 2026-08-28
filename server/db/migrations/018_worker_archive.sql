@@ -1,0 +1,23 @@
+-- Removing a worker, without pretending it never existed.
+--
+-- Until now a worker had two states, ACTIVE and DISABLED, and nothing removed
+-- one. A worker created by mistake — or created for a person and then used as
+-- an example — sat on the operator console permanently, offered in every
+-- dropdown, listed on every consent screen. Disabling hid nothing; it only made
+-- the row say "disabled" forever.
+--
+-- ARCHIVED is a third state and it is terminal. An archived worker is revoked,
+-- hidden, and cannot be brought back: re-enabling would resurrect an identity
+-- somebody deliberately retired, and the audit rows that name it are easier to
+-- read when its name cannot be reused by something new.
+--
+-- No CHECK constraint on `status` to widen, because there never was one. What
+-- this adds is the timestamp, so "disabled at X, archived at Y" is answerable
+-- rather than collapsed into one field.
+--
+-- Deliberately NOT a DELETE. `identity_events` has no foreign keys precisely so
+-- history outlives the things it describes, and a hard delete would leave those
+-- rows pointing at an id that resolves to nothing. The record that a worker
+-- existed and acted survives; the worker stops being something you can connect,
+-- grant or see.
+ALTER TABLE workers ADD COLUMN archived_at TEXT;

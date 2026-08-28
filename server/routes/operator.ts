@@ -24,6 +24,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { authenticateRequest, originIsSameSite } from '../services/identity/authenticate.ts';
 import {
+  archiveWorker,
   createWorker,
   getWorker,
   getWorkerByName,
@@ -222,11 +223,17 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
           }${liveConnections > 0 ? ` · ${liveConnections} live connection(s)` : ''}</div>
           ${membershipLines(worker, rows)}
         </div>
-        <form method="post" action="${OPERATOR_BASE}/workers/${esc(worker.id)}/disabled">
-          <input type="hidden" name="disabled" value="${worker.disabled ? 'false' : 'true'}">
-          <button type="submit" class="${worker.disabled ? 'secondary' : 'danger'}">
-            ${worker.disabled ? 'Enable' : 'Disable'}</button>
-        </form>
+        <div class="actions">
+          <form method="post" action="${OPERATOR_BASE}/workers/${esc(worker.id)}/disabled">
+            <input type="hidden" name="disabled" value="${worker.disabled ? 'false' : 'true'}">
+            <button type="submit" class="${worker.disabled ? 'secondary' : 'danger'}">
+              ${worker.disabled ? 'Enable' : 'Disable'}</button>
+          </form>
+          <form method="post" action="${OPERATOR_BASE}/workers/${esc(worker.id)}/archive">
+            <input type="hidden" name="confirm" value="${esc(worker.name)}">
+            <button type="submit" class="danger">Remove</button>
+          </form>
+        </div>
       </div>`,
     )
     .join('');
@@ -375,7 +382,15 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
         <strong>${esc(person.handle)}</strong>.</p>
       ${flash.err ? `<div class="err">${esc(flash.err)}</div>` : ''}
       ${flash.ok ? `<div class="ok">${esc(flash.ok)}</div>` : ''}
-      ${workerRows || '<p class="sub">No workers yet.</p>'}`)}
+      ${workerRows || '<p class="sub">No workers yet.</p>'}
+      ${
+        workerRows
+          ? `<p class="note"><strong>Disable</strong> pauses a worker and can be undone.
+             <strong>Remove</strong> cannot: it revokes the worker's credentials, its connections
+             and every project it can reach, then retires it permanently. The name stays taken and
+             the audit trail stays readable — what goes away is the worker.</p>`
+          : ''
+      }`)}
      ${secretCard}
      ${card(`<h2>Create a worker</h2>
        <form method="post" action="${OPERATOR_BASE}/workers">
@@ -833,6 +848,56 @@ export function operatorRouter(): Router {
           ok: disable
             ? `${worker.name} is disabled${revoked > 0 ? ` and ${revoked} connection(s) were ended` : ''}.`
             : `${worker.name} is active again. It will need to be connected again.`,
+        }),
+      );
+    })();
+  });
+
+  /**
+   * Remove a worker, permanently.
+   *
+   * The gap this closes: a worker had two states and nothing retired one, so
+   * one created by mistake — or created for a person and then used as an
+   * example — stayed on this screen forever, in every dropdown and on every
+   * consent screen. Disabling hid nothing; it only made the row say "disabled"
+   * for good.
+   *
+   * The hidden `confirm` field carries the worker's own name and must match the
+   * row being archived. It is not a security control — an administrator is
+   * already authorized — it is a guard against the button next to it. Disable
+   * and Remove sit side by side and one of them cannot be undone.
+   */
+  router.post('/workers/:workerId/archive', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      const person = await administrator(req);
+      if (!person || !originIsSameSite(req)) {
+        denied(res);
+        return;
+      }
+      const worker = await getWorker(req.params['workerId'] ?? '');
+      if (!worker) {
+        denied(res);
+        return;
+      }
+      const confirm = (req.body as Record<string, unknown>)['confirm'];
+      if (confirm !== worker.name) {
+        res.status(400).type('html').send(
+          await consolePage(person, { err: 'That confirmation did not match the worker. Nothing was removed.' }),
+        );
+        return;
+      }
+
+      await archiveWorker(worker.id);
+      await audit({
+        actor: person,
+        action: 'ARCHIVE_WORKER',
+        targetId: worker.id,
+        result: 'SUCCESS',
+        metadata: { name: worker.name },
+      });
+      res.type('html').send(
+        await consolePage(person, {
+          ok: `${worker.name} has been removed. Its access, credentials and connections are revoked, and it cannot be brought back.`,
         }),
       );
     })();

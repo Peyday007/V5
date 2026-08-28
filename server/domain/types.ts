@@ -2519,7 +2519,16 @@ export type WorkerScope = (typeof WORKER_SCOPES)[number];
 export const AUTH_METHODS = ['SESSION_COOKIE', 'WORKER_BEARER', 'OAUTH_BEARER'] as const;
 export type AuthMethod = (typeof AUTH_METHODS)[number];
 
-export const WORKER_STATUSES = ['ACTIVE', 'DISABLED'] as const;
+/**
+ * ACTIVE, DISABLED, or gone.
+ *
+ * `ARCHIVED` is terminal. A disabled worker is paused and can be brought back;
+ * an archived one is retired, revoked and hidden, and there is deliberately no
+ * way to reverse it. Re-enabling would resurrect an identity somebody chose to
+ * remove, and the audit rows naming it read better when its name cannot be
+ * taken by something new.
+ */
+export const WORKER_STATUSES = ['ACTIVE', 'DISABLED', 'ARCHIVED'] as const;
 export type WorkerStatus = (typeof WORKER_STATUSES)[number];
 
 /** Who or what performed an audited action. */
@@ -2591,6 +2600,7 @@ export interface WorkerRow {
   description: string | null;
   status: string;
   disabled_at: string | null;
+  archived_at: string | null;
   created_by_type: string;
   created_by_id: string;
   created_at: string;
@@ -2674,8 +2684,11 @@ export interface Worker {
   workerType: string;
   description: string | null;
   status: WorkerStatus;
+  /** True for DISABLED and ARCHIVED alike — every refusal path reads this. */
   disabled: boolean;
   disabledAt: string | null;
+  archived: boolean;
+  archivedAt: string | null;
   createdByType: ActorType;
   createdById: string;
   createdAt: string;

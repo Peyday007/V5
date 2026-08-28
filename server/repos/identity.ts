@@ -36,6 +36,10 @@ import type {
 } from '../domain/types.ts';
 import { WORKER_SCOPES } from '../domain/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
+// Safe in this direction only: repos/oauth.ts imports nothing from here, so
+// there is no cycle. Archiving revokes tokens through the same function the
+// console's Disable uses rather than repeating the statement.
+import { revokeTokensForWorker } from './oauth.ts';
 import {
   digestSecret,
   generateWorkerCredential,
@@ -69,8 +73,13 @@ function mapWorker(row: WorkerRow): Worker {
     workerType: row.worker_type,
     description: row.description,
     status: row.status as WorkerStatus,
+    // ARCHIVED is not ACTIVE, so every existing refusal path already covers it
+    // without knowing the state exists. That is the point of deriving this from
+    // the status rather than testing for DISABLED by name.
     disabled: row.status !== 'ACTIVE' || row.disabled_at !== null,
     disabledAt: row.disabled_at,
+    archived: row.status === 'ARCHIVED',
+    archivedAt: row.archived_at,
     createdByType: row.created_by_type as ActorType,
     createdById: row.created_by_id,
     createdAt: row.created_at,
@@ -471,8 +480,23 @@ export async function getWorkerByName(name: string): Promise<Worker | null> {
   return row ? mapWorker(row) : null;
 }
 
-export async function listWorkers(): Promise<Worker[]> {
-  return (await getDb().all<WorkerRow>('SELECT * FROM workers ORDER BY name')).map(mapWorker);
+/**
+ * Live workers, unless you ask for the retired ones too.
+ *
+ * Archived is excluded by default because every caller wants workers you can
+ * still do something with — the console, the administration API and the consent
+ * screen all list them to be chosen from. Making the default the safe one means
+ * archiving a worker removes it from all three without touching any of them.
+ */
+export async function listWorkers(
+  options: { includeArchived?: boolean } = {},
+): Promise<Worker[]> {
+  const rows = options.includeArchived
+    ? await getDb().all<WorkerRow>('SELECT * FROM workers ORDER BY name')
+    : await getDb().all<WorkerRow>(
+        "SELECT * FROM workers WHERE status <> 'ARCHIVED' ORDER BY name",
+      );
+  return rows.map(mapWorker);
 }
 
 /**
@@ -482,7 +506,56 @@ export async function listWorkers(): Promise<Worker[]> {
  * table for a thing nobody intends to run again, and revoking alone would let
  * a new credential be issued to a worker somebody had decided to stop.
  */
+/**
+ * Retire a worker for good.
+ *
+ * Removing has to mean removing, so this is not a status change with a nicer
+ * name. It revokes the worker's credentials, revokes its OAuth tokens, revokes
+ * every project membership it holds, and only then marks the row ARCHIVED —
+ * in that order, so a crash part-way through leaves a worker with nothing
+ * rather than a hidden worker that still holds live access.
+ *
+ * Deliberately not a DELETE, and deliberately not reversible.
+ *
+ * Not a delete because `identity_events` has no foreign keys, precisely so the
+ * audit outlives what it describes. Removing the row would leave those entries
+ * naming an id that resolves to nothing.
+ *
+ * Not reversible because un-archiving would resurrect an identity somebody
+ * chose to retire, and because the name stays taken — an audit row from last
+ * year reading `worker-02` should not be ambiguous about which worker-02 it
+ * meant.
+ */
+export async function archiveWorker(id: string): Promise<Worker | null> {
+  const worker = await getWorker(id);
+  if (!worker) return null;
+  if (worker.archived) return worker;
+
+  const at = nowIso();
+  await revokeCredentialsForWorker(id, 'WORKER_ARCHIVED');
+  await revokeTokensForWorker(id);
+  await getDb().run(
+    `UPDATE project_memberships SET revoked_at = ?, updated_at = ?
+      WHERE principal_type = 'WORKER' AND principal_id = ? AND revoked_at IS NULL`,
+    [at, at, id],
+  );
+  await getDb().run(
+    'UPDATE workers SET status = ?, disabled_at = ?, archived_at = ?, updated_at = ? WHERE id = ?',
+    ['ARCHIVED', worker.disabledAt ?? at, at, at, id],
+  );
+  return await getWorker(id);
+}
+
 export async function setWorkerStatus(id: string, status: WorkerStatus): Promise<Worker | null> {
+  // Archiving is terminal, and this is where that is enforced rather than
+  // merely intended. Without it the administration API could set an archived
+  // worker back to ACTIVE — resurrecting an identity somebody retired, with its
+  // name and its audit history, through a route that knows nothing about
+  // archiving. `archiveWorker` writes the ARCHIVED row itself and does not come
+  // through here.
+  const existing = await getWorker(id);
+  if (existing?.archived) return existing;
+
   const at = nowIso();
   await getDb().run('UPDATE workers SET status = ?, disabled_at = ?, updated_at = ? WHERE id = ?', [
     status,

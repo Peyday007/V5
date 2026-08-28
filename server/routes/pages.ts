@@ -77,6 +77,7 @@ const CSS = `
   .pill.off { background:#fdecec; color:#8a1f1f; }
   fieldset { border:1px solid #e3e6ea; border-radius:10px; padding:14px 16px; margin:18px 0 0; }
   legend { font-size:12px; font-weight:600; color:#5b636e; text-transform:uppercase; letter-spacing:.04em; padding:0 6px; }
+  .actions { display:flex; gap:8px; align-items:center; }
   .access { display:flex; align-items:center; justify-content:space-between; gap:10px;
     margin-top:6px; padding:6px 0 0; border-top:1px dashed #e3e6ea; }
   .access button { padding:3px 10px; font-size:12px; }
