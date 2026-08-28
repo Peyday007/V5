@@ -147,21 +147,53 @@ So the selection criteria are:
 5. **Safe to be wrong about.** Nothing depending on it ships before a person
    has read it.
 
-### The one input that is not mine to decide
+### The packet, as selected
 
-Criteria 1 and 4 are judgements about the operator's own work, and the
-production Brain is unreachable from this environment, so I cannot read what
-projects and layers exist there or what is open in them. **The packet's subject
-is the single open input.** Everything else in this map is decided and is being
-built while that answer is outstanding.
+**Project:** Deal Dispatch. **Layer:** Monetization Logic.
 
-The default, if no preference is given: a bounded question inside the existing
-**Deal Dispatch** programme, whose premise is already declared in
-`domain/auditProfile.ts` — a layered research programme building a conceptual
-foundation for commercial intermediation, with fourteen global criteria and
-per-layer ownership rules the audit already knows how to apply. A packet there
-inherits a real audit profile rather than needing one invented, which satisfies
-criterion 4 better than a fresh subject would.
+> **In California, Texas, Florida, New York and Illinois, does a person who
+> arranges the sale of a privately held business for a success fee need a
+> real-estate broker or business-broker licence when the transaction transfers
+> no real property and no lease interest — and what is the exact statutory or
+> regulatory provision that settles it in each state?**
+
+**Why this layer.** Monetization Logic owns *what economic position Deal
+Dispatch may occupy in a transaction*, and the word "may" is load-bearing: a
+position you are legally barred from occupying without a licence is not one you
+may occupy. The layer already audits for the agency-versus-principal distinction
+and for marketplace-versus-representation, and licensure attaches precisely to
+acting as a representative for compensation. The neighbouring layer,
+Execution Playbooks, owns *how* to do it — which this is not. Recording the
+reasoning here so the audit's G12, correct gap ownership, can be checked rather
+than assumed.
+
+**Why it meets the criteria.**
+
+1. *Genuinely unresolved, and decision-changing.* The answer differs by state
+   and is not one line. It decides whether a success fee is available at all in
+   the largest five commercial markets, which is a compliance gate on a
+   monetization structure rather than a detail of it.
+2. *Bounded.* Six fragments — one per state, plus a boundary fragment
+   establishing what "arranges", "success fee" and "no real property" mean, on
+   which the other five depend. That dependency is not decoration: §13 says an
+   ambiguity in the boundary contract becomes its own fragment before anything
+   else runs, and it exercises the runner's ordering for real.
+3. *Primary sources.* Each answer is a statute section or a regulator's own
+   guidance — the source type §14 says settles a statutory fact with one
+   directly inspected instance. Each fragment's `min_independent_sources` is
+   therefore 1, not 2, and `standards.ts` is what decides that rather than a
+   blanket rule.
+4. *Independently verifiable.* The deliverable is five citations a reader can
+   open. That is the strongest form of criterion 4 available: correctness is
+   checkable by anybody, not only by a specialist.
+5. *Safe to be wrong about.* It is a research packet, not legal advice, and
+   nothing depends on it before a person has read it. The assignment says so.
+
+**What would make it a failure rather than a bad answer:** a state answered
+from a law-firm summary rather than the provision itself, a citation that does
+not resolve, or a scope drift into transactions that do include real property —
+each of which the fragment's declared `excluded_source_types`, its evidence
+lane and its `definitions` are there to catch at the gate.
 
 ### What the packet must produce
 
