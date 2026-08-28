@@ -31,6 +31,8 @@ import {
 } from '../server/repos/research.ts';
 import { claimWork, enqueueWork, getWorkItem, listWorkItems } from '../server/repos/workQueue.ts';
 import { getProjectBySlug } from '../server/repos/projects.ts';
+import { getDocument } from '../server/repos/documents.ts';
+import { readObject } from '../server/services/storage.ts';
 import {
   createFixturePacket,
   FIXTURE_BANNER,
@@ -1015,6 +1017,32 @@ describe('test packets', () => {
     });
     expect(again.ran).toBeUndefined();
     expect(again.waitingOn).toBe('nothing is awaiting approval');
+  });
+
+  it('file a document whose markdown actually renders', async () => {
+    const packet = await createFixturePacket({ createdByUserId: 'usr_someone' });
+    await approvePlan({
+      orchestrationId: packet.orchestration.id,
+      approvedByUserId: 'usr_someone',
+    });
+    const after = await getOrchestration(packet.orchestration.id);
+    const document = await getDocument(after!.documentId!);
+    const body = (await readObject(document!.storageKey!)).toString('utf8');
+
+    // Every heading needs a blank line before it or markdown renders it as part
+    // of whatever is above. The builder used to strip every empty string in the
+    // document to remove two conditional entries, which took the deliberate
+    // spacers with them — invisible until somebody read a filed packet.
+    for (const heading of ['## Evidence ledger', '## What this packet does not settle']) {
+      expect(body).toContain(`\n\n${heading}\n\n`);
+    }
+    // And exactly one of each heading. Two sections of the same name is what
+    // you get when two places both think they own it.
+    expect(body.split('## What this packet does not settle').length - 1).toBe(1);
+
+    // The ledger resolves: every cited id appears with a URL under it.
+    expect(body).toContain('https://www.rfc-editor.org/rfc/rfc9728.html');
+    expect(body).toContain('  - Passage: "');
   });
 
   it('refuse to run the fixture claims against a packet that is not a fixture', async () => {

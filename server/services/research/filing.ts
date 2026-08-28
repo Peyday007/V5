@@ -68,20 +68,31 @@ export function appendLedger(report: string, claims: ResearchClaim[]): string {
     '',
   ];
   for (const claim of claims) {
-    lines.push(
+    // Built as a list and filtered here, rather than filtering the whole
+    // document at the end.
+    //
+    // The end-of-function filter dropped *every* empty string, which was meant
+    // to remove the two conditional entries below and also removed the blank
+    // lines above that separate the rule from the heading and the heading from
+    // its paragraph. Markdown needs those: without them the `## Evidence
+    // ledger` heading sits against the `---` above it and renders as part of
+    // it. Every packet the Brain has ever filed had that defect, and it only
+    // showed up when somebody read one.
+    const entry = [
       `- **[${claim.id}]** ${claim.claim}`,
       `  - Source: ${claim.sourcePublisher ?? 'unknown publisher'} — ${claim.sourceTitle ?? 'untitled'}` +
         `${claim.sourceDate ? ` (${claim.sourceDate})` : ''}`,
       `  - URL: ${claim.sourceUrl}`,
       `  - Passage: "${(claim.evidenceExcerpt ?? '').replace(/\s+/g, ' ').slice(0, 400)}"` +
         `${claim.evidenceLocator ? ` — ${claim.evidenceLocator}` : ''}`,
-      claim.retrievedAt ? `  - Retrieved: ${claim.retrievedAt}` : '',
+      claim.retrievedAt ? `  - Retrieved: ${claim.retrievedAt}` : null,
       claim.contradictionState !== 'UNCHALLENGED'
         ? `  - Contradiction state: ${claim.contradictionState}${claim.contradictionNote ? ` — ${claim.contradictionNote}` : ''}`
-        : '',
-    );
+        : null,
+    ].filter((line): line is string => line !== null);
+    lines.push(...entry);
   }
-  return lines.filter((line) => line !== '').join('\n');
+  return `${lines.join('\n')}\n`;
 }
 
 /** What is still open, stated in the packet rather than left for the reader. */

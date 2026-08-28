@@ -327,12 +327,13 @@ function fixtureReport(accepted: { key: string; claimIds: string[] }[]): string 
     }
     lines.push('');
   }
+  // Deliberately no "what this does not settle" heading here: `filing.ts` adds
+  // one from `stillMissing`, and writing a second produced two headings of the
+  // same name in the filed document — an empty one and the real one.
   lines.push(
-    '## What this packet does not settle',
-    '',
-    'Everything a fragment failed to establish is absent rather than softened. A fragment',
-    'that could not clear its evidence gate contributed nothing at all — not a weaker version',
-    'of its findings, nothing — which is the property the whole engine exists for.',
+    'A fragment that could not clear its evidence gate contributed nothing at all — not a',
+    'weaker version of its findings, nothing — which is the property the whole engine exists',
+    'for. What those fragments failed to establish is listed below rather than written around.',
   );
   return lines.join('\n');
 }
