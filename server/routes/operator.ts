@@ -52,7 +52,12 @@ import {
   currentFragments,
   listOrchestrationsByProject,
 } from '../repos/research.ts';
-import { advancePacket, approvePlan } from '../services/research/packetRunner.ts';
+import { approvePlan } from '../services/research/packetRunner.ts';
+import {
+  GoalIncomplete,
+  NoSuchTarget,
+  startPacket,
+} from '../services/research/startPacket.ts';
 import { createFixturePacket } from '../services/research/fixtures.ts';
 import { runTypeForNewPacket } from '../services/runArtifacts.ts';
 import { card, esc, page } from './pages.ts';
@@ -940,18 +945,16 @@ export function operatorRouter(): Router {
   });
 
   /**
-   * Start a research packet: create the run, the orchestration, and stop.
+   * Start a research packet.
    *
-   * The one thing this must not do is start researching. It queues a single
-   * planning job, and the plan comes back for a person to read. §16 is explicit
-   * that a browser-initiated run is planned in full and then stops before
-   * anything is spent, and the temptation here is a single extra call — advance
-   * straight through PLANNING — which would spend the allowance on a
-   * decomposition nobody had seen.
+   * Everything this route does that is not HTTP lives in `startPacket`, which
+   * is what a scheduler or the Brain's own decider will call. What is left
+   * here is the console's half: read a form, choose the approval policy this
+   * surface represents, and render the answer.
    *
-   * Like project creation and hand-queueing, this is a person doing something a
-   * worker must not be able to do for itself. Enqueueing is a project write and
-   * no worker scope grants it.
+   * Like project creation and hand-queueing, this is a person doing something
+   * a worker must not be able to do for itself. Enqueueing is a project write
+   * and no worker scope grants it.
    */
   router.post('/packets', (req: Request, res: Response) => {
     void (async (): Promise<void> => {
@@ -962,79 +965,78 @@ export function operatorRouter(): Router {
       }
       const body = (req.body ?? {}) as Record<string, unknown>;
       const target = typeof body['target'] === 'string' ? body['target'] : '';
-      const title = typeof body['title'] === 'string' ? body['title'].trim() : '';
-      const assignment = typeof body['assignment'] === 'string' ? body['assignment'].trim() : '';
-
       const [projectId, layerId] = target.split(':');
+
+      // The form's own completeness is the route's business, and it is worth
+      // separating from resolution: nothing was chosen and what was chosen is
+      // not there are different mistakes to a person filling this in, and
+      // neither answer discloses anything, because there is no id to probe.
       if (!projectId || !layerId) {
         res.status(400).type('html').send(await consolePage(person, { err: 'Choose a layer.' }));
         return;
       }
-      if (!title || !assignment) {
-        res
-          .status(400)
-          .type('html')
-          .send(await consolePage(person, { err: 'A packet needs a title and an assignment.' }));
-        return;
+
+      let started;
+      try {
+        started = await startPacket({
+          projectId,
+          layerId,
+          title: typeof body['title'] === 'string' ? body['title'] : '',
+          assignment: typeof body['assignment'] === 'string' ? body['assignment'] : '',
+          // The console is the per-packet surface: a person is looking at this
+          // packet, and the plan comes back to this screen for them to
+          // approve. A goal-level authorization is a different decision made
+          // somewhere else, and this form is not where it is taken.
+          approval: { mode: 'PER_PACKET' },
+          startedBy: { kind: 'PERSON', id: person.id },
+        });
+      } catch (error) {
+        if (error instanceof GoalIncomplete || error instanceof NoSuchTarget) {
+          const status = error instanceof NoSuchTarget ? 404 : 400;
+          res
+            .status(status)
+            .type('html')
+            .send(await consolePage(person, { err: error.message }));
+          return;
+        }
+        throw error;
       }
-
-      const project = await getProject(projectId);
-      const layer = (await listLayers(projectId)).find((candidate) => candidate.id === layerId);
-      if (!project || !layer) {
-        res.status(404).type('html').send(await consolePage(person, { err: 'No such layer.' }));
-        return;
-      }
-
-      // The run is the assignment Brain issued, and the orchestration is how it
-      // gets carried out. A run always exists — that is what lets an artifact
-      // filed by a worker land through exactly the path a hand-uploaded report
-      // does, with the same naming, the same versioning and the same lineage.
-      const run = await createRun({
-        projectId: project.id,
-        layerId: layer.id,
-        // The run type describes what the work is *for* the layer, and a packet
-        // researched by a worker is the same kind of contribution as one
-        // researched in process. It is not always FOUNDATION, though: that
-        // targets v1 by definition, so a second packet on a layer that already
-        // has a document would be declined by the importer as a duplicate.
-        runType: await runTypeForNewPacket(layer.id),
-        status: 'PLANNED',
-        provider: 'WORKER',
-        prompt: assignment,
-      });
-
-      const orchestration = await createOrchestration({
-        projectId: project.id,
-        layerId: layer.id,
-        runId: run.id,
-        title,
-        assignment,
-        provider: 'WORKER',
-        // Nothing about this packet runs without a person, which is what the
-        // flag means here. It is not a preference; it is the §16 gate.
-        autoApprove: false,
-      });
-
-      const advanced = await advancePacket(orchestration.id);
 
       await audit({
         actor: person,
         action: 'QUEUE_ENQUEUE',
         targetType: 'PROJECT',
-        targetId: project.id,
+        targetId: started.project.id,
         result: 'SUCCESS',
         metadata: {
-          orchestrationId: orchestration.id,
-          layer: layer.slug,
-          enqueued: advanced.enqueued.length,
+          orchestrationId: started.orchestration.id,
+          layer: started.layer.slug,
+          enqueued: started.advanced.enqueued.length,
+          archiveClaims: started.archive.claims,
+          archiveUnreadable: started.archive.documentsUnreadable,
         },
       });
+
+      // What the archive holds is said here rather than left implicit,
+      // because it is the number that decides how much of this packet is
+      // worth researching at all — and a project with unreadable documents
+      // will reconcile against less than it looks like it has.
+      const census =
+        started.archive.claims > 0
+          ? ` The project already holds ${started.archive.claims} claim(s) across ` +
+            `${started.archive.documentsRead} readable document(s)` +
+            (started.archive.documentsUnreadable > 0
+              ? `, and ${started.archive.documentsUnreadable} it cannot read`
+              : '') +
+            '; anything the archive already answers will be dropped from the plan.'
+          : '';
 
       res.type('html').send(
         await consolePage(person, {
           ok:
-            `Planning "${title}". A worker will decompose it into fragments and bring the plan ` +
-            'back here. Nothing is researched and nothing is spent until you approve it.',
+            `Planning "${started.orchestration.title}". A worker will decompose it into ` +
+            'fragments and bring the plan back here. Nothing is researched and nothing is ' +
+            'spent until you approve it.' + census,
         }),
       );
     })();

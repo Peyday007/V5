@@ -96,6 +96,17 @@ because a fragment that cannot be judged must not be researched.
 
 Then it stops. **Nothing is researched until you approve.**
 
+Before the proposal becomes a plan the Brain checks it against what the project
+already holds. A fragment the archive answers is dropped there and then, with
+the claims that answer it named, so the plan you read is the work that is
+actually still open — §13's default of not researching, applied before anything
+can be spent rather than after. The worker sees the same list back, under
+`alreadyAnswered`.
+
+If the archive answers **all** of it, there is no plan to approve: the packet
+ends as `CANCELLED` saying so, and that is a good outcome. The project already
+knew.
+
 ## 4. Read the plan and approve it — you
 
 Refresh `/operator`. The **Research packets** card shows every proposed

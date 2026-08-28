@@ -64,6 +64,7 @@ import {
 import { recomputeProject } from '../services/stateEngine.ts';
 import { AUDIT_ROLES, type AuditRole } from '../services/queue/workTypes.ts';
 import { assignmentFor } from '../services/research/assignment.ts';
+import { coverProposal, whyNotResearched } from '../services/research/coverageGate.ts';
 import {
   gateFragment,
   recordFragmentClaims,
@@ -583,32 +584,111 @@ const proposeFragmentsTool: McpTool = {
           raw: { rationale, fragments: proposed },
         });
 
-        const created = await createFragments(
-          proposed.map((fragment, index) => ({
-            orchestrationId: orchestration.id,
-            projectId: orchestration.projectId,
-            layerId: orchestration.layerId,
-            fragmentIndex: index,
-            fragmentKey: fragment.key,
+        // §13, on this path too. Until now a proposal arriving here became
+        // research without anybody asking what the project already held, so a
+        // worker-run packet could spend the allowance re-establishing a fact
+        // sitting in the archive. The decider is the same one the in-process
+        // orchestrator uses; nothing here judges coverage itself.
+        const coverage = await coverProposal({
+          orchestration,
+          proposed: proposed.map((fragment) => ({
+            key: fragment.key,
             question: fragment.question,
             geography: fragment.geography,
             timeframe: fragment.timeframe,
             population: fragment.population,
             definitions: fragment.definitions,
             requiredEvidence: fragment.requiredEvidence,
-            acceptableSourceTypes: fragment.acceptableSourceTypes,
-            excludedSourceTypes: fragment.excludedSourceTypes,
             completionCriteria: fragment.completionCriteria,
-            dependsOn: fragment.dependsOn,
-            minIndependentSources: fragment.minIndependentSources,
             whyItMatters: fragment.whyItMatters,
-            // PLANNED, and it stays PLANNED. Nothing here queues research: a
-            // browser-initiated run is planned in full and then stops until a
-            // person approves it, which is §16 and is not negotiable by the
-            // thing doing the proposing.
-            status: 'PLANNED',
           })),
+        });
+        const decisionFor = new Map(
+          coverage.decisions.map((decision) => [decision.fragmentKey, decision]),
         );
+        const toResearch = proposed.filter(
+          (fragment) => decisionFor.get(fragment.key)?.needsResearch !== false,
+        );
+
+        const created = await createFragments(
+          toResearch.map((fragment, index) => {
+            const decision = decisionFor.get(fragment.key);
+            return {
+              orchestrationId: orchestration.id,
+              projectId: orchestration.projectId,
+              layerId: orchestration.layerId,
+              fragmentIndex: index,
+              fragmentKey: fragment.key,
+              question: fragment.question,
+              geography: fragment.geography,
+              timeframe: fragment.timeframe,
+              population: fragment.population,
+              definitions: fragment.definitions,
+              requiredEvidence: fragment.requiredEvidence,
+              acceptableSourceTypes: fragment.acceptableSourceTypes,
+              excludedSourceTypes: fragment.excludedSourceTypes,
+              completionCriteria: fragment.completionCriteria,
+              dependsOn: fragment.dependsOn,
+              minIndependentSources: fragment.minIndependentSources,
+              whyItMatters: fragment.whyItMatters,
+              // What the archive already has that bears on this fragment, and
+              // why it was not enough. A fragment that survives coverage
+              // should say what it is adding to rather than start from
+              // nothing — that is the difference between new evidence and a
+              // second copy of the old evidence.
+              ...(decision
+                ? {
+                    requirementIds: [decision.requirementId],
+                    existingClaimIds: decision.claimIds,
+                    whyExistingInsufficient: decision.reasons.join(' ') || null,
+                  }
+                : {}),
+              // PLANNED, and it stays PLANNED. Nothing here queues research: a
+              // browser-initiated run is planned in full and then stops until a
+              // person approves it, which is §16 and is not negotiable by the
+              // thing doing the proposing.
+              status: 'PLANNED' as const,
+            };
+          }),
+        );
+
+        const answered = coverage.alreadyAnswered.map((decision) => ({
+          fragmentKey: decision.fragmentKey,
+          status: decision.status,
+          why: whyNotResearched(decision),
+          claimIds: decision.claimIds,
+        }));
+
+        // Every fragment answered by the archive is the best outcome this
+        // module has, and it must not be reported through the branch that
+        // means "nothing cleared the gate". The packet ends here, terminally,
+        // saying why — there is nothing for a person to approve and nothing
+        // for a worker to research.
+        if (created.length === 0) {
+          await updateOrchestration(orchestration.id, {
+            status: 'CANCELLED',
+            cancelReason:
+              answered.length > 0
+                ? `The project already answers all ${answered.length} proposed fragment(s).`
+                : 'No fragment was proposed.',
+            cancelledAt: new Date().toISOString(),
+          });
+          return {
+            resultRef: passId,
+            resultSummary: `${answered.length} fragments already answered by the archive`,
+            value: {
+              proposed: 0,
+              fragmentKeys: [] as string[],
+              alreadyAnswered: answered,
+              archive: {
+                documentsRead: coverage.documentsRead,
+                documentsUnreadable: coverage.documentsUnreadable,
+                existingClaims: coverage.existingClaims,
+              },
+              status: 'NOTHING_TO_RESEARCH',
+            },
+          };
+        }
 
         await updateOrchestration(orchestration.id, { status: 'PLANNING', currentPass: 'PLAN' });
 
@@ -618,6 +698,12 @@ const proposeFragmentsTool: McpTool = {
           value: {
             proposed: created.length,
             fragmentKeys: created.map((fragment) => fragment.fragmentKey),
+            alreadyAnswered: answered,
+            archive: {
+              documentsRead: coverage.documentsRead,
+              documentsUnreadable: coverage.documentsUnreadable,
+              existingClaims: coverage.existingClaims,
+            },
             status: 'AWAITING_APPROVAL',
           },
         };

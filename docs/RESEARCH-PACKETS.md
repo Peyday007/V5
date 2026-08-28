@@ -134,6 +134,45 @@ precisely what the allowance will be spent on.
 moving fragments from PLANNED to QUEUED and the allowance is spent on a
 decomposition nobody had seen.
 
+### 4b. A proposal is checked against the archive before it is research
+
+`startPacket` is the entry point — one function, callable by the console, a
+scheduler or the Brain's own decider, taking the approval policy as an argument
+instead of assuming one. It creates the run and the orchestration, queues one
+planning job, and stops. Before it creates anything it reads the archive
+(`inventoryProject`), because a caller that cannot see what the project already
+holds cannot honour §13's default of *not* researching.
+
+The decision that follows from that reading is per requirement, and it needs
+the goal decomposed first — so it happens where the decomposition arrives. When
+a worker calls `brain_propose_fragments`, `services/research/coverageGate.ts`
+turns each proposed fragment into a requirement, runs
+`services/reconcile/` over it, and creates fragments only for the ones the
+archive cannot answer. Nothing here judges coverage itself: the decider is the
+same one the in-process orchestrator has always used, and a second
+implementation would be a second answer to the same question.
+
+Three consequences worth stating:
+
+- A fragment the archive answers is **not created**. Its requirement and its
+  coverage row are, with the claim ids the decision rests on, so "we did not
+  research this" resolves to evidence rather than to a silence.
+- A fragment that survives carries `existingClaimIds` and
+  `whyExistingInsufficient` — what it is adding to, and why the archive was not
+  enough. That is the difference between new evidence and a second copy of the
+  old evidence.
+- If the archive answers **everything**, the packet ends `CANCELLED` with that
+  as its reason. It must not fall through to "no fragment cleared its evidence
+  gate", which is the same terminal state describing the opposite outcome.
+
+Without a boundary contract the staleness and geography checks abstain, and a
+well-sourced claim from years ago can then reach SATISFIED — the one status
+that stops research. The push path gets its contract from the planning pass; on
+this path it is assembled from the scope the proposed fragments themselves
+declare, and only from what they agree on. §12 already says those declarations
+are what the gate is applied against, so they are also what a decision about
+whether the fragment is needed is applied against.
+
 ### 5. A redelivery is not a second ledger
 
 Every research work type is `IDEMPOTENT` rather than `HARMLESS`, and the

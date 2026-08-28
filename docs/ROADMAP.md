@@ -72,6 +72,57 @@ screen is rebuilt.
 for a client that cannot do OAuth. Both have to keep working when the front-end
 does not, which is why they are plain server-rendered HTML.
 
+### Research budgets — where the ceiling gets built
+
+`startPacket` takes an approval policy rather than assuming one, and today it
+serves exactly one of the two modes.
+
+- **`PER_PACKET`** is what the console does and what has always happened: the
+  packet is planned in full, a person reads the plan, and only then is any
+  allowance spent. The approval is about *this packet*, and what it controls is
+  **scope** — nobody researches a decomposition a person has not seen.
+- **`GOAL_BUDGET`** is what the Brain needs to run without a person in the
+  loop: approval given once for a goal, its boundary contract, its source
+  requirements and how much research effort it may consume, after which the
+  Brain creates and dispatches whatever packets that goal needs. The approval
+  is about *the goal*, and what it controls is **spend**.
+
+The type is in `services/research/startPacket.ts` now; the second mode is
+refused there by name, and the reason is worth keeping when it is implemented.
+Setting `autoApprove` is easy and would work today. Nothing in the Brain counts
+packets, counts fragments or watches a deadline — `services/research/quota.ts`
+only reacts to an allowance that has *already* run out — so the approval half
+of the authorization would take effect while the budget half stayed decorative.
+A ceiling nothing enforces is worse than no ceiling, because the person who set
+it believes they have one.
+
+**What the step has to build:**
+
+- A goal record the budget hangs off, and a packet's link back to it. Packets
+  per goal and fragments across those packets are counts over that link, so
+  they cannot be derived from a single orchestration.
+- The counters, checked **before** work is created rather than after it is
+  spent — the same placement as the coverage check, and for the same reason.
+- An optional deadline, evaluated on Brain's clock (`queueNow()`), never a
+  worker's.
+- External paid spending pinned at zero, and metered overages off unless the
+  user turns them on themselves. Invariant 18: neither a policy, a default nor
+  a caller may set either.
+- **Reaching a limit is not a failure.** Every accepted fragment and every
+  queued one is kept, exactly as an exhausted allowance is handled today, and
+  the answer is a question to the user about raising the goal's budget — never
+  a lowered evidence bar.
+- Unused authorization is a **ceiling, not a target**. With budget left and the
+  archive already answering the goal, the correct number of new packets is
+  zero. §13 decides that, not the budget.
+
+**What it must not change.** The gate and the audit decide what the Brain
+knows: research that clears its evidence gate and its audit is absorbed without
+a person reading the report first. Human review belongs where a conclusion
+turns into a consequence — an implementation somebody has to live with,
+external spending, a destructive action, or another governed decision — not in
+front of every packet.
+
 ### The separations that matter most
 
 - **Step 4 is not Step 5.** Knowing *who* a worker is does not make it safe for
