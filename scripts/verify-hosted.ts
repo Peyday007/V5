@@ -691,8 +691,44 @@ async function claimAs(bearer: string, body: Record<string, unknown> = {}): Prom
   return Array.isArray(claimed) ? claimed : [];
 }
 
+/**
+ * Everything this harness left behind on an earlier run, cancelled.
+ *
+ * The verification scope accumulates work items every deploy, and nothing ever
+ * consumed them: a run seeds a few, claims what it needs, and leaves the rest
+ * queued forever. That pile is why two separate checks here have failed with
+ * "it was not handed out" — a claim asks for 25 items and the one it wants is
+ * behind a hundred it does not.
+ *
+ * Priority 9 was the fix both times, and it is a workaround: it keeps working
+ * only while priority-9 items get consumed, and it puts the burden on whoever
+ * adds the next check to remember. This is the actual repair. Every check in
+ * this file is about claiming, fencing or authorization, and none of them is
+ * about the queue's history — so the history is cleared first and each run
+ * starts from the same place.
+ *
+ * Only this scope, which exists for nothing else, and only items this harness
+ * created. Cancellation rather than deletion, because it goes through the same
+ * guarded path everything else does and leaves the attempt history readable.
+ */
+async function drainPreviousRuns(fixtures: Fixtures): Promise<void> {
+  const stale = await getDb().all<{ id: string }>(
+    `SELECT id FROM work_items
+      WHERE project_id = ? AND created_by_id = 'verify-hosted'
+        AND state IN ('QUEUED', 'LEASED')`,
+    [fixtures.scope.id],
+  );
+  for (const row of stale) {
+    await cancelWork(row.id, 'superseded by a later verification run');
+  }
+  if (stale.length > 0) {
+    console.log(`  ....  cleared ${stale.length} work item(s) left by earlier runs`);
+  }
+}
+
 async function queueChecks(fixtures: Fixtures, cookie: string): Promise<void> {
   console.log('\nThe distributed queue');
+  await drainPreviousRuns(fixtures);
 
   /**
    * Seed one item, at a priority that puts it at the front of the queue.
@@ -716,13 +752,14 @@ async function queueChecks(fixtures: Fixtures, cookie: string): Promise<void> {
    * is what a check of *claiming* should be — the backlog is a property of the
    * fixture, not of the thing under test.
    */
-  const seed = async (note: string): Promise<string> => {
+  const seed = async (note: string, over: { maxAttempts?: number } = {}): Promise<string> => {
     const item = await enqueueWork({
       projectId: fixtures.scope.id,
       workType: 'SYNTHETIC_ECHO',
       payload: { note },
       priority: 9,
       requiredScopes: ['queue:claim'],
+      maxAttempts: over.maxAttempts,
       createdByType: 'SYSTEM',
       createdById: 'verify-hosted',
     });
@@ -871,20 +908,25 @@ async function queueChecks(fixtures: Fixtures, cookie: string): Promise<void> {
   }
 
   // --- retry and terminal failure ---------------------------------------
-  const failing = await enqueueWork({
-    projectId: fixtures.scope.id,
-    workType: 'SYNTHETIC_ECHO',
-    payload: { note: 'this one fails' },
-    requiredScopes: ['queue:claim'],
-    maxAttempts: 1,
-    createdByType: 'SYSTEM',
-    createdById: 'verify-hosted',
-  });
+  /**
+   * Through `seed`, and that is the whole fix.
+   *
+   * This enqueued directly at the default priority, which is the *same bug*
+   * `seed`'s own comment above describes and which cost a red deploy once
+   * already. It was fixed in one place and missed here, and it duly failed —
+   * "the failing item was claimed: it was not handed out" — on the first pass
+   * of a deploy whose second pass, against a queue the first pass had drained,
+   * passed. Which is what made it look like flakiness both times.
+   *
+   * There is now one enqueue helper in this function and it sets the priority,
+   * so the next check somebody adds cannot reintroduce it a third time.
+   */
+  const failingId = await seed('this one fails', { maxAttempts: 1 });
   const toFail = (await claimAs(fixtures.credential, { limit: 25 })).find(
-    (c) => c.workItemId === failing.id,
+    (c) => c.workItemId === failingId,
   );
   if (toFail) {
-    const failed = await call(`/api/work/${failing.id}/fail`, {
+    const failed = await call(`/api/work/${failingId}/fail`, {
       method: 'POST',
       bearer: fixtures.credential,
       body: {
@@ -894,7 +936,7 @@ async function queueChecks(fixtures: Fixtures, cookie: string): Promise<void> {
       },
     });
     expectStatus('a worker may report failure', failed.status, 200);
-    const after = await getWorkItem(failing.id);
+    const after = await getWorkItem(failingId);
     record(
       'the last attempt failing is terminal, not another retry',
       after?.state === 'FAILED' && after?.failureCategory === 'ATTEMPTS_EXHAUSTED',
@@ -1549,11 +1591,16 @@ interface BeaconShape {
 async function leaveBeacon(fixtures: Fixtures): Promise<BeaconShape> {
   await clearBeacons();
 
+  // Priority 9 for the same reason the queue checks use it: this claims 25 and
+  // looks for two specific items among them, so a backlog ahead of them would
+  // make the beacon silently fail to be set up. It has not yet; the exposure is
+  // identical and closing it is one field.
   const make = async (suffix: string) =>
     await enqueueWork({
       projectId: fixtures.scope.id,
       workType: 'SYNTHETIC_ECHO',
       payload: { note: 'persistence beacon' },
+      priority: 9,
       requiredScopes: ['queue:claim'],
       correlationId: `${BEACON}:${suffix}`,
       createdByType: 'SYSTEM',

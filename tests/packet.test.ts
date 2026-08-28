@@ -679,6 +679,46 @@ describe('the packet runner', () => {
     expect(queued.map((item) => item.workType)).toContain('RESEARCH_VERIFY');
   });
 
+  it('never creates a second item for work that already has one', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    // A worker that claimed the research item and completed it without ever
+    // calling brain_submit_claims. The fragment never left QUEUED.
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await getDb().run(
+      `UPDATE work_items SET state = 'SUCCEEDED', lease_id = NULL, worker_id = NULL,
+        lease_expires_at = NULL WHERE id = ?`,
+      [research.workItemId],
+    );
+
+    const result = await advancePacket(orchestration.id);
+
+    // The loop is the lesser problem. A second work item has a different id,
+    // and Step 6 keys a research effect from the work item — so two items for
+    // one fragment are two idempotency scopes, and the second could record a
+    // second claim ledger. One item per target, for the life of the packet.
+    const research_items = (await listWorkItems(project.id, {})).filter(
+      (item) => item.workType === 'RESEARCH_FRAGMENT' && item.fragmentId === fragment.id,
+    );
+    expect(research_items).toHaveLength(1);
+    expect(result.enqueued).toHaveLength(0);
+    expect(result.status).toBe('NEEDS_HUMAN');
+    expect((await getFragment(fragment.id))?.status).toBe('BLOCKED');
+  });
+
+  it('stops rather than re-planning when a plan job produced no fragments', async () => {
+    const orchestration = await makeOrchestration();
+    await advancePacket(orchestration.id);
+
+    const [planItem] = await listWorkItems(project.id, {});
+    await getDb().run(`UPDATE work_items SET state = 'SUCCEEDED' WHERE id = ?`, [planItem!.id]);
+
+    const result = await advancePacket(orchestration.id);
+    expect(result.enqueued).toHaveLength(0);
+    expect(result.status).toBe('NEEDS_HUMAN');
+  });
+
   it('stops for a person when no fragment cleared its gate', async () => {
     const orchestration = await makeOrchestration();
     const fragment = await makeFragment(orchestration);

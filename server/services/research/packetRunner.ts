@@ -81,24 +81,86 @@ export interface AdvanceResult {
  * work items for the same fragment, and the check is against the queue's own
  * rows rather than against anything this process remembers.
  */
-function hasLiveWork(live: WorkItem[], predicate: (item: WorkItem) => boolean): boolean {
-  return live.some(predicate);
+/**
+ * Has this exact piece of work already been created — in any state at all?
+ *
+ * **This is the guard that matters most in the file, and the first version of
+ * it was wrong.** It only looked at QUEUED and LEASED items, which meant that
+ * when an item finished without moving the state it was supposed to move — a
+ * worker that completes a `RESEARCH_FRAGMENT` without ever calling
+ * `brain_submit_claims` — the runner saw no live work, saw a fragment still
+ * QUEUED, and enqueued another one. That is a loop, and the loop is the
+ * *lesser* problem.
+ *
+ * The real problem is that a second work item has a different id, and Step 6
+ * keys a research effect from the work item. Two items for one fragment are
+ * therefore two idempotency scopes, and the second one could record a second
+ * claim ledger for the same fragment — the exact duplication the whole
+ * mechanism exists to prevent, reintroduced above it.
+ *
+ * So the rule is: **one item per (type, target), for the life of the packet.**
+ * Retrying inside an item is the queue's job and it already does it, bounded by
+ * `max_attempts`, under one key. If an item reached a terminal state and the
+ * state it should have moved did not move, that is a fault for a person to see
+ * — not something to try again with a fresh key.
+ */
+function alreadyCreated(items: WorkItem[], predicate: (item: WorkItem) => boolean): boolean {
+  return items.some(predicate);
+}
+
+/** Of those, the ones still going to happen or happening right now. */
+function stillRunning(items: WorkItem[], predicate: (item: WorkItem) => boolean): boolean {
+  return items.some((item) => LIVE_ITEM.has(item.state) && predicate(item));
 }
 
 /**
- * This orchestration's unfinished items, read once per advance.
+ * Every item this orchestration has ever had, read once per advance.
  *
- * Read once rather than per check because one advance asks the question up to a
- * dozen times — is there a plan running, is there work for this fragment, is
- * there a verify for that one — and each of those was a separate scan of the
- * project's queue.
+ * Once rather than per check because one advance asks about a dozen times — is
+ * there a plan, is there work for this fragment, a verify for that one — and
+ * each was a separate scan of the project's queue.
+ *
+ * Every state, not only the live ones, for the reason in `alreadyCreated`.
  */
-async function liveItemsFor(orchestration: ResearchOrchestration): Promise<WorkItem[]> {
-  const items = await listWorkItems(orchestration.projectId, {
-    states: ['QUEUED', 'LEASED'],
-    limit: 500,
-  });
+async function itemsFor(orchestration: ResearchOrchestration): Promise<WorkItem[]> {
+  const items = await listWorkItems(orchestration.projectId, { limit: 500 });
   return items.filter((item) => item.orchestrationId === orchestration.id);
+}
+
+/**
+ * An item finished and the state it should have moved did not move.
+ *
+ * Recorded on the fragment, or on the orchestration when the work was not about
+ * one, so the packet stops with a reason a person can act on rather than
+ * spinning. `advancePacket` calls this instead of enqueueing a replacement.
+ */
+async function faultedOut(input: {
+  orchestration: ResearchOrchestration;
+  fragment?: ResearchFragment | null;
+  what: string;
+}): Promise<AdvanceResult> {
+  const reason =
+    `A ${input.what} work item finished without recording anything. ` +
+    'The packet cannot continue on its own: re-plan it, or investigate why the worker ' +
+    'completed without submitting.';
+  if (input.fragment) {
+    await updateFragment(input.fragment.id, {
+      status: 'BLOCKED',
+      blockedReason: reason,
+      completedAt: new Date().toISOString(),
+    });
+  }
+  await updateOrchestration(input.orchestration.id, {
+    status: 'NEEDS_HUMAN',
+    failureReason: reason,
+    completedAt: new Date().toISOString(),
+  });
+  return {
+    orchestrationId: input.orchestration.id,
+    status: 'NEEDS_HUMAN',
+    enqueued: [],
+    waitingOn: `a person: ${reason}`,
+  };
 }
 
 async function enqueueResearchItem(input: {
@@ -169,12 +231,18 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   const enqueued: AdvanceResult['enqueued'] = [];
   const fragments = await currentFragments(orchestration.id);
-  const live = await liveItemsFor(orchestration);
+  const items = await itemsFor(orchestration);
 
   // ---- Nothing planned yet: ask for a plan. ------------------------------
   if (fragments.length === 0) {
-    if (hasLiveWork(live, (item) => item.workType === 'RESEARCH_PLAN')) {
+    const planItem = (item: WorkItem): boolean => item.workType === 'RESEARCH_PLAN';
+    if (stillRunning(items, planItem)) {
       return { orchestrationId, status: orchestration.status, enqueued: [], waitingOn: 'the plan' };
+    }
+    // A plan item that finished and produced no fragments. Not retried with a
+    // fresh key; a person looks at it.
+    if (alreadyCreated(items, planItem)) {
+      return await faultedOut({ orchestration, what: 'planning' });
     }
     enqueued.push(await enqueueResearchItem({ orchestration, type: 'RESEARCH_PLAN', priority: 7 }));
     await updateOrchestration(orchestration.id, { status: 'PLANNING', currentPass: 'PLAN' });
@@ -198,11 +266,12 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   // ---- Fragments whose claims are in: gate them. -------------------------
   for (const fragment of fragments.filter((f) => f.status === 'VALIDATING')) {
-    const running = hasLiveWork(
-      live,
-      (item) => item.workType === 'RESEARCH_VERIFY' && item.fragmentId === fragment.id,
-    );
-    if (running) continue;
+    const verifyItem = (item: WorkItem): boolean =>
+      item.workType === 'RESEARCH_VERIFY' && item.fragmentId === fragment.id;
+    if (stillRunning(items, verifyItem)) continue;
+    if (alreadyCreated(items, verifyItem)) {
+      return await faultedOut({ orchestration, fragment, what: 'verification' });
+    }
     enqueued.push(
       await enqueueResearchItem({
         orchestration,
@@ -217,11 +286,12 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   // ---- Fragments ready to research. --------------------------------------
   for (const fragment of readyToResearch(fragments)) {
-    const running = hasLiveWork(
-      live,
-      (item) => item.workType === 'RESEARCH_FRAGMENT' && item.fragmentId === fragment.id,
-    );
-    if (running) continue;
+    const researchItem = (item: WorkItem): boolean =>
+      item.workType === 'RESEARCH_FRAGMENT' && item.fragmentId === fragment.id;
+    if (stillRunning(items, researchItem)) continue;
+    if (alreadyCreated(items, researchItem)) {
+      return await faultedOut({ orchestration, fragment, what: 'research' });
+    }
     enqueued.push(
       await enqueueResearchItem({ orchestration, type: 'RESEARCH_FRAGMENT', fragment }),
     );
@@ -267,13 +337,17 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   // ---- Synthesis, once there is something to synthesize from. ------------
   if (!orchestration.documentId) {
-    if (hasLiveWork(live, (item) => item.workType === 'RESEARCH_SYNTHESIZE')) {
+    const synthItem = (item: WorkItem): boolean => item.workType === 'RESEARCH_SYNTHESIZE';
+    if (stillRunning(items, synthItem)) {
       return {
         orchestrationId,
         status: orchestration.status,
         enqueued: [],
         waitingOn: 'the synthesis',
       };
+    }
+    if (alreadyCreated(items, synthItem)) {
+      return await faultedOut({ orchestration, what: 'synthesis' });
     }
     const claims = await acceptedClaims(orchestration.id);
     if (claims.length === 0) {
@@ -305,17 +379,18 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
   for (const role of AUDIT_ROLES) {
     const submitted = await auditRoleSubmitted(orchestration, role);
     if (submitted) continue;
-    const running = hasLiveWork(
-      live,
-      (item) => item.workType === 'RESEARCH_AUDIT' && item.payload['role'] === role,
-    );
-    if (running) {
+    const auditItem = (item: WorkItem): boolean =>
+      item.workType === 'RESEARCH_AUDIT' && item.payload['role'] === role;
+    if (stillRunning(items, auditItem)) {
       return {
         orchestrationId,
         status: orchestration.status,
         enqueued: [],
         waitingOn: `the ${role} audit pass`,
       };
+    }
+    if (alreadyCreated(items, auditItem)) {
+      return await faultedOut({ orchestration, what: `${role.toLowerCase()} audit` });
     }
     enqueued.push(
       await enqueueResearchItem({
