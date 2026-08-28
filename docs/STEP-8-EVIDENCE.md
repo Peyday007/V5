@@ -284,9 +284,10 @@ explanation.
 | Item | Disposition |
 |---|---|
 | **CF-7 — the real Claude worker is UNVERIFIED** | **CLOSED.** A real Claude Max session completed a bounded cycle against the deployed Brain |
-| **CF-8 — a one-hour access token versus long research jobs** | **Step 10.** Refresh tokens are issued and valid for thirty days, but the client reported it could not re-authorize in a non-interactive session. If it does not refresh, an unattended job outliving the access token dies and needs a human. Harmless for a bounded echo; not harmless for scheduled work |
+| **CF-8 — a one-hour access token versus long research jobs** | **Step 10.** Refresh tokens are issued for thirty days and the rotation grant is implemented and tested, so a client that refreshes never sees a prompt. What is unverified is whether the surfaces we intend to use actually refresh — the observed "requires re-authorization" turned out to be CF-11 rather than a refresh failure, so nothing has yet exercised this path live. Harmless for a bounded echo; decide it before anything runs unattended |
 | **CF-9 — the console's live-connection count disagreed with the revoke** | **Open.** The count filters access tokens that are unrevoked and unexpired; the revoke matches every unrevoked token, a strictly larger set. They should not disagree, and they did. Most likely a stale render, but unexplained and not explained away |
 | **CF-10 — a dropped connector does not re-attach to a running session** | **Known client limitation.** The tool list is assembled when a session starts, so re-enabling the toggle does not restore it. Work around it with a fresh session |
+| **CF-11 — where a worker runs decides whether it can authorize at all** | **Step 11.** A claude.ai chat inherits the account's connector authorization. A Claude Code session authorizes per session and cannot do it non-interactively — it answers "that server needs OAuth authorization before any of its tools become available" and stops. So a fleet of unattended workers cannot be Claude Code sessions unless something carries authorization into them. This is about the surface, not the Brain: the same worker identity and the same token work fine from a chat |
 | CF-5 — a real archive migration | operator task |
 | CF-6 — more than one instance | Step 11 |
 | MCP rate counter is in-memory | Step 11 |
