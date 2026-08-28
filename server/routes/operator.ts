@@ -312,12 +312,32 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
         <div>
           <div class="who"><strong>${esc(entry.project.name)}</strong></div>
           <div class="meta">${entry.items
-            .map(
-              (item) =>
+            .map((item) => {
+              /**
+               * The state alone cannot answer "did it work".
+               *
+               * SUCCEEDED tells you the queue closed the item. For a passage the
+               * worker had to read, the thing you actually want to see is what
+               * it produced — and that was recorded on the item all along while
+               * this card showed only a status, so the one question the card
+               * exists to answer had to be asked somewhere else.
+               *
+               * A failure's category is here for the same reason: "FAILED" with
+               * no reason is a dead end.
+               */
+              const head =
                 `<code>${esc(item.id)}</code> ${esc(item.workType)} · ${esc(item.state)}` +
-                (item.attemptCount > 0 ? ` · attempt ${item.attemptCount}` : ''),
-            )
-            .join('<br>')}</div>
+                (item.attemptCount > 0 ? ` · attempt ${item.attemptCount}` : '');
+              const outcome = item.resultSummary
+                ? `<div class="result">${esc(item.resultSummary)}</div>`
+                : item.failureCategory
+                  ? `<div class="result">${esc(item.failureCategory)}</div>`
+                  : item.state === 'QUEUED'
+                    ? '<div class="result">Waiting. Nothing runs on its own yet — a connected worker has to be asked to claim it.</div>'
+                    : '';
+              return head + outcome;
+            })
+            .join('')}</div>
         </div>
       </div>`,
     )

@@ -82,6 +82,8 @@ const CSS = `
   fieldset { border:1px solid #e3e6ea; border-radius:10px; padding:14px 16px; margin:18px 0 0; }
   legend { font-size:12px; font-weight:600; color:#5b636e; text-transform:uppercase; letter-spacing:.04em; padding:0 6px; }
   .actions { display:flex; gap:8px; align-items:center; }
+  .result { margin:3px 0 10px; padding-left:10px; border-left:2px solid #e3e6ea; color:#3a4048;
+    white-space:pre-wrap; }
   .inline { display:flex; gap:8px; align-items:center; width:100%; }
   .inline select { margin:0; }
   .inline button { margin-top:0; width:auto; white-space:nowrap; }
@@ -109,6 +111,7 @@ const CSS = `
     button.danger { background:#16191d; color:#f3b6b6; border-color:#5c2326; }
     .grant, fieldset { background:#0e1013; border-color:#2a2f36; }
     .access { border-top-color:#2a2f36; }
+    .result { border-left-color:#2a2f36; color:#c6ccd3; }
     code, .pill { background:#22262c; }
     .err { background:#2b1416; border-color:#5c2326; color:#f3b6b6; }
     .ok { background:#10231a; border-color:#1f4a30; color:#a7dcb8; }

@@ -1159,6 +1159,45 @@ describe('the operator console', () => {
     expect(row).not.toContain(`<option value="${projectId}"`);
   });
 
+  it('shows what the work produced, not only that it finished', async () => {
+    // "SUCCEEDED" says the queue closed the item. For a passage the worker had
+    // to read, what you want to see is what it produced — and that was on the
+    // item all along while this card showed a status and nothing else, so the
+    // one question the card exists to answer had to be asked somewhere else.
+    const queued = await post(
+      '/operator/work',
+      { project_id: projectId, passage: 'A fencing generation is issued once per work item.' },
+      { cookie: adminCookie },
+    );
+    expect(queued.status).toBe(200);
+
+    // Before anyone claims it, the card says so rather than leaving a bare state.
+    expect((await operatorPage({ cookie: adminCookie })).html).toContain('Nothing runs on its own yet');
+
+    // Drive it to done the way a worker would, then read the card back.
+    const worker = await connectedToken();
+    const claimed = await callTool(worker, 'brain_claim_work', { project_id: projectId, limit: 5 });
+    const items = (claimed.structured['claimed'] ?? []) as {
+      workItemId: string;
+      workType: string;
+      leaseId: string;
+      leaseGeneration: number;
+    }[];
+    const mine = items.find((item) => item.workType === 'SUMMARIZE_PASSAGE');
+    expect(mine, 'the reading should have been claimable').toBeTruthy();
+
+    const done = await callTool(worker, 'brain_complete_work', {
+      work_item_id: mine!.workItemId,
+      lease_id: mine!.leaseId,
+      lease_generation: mine!.leaseGeneration,
+      summary: 'One generation per item, and it is the fencing token.',
+    });
+    expect(done.isError).toBe(false);
+
+    const after = await operatorPage({ cookie: adminCookie });
+    expect(after.html).toContain('One generation per item, and it is the fencing token.');
+  });
+
   it('refuses a reading with nothing to read', async () => {
     const empty = await post(
       '/operator/work',
