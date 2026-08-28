@@ -151,10 +151,10 @@ decides what work exists; nobody hand-queues an item. See `docs/ROADMAP.md`.
 
 ---
 
-## Three faults on one screen, and what caused them
+## Four faults, and what caused them
 
-The operator console produced two real mis-grants inside ten minutes. All three
-causes were mine.
+Three on the operator console and one on the consent screen. All of them found
+the same way — by an operator using the thing — and all of them mine.
 
 1. **The dropdowns silently chose.** A `<select>` with no placeholder is pre-set
    to its first option, so a form submitted without opening it grants whatever
@@ -175,6 +175,23 @@ causes were mine.
 Grouping the picker by hand costs something: a scope added later would not
 appear, ungrantable, with nothing to notice. A test walks the scope enum and
 asserts every one is present, and it was checked against its own inversion.
+
+4. **The consent screen told an operator to create a worker they already had.**
+   It filtered out disabled workers and then reported the empty list as "This
+   Brain has no workers yet. Create one first." So somebody whose only worker
+   was disabled — which is exactly the state you are in while trying to restore
+   it — was told the Brain had none, and pointed at creating a duplicate. Two
+   cases now: none at all still says create one; all disabled says to enable one
+   and states plainly that another is not needed.
+
+And one thing that was **not** a fault, reported as one. A reader of
+`brain_whoami` warned that `queue:fail` was missing and that failing or
+releasing an item would be refused. A fair inference from the scope names, and
+wrong: there is no `queue:fail` and no `queue:release`. Completing an item,
+failing it and handing it back are one authority — the right to stop holding it
+— and all three are gated by `queue:complete`. The live run had already released
+an item on exactly those scopes. The names imply a granularity that does not
+exist, which is now written into the runbook.
 
 ---
 
