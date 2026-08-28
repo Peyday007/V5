@@ -54,6 +54,7 @@ import {
 } from '../repos/research.ts';
 import { advancePacket, approvePlan } from '../services/research/packetRunner.ts';
 import { createFixturePacket } from '../services/research/fixtures.ts';
+import { runTypeForNewPacket } from '../services/runArtifacts.ts';
 import { card, esc, page } from './pages.ts';
 
 export const OPERATOR_BASE = '/operator';
@@ -991,11 +992,12 @@ export function operatorRouter(): Router {
       const run = await createRun({
         projectId: project.id,
         layerId: layer.id,
-        // FOUNDATION, matching what the in-process orchestrator creates. The
-        // run type describes what the work is *for* the layer, and a packet
+        // The run type describes what the work is *for* the layer, and a packet
         // researched by a worker is the same kind of contribution as one
-        // researched in process.
-        runType: 'FOUNDATION',
+        // researched in process. It is not always FOUNDATION, though: that
+        // targets v1 by definition, so a second packet on a layer that already
+        // has a document would be declined by the importer as a duplicate.
+        runType: await runTypeForNewPacket(layer.id),
         status: 'PLANNED',
         provider: 'WORKER',
         prompt: assignment,

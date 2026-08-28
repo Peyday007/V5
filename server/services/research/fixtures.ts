@@ -71,6 +71,7 @@ import {
 import crypto from 'node:crypto';
 import { recordFragmentClaims, gateFragment, type ClaimVerification } from './submission.ts';
 import { fileResearchPacket } from './filing.ts';
+import { runTypeForNewPacket } from '../runArtifacts.ts';
 import type { ParsedClaim } from './schema.ts';
 
 /** The project every fixture packet lives in, and nothing else does. */
@@ -417,7 +418,9 @@ export async function createFixturePacket(input: {
   const run = await createRun({
     projectId: project.id,
     layerId: layer.id,
-    runType: 'FOUNDATION',
+    // Not always FOUNDATION: that targets v1 by definition, so a second
+    // fixture packet in this layer would collide with the first.
+    runType: await runTypeForNewPacket(layer.id),
     status: 'PLANNED',
     provider: 'FIXTURE',
     prompt: 'A test packet. Its content is written into the Brain rather than researched.',

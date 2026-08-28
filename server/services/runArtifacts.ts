@@ -21,7 +21,7 @@ import type {
   RunType,
 } from '../domain/types.ts';
 import { isValidVersion, normalizeVersion } from '../domain/version.ts';
-import { getDocument, updateDocument } from '../repos/documents.ts';
+import { getDocument, listDocumentsByLayer, updateDocument } from '../repos/documents.ts';
 import { recordEvent } from '../repos/events.ts';
 import { getRun, updateRun } from '../repos/runs.ts';
 import { nowIso } from '../repos/util.ts';
@@ -51,6 +51,27 @@ export async function documentTypeForRun(run: ResearchRun): Promise<DocumentType
     current = current.parentRunId ? await getRun(current.parentRunId) : null;
   }
   return DOCUMENT_TYPE_BY_RUN_TYPE.REDO;
+}
+
+/**
+ * Which kind of run a newly started packet is.
+ *
+ * FOUNDATION always targets the layer's foundation version — v1 — because that
+ * is what a foundation *is*. So a second packet started on a layer that already
+ * has one cannot be a FOUNDATION: it would target v1 again, and the importer
+ * would decline it as a duplicate canonical name. Correct refusal, baffling
+ * message, and the operator did nothing wrong.
+ *
+ * Found by running a second test packet, which is exactly the thing an operator
+ * does after reading the first one and wanting another look.
+ *
+ * A layer that already holds a document gets an EXPANSION instead, which
+ * resolves to the next expansion version. Nothing here decides *what* the
+ * version is — `resolveTargetVersion` owns that and keeps owning it.
+ */
+export async function runTypeForNewPacket(layerId: string): Promise<RunType> {
+  const existing = await listDocumentsByLayer(layerId);
+  return existing.length === 0 ? 'FOUNDATION' : 'EXPANSION';
 }
 
 export async function targetVersionForRun(run: ResearchRun, layerId: string, projectId: string): Promise<string> {

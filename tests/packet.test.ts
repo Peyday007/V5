@@ -1045,6 +1045,27 @@ describe('test packets', () => {
     expect(body).toContain('  - Passage: "');
   });
 
+  it('can be run more than once, each filing its own version', async () => {
+    // Not hypothetical: the first fixture packet an operator ran filed a
+    // document with a formatting defect, and the only way to get a clean one is
+    // to run a second. A document is never overwritten, so the second has to
+    // land as its own version rather than colliding with the first.
+    const first = await createFixturePacket({ createdByUserId: 'usr_someone' });
+    await approvePlan({ orchestrationId: first.orchestration.id, approvedByUserId: 'usr_someone' });
+    const firstDoc = await getDocument((await getOrchestration(first.orchestration.id))!.documentId!);
+
+    const second = await createFixturePacket({ createdByUserId: 'usr_someone' });
+    await approvePlan({ orchestrationId: second.orchestration.id, approvedByUserId: 'usr_someone' });
+    const secondDoc = await getDocument((await getOrchestration(second.orchestration.id))!.documentId!);
+
+    expect(secondDoc).toBeTruthy();
+    expect(secondDoc!.id).not.toBe(firstDoc!.id);
+    expect(secondDoc!.canonicalName).not.toBe(firstDoc!.canonicalName);
+    // The first one is still there. Superseded documents keep their rows and
+    // their files; they are the layer's provenance.
+    expect(await getDocument(firstDoc!.id)).toBeTruthy();
+  });
+
   it('refuse to run the fixture claims against a packet that is not a fixture', async () => {
     // The guard that matters most in the file. This path supplies its own
     // claims, so pointing it at real research would write fixture content into
