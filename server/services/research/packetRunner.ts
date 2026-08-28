@@ -49,9 +49,11 @@ import {
   currentFragments,
   getOrchestration,
   listFragments,
+  listPendingOrchestrations,
   updateFragment,
   updateOrchestration,
 } from '../../repos/research.ts';
+import { earlierAuditRole } from './auditBrief.ts';
 import { enqueueWork, listWorkItems } from '../../repos/workQueue.ts';
 import { workType, AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { recordEvent } from '../../repos/events.ts';
@@ -79,15 +81,24 @@ export interface AdvanceResult {
  * work items for the same fragment, and the check is against the queue's own
  * rows rather than against anything this process remembers.
  */
-async function hasLiveWork(
-  orchestration: ResearchOrchestration,
-  predicate: (item: WorkItem) => boolean,
-): Promise<boolean> {
-  const items = await listWorkItems(orchestration.projectId, { limit: 500 });
-  return items.some(
-    (item) =>
-      item.orchestrationId === orchestration.id && LIVE_ITEM.has(item.state) && predicate(item),
-  );
+function hasLiveWork(live: WorkItem[], predicate: (item: WorkItem) => boolean): boolean {
+  return live.some(predicate);
+}
+
+/**
+ * This orchestration's unfinished items, read once per advance.
+ *
+ * Read once rather than per check because one advance asks the question up to a
+ * dozen times — is there a plan running, is there work for this fragment, is
+ * there a verify for that one — and each of those was a separate scan of the
+ * project's queue.
+ */
+async function liveItemsFor(orchestration: ResearchOrchestration): Promise<WorkItem[]> {
+  const items = await listWorkItems(orchestration.projectId, {
+    states: ['QUEUED', 'LEASED'],
+    limit: 500,
+  });
+  return items.filter((item) => item.orchestrationId === orchestration.id);
 }
 
 async function enqueueResearchItem(input: {
@@ -158,10 +169,11 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   const enqueued: AdvanceResult['enqueued'] = [];
   const fragments = await currentFragments(orchestration.id);
+  const live = await liveItemsFor(orchestration);
 
   // ---- Nothing planned yet: ask for a plan. ------------------------------
   if (fragments.length === 0) {
-    if (await hasLiveWork(orchestration, (item) => item.workType === 'RESEARCH_PLAN')) {
+    if (hasLiveWork(live, (item) => item.workType === 'RESEARCH_PLAN')) {
       return { orchestrationId, status: orchestration.status, enqueued: [], waitingOn: 'the plan' };
     }
     enqueued.push(await enqueueResearchItem({ orchestration, type: 'RESEARCH_PLAN', priority: 7 }));
@@ -186,11 +198,11 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   // ---- Fragments whose claims are in: gate them. -------------------------
   for (const fragment of fragments.filter((f) => f.status === 'VALIDATING')) {
-    const live = await hasLiveWork(
-      orchestration,
+    const running = hasLiveWork(
+      live,
       (item) => item.workType === 'RESEARCH_VERIFY' && item.fragmentId === fragment.id,
     );
-    if (live) continue;
+    if (running) continue;
     enqueued.push(
       await enqueueResearchItem({
         orchestration,
@@ -205,11 +217,11 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   // ---- Fragments ready to research. --------------------------------------
   for (const fragment of readyToResearch(fragments)) {
-    const live = await hasLiveWork(
-      orchestration,
+    const running = hasLiveWork(
+      live,
       (item) => item.workType === 'RESEARCH_FRAGMENT' && item.fragmentId === fragment.id,
     );
-    if (live) continue;
+    if (running) continue;
     enqueued.push(
       await enqueueResearchItem({ orchestration, type: 'RESEARCH_FRAGMENT', fragment }),
     );
@@ -255,7 +267,7 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   // ---- Synthesis, once there is something to synthesize from. ------------
   if (!orchestration.documentId) {
-    if (await hasLiveWork(orchestration, (item) => item.workType === 'RESEARCH_SYNTHESIZE')) {
+    if (hasLiveWork(live, (item) => item.workType === 'RESEARCH_SYNTHESIZE')) {
       return {
         orchestrationId,
         status: orchestration.status,
@@ -293,11 +305,11 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
   for (const role of AUDIT_ROLES) {
     const submitted = await auditRoleSubmitted(orchestration, role);
     if (submitted) continue;
-    const live = await hasLiveWork(
-      orchestration,
+    const running = hasLiveWork(
+      live,
       (item) => item.workType === 'RESEARCH_AUDIT' && item.payload['role'] === role,
     );
-    if (live) {
+    if (running) {
       return {
         orchestrationId,
         status: orchestration.status,
@@ -335,7 +347,6 @@ async function auditRoleSubmitted(
   orchestration: ResearchOrchestration,
   role: AuditRole,
 ): Promise<boolean> {
-  const { earlierAuditRole } = await import('./auditBrief.ts');
   return (await earlierAuditRole(orchestration.id, role)) !== null;
 }
 
@@ -439,7 +450,6 @@ export async function approvePlan(input: {
  * plan nobody approved stays PLANNED — `advancePacket` refuses to move it.
  */
 export async function resumePulledPackets(): Promise<number> {
-  const { listPendingOrchestrations } = await import('../../repos/research.ts');
   let advanced = 0;
   for (const orchestration of await listPendingOrchestrations()) {
     // Only packets that are actually worker-driven. A push-model orchestration

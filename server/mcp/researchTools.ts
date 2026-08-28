@@ -30,6 +30,7 @@
  * `tools/list` for a caller who may not use it, because a list that varies by
  * principal is a permission oracle.
  */
+import crypto from 'node:crypto';
 import type {
   Principal,
   ResearchFragment,
@@ -302,7 +303,6 @@ async function recordPass(input: {
   assignment: string;
   raw: unknown;
 }): Promise<string> {
-  const crypto = await import('node:crypto');
   const pass = await startPass({
     orchestrationId: input.orchestration.id,
     fragmentId: input.fragmentId,
@@ -369,10 +369,11 @@ const getAssignmentTool: McpTool = {
   name: 'brain_get_assignment',
   title: 'Read the assignment for claimed work',
   description:
-    'The research assignment behind a work item you hold: the orchestration, this fragment\'s ' +
+    'The research assignment behind a research work item: the orchestration, this fragment\'s ' +
     'question and every boundary it will be judged against, what its dependencies established, ' +
     'and any checkpoints an earlier attempt left. Read this before researching — the item ' +
-    'itself carries none of it.',
+    'itself carries none of it. A read, so it does not require the lease; every tool that ' +
+    'writes does.',
   inputSchema: {
     type: 'object',
     properties: { work_item_id: { type: 'string' } },

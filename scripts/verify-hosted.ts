@@ -1227,6 +1227,52 @@ async function mcpChecks(fixtures: Fixtures): Promise<void> {
   const listed = await modern.listTools();
   const modernNames = (listed.result?.tools ?? []).map((tool) => tool.name);
   record('and lists the permanent tool surface', modernNames.length > 0, `${modernNames.length} tool(s)`);
+
+  /**
+   * Step 9's tools are on the deployed surface, and every one of them is there.
+   *
+   * Named individually rather than counted. A count passes when a tool is
+   * renamed, and renaming a tool the connector already knows is exactly the
+   * change that would break a live worker without breaking anything here.
+   */
+  const RESEARCH_TOOL_NAMES = [
+    'brain_get_assignment',
+    'brain_checkpoint_work',
+    'brain_propose_fragments',
+    'brain_submit_claims',
+    'brain_submit_verification',
+    'brain_report_contradiction',
+    'brain_report_blocker',
+    'brain_submit_synthesis',
+    'brain_get_audit_brief',
+    'brain_submit_audit',
+  ];
+  const missingResearch = RESEARCH_TOOL_NAMES.filter((name) => !modernNames.includes(name));
+  record(
+    'including every research tool, so a worker can write what it finds',
+    missingResearch.length === 0,
+    missingResearch.length === 0 ? `${RESEARCH_TOOL_NAMES.length} present` : `missing ${missingResearch.join(', ')}`,
+  );
+
+  /**
+   * A worker cannot submit research into a project it has no membership in,
+   * and the refusal says nothing about whether that project exists.
+   *
+   * The scope fixture holds a membership; `fixtures.other` deliberately does
+   * not. This is the same oracle test the queue checks run, applied to the
+   * surface that can now write evidence.
+   */
+  const strayClaim = await modern.callTool('brain_submit_claims', {
+    work_item_id: 'wki_not_a_real_item',
+    lease_id: 'wls_x',
+    lease_generation: 1,
+    claims: [{ claim: 'this must never be recorded' }],
+  });
+  record(
+    'and refuses a research submission against an item it does not hold',
+    strayClaim.result?.isError === true,
+    `isError ${String(strayClaim.result?.isError)}`,
+  );
   record(
     'with the cache fields this revision requires',
     typeof listed.result?.ttlMs === 'number' && listed.result?.cacheScope === 'private',
