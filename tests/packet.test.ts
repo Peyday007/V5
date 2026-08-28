@@ -1,0 +1,810 @@
+/**
+ * The research packet, end to end, written as the ways it could lie.
+ *
+ * Step 9 gave a worker the ability to put research into the Brain. Every test
+ * here is about a way that could go wrong quietly — a claim accepted without a
+ * source, a fragment passing with its lanes uncovered, a report citing evidence
+ * that was rejected, a second submission doubling a ledger, a plan starting
+ * before anybody approved it.
+ *
+ * They run at the tool boundary rather than over HTTP, because what is under
+ * test is the authorization, the gate and the idempotency rather than the
+ * transport — `mcp.test.ts` and `oauth.test.ts` cover that. And they run
+ * against whichever backend the suite is pointed at, because "the gate refuses
+ * this" is a claim about a database.
+ */
+import { beforeEach, describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { findTool } from '../server/mcp/tools.ts';
+import { getDb } from '../server/db/database.ts';
+import { createWorker, grantMembership } from '../server/repos/identity.ts';
+import { createRun } from '../server/repos/runs.ts';
+import {
+  acceptedClaims,
+  createFragments,
+  createOrchestration,
+  currentFragments,
+  getFragment,
+  getOrchestration,
+  listClaimsForFragment,
+} from '../server/repos/research.ts';
+import { claimWork, enqueueWork, getWorkItem, listWorkItems } from '../server/repos/workQueue.ts';
+import { advancePacket, approvePlan, resumePulledPackets } from '../server/services/research/packetRunner.ts';
+import { workType } from '../server/services/queue/workTypes.ts';
+import type {
+  ClaimedWork,
+  Layer,
+  Principal,
+  Project,
+  ResearchFragment,
+  ResearchOrchestration,
+  WorkerScope,
+} from '../server/domain/types.ts';
+
+/** Everything a research worker holds, so a missing scope is a deliberate test. */
+const FULL: WorkerScope[] = [
+  'project:read',
+  'documents:read',
+  'research:read',
+  'research:propose',
+  'research:write',
+  'claims:write',
+  'contradictions:write',
+  'checkpoints:write',
+  'blockers:report',
+  'queue:read',
+  'queue:claim',
+  'queue:heartbeat',
+  'queue:complete',
+];
+
+let project: Project;
+let layer: Layer;
+let workerId = '';
+let run = '';
+
+async function principalFor(scopes: WorkerScope[]): Promise<Principal> {
+  return {
+    type: 'WORKER',
+    id: workerId,
+    handle: 'test-worker',
+    displayName: 'Test Worker',
+    isBrainAdmin: false,
+    mustChangePassword: false,
+    credentialId: 'cred_test',
+    authMethod: 'WORKER_BEARER',
+    memberships: [
+      {
+        id: 'mem_test',
+        projectId: project.id,
+        principalType: 'WORKER',
+        principalId: workerId,
+        role: 'MEMBER',
+        scopes,
+        active: true,
+        grantedByType: 'SYSTEM',
+        grantedById: 'seed',
+        grantedAt: new Date().toISOString(),
+        revokedAt: null,
+      },
+    ],
+    requestId: 'req_test',
+  };
+}
+
+async function call(
+  name: string,
+  args: Record<string, unknown>,
+  scopes: WorkerScope[] = FULL,
+): Promise<Record<string, unknown>> {
+  const tool = findTool(name);
+  if (!tool) throw new Error(`no such tool: ${name}`);
+  const outcome = await tool.run(args, {
+    principal: await principalFor(scopes),
+    requestId: `req_${Math.random().toString(36).slice(2)}`,
+  });
+  return outcome.value;
+}
+
+/** Call a tool and return the refusal rather than throwing it. */
+async function refusal(
+  name: string,
+  args: Record<string, unknown>,
+  scopes: WorkerScope[] = FULL,
+): Promise<{ category: string; message: string }> {
+  try {
+    await call(name, args, scopes);
+  } catch (error) {
+    const err = error as { category?: string; message?: string };
+    return { category: err.category ?? 'THREW', message: err.message ?? String(error) };
+  }
+  throw new Error(`${name} was expected to refuse and did not.`);
+}
+
+async function makeOrchestration(): Promise<ResearchOrchestration> {
+  const created = await createRun({
+    projectId: project.id,
+    layerId: layer.id,
+    runType: 'FOUNDATION',
+    status: 'PLANNED',
+    provider: 'WORKER',
+    prompt: 'Whether a success fee for arranging a business sale needs a broker licence.',
+  });
+  run = created.id;
+  return await createOrchestration({
+    projectId: project.id,
+    layerId: layer.id,
+    runId: created.id,
+    title: 'Licensure of success-fee intermediation',
+    assignment: 'Which US states require a licence, and what provision settles it.',
+    provider: 'WORKER',
+    autoApprove: false,
+  });
+}
+
+async function makeFragment(
+  orchestration: ResearchOrchestration,
+  over: Partial<Parameters<typeof createFragments>[0][number]> = {},
+): Promise<ResearchFragment> {
+  const [fragment] = await createFragments([
+    {
+      orchestrationId: orchestration.id,
+      projectId: project.id,
+      layerId: layer.id,
+      fragmentIndex: 0,
+      fragmentKey: 'licence-california',
+      question: 'Does California require a licence for a success fee on a business sale?',
+      geography: 'California, United States',
+      timeframe: 'in force as at 2026',
+      population: null,
+      definitions: 'Business sale meaning a transfer of a going concern with no real property.',
+      requiredEvidence: ['statute'],
+      acceptableSourceTypes: ['statute', 'regulator guidance'],
+      excludedSourceTypes: ['law firm blog'],
+      completionCriteria: ['One statute section that answers yes or no.'],
+      dependsOn: [],
+      minIndependentSources: 1,
+      status: 'QUEUED',
+      ...over,
+    },
+  ]);
+  return fragment!;
+}
+
+/** Queue a research item for a fragment and claim it, as a worker would. */
+async function claimFor(
+  orchestration: ResearchOrchestration,
+  type: string,
+  fragment: ResearchFragment | null,
+  payload: Record<string, unknown> = {},
+): Promise<ClaimedWork> {
+  const definition = workType(type);
+  await enqueueWork({
+    projectId: project.id,
+    workType: type,
+    payload: definition.validate(payload),
+    requiredScopes: definition.requiredScopes,
+    orchestrationId: orchestration.id,
+    fragmentId: fragment?.id ?? null,
+    createdByType: 'SYSTEM',
+  });
+  const [claimed] = await claimWork({
+    workerId,
+    scopes: [{ projectId: project.id, scopes: FULL }],
+    workTypes: [type],
+  });
+  if (!claimed) throw new Error(`nothing claimable of type ${type}`);
+  return claimed;
+}
+
+function proof(claimed: ClaimedWork): Record<string, unknown> {
+  return {
+    work_item_id: claimed.workItemId,
+    lease_id: claimed.leaseId,
+    lease_generation: claimed.leaseGeneration,
+  };
+}
+
+const SOURCED = {
+  claim: 'California Business and Professions Code section 10131 defines a real estate broker.',
+  claim_type: 'SOURCED_FACT',
+  source_url: 'https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=10131',
+  source_title: 'Business and Professions Code section 10131',
+  source_publisher: 'California Legislative Information',
+  source_date: '2026-01-01',
+  evidence_excerpt: 'A real estate broker within the meaning of this part is a person who…',
+  evidence_locator: 'section 10131(a)',
+  evidence_lane: 'statute',
+  retrieved_at: '2026-08-28',
+  confidence: 0.95,
+  primary_source: true,
+};
+
+const MATCHES = { geography: 'MATCH', timeframe: 'MATCH', population: 'MATCH', definitions: 'MATCH' };
+
+beforeEach(async () => {
+  const fixture = await freshProject();
+  project = fixture.project;
+  layer = await fixture.layerByName('Monetization Logic');
+  const worker = await createWorker({
+    name: 'test-worker',
+    displayName: 'Test Worker',
+    createdByType: 'SYSTEM',
+    createdById: 'seed',
+  });
+  workerId = worker.id;
+  await grantMembership({
+    projectId: project.id,
+    principalType: 'WORKER',
+    principalId: worker.id,
+    role: 'MEMBER',
+    scopes: FULL,
+    grantedByType: 'SYSTEM',
+    grantedById: 'seed',
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a worker may see
+// ---------------------------------------------------------------------------
+
+describe('reading an assignment', () => {
+  it('hands over the fragment declaration the gate will judge it against', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const claimed = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    const value = await call('brain_get_assignment', { work_item_id: claimed.workItemId });
+    const assignment = value['assignment'] as Record<string, unknown>;
+    const declared = assignment['fragment'] as Record<string, unknown>;
+
+    // Verbatim, because these are the fields applyGate reads. A summary here
+    // would mean the worker researched against something other than the bar.
+    expect(declared['question']).toBe(fragment.question);
+    expect(declared['geography']).toBe('California, United States');
+    expect(declared['requiredEvidence']).toEqual(['statute']);
+    expect(declared['excludedSourceTypes']).toEqual(['law firm blog']);
+    expect(declared['minIndependentSources']).toBe(1);
+    expect(declared['completionCriteria']).toEqual(['One statute section that answers yes or no.']);
+  });
+
+  it('carries no prompt — an assignment is not a script', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const claimed = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    const value = await call('brain_get_assignment', { work_item_id: claimed.workItemId });
+    const serialized = JSON.stringify(value).toLowerCase();
+    expect(serialized).not.toContain('you are');
+    expect(serialized).not.toContain('respond with');
+    expect(Object.keys(value['assignment'] as object)).not.toContain('prompt');
+  });
+
+  it('refuses a worker without research:read, saying nothing about what exists', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const claimed = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    const without = FULL.filter((scope) => scope !== 'research:read');
+    const refused = await refusal(
+      'brain_get_assignment',
+      { work_item_id: claimed.workItemId },
+      without,
+    );
+    expect(refused.category).toBe('NOT_FOUND');
+    // Indistinguishable from a work item that is not there — invariant 23.
+    const absent = await refusal('brain_get_assignment', { work_item_id: 'wki_nothing' });
+    expect(refused.message).toBe(absent.message);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Claims, and the gate
+// ---------------------------------------------------------------------------
+
+describe('submitting claims', () => {
+  it('stores every claim unaccepted, whatever the worker thinks of it', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const claimed = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    const value = await call('brain_submit_claims', {
+      ...proof(claimed),
+      claims: [SOURCED],
+    });
+
+    expect(value['recorded']).toBe(1);
+    expect(value['accepted']).toBe(0);
+    const stored = await listClaimsForFragment(fragment.id);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.accepted).toBe(false);
+  });
+
+  it('keeps an unsourced claim, marked, rather than dropping it', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const claimed = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    const value = await call('brain_submit_claims', {
+      ...proof(claimed),
+      claims: [SOURCED, { claim: 'Most states probably require one.', confidence: 0.4 }],
+    });
+
+    // Both stored. Dropping the unsourced one would make the ledger look better
+    // than the research was, and the count of what could not be sourced is one
+    // of the more useful things it says.
+    expect(value['recorded']).toBe(2);
+    expect(value['unsourced']).toBe(1);
+    const stored = await listClaimsForFragment(fragment.id);
+    const unsourced = stored.find((claim) => !claim.sourced);
+    expect(unsourced?.validationState).toBe('NO_URL');
+  });
+
+  it('refuses a worker without claims:write', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const claimed = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    const refused = await refusal(
+      'brain_submit_claims',
+      { ...proof(claimed), claims: [SOURCED] },
+      FULL.filter((scope) => scope !== 'claims:write'),
+    );
+    expect(refused.category).toBe('NOT_FOUND');
+    expect(await listClaimsForFragment(fragment.id)).toHaveLength(0);
+  });
+
+  it('records one ledger however many times the item is redelivered', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const claimed = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    await call('brain_submit_claims', { ...proof(claimed), claims: [SOURCED] });
+    const again = await call('brain_submit_claims', {
+      ...proof(claimed),
+      // Deliberately different claims: a second attempt that researched harder
+      // must still not double the ledger. The key is the work item and the
+      // operation, never the contents.
+      claims: [SOURCED, { ...SOURCED, claim: 'A second thing entirely.' }],
+    });
+
+    expect(again['state']).toBe('ALREADY_RECORDED');
+    expect(await listClaimsForFragment(fragment.id)).toHaveLength(1);
+  });
+});
+
+describe('the gate', () => {
+  it('accepts a claim its source supports, in scope', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(fragment.id);
+
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    const value = await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: true, ...MATCHES, note: 'Reads directly.' }],
+      sufficiency: 'SUFFICIENT',
+    });
+
+    expect(value['integrity']).toBe('PASS');
+    expect(value['acceptedClaims']).toBe(1);
+    expect((await getFragment(fragment.id))?.status).toBe('ACCEPTED');
+    expect((await listClaimsForFragment(fragment.id))[0]!.accepted).toBe(true);
+    expect(await acceptedClaims(orchestration.id)).toHaveLength(1);
+  });
+
+  it('never accepts a claim the source does not support, whatever the worker said', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(fragment.id);
+
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    const value = await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [
+        { claim_id: stored!.id, supports_claim: false, ...MATCHES, note: 'The section is about something else.' },
+      ],
+      // The worker calls it sufficient. The gate does not have to agree, and
+      // the whole design rests on it not having to.
+      sufficiency: 'SUFFICIENT',
+    });
+
+    expect(value['acceptedClaims']).toBe(0);
+    expect(value['integrity']).toBe('FAIL');
+    expect((await getFragment(fragment.id))?.status).toBe('BLOCKED');
+    // The reported count and the stored flag are different facts, and the
+    // stored one is what the synthesis reads. Asserting only the number let a
+    // deliberately broken gate pass this test once.
+    expect((await listClaimsForFragment(fragment.id))[0]!.accepted).toBe(false);
+    expect(await acceptedClaims(orchestration.id)).toHaveLength(0);
+  });
+
+  it('rejects a claim whose scope does not match the fragment it answers', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(fragment.id);
+
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    const value = await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [
+        {
+          claim_id: stored!.id,
+          supports_claim: true,
+          ...MATCHES,
+          geography: 'MISMATCH',
+          note: 'This is the Nevada provision.',
+        },
+      ],
+      sufficiency: 'SUFFICIENT',
+    });
+
+    expect(value['acceptedClaims']).toBe(0);
+    expect(value['failedConditions']).toContain('SCOPE_MATCH');
+    expect((await listClaimsForFragment(fragment.id))[0]!.accepted).toBe(false);
+    expect(await acceptedClaims(orchestration.id)).toHaveLength(0);
+  });
+
+  it('refuses a verification that leaves some of the fragment\'s claims unanswered', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', {
+      ...proof(research),
+      claims: [SOURCED, { ...SOURCED, claim: 'And a second one.' }],
+    });
+    const stored = await listClaimsForFragment(fragment.id);
+
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    const refused = await refusal('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored[0]!.id, supports_claim: true, ...MATCHES, note: 'ok' }],
+      sufficiency: 'SUFFICIENT',
+    });
+
+    // Choosing which of your own claims get examined is not a choice a worker
+    // should have.
+    expect(refused.category).toBe('INVALID_INPUT');
+    expect(refused.message).toContain('no verdict');
+    expect((await getFragment(fragment.id))?.status).toBe('VALIDATING');
+  });
+
+  it('refuses a verdict about a claim that is not on this fragment', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    const refused = await refusal('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: 'clm_elsewhere', supports_claim: true, ...MATCHES, note: 'ok' }],
+      sufficiency: 'SUFFICIENT',
+    });
+    expect(refused.category).toBe('INVALID_INPUT');
+  });
+
+  it('keeps a rejection reason so a claim cannot return through a later attempt', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(fragment.id);
+
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: false, ...MATCHES, note: 'Does not say that.' }],
+      sufficiency: 'INSUFFICIENT',
+    });
+
+    const after = (await listClaimsForFragment(fragment.id))[0]!;
+    expect(after.accepted).toBe(false);
+    expect(after.rejectionReason).toBeTruthy();
+    // And it is not in the packet's accepted evidence, which is what the
+    // synthesis reads.
+    expect(await acceptedClaims(orchestration.id)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Filing
+// ---------------------------------------------------------------------------
+
+describe('the synthesis', () => {
+  it('refuses a report citing a claim that was never accepted', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(fragment.id);
+
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: true, ...MATCHES, note: 'ok' }],
+      sufficiency: 'SUFFICIENT',
+    });
+
+    const synth = await claimFor(orchestration, 'RESEARCH_SYNTHESIZE', null);
+    const refused = await refusal('brain_submit_synthesis', {
+      ...proof(synth),
+      report: 'California requires a licence [clm_invented].',
+      cited_claim_ids: [stored!.id, 'clm_invented'],
+    });
+
+    // The whole report, not just that sentence. A packet whose citations are
+    // approximately right is worse than none, because the reader cannot tell
+    // which sentences are the approximate ones.
+    expect(refused.category).toBe('INVALID_INPUT');
+    expect((await getOrchestration(orchestration.id))?.documentId).toBeNull();
+  });
+
+  it('refuses to file anything when no claim cleared the gate', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(fragment.id);
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: false, ...MATCHES, note: 'no' }],
+      sufficiency: 'INSUFFICIENT',
+    });
+
+    const synth = await claimFor(orchestration, 'RESEARCH_SYNTHESIZE', null);
+    const refused = await refusal('brain_submit_synthesis', {
+      ...proof(synth),
+      report: 'Here is what we found.',
+      cited_claim_ids: [stored!.id],
+    });
+    expect(refused.category).toBe('CONFLICT');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The runner
+// ---------------------------------------------------------------------------
+
+describe('the packet runner', () => {
+  it('asks for a plan first, and only once', async () => {
+    const orchestration = await makeOrchestration();
+
+    const first = await advancePacket(orchestration.id);
+    expect(first.enqueued.map((entry) => entry.workType)).toEqual(['RESEARCH_PLAN']);
+
+    // Called again — a second completion, a boot sweep — and it creates
+    // nothing, because it checks the queue rather than remembering.
+    const second = await advancePacket(orchestration.id);
+    expect(second.enqueued).toHaveLength(0);
+    expect(second.waitingOn).toBe('the plan');
+  });
+
+  it('will not start researching a plan nobody approved', async () => {
+    const orchestration = await makeOrchestration();
+    await makeFragment(orchestration, { status: 'PLANNED' });
+
+    const result = await advancePacket(orchestration.id);
+    expect(result.enqueued).toHaveLength(0);
+    expect(result.waitingOn).toContain('approve');
+
+    // Nothing queued means nothing spent. That is the whole gate.
+    const items = await listWorkItems(project.id, { states: ['QUEUED'] });
+    expect(items.filter((item) => item.workType === 'RESEARCH_FRAGMENT')).toHaveLength(0);
+  });
+
+  it('queues one job per fragment once a person approves', async () => {
+    const orchestration = await makeOrchestration();
+    await makeFragment(orchestration, { status: 'PLANNED' });
+
+    const approved = await approvePlan({
+      orchestrationId: orchestration.id,
+      approvedByUserId: 'usr_someone',
+    });
+    expect(approved.enqueued.map((entry) => entry.workType)).toEqual(['RESEARCH_FRAGMENT']);
+    expect((await currentFragments(orchestration.id))[0]?.status).toBe('QUEUED');
+  });
+
+  it('holds a fragment back until the fragment it depends on is accepted', async () => {
+    const orchestration = await makeOrchestration();
+    await createFragments([
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        fragmentIndex: 0,
+        fragmentKey: 'definitions',
+        question: 'What counts as a business sale here?',
+        requiredEvidence: ['statute'],
+        acceptableSourceTypes: [],
+        excludedSourceTypes: [],
+        completionCriteria: ['A definition'],
+        dependsOn: [],
+        minIndependentSources: 1,
+        status: 'QUEUED',
+      },
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        fragmentIndex: 1,
+        fragmentKey: 'licence-california',
+        question: 'Does California require a licence?',
+        requiredEvidence: ['statute'],
+        acceptableSourceTypes: [],
+        excludedSourceTypes: [],
+        completionCriteria: ['A section'],
+        dependsOn: ['definitions'],
+        minIndependentSources: 1,
+        status: 'QUEUED',
+      },
+    ]);
+
+    const result = await advancePacket(orchestration.id);
+    // The boundary fragment only. Researching the second one first would mean
+    // answering it against a definition nobody had established.
+    expect(result.enqueued.map((entry) => entry.fragmentKey)).toEqual(['definitions']);
+  });
+
+  it('resumes from rows after a restart, not from anything remembered', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    // The state a crash between a completion and the enqueue that should have
+    // followed it leaves behind: claims are in, nothing is queued.
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    await getDb().run(`UPDATE work_items SET state = 'SUCCEEDED', lease_id = NULL,
+      worker_id = NULL, lease_expires_at = NULL WHERE id = ?`, [research.workItemId]);
+
+    const resumed = await resumePulledPackets();
+    expect(resumed).toBe(1);
+
+    const queued = await listWorkItems(project.id, { states: ['QUEUED'] });
+    expect(queued.map((item) => item.workType)).toContain('RESEARCH_VERIFY');
+  });
+
+  it('stops for a person when no fragment cleared its gate', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(fragment.id);
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: false, ...MATCHES, note: 'no' }],
+      sufficiency: 'INSUFFICIENT',
+    });
+
+    const result = await advancePacket(orchestration.id);
+    // Not a retry. A packet where nothing cleared the gate is a result somebody
+    // needs to see, and repair is planned rather than automatic.
+    expect(result.status).toBe('NEEDS_HUMAN');
+    expect(result.enqueued).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Blockers and checkpoints
+// ---------------------------------------------------------------------------
+
+describe('reporting a blocker', () => {
+  it('records where the worker looked, because a claimed absence needs that', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const claimed = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    await call('brain_report_blocker', {
+      ...proof(claimed),
+      reason: 'No statute addresses this transaction shape.',
+      searched: ['Business and Professions Code', 'DRE guidance letters'],
+      suggested_narrowing: 'Ask instead about transactions that include a lease.',
+    });
+
+    const after = await getFragment(fragment.id);
+    expect(after?.status).toBe('BLOCKED');
+    expect(after?.blockedReason).toContain('Business and Professions Code');
+    expect(after?.blockedReason).toContain('Suggested narrowing');
+  });
+
+  it('refuses a worker without blockers:report', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const claimed = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    const refused = await refusal(
+      'brain_report_blocker',
+      { ...proof(claimed), reason: 'cannot' },
+      FULL.filter((scope) => scope !== 'blockers:report'),
+    );
+    expect(refused.category).toBe('NOT_FOUND');
+    expect((await getFragment(fragment.id))?.status).toBe('QUEUED');
+  });
+});
+
+describe('checkpoints through the tool', () => {
+  it('are visible to whoever holds the item next', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const claimed = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    await call('brain_checkpoint_work', {
+      ...proof(claimed),
+      note: 'Section 10131 read; 10131.6 still to check.',
+    });
+
+    const value = await call('brain_get_assignment', { work_item_id: claimed.workItemId });
+    const assignment = value['assignment'] as Record<string, unknown>;
+    const notes = assignment['checkpoints'] as { note: string }[];
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.note).toContain('10131.6');
+  });
+
+  it('refuse a worker without checkpoints:write', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const claimed = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    const refused = await refusal(
+      'brain_checkpoint_work',
+      { ...proof(claimed), note: 'anything' },
+      FULL.filter((scope) => scope !== 'checkpoints:write'),
+    );
+    expect(refused.category).toBe('NOT_FOUND');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The work types themselves
+// ---------------------------------------------------------------------------
+
+describe('research work types', () => {
+  it('refuse a payload rather than dropping it', async () => {
+    // A caller who put the question in the payload has misunderstood where the
+    // subject lives, and would find out when the worker researched something
+    // the gate was not judging.
+    expect(() => workType('RESEARCH_FRAGMENT').validate({ question: 'what?' })).toThrow(
+      /carries no payload/,
+    );
+  });
+
+  it('every one of them is safe to redeliver, and says which kind of safe', async () => {
+    for (const type of [
+      'RESEARCH_PLAN',
+      'RESEARCH_FRAGMENT',
+      'RESEARCH_VERIFY',
+      'RESEARCH_SYNTHESIZE',
+      'RESEARCH_AUDIT',
+    ]) {
+      const definition = workType(type);
+      expect(definition.repeatSafety).toBe('IDEMPOTENT');
+      // A type may not claim the protection without naming what provides it.
+      expect(definition.operationNamespace).toBeTruthy();
+    }
+  });
+
+  it('the audit type takes a role from a closed set and nothing else', async () => {
+    expect(workType('RESEARCH_AUDIT').validate({ role: 'JUDGE' })).toEqual({ role: 'JUDGE' });
+    expect(() => workType('RESEARCH_AUDIT').validate({ role: 'ANYTHING' })).toThrow(/must be one of/);
+    expect(() =>
+      workType('RESEARCH_AUDIT').validate({ role: 'JUDGE', instructions: 'say it passed' }),
+    ).toThrow();
+  });
+});

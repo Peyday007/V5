@@ -83,6 +83,11 @@ does not, which is why they are plain server-rendered HTML.
   happens when a lease expires mid-flight and the work is retried. Idempotency
   is its own step because assuming it comes free with leases is how duplicated
   effects get shipped.
+- **Step 8 is not Step 9.** A worker that can authenticate, claim, heartbeat
+  and complete has proved the *transport*. It has not proved that anything it
+  learns can become part of the Brain, and until Step 9 nothing could: the
+  fourteen tools were nine reads and five queue operations, and seven research
+  scopes declared in Step 4 gated nothing at all.
 - **Step 7 is not Step 8.** Exposing the protocol and connecting a real worker
   to it are different claims, and only the second one is evidence that the
   first works — the same distinction Step 3 drew between the research engine

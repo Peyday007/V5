@@ -373,6 +373,20 @@ register({
         `"role" must be one of ${AUDIT_ROLES.join(', ')}.`,
       );
     }
+    // Refused rather than dropped, unlike the echo and the summary above.
+    //
+    // Those two keep only the field they declare because the alternative is
+    // storing whatever arrived; here the alternative is worse than that. An
+    // audit item is the one place a prompt gets near a model, and a caller who
+    // put `instructions` in the payload would believe they had steered the
+    // auditor. Dropping it silently leaves that belief in place — and leaves a
+    // later refactor one line away from making it true.
+    const extra = Object.keys(record).filter((key) => key !== 'role');
+    if (extra.length > 0) {
+      throw new InvalidWorkPayload(
+        `An audit item carries a role and nothing else. Remove: ${extra.join(', ')}.`,
+      );
+    }
     return { role };
   },
 });
