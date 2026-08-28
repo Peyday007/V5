@@ -78,6 +78,35 @@ right to stop holding this item. A worker with `queue:complete` can therefore
 report a blocker and hand work back, which is what you want. Reading the names
 alone suggests otherwise, and that inference has already been made once.
 
+## 2a. If the account is not yours — send an invitation
+
+Everything below assumes you are sitting at the machine whose Claude account is
+being connected. When you are not — a friend's account, a second laptop — do
+this instead and skip to *Checking it worked*.
+
+On `/operator`, click **Invite** beside the worker. You get a link, shown once.
+Send it to whoever holds the account. They:
+
+1. open the link — this connects nothing, it just tells their browser which
+   worker it may connect;
+2. add the connector in their own Claude, exactly as in step 3 below;
+3. click **Connect**, and **Approve** on a screen naming that one worker.
+
+They never sign in here, never get a Brain account, and can connect only that
+worker, once, before the link expires.
+
+**Why a link rather than an account for them.** The connection begins and ends
+in the browser Claude opened, and the consent screen requires an administrator —
+so connecting somebody else's account would otherwise mean standing at their
+keyboard or making them an administrator. An administrator can create workers,
+grant any project and issue credentials. The people lending an account hold no
+research here and need no login; giving them one to click a button is the wrong
+trade. So the approval moves earlier instead of moving machines.
+
+**Treat the link like a password until it is used.** Anyone holding it can
+connect that worker. A used one is dead, and **Remove** on the worker withdraws
+any that are still outstanding.
+
 ## 3. Register the connector in Claude
 
 Go to **Settings → Connectors → Add custom connector**.

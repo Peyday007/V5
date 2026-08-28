@@ -54,6 +54,13 @@ import {
   visibleProjectIds,
 } from '../server/services/identity/policy.ts';
 import { bootstrapFirstAdmin } from '../server/services/identity/bootstrap.ts';
+import {
+  createInvitation,
+  findLiveInvitation,
+  redeemInvitation,
+  revokeInvitation,
+} from '../server/repos/invitations.ts';
+import { generateInvitationToken } from '../server/services/identity/secrets.ts';
 import type { Principal, ProjectMembership } from '../server/domain/types.ts';
 
 let fixture: TestProject;
@@ -741,6 +748,70 @@ describe('the identity audit', () => {
     const events = await listIdentityEvents({ action: 'GRANT_MEMBERSHIP' });
     expect(events).toHaveLength(1);
     expect(events[0]!.projectId).toBe(fixture.project.id);
+  });
+});
+
+describe('spending an invitation', () => {
+  /**
+   * The guarded UPDATE, exercised where it can actually be exercised.
+   *
+   * Driving this over HTTP proves nothing about the guard: a redeemed
+   * invitation stops resolving, so a second request is filtered long before it
+   * reaches the statement, and the test passes with the guard deleted. The race
+   * the guard exists for is two callers that both read it as live — which needs
+   * the repository directly, and on Postgres needs real concurrent connections.
+   */
+  it('is won by exactly one of several callers reading it as live', async () => {
+    const worker = await createWorker({
+      name: `racing-worker-${Date.now()}`,
+      displayName: 'Racing',
+      workerType: 'MCP',
+      description: null,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    const token = generateInvitationToken();
+    const invitation = await createInvitation({
+      workerId: worker.id,
+      tokenPrefix: token.prefix,
+      tokenDigest: token.digest,
+      createdByUserId: 'usr_test',
+    });
+
+    // Every caller has already decided the invitation is live. Only the
+    // database can settle which of them gets to spend it.
+    const outcomes = await Promise.all([
+      redeemInvitation(invitation.id),
+      redeemInvitation(invitation.id),
+      redeemInvitation(invitation.id),
+      redeemInvitation(invitation.id),
+    ]);
+    expect(outcomes.filter(Boolean)).toHaveLength(1);
+
+    // And it is spent afterwards, not merely contested.
+    expect(await redeemInvitation(invitation.id)).toBe(false);
+  });
+
+  it('is refused once it has been withdrawn', async () => {
+    const worker = await createWorker({
+      name: `withdrawn-worker-${Date.now()}`,
+      displayName: 'Withdrawn',
+      workerType: 'MCP',
+      description: null,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    const token = generateInvitationToken();
+    const invitation = await createInvitation({
+      workerId: worker.id,
+      tokenPrefix: token.prefix,
+      tokenDigest: token.digest,
+      createdByUserId: 'usr_test',
+    });
+
+    expect(await revokeInvitation(invitation.id)).toBe(true);
+    expect(await findLiveInvitation(token.prefix, token.plaintext.split('.')[1] ?? '')).toBeNull();
+    expect(await redeemInvitation(invitation.id)).toBe(false);
   });
 });
 

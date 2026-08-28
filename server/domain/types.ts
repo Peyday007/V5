@@ -2607,6 +2607,32 @@ export interface WorkerRow {
   updated_at: string;
 }
 
+export interface WorkerInvitationRow {
+  id: string;
+  worker_id: string;
+  token_prefix: string;
+  token_digest: string;
+  created_by_user_id: string;
+  created_at: string;
+  expires_at: string;
+  redeemed_at: string | null;
+  revoked_at: string | null;
+  note: string | null;
+}
+
+/** An administrator's approval of one worker, made in advance and sent. */
+export interface WorkerInvitation {
+  id: string;
+  workerId: string;
+  tokenPrefix: string;
+  createdByUserId: string;
+  createdAt: string;
+  expiresAt: string;
+  redeemedAt: string | null;
+  revokedAt: string | null;
+  note: string | null;
+}
+
 export interface WorkerCredentialRow {
   id: string;
   worker_id: string;

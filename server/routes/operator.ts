@@ -37,11 +37,13 @@ import {
   setWorkerStatus,
 } from '../repos/identity.ts';
 import { listTokensForWorker, revokeTokensForWorker } from '../repos/oauth.ts';
+import { createInvitation } from '../repos/invitations.ts';
 import { createProject, getProject, getProjectBySlug, listProjects } from '../repos/projects.ts';
 import { PayloadTooLarge, enqueueWork, listWorkItems } from '../repos/workQueue.ts';
 import { InvalidWorkPayload, workType } from '../services/queue/workTypes.ts';
 import { WORKER_SCOPES } from '../domain/types.ts';
 import type { Principal, WorkItem, WorkerScope } from '../domain/types.ts';
+import { generateInvitationToken } from '../services/identity/secrets.ts';
 import { card, esc, page } from './pages.ts';
 
 export const OPERATOR_BASE = '/operator';
@@ -162,6 +164,8 @@ interface Flash {
   err?: string;
   /** Shown exactly once, and never stored anywhere. */
   secret?: { workerName: string; plaintext: string };
+  /** Also shown exactly once: an invitation link is a credential in a URL. */
+  invite?: { workerName: string; url: string; expiresAt: string };
 }
 
 async function consolePage(person: Principal, flash: Flash = {}): Promise<string> {
@@ -228,6 +232,9 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
             <input type="hidden" name="disabled" value="${worker.disabled ? 'false' : 'true'}">
             <button type="submit" class="${worker.disabled ? 'secondary' : 'danger'}">
               ${worker.disabled ? 'Enable' : 'Disable'}</button>
+          </form>
+          <form method="post" action="${OPERATOR_BASE}/workers/${esc(worker.id)}/invite">
+            <button type="submit" class="secondary">Invite</button>
           </form>
           <form method="post" action="${OPERATOR_BASE}/workers/${esc(worker.id)}/archive">
             <input type="hidden" name="confirm" value="${esc(worker.name)}">
@@ -375,6 +382,18 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
           hand at all. This is for a worker that cannot do OAuth.</p>`)
     : '';
 
+  const inviteCard = flash.invite
+    ? card(`<h2>Invitation for ${esc(flash.invite.workerName)}</h2>
+        <div class="ok">Send this link to whoever is lending the account. It is shown once.</div>
+        <p><code style="word-break:break-all;user-select:all">${esc(flash.invite.url)}</code></p>
+        <p class="note">They open it, then add the connector in their own Claude and click Connect.
+          They never sign in here, never get an account, and can connect only that one worker, once.
+          It expires ${esc(flash.invite.expiresAt.slice(0, 10))}.</p>
+        <p class="note">Treat it like a password until it is used: anyone holding it can connect
+          that worker. If it goes astray, remove the worker or wait for it to expire — and a used
+          invitation is dead, so a link that has already been redeemed is harmless.</p>`)
+    : '';
+
   return page(
     'Workers',
     `${card(`<h1>Workers</h1>
@@ -391,6 +410,7 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
              the audit trail stays readable — what goes away is the worker.</p>`
           : ''
       }`)}
+     ${inviteCard}
      ${secretCard}
      ${card(`<h2>Create a worker</h2>
        <form method="post" action="${OPERATOR_BASE}/workers">
@@ -867,6 +887,80 @@ export function operatorRouter(): Router {
    * already authorized — it is a guard against the button next to it. Disable
    * and Remove sit side by side and one of them cannot be undone.
    */
+  /**
+   * Mint an invitation: your approval, in a link.
+   *
+   * The connection flow begins and ends in the browser Claude opened, so
+   * connecting somebody else's account used to mean standing at their keyboard
+   * or making them an administrator. Neither is acceptable — the people lending
+   * an account hold no research here and need no login, and administrator
+   * rights would let them create workers and grant projects.
+   *
+   * So the approval moves earlier rather than moving machines. This is that
+   * approval, made once, for one named worker, carried to whichever browser
+   * needs it.
+   *
+   * Refused for a worker with no project, for the same reason the consent
+   * screen refuses one: a link that connects something which can do nothing
+   * wastes somebody else's time and looks broken.
+   */
+  router.post('/workers/:workerId/invite', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      const person = await administrator(req);
+      if (!person || !originIsSameSite(req)) {
+        denied(res);
+        return;
+      }
+      const worker = await getWorker(req.params['workerId'] ?? '');
+      if (!worker) {
+        denied(res);
+        return;
+      }
+      if (worker.disabled) {
+        res.status(400).type('html').send(
+          await consolePage(person, { err: `${worker.name} is disabled, so an invitation for it would connect nothing.` }),
+        );
+        return;
+      }
+      const memberships = (await listMembershipsForPrincipal('WORKER', worker.id)).filter((m) => m.active);
+      if (memberships.length === 0) {
+        res.status(400).type('html').send(
+          await consolePage(person, {
+            err: `${worker.name} has no project yet, so an invitation for it would connect something that can do nothing. Grant it a project first.`,
+          }),
+        );
+        return;
+      }
+
+      const token = generateInvitationToken();
+      const invitation = await createInvitation({
+        workerId: worker.id,
+        tokenPrefix: token.prefix,
+        tokenDigest: token.digest,
+        createdByUserId: person.id,
+      });
+      await audit({
+        actor: person,
+        action: 'CREATE_INVITATION',
+        targetId: worker.id,
+        result: 'SUCCESS',
+        // The invitation's id, never the token.
+        metadata: { invitationId: invitation.id },
+      });
+
+      const origin = `${req.protocol}://${req.get('host') ?? 'localhost'}`;
+      res.type('html').send(
+        await consolePage(person, {
+          invite: {
+            workerName: worker.name,
+            url: `${origin}/oauth/invite/${token.plaintext}`,
+            expiresAt: invitation.expiresAt,
+          },
+        }),
+      );
+    })();
+  });
+
   router.post('/workers/:workerId/archive', (req: Request, res: Response) => {
     void (async (): Promise<void> => {
       const person = await administrator(req);

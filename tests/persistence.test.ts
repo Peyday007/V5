@@ -596,6 +596,10 @@ onPostgres('against a real Postgres', () => {
         'oauth_clients(client_id)',
         'oauth_authorization_codes(code_digest)',
         'oauth_tokens(token_digest)',
+        // An invitation is looked up by prefix and then verified in constant
+        // time on the secret, so two rows sharing a prefix would make "which
+        // invitation is this" ambiguous in the same way as the three above.
+        'worker_invitations(token_prefix)',
       ].sort(),
     );
   });

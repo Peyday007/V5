@@ -242,6 +242,15 @@ export function parseWorkerCredential(presented: string): ParsedWorkerCredential
  */
 export const OAUTH_TOKEN_MARKER = 'brnt_';
 
+/**
+ * A worker invitation — an administrator's approval, made in advance.
+ *
+ * Its own marker rather than reusing `brnt_`, so a value that turns up in a log
+ * or a support message is identifiable on sight, and so an invitation can never
+ * be mistaken for an access token by a lookup that only checks the shape.
+ */
+export const INVITATION_MARKER = 'brnv_';
+
 export interface GeneratedOAuthToken {
   plaintext: string;
   prefix: string;
@@ -254,9 +263,29 @@ export function generateOAuthToken(): GeneratedOAuthToken {
   return { plaintext: `${prefix}.${secret}`, prefix, digest: digestSecret(secret) };
 }
 
+export function generateInvitationToken(): GeneratedOAuthToken {
+  const prefix = `${INVITATION_MARKER}${crypto.randomBytes(PREFIX_BYTES).toString('hex')}`;
+  const secret = crypto.randomBytes(SECRET_BYTES).toString('base64url');
+  return { plaintext: `${prefix}.${secret}`, prefix, digest: digestSecret(secret) };
+}
+
 export interface ParsedOAuthToken {
   prefix: string;
   secret: string;
+}
+
+/** The same shape rules as an access token, against the invitation marker. */
+export function parseInvitationToken(presented: string): ParsedOAuthToken | null {
+  if (typeof presented !== 'string') return null;
+  const trimmed = presented.trim();
+  if (!trimmed.startsWith(INVITATION_MARKER)) return null;
+  const dot = trimmed.indexOf('.');
+  if (dot <= INVITATION_MARKER.length) return null;
+  const prefix = trimmed.slice(0, dot);
+  const secret = trimmed.slice(dot + 1);
+  if (secret.length < 16 || /[^A-Za-z0-9_-]/.test(secret)) return null;
+  if (!/^brnv_[0-9a-f]{16}$/.test(prefix)) return null;
+  return { prefix, secret };
 }
 
 export function parseOAuthToken(presented: string): ParsedOAuthToken | null {

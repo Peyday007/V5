@@ -1137,6 +1137,212 @@ describe('the operator console', () => {
     expect(later.html).not.toContain(shown!);
   });
 
+  /* ---------------------------------------------------------------- */
+  /* Invitations                                                        */
+  /* ---------------------------------------------------------------- */
+
+  /** Mint an invitation and pull the link out of the one page that shows it. */
+  async function invite(id: string): Promise<string | null> {
+    const made = await post(`/operator/workers/${id}/invite`, {}, { cookie: adminCookie });
+    if (made.status !== 200) return null;
+    return /https?:\/\/[^<"\s]*\/oauth\/invite\/brnv_[0-9a-f]{16}\.[A-Za-z0-9_-]+/.exec(made.html)?.[0] ?? null;
+  }
+
+  /** Open an invitation the way a recipient would, and keep its cookie. */
+  async function openInvite(url: string): Promise<{ status: number; cookie: string; html: string }> {
+    const response = await fetch(url, { redirect: 'manual' });
+    return {
+      status: response.status,
+      cookie: (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '',
+      html: await response.text(),
+    };
+  }
+
+  it('connects a worker for somebody who has no account here at all', async () => {
+    // The whole point: the people lending a Claude account are not participants
+    // in this Brain. Making them administrators so they can click Approve would
+    // hand them the ability to create workers and grant projects.
+    const url = await invite(workerId);
+    expect(url).toBeTruthy();
+
+    const opened = await openInvite(url!);
+    expect(opened.status).toBe(200);
+    expect(opened.html).toContain('You are ready to connect');
+    expect(opened.cookie).toContain('brain_invite=');
+
+    // No Brain session anywhere in this — only the invitation's own cookie.
+    const { verifier, challenge } = pkce();
+    const consent = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge).toString()}`, {
+      headers: { cookie: opened.cookie },
+    });
+    const html = await consent.text();
+    expect(consent.status).toBe(200);
+    expect(html).toContain('Connect');
+    // Pinned to one worker: no chooser, because nothing here is being decided.
+    expect(html).not.toContain('<select');
+
+    const form = authorizeForm(challenge, { worker_id: workerId });
+    const approved = await fetch(`${BASE}/oauth/authorize/approve`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: BASE,
+        cookie: opened.cookie,
+      },
+      body: form.toString(),
+      redirect: 'manual',
+    });
+    expect(approved.status).toBe(302);
+    const code = new URL(approved.headers.get('location') ?? '').searchParams.get('code');
+    expect(code).toBeTruthy();
+
+    // And the token it produces is the worker's, exactly as on the admin path.
+    const token = await fetch(`${BASE}/oauth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: code!,
+        redirect_uri: REDIRECT,
+        client_id: clientId,
+        code_verifier: verifier,
+      }).toString(),
+    });
+    const issued = (await token.json()) as { access_token?: string };
+    expect(issued.access_token).toBeTruthy();
+    const who = await callTool(issued.access_token!, 'brain_whoami');
+    expect(who.isError).toBe(false);
+    expect(who.structured['principalType']).toBe('WORKER');
+  });
+
+  it('spends an invitation exactly once, however many people hold the link', async () => {
+    // An invitation travels over a channel this Brain does not control — a
+    // message, an email, a forwarded screenshot. Two people opening the same
+    // link is a case to handle, not an anomaly.
+    const url = await invite(workerId);
+    const opened = await openInvite(url!);
+
+    const useIt = async (): Promise<number> => {
+      const { challenge } = pkce();
+      const response = await fetch(`${BASE}/oauth/authorize/approve`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: BASE,
+          cookie: opened.cookie,
+        },
+        body: authorizeForm(challenge, { worker_id: workerId }).toString(),
+        redirect: 'manual',
+      });
+      return response.status;
+    };
+
+    expect(await useIt()).toBe(302);
+    // The second attempt is refused rather than issuing a second connection.
+    expect(await useIt()).toBe(400);
+  });
+
+  it('hands one connection to exactly one of two simultaneous redemptions', async () => {
+    // The test above proves the ordinary case — a second click, after the first
+    // finished — and it passes even with the guard on the UPDATE removed,
+    // because a redeemed invitation stops resolving before it gets there. So it
+    // says nothing about the race the guard actually exists for.
+    //
+    // This is that race: two requests that both read the invitation as live.
+    // The `WHERE redeemed_at IS NULL` is in the same statement that sets it, so
+    // the database picks the winner and the loser gets nothing.
+    const url = await invite(workerId);
+    const opened = await openInvite(url!);
+
+    const attempt = async (): Promise<number> => {
+      const { challenge } = pkce();
+      const response = await fetch(`${BASE}/oauth/authorize/approve`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: BASE,
+          cookie: opened.cookie,
+        },
+        body: authorizeForm(challenge, { worker_id: workerId }).toString(),
+        redirect: 'manual',
+      });
+      return response.status;
+    };
+
+    const results = await Promise.all([attempt(), attempt(), attempt(), attempt()]);
+    expect(results.filter((status) => status === 302)).toHaveLength(1);
+    // The rest are refused, and none of them is a crash.
+    expect(results.filter((status) => status >= 500)).toHaveLength(0);
+  });
+
+  it('will not let an invitation approve a worker it does not name', async () => {
+    // The form is a form, and a form can be edited. If a posted worker id were
+    // trusted here, an invitation for any worker would be an invitation for
+    // every worker.
+    const other = await post(
+      '/operator/workers',
+      { name: 'not-the-invited-one', displayName: 'Not Invited' },
+      { cookie: adminCookie },
+    );
+    expect(other.status).toBe(200);
+    const list = await api<{ workers: { id: string; name: string }[] }>('GET', '/api/admin/workers', {
+      cookie: adminCookie,
+    });
+    const target = list.body.workers.find((w) => w.name === 'not-the-invited-one')!;
+    await api('POST', `/api/admin/projects/${projectId}/members`, {
+      cookie: adminCookie,
+      body: { principalId: target.id, principalType: 'WORKER', scopes: ['project:read'] },
+    });
+
+    const url = await invite(workerId);
+    const opened = await openInvite(url!);
+
+    const { challenge } = pkce();
+    const forged = await fetch(`${BASE}/oauth/authorize/approve`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: BASE,
+        cookie: opened.cookie,
+      },
+      // An invitation for one worker, pointed at another.
+      body: authorizeForm(challenge, { worker_id: target.id }).toString(),
+      redirect: 'manual',
+    });
+    expect(forged.status).toBe(403);
+    expect(await forged.text()).toContain('does not cover this worker');
+  });
+
+  it('refuses a guessed, withdrawn or expired invitation with one answer', async () => {
+    const bogus = await fetch(`${BASE}/oauth/invite/brnv_0123456789abcdef.notarealsecretatall`, {
+      redirect: 'manual',
+    });
+    expect(bogus.status).toBe(400);
+    const body = await bogus.text();
+    // One message that names every possibility at once, so it identifies none
+    // of them. Asserting the word "expired" is absent was wrong: the point is
+    // not that the reasons go unmentioned, it is that they are indistinguishable.
+    expect(body).toContain('used already, withdrawn, or expired');
+  });
+
+  it('will not invite a worker that could not do anything anyway', async () => {
+    const made = await post('/operator/workers', { name: 'no-project-worker', displayName: 'No Project' }, { cookie: adminCookie });
+    expect(made.status).toBe(200);
+    const list = await api<{ workers: { id: string; name: string }[] }>('GET', '/api/admin/workers', {
+      cookie: adminCookie,
+    });
+    const target = list.body.workers.find((w) => w.name === 'no-project-worker')!;
+    const attempt = await post(`/operator/workers/${target.id}/invite`, {}, { cookie: adminCookie });
+    expect(attempt.status).toBe(400);
+    expect(attempt.html).toContain('has no project yet');
+  });
+
+  it('will not let anybody but an administrator mint an invitation', async () => {
+    expect((await post(`/operator/workers/${workerId}/invite`, {}, { cookie: memberCookie })).status).toBe(404);
+    const access = await connectedToken();
+    expect((await post(`/operator/workers/${workerId}/invite`, {}, { bearer: access })).status).toBe(404);
+  });
+
   it('removes a worker for good, and cuts off what it was holding', async () => {
     // Disabling never removed anything, so a worker created by mistake stayed
     // on the console permanently. Remove has to mean remove — and it has to

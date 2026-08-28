@@ -40,6 +40,7 @@ import { newId, nowIso, parseJson, toJson } from './util.ts';
 // there is no cycle. Archiving revokes tokens through the same function the
 // console's Disable uses rather than repeating the statement.
 import { revokeTokensForWorker } from './oauth.ts';
+import { revokeInvitationsForWorker } from './invitations.ts';
 import {
   digestSecret,
   generateWorkerCredential,
@@ -534,6 +535,10 @@ export async function archiveWorker(id: string): Promise<Worker | null> {
   const at = nowIso();
   await revokeCredentialsForWorker(id, 'WORKER_ARCHIVED');
   await revokeTokensForWorker(id);
+  // An outstanding invitation is an approval waiting to be spent. Leaving one
+  // alive for a retired worker would mean a link sent last week could still
+  // connect something that was deliberately removed.
+  await revokeInvitationsForWorker(id);
   await getDb().run(
     `UPDATE project_memberships SET revoked_at = ?, updated_at = ?
       WHERE principal_type = 'WORKER' AND principal_id = ? AND revoked_at IS NULL`,

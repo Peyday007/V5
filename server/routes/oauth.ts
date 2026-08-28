@@ -32,13 +32,14 @@
  */
 import { Router } from 'express';
 import type { Request, RequestHandler, Response } from 'express';
-import { authenticateRequest, originIsSameSite } from '../services/identity/authenticate.ts';
+import { authenticateRequest, originIsSameSite, parseCookies } from '../services/identity/authenticate.ts';
 import {
   digestSecret,
   generateOAuthToken,
   generateOpaqueSecret,
   parseOAuthToken,
   verifyPkceS256,
+  parseInvitationToken,
 } from '../services/identity/secrets.ts';
 import {
   ACCESS_TOKEN_TTL_MS,
@@ -54,7 +55,13 @@ import {
 } from '../repos/oauth.ts';
 import { getWorker, listWorkers, listMembershipsForPrincipal, recordIdentityEvent } from '../repos/identity.ts';
 import { getProject } from '../repos/projects.ts';
-import type { Principal } from '../domain/types.ts';
+import {
+  createInvitation,
+  findLiveInvitation,
+  redeemInvitation,
+  INVITATION_TTL_MS,
+} from '../repos/invitations.ts';
+import type { Principal, Worker, WorkerInvitation } from '../domain/types.ts';
 import { card, esc, page } from './pages.ts';
 
 export const OAUTH_BASE = '/oauth';
@@ -168,6 +175,51 @@ function redirectUriIsRegistered(registered: string[], presented: string): boole
  * A project member cannot do it, and a worker certainly cannot — a worker
  * approving its own connection would be a machine widening its own access.
  */
+/**
+ * The name of the cookie an opened invitation leaves behind.
+ *
+ * Opening the link does not connect anything — it puts the invitation into the
+ * browser that will need it, because Claude constructs the authorize URL itself
+ * and there is nowhere to put a token in it. So the sequence is: open the link,
+ * then start the connection in Claude, and the consent screen finds it here.
+ */
+const INVITE_COOKIE = 'brain_invite';
+
+/**
+ * An invitation standing in for a signed-in administrator.
+ *
+ * Deliberately a separate function from `approver` rather than a branch inside
+ * it. They authorize different things: an administrator may connect any worker,
+ * and an invitation may connect exactly the one it names. Folding them together
+ * would make it one forgotten check away from an invitation approving anything,
+ * which is the whole risk of sending one over a channel the Brain does not
+ * control.
+ *
+ * A bearer token is ignored here for the same reason it is on the admin path.
+ */
+async function invitedApproval(
+  req: Request,
+): Promise<{ invitation: WorkerInvitation; worker: Worker; approvedByUserId: string } | null> {
+  if (req.header('authorization')) return null;
+  // The application parses cookies itself rather than mounting a parser, so
+  // `req.cookies` is always undefined here — reaching for it silently disables
+  // this whole path, which is exactly what it did until the tests said so.
+  const raw = parseCookies(req.header('cookie'))[INVITE_COOKIE];
+  if (typeof raw !== 'string') return null;
+  const parsed = parseInvitationToken(raw);
+  if (!parsed) return null;
+
+  const invitation = await findLiveInvitation(parsed.prefix, parsed.secret);
+  if (!invitation) return null;
+
+  const worker = await getWorker(invitation.workerId);
+  // An invitation for a worker that has since been disabled or removed connects
+  // nothing. The worker's current state decides, not the invitation's.
+  if (!worker || worker.disabled) return null;
+
+  return { invitation, worker, approvedByUserId: invitation.createdByUserId };
+}
+
 async function approver(req: Request): Promise<Principal | null> {
   // A bearer token must not authorize a consent screen, so the header is
   // ignored here and only the browser session counts.
@@ -296,6 +348,73 @@ export function oauthRouter(): Router {
 
   /* -- Authorize --------------------------------------------------------- */
 
+  /**
+   * Open an invitation.
+   *
+   * This connects nothing. It puts the invitation into the browser that is
+   * about to need it and then gets out of the way, because Claude builds the
+   * authorize URL itself and there is nowhere in it to carry a token.
+   *
+   * Opening deliberately does not spend the invitation. Somebody who closes the
+   * tab, or whose first attempt fails, should not need a new link — it is spent
+   * when a connection is actually authorized, and nowhere else.
+   */
+  router.get('/invite/:token', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      const parsed = parseInvitationToken(req.params['token'] ?? '');
+      const invitation = parsed ? await findLiveInvitation(parsed.prefix, parsed.secret) : null;
+      const worker = invitation ? await getWorker(invitation.workerId) : null;
+
+      // Unknown, revoked, spent, expired, and pointing at a worker that has
+      // since been removed are one answer. Anything finer tells a person
+      // holding a guessed link which part of their guess was right.
+      if (!parsed || !invitation || !worker || worker.disabled) {
+        await audit({ action: 'OAUTH_INVITE_OPEN', actor: null, targetId: null, result: 'DENIED' });
+        errorPage(
+          res,
+          400,
+          'This invitation cannot be used',
+          'It may have been used already, withdrawn, or expired. Ask for a new one.',
+        );
+        return;
+      }
+
+      res.cookie(INVITE_COOKIE, req.params['token'] ?? '', {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: req.protocol === 'https',
+        path: '/',
+        maxAge: 60 * 60 * 1000,
+      });
+      await audit({
+        action: 'OAUTH_INVITE_OPEN',
+        actor: null,
+        targetId: invitation.workerId,
+        result: 'SUCCESS',
+      });
+
+      res.type('html').send(
+        page(
+          'Invitation accepted',
+          card(`<h1>You are ready to connect</h1>
+           <p class="sub">This browser can now connect <strong>${esc(worker.displayName)}</strong>,
+             and nothing else. Leave this tab open and go back to Claude.</p>
+           <div class="grant">
+             <dt>Next</dt>
+             <dd>In Claude, open <strong>Settings → Connectors</strong>, add a connector pointing at
+               <code>${esc(issuerFor(req))}/mcp</code>, then click <strong>Connect</strong>.</dd>
+             <dt>What this gives away</dt>
+             <dd>Nothing of yours. Claude receives a token for that one worker, which the person who
+               invited you can withdraw at any time. No account is created for you, and you are not
+               being asked for a password.</dd>
+           </div>
+           <p class="note">This invitation is good for one connection. If it stops working, ask for
+             a fresh link rather than reusing this one.</p>`),
+        ),
+      );
+    })();
+  });
+
   router.get('/authorize', (req: Request, res: Response) => {
     void (async (): Promise<void> => {
       const params = readAuthorizeParams(req.query as Record<string, unknown>);
@@ -317,11 +436,21 @@ export function oauthRouter(): Router {
       }
 
       const person = await approver(req);
-      if (!person) {
-        res.type('html').send(signInPage(req, params, client.clientName, null));
+      if (person) {
+        res.type('html').send(await consentPage(req, params, client.clientName, person, null));
         return;
       }
-      res.type('html').send(await consentPage(req, params, client.clientName, person, null));
+
+      // No administrator here. An invitation carries one's approval instead,
+      // for exactly the worker it names — so the screen offers that worker and
+      // no choice, rather than a list.
+      const invited = await invitedApproval(req);
+      if (invited) {
+        res.type('html').send(invitedConsentPage(req, params, client.clientName, invited.worker));
+        return;
+      }
+
+      res.type('html').send(signInPage(req, params, client.clientName, null));
     })();
   });
 
@@ -417,24 +546,81 @@ export function oauthRouter(): Router {
       }
 
       const person = await approver(req);
-      if (!person) {
-        await audit({ action: 'OAUTH_AUTHORIZE', actor: null, targetId: params.clientId, result: 'DENIED', metadata: { reason: 'NOT_ADMIN' } });
+      const invited = person ? null : await invitedApproval(req);
+      if (!person && !invited) {
+        // Somebody who arrived with an invitation gets told about the
+        // invitation, not about administrators. This is the ordinary case of a
+        // second click or a back button after connecting, and telling that
+        // person they need to be a Brain administrator sounds like a fault in
+        // the Brain rather than a link that has already been used.
+        //
+        // It discloses nothing: they know they had an invitation, and the
+        // message is the same one every dead invitation gets.
+        const presentedInvitation = parseCookies(req.header('cookie'))[INVITE_COOKIE] !== undefined;
+        await audit({
+          action: 'OAUTH_AUTHORIZE',
+          actor: null,
+          targetId: params.clientId,
+          result: 'DENIED',
+          metadata: { reason: presentedInvitation ? 'INVITATION_NOT_LIVE' : 'NOT_ADMIN' },
+        });
+        if (presentedInvitation) {
+          errorPage(
+            res,
+            400,
+            'This invitation cannot be used',
+            'It may have been used already, withdrawn, or expired. Ask for a new one.',
+          );
+          return;
+        }
         errorPage(res, 403, 'Not authorized', 'Only a signed-in Brain administrator may connect a worker.');
         return;
       }
 
       const workerId = typeof body['worker_id'] === 'string' ? body['worker_id'] : '';
+
+      // The invitation names the worker. The form is a form, and a form can be
+      // edited — so on the invited path the posted id is checked against the
+      // invitation rather than trusted, and a mismatch is refused outright
+      // instead of being quietly corrected. An invitation that could approve a
+      // different worker would be an invitation to approve any worker.
+      if (invited && workerId !== invited.worker.id) {
+        await audit({
+          action: 'OAUTH_AUTHORIZE',
+          actor: null,
+          targetId: invited.worker.id,
+          result: 'DENIED',
+          metadata: { reason: 'INVITATION_WORKER_MISMATCH' },
+        });
+        errorPage(res, 403, 'Not authorized', 'That invitation does not cover this worker.');
+        return;
+      }
+
       const worker = workerId ? await getWorker(workerId) : null;
+
+      /**
+       * Say what went wrong, on whichever screen the caller is actually on.
+       *
+       * An administrator gets the chooser back with the problem on it. Somebody
+       * on an invitation has nothing to choose, so they get a plain refusal
+       * rather than a list of workers they were never offered.
+       */
+      const refuse = async (detail: string): Promise<void> => {
+        if (person) {
+          res.status(400).type('html').send(
+            await consentPage(req, params, client.clientName, person, detail),
+          );
+          return;
+        }
+        errorPage(res, 400, 'This connection cannot be completed', detail);
+      };
+
       if (!worker) {
-        res.status(400).type('html').send(
-          await consentPage(req, params, client.clientName, person, 'Choose a worker to connect.'),
-        );
+        await refuse('Choose a worker to connect.');
         return;
       }
       if (worker.disabled) {
-        res.status(400).type('html').send(
-          await consentPage(req, params, client.clientName, person, 'That worker is disabled.'),
-        );
+        await refuse('That worker is disabled.');
         return;
       }
       // A worker with no membership can do nothing, and connecting one is
@@ -442,14 +628,41 @@ export function oauthRouter(): Router {
       // puzzling refusal.
       const memberships = await listMembershipsForPrincipal('WORKER', worker.id);
       if (memberships.filter((m) => m.active).length === 0) {
-        res.status(400).type('html').send(
-          await consentPage(
-            req,
-            params,
-            client.clientName,
-            person,
-            'That worker is not a member of any project yet, so it could not do anything. Grant it a project first.',
-          ),
+        await refuse(
+          'That worker is not a member of any project yet, so it could not do anything. Grant it a project first.',
+        );
+        return;
+      }
+
+      /**
+       * Spend the invitation before issuing anything.
+       *
+       * A single guarded UPDATE, and losing it is an ordinary outcome: an
+       * invitation travels over a channel the Brain does not control, so two
+       * people opening the same link at once is a case to handle rather than an
+       * anomaly. Exactly one of them gets the connection.
+       *
+       * Deliberately before `issueAuthorizationCode`, not after. Spending first
+       * and failing later costs somebody a link; issuing first and failing to
+       * spend would leave an invitation that still works after it was used.
+       *
+       * A second click reaching this point is already filtered out above, since
+       * a redeemed invitation stops resolving. What remains is the genuine race:
+       * two requests that both read it as live, one of which loses the UPDATE.
+       */
+      if (invited && !(await redeemInvitation(invited.invitation.id))) {
+        await audit({
+          action: 'OAUTH_AUTHORIZE',
+          actor: null,
+          targetId: worker.id,
+          result: 'DENIED',
+          metadata: { reason: 'INVITATION_ALREADY_USED' },
+        });
+        errorPage(
+          res,
+          400,
+          'This invitation cannot be used',
+          'It may have been used already, withdrawn, or expired. Ask for a new one.',
         );
         return;
       }
@@ -460,7 +673,10 @@ export function oauthRouter(): Router {
         clientId: params.clientId,
         // The identity the token will carry — chosen here, by a human.
         workerId: worker.id,
-        approvedByUserId: person.id,
+        // The human who decided. On the invited path that is whoever created the
+        // invitation, not whoever clicked — the recipient authorized nothing,
+        // they spent an authorization somebody else had already given.
+        approvedByUserId: person ? person.id : invited!.approvedByUserId,
         redirectUri: params.redirectUri,
         codeChallenge: params.codeChallenge,
         codeChallengeMethod: 'S256',
@@ -473,8 +689,16 @@ export function oauthRouter(): Router {
         actor: person,
         targetId: worker.id,
         result: 'SUCCESS',
-        metadata: { clientId: params.clientId, workerName: worker.name },
+        metadata: {
+          clientId: params.clientId,
+          workerName: worker.name,
+          ...(invited ? { via: 'INVITATION', invitationId: invited.invitation.id } : {}),
+        },
       });
+
+      // The invitation is spent, so the cookie is litter at best and a puzzle
+      // at worst if the same browser connects again later.
+      if (invited) res.clearCookie(INVITE_COOKIE, { path: '/' });
 
       const location = new URL(params.redirectUri);
       location.searchParams.set('code', code.plaintext);
@@ -716,6 +940,43 @@ function signInPage(
      </form>
      <p class="note">This is the same account you use for the Brain. Your password is
        never shared with ${esc(clientName)}.</p>`),
+  );
+}
+
+/**
+ * The consent screen somebody reaches through an invitation.
+ *
+ * One worker, named, with no way to choose another — the approval was made when
+ * the invitation was created, and this page is where it is spent rather than
+ * where it is decided. It shows what the worker can reach so the person
+ * connecting can see what they are lending their account to, and it does not
+ * name the projects' contents or anyone's account.
+ */
+function invitedConsentPage(
+  req: Request,
+  params: AuthorizeParams,
+  clientName: string,
+  worker: Worker,
+): string {
+  return page(
+    'Connect',
+    card(`<h1>Connect ${esc(worker.displayName)}</h1>
+     <p class="sub"><strong>${esc(clientName)}</strong> is asking to act as this worker. It will get
+       that worker's access — nothing more, and nothing of yours.</p>
+     <div class="grant">
+       <dt>Worker</dt><dd><code>${esc(worker.name)}</code></dd>
+       <dt>You are</dt>
+       <dd>connecting on an invitation. No Brain account is created for you, and you are not signing
+         in to anything.</dd>
+     </div>
+     <form method="post" action="${OAUTH_BASE}/authorize/approve">
+       ${hiddenFields(params)}
+       <input type="hidden" name="worker_id" value="${esc(worker.id)}">
+       <button type="submit">Approve</button>
+     </form>
+     <p class="note">Whoever invited you can withdraw this at any time, and doing so cuts the
+       connection off on its next call. Nothing about your Claude account reaches this Brain — not a
+       password, a cookie, or a session.</p>`),
   );
 }
 
