@@ -45,6 +45,7 @@ import { CONNECTOR_SCOPES } from '../domain/types.ts';
 import type { Principal, WorkItem, WorkerScope } from '../domain/types.ts';
 import { generateInvitationToken } from '../services/identity/secrets.ts';
 import { listLayers } from '../repos/layers.ts';
+import { getDocument } from '../repos/documents.ts';
 import { createRun } from '../repos/runs.ts';
 import {
   createOrchestration,
@@ -405,6 +406,11 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
         (await listOrchestrationsByProject(project.id)).slice(0, 6).map(async (orchestration) => ({
           orchestration,
           fragments: await currentFragments(orchestration.id),
+          // The whole point of running a packet is reading what it filed, and
+          // the main UI has no project switcher — it opens whichever project
+          // sorts first. Without a link from here, an operator can watch a
+          // packet succeed and have nowhere to go and check its citations.
+          document: orchestration.documentId ? await getDocument(orchestration.documentId) : null,
         })),
       ),
     })),
@@ -414,7 +420,7 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
     .filter((group) => group.packets.length > 0)
     .map((group) => {
       const rows = group.packets
-        .map(({ orchestration, fragments }) => {
+        .map(({ orchestration, fragments, document }) => {
           const awaiting = fragments.filter((fragment) => fragment.status === 'PLANNED');
           const counts = ['ACCEPTED', 'BLOCKED', 'QUEUED', 'VALIDATING']
             .map((state) => ({ state, n: fragments.filter((f) => f.status === state).length }))
@@ -474,6 +480,13 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
             <div class="meta"><code>${esc(orchestration.id)}</code> · ${esc(orchestration.status)}${
               counts ? ` · ${esc(counts)}` : ''
             }${orchestration.verdict ? ` · audit ${esc(orchestration.verdict)}` : ''}</div>
+            ${
+              document && document.storageKey
+                ? `<div class="result"><strong>Filed as ${esc(document.canonicalName)}.</strong>
+                   <a href="/files/${esc(document.storageKey)}">Open it and check the citations</a> —
+                   every claim in the ledger carries its id, its URL and the passage it came from.</div>`
+                : ''
+            }
             ${
               orchestration.failureReason
                 ? `<div class="result">${esc(orchestration.failureReason)}</div>`
