@@ -96,6 +96,9 @@ audit (`recordAuditPasses`, extracted from `runDynamicAudit`).
 | Every research type declares `IDEMPOTENT` **and** names what provides it | a type cannot claim the protection without it |
 | An audit item takes a role from a closed set and nothing else | including refusing an extra field |
 
+| The runner never creates a second item for work that already has one | see below — this is the fault that mattered most |
+| A plan job that produced no fragments stops rather than re-planning | not retried with a fresh key |
+
 `tests/workQueue.test.ts` adds six checkpoint tests: a note is written under a
 live lease, refused under an expired one, readable by the next claimant with its
 author, unforgeable by naming another worker, bounded per attempt, and truncated
@@ -120,6 +123,42 @@ the *reported count* rather than the *stored flag*, and the reported count is
 computed inside `applyGate` before the sabotaged line. The reported number and
 the stored row are different facts, and the stored one is what the synthesis
 reads. The tests now assert both, and three fail instead of one.
+
+## Faults found before the packet ran
+
+Four, and they are recorded rather than quietly fixed because three of them are
+the kind that would have been found by a live run going wrong instead.
+
+**1. The runner could create a second work item for one fragment.** The guard
+that asked "is there already work for this?" only looked at QUEUED and LEASED
+items. So a worker that completed a `RESEARCH_FRAGMENT` without ever calling
+`brain_submit_claims` left a fragment still QUEUED with no live item, and the
+next advance enqueued another one.
+
+The loop is the lesser problem. **A second work item has a different id, and
+Step 6 keys a research effect from the work item.** Two items for one fragment
+are two idempotency scopes, and the second could have recorded a second claim
+ledger for the same fragment — the exact duplication the whole mechanism exists
+to prevent, reintroduced in the layer above it. The rule is now one item per
+(type, target) for the life of the packet, and an item that finished without
+moving the state it should have moved is a fault a person sees rather than
+something to retry with a fresh key.
+
+**2. The tests asserted the reported count rather than the stored flag.** Found
+by inverting the gate; described above.
+
+**3. `RESEARCH_AUDIT` silently dropped unknown payload fields**, following the
+registry's normal behaviour, which is right for an echo. An audit item is the
+one place a prompt gets near a model, and a caller who put `instructions` in the
+payload would have believed they had steered the auditor. It refuses now.
+
+**4. The hosted harness failed on its own history.** One check enqueued at the
+default priority instead of through the seed helper, which is the *same* bug
+that helper's comment already describes and that cost a red deploy once before —
+fixed in one place and missed in another. Both times it looked like flakiness,
+because the first pass drains the queue and the second then reaches the item.
+The workaround is priority 9; the repair is cancelling the scope's leftovers at
+the start of a run, so no check in that file depends on the queue's history.
 
 ## What only passes its tests
 
