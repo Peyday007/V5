@@ -71,6 +71,18 @@ export interface AdvanceResult {
   enqueued: { workType: string; workItemId: string; fragmentKey: string | null }[];
   /** Why nothing was enqueued, when nothing was. */
   waitingOn: string | null;
+  /**
+   * Set when approving a fixture ran it, because "nothing was queued" is a
+   * true statement about a fixture and a badly misleading one: nothing was
+   * queued *because the work was already done*, not because it failed.
+   */
+  ran?: {
+    acceptedFragments: number;
+    blockedFragments: number;
+    acceptedClaims: number;
+    rejectedClaims: number;
+    canonicalName: string | null;
+  };
 }
 
 /**
@@ -516,6 +528,13 @@ export async function approvePlan(input: {
       status: 'NEEDS_HUMAN',
       enqueued: [],
       waitingOn: report.stoppedBecause,
+      ran: {
+        acceptedFragments: report.acceptedFragments,
+        blockedFragments: report.blockedFragments,
+        acceptedClaims: report.acceptedClaims,
+        rejectedClaims: report.rejectedClaims,
+        canonicalName: report.canonicalName,
+      },
     };
   }
 

@@ -1094,15 +1094,26 @@ export function operatorRouter(): Router {
         metadata: { approvedPlan: true, enqueued: result.enqueued.length },
       });
 
-      res.type('html').send(
-        await consolePage(person, {
-          ok:
-            result.enqueued.length > 0
-              ? `Approved. ${result.enqueued.length} research job(s) queued — a connected worker ` +
-                'will claim them.'
-              : `Approved, but nothing was queued: ${result.waitingOn ?? 'nothing was waiting'}.`,
-        }),
-      );
+      /**
+       * Three different things can happen, and the first version of this said
+       * the same discouraging sentence for two of them.
+       *
+       * A fixture that ran successfully queues nothing — because the work is
+       * already done — and reporting that as "nothing was queued" reads as a
+       * failure of exactly the thing that just worked.
+       */
+      const message = result.ran
+        ? `Ran. ${result.ran.acceptedFragments} fragment(s) cleared the gate and ` +
+          `${result.ran.blockedFragments} did not; ${result.ran.acceptedClaims} claim(s) ` +
+          `accepted, ${result.ran.rejectedClaims} rejected. Filed as ` +
+          `${result.ran.canonicalName ?? 'a document in this project'}. Open the packet below ` +
+          'to see which claims were refused and why.'
+        : result.enqueued.length > 0
+          ? `Approved. ${result.enqueued.length} research job(s) queued — a connected worker ` +
+            'will claim them.'
+          : `Nothing happened: ${result.waitingOn ?? 'nothing was waiting'}.`;
+
+      res.type('html').send(await consolePage(person, { ok: message }));
     })();
   });
 

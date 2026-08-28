@@ -983,6 +983,40 @@ describe('test packets', () => {
     expect(after?.failureReason).toContain('audit');
   });
 
+  it('report what they did, because "nothing was queued" reads as a failure', async () => {
+    const packet = await createFixturePacket({ createdByUserId: 'usr_someone' });
+    const result = await approvePlan({
+      orchestrationId: packet.orchestration.id,
+      approvedByUserId: 'usr_someone',
+    });
+
+    // A fixture queues nothing *because the work is already done*, and saying
+    // only that would describe the success exactly as it describes a failure.
+    expect(result.enqueued).toHaveLength(0);
+    expect(result.ran).toBeDefined();
+    expect(result.ran!.acceptedFragments).toBeGreaterThan(0);
+    expect(result.ran!.blockedFragments).toBeGreaterThan(0);
+    expect(result.ran!.rejectedClaims).toBeGreaterThan(0);
+    expect(result.ran!.canonicalName).toBeTruthy();
+  });
+
+  it('say nothing was waiting when a plan has already been approved', async () => {
+    const packet = await createFixturePacket({ createdByUserId: 'usr_someone' });
+    await approvePlan({
+      orchestrationId: packet.orchestration.id,
+      approvedByUserId: 'usr_someone',
+    });
+
+    // The second press. Distinguishable from the first, which is the whole
+    // point — the operator saw this message and could not tell which it was.
+    const again = await approvePlan({
+      orchestrationId: packet.orchestration.id,
+      approvedByUserId: 'usr_someone',
+    });
+    expect(again.ran).toBeUndefined();
+    expect(again.waitingOn).toBe('nothing is awaiting approval');
+  });
+
   it('refuse to run the fixture claims against a packet that is not a fixture', async () => {
     // The guard that matters most in the file. This path supplies its own
     // claims, so pointing it at real research would write fixture content into
