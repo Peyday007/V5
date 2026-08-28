@@ -91,6 +91,14 @@ server code when the operation runs.
 and scopes, project membership, credential lifecycle, the audit, and the threat
 model including what it does *not* defend against.
 
+A connected Claude does the research, and the Brain decides what counts. A worker
+is handed one bounded question with the boundaries it will be judged against,
+submits what it found, and every claim is stored **unaccepted** until the
+evidence gate rules on it — the same gate, in the same code, that judges research
+done in process. **[docs/RESEARCH-PACKETS.md](docs/RESEARCH-PACKETS.md)** is the
+design; **[docs/workers/RUNNING-A-PACKET.md](docs/workers/RUNNING-A-PACKET.md)**
+is what a person actually does, in order.
+
 It still runs **one** instance, deliberately: the atomic claiming and leases that
 make a second one safe are Step 5.
 **[docs/ROADMAP.md](docs/ROADMAP.md)** is the register of which step owns what,
