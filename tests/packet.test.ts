@@ -840,6 +840,29 @@ describe('research work types', () => {
     }
   });
 
+  it('travel with their own definition when a worker claims one', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const definition = workType('RESEARCH_FRAGMENT');
+    await enqueueWork({
+      projectId: project.id,
+      workType: 'RESEARCH_FRAGMENT',
+      payload: {},
+      requiredScopes: definition.requiredScopes,
+      orchestrationId: orchestration.id,
+      fragmentId: fragment.id,
+      createdByType: 'SYSTEM',
+    });
+
+    const value = await call('brain_claim_work', { project_id: project.id, limit: 1 });
+    const claimed = value['claimed'] as Record<string, unknown>[];
+    expect(claimed).toHaveLength(1);
+    // The name alone leaves a model to infer which tool the type calls for, and
+    // finding out by being refused costs an allowance to learn something the
+    // Brain already knew.
+    expect(claimed[0]!['workTypeDescription']).toBe(definition.description);
+  });
+
   it('the audit type takes a role from a closed set and nothing else', async () => {
     expect(workType('RESEARCH_AUDIT').validate({ role: 'JUDGE' })).toEqual({ role: 'JUDGE' });
     expect(() => workType('RESEARCH_AUDIT').validate({ role: 'ANYTHING' })).toThrow(/must be one of/);

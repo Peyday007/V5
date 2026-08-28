@@ -22,7 +22,7 @@
  * leaked worker credential must not be able to create work for the fleet or to
  * decide what an unknown outcome meant.
  */
-import type { WorkerScope } from '../domain/types.ts';
+import type { ClaimedWork, WorkerScope } from '../domain/types.ts';
 import {
   WORK_FAILURE_CATEGORIES,
   WORK_ITEM_STATES,
@@ -44,6 +44,7 @@ import {
   type ClaimScope,
 } from '../repos/workQueue.ts';
 import { getDocument, listDocuments } from '../repos/documents.ts';
+import { workType } from '../services/queue/workTypes.ts';
 import { readableText, retrieveEvidence } from '../services/documents/retrieval.ts';
 import { invalidInput, notFoundError } from './errors.ts';
 import type { McpTool } from './toolkit.ts';
@@ -323,6 +324,33 @@ const getWorkItemTool: McpTool = {
   },
 };
 
+/**
+ * What the work type means, handed over with the work.
+ *
+ * The registry's own header assumes "a worker that receives an item looks up
+ * what that type means in its own code". That is right for a worker somebody
+ * wrote; it is not right for the workers this Brain actually has, which read
+ * the name `RESEARCH_PLAN` and have to infer the rest.
+ *
+ * So the registered description travels with the claim. It is not a prompt and
+ * cannot become one: it is the type's own definition, authored here, from a
+ * closed registry a caller cannot add to. The alternative is a capable model
+ * guessing which tool a type calls for and finding out by being refused, which
+ * costs an allowance to learn something the Brain already knew.
+ */
+function describeClaimed(item: ClaimedWork): Record<string, unknown> {
+  let description: string | null = null;
+  try {
+    description = workType(item.workType).description;
+  } catch {
+    // A type that is no longer registered. The item still gets handed over —
+    // refusing it here would strand work nobody can look at — and the worker is
+    // told there is nothing to say about it rather than being told nothing.
+    description = null;
+  }
+  return { ...item, workTypeDescription: description };
+}
+
 const claimWorkTool: McpTool = {
   name: 'brain_claim_work',
   title: 'Claim queued work',
@@ -390,7 +418,7 @@ const claimWorkTool: McpTool = {
       // One claim may span projects, so the audit row records the project only
       // when the answer is unambiguous.
       projectId: claimed.length === 1 ? (claimed[0]?.projectId ?? null) : null,
-      value: { claimed },
+      value: { claimed: claimed.map(describeClaimed) },
     };
   },
 };
