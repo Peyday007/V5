@@ -160,6 +160,40 @@ because the first pass drains the queue and the second then reaches the item.
 The workaround is priority 9; the repair is cancelling the scope's leftovers at
 the start of a run, so no check in that file depends on the queue's history.
 
+## What the test packet found in its first hour
+
+The fixture was built so the pipeline could be judged before an allowance was
+spent on it. It earned that immediately: three defects, all of which would
+otherwise have surfaced during a run somebody was paying for, and two of which
+had nothing to do with fixtures at all.
+
+**1. Success and no-op read identically.** Approving a fixture reported
+"Approved, but nothing was queued" — true, because a fixture queues nothing
+*since the work is already done* — and a plan with nothing awaiting approval
+reported the same sentence. An operator pressed the button, got that message,
+and had no way to tell which had happened. It now says what it did: fragments
+cleared, fragments blocked, claims accepted and refused, and what it filed as.
+
+**2. Every packet the Brain has ever filed had broken markdown.** The ledger
+builder stripped every empty string in the document to drop two optional
+fields, and took the deliberate blank lines with them — so `## Evidence ledger`
+sat against the rule above it and rendered as part of it rather than as a
+heading. Invisible to the code and wrong to a reader, which is why it survived
+until somebody read a filed document. Not a fixture bug; a bug in `filing.ts`
+that fixtures made visible.
+
+**3. A second packet on one layer could not file.** `FOUNDATION` targets the
+layer's foundation version by definition, and every packet was created as a
+FOUNDATION — so the second one targeted `v1` again and the importer correctly
+declined it as a duplicate canonical name. Correct refusal, baffling message,
+and the operator did nothing wrong. It would have hit real packets identically.
+Found by running a second test packet, which is exactly what somebody does
+after reading the first one.
+
+The general point is worth keeping: **the first packet through a pipeline is
+both the thing being tested and, if it is real, the thing being paid for.** A
+fixture separates those.
+
 ## What only passes its tests
 
 - **Nothing here has run against a live Claude.** The suite drives the tool
@@ -176,10 +210,45 @@ the start of a run, so no check in that file depends on the queue's history.
   its gate stops at `NEEDS_HUMAN`, which is honest and is not the same as
   repaired.
 
+## What has now been watched happen, live
+
+A test packet ran against the deployed Brain — production Postgres, Supabase
+storage — and did this:
+
+```
+Test packet — protocol notes — TEST PACKET
+orc_569f8cc5ffec42668927 · NEEDS_HUMAN · 2 accepted, 1 blocked
+Filed. The audit is the one part a fixture cannot stand in for …
+```
+
+Which is the whole Brain-side pipeline: a plan a person approved, claims stored
+unaccepted, the gate applying all seven conditions and refusing one fragment
+outright, a synthesis assembled only from what survived, citations resolved
+against accepted claims, and a document filed under the Brain's own canonical
+name. Nothing was spent.
+
+The fragment that failed is the one worth noting. Its source is real, the quote
+is accurate, and the claim it supports is true — about the **2025-11-25** MCP
+revision, when the fragment asked about **2026-07-28**. A correct fact,
+correctly cited, answering a different question, refused by the fourth gate
+condition. That is the failure mode the scope fields exist for, and it is now
+observed rather than asserted.
+
 ## What nobody has watched happen
 
-*(Filled in after the live run. Until then this section is the reason Step 9 is
-not closed.)*
+**A worker doing the research.** Everything above was driven by fixture content
+through the same acceptance path; nothing has yet come in over `/mcp` from a
+real Claude and been gated. Until that has happened, Step 9's own question —
+*can a real Claude Max worker carry a packet from intent to an audited
+document* — is answered only for the Brain's half.
+
+**The audit, in any form.** Three roles, three work items, a judge whose
+structured output reaches `recordAudit`. The recording half is the same code
+`runDynamicAudit` uses and the existing audit suite covers it; the *sequencing*
+of three work items into it has never run.
+
+**A packet that needed repairing.** `repair.ts` and `replan.ts` remain wired
+only to the push path.
 
 ---
 
