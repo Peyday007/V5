@@ -26,6 +26,28 @@
  * Registering a research or extraction type here before Step 6 exists would
  * mean a redelivered item spending the user's quota a second time. That is the
  * bug this boundary exists to prevent, so the registry stays honest about it.
+ *
+ * ---------------------------------------------------------------------------
+ * Why there is a second one now
+ * ---------------------------------------------------------------------------
+ *
+ * `SYNTHETIC_ECHO` proves the queue and nothing else. It hands a note back, so
+ * a worker that never read it would look identical to one that did — which is
+ * exactly what you want when the queue is the thing under test, and useless for
+ * finding out whether real work flows through.
+ *
+ * `SUMMARIZE_PASSAGE` is the smallest thing that cannot be faked. The worker
+ * has to read the passage and produce something that depends on it. It costs a
+ * little of the account's allowance, which is the point: an end-to-end test
+ * that spends nothing has not tested the part where spending happens.
+ *
+ * It stays inside the same boundary. The passage is bounded and travels in the
+ * payload, so nothing is fetched, no document is touched and no quota-metered
+ * research pipeline runs. Repeating it re-reads the same text for the same
+ * answer — the summary may differ in wording, and that changes nothing, because
+ * completion is idempotent by work item and a second attempt cannot record a
+ * second result. Still safe to perform twice, which is the bar for being in
+ * this registry at all.
  */
 import type { WorkerScope } from '../../domain/types.ts';
 
@@ -101,6 +123,37 @@ register({
     // dropped rather than stored, so the payload cannot become a place to smuggle
     // data past the size bound or the schema.
     return note === undefined ? {} : { note };
+  },
+});
+
+const MAX_PASSAGE_CHARS = 4000;
+
+register({
+  type: 'SUMMARIZE_PASSAGE',
+  description:
+    'Carries a short passage and asks a worker to read it and hand back a summary. ' +
+    'The first work that makes the worker actually think rather than echo, and the ' +
+    'smallest thing that does.',
+  requiredScopes: ['queue:claim'],
+  defaultMaxAttempts: 3,
+  safeToRepeat: true,
+  validate(payload: unknown): Record<string, unknown> {
+    const record = asRecord(payload);
+    const passage = record['passage'];
+    if (typeof passage !== 'string' || passage.trim().length === 0) {
+      throw new InvalidWorkPayload('"passage" must be a non-empty string.');
+    }
+    if (passage.length > MAX_PASSAGE_CHARS) {
+      throw new InvalidWorkPayload(`"passage" may be at most ${MAX_PASSAGE_CHARS} characters.`);
+    }
+    const question = record['question'];
+    if (question !== undefined && typeof question !== 'string') {
+      throw new InvalidWorkPayload('"question" must be a string when present.');
+    }
+    if (typeof question === 'string' && question.length > MAX_NOTE_CHARS) {
+      throw new InvalidWorkPayload(`"question" may be at most ${MAX_NOTE_CHARS} characters.`);
+    }
+    return question === undefined ? { passage } : { passage, question };
   },
 });
 

@@ -53,30 +53,30 @@ mislead somebody reading an audit row later.
 
 Below, `<worker>` means whatever canonical name you chose here.
 
-## 2. Grant it exactly what it needs
+## 2. Give it a project
 
-In **Grant access** on the same screen:
+In **Grant access** on the same screen, choose the worker and the project, and
+click **Grant**. There is nothing else to fill in.
 
-- **Worker** — `<worker>`
-- **Project** — the Step 8 acceptance project (**not** Deal Dispatch)
-- **Scopes** — tick only these six:
+Point a new worker at a throwaway project rather than the one holding real
+research. A worker's first run writing into work you depend on is what an
+isolated project prevents.
 
-  `project:read` · `documents:read` · `queue:read` · `queue:claim` ·
-  `queue:heartbeat` · `queue:complete`
+**You do not choose what it may do.** The Brain sets that: exactly what the
+remote tools require and nothing else. Composing a scope list by hand was a job
+with no judgement in it and two ways to get wrong, and both happened within ten
+minutes of that screen existing — a worker granted the wrong project, and
+`work:complete` ticked in place of `queue:heartbeat` because the names sit
+beside each other and one of them no remote tool reads.
 
-Leave everything else unticked. The research scopes belong to Step 9, and
-granting them now would make the "a scope it does not hold is refused" test
-meaningless.
+Scopes still exist and still matter. They bound what a stolen credential
+reaches, and they will matter more once research tools land and "reads
+evidence" stops being the same thing as "writes findings". What changed is who
+composes the set.
 
-A worker administers nothing regardless of what is ticked — administration is
-refused to a worker principal outright, in the policy, not here.
-
-**The scope names imply more granularity than exists.** There is no
-`queue:fail` and no `queue:release`: finishing an item, failing it and giving it
-back are all gated by `queue:complete`, because they are one authority — the
-right to stop holding this item. A worker with `queue:complete` can therefore
-report a blocker and hand work back, which is what you want. Reading the names
-alone suggests otherwise, and that inference has already been made once.
+**What actually constrains a worker is what has no scope at all.** It cannot
+create work, cancel work, or administer anything — that is decided in the
+policy, not on this screen, and no grant here can change it.
 
 ## 2a. If the account is not yours — send an invitation
 
@@ -167,12 +167,24 @@ Back on **`/operator`**, in **Give a worker something to do**:
 Click **Queue a synthetic echo**. The green line names the item's id, and **The
 queue** card below lists it as `QUEUED`.
 
-`SYNTHETIC_ECHO` is the only registered work type, deliberately. The queue is
-at-least-once — a lease can expire after a worker did something and before it
-recorded that it did — so the only work it may carry is work that costs nothing
-to perform twice. This one carries a short note and asks for it back, which
-exercises claiming, the lease, heartbeats, fencing and completion without
-touching a document or spending anything.
+**There are two kinds, and the difference is the point.**
+
+`SYNTHETIC_ECHO` carries a short note and asks for it back. It exercises
+claiming, the lease, heartbeats, fencing and completion without touching a
+document or spending anything — and it proves the queue and nothing else,
+because a worker that never read the note would look identical to one that did.
+
+`SUMMARIZE_PASSAGE` cannot be faked. Paste a paragraph, optionally a question,
+and the worker has to read it and produce something that depends on it. That
+costs a little of the connected account's allowance, which is the reason to use
+it: an end-to-end test that spends nothing has not tested the part where
+spending happens.
+
+Both stay inside what the queue requires. It is at-least-once — a lease can
+expire after a worker did something and before it recorded that it did — so
+everything it carries must be safe to perform twice. The passage travels in the
+item, bounded, so nothing is fetched and no document is touched, and a repeat
+cannot record a second result.
 
 **A worker cannot do this for itself.** Enqueueing is a project write and no
 worker scope grants it, so a machine credential is refused however its

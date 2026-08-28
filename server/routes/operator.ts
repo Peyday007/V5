@@ -41,7 +41,7 @@ import { createInvitation } from '../repos/invitations.ts';
 import { createProject, getProject, getProjectBySlug, listProjects } from '../repos/projects.ts';
 import { PayloadTooLarge, enqueueWork, listWorkItems } from '../repos/workQueue.ts';
 import { InvalidWorkPayload, workType } from '../services/queue/workTypes.ts';
-import { WORKER_SCOPES } from '../domain/types.ts';
+import { CONNECTOR_SCOPES } from '../domain/types.ts';
 import type { Principal, WorkItem, WorkerScope } from '../domain/types.ts';
 import { generateInvitationToken } from '../services/identity/secrets.ts';
 import { card, esc, page } from './pages.ts';
@@ -307,69 +307,6 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
       .map((worker) => `<option value="${esc(worker.id)}">${esc(worker.name)}</option>`)
       .join('');
 
-  /**
-   * The scopes, grouped, with the ones a remote worker actually uses marked.
-   *
-   * Eleven checkboxes in one flat list put `work:complete` immediately beside
-   * `queue:complete`, and somebody ticking six of them quickly got the wrong
-   * one — losing `queue:heartbeat` and gaining a scope no MCP tool reads.
-   *
-   * `work:complete` is not dead: one HTTP route requires it. It is simply not
-   * part of the remote tool surface, and a picker that cannot say so is a
-   * picker that invites exactly this. Marking which six a connector needs costs
-   * nothing and is the difference between choosing and guessing.
-   */
-  const MCP_SURFACE: readonly WorkerScope[] = [
-    'project:read',
-    'documents:read',
-    'queue:read',
-    'queue:claim',
-    'queue:heartbeat',
-    'queue:complete',
-  ];
-
-  const SCOPE_GROUPS: { title: string; note: string; scopes: readonly WorkerScope[] }[] = [
-    {
-      title: 'Reading',
-      note: 'What the worker may see.',
-      scopes: ['project:read', 'documents:read'],
-    },
-    {
-      title: 'The queue',
-      note: 'Taking work and finishing it. Enqueueing and cancelling are deliberately absent.',
-      scopes: ['queue:read', 'queue:claim', 'queue:heartbeat', 'queue:complete'],
-    },
-    {
-      title: 'Research',
-      note: 'Writing research back. No remote tool uses any of these yet.',
-      scopes: [
-        'research:read',
-        'research:write',
-        'research:propose',
-        'claims:write',
-        'sources:write',
-        'contradictions:write',
-        'checkpoints:write',
-        'blockers:report',
-        'work:complete',
-      ],
-    },
-  ];
-
-  const scopeBoxes = SCOPE_GROUPS.map(
-    (group) => `
-      <div class="scopegroup">
-        <div class="grouphead">${esc(group.title)}<span class="note"> — ${esc(group.note)}</span></div>
-        <div class="scopes">${group.scopes
-          .map(
-            (scope) =>
-              `<label><input type="checkbox" name="scopes" value="${esc(scope)}">` +
-              ` <code>${esc(scope)}</code>${MCP_SURFACE.includes(scope) ? ' <span class="pill">connector</span>' : ''}</label>`,
-          )
-          .join('')}</div>
-      </div>`,
-  ).join('');
-
   const secretCard = flash.secret
     ? card(`<h2>Credential for ${esc(flash.secret.workerName)}</h2>
         <div class="ok">This is the only time it will ever be shown. Copy it now.</div>
@@ -440,15 +377,14 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
          <select id="worker_id" name="worker_id" required>${workerOptions}</select>
          <label for="project_id">Project</label>
          <select id="project_id" name="project_id" required>${projectOptions}</select>
-         <fieldset><legend>Scopes</legend><div class="scopes">${scopeBoxes}</div></fieldset>
-         <button type="submit">Set scopes</button>
+         <button type="submit">Grant</button>
        </form>
-       <p class="note"><strong>This replaces that worker's scopes on that project</strong> — it does
-         not add to them. The boxes always start empty, so whatever you tick is the complete new
-         list, and unticking one is how you take it away.</p>
-       <p class="note">Grant the fewest scopes the work actually needs. A worker administers
-         nothing regardless of what is ticked here — administration is refused to a worker
-         principal outright.</p>`)
+       <p class="note">The Brain sets what the worker may do — exactly what the remote tools
+         require and nothing else. There is no list to compose, because composing it was a job with
+         no judgement in it and two ways to get wrong, and both happened here within ten minutes of
+         this screen existing.</p>
+       <p class="note">A worker administers nothing regardless. It cannot create work, cancel work,
+         or reach a project it was not granted — that is decided in the policy, not here.</p>`)
          : ''
      }
      ${
@@ -462,11 +398,26 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
            placeholder="Step 8 acceptance item">
          <button type="submit">Queue a synthetic echo</button>
        </form>
-       <p class="note"><code>SYNTHETIC_ECHO</code> is the only registered work type, and that is
-         deliberate: this queue is at-least-once, so until more of the pipeline is protected the
-         only work it may carry is work that costs nothing to perform twice. It carries a short
-         note and asks a worker to hand it back, which exercises claiming, the lease, heartbeats,
-         fencing and completion without touching a document or spending anything.</p>
+       <form method="post" action="${OPERATOR_BASE}/work/summarize">
+         <label for="sum_project">Project</label>
+         <select id="sum_project" name="project_id" required>${projectOptions}</select>
+         <label for="sum_passage">Passage for the worker to read</label>
+         <textarea id="sum_passage" name="passage" rows="4" maxlength="4000" required
+           placeholder="Paste a paragraph. The worker has to actually read it."></textarea>
+         <label for="sum_question">Question (optional)</label>
+         <input id="sum_question" name="question" type="text" maxlength="500"
+           placeholder="What should it tell you about the passage?">
+         <button type="submit" class="secondary">Queue a real reading</button>
+       </form>
+       <p class="note">Two kinds. <code>SYNTHETIC_ECHO</code> hands a note back, so it proves the
+         queue and nothing else — a worker that never read it would look identical to one that did.
+         <code>SUMMARIZE_PASSAGE</code> cannot be faked: the worker has to read the passage and
+         produce something that depends on it, which costs a little of that account's allowance.
+         That cost is the point, because a test that spends nothing has not tested the part where
+         spending happens.</p>
+       <p class="note">Both stay inside the boundary this queue requires. It is at-least-once, so
+         everything it carries must be safe to perform twice — the passage travels in the item,
+         nothing is fetched, no document is touched, and a repeat cannot record a second result.</p>
        <p class="note">A worker cannot enqueue its own work. Enqueueing is a project write with no
          scope that grants it, so a machine credential is refused here however it is configured —
          which is why this box exists at all.</p>`)
@@ -741,20 +692,13 @@ export function operatorRouter(): Router {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const workerId = typeof body['worker_id'] === 'string' ? body['worker_id'] : '';
       const projectId = typeof body['project_id'] === 'string' ? body['project_id'] : '';
-      // A single checkbox arrives as a string, several as an array.
-      const raw = body['scopes'];
-      const requested = Array.isArray(raw) ? raw : raw === undefined ? [] : [raw];
-
-      // Matched exactly against the enum. An unknown scope is refused rather
-      // than dropped, so a typo cannot look like a successful narrower grant.
-      const scopes: WorkerScope[] = [];
-      for (const scope of requested) {
-        if (typeof scope !== 'string' || !(WORKER_SCOPES as readonly string[]).includes(scope)) {
-          res.status(400).type('html').send(await consolePage(person, { err: 'Unknown scope.' }));
-          return;
-        }
-        scopes.push(scope as WorkerScope);
-      }
+      // The Brain composes the set; this form only names a worker and a project.
+      //
+      // A posted `scopes` field is ignored rather than honoured. The console
+      // stopped asking, so anything arriving under that name came from a hand-
+      // edited form, and quietly accepting it would put back the exact hazard
+      // the picker was removed for — with no screen left to show what happened.
+      const scopes: WorkerScope[] = [...CONNECTOR_SCOPES];
 
       const worker = await getWorker(workerId);
       if (!worker) {
@@ -799,6 +743,90 @@ export function operatorRouter(): Router {
    * request rather than frozen into a token, so there is nothing to wait for
    * and nothing to reconnect.
    */
+  /**
+   * Queue work that the worker has to actually read.
+   *
+   * `SYNTHETIC_ECHO` proves the queue. It cannot prove that a worker did
+   * anything, because handing a note back looks the same whether the passage
+   * was read or ignored — which is right for testing claiming and leases, and
+   * useless for finding out whether real work flows through the connection.
+   *
+   * This one costs a little of the connected account's allowance, and that is
+   * the point: an end-to-end test that spends nothing has not tested the part
+   * where spending happens.
+   *
+   * It is still inside the boundary the queue requires. The passage travels in
+   * the item, bounded, so nothing is fetched and no document is touched, and a
+   * redelivery re-reads the same text — the wording of a second summary may
+   * differ, and it cannot be recorded, because completion is idempotent by work
+   * item.
+   */
+  router.post('/work/summarize', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      const person = await administrator(req);
+      if (!person || !originIsSameSite(req)) {
+        denied(res);
+        return;
+      }
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const project = await getProject(typeof body['project_id'] === 'string' ? body['project_id'] : '');
+      if (!project) {
+        res.status(404).type('html').send(await consolePage(person, { err: 'No such project.' }));
+        return;
+      }
+
+      const definition = workType('SUMMARIZE_PASSAGE');
+      let payload: Record<string, unknown>;
+      try {
+        payload = definition.validate({
+          passage: typeof body['passage'] === 'string' ? body['passage'].trim() : '',
+          ...(typeof body['question'] === 'string' && body['question'].trim().length > 0
+            ? { question: body['question'].trim() }
+            : {}),
+        });
+      } catch (error) {
+        if (error instanceof InvalidWorkPayload) {
+          res.status(400).type('html').send(await consolePage(person, { err: error.message }));
+          return;
+        }
+        throw error;
+      }
+
+      let item: WorkItem;
+      try {
+        item = await enqueueWork({
+          projectId: project.id,
+          workType: definition.type,
+          payload,
+          requiredScopes: definition.requiredScopes,
+          maxAttempts: definition.defaultMaxAttempts,
+          createdByType: person.type,
+          createdById: person.id,
+        });
+      } catch (error) {
+        if (error instanceof PayloadTooLarge) {
+          res.status(400).type('html').send(await consolePage(person, { err: error.message }));
+          return;
+        }
+        throw error;
+      }
+
+      await audit({
+        actor: person,
+        action: 'QUEUE_ENQUEUE',
+        targetType: 'WORK_ITEM',
+        targetId: item.id,
+        result: 'SUCCESS',
+        metadata: { projectId: project.id, workType: item.workType },
+      });
+      res.type('html').send(
+        await consolePage(person, {
+          ok: `Queued ${item.id} in "${project.name}". A connected worker will have to read the passage to finish it.`,
+        }),
+      );
+    })();
+  });
+
   router.post('/memberships/revoke', (req: Request, res: Response) => {
     void (async (): Promise<void> => {
       const person = await administrator(req);

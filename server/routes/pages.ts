@@ -48,9 +48,13 @@ const CSS = `
   h2 { font-size:15px; margin:0 0 14px; letter-spacing:-.01em; }
   p.sub { margin:0 0 20px; color:#5b636e; font-size:14px; }
   label { display:block; font-size:13px; font-weight:600; margin:14px 0 5px; }
-  input[type=text], input[type=email], input[type=password], select {
+  textarea, input[type=text], input[type=email], input[type=password], select {
     width:100%; padding:9px 11px; border:1px solid #cfd4da; border-radius:8px; font-size:14px;
     background:#fff; color:inherit; }
+  /* Inherit nothing from the browser: a textarea defaults to a monospace face
+     and its own box model, which reads as a different control beside the
+     inputs it sits with. */
+  textarea { font-family:inherit; resize:vertical; box-sizing:border-box; }
   button { width:100%; margin-top:20px; padding:11px; border:0; border-radius:8px;
     background:#14161a; color:#fff; font-size:14px; font-weight:600; cursor:pointer; }
   button.secondary { background:#fff; color:#14161a; border:1px solid #cfd4da; }
@@ -92,7 +96,7 @@ const CSS = `
     body { background:#0e1013; color:#e8eaed; }
     .card { background:#16191d; border-color:#2a2f36; box-shadow:none; }
     p.sub, .grant dt, .note, .row .meta, legend { color:#9aa3ad; }
-    input[type=text], input[type=email], input[type=password], select {
+    textarea, input[type=text], input[type=email], input[type=password], select {
       background:#0e1013; border-color:#3a414a; color:#e8eaed; }
     button { background:#e8eaed; color:#14161a; }
     button.secondary { background:#16191d; color:#e8eaed; border-color:#3a414a; }

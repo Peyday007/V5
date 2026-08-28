@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { WORKER_SCOPES } from '../server/domain/types.ts';
+import { CONNECTOR_SCOPES } from '../server/domain/types.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = 6500 + Math.floor(Math.random() * 150);
@@ -949,7 +949,7 @@ describe('the operator console', () => {
     // it.
     const granted = await post(
       '/operator/memberships',
-      { worker_id: workerId, project_id: projectId, scopes: ['project:read'] },
+      { worker_id: workerId, project_id: projectId },
       { cookie: adminCookie },
     );
     expect(granted.status).toBe(200);
@@ -975,11 +975,7 @@ describe('the operator console', () => {
     // Put it back for the tests that follow.
     await post(
       '/operator/memberships',
-      {
-        worker_id: workerId,
-        project_id: projectId,
-        scopes: ['project:read', 'documents:read', 'queue:read', 'queue:claim', 'queue:heartbeat', 'queue:complete'],
-      },
+      { worker_id: workerId, project_id: projectId },
       { cookie: adminCookie },
     );
   });
@@ -996,16 +992,6 @@ describe('the operator console', () => {
     ).toBe(404);
   });
 
-  it('offers every scope that exists, so a new one cannot go missing from the picker', async () => {
-    // The picker is grouped by hand for legibility, which means a scope added
-    // to WORKER_SCOPES later would simply not appear — ungrantable, with
-    // nothing to notice. Grouping buys clarity; this is what it costs.
-    const shown = await operatorPage({ cookie: adminCookie });
-    for (const scope of WORKER_SCOPES) {
-      expect(shown.html, `the picker is missing ${scope}`).toContain(`value="${scope}"`);
-    }
-  });
-
   it('makes the operator choose a project rather than defaulting to one', async () => {
     // A select with no placeholder is pre-set to its first option, so a form
     // submitted without opening the dropdown grants whatever sorts first. That
@@ -1015,14 +1001,51 @@ describe('the operator console', () => {
     expect(shown.html).toContain('<option value="" disabled selected>');
   });
 
-  it('refuses an unknown scope rather than dropping it', async () => {
-    // Silently ignoring a typo would look like a successful narrower grant.
-    const bad = await post(
+  it('sets the scopes itself, and ignores any that were posted at it', async () => {
+    // Composing a scope list by hand was a job with no judgement in it and two
+    // ways to get wrong, and both happened here within ten minutes of the
+    // screen existing. The console stopped asking — so anything arriving under
+    // that name came from a hand-edited form, and honouring it would put the
+    // hazard back with no screen left to show what happened.
+    const granted = await post(
       '/operator/memberships',
       { worker_id: workerId, project_id: projectId, scopes: ['queue:read', 'queue:invented'] },
       { cookie: adminCookie },
     );
-    expect(bad.status).toBe(400);
+    expect(granted.status).toBe(200);
+
+    const access = await connectedToken();
+    const who = await callTool(access, 'brain_whoami');
+    const memberships = (who.structured['memberships'] ?? []) as { projectId: string; scopes: string[] }[];
+    const mine = memberships.find((m) => m.projectId === projectId)!;
+    expect([...mine.scopes].sort()).toEqual([...CONNECTOR_SCOPES].sort());
+  });
+
+  it('grants exactly what the remote tools require — no more, and no less', async () => {
+    // The picker used to be guarded by a test that walked the scope enum, so a
+    // scope added later could not silently vanish from a hand-grouped list.
+    // There is no list now, and the equivalent hazard moved: CONNECTOR_SCOPES
+    // drifting from what the tools actually need. A superset hands out reach
+    // nobody asked for; a subset makes some tool fail confusingly at the worst
+    // possible moment. So exercise the surface rather than compare two lists —
+    // a list can agree with itself while both are wrong.
+    await post('/operator/memberships', { worker_id: workerId, project_id: projectId }, { cookie: adminCookie });
+    const access = await connectedToken();
+
+    // One call per scope in the set, all of which must be allowed.
+    expect((await callTool(access, 'brain_get_project', { project_id: projectId })).isError).toBe(false);
+    expect((await callTool(access, 'brain_search_evidence', { project_id: projectId, query: 'anything' })).isError).toBe(false);
+    expect((await callTool(access, 'brain_list_work', { project_id: projectId })).isError).toBe(false);
+    expect((await callTool(access, 'brain_claim_work', { project_id: projectId, limit: 1 })).isError).toBe(false);
+
+    // And nothing beyond it: a worker still cannot create its own work, whatever
+    // the Brain decided to grant.
+    const enqueue = await fetch(`${BASE}/api/projects/${projectId}/work`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${access}` },
+      body: JSON.stringify({ workType: 'SYNTHETIC_ECHO', payload: {} }),
+    });
+    expect(enqueue.status).toBe(404);
   });
 
   it('queues a bounded work item for a worker to claim', async () => {
@@ -1073,6 +1096,66 @@ describe('the operator console', () => {
     // And the operation that really is about a worker still says so.
     const granted = audit.body.events.find((event) => event.action === 'GRANT_MEMBERSHIP');
     expect(granted?.targetType).toBe('WORKER');
+  });
+
+  it('queues work a worker cannot finish without reading it', async () => {
+    // The echo proves the queue and nothing else: handing a note back looks the
+    // same whether the passage was read or ignored. This is the smallest item
+    // that cannot be faked.
+    const queued = await post(
+      '/operator/work/summarize',
+      {
+        project_id: projectId,
+        passage: 'The lease generation is also the fencing token, which is why a late completion from a previous owner matches nothing.',
+        question: 'What does the generation do?',
+      },
+      { cookie: adminCookie },
+    );
+    expect(queued.status).toBe(200);
+    expect(queued.html).toContain('will have to read the passage');
+
+    const listed = await api<{ items: { workType: string; payload: Record<string, unknown> }[] }>(
+      'GET',
+      `/api/projects/${projectId}/work?state=QUEUED`,
+      { cookie: adminCookie },
+    );
+    const mine = listed.body.items.find((item) => item.workType === 'SUMMARIZE_PASSAGE');
+    expect(mine).toBeTruthy();
+    expect(mine!.payload['passage']).toContain('fencing token');
+    expect(mine!.payload['question']).toBe('What does the generation do?');
+  });
+
+  it('refuses a reading with nothing to read', async () => {
+    const empty = await post(
+      '/operator/work/summarize',
+      { project_id: projectId, passage: '   ' },
+      { cookie: adminCookie },
+    );
+    expect(empty.status).toBe(400);
+    expect(empty.html).toContain('non-empty string');
+  });
+
+  it('refuses a passage past the bound rather than truncating it', async () => {
+    // Truncating would hand the worker a different passage from the one queued,
+    // and its summary would be of text nobody chose.
+    const huge = await post(
+      '/operator/work/summarize',
+      { project_id: projectId, passage: 'x'.repeat(4001) },
+      { cookie: adminCookie },
+    );
+    expect(huge.status).toBe(400);
+    expect(huge.html).toContain('at most 4000 characters');
+  });
+
+  it('will not let anybody but an administrator queue a reading', async () => {
+    expect(
+      (await post('/operator/work/summarize', { project_id: projectId, passage: 'hello' }, { cookie: memberCookie }))
+        .status,
+    ).toBe(404);
+    const access = await connectedToken();
+    expect(
+      (await post('/operator/work/summarize', { project_id: projectId, passage: 'hello' }, { bearer: access })).status,
+    ).toBe(404);
   });
 
   it('will not queue work into a project that does not exist', async () => {
