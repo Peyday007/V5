@@ -491,6 +491,34 @@ export async function approvePlan(input: {
     },
   });
 
+  // A fixture supplies its own claims, so approving one runs it here rather
+  // than queueing work for a worker that would have nothing to research. The
+  // *approval* is identical — same screen, same decision, same event row — and
+  // that is the half worth rehearsing.
+  if (orchestration.fixture) {
+    if (approvedCount === 0) {
+      await updateOrchestration(orchestration.id, {
+        status: 'CANCELLED',
+        cancelReason: 'Every proposed fragment was rejected.',
+        cancelledAt: at,
+      });
+      return {
+        orchestrationId: orchestration.id,
+        status: 'CANCELLED',
+        enqueued: [],
+        waitingOn: 'every fragment was rejected',
+      };
+    }
+    const { runFixturePacket } = await import('./fixtures.ts');
+    const report = await runFixturePacket(orchestration.id);
+    return {
+      orchestrationId: orchestration.id,
+      status: 'NEEDS_HUMAN',
+      enqueued: [],
+      waitingOn: report.stoppedBecause,
+    };
+  }
+
   if (approvedCount === 0) {
     await updateOrchestration(orchestration.id, {
       status: 'CANCELLED',

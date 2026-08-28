@@ -52,6 +52,7 @@ import {
   listOrchestrationsByProject,
 } from '../repos/research.ts';
 import { advancePacket, approvePlan } from '../services/research/packetRunner.ts';
+import { createFixturePacket } from '../services/research/fixtures.ts';
 import { card, esc, page } from './pages.ts';
 
 export const OPERATOR_BASE = '/operator';
@@ -447,17 +448,29 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
               )
               .join('')}
             <form method="post" action="${OPERATOR_BASE}/packets/${esc(orchestration.id)}/approve">
-              <button type="submit">Approve this plan and start researching</button>
+              <button type="submit">${
+                orchestration.fixture
+                  ? 'Approve this plan and run the test packet'
+                  : 'Approve this plan and start researching'
+              }</button>
             </form>
-            <p class="note">Approving queues one job per fragment. Each one costs a little of the
-              connected account's allowance, and a fragment that cannot clear its own evidence bar
-              contributes nothing to the report rather than contributing something weaker.</p>
+            ${
+              orchestration.fixture
+                ? `<p class="note">This one spends nothing. Its claims are written into the Brain's
+              own source, and approving it runs them through the same acceptance path a worker's
+              submission takes — so what you see the gate do here is what it does.</p>`
+                : `<p class="note">Approving queues one job per fragment. Each one costs a little of
+              the connected account's allowance, and a fragment that cannot clear its own evidence
+              bar contributes nothing to the report rather than contributing something weaker.</p>`
+            }
           </div>`;
 
           return `
         <div class="row">
           <div>
-            <div class="who"><strong>${esc(orchestration.title)}</strong></div>
+            <div class="who"><strong>${esc(orchestration.title)}</strong>${
+              orchestration.fixture ? ' <span class="meta">— TEST PACKET</span>' : ''
+            }</div>
             <div class="meta"><code>${esc(orchestration.id)}</code> · ${esc(orchestration.status)}${
               counts ? ` · ${esc(counts)}` : ''
             }${orchestration.verdict ? ` · audit ${esc(orchestration.verdict)}` : ''}</div>
@@ -616,6 +629,22 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
          scope grants, which is why this box exists.</p>`)
          : ''
      }
+     ${card(`<h2>Try it without spending anything</h2>
+       <form method="post" action="${OPERATOR_BASE}/packets/fixture">
+         <button type="submit" class="secondary">Create a test packet</button>
+       </form>
+       <p class="note">A packet whose research is written into the Brain's own source rather than
+         found by anybody. It goes through the <strong>same</strong> acceptance path a worker's
+         submission takes — the same gate, the same seven conditions, the same filing and the same
+         ledger — so what you watch it do is what the Brain does.</p>
+       <p class="note">Three fragments, chosen to show the three outcomes: one that clears the gate,
+         one that clears it while losing an unsourced claim, and one that fails because its only
+         source is about a different thing than the fragment asked about. Approving it costs
+         nothing.</p>
+       <p class="note">It lives in its own project and is labelled a test packet everywhere it
+         appears, so it cannot be mistaken for research or reach a layer anything depends on. It
+         stops before the audit, which is the one part a fixture cannot honestly stand in for —
+         that needs a worker.</p>`)}
      ${packetRows ? card(`<h2>Research packets</h2>${packetRows}`) : ''}
      ${queueRows ? card(`<h2>The queue</h2>${queueRows}`) : ''}
      ${
@@ -1003,6 +1032,44 @@ export function operatorRouter(): Router {
    * load-bearing. Everything before it is free; everything after it spends the
    * connected account's allowance, one fragment at a time.
    */
+  /**
+   * Create a test packet.
+   *
+   * Here rather than in the API because it is the same kind of thing project
+   * creation and hand-queueing are: scaffolding a person needs and a machine
+   * must not have. A worker that could manufacture packets could manufacture
+   * evidence-shaped rows, and the fact that this particular content is honest
+   * is a property of the fixture rather than of the caller.
+   */
+  router.post('/packets/fixture', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      const person = await administrator(req);
+      if (!person || !originIsSameSite(req)) {
+        denied(res);
+        return;
+      }
+
+      const packet = await createFixturePacket({ createdByUserId: person.id });
+
+      await audit({
+        actor: person,
+        action: 'CREATE_PROJECT',
+        targetType: 'PROJECT',
+        targetId: packet.projectId,
+        result: 'SUCCESS',
+        metadata: { fixture: true, orchestrationId: packet.orchestration.id },
+      });
+
+      res.type('html').send(
+        await consolePage(person, {
+          ok:
+            `Test packet created with ${packet.fragments.length} proposed fragments. Read the ` +
+            'plan below and approve it — it spends nothing.',
+        }),
+      );
+    })();
+  });
+
   router.post('/packets/:orchestrationId/approve', (req: Request, res: Response) => {
     void (async (): Promise<void> => {
       const person = await administrator(req);

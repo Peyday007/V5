@@ -60,6 +60,7 @@ function mapOrchestration(row: ResearchOrchestrationRow): ResearchOrchestration 
     cancelReason: row.cancel_reason,
     heartbeatAt: row.heartbeat_at,
     autoApprove: toBool(row.auto_approve),
+    fixture: toBool(row.fixture),
     approvedAt: row.approved_at,
     approvalNote: row.approval_note,
     createdAt: row.created_at,
@@ -211,6 +212,7 @@ export interface CreateOrchestrationInput {
   repairReason?: string | null;
   /** False plans the run and then waits for a person to approve it. */
   autoApprove?: boolean;
+  fixture?: boolean;
 }
 
 export async function createOrchestration(input: CreateOrchestrationInput): Promise<ResearchOrchestration> {
@@ -219,12 +221,12 @@ export async function createOrchestration(input: CreateOrchestrationInput): Prom
   await getDb().run(
     `INSERT INTO research_orchestrations (id, project_id, layer_id, run_id, title, assignment,
        target_version, provider, model, status, attempt, parent_orchestration_id, repair_reason,
-       auto_approve, queued_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?, ?, ?)`,
+       auto_approve, fixture, queued_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, input.projectId, input.layerId, input.runId, input.title, input.assignment,
       input.targetVersion ?? null, input.provider, input.model ?? null, input.attempt ?? 1,
       input.parentOrchestrationId ?? null, input.repairReason ?? null,
-      fromBool(input.autoApprove ?? true), ts, ts, ts],
+      fromBool(input.autoApprove ?? true), fromBool(input.fixture ?? false), ts, ts, ts],
   );
   return (await getOrchestration(id))!;
 }

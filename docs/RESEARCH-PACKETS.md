@@ -198,6 +198,56 @@ may *succeed* with is decided at execution time by
 `services/identity/policy.ts` — the same module every HTTP route uses. There is
 no MCP policy module and there must never be one.
 
+## Test packets
+
+A packet costs a real account's allowance, and until somebody has watched one go
+through there is no way to know whether it is worth spending. That is a bad
+order to do things in: the first packet is both the thing being tested and the
+thing being paid for.
+
+So `services/research/fixtures.ts` builds a packet whose research is written
+into this repository. It runs everything the Brain does by itself — plan,
+approval, all seven gate conditions, acceptance and rejection, dependency
+ordering, synthesis, citation resolution, the filed artifact and its ledger —
+and touches no allowance.
+
+**It is not a way around the placeholder rule.** `routes/research.ts` refuses to
+run staged research against a provider that returns placeholder content, because
+that "would produce a report with invented citations". A fixture is different in
+the way that matters: **nothing invents anything.** Every claim is a statement
+somebody wrote down, with a stable primary source, chosen so a reader can check
+it in under a minute — the specifications this Brain's own remote boundary rests
+on, not anything commercial. A fixture that read like real research is a fixture
+somebody would eventually cite.
+
+Three things stop it ever being mistaken for research:
+
+- **Its own project.** It cannot reach a layer that holds work anybody depends
+  on.
+- **`research_orchestrations.fixture`**, a column rather than a naming
+  convention, so every query that needs to ask can — and so a fixture cannot
+  become evidence by being forgotten about.
+- **The document says so in its first line**, before anything readable as a
+  finding.
+
+What is fixture is the *input*: the claims, and the two verification judgements
+only a reader of a source can make. Everything downstream calls
+`recordFragmentClaims`, `gateFragment` and `fileResearchPacket` — the same three
+functions a worker's submission goes through. So what an operator watches a
+fixture do is what the Brain does.
+
+Three fragments, because there are three outcomes worth seeing: one that clears
+the gate, one that clears it while losing an unsourced claim, and one that fails
+because its only source is about a different revision than the fragment asked
+about — a correct fact, correctly cited, answering a different question.
+
+**It stops before the audit**, and that is the honest place. Everything earlier
+is Brain code deciding things. The audit is a model reading a document and
+forming a judgement, and there is no way to stand in for that half which does
+not amount to writing a verdict into `audits` that nobody reached. §8 exists to
+prevent exactly that and has no exception for convenience. Watching the audit
+run needs a worker, which is the one part that costs something.
+
 ## What Step 9 does not do
 
 - **No schedules.** Every packet is started by a person clicking a button.

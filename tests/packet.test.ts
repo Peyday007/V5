@@ -26,9 +26,17 @@ import {
   currentFragments,
   getFragment,
   getOrchestration,
+  listClaims,
   listClaimsForFragment,
 } from '../server/repos/research.ts';
 import { claimWork, enqueueWork, getWorkItem, listWorkItems } from '../server/repos/workQueue.ts';
+import { getProjectBySlug } from '../server/repos/projects.ts';
+import {
+  createFixturePacket,
+  FIXTURE_BANNER,
+  FIXTURE_PROJECT_SLUG,
+  runFixturePacket,
+} from '../server/services/research/fixtures.ts';
 import { advancePacket, approvePlan, resumePulledPackets } from '../server/services/research/packetRunner.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import type {
@@ -869,5 +877,118 @@ describe('research work types', () => {
     expect(() =>
       workType('RESEARCH_AUDIT').validate({ role: 'JUDGE', instructions: 'say it passed' }),
     ).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test packets
+//
+// A fixture packet runs the real acceptance path with claims written into the
+// repository. Two things have to be true of it and they pull in opposite
+// directions: it must exercise the *same* code a worker's submission does, and
+// it must never be able to become evidence for anything.
+// ---------------------------------------------------------------------------
+
+describe('test packets', () => {
+  it('are planned and stop for approval, exactly as a real one does', async () => {
+    const packet = await createFixturePacket({ createdByUserId: 'usr_someone' });
+
+    expect(packet.orchestration.fixture).toBe(true);
+    expect(packet.fragments.length).toBeGreaterThan(1);
+    // PLANNED, so the approval screen is the same screen. Rehearsing the
+    // decision is most of the point.
+    expect(packet.fragments.every((fragment) => fragment.status === 'PLANNED')).toBe(true);
+  });
+
+  it('live in their own project, not in one that holds real research', async () => {
+    const packet = await createFixturePacket({ createdByUserId: 'usr_someone' });
+    expect(packet.projectId).not.toBe(project.id);
+    const fixtureProject = await getProjectBySlug(FIXTURE_PROJECT_SLUG);
+    expect(fixtureProject?.id).toBe(packet.projectId);
+  });
+
+  it('reuse the one fixture project rather than making a new one each time', async () => {
+    const first = await createFixturePacket({ createdByUserId: 'usr_someone' });
+    const second = await createFixturePacket({ createdByUserId: 'usr_someone' });
+    expect(second.projectId).toBe(first.projectId);
+    expect(second.layerId).toBe(first.layerId);
+    expect(second.orchestration.id).not.toBe(first.orchestration.id);
+  });
+
+  it('show all three gate outcomes when approved', async () => {
+    const packet = await createFixturePacket({ createdByUserId: 'usr_someone' });
+    await approvePlan({
+      orchestrationId: packet.orchestration.id,
+      approvedByUserId: 'usr_someone',
+    });
+
+    const fragments = await currentFragments(packet.orchestration.id);
+    const accepted = fragments.filter((fragment) => fragment.status === 'ACCEPTED');
+    const blocked = fragments.filter((fragment) => fragment.status === 'BLOCKED');
+
+    // The point of the fixture: a fragment that passes, and one that does not.
+    // A fixture where everything passed would teach an operator nothing about
+    // what refusal looks like.
+    expect(accepted.length).toBeGreaterThan(0);
+    expect(blocked.length).toBeGreaterThan(0);
+  });
+
+  it('reject the unsourced claim and keep it, rather than dropping it', async () => {
+    const packet = await createFixturePacket({ createdByUserId: 'usr_someone' });
+    await approvePlan({
+      orchestrationId: packet.orchestration.id,
+      approvedByUserId: 'usr_someone',
+    });
+
+    const fragments = await currentFragments(packet.orchestration.id);
+    const target = fragments.find((fragment) => fragment.fragmentKey === 'client-registration')!;
+    const claims = await listClaimsForFragment(target.id);
+
+    const unsourced = claims.find((row) => !row.sourced);
+    expect(unsourced).toBeDefined();
+    expect(unsourced!.accepted).toBe(false);
+    expect(unsourced!.validationState).toBe('NO_URL');
+    // And it is still there. A ledger that hid it would look better than the
+    // research was.
+    expect(claims.length).toBeGreaterThan(1);
+  });
+
+  it('file a document whose first line says what it is', async () => {
+    const packet = await createFixturePacket({ createdByUserId: 'usr_someone' });
+    await approvePlan({
+      orchestrationId: packet.orchestration.id,
+      approvedByUserId: 'usr_someone',
+    });
+
+    const after = await getOrchestration(packet.orchestration.id);
+    expect(after?.documentId).toBeTruthy();
+    // Before anything that could be read as a finding.
+    expect(after?.reportText?.startsWith(FIXTURE_BANNER)).toBe(true);
+  });
+
+  it('stop before the audit, and say why on the row', async () => {
+    const packet = await createFixturePacket({ createdByUserId: 'usr_someone' });
+    await approvePlan({
+      orchestrationId: packet.orchestration.id,
+      approvedByUserId: 'usr_someone',
+    });
+
+    const after = await getOrchestration(packet.orchestration.id);
+    // Never COMPLETE, and never carrying a verdict. A fixture that recorded an
+    // audit would be a verdict nobody reached, which is the one thing this must
+    // not do.
+    expect(after?.status).toBe('NEEDS_HUMAN');
+    expect(after?.auditId).toBeNull();
+    expect(after?.verdict).toBeNull();
+    expect(after?.failureReason).toContain('audit');
+  });
+
+  it('refuse to run the fixture claims against a packet that is not a fixture', async () => {
+    // The guard that matters most in the file. This path supplies its own
+    // claims, so pointing it at real research would write fixture content into
+    // somebody's work.
+    const real = await makeOrchestration();
+    await expect(runFixturePacket(real.id)).rejects.toThrow(/not a fixture/);
+    expect(await listClaims(real.id)).toHaveLength(0);
   });
 });

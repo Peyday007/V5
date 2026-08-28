@@ -22,6 +22,37 @@ rather than a stale grant.
 
 ---
 
+## 0. Try it without spending anything — you
+
+Before pointing a real question at this, run a **test packet**.
+
+`/operator` → **Try it without spending anything** → **Create a test packet**.
+
+It appears in the same **Research packets** card a real one does, labelled
+`— TEST PACKET`, with the same approval screen. Approve it. It costs nothing:
+its claims are written into the Brain's own source, and approving it runs them
+through the same gate, the same filing and the same ledger a worker's submission
+goes through.
+
+What to look at afterwards:
+
+- **Three fragments, three outcomes.** One cleared the gate. One cleared it and
+  lost a claim. One failed because its only source was about a different thing
+  than the fragment asked about — a correct fact, correctly cited, answering a
+  different question. That third one contributed nothing to the report.
+- **The rejected claim is still there**, marked, in the ledger. It was not
+  dropped, because a ledger that hides what could not be sourced looks better
+  than the research was.
+- **The filed document.** Open it. Every sentence resolves to a claim id, a URL
+  and a passage — that is the check the whole machine exists to make possible.
+
+It stops before the audit and says so on the row. That is the one part a fixture
+cannot honestly stand in for: an audit is a model reading a document and forming
+a judgement, and writing a verdict nobody reached is exactly what the audit
+rules exist to prevent. Seeing that half run needs a worker.
+
+Once you have looked at that and think the machinery is worth it, carry on.
+
 ## 1. Write the assignment — you
 
 `/operator` → **Start a research packet**.

@@ -927,6 +927,7 @@ export interface ResearchOrchestrationRow {
   cancel_reason: string | null;
   heartbeat_at: string | null;
   auto_approve: number;
+  fixture: number;
   approved_at: string | null;
   approval_note: string | null;
   created_at: string;
@@ -1926,6 +1927,15 @@ export interface ResearchOrchestration {
   heartbeatAt: string | null;
   /** False means: plan it, show the plan, and wait for a person. */
   autoApprove: boolean;
+  /**
+   * True when this packet's research was written into the repository rather
+   * than found by anybody.
+   *
+   * A fact about the row rather than something a reader infers from a title,
+   * because "is this real research" is a question several places have to answer
+   * and none of them should answer it by guessing.
+   */
+  fixture: boolean;
   approvedAt: string | null;
   approvalNote: string | null;
   createdAt: string;
