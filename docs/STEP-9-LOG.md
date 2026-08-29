@@ -145,12 +145,36 @@ Claude, and until scheduling exists, somebody has to say go.
 
 ---
 
+## Closed since
+
+The `brain_propose_fragments` "regression" was never in
+`brain_propose_fragments`. `claimWork` takes the highest-priority item *of a
+type in a project*, and every deploy had been leaving its packet's planning job
+behind — sixteen of them by the morning of the 29th. A run claimed an earlier
+packet's plan, proposed fragments into that orchestration, and then read
+coverage for its own. Both halves of the contradiction were true; they were
+about different packets.
+
+The fix retires earlier packets at the start of the research phase and checks,
+on every claim, that the item belongs to this run's packet. The second check
+stays even though the first makes it unreachable — a claim that silently
+belongs to another packet is the failure that section exists to catch. It also
+took the approve button off sixteen packets nobody should have approved, which
+is the second open item.
+
+**The accumulation was flagged twice and deferred twice.** It was read as
+clutter. It was the bug.
+
+| | |
+|---|---|
+| Diagnosed and fixed | 29 Aug 06:15 |
+| First deploy green on both passes | 29 Aug 06:29 — 145/145, before and after the restart |
+
 ## Still open
 
 - Ten fragments remain queued; California is on attempt 2 and Texas is ungated.
-- A regression in `brain_propose_fragments` that the hosted harness catches and
-  which is not yet diagnosed.
-- Sixteen throwaway verification packets accumulating in the verification
-  project, one per deploy, cluttering the operator console.
+  The packet needs one more worker session, and that is the whole remainder.
 - The budget system itself — packets per goal, fragments across them, a time
   limit, external spend fixed at zero — specified and deliberately not built.
+  The numbers it needs are now measured rather than guessed: three work items
+  per fragment, not two.

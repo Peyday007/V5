@@ -256,19 +256,15 @@ fixture separates those.
 
 ## What only passes its tests
 
-- **Nothing here has run against a live Claude.** The suite drives the tool
-  functions directly. That proves the gate, the fencing and the idempotency; it
-  says nothing about whether a real worker can carry out an assignment well.
-  That distinction is the same one Step 3 drew between the research engine
-  passing its tests against a scripted provider and a real job having run, and
-  the same one Step 7 drew against Step 8.
-- **The audit path's three roles have never run in sequence live.** The
-  recording half is the same code `runDynamicAudit` uses and is covered by the
-  existing audit suite; the *sequencing* of three work items into it is not.
-- **No packet has been repaired.** `repair.ts` and `replan.ts` are untouched by
-  this step and remain wired only to the push path. A pulled packet that fails
-  its gate stops at `NEEDS_HUMAN`, which is honest and is not the same as
-  repaired.
+- **The audit path's three roles have never run in sequence against a live
+  Claude.** The recording half is the same code `runDynamicAudit` uses and is
+  covered by the existing audit suite, and the deploy harness now drives all
+  three roles in order over the wire — but with fixture findings. Whether a real
+  worker can hold an adversarial stance against its own research is untested.
+- **`repair.ts` and `replan.ts` remain wired only to the push path.** The pull
+  path grew its own §15-shaped repair in `services/research/reissue.ts`, which
+  creates attempt N+1 as a new fragment row carrying every declaration forward.
+  That is the same rule, applied by different code; it is not the same code.
 
 ## What has now been watched happen, live
 
@@ -351,21 +347,45 @@ verification script can be confidently wrong:
 The fourth was real, and is the one that mattered: `brain_submit_audit`
 advertised an adversarial schema its own validator rejected. Recorded above.
 
+## And then a real worker did the research
+
+Everything above was fixture content through the real acceptance path. On
+**29 August** a connected Claude Max worker claimed the live packet's work over
+`/mcp` and submitted research nobody had written for it:
+
+| | |
+|---|---|
+| Planning | 12 fragments declared in **3m 28s** — five licence triggers, five penalties, and two boundary fragments the worker added itself |
+| California | **13 claims submitted, 8 accepted**, verdict `INSUFFICIENT` |
+| Texas | submitted and marked **provisional**, with three claims explicitly unsourced |
+
+The California number is the one that answers Step 9's question. Five claims
+were refused by three different gate conditions, on real evidence, from a
+provider that had every incentive to be believed — and the Brain refused them
+without being asked to. `brain_submit_claims` stored all thirteen with
+`accepted = 0` and `applyGate` decided, exactly as it does for a fixture.
+
+It also produced the first finding the platform could not have reached on its
+own: **state legislature sites defend against automated retrieval.** `leginfo`
+blocked amendment dates and `statutes.capitol.texas.gov` serves a JavaScript
+shell and refuses PDFs, so the worker marked Texas provisional and left three
+claims unsourced rather than backfilling them from Justia or FindLaw mirrors.
+That is the correct behaviour under §14 and nothing in the Brain enforced it —
+which is worth knowing before Florida, New York and Illinois do the same.
+
 ## What nobody has watched happen
 
-**A worker doing the research.** Everything above was driven by fixture content
-through the same acceptance path; nothing has yet come in over `/mcp` from a
-real Claude and been gated. Until that has happened, Step 9's own question —
-*can a real Claude Max worker carry a packet from intent to an audited
-document* — is answered only for the Brain's half.
+**A packet reaching a filed, audited document from real research.** The gate has
+now been applied to real claims and the synthesis-and-audit half has now run
+over the wire, but not on the same packet. Ten fragments remain queued.
 
-**The audit, in any form.** Three roles, three work items, a judge whose
-structured output reaches `recordAudit`. The recording half is the same code
-`runDynamicAudit` uses and the existing audit suite covers it; the *sequencing*
-of three work items into it has never run.
+**Three audit roles argued by a real worker.** Sequencing is proven; the
+adversarial pass being genuinely adversarial is not.
 
-**A packet that needed repairing.** `repair.ts` and `replan.ts` remain wired
-only to the push path.
+**An allowance boundary that did not cost something.** Both live worker sessions
+ended by running out of budget mid-item, and the second one stopped the packet
+outright. The refusal added in `brain_complete_work` prevents the corruption;
+it does not prevent the interruption.
 
 ---
 
