@@ -59,6 +59,10 @@ import {
   startPacket,
 } from '../services/research/startPacket.ts';
 import { createFixturePacket } from '../services/research/fixtures.ts';
+import {
+  findStrandedVerifications,
+  reissueMissingVerification,
+} from '../services/research/reissue.ts';
 import { runTypeForNewPacket } from '../services/runArtifacts.ts';
 import { card, esc, page } from './pages.ts';
 
@@ -412,6 +416,14 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
         (await listOrchestrationsByProject(project.id)).slice(0, 6).map(async (orchestration) => ({
           orchestration,
           fragments: await currentFragments(orchestration.id),
+          // A packet stopped by a verification that recorded nothing is
+          // recoverable, and the recovery is unreachable without this: the
+          // service exists, and until now the only way to call it was a shell
+          // inside the container.
+          stranded:
+            orchestration.status === 'NEEDS_HUMAN'
+              ? await findStrandedVerifications(orchestration.id)
+              : [],
           // The whole point of running a packet is reading what it filed, and
           // the main UI has no project switcher — it opens whichever project
           // sorts first. Without a link from here, an operator can watch a
@@ -426,7 +438,7 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
     .filter((group) => group.packets.length > 0)
     .map((group) => {
       const rows = group.packets
-        .map(({ orchestration, fragments, document }) => {
+        .map(({ orchestration, fragments, document, stranded }) => {
           const awaiting = fragments.filter((fragment) => fragment.status === 'PLANNED');
           const counts = ['ACCEPTED', 'BLOCKED', 'QUEUED', 'VALIDATING']
             .map((state) => ({ state, n: fragments.filter((f) => f.status === state).length }))
@@ -497,6 +509,31 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
               orchestration.failureReason
                 ? `<div class="result">${esc(orchestration.failureReason)}</div>`
                 : ''
+            }
+            ${
+              stranded.length === 0
+                ? ''
+                : `<div class="result">
+              <strong>This can be repaired without losing anything.</strong>
+              ${stranded
+                .map(
+                  (entry) => `
+              <div class="access">
+                <span class="meta">The verification for <strong>${esc(entry.fragmentKey)}</strong>
+                  finished without recording a verdict, so that fragment's research is sitting
+                  ungated and the packet stopped rather than continue around it.</span>
+                <form method="post" action="${OPERATOR_BASE}/packets/verifications/${esc(entry.workItemId)}/reissue">
+                  <button type="submit" class="secondary">Reissue this verification</button>
+                </form>
+              </div>`,
+                )
+                .join('')}
+              <p class="note">This creates one replacement job and changes nothing else — every
+                claim, verdict, rejection reason and attempt count stays exactly as it is, and the
+                failed item is kept because it is the record of what happened. It is safe only
+                because that item recorded nothing: there is no verdict for a second one to
+                contradict.</p>
+            </div>`
             }
             ${plan}
           </div>
@@ -1152,6 +1189,64 @@ export function operatorRouter(): Router {
           : `Nothing happened: ${result.waitingOn ?? 'nothing was waiting'}.`;
 
       res.type('html').send(await consolePage(person, { ok: message }));
+    })();
+  });
+
+  /**
+   * Reissue one verification that finished without performing.
+   *
+   * Every line of judgement is in `services/research/reissue.ts`, which Step 12
+   * will call from wherever the Brain's own controls end up. This route reads
+   * an id, names the administrator, and renders what came back — deliberately
+   * nothing else, so deleting this screen later costs the recovery nothing.
+   */
+  router.post('/packets/verifications/:workItemId/reissue', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      const person = await administrator(req);
+      if (!person || !originIsSameSite(req)) {
+        denied(res);
+        return;
+      }
+      const workItemId = req.params['workItemId'] ?? '';
+
+      let result;
+      try {
+        result = await reissueMissingVerification({
+          workItemId,
+          actor: { type: 'HUMAN', id: person.id },
+        });
+      } catch (error) {
+        // Every refusal from the service names a reason a person can act on,
+        // so it is shown rather than flattened into "that did not work".
+        const message = error instanceof Error ? error.message : String(error);
+        res.status(409).type('html').send(await consolePage(person, { err: message }));
+        return;
+      }
+
+      await audit({
+        actor: person,
+        action: 'QUEUE_ENQUEUE',
+        targetType: 'WORK_ITEM',
+        targetId: result.originalWorkItemId,
+        result: 'SUCCESS',
+        metadata: {
+          recovery: 'reissue-verification',
+          fragmentKey: result.fragmentKey,
+          replacementWorkItemId: result.replacementWorkItemId,
+          status: result.status,
+        },
+      });
+
+      res.type('html').send(
+        await consolePage(person, {
+          ok:
+            result.status === 'ALREADY_REISSUED'
+              ? `Already done — a replacement verification for ${result.fragmentKey} exists ` +
+                'and nothing further was created.'
+              : `Reissued the verification for ${result.fragmentKey}. A worker can claim it now; ` +
+                'every claim, verdict and rejection reason is exactly as it was.',
+        }),
+      );
     })();
   });
 
