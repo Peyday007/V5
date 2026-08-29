@@ -790,8 +790,6 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
   });
   const orchestrationId = started.orchestration.id;
 
-  await retireEarlierPackets(fixtures, orchestrationId);
-
   record(
     'starting a packet queues one planning job and researches nothing',
     started.advanced.enqueued.length === 1 &&
@@ -1134,17 +1132,28 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
  * were never cleared. They accumulated — one packet per deploy, each with a
  * claimable planning job — and the queue does not care whose they are.
  *
- * That is not a tidiness problem. `claimWork` takes the highest-priority item
- * of a type in the project, so a run would claim an *earlier* packet's plan,
- * propose fragments into that orchestration, and then read coverage for its own
- * and find nothing. The three failures that produced looked like a regression
- * in `brain_propose_fragments` and were this.
+ * That is not a tidiness problem, and it cost two diagnoses.
+ *
+ * `claimWork` takes the highest-priority item *of a type* in the project, so a
+ * run would claim an *earlier* packet's plan, propose fragments into that
+ * orchestration, and then read coverage for its own and find nothing. Both
+ * halves of the contradiction were true; they were about different packets.
+ * That looked like a regression in `brain_propose_fragments`.
+ *
+ * Retiring them at the start of the *research* phase fixed that and left a
+ * second failure standing, because the phases before it claim from the same
+ * queue: the idempotency section seeds one item, claims a window of 25, and
+ * sixteen stale planning jobs are enough to push its own item out of the
+ * window. It read as `a worker claimed it — not claimed`.
+ *
+ * So this belongs to draining, not to research. `keepId` is for the caller that
+ * has a packet of its own to protect; the drain has none yet.
  *
  * Cancelled rather than deleted: `project_events` records what happened to
  * them, and the operator console stops offering an approve button for a packet
  * nobody should approve.
  */
-async function retireEarlierPackets(fixtures: Fixtures, keepId: string): Promise<void> {
+async function retireEarlierPackets(fixtures: Fixtures, keepId?: string): Promise<void> {
   const older = (await listOrchestrationsByProject(fixtures.scope.id)).filter(
     (orchestration) =>
       orchestration.id !== keepId &&
@@ -1308,6 +1317,14 @@ async function drainPreviousRuns(fixtures: Fixtures): Promise<void> {
   if (stale.length > 0) {
     console.log(`  ....  cleared ${stale.length} work item(s) left by earlier runs`);
   }
+
+  // Research work is not created by this harness — the packet runner creates it,
+  // under its own `created_by_id` — so the query above has never seen a single
+  // item of it. Retiring the packets is therefore part of draining, and it has
+  // to happen here rather than when the research phase starts: the phases in
+  // between claim from the same queue, and a stale packet's planning job
+  // outranks whatever they just seeded.
+  await retireEarlierPackets(fixtures);
 }
 
 async function queueChecks(fixtures: Fixtures, cookie: string): Promise<void> {
