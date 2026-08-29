@@ -77,7 +77,20 @@ import {
   releaseWork,
 } from '../server/repos/workQueue.ts';
 import { getDb } from '../server/db/database.ts';
-import type { Project } from '../server/domain/types.ts';
+import { createLayer, listLayers } from '../server/repos/layers.ts';
+import { getDocument } from '../server/repos/documents.ts';
+import { listCoverage } from '../server/repos/reconciliation.ts';
+import { listAuditsByProject } from '../server/repos/audits.ts';
+import {
+  currentFragments,
+  getOrchestration,
+  listClaimsForFragment,
+} from '../server/repos/research.ts';
+import { listWorkItems } from '../server/repos/workQueue.ts';
+import { readObject } from '../server/services/storage.ts';
+import { startPacket } from '../server/services/research/startPacket.ts';
+import { approvePlan } from '../server/services/research/packetRunner.ts';
+import type { Project, WorkerScope } from '../server/domain/types.ts';
 
 /* ------------------------------------------------------------------------ */
 /* The fixtures                                                              */
@@ -90,7 +103,32 @@ import type { Project } from '../server/domain/types.ts';
 const MEMBER_EMAIL = 'verification-member@brain.invalid';
 const OWNER_EMAIL = 'verification-owner@brain.invalid';
 const WORKER_NAME = 'verification-worker';
+const RESEARCH_WORKER_NAME = 'verification-worker-research';
 const FIXTURE_SLUG = 'verification-scope';
+const VERIFICATION_LAYER_NAME = 'Verification Layer';
+const VERIFICATION_LAYER_SLUG = 'verification-layer';
+
+/**
+ * What the verification worker needs to run a whole packet.
+ *
+ * Listed rather than taken from a constant, so a scope quietly added to
+ * `WORKER_SCOPES` does not silently widen what this run grants itself.
+ */
+const RESEARCH_SCOPES: WorkerScope[] = [
+  'project:read',
+  'documents:read',
+  'research:read',
+  'research:propose',
+  'research:write',
+  'claims:write',
+  'contradictions:write',
+  'checkpoints:write',
+  'blockers:report',
+  'queue:read',
+  'queue:claim',
+  'queue:heartbeat',
+  'queue:complete',
+];
 
 /** Long enough that the run is not testing the password policy by accident. */
 function freshPassword(): string {
@@ -198,6 +236,17 @@ interface Fixtures {
   expiredCredential: string;
   expiredCredentialId: string;
   workerId: string;
+  /**
+   * A third worker, the only one granted the research scopes.
+   *
+   * Deliberately not the one above. That grant is read-only on purpose — it is
+   * the narrowest grant that proves authentication works, and several checks
+   * turn on it being refused. Widening it to run a packet would quietly delete
+   * those checks while leaving them green.
+   */
+  researchCredential: string;
+  researchCredentialId: string;
+  researchWorkerId: string;
   /** A second, independent worker, so a hosted claim can actually be a race. */
   rivalCredential: string;
   rivalWorkerId: string;
@@ -362,6 +411,33 @@ async function setUp(): Promise<Fixtures> {
     issuedById: 'verify-hosted',
   });
 
+  // The research worker. Every scope a packet needs and nothing else.
+  const researcher =
+    (await getWorkerByName(RESEARCH_WORKER_NAME)) ??
+    (await createWorker({
+      name: RESEARCH_WORKER_NAME,
+      displayName: 'Hosted verification research worker',
+      workerType: 'GENERIC',
+      description: 'Created by scripts/verify-hosted.ts. Disabled between runs.',
+      createdByType: 'SYSTEM',
+      createdById: 'verify-hosted',
+    }));
+  await setWorkerStatus(researcher.id, 'ACTIVE');
+  await grantMembership({
+    projectId: scope.id,
+    principalType: 'WORKER',
+    principalId: researcher.id,
+    role: null,
+    scopes: RESEARCH_SCOPES,
+    grantedByType: 'SYSTEM',
+    grantedById: 'verify-hosted',
+  });
+  const researchIssued = await issueWorkerCredential({
+    workerId: researcher.id,
+    issuedByType: 'SYSTEM',
+    issuedById: 'verify-hosted',
+  });
+
   // Sign the owner in over the real edge, the same way anything else would.
   const ownerLogin = await call('/api/auth/login', {
     method: 'POST',
@@ -369,6 +445,15 @@ async function setUp(): Promise<Fixtures> {
     body: { email: OWNER_EMAIL, password: ownerPassword },
   });
   const ownerCookie = sessionPair(ownerLogin.cookie) ?? '';
+  // Said out loud, because an empty cookie here does not fail here: it fails
+  // twelve unrelated checks later, each reporting 401 for a reason that has
+  // nothing to do with what they were testing. A fixture that did not work is
+  // its own result.
+  record(
+    'the verification project owner can sign in, so the fixtures are usable',
+    ownerCookie.length > 0,
+    ownerCookie.length > 0 ? 'signed in' : `login returned ${ownerLogin.status}: ${ownerLogin.body.slice(0, 120)}`,
+  );
 
   return {
     adminCookie: ownerCookie,
@@ -386,6 +471,9 @@ async function setUp(): Promise<Fixtures> {
     expiredCredential: expired.plaintext,
     expiredCredentialId: expired.credential.id,
     workerId: worker.id,
+    researchCredential: researchIssued.plaintext,
+    researchCredentialId: researchIssued.credential.id,
+    researchWorkerId: researcher.id,
   };
 }
 
@@ -634,6 +722,424 @@ async function workerAuthentication(fixtures: Fixtures): Promise<void> {
       asHuman.json !== null &&
       (asHuman.json as { authenticated?: unknown }).authenticated !== true);
   record('a worker credential does not make the caller a person', notAPerson, `${asHuman.status}`);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Step 9: a whole research packet, over the deployed endpoint                */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * The packet lifecycle, end to end, against the live Brain.
+ *
+ * Everything else in this file proves the *boundary*: who may call, what they
+ * are refused, that a lease is a compare-and-swap and an effect happens once.
+ * None of it proves that a worker can actually put research into the Brain,
+ * which is the entire point of Step 9 and until now had only ever run against
+ * SQLite on a loopback socket.
+ *
+ * The difference is not cosmetic. This path writes through the storage layer
+ * (a bucket in cloud mode, not a folder), reads extracted text back out of it
+ * for the coverage decision, and takes ten tool calls over TLS through the
+ * edge — and the first time it ran here it found that `brain_submit_audit`
+ * advertised an adversarial schema its own validator rejected, so no
+ * worker-driven packet could ever have reached a judge.
+ *
+ * It spends nothing. Every claim is supplied by this script, so the run
+ * exercises the gate rather than a provider.
+ */
+async function researchChecks(fixtures: Fixtures): Promise<void> {
+  console.log('');
+  console.log('A research packet, end to end, over the deployed endpoint');
+
+  const worker = new ModernMcpClient({
+    url: `${base}/mcp`,
+    credential: fixtures.researchCredential,
+    clientName: 'brain-hosted-verification-research',
+  });
+
+  // A layer to file into. Reused across runs like the project is.
+  const layers = await listLayers(fixtures.scope.id);
+  const layer =
+    layers.find((candidate) => candidate.slug === VERIFICATION_LAYER_SLUG) ??
+    (await createLayer({
+      projectId: fixtures.scope.id,
+      name: VERIFICATION_LAYER_NAME,
+      slug: VERIFICATION_LAYER_SLUG,
+      orderIndex: layers.length,
+    }));
+
+  /**
+   * Start the packet server-side, exactly as the console does.
+   *
+   * Deliberately not over MCP. Creating work is a project write and no worker
+   * scope grants it — a worker that could manufacture its own packets could
+   * manufacture work nobody asked for. That refusal is asserted below.
+   */
+  const started = await startPacket({
+    projectId: fixtures.scope.id,
+    layerId: layer.id,
+    title: `Hosted verification packet ${new Date().toISOString()}`,
+    assignment:
+      'A bounded question used only to prove the packet lifecycle against the deployed Brain. ' +
+      'Every claim in it is supplied by the verification script, so nothing is researched and ' +
+      'no allowance is spent.',
+    approval: { mode: 'PER_PACKET' },
+    startedBy: { kind: 'PERSON', id: fixtures.adminId },
+  });
+  const orchestrationId = started.orchestration.id;
+
+  record(
+    'starting a packet queues one planning job and researches nothing',
+    started.advanced.enqueued.length === 1 &&
+      started.advanced.enqueued[0]?.workType === 'RESEARCH_PLAN',
+    started.advanced.enqueued.map((entry) => entry.workType).join(', ') || 'nothing queued',
+  );
+  record(
+    'and reads the archive before creating anything',
+    typeof started.archive.documentsRead === 'number' &&
+      typeof started.archive.documentsUnreadable === 'number',
+    `${started.archive.claims} claim(s) across ${started.archive.documentsRead} readable document(s)`,
+  );
+
+  /* --- The plan ---------------------------------------------------------- */
+
+  const planClaim = await claimResearch(fixtures, 'RESEARCH_PLAN');
+  if (!planClaim) {
+    record('a worker claims the planning job over MCP', false, 'nothing claimable');
+    return;
+  }
+  record('a worker claims the planning job over MCP', true, planClaim.workItemId);
+
+  const assignment = await worker.call('brain_get_assignment', {
+    work_item_id: planClaim.workItemId,
+  });
+  const assignmentView = assignment['assignment'] as Record<string, unknown> | undefined;
+  record(
+    'and is handed the assignment, and no prompt',
+    Boolean(assignmentView) && !('prompt' in (assignmentView ?? {})),
+    Object.keys(assignmentView ?? {}).join(', ') || 'nothing',
+  );
+
+  await worker.call('brain_checkpoint_work', {
+    ...proofOf(planClaim),
+    note: 'Hosted verification: read the assignment.',
+  });
+
+  const proposed = await worker.call('brain_propose_fragments', {
+    ...proofOf(planClaim),
+    rationale: 'One fragment, because this run is proving the lifecycle rather than a question.',
+    fragments: [
+      {
+        key: 'hosted-verification-fragment',
+        question: 'Does the deployed Brain record a claim, gate it, and file the result?',
+        geography: 'Not applicable',
+        timeframe: '2026',
+        required_evidence: ['a supplied fixture claim'],
+        acceptable_source_types: ['verification fixture'],
+        completion_criteria: ['one claim recorded, gated and cited in a filed report'],
+        min_independent_sources: 1,
+        why_it_matters: 'Nothing else in this file proves a worker can write research.',
+      },
+    ],
+  });
+  record(
+    'proposes fragments, and the coverage check runs against the live archive',
+    Array.isArray(proposed['alreadyAnswered']) && typeof proposed['archive'] === 'object',
+    `${String(proposed['proposed'])} proposed · ` +
+      `${(proposed['alreadyAnswered'] as unknown[] | undefined)?.length ?? '?'} already answered`,
+  );
+
+  // Every proposed fragment has a persisted coverage decision behind it. A
+  // fragment created without one is §13 skipped rather than satisfied.
+  const coverage = await listCoverage(orchestrationId);
+  record(
+    'and records a coverage decision for every fragment it proposed',
+    coverage.length >= 1,
+    `${coverage.length} coverage row(s): ${coverage.map((row) => row.status).join(', ')}`,
+  );
+
+  await worker.call('brain_complete_work', { ...proofOf(planClaim), summary: 'plan proposed' });
+
+  const planned = await currentFragments(orchestrationId);
+  record(
+    'and leaves them PLANNED, so nothing researches an unapproved plan',
+    planned.length > 0 && planned.every((fragment) => fragment.status === 'PLANNED'),
+    planned.map((fragment) => fragment.status).join(', ') || 'no fragments',
+  );
+  record(
+    'with no research queued behind them',
+    (await listWorkItems(fixtures.scope.id, { limit: 200 })).every(
+      (item) => item.orchestrationId !== orchestrationId || item.workType !== 'RESEARCH_FRAGMENT',
+    ),
+    'no RESEARCH_FRAGMENT item exists yet',
+  );
+
+  /* --- Approval, which is a person -------------------------------------- */
+
+  await approvePlan({ orchestrationId, approvedByUserId: fixtures.adminId });
+
+  /* --- The research, and the gate --------------------------------------- */
+
+  const fragmentClaim = await claimResearch(fixtures, 'RESEARCH_FRAGMENT');
+  if (!fragmentClaim) {
+    record('approval queues the research', false, 'nothing claimable after approval');
+    return;
+  }
+  record('approval queues the research', true, fragmentClaim.workItemId);
+
+  await worker.call('brain_submit_claims', {
+    ...proofOf(fragmentClaim),
+    claims: [
+      {
+        claim: 'The deployed Brain records a worker claim through the storage layer it is configured with.',
+        claim_type: 'SOURCED_FACT',
+        source_url: 'https://example.invalid/hosted-verification-fixture',
+        source_title: 'Hosted verification fixture',
+        source_publisher: 'scripts/verify-hosted.ts',
+        source_date: '2026-01-01',
+        evidence_excerpt: 'Supplied by the verification script rather than researched.',
+        evidence_locator: 'fixture',
+        evidence_lane: 'a supplied fixture claim',
+        retrieved_at: '2026-01-01',
+        confidence: 0.9,
+        primary_source: true,
+      },
+      {
+        // The one that must not survive. Nothing supports it, and the gate —
+        // not the worker, and not this script — is what decides that.
+        claim: 'Everybody agrees this is true and it needs no support.',
+        claim_type: 'UNSUPPORTED_ASSERTION',
+      },
+    ],
+  });
+
+  const stored = await listClaimsForFragment(planned[0]!.id);
+  record(
+    'a submitted claim is stored unaccepted, whatever the worker said about it',
+    stored.length === 2 && stored.every((claim) => !claim.accepted),
+    `${stored.length} claim(s), ${stored.filter((claim) => claim.accepted).length} accepted on arrival`,
+  );
+
+  await worker.call('brain_complete_work', { ...proofOf(fragmentClaim), summary: 'claims in' });
+
+  const verifyClaim = await claimResearch(fixtures, 'RESEARCH_VERIFY');
+  if (!verifyClaim) {
+    record('the gate runs as its own pass', false, 'no RESEARCH_VERIFY item');
+    return;
+  }
+  const gated = await worker.call('brain_submit_verification', {
+    ...proofOf(verifyClaim),
+    verdicts: stored.map((claim) => ({
+      claim_id: claim.id,
+      supports_claim: claim.claimType !== 'UNSUPPORTED_ASSERTION',
+      geography: 'MATCH',
+      timeframe: 'MATCH',
+      population: 'MATCH',
+      definitions: 'MATCH',
+      note: claim.claimType === 'UNSUPPORTED_ASSERTION' ? 'Nothing supports it.' : 'Reads directly.',
+    })),
+    sufficiency: 'SUFFICIENT',
+  });
+
+  const afterGate = await listClaimsForFragment(planned[0]!.id);
+  const accepted = afterGate.filter((claim) => claim.accepted);
+  record(
+    'the gate accepts the sourced claim and refuses the unsupported one',
+    accepted.length === 1 && accepted[0]?.claimType === 'SOURCED_FACT',
+    `${accepted.length} accepted of ${afterGate.length} · integrity ${String(gated['integrity'])}`,
+  );
+  record(
+    'and keeps the refusal reason on the claim it rejected',
+    afterGate.some((claim) => !claim.accepted && (claim.rejectionReason ?? '').length > 0),
+    afterGate.find((claim) => !claim.accepted)?.rejectionReason?.slice(0, 60) ?? 'no reason recorded',
+  );
+
+  await worker.call('brain_complete_work', { ...proofOf(verifyClaim), summary: 'gated' });
+
+  /* --- The synthesis, and what it may cite ------------------------------ */
+
+  const synthClaim = await claimResearch(fixtures, 'RESEARCH_SYNTHESIZE');
+  if (!synthClaim) {
+    record('an accepted fragment queues the synthesis', false, 'no RESEARCH_SYNTHESIZE item');
+    return;
+  }
+
+  const rejected = afterGate.find((claim) => !claim.accepted);
+  let citedRejected = false;
+  try {
+    await worker.call('brain_submit_synthesis', {
+      ...proofOf(synthClaim),
+      report: `A report that cites something the gate refused [${rejected?.id}].`,
+      cited_claim_ids: [rejected?.id ?? 'clm_missing'],
+    });
+    citedRejected = true;
+  } catch {
+    /* refused, which is the point */
+  }
+  record(
+    'a report citing a refused claim is refused, over the wire',
+    !citedRejected,
+    citedRejected ? 'it was filed' : 'refused',
+  );
+
+  const filed = await worker.call('brain_submit_synthesis', {
+    ...proofOf(synthClaim),
+    report: `The deployed Brain recorded and gated a worker's claim [${accepted[0]?.id}].`,
+    cited_claim_ids: accepted.map((claim) => claim.id),
+  });
+  const withDocument = await getOrchestration(orchestrationId);
+  record(
+    'and a report citing only accepted claims is filed as a document',
+    typeof withDocument?.documentId === 'string' && withDocument.documentId.length > 0,
+    String(filed['canonicalName'] ?? withDocument?.documentId ?? 'nothing filed'),
+  );
+
+  // Filed through the storage layer the deployment is configured with, which
+  // is a bucket in cloud mode. A row without bytes is not a filed document.
+  if (withDocument?.documentId) {
+    const document = await getDocument(withDocument.documentId);
+    let readable = false;
+    try {
+      readable = document?.filesystemPath
+        ? (await readObject(document.filesystemPath)).byteLength > 0
+        : false;
+    } catch {
+      readable = false;
+    }
+    record(
+      'whose bytes come back out of the configured document store',
+      readable,
+      readable ? `${document?.canonicalName}` : 'the stored object could not be read back',
+    );
+  }
+
+  await worker.call('brain_complete_work', { ...proofOf(synthClaim), summary: 'filed' });
+
+  /* --- The three audit roles -------------------------------------------- */
+
+  const GAP = {
+    classification: 'TARGETED_RESEARCH_GAP',
+    title: 'The question this fixture deliberately does not answer',
+    detail: 'The packet proves the mechanism rather than settling a subject.',
+    research_question: 'What would a real packet on this subject have to establish?',
+  };
+
+  let auditRolesRun = 0;
+  for (const role of ['PRIMARY', 'ADVERSARIAL', 'JUDGE'] as const) {
+    const auditClaim = await claimResearch(fixtures, 'RESEARCH_AUDIT');
+    if (!auditClaim) break;
+    const body =
+      role === 'PRIMARY'
+        ? { primary: { assignment_satisfied: 'PARTIAL', candidate_gaps: [GAP], notes: 'Fixture packet.' } }
+        : role === 'ADVERSARIAL'
+          ? {
+              adversarial: {
+                attacks: [
+                  {
+                    attack: 'The packet rests on a single supplied claim.',
+                    assessment: 'VALID',
+                    reasoning: 'It is a fixture, and a fixture is not evidence about the world.',
+                  },
+                ],
+                strongest_reason_not_to_advance: 'Nothing here was researched.',
+              },
+            }
+          : {
+              judge: {
+                verdict: 'MORE_RESEARCH',
+                summary: 'The mechanism works; the subject is unanswered.',
+                next_action: 'Run a real packet.',
+                gap_classifications: [GAP],
+                foundational_gap_count: 0,
+                targeted_research_runs_required: 1,
+                synthesis_ready: false,
+                freeze_ready: false,
+                confidence: 0.5,
+              },
+            };
+    const result = await worker.call('brain_submit_audit', { ...proofOf(auditClaim), ...body });
+    if (result['role'] === role) auditRolesRun += 1;
+    if (role !== 'JUDGE') {
+      record(
+        `the ${role} audit pass records findings and moves nothing`,
+        result['advancesState'] === false,
+        `advancesState ${String(result['advancesState'])}`,
+      );
+    } else {
+      record(
+        'and only the judge records a verdict',
+        result['verdict'] === 'MORE_RESEARCH',
+        `verdict ${String(result['verdict'])}`,
+      );
+    }
+    await worker.call('brain_complete_work', { ...proofOf(auditClaim), summary: `${role} in` });
+  }
+  record(
+    'all three audit roles ran, strictly in order',
+    auditRolesRun === 3,
+    `${auditRolesRun}/3`,
+  );
+
+  const audits = await listAuditsByProject(fixtures.scope.id);
+  record(
+    'and the verdict is stored as a structured record, not as prose',
+    audits.length > 0 && audits[0]!.gaps.length > 0,
+    audits.length > 0 ? `${audits[0]!.verdict} · ${audits[0]!.gaps.length} gap(s)` : 'no audit row',
+  );
+
+  /* --- What a worker still may not do ----------------------------------- */
+
+  let manufactured = false;
+  try {
+    await worker.call('brain_propose_fragments', {
+      work_item_id: 'wki_not_mine',
+      lease_id: 'wls_x',
+      lease_generation: 1,
+      fragments: [
+        {
+          key: 'forged',
+          question: 'Can a worker create its own work?',
+          required_evidence: ['none'],
+          completion_criteria: ['none'],
+        },
+      ],
+    });
+    manufactured = true;
+  } catch {
+    /* refused, which is the point */
+  }
+  record(
+    'and a worker still cannot write into an item it does not hold',
+    !manufactured,
+    manufactured ? 'it succeeded' : 'refused',
+  );
+}
+
+/** Claim one research item of a type, as the worker, through the queue. */
+async function claimResearch(
+  fixtures: Fixtures,
+  workType: string,
+): Promise<{ workItemId: string; leaseId: string; leaseGeneration: number } | null> {
+  const [claimed] = await claimWork({
+    workerId: fixtures.researchWorkerId,
+    scopes: [{ projectId: fixtures.scope.id, scopes: RESEARCH_SCOPES }],
+    workTypes: [workType],
+  });
+  return claimed
+    ? {
+        workItemId: claimed.workItemId,
+        leaseId: claimed.leaseId,
+        leaseGeneration: claimed.leaseGeneration,
+      }
+    : null;
+}
+
+function proofOf(claimed: { workItemId: string; leaseId: string; leaseGeneration: number }): Record<string, unknown> {
+  return {
+    work_item_id: claimed.workItemId,
+    lease_id: claimed.leaseId,
+    lease_generation: claimed.leaseGeneration,
+  };
 }
 
 async function revocationEndsAccess(fixtures: Fixtures, cookie: string): Promise<void> {
@@ -1781,6 +2287,8 @@ async function main(): Promise<void> {
     await effectChecks(fixtures, fixtures.adminCookie, cookie);
     // Step 7. Before revocation, because it needs a live credential.
     await mcpChecks(fixtures);
+    // Step 9. Also before revocation: it needs the same live credential.
+    await researchChecks(fixtures);
     await revocationEndsAccess(fixtures, cookie);
 
     // Last, so the beacon is not swept up by the checks above.
@@ -1795,11 +2303,13 @@ async function main(): Promise<void> {
 
     // Whatever happened above, the fixtures do not stay usable.
     await revokeCredential(fixtures.credentialId, 'hosted verification finished');
+    await revokeCredential(fixtures.researchCredentialId, 'hosted verification finished');
     await revokeCredential(fixtures.expiredCredentialId, 'hosted verification finished');
     await setUserDisabled(fixtures.memberId, true);
     await setUserDisabled(fixtures.adminId, true);
     await setWorkerStatus(fixtures.workerId, 'DISABLED');
     await setWorkerStatus(fixtures.rivalWorkerId, 'DISABLED');
+    await setWorkerStatus(fixtures.researchWorkerId, 'DISABLED');
     // Archived rather than left ACTIVE, so it can never be picked as anybody's
     // default project and never sits in a list beside the real work. The next
     // run finds it by slug regardless of status and reuses it.

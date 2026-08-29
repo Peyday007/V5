@@ -32,6 +32,8 @@ import {
 import { claimWork, enqueueWork, getWorkItem, listWorkItems } from '../server/repos/workQueue.ts';
 import { getProjectBySlug } from '../server/repos/projects.ts';
 import { getDocument } from '../server/repos/documents.ts';
+import { listAuditsByProject } from '../server/repos/audits.ts';
+import { parseAdversarialPass } from '../server/services/audit/schema.ts';
 import { readObject } from '../server/services/storage.ts';
 import {
   createFixturePacket,
@@ -1073,5 +1075,282 @@ describe('test packets', () => {
     const real = await makeOrchestration();
     await expect(runFixturePacket(real.id)).rejects.toThrow(/not a fixture/);
     expect(await listClaims(real.id)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The audit, which nothing here had ever driven
+// ---------------------------------------------------------------------------
+
+/**
+ * The last three passes of a worker-driven packet.
+ *
+ * Everything above stops at the filed report. The three audit roles were built,
+ * registered, serialised through the same judge validator the in-process path
+ * uses — and never once run from end to end, which meant "the judge decides"
+ * was a claim about code nobody had executed in this order.
+ *
+ * The roles are deliberately not symmetric. Primary and adversarial record what
+ * they found and move nothing; only the judge's validated structured output may
+ * reach `recordAudit`. So the tests that matter are the ones where the judge
+ * says something it is not allowed to say.
+ */
+describe('the audit passes', () => {
+  /**
+   * Take a packet all the way to a filed document, ready to be audited.
+   *
+   * Each stage is *completed* rather than abandoned, because completion is what
+   * makes the runner enqueue the next one. Enqueueing the audit items by hand
+   * would test the tools and skip the thing most likely to be wrong — whether
+   * the state machine gets there on its own.
+   */
+  async function filedPacket(): Promise<ResearchOrchestration> {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(fragment.id);
+    await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+
+    const verify = await claimNext('RESEARCH_VERIFY');
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: true, ...MATCHES, note: 'Reads directly.' }],
+      sufficiency: 'SUFFICIENT',
+    });
+    await call('brain_complete_work', { ...proof(verify), summary: 'verified' });
+
+    const synth = await claimNext('RESEARCH_SYNTHESIZE');
+    await call('brain_submit_synthesis', {
+      ...proof(synth),
+      report: `California defines a real estate broker at section 10131 [${stored!.id}].`,
+      cited_claim_ids: [stored!.id],
+    });
+    await call('brain_complete_work', { ...proof(synth), summary: 'filed' });
+
+    return (await getOrchestration(orchestration.id))!;
+  }
+
+  /** Claim whatever the runner queued next, rather than queueing it ourselves. */
+  async function claimNext(type: string): Promise<ClaimedWork> {
+    const [claimed] = await claimWork({
+      workerId,
+      scopes: [{ projectId: project.id, scopes: FULL }],
+      workTypes: [type],
+    });
+    if (!claimed) throw new Error(`the runner queued no ${type}`);
+    return claimed;
+  }
+
+  const PRIMARY = {
+    assignment_satisfied: 'PARTIAL',
+    requirement_findings: ['One state of five is answered.'],
+    structural_findings: [],
+    boundary_findings: [],
+    consistency_findings: [],
+    candidate_gaps: [
+      {
+        classification: 'TARGETED_RESEARCH_GAP',
+        title: 'The other four states',
+        detail: 'Texas, Florida, New York and Illinois are unanswered.',
+        research_question: 'Does each of TX, FL, NY and IL require a licence for a success fee?',
+      },
+    ],
+    notes: 'The one answered state is answered from its own statute.',
+  };
+
+  const ADVERSARIAL = {
+    attacks: [
+      {
+        attack: 'One statute section is being read as settling a question about compensation.',
+        assessment: 'VALID',
+        reasoning: 'The definition of a broker is not by itself the compensation rule.',
+      },
+    ],
+    strongest_reason_not_to_advance: 'Four of the five states in the assignment have no evidence at all.',
+  };
+
+  function judge(over: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      verdict: 'MORE_RESEARCH',
+      summary: 'One state answered, four open.',
+      next_action: 'Research the remaining four states.',
+      gap_classifications: [
+        {
+          classification: 'TARGETED_RESEARCH_GAP',
+          title: 'The other four states',
+          detail: 'No evidence was gathered for them.',
+          research_question: 'Does each of TX, FL, NY and IL require a licence?',
+        },
+      ],
+      foundational_gap_count: 0,
+      targeted_research_runs_required: 1,
+      synthesis_ready: false,
+      freeze_ready: false,
+      confidence: 0.6,
+      ...over,
+    };
+  }
+
+  it('records the primary and adversarial passes without moving anything', async () => {
+    const orchestration = await filedPacket();
+
+    const primary = await claimNext('RESEARCH_AUDIT');
+    const first = await call('brain_submit_audit', { ...proof(primary), primary: PRIMARY });
+    expect(first['role']).toBe('PRIMARY');
+    await call('brain_complete_work', { ...proof(primary), summary: 'primary in' });
+
+    const adversarial = await claimNext('RESEARCH_AUDIT');
+    await call('brain_submit_audit', { ...proof(adversarial), adversarial: ADVERSARIAL });
+    await call('brain_complete_work', { ...proof(adversarial), summary: 'adversarial in' });
+
+    // Two of the three roles have run and nothing has been decided. That is
+    // the whole point of the separation: an opinion is not a verdict.
+    const after = await getOrchestration(orchestration.id);
+    expect(after?.status).not.toBe('COMPLETE');
+    expect(await listAuditsByProject(orchestration.projectId)).toHaveLength(0);
+  });
+
+  it('refuses a role\'s findings submitted against another role\'s item', async () => {
+    const orchestration = await filedPacket();
+    const primary = await claimNext('RESEARCH_AUDIT');
+
+    // The adversarial body against the primary item. The work item says which
+    // role this is; the payload does not get to say otherwise.
+    const refused = await refusal('brain_submit_audit', {
+      ...proof(primary),
+      adversarial: ADVERSARIAL,
+    });
+    expect(refused.category).toBe('INVALID_INPUT');
+  });
+
+  it('records the judge\'s verdict, and only the judge\'s', async () => {
+    const orchestration = await filedPacket();
+
+    const primary = await claimNext('RESEARCH_AUDIT');
+    await call('brain_submit_audit', { ...proof(primary), primary: PRIMARY });
+    await call('brain_complete_work', { ...proof(primary), summary: 'primary in' });
+    const adversarial = await claimNext('RESEARCH_AUDIT');
+    await call('brain_submit_audit', { ...proof(adversarial), adversarial: ADVERSARIAL });
+    await call('brain_complete_work', { ...proof(adversarial), summary: 'adversarial in' });
+
+    const judgeItem = await claimNext('RESEARCH_AUDIT');
+    const value = await call('brain_submit_audit', { ...proof(judgeItem), judge: judge() });
+
+    expect(value['role']).toBe('JUDGE');
+    expect(value['verdict']).toBe('MORE_RESEARCH');
+
+    const audits = await listAuditsByProject(orchestration.projectId);
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.verdict).toBe('MORE_RESEARCH');
+    // The structured record, not prose. Invariant 11.
+    expect(audits[0]!.gaps.length).toBeGreaterThan(0);
+  });
+
+  it('refuses an advancing verdict while a foundational gap is open', async () => {
+    const orchestration = await filedPacket();
+    const primary = await claimNext('RESEARCH_AUDIT');
+    await call('brain_submit_audit', { ...proof(primary), primary: PRIMARY });
+    await call('brain_complete_work', { ...proof(primary), summary: 'primary in' });
+    const adversarial = await claimNext('RESEARCH_AUDIT');
+    await call('brain_submit_audit', { ...proof(adversarial), adversarial: ADVERSARIAL });
+    await call('brain_complete_work', { ...proof(adversarial), summary: 'adversarial in' });
+
+    const judgeItem = await claimNext('RESEARCH_AUDIT');
+    const refused = await refusal('brain_submit_audit', {
+      ...proof(judgeItem),
+      judge: judge({
+        verdict: 'READY_FOR_SYNTHESIS',
+        gap_classifications: [
+          {
+            classification: 'FOUNDATIONAL_GAP',
+            title: 'Nothing establishes what compensation triggers the rule',
+            detail: 'The packet never reaches the compensation question.',
+          },
+        ],
+        foundational_gap_count: 1,
+        synthesis_ready: true,
+      }),
+    });
+
+    // The one thing a judge must never be able to do: advance a layer over a
+    // gap it has itself called foundational.
+    expect(refused.category).toBe('INVALID_INPUT');
+    expect(await listAuditsByProject(orchestration.projectId)).toHaveLength(0);
+  });
+
+  it('refuses a judgement whose counts disagree with the gaps it classified', async () => {
+    const orchestration = await filedPacket();
+    const primary = await claimNext('RESEARCH_AUDIT');
+    await call('brain_submit_audit', { ...proof(primary), primary: PRIMARY });
+    await call('brain_complete_work', { ...proof(primary), summary: 'primary in' });
+    const adversarial = await claimNext('RESEARCH_AUDIT');
+    await call('brain_submit_audit', { ...proof(adversarial), adversarial: ADVERSARIAL });
+    await call('brain_complete_work', { ...proof(adversarial), summary: 'adversarial in' });
+
+    const judgeItem = await claimNext('RESEARCH_AUDIT');
+    const refused = await refusal('brain_submit_audit', {
+      ...proof(judgeItem),
+      // Says zero foundational gaps while classifying one. The counts are
+      // recomputed rather than believed.
+      judge: judge({
+        gap_classifications: [
+          {
+            classification: 'FOUNDATIONAL_GAP',
+            title: 'A gap it called foundational',
+            detail: 'And then did not count.',
+          },
+        ],
+        foundational_gap_count: 0,
+      }),
+    });
+    expect(refused.category).toBe('INVALID_INPUT');
+    expect(await listAuditsByProject(orchestration.projectId)).toHaveLength(0);
+  });
+
+  it('declares an adversarial schema its own validator accepts', async () => {
+    // The narrow guard for a defect that was invisible for exactly as long as
+    // nobody drove this path: the tool advertised `material: boolean` while
+    // `parseAdversarialPass` required `assessment`, so a worker following the
+    // published schema was refused every time — and the refusal named a field
+    // the schema never mentioned. The adversarial pass is the middle of three,
+    // so no worker-driven packet could ever reach a judge.
+    //
+    // The end-to-end tests above would catch this again, but only while their
+    // fixtures happen to be built from the schema. This asserts the contract
+    // itself.
+    const tool = findTool('brain_submit_audit');
+    const schema = tool!.inputSchema as unknown as {
+      properties: {
+        adversarial: { properties: { attacks: { items: { required: string[] } } } };
+      };
+    };
+    const required = schema.properties.adversarial.properties.attacks.items.required;
+    expect(required).toContain('assessment');
+    expect(required).not.toContain('material');
+
+    // And it is the same enum the validator matches exactly, not a lookalike.
+    const parsed = parseAdversarialPass(
+      JSON.stringify({
+        attacks: [{ attack: 'a', assessment: 'NOT_MATERIAL', reasoning: 'b' }],
+        strongest_reason_not_to_advance: 'c',
+      }),
+    );
+    expect(parsed.ok).toBe(true);
+  });
+
+  it('runs the three roles strictly in order, one at a time', async () => {
+    const orchestration = await filedPacket();
+
+    // The runner enqueues PRIMARY and nothing else, and will not enqueue the
+    // next role until this one has produced a completed pass. Three opinions
+    // in parallel is a different and much weaker thing than one argument.
+    const queued = await listWorkItems(project.id, { limit: 100 });
+    const audits = queued.filter(
+      (item) => item.orchestrationId === orchestration.id && item.workType === 'RESEARCH_AUDIT',
+    );
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.payload['role']).toBe('PRIMARY');
   });
 });

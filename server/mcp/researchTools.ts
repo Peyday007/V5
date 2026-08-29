@@ -329,6 +329,16 @@ async function recordPass(input: {
  * The gap shape, identical for the primary's candidates and the judge's
  * classifications, because they are the same thing at two stages.
  */
+/**
+ * One classified gap.
+ *
+ * Two of these fields are conditionally required and JSON Schema cannot say
+ * so, which means the only place a caller can learn it is here: a gap
+ * classified OTHER_LAYER must name `owning_layer`, and one classified
+ * TARGETED_RESEARCH_GAP must state a `research_question`. Both are refused by
+ * the validator otherwise — a handoff to nobody is not a handoff, and a
+ * research gap with no question is not something a run could answer.
+ */
 const GAP_SCHEMA = {
   type: 'object',
   properties: {
@@ -336,8 +346,14 @@ const GAP_SCHEMA = {
     title: { type: 'string' },
     detail: { type: 'string' },
     justification: { type: 'string' },
-    owning_layer: { type: 'string' },
-    research_question: { type: 'string' },
+    owning_layer: {
+      type: 'string',
+      description: 'Required when classification is OTHER_LAYER.',
+    },
+    research_question: {
+      type: 'string',
+      description: 'Required when classification is TARGETED_RESEARCH_GAP.',
+    },
     expected_contribution: { type: 'string' },
   },
   required: ['classification', 'title'],
@@ -1434,11 +1450,27 @@ const submitAuditTool: McpTool = {
             items: {
               type: 'object',
               properties: {
-                attack: { type: 'string' },
-                material: { type: 'boolean' },
+                attack: { type: 'string', description: 'The objection, stated as an objection.' },
+                // The field the validator actually reads, and the reason it is
+                // an enum rather than the boolean this schema used to declare:
+                // "is this attack material" is a judgement with two named
+                // outcomes, and a bare true/false loses which one was meant
+                // when the answer is later read back out of the pass row.
+                //
+                // This schema said `material: boolean` and the validator has
+                // always required `assessment`. A worker following the schema
+                // exactly was refused every time, and the refusal named a
+                // field the schema never mentioned — so no worker-driven
+                // packet could get past the adversarial pass, and therefore
+                // none could ever reach a judge.
+                assessment: {
+                  type: 'string',
+                  enum: ['VALID', 'NOT_MATERIAL'],
+                  description: 'VALID if the objection stands; NOT_MATERIAL if it does not bite.',
+                },
                 reasoning: { type: 'string' },
               },
-              required: ['attack', 'material', 'reasoning'],
+              required: ['attack', 'assessment', 'reasoning'],
               additionalProperties: false,
             },
           },
