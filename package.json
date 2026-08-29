@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Brain — local-first research operations platform (project state, dependencies, prompts, audits, synthesis, freeze).",
+  "description": "Brain \u2014 local-first research operations platform (project state, dependencies, prompts, audits, synthesis, freeze).",
   "engines": {
     "node": ">=22.5.0"
   },
@@ -21,7 +21,8 @@
     "migrate:cloud": "tsx --env-file-if-exists=.env scripts/migrate-cloud.ts",
     "start:container": "node --import tsx server/index.ts",
     "verify:hosted": "node --import tsx scripts/verify-hosted.ts",
-    "preflight": "tsx --env-file-if-exists=.env scripts/preflight.ts"
+    "preflight": "tsx --env-file-if-exists=.env scripts/preflight.ts",
+    "reissue:verification": "tsx scripts/reissue-verification.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
