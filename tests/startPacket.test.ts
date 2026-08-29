@@ -21,7 +21,7 @@ import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { findTool } from '../server/mcp/tools.ts';
 import { importFile } from '../server/services/importer.ts';
 import { whenExtractionIdle } from '../server/services/documents/queue.ts';
-import { createWorker, grantMembership } from '../server/repos/identity.ts';
+import { createWorker, grantMembership, revokeMembership } from '../server/repos/identity.ts';
 import { claimWork, enqueueWork, listWorkItems } from '../server/repos/workQueue.ts';
 import { currentFragments, getOrchestration } from '../server/repos/research.ts';
 import { listRequirements, listCoverage } from '../server/repos/reconciliation.ts';
@@ -270,6 +270,54 @@ describe('startPacket', () => {
     await addRead('World Model v1.txt', 'too short');
     const started = await startPacket(goal());
     expect(started.archive.documentsUnreadable).toBeGreaterThan(0);
+  });
+
+  it('counts a worker that holds the scopes the queued work actually needs', async () => {
+    // The fixture already granted this worker the full research scopes, which
+    // is the ordinary case: somebody who can do the work belongs to the
+    // project the work is in.
+    const started = await startPacket(goal());
+    expect(started.claimants.workers).toBe(1);
+    expect(started.claimants.eligible).toBe(1);
+  });
+
+  it('says when no connected worker could claim what it just queued', async () => {
+    // The failure this exists to stop: a packet created in a project no worker
+    // belongs to. The queue is right to say nothing — a worker sees only its
+    // own projects, and a project it may not have is absent rather than
+    // refused. But that makes "there is no work" and "that work is not yours"
+    // the same sentence from the worker's side, so the difference has to be
+    // said where it is knowable, which is here.
+    await revokeMembership(fixture.project.id, 'WORKER', workerId);
+
+    const started = await startPacket(goal());
+    expect(started.claimants.workers).toBe(0);
+    expect(started.claimants.eligible).toBe(0);
+  });
+
+  it('does not count a member that cannot claim this kind of work', async () => {
+    const narrow = await createWorker({
+      name: 'narrow-worker',
+      displayName: 'Narrow Worker',
+      createdByType: 'SYSTEM',
+      createdById: 'seed',
+    });
+    await grantMembership({
+      projectId: fixture.project.id,
+      principalType: 'WORKER',
+      principalId: narrow.id,
+      role: 'MEMBER',
+      // Enough to see the project and take an item, and not enough to plan.
+      scopes: ['project:read', 'queue:read', 'queue:claim'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'seed',
+    });
+
+    const started = await startPacket(goal());
+    // Two members, one of whom could actually do it. Counting memberships
+    // alone would have called the narrow one covered.
+    expect(started.claimants.workers).toBe(2);
+    expect(started.claimants.eligible).toBe(1);
   });
 
   it('refuses a goal with no title or no assignment', async () => {

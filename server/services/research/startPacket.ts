@@ -36,6 +36,8 @@ import { createRun } from '../../repos/runs.ts';
 import { createOrchestration } from '../../repos/research.ts';
 import { runTypeForNewPacket } from '../runArtifacts.ts';
 import { inventoryProject } from '../reconcile/plan.ts';
+import { listMembershipsForProject } from '../../repos/identity.ts';
+import { workType } from '../queue/workTypes.ts';
 import { advancePacket, type AdvanceResult } from './packetRunner.ts';
 
 /**
@@ -156,6 +158,28 @@ export interface ArchiveCensus {
   documentsUnreadable: number;
 }
 
+/**
+ * Whether anybody can actually do the work this packet just queued.
+ *
+ * The queue's refusals are correct and silent by design: a worker sees only
+ * projects it is a member of, and a project it may not have is *absent* rather
+ * than refused (invariant 23). That is the right trade at the boundary and it
+ * has one cost — from the worker's side, "there is no work" and "that work is
+ * not yours" are the same sentence.
+ *
+ * So the honest place to say it is here, where the work is created and the
+ * memberships are readable. A packet queued into a project no connected worker
+ * belongs to is not queued; it is parked, and nothing downstream will ever say
+ * so. Reported rather than refused: creating work before granting access is a
+ * legitimate order to do things in, as long as somebody is told.
+ */
+export interface ClaimantCensus {
+  /** Workers with an active membership on this project. */
+  workers: number;
+  /** Of those, the ones holding every scope the queued work requires. */
+  eligible: number;
+}
+
 export interface StartPacketInput {
   projectId: string;
   layerId: string;
@@ -179,6 +203,7 @@ export interface StartPacketResult {
   orchestration: ResearchOrchestration;
   advanced: AdvanceResult;
   archive: ArchiveCensus;
+  claimants: ClaimantCensus;
 }
 
 /**
@@ -249,5 +274,36 @@ export async function startPacket(input: StartPacketInput): Promise<StartPacketR
 
   const advanced = await advancePacket(orchestration.id);
 
-  return { project, layer, run, orchestration, advanced, archive };
+  return {
+    project,
+    layer,
+    run,
+    orchestration,
+    advanced,
+    archive,
+    claimants: await countClaimants(project.id, advanced),
+  };
+}
+
+/** How many connected workers could actually claim what was just queued. */
+async function countClaimants(
+  projectId: string,
+  advanced: AdvanceResult,
+): Promise<ClaimantCensus> {
+  const memberships = (await listMembershipsForProject(projectId)).filter(
+    (membership) => membership.principalType === 'WORKER' && membership.active,
+  );
+
+  // The scopes the work that was actually queued demands, from the registry
+  // rather than from a list here — a work type whose scopes change must not
+  // leave this check quietly answering the old question.
+  const required = new Set<string>();
+  for (const entry of advanced.enqueued) {
+    for (const scope of workType(entry.workType).requiredScopes) required.add(scope);
+  }
+
+  const eligible = memberships.filter((membership) =>
+    [...required].every((scope) => membership.scopes.includes(scope as never)),
+  );
+  return { workers: memberships.length, eligible: eligible.length };
 }

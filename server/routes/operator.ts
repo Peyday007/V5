@@ -1014,8 +1014,29 @@ export function operatorRouter(): Router {
           enqueued: started.advanced.enqueued.length,
           archiveClaims: started.archive.claims,
           archiveUnreadable: started.archive.documentsUnreadable,
+          eligibleWorkers: started.claimants.eligible,
         },
       });
+
+      /**
+       * The sentence that would have saved an evening.
+       *
+       * A packet was created in a project no connected worker was a member
+       * of. The worker looked, correctly saw two projects and no research
+       * work, and reported a thin pipeline — because from its side "there is
+       * no work" and "that work is not yours" are the same sentence, which is
+       * invariant 23 doing its job. The place that can tell the difference is
+       * this one, so this is where it gets said.
+       */
+      const reach =
+        started.claimants.eligible > 0
+          ? ''
+          : started.claimants.workers > 0
+            ? ` WARNING: ${started.claimants.workers} worker(s) belong to this project but none holds ` +
+              'the scopes this work needs. Use "Update access" below, or nothing will ever claim it.'
+            : ' WARNING: no worker belongs to this project, so nothing can claim this work. ' +
+              'Grant a worker access to it below — a worker sees only the projects it is a member ' +
+              'of, so from its side this packet does not exist.';
 
       // What the archive holds is said here rather than left implicit,
       // because it is the number that decides how much of this packet is
@@ -1036,7 +1057,7 @@ export function operatorRouter(): Router {
           ok:
             `Planning "${started.orchestration.title}". A worker will decompose it into ` +
             'fragments and bring the plan back here. Nothing is researched and nothing is ' +
-            'spent until you approve it.' + census,
+            'spent until you approve it.' + census + reach,
         }),
       );
     })();

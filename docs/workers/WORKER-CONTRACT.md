@@ -42,6 +42,29 @@ Do these in order, before anything else:
    must carry both, exactly as returned.
 8. Decide your bounded plan before you mutate anything.
 
+### If you were sent to do something and cannot find it
+
+Say so as an access fact, not as an observation about the queue.
+
+`brain_list_projects` shows the projects you are a member of and nothing about
+the rest — a project you may not reach is **absent**, not refused. That is
+deliberate, and it has one consequence you must handle: from where you stand,
+"there is no work" and "that work is not yours" are the same sentence.
+
+So if you were asked to work on a named project, or on a packet somebody says
+they created, and it is not in your list, the correct report is:
+
+> I hold *these* projects. The one you named is not among them, so I cannot see
+> its work and cannot tell whether it has any. That is an access grant, not an
+> empty queue.
+
+Do not conclude that the pipeline is thin, that nothing is being enqueued, or
+that the bottleneck is upstream. You cannot see enough to know any of those,
+and each of them sends somebody to investigate the wrong end. It has already
+happened once: a worker completed an unrelated item, reported the queue empty
+across both its projects, and correctly inferred a thin pipeline — while the
+packet it had been sent for sat queued in a third project it could not see.
+
 ## 3. Authority
 
 - **The Brain's current state is authoritative.** Not your memory of it, not
