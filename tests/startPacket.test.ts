@@ -85,6 +85,20 @@ async function principal(): Promise<Principal> {
   };
 }
 
+/** Call a tool and return the refusal rather than throwing it. */
+async function refusal(
+  name: string,
+  args: Record<string, unknown>,
+): Promise<{ category: string; message: string }> {
+  try {
+    await call(name, args);
+  } catch (error) {
+    const err = error as { category?: string; message?: string };
+    return { category: err.category ?? 'THREW', message: err.message ?? String(error) };
+  }
+  throw new Error(`${name} was expected to refuse and did not.`);
+}
+
 async function call(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
   const tool = findTool(name);
   if (!tool) throw new Error(`no such tool: ${name}`);
@@ -459,6 +473,55 @@ describe('the coverage gate on a proposed plan', () => {
     // a packet on a new project researches less than it was asked to.
     expect(value['proposed']).toBe(2);
     expect((value['alreadyAnswered'] as unknown[])).toHaveLength(0);
+  });
+
+  it('refuses a fragment that names a sibling it does not declare a dependency on', async () => {
+    const started = await startPacket(goal());
+    const claimed = await claimPlan(started.orchestration.id);
+
+    const refused = await refusal('brain_propose_fragments', {
+      work_item_id: claimed.workItemId,
+      lease_id: claimed.leaseId,
+      lease_generation: claimed.leaseGeneration,
+      fragments: [
+        proposal({ key: 'ca-licence-trigger', question: 'Does California require a licence?' }),
+        proposal({
+          key: 'ca-penalty',
+          // Names its sibling and declares nothing. Exactly what the first
+          // real packet did, five times, and nothing noticed.
+          question: 'What is the penalty for acting without the licence identified in ca-licence-trigger?',
+        }),
+      ],
+    });
+
+    expect(refused.category).toBe('INVALID_INPUT');
+    expect(refused.message).toContain('depends_on');
+    // Refused whole. A plan that is half-created is worse than one refused.
+    expect(await currentFragments(started.orchestration.id)).toHaveLength(0);
+  });
+
+  it('accepts the same pair once the dependency is declared', async () => {
+    const started = await startPacket(goal());
+    const claimed = await claimPlan(started.orchestration.id);
+
+    const value = await call('brain_propose_fragments', {
+      work_item_id: claimed.workItemId,
+      lease_id: claimed.leaseId,
+      lease_generation: claimed.leaseGeneration,
+      fragments: [
+        proposal({ key: 'ca-licence-trigger', question: 'Does California require a licence?' }),
+        proposal({
+          key: 'ca-penalty',
+          question: 'What is the penalty for acting without the licence identified in ca-licence-trigger?',
+          depends_on: ['ca-licence-trigger'],
+        }),
+      ],
+    });
+
+    expect(value['proposed']).toBe(2);
+    const fragments = await currentFragments(started.orchestration.id);
+    const penalty = fragments.find((f) => f.fragmentKey === 'ca-penalty');
+    expect(penalty?.dependsOn).toEqual(['ca-licence-trigger']);
   });
 
   it('records the decision behind every fragment, kept or dropped', async () => {

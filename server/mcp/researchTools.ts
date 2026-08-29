@@ -576,6 +576,42 @@ const proposeFragmentsTool: McpTool = {
       }
     }
 
+    /**
+     * A fragment that names a sibling has to declare it.
+     *
+     * Prose and declaration are read by different things. The runner orders
+     * work from `depends_on`; the researcher is handed the question. So a
+     * question reading "the licence identified in ca-licence-trigger" with an
+     * empty `depends_on` produces a fragment that *says* it builds on another
+     * and is scheduled as though it does not — researched in the same wave,
+     * with none of that fragment's accepted claims in its assignment, free to
+     * reach a different answer than the sibling it cites.
+     *
+     * This is not a style rule. It happened on the first real packet: five
+     * penalty fragments each named their state's trigger fragment in the
+     * question, the plan was approved, and all twelve went ready at once.
+     * Nothing was wrong with any single declaration, which is exactly why
+     * nothing caught it.
+     *
+     * Refused rather than inferred. Adding the dependency here would be the
+     * Brain deciding what the plan meant, and a fragment's declarations are
+     * what its gate is applied against — they have to be the author's.
+     */
+    for (const fragment of proposed) {
+      const declared = new Set(fragment.dependsOn);
+      for (const sibling of keys) {
+        if (sibling === fragment.key || declared.has(sibling)) continue;
+        if (!fragment.question.includes(sibling)) continue;
+        throw invalidInput(
+          `Fragment "${fragment.key}" names "${sibling}" in its question but does not list it in ` +
+            'depends_on. The runner orders work from depends_on and the researcher reads the ' +
+            'question, so as written this fragment would be researched alongside the one it says ' +
+            'it builds on, without its findings. Declare the dependency, or ask the question ' +
+            'without naming the other fragment.',
+        );
+      }
+    }
+
     const rationale = optionalString(args, 'rationale') ?? '';
 
     const outcome = await idempotentEffect(
