@@ -150,10 +150,36 @@ export async function assessPacket(input: {
 
   const byRequirement = new Map(evidence.coverage.map((entry) => [entry.requirementId, entry]));
 
-  // 1. Every mandatory requirement is covered.
+  /**
+   * 1. Every mandatory requirement is covered — by the archive, or by research.
+   *
+   * The coverage table answers the first half only. It records what the archive
+   * settled *at planning time*, and a requirement that was MISSING then stays
+   * MISSING: nothing rewrites those rows when a fragment researched for it
+   * clears its gate. Reading coverage alone therefore reports a requirement as
+   * open precisely because the packet went and answered it.
+   *
+   * That mattered the moment this check became a refusal rather than a report.
+   * The in-process path tolerates a failing check — it plans targeted fragments
+   * and, having run out of repairs, synthesizes anyway carrying the gaps — so
+   * the omission cost it nothing but an over-pessimistic summary. Blocking on
+   * it stopped a packet whose single fragment had been researched, verified and
+   * accepted, which is the opposite of what invariant 20 is for.
+   *
+   * So an ACCEPTED fragment carrying the requirement's id counts. That is not a
+   * softening: a fragment reaches ACCEPTED only by clearing all seven gate
+   * conditions, which is a stronger statement about evidence than a coverage
+   * decision made before any of it was gathered.
+   */
+  const answeredByResearch = new Set(
+    fragments
+      .filter((fragment) => fragment.status === 'ACCEPTED')
+      .flatMap((fragment) => fragment.requirementIds),
+  );
   const mandatoryOpen = evidence.requirements.filter((requirement) => {
     if (requirement.necessity !== 'MANDATORY') return false;
     if (requirement.kind === 'OTHER_LAYER' || requirement.kind === 'IRRELEVANT') return false;
+    if (answeredByResearch.has(requirement.id)) return false;
     const entry = byRequirement.get(requirement.id);
     return !entry || (entry.status !== 'SATISFIED' && entry.status !== 'PARTIALLY_SATISFIED');
   });

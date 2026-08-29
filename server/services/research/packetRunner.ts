@@ -213,6 +213,54 @@ async function itemsFor(orchestration: ResearchOrchestration): Promise<WorkItem[
  * one, so the packet stops with a reason a person can act on rather than
  * spinning. `advancePacket` calls this instead of enqueueing a replacement.
  */
+/**
+ * One fragment's work faulted. Block that fragment and carry on.
+ *
+ * This used to stop the packet. `faultedOut` set the orchestration to
+ * NEEDS_HUMAN and returned, which aborted the rest of the advance — and since
+ * `advancePacket` short-circuits on NEEDS_HUMAN, every later call did nothing
+ * at all. So one fragment whose verification died took the whole packet with
+ * it, permanently.
+ *
+ * On the live packet that was Texas. Four other fragments were sitting
+ * VALIDATING with real research on them — California, Florida, New York,
+ * Illinois — and not one could be handed a verification job, because the loop
+ * that mints them returned at Texas before reaching any of them. Two worker
+ * sessions in a row reported the same thing: the queue never offers a
+ * verification, only work that has already been done.
+ *
+ * A fault is about a fragment. The packet's own end state is decided where it
+ * always was — when everything has finished, or when nothing left can move.
+ */
+async function faultedFragment(input: {
+  orchestration: ResearchOrchestration;
+  fragment: ResearchFragment;
+  what: string;
+}): Promise<void> {
+  const reason =
+    `A ${input.what} work item for this fragment finished without recording anything. ` +
+    'Its research is kept; reissue the verification or give the fragment another attempt.';
+  await updateFragment(input.fragment.id, {
+    status: 'BLOCKED',
+    blockedReason: reason,
+    completedAt: new Date().toISOString(),
+  });
+  await recordEvent({
+    projectId: input.orchestration.projectId,
+    layerId: input.orchestration.layerId,
+    entityType: 'RUN',
+    entityId: input.orchestration.runId,
+    eventType: 'RESEARCH_FRAGMENT_REJECTED',
+    payload: {
+      orchestrationId: input.orchestration.id,
+      fragmentId: input.fragment.id,
+      fragmentKey: input.fragment.fragmentKey,
+      what: input.what,
+      reason,
+    },
+  });
+}
+
 async function faultedOut(input: {
   orchestration: ResearchOrchestration;
   fragment?: ResearchFragment | null;
@@ -443,7 +491,9 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
       item.workType === 'RESEARCH_VERIFY' && item.fragmentId === fragment.id;
     if (stillRunning(items, verifyItem)) continue;
     if (alreadyCreated(items, verifyItem)) {
-      return await faultedOut({ orchestration, fragment, what: 'verification' });
+      // This fragment is stuck. The others are not, and the loop goes on.
+      await faultedFragment({ orchestration, fragment, what: 'verification' });
+      continue;
     }
     enqueued.push(
       await enqueueResearchItem({
@@ -463,7 +513,8 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
       item.workType === 'RESEARCH_FRAGMENT' && item.fragmentId === fragment.id;
     if (stillRunning(items, researchItem)) continue;
     if (alreadyCreated(items, researchItem)) {
-      return await faultedOut({ orchestration, fragment, what: 'research' });
+      await faultedFragment({ orchestration, fragment, what: 'research' });
+      continue;
     }
     enqueued.push(
       await enqueueResearchItem({ orchestration, type: 'RESEARCH_FRAGMENT', fragment }),

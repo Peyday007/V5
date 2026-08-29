@@ -31,6 +31,7 @@ import {
 } from '../server/repos/research.ts';
 import {
   claimWork,
+  completeWork,
   enqueueWork,
   getWorkItem,
   listWorkItems,
@@ -504,6 +505,75 @@ describe('submitting claims', () => {
   });
 });
 
+describe('one fragment faulting', () => {
+  /**
+   * The defect two worker sessions in a row reported, and the reason neither
+   * was ever offered a verification job.
+   *
+   * `faultedOut` set the whole orchestration to NEEDS_HUMAN and returned,
+   * aborting the rest of the advance — and `advancePacket` short-circuits on
+   * NEEDS_HUMAN, so every later call did nothing at all. On the live packet one
+   * fragment's verification had died. Four others were sitting VALIDATING with
+   * real research on them and could never be handed a verification, because the
+   * loop that mints them returned at the dead one before reaching any of them.
+   *
+   * From a worker's side that looks like a queue that only ever offers work
+   * which is already done.
+   */
+  it('does not stop the packet, and the healthy fragments still get verified', async () => {
+    const orchestration = await makeOrchestration();
+    const dead = await makeFragment(orchestration, { fragmentKey: 'dead', fragmentIndex: 0 });
+    const healthy = await makeFragment(orchestration, { fragmentKey: 'healthy', fragmentIndex: 1 });
+
+    // Both researched. Both VALIDATING.
+    for (const fragment of [dead, healthy]) {
+      const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+      await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+      await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+    }
+
+    // The dead one's verification finishes without recording — written straight
+    // through the repository, as a database from before the boundary refused it
+    // would hold.
+    const items = await listWorkItems(project.id, { limit: 100 });
+    const deadVerify = items.find(
+      (item) => item.workType === 'RESEARCH_VERIFY' && item.fragmentId === dead.id,
+    );
+    expect(deadVerify).toBeDefined();
+    const [claimed] = await claimWork({
+      workerId,
+      scopes: [{ projectId: project.id, scopes: FULL }],
+      workTypes: ['RESEARCH_VERIFY'],
+    });
+    const held = claimed!.workItemId === deadVerify!.id ? claimed! : null;
+    if (!held) throw new Error('expected to claim the dead verification first');
+    await completeWork(
+      {
+        workItemId: held.workItemId,
+        leaseId: held.leaseId,
+        leaseGeneration: held.leaseGeneration,
+        workerId,
+      },
+      { summary: 'out of budget' },
+    );
+
+    await advancePacket(orchestration.id);
+
+    expect((await getFragment(dead.id))?.status).toBe('BLOCKED');
+    // And the healthy fragment has a verification waiting for a worker, which
+    // is the whole point.
+    const after = await listWorkItems(project.id, { limit: 100 });
+    const healthyVerify = after.filter(
+      (item) =>
+        item.workType === 'RESEARCH_VERIFY' &&
+        item.fragmentId === healthy.id &&
+        (item.state === 'QUEUED' || item.state === 'LEASED'),
+    );
+    expect(healthyVerify).toHaveLength(1);
+    expect((await getOrchestration(orchestration.id))?.status).not.toBe('NEEDS_HUMAN');
+  });
+});
+
 describe('work its fragment has outgrown', () => {
   /**
    * The cause behind the duplicate a worker was handed on the live packet, and
@@ -949,8 +1019,11 @@ describe('the packet runner', () => {
     );
     expect(research_items).toHaveLength(1);
     expect(result.enqueued).toHaveLength(0);
-    expect(result.status).toBe('NEEDS_HUMAN');
+    // The fragment is blocked; the packet is not. A fault belongs to the
+    // fragment it happened to — stopping the packet froze every healthy
+    // fragment beside it, because advancePacket short-circuits on NEEDS_HUMAN.
     expect((await getFragment(fragment.id))?.status).toBe('BLOCKED');
+    expect(result.status).not.toBe('NEEDS_HUMAN');
   });
 
   it('stops rather than re-planning when a plan job produced no fragments', async () => {
@@ -1918,9 +1991,35 @@ describe('the packet check before synthesis', () => {
     expect(stopped?.failureReason).toContain('Texas');
   });
 
-  it('queues it once every mandatory requirement is answered', async () => {
+  /**
+   * The case the previous version of this test did not cover, and the deployed
+   * harness did.
+   *
+   * It asserted that synthesis is queued when every mandatory requirement is
+   * answered — against a fixture with no requirements at all, so it passed
+   * vacuously while the real path was blocked. A requirement researched and
+   * accepted still reads MISSING in the coverage table, because those rows
+   * record what the archive settled at planning time and nothing rewrites them
+   * afterwards. So the check refused a packet whose only fragment had cleared
+   * its gate.
+   */
+  it('queues it when the requirement was answered by research rather than the archive', async () => {
     const orchestration = await makeOrchestration();
-    const fragment = await makeFragment(orchestration);
+    const [requirement] = await createRequirements([
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requirementKey: 'answered-by-research',
+        ordinal: 0,
+        statement: 'Whether California requires a licence for the transaction.',
+        necessity: 'MANDATORY',
+        kind: 'RESEARCH',
+      },
+    ]);
+    const fragment = await makeFragment(orchestration, {
+      requirementIds: [requirement!.id],
+    });
 
     const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
     await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });

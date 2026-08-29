@@ -221,6 +221,36 @@ researched.
 from a few minutes earlier; a different session would not have. Being refused at
 the write boundary is the floor, and not being offered the work is the fix.
 
+## Faults 25 and 26 — why no verification was ever handed out
+
+Two worker sessions in a row reported the same thing: the queue never offers a
+verification job, only research for a fragment that has already been researched.
+The first explanation — a released item left claimable — was real and fixed, and
+it was not the whole story.
+
+**One fragment's fault stopped the entire packet.** `faultedOut` set the
+*orchestration* to NEEDS_HUMAN and returned, aborting the rest of the advance,
+and `advancePacket` short-circuits on NEEDS_HUMAN — so every later call did
+nothing at all. Texas's verification had died. California, Florida, New York and
+Illinois were sitting VALIDATING with real research on them, and the loop that
+mints verifications returned at Texas before reaching any of them. Permanently.
+
+A fault belongs to the fragment it happened to. The packet's own end state is
+decided where it always was: when everything has finished, or when nothing left
+can move.
+
+| # | Fault | Fix |
+|---|---|---|
+| 25 | One faulted fragment froze the whole packet | Block the fragment, record the event, continue the loop. Four fragments' verifications had been unreachable since the Texas fault. |
+| 26 | The §16 coverage check refused packets that had answered their requirements | The coverage table records what the *archive* settled at planning time; nothing rewrites those rows when research lands, so a requirement read MISSING precisely because the packet went and answered it. An ACCEPTED fragment carrying the requirement's id now counts. |
+
+**26 was mine, and it was live for one deploy.** The check went in as a refusal
+against a table that only ever answered half the question. The local test that
+should have caught it asserted synthesis is queued "once every mandatory
+requirement is answered" — against a fixture with no requirements at all, so it
+passed vacuously. The deployed harness caught it on the first pass. A test that
+cannot fail is worse than no test, because it is counted.
+
 ## Still open
 
 - Ten fragments remain queued; California is on attempt 2 and Texas is ungated.

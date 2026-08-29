@@ -192,9 +192,21 @@ async function strandedPacket(): Promise<{
     { summary: 'out of budget' },
   );
 
-  // And the runner stopped the packet for a person, as it should have.
-  const advanced = await advancePacket(orchestration.id);
-  expect(advanced.status).toBe('NEEDS_HUMAN');
+  /**
+   * And the runner blocked the fragment.
+   *
+   * This used to assert the whole *packet* went NEEDS_HUMAN, which is what the
+   * runner did and what turned out to be wrong. A fault is about one fragment;
+   * stopping the packet froze every healthy fragment beside it, permanently,
+   * because `advancePacket` short-circuits on NEEDS_HUMAN. On the live packet
+   * that meant four fragments holding real research could never be handed a
+   * verification job — which is exactly what two worker sessions reported.
+   *
+   * The packet's own end state is still decided where it always was: when
+   * everything has finished, or when nothing left can move.
+   */
+  await advancePacket(orchestration.id);
+  expect((await getFragment(fragment.id))?.status).toBe('BLOCKED');
 
   return {
     orchestration: (await getOrchestration(orchestration.id))!,
@@ -428,9 +440,15 @@ describe('reissuing the verification', () => {
     expect(payload['actorId']).toBe(ADMIN.id);
   });
 
-  it('lets the packet run again, and only from NEEDS_HUMAN', async () => {
+  it('restores a packet that a person had to be called for', async () => {
     const { orchestration, verifyItemId } = await strandedPacket();
-    expect((await getOrchestration(orchestration.id))?.status).toBe('NEEDS_HUMAN');
+    // A single blocked fragment no longer stops the packet, so put it in the
+    // state a packet reaches when nothing else can move — which is the state
+    // the reissue exists to lift.
+    await updateOrchestration(orchestration.id, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'Nothing left can move.',
+    });
 
     await reissueMissingVerification({ workItemId: verifyItemId, actor: ADMIN });
 
