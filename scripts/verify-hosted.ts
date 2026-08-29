@@ -87,7 +87,7 @@ import {
   listClaimsForFragment,
 } from '../server/repos/research.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
-import { readObject } from '../server/services/storage.ts';
+import { readObject, storageKeyOf } from '../server/services/storage.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import type { Project, WorkerScope } from '../server/domain/types.ts';
@@ -996,20 +996,27 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
 
   // Filed through the storage layer the deployment is configured with, which
   // is a bucket in cloud mode. A row without bytes is not a filed document.
+  //
+  // The key comes from `storageKeyOf` rather than from `filesystemPath`. The
+  // first version of this check read that column directly and passed locally
+  // and failed here, which is §1 exactly: in cloud mode the key lives in
+  // `storage_key` and the local path means nothing to a bucket. A path built
+  // by hand is correct in exactly one of the two modes.
   if (withDocument?.documentId) {
     const document = await getDocument(withDocument.documentId);
-    let readable = false;
+    const key = storageKeyOf(document);
+    let bytes = 0;
+    let why = '';
     try {
-      readable = document?.filesystemPath
-        ? (await readObject(document.filesystemPath)).byteLength > 0
-        : false;
-    } catch {
-      readable = false;
+      bytes = key ? (await readObject(key)).byteLength : 0;
+      if (!key) why = 'the document row carries neither a storage key nor a path';
+    } catch (error) {
+      why = error instanceof Error ? error.message : String(error);
     }
     record(
       'whose bytes come back out of the configured document store',
-      readable,
-      readable ? `${document?.canonicalName}` : 'the stored object could not be read back',
+      bytes > 0,
+      bytes > 0 ? `${document?.canonicalName} · ${bytes} bytes` : `could not read ${key ?? 'no key'}: ${why}`,
     );
   }
 
