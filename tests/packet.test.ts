@@ -294,6 +294,116 @@ describe('reading an assignment', () => {
     expect(Object.keys(value['assignment'] as object)).not.toContain('prompt');
   });
 
+  /**
+   * The deadlock, and the reason no test caught it.
+   *
+   * `brain_submit_verification` takes a verdict per claim id and refuses a
+   * partial answer. Nothing handed a worker those ids: the assignment carried
+   * the fragment's declarations and its *dependencies'* claims, never its own.
+   * So a verification could be completed only by a session that had submitted
+   * the claims and still had the ids in front of it — and every redelivery,
+   * reissue and second session was uncompletable.
+   *
+   * Every other test in this file reads ids with `listClaimsForFragment`, which
+   * is the database, which a worker does not have. The hosted harness holds
+   * them in a local variable. Both prove the tool works and neither crosses the
+   * boundary the real path always crosses, which is why this survived a live
+   * packet stopping on it twice.
+   *
+   * These three go through `brain_get_assignment` and nothing else.
+   */
+  it('hands a verification the claims it must judge, with their ids', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    const value = await call('brain_get_assignment', { work_item_id: verify.workItemId });
+    const assignment = value['assignment'] as Record<string, unknown>;
+    const toVerify = assignment['claimsToVerify'] as Record<string, unknown>[];
+
+    expect(toVerify).toHaveLength(1);
+    expect(toVerify[0]!['claimId']).toBe((await listClaimsForFragment(fragment.id))[0]!.id);
+    // The scope fields travel too: two of the seven gate conditions are
+    // judgements about scope, and they cannot be made from the claim text.
+    expect(toVerify[0]!['claim']).toBe(SOURCED.claim);
+    expect(toVerify[0]!['sourceUrl']).toBe(SOURCED.source_url);
+  });
+
+  it('lets a session verify claims it did not submit', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+
+    // From here on, pretend the submitting session is gone. The only source of
+    // claim ids is the assignment — no listClaimsForFragment, no response body
+    // kept from the submission.
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    const assignment = (await call('brain_get_assignment', { work_item_id: verify.workItemId }))[
+      'assignment'
+    ] as Record<string, unknown>;
+    const ids = (assignment['claimsToVerify'] as { claimId: string }[]).map((c) => c.claimId);
+
+    const value = await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: ids.map((claimId) => ({
+        claim_id: claimId,
+        supports_claim: true,
+        ...MATCHES,
+        note: 'Read the section.',
+      })),
+      sufficiency: 'SUFFICIENT',
+    });
+
+    expect(value['integrity']).toBe('PASS');
+    expect(value['acceptedClaims']).toBe(1);
+    expect((await getFragment(fragment.id))?.status).toBe('ACCEPTED');
+  });
+
+  it('does not hand a research item the fragment its own working back', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    const assignment = (await call('brain_get_assignment', { work_item_id: research.workItemId }))[
+      'assignment'
+    ] as Record<string, unknown>;
+    // Only the item whose purpose is to judge them gets them. A researcher
+    // handed the claims it is about to make is being shown an answer.
+    expect(assignment['claimsToVerify']).toBeNull();
+  });
+
+  it('names the claims a verification left unanswered', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', {
+      ...proof(research),
+      claims: [SOURCED, { ...SOURCED, claim: 'A second, separate thing.' }],
+    });
+    const stored = await listClaimsForFragment(fragment.id);
+
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    const refused = await refusal('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [
+        { claim_id: stored[0]!.id, supports_claim: true, ...MATCHES, note: 'Reads directly.' },
+      ],
+      sufficiency: 'SUFFICIENT',
+    });
+
+    // Being told the answer is short without being told of what is half of what
+    // made this uncompletable. The caller holds the item for this fragment and
+    // can read every id from the assignment, so naming them discloses nothing.
+    expect(refused.message).toContain(stored[1]!.id);
+    expect(refused.message).not.toContain(stored[0]!.id);
+  });
+
   it('refuses a worker without research:read, saying nothing about what exists', async () => {
     const orchestration = await makeOrchestration();
     const fragment = await makeFragment(orchestration);

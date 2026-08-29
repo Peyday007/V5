@@ -929,10 +929,37 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
     record('the gate runs as its own pass', false, 'no RESEARCH_VERIFY item');
     return;
   }
+  /**
+   * The claim ids come from the assignment, not from `stored` above.
+   *
+   * This is the difference between proving the tool works and proving the
+   * *step* is performable. Verification needs a verdict per claim id and
+   * refuses a partial answer; until the assignment carried the claims, the only
+   * way to get those ids was to have submitted them and still be holding them.
+   * This script was, in a local variable, so it passed every deploy while a
+   * real worker's verification could not be completed at all — twice, on the
+   * live packet, before anyone worked out why.
+   *
+   * So the read below stands in for the session boundary the real path always
+   * crosses. It must never be replaced with `stored`.
+   */
+  const verifyAssignment = await worker.call('brain_get_assignment', {
+    work_item_id: verifyClaim.workItemId,
+  });
+  const toVerify =
+    (((verifyAssignment['assignment'] as Record<string, unknown> | undefined)?.[
+      'claimsToVerify'
+    ] as { claimId: string; claimType: string }[] | null) ?? []);
+  record(
+    'the verification assignment carries the claims it must judge, with their ids',
+    toVerify.length === stored.length && toVerify.every((claim) => claim.claimId.length > 0),
+    `${toVerify.length} claim(s) offered for ${stored.length} stored`,
+  );
+
   const gated = await worker.call('brain_submit_verification', {
     ...proofOf(verifyClaim),
-    verdicts: stored.map((claim) => ({
-      claim_id: claim.id,
+    verdicts: toVerify.map((claim) => ({
+      claim_id: claim.claimId,
       supports_claim: claim.claimType !== 'UNSUPPORTED_ASSERTION',
       geography: 'MATCH',
       timeframe: 'MATCH',
@@ -1300,15 +1327,29 @@ async function claimAs(bearer: string, body: Record<string, unknown> = {}): Prom
  * about the queue's history — so the history is cleared first and each run
  * starts from the same place.
  *
- * Only this scope, which exists for nothing else, and only items this harness
- * created. Cancellation rather than deletion, because it goes through the same
- * guarded path everything else does and leaves the attempt history readable.
+ * **It has to be every live item in the scope, not the ones this harness looks
+ * like it created.** The first version filtered on
+ * `created_by_id = 'verify-hosted'`, which is what the harness stamps when it
+ * enqueues directly. Half of it does not: the idempotency section posts to
+ * `/api/projects/:id/work` as the administrator, and that route records
+ * `createdById: principal.id`. So those items have been invisible to this
+ * function since it was written, and have piled up two passes a deploy ever
+ * since.
+ *
+ * That pile is why `a worker claimed it` failed on the *before* pass of every
+ * run and passed on the *after* pass. Nothing was different about the second
+ * pass except that the first one had just leased twenty-five of the oldest
+ * items out of the way. The check was passing for a reason unrelated to what
+ * it tests.
+ *
+ * Only this scope, which exists for nothing else. Cancellation rather than
+ * deletion, because it goes through the same guarded path everything else does
+ * and leaves the attempt history readable.
  */
 async function drainPreviousRuns(fixtures: Fixtures): Promise<void> {
   const stale = await getDb().all<{ id: string }>(
     `SELECT id FROM work_items
-      WHERE project_id = ? AND created_by_id = 'verify-hosted'
-        AND state IN ('QUEUED', 'LEASED')`,
+      WHERE project_id = ? AND state IN ('QUEUED', 'LEASED')`,
     [fixtures.scope.id],
   );
   for (const row of stale) {

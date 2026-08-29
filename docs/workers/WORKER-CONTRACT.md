@@ -168,6 +168,25 @@ The order when your budget runs out mid-item:
 
 Releasing is not failing. It costs the packet nothing.
 
+### Verifying claims you did not submit
+
+**The claim ids are in the assignment. You do not need to have submitted them.**
+
+`brain_submit_verification` takes a verdict per `claim_id` and refuses a partial
+answer, on purpose — a worker must not get to choose which of its claims are
+gated. Call `brain_get_assignment` on the verification item first and answer the
+`claims_to_verify` it hands back: every claim on the fragment, with its source,
+its excerpt and its scope, whoever submitted it and whenever.
+
+This is the normal case, not the exception. The queue is at-least-once and a
+packet outlives a session, so the worker verifying a fragment is usually not the
+one that researched it. If a verification is refused for missing verdicts, the
+refusal names the ids it did not get.
+
+A verification you cannot complete is released, not completed — the section
+above. And verifying your own research is a weak check even when it turns up
+adverse findings, so say so in your report when that is what happened.
+
 ## 9. Failing
 
 - Retryable failure: a transient condition that a later attempt could genuinely

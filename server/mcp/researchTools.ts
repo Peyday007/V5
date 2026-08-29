@@ -388,9 +388,11 @@ const getAssignmentTool: McpTool = {
   description:
     'The research assignment behind a research work item: the orchestration, this fragment\'s ' +
     'question and every boundary it will be judged against, what its dependencies established, ' +
-    'and any checkpoints an earlier attempt left. Read this before researching — the item ' +
-    'itself carries none of it. A read, so it does not require the lease; every tool that ' +
-    'writes does.',
+    'and any checkpoints an earlier attempt left. On a RESEARCH_VERIFY item it also carries ' +
+    'claims_to_verify — every claim awaiting a verdict, with its id, its source and its scope. ' +
+    'That is where the claim ids come from; you do not need to have submitted them yourself. ' +
+    'Read this before researching — the item itself carries none of it. A read, so it does not ' +
+    'require the lease; every tool that writes does.',
   inputSchema: {
     type: 'object',
     properties: { work_item_id: { type: 'string' } },
@@ -931,8 +933,10 @@ const submitVerificationTool: McpTool = {
     'Answer, per claim, the two questions only somebody who read the source can: does the ' +
     'source directly support the claim, and does its scope match the fragment\'s geography, ' +
     'timeframe, population and definitions. The Brain then applies all seven gate conditions ' +
-    'and records which claims are accepted and why the rest were not. Answer honestly — a ' +
-    'claim you wave through is one the packet will rest on.',
+    'and records which claims are accepted and why the rest were not. Every claim on the ' +
+    'fragment needs a verdict — call brain_get_assignment first and answer the ' +
+    'claims_to_verify it hands you, which is the full list whether or not you submitted them. ' +
+    'Answer honestly — a claim you wave through is one the packet will rest on.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -1019,9 +1023,16 @@ const submitVerificationTool: McpTool = {
     const answered = new Set(verifications.map((verification) => verification.claimId));
     const unanswered = stored.filter((claim) => !answered.has(claim.id));
     if (unanswered.length > 0) {
+      // Name them. The caller holds this item for this fragment and can read
+      // every one of these ids out of brain_get_assignment, so listing them
+      // discloses nothing it does not already have — and withholding them was
+      // half of what made this step uncompletable: a worker was told its answer
+      // was short without being told of what.
       throw invalidInput(
         `${unanswered.length} of this fragment's ${stored.length} claims have no verdict. ` +
-          'Every claim must be answered.',
+          'Every claim must be answered. Missing: ' +
+          `${unanswered.map((claim) => claim.id).join(', ')}. ` +
+          'brain_get_assignment returns all of them as claims_to_verify.',
       );
     }
 

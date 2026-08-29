@@ -26,6 +26,22 @@
  * the second worker to hold this item. What the first one wrote down is here
  * rather than lost.
  *
+ * **And, on a verification item, the claims it exists to judge.** This one was
+ * missing and it deadlocked the step. `brain_submit_verification` takes a
+ * verdict per `claim_id` and refuses a partial answer, deliberately — a worker
+ * must not get to choose which of its claims are gated. But nothing handed the
+ * worker those ids, so a verification could only be completed by a session that
+ * had submitted the claims itself and still had the ids in front of it. Any
+ * redelivery, any reissue, any second session: uncompletable, forever.
+ *
+ * The hosted harness passed this every deploy because it submits and verifies
+ * inside one script run, holding the ids in a local variable. It proved the
+ * tool worked and never crossed the boundary the real path always crosses.
+ *
+ * This adds no capability. The worker already holds the item for that fragment
+ * and may already write verdicts against exactly these claims; it simply could
+ * not name them.
+ *
  * And one rule about what is not: **no prompt.** Nothing in this module tells a
  * worker what to say. It says what is being asked and what would count as an
  * answer, which is the difference between an assignment and a script.
@@ -63,6 +79,43 @@ export interface AssignmentView {
   siblings: { key: string; question: string; status: string; index: number }[];
   dependencies: DependencyView[];
   checkpoints: { attemptNumber: number; leaseGeneration: number; note: string; createdAt: string }[];
+  /**
+   * The claims this item must return a verdict on, on a `RESEARCH_VERIFY` item;
+   * null on every other kind, where they would be the fragment's own working
+   * handed back to it.
+   *
+   * Never truncated. `brain_submit_verification` requires a verdict for every
+   * stored claim, so a cap here would silently recreate the deadlock it exists
+   * to fix — the worker would answer the ones it could see and be refused for
+   * the ones it could not.
+   */
+  claimsToVerify: ClaimToVerifyView[] | null;
+}
+
+/**
+ * One claim awaiting a verdict.
+ *
+ * The scope fields travel with it because two of the gate's seven conditions —
+ * does the source support this, does its scope match — are judgements only a
+ * reader can make, and the reader cannot make them against the claim text
+ * alone.
+ */
+export interface ClaimToVerifyView {
+  claimId: string;
+  claim: string;
+  claimType: string;
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+  sourcePublisher: string | null;
+  sourceDate: string | null;
+  evidenceExcerpt: string | null;
+  evidenceLocator: string | null;
+  evidenceLane: string | null;
+  geography: string | null;
+  timeframe: string | null;
+  population: string | null;
+  definition: string | null;
+  primarySource: boolean;
 }
 
 export interface FragmentView {
@@ -137,6 +190,27 @@ function viewFragment(fragment: ResearchFragment): FragmentView {
     repairReason: fragment.repairReason,
     repairStrategy: fragment.repairStrategy,
   };
+}
+
+/** Everything a reader needs to judge whether the source bears out the claim. */
+function toVerify(claims: ResearchClaim[]): ClaimToVerifyView[] {
+  return claims.map((claim) => ({
+    claimId: claim.id,
+    claim: claim.claim,
+    claimType: claim.claimType,
+    sourceUrl: claim.sourceUrl,
+    sourceTitle: claim.sourceTitle,
+    sourcePublisher: claim.sourcePublisher,
+    sourceDate: claim.sourceDate,
+    evidenceExcerpt: claim.evidenceExcerpt,
+    evidenceLocator: claim.evidenceLocator,
+    evidenceLane: claim.evidenceLane,
+    geography: claim.geography,
+    timeframe: claim.timeframe,
+    population: claim.population,
+    definition: claim.definition,
+    primarySource: claim.primarySource,
+  }));
 }
 
 /** Accepted claims only. A dependency's rejected working is not evidence. */
@@ -216,6 +290,10 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
       index: candidate.fragmentIndex,
     })),
     dependencies,
+    claimsToVerify:
+      item.workType === 'RESEARCH_VERIFY' && fragment
+        ? toVerify(await listClaimsForFragment(fragment.id))
+        : null,
     checkpoints: checkpoints.map((checkpoint: WorkItemCheckpoint) => ({
       attemptNumber: checkpoint.attemptNumber,
       leaseGeneration: checkpoint.leaseGeneration,
