@@ -60,8 +60,10 @@ import {
 } from '../services/research/startPacket.ts';
 import { createFixturePacket } from '../services/research/fixtures.ts';
 import {
+  findRetryableFragments,
   findStrandedVerifications,
   reissueMissingVerification,
+  retryFragment,
 } from '../services/research/reissue.ts';
 import { runTypeForNewPacket } from '../services/runArtifacts.ts';
 import { card, esc, page } from './pages.ts';
@@ -424,6 +426,10 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
             orchestration.status === 'NEEDS_HUMAN'
               ? await findStrandedVerifications(orchestration.id)
               : [],
+          retryable:
+            orchestration.status === 'NEEDS_HUMAN'
+              ? await findRetryableFragments(orchestration.id)
+              : [],
           // The whole point of running a packet is reading what it filed, and
           // the main UI has no project switcher — it opens whichever project
           // sorts first. Without a link from here, an operator can watch a
@@ -438,7 +444,7 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
     .filter((group) => group.packets.length > 0)
     .map((group) => {
       const rows = group.packets
-        .map(({ orchestration, fragments, document, stranded }) => {
+        .map(({ orchestration, fragments, document, stranded, retryable }) => {
           const awaiting = fragments.filter((fragment) => fragment.status === 'PLANNED');
           const counts = ['ACCEPTED', 'BLOCKED', 'QUEUED', 'VALIDATING']
             .map((state) => ({ state, n: fragments.filter((f) => f.status === state).length }))
@@ -511,12 +517,65 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
                 : ''
             }
             ${
+              retryable.length === 0
+                ? ''
+                : `<div class="result">
+              <strong>${retryable.length} fragment(s) failed their gate and can be attempted again.</strong>
+              ${retryable
+                .map(
+                  (entry) => `
+              <div class="access">
+                <span class="meta"><strong>${esc(entry.fragmentKey)}</strong> — attempt
+                  ${entry.attempt} of ${entry.maxRepairs + 1}, ${entry.claims} claim(s),
+                  verdict ${esc(
+                    [entry.integrityVerdict, entry.sufficiencyVerdict]
+                      .filter((part) => part !== null)
+                      .join(' / ') || 'none recorded',
+                  )}.
+                  <br>${esc(entry.blockedReason ?? 'No reason recorded.')}</span>
+                <form method="post" action="${OPERATOR_BASE}/packets/fragments/${esc(entry.fragmentId)}/retry">
+                  <button type="submit" class="secondary">Try this fragment again</button>
+                </form>
+              </div>`,
+                )
+                .join('')}
+              <p class="note">This creates the next attempt of the same question, carrying every
+                declaration forward so it is judged by the standard the last one failed — a repair
+                that relaxes the bar answers an easier question. The failed attempt keeps its
+                claims, verdicts and rejection reasons; they are the history the next attempt is
+                meant not to repeat.</p>
+            </div>`
+            }
+            ${
+              orchestration.status !== 'NEEDS_HUMAN'
+                ? ''
+                : `<details class="result"><summary>What is actually in this packet</summary>
+              ${fragments
+                .map(
+                  (fragment) => `<div class="access"><span class="meta">
+                <strong>${esc(fragment.fragmentKey)}</strong> — ${esc(fragment.status)},
+                attempt ${fragment.attempt}${
+                  fragment.parentFragmentId ? ' (a repair)' : ''
+                }, verdict ${esc(
+                    [fragment.integrityVerdict, fragment.sufficiencyVerdict]
+                      .filter((part) => part !== null)
+                      .join(' / ') || 'none',
+                  )}${fragment.blockedReason ? ` · ${esc(fragment.blockedReason)}` : ''}
+              </span></div>`,
+                )
+                .join('')}
+              <p class="note">Shown because a packet that stopped is a packet somebody has to
+                reason about, and a status line summarising twelve fragments into three numbers is
+                not enough to do that with.</p>
+            </details>`
+            }
+            ${
               stranded.length === 0
-                ? orchestration.status === 'NEEDS_HUMAN'
-                  ? `<div class="result"><span class="meta">Nothing here can be reissued
-                automatically: no verification on this packet has stopped without recording a
-                verdict. Whatever halted it is something else, and repairing it blind would be
-                guessing.</span></div>`
+                ? orchestration.status === 'NEEDS_HUMAN' && retryable.length === 0
+                  ? `<div class="result"><span class="meta">Nothing here can be repaired
+                automatically: no verification stopped without recording a verdict, and no
+                fragment is sitting failed with attempts left. Whatever halted it is something
+                else, and repairing it blind would be guessing.</span></div>`
                   : ''
                 : `<div class="result">
               <strong>This can be repaired without losing anything.</strong>
@@ -1250,6 +1309,61 @@ export function operatorRouter(): Router {
                 'and nothing further was created.'
               : `Reissued the verification for ${result.fragmentKey}. A worker can claim it now; ` +
                 'every claim, verdict and rejection reason is exactly as it was.',
+        }),
+      );
+    })();
+  });
+
+  /**
+   * Another attempt at a fragment that failed its gate.
+   *
+   * §15's shape, and the judgement lives in the service. The failed attempt is
+   * kept: its claims, verdicts and rejection reasons are the history the new
+   * attempt exists not to repeat.
+   */
+  router.post('/packets/fragments/:fragmentId/retry', (req: Request, res: Response) => {
+    void (async (): Promise<void> => {
+      const person = await administrator(req);
+      if (!person || !originIsSameSite(req)) {
+        denied(res);
+        return;
+      }
+
+      let result;
+      try {
+        result = await retryFragment({
+          fragmentId: req.params['fragmentId'] ?? '',
+          reason: 'An administrator authorised another attempt from the operator console.',
+          actor: { type: 'HUMAN', id: person.id },
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        res.status(409).type('html').send(await consolePage(person, { err: message }));
+        return;
+      }
+
+      await audit({
+        actor: person,
+        action: 'QUEUE_ENQUEUE',
+        targetType: 'WORK_ITEM',
+        targetId: result.previousFragmentId,
+        result: 'SUCCESS',
+        metadata: {
+          recovery: 'retry-fragment',
+          fragmentKey: result.fragmentKey,
+          attempt: result.attempt,
+          newFragmentId: result.newFragmentId,
+        },
+      });
+
+      res.type('html').send(
+        await consolePage(person, {
+          ok:
+            result.status === 'ALREADY_RETRIED'
+              ? `${result.fragmentKey} already has a later attempt; nothing was created.`
+              : `Attempt ${result.attempt} of ${result.fragmentKey} created. The previous ` +
+                'attempt keeps its claims and its rejection reasons — a worker can pick the new ' +
+                'one up now.',
         }),
       );
     })();

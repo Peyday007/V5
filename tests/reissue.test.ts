@@ -21,6 +21,7 @@ import { createRun } from '../server/repos/runs.ts';
 import {
   createFragments,
   createOrchestration,
+  currentFragments,
   getFragment,
   getOrchestration,
   listClaimsForFragment,
@@ -39,11 +40,14 @@ import {
 import { workType } from '../server/services/queue/workTypes.ts';
 import { advancePacket } from '../server/services/research/packetRunner.ts';
 import {
+  findRetryableFragments,
+  FragmentNotRetryable,
   findStrandedVerifications,
   NotAVerification,
   NotFinished,
   ReplacementExists,
   reissueMissingVerification,
+  retryFragment,
   VerificationWasRecorded,
 } from '../server/services/research/reissue.ts';
 import type {
@@ -511,6 +515,168 @@ describe('any way an item stops without recording', () => {
       reissueMissingVerification({ workItemId: queued!.id, actor: ADMIN }),
     ).rejects.toBeInstanceOf(NotFinished);
     expect(await findStrandedVerifications(orchestration.id)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Another attempt at a fragment that failed its gate
+// ---------------------------------------------------------------------------
+
+/** Research a fragment and have the gate reject it, as the live one was. */
+async function gatedAndBlocked(): Promise<{
+  orchestration: ResearchOrchestration;
+  fragment: ResearchFragment;
+  claimId: string;
+}> {
+  const orchestration = await makeOrchestration();
+  const fragment = await makeFragment(orchestration);
+  const definition = workType('RESEARCH_FRAGMENT');
+  await enqueueWork({
+    projectId: project.id, workType: 'RESEARCH_FRAGMENT',
+    payload: definition.validate({}), requiredScopes: definition.requiredScopes,
+    orchestrationId: orchestration.id, fragmentId: fragment.id, createdByType: 'SYSTEM',
+  });
+  const research = await claimOne('RESEARCH_FRAGMENT');
+  await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+  await call('brain_complete_work', { ...proof(research), summary: 'in' });
+  const [claim] = await listClaimsForFragment(fragment.id);
+
+  const verify = await claimOne('RESEARCH_VERIFY');
+  await call('brain_submit_verification', {
+    ...proof(verify),
+    verdicts: [{ claim_id: claim!.id, supports_claim: false, ...MATCHES, note: 'Says something else.' }],
+    sufficiency: 'INSUFFICIENT',
+  });
+  await call('brain_complete_work', { ...proof(verify), summary: 'gated' });
+
+  return {
+    orchestration: (await getOrchestration(orchestration.id))!,
+    fragment: (await getFragment(fragment.id))!,
+    claimId: claim!.id,
+  };
+}
+
+describe('trying a failed fragment again', () => {
+  it('offers it only once the gate has actually rejected it', async () => {
+    const { orchestration, fragment } = await gatedAndBlocked();
+    expect(fragment.status).toBe('BLOCKED');
+
+    const retryable = await findRetryableFragments(orchestration.id);
+    expect(retryable.map((entry) => entry.fragmentKey)).toEqual(['tx-licence-trigger']);
+    expect(retryable[0]!.claims).toBe(1);
+    expect(retryable[0]!.sufficiencyVerdict).toBe('INSUFFICIENT');
+  });
+
+  it('creates the next attempt and keeps the failed one entire', async () => {
+    const { orchestration, fragment, claimId } = await gatedAndBlocked();
+
+    const result = await retryFragment({
+      fragmentId: fragment.id,
+      reason: 'Single publisher; try the regulator.',
+      actor: ADMIN,
+    });
+
+    expect(result.status).toBe('RETRIED');
+    expect(result.attempt).toBe(2);
+
+    // The failed attempt is untouched. Its claims and its rejection reason are
+    // the history the next attempt exists not to repeat — §15 and invariant 5.
+    const old = await getFragment(fragment.id);
+    expect(old?.status).toBe('BLOCKED');
+    expect(old?.sufficiencyVerdict).toBe('INSUFFICIENT');
+    const oldClaims = await listClaimsForFragment(fragment.id);
+    expect(oldClaims).toHaveLength(1);
+    expect(oldClaims[0]!.id).toBe(claimId);
+    expect(oldClaims[0]!.accepted).toBe(false);
+    expect(oldClaims[0]!.rejectionReason ?? '').not.toBe('');
+
+    // And the new one carries every declaration forward, so it is judged by the
+    // standard the last one failed.
+    const next = await getFragment(result.newFragmentId!);
+    expect(next?.attempt).toBe(2);
+    expect(next?.parentFragmentId).toBe(fragment.id);
+    expect(next?.status).toBe('QUEUED');
+    expect(next?.question).toBe(fragment.question);
+    expect(next?.minIndependentSources).toBe(fragment.minIndependentSources);
+    expect(next?.completionCriteria).toEqual(fragment.completionCriteria);
+    expect(next?.requiredEvidence).toEqual(fragment.requiredEvidence);
+    // It starts with no claims of its own.
+    expect(await listClaimsForFragment(next!.id)).toHaveLength(0);
+  });
+
+  it('supersedes the failed attempt without deleting it', async () => {
+    const { orchestration, fragment } = await gatedAndBlocked();
+    const result = await retryFragment({ fragmentId: fragment.id, reason: 'again', actor: ADMIN });
+
+    const live = await currentFragments(orchestration.id);
+    expect(live.map((entry) => entry.id)).toEqual([result.newFragmentId]);
+    // Superseded, not gone.
+    expect(await getFragment(fragment.id)).toBeTruthy();
+  });
+
+  it('queues research for the new attempt and unsticks the packet', async () => {
+    const { orchestration, fragment } = await gatedAndBlocked();
+    await updateOrchestration(orchestration.id, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'Stopped for a person.',
+    });
+
+    const result = await retryFragment({ fragmentId: fragment.id, reason: 'again', actor: ADMIN });
+
+    const after = await getOrchestration(orchestration.id);
+    expect(after?.status).not.toBe('NEEDS_HUMAN');
+    expect(after?.failureReason).toBeNull();
+    expect(result.advanced?.enqueued.map((entry) => entry.workType)).toContain('RESEARCH_FRAGMENT');
+
+    // And a worker can claim it.
+    const claimed = await claimOne('RESEARCH_FRAGMENT');
+    expect(claimed.workItemId).toBeTruthy();
+  });
+
+  it('refuses a fragment that has used its repair budget', async () => {
+    // `attempt` is immutable per row — a later attempt is a new row — so the
+    // exhausted case is built as one, which is also how it arises.
+    const orchestration = await makeOrchestration();
+    const [spent] = await createFragments([{
+      orchestrationId: orchestration.id, projectId: project.id, layerId: layer.id,
+      fragmentIndex: 0, fragmentKey: 'spent-fragment',
+      question: 'A question that has had every attempt it is going to get.',
+      requiredEvidence: ['statute'], acceptableSourceTypes: ['statute'], excludedSourceTypes: [],
+      completionCriteria: ['a section'], dependsOn: [], minIndependentSources: 1,
+      status: 'BLOCKED', attempt: 3, maxRepairs: 2,
+    }]);
+
+    const refused = await retryFragment({
+      fragmentId: spent!.id, reason: 'again', actor: ADMIN,
+    }).catch((error: unknown) => error as Error);
+
+    expect(refused).toBeInstanceOf(FragmentNotRetryable);
+    // §15: when the budget runs out the honest outcome is unresolved, recorded
+    // as such — not a further attempt at the same question.
+    expect((refused as Error).message).toMatch(/unresolved/i);
+  });
+
+  it('refuses a fragment that did not fail', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    // QUEUED, never gated. Trying it "again" would be trying it for the first
+    // time, with a second row for one question.
+    await expect(
+      retryFragment({ fragmentId: fragment.id, reason: 'again', actor: ADMIN }),
+    ).rejects.toBeInstanceOf(FragmentNotRetryable);
+  });
+
+  it('is idempotent: two administrators produce one new attempt', async () => {
+    const { orchestration, fragment } = await gatedAndBlocked();
+
+    const first = await retryFragment({ fragmentId: fragment.id, reason: 'a', actor: ADMIN });
+    const again = await retryFragment({ fragmentId: fragment.id, reason: 'b', actor: ADMIN });
+
+    expect(first.status).toBe('RETRIED');
+    expect(again.status).toBe('ALREADY_RETRIED');
+    expect(again.newFragmentId).toBe(first.newFragmentId);
+    expect(await currentFragments(orchestration.id)).toHaveLength(1);
   });
 });
 

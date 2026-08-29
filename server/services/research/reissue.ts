@@ -38,6 +38,8 @@ import type {
   WorkItem,
 } from '../../domain/types.ts';
 import {
+  createFragments,
+  currentFragments,
   getFragment,
   getOrchestration,
   listClaimsForFragment,
@@ -60,6 +62,14 @@ import { advancePacket, researchItemRecorded, type AdvanceResult } from './packe
  */
 const REISSUE_NAMESPACE: OperationNamespace = {
   name: 'research.reissue-verification',
+  version: 1,
+  principalScope: 'PROJECT',
+  retention: 'PERMANENT',
+};
+
+/** One attempt per (fragment, attempt number), whoever asks for it. */
+const RETRY_NAMESPACE: OperationNamespace = {
+  name: 'research.retry-fragment',
   version: 1,
   principalScope: 'PROJECT',
   retention: 'PERMANENT',
@@ -403,3 +413,259 @@ export async function reissueMissingVerification(input: {
 }
 
 export type { ResearchOrchestration };
+
+/* ------------------------------------------------------------------------ */
+/* Retrying a fragment                                                       */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * The other way a packet stops, and the one the first real one actually hit.
+ *
+ * A fragment is gated, fails, and is BLOCKED. Its research was not wrong — it
+ * was thin, or single-sourced, or scoped past what the fragment asked. The
+ * honest response is another attempt against a different search, which is §15:
+ * **a repair is a new fragment row, not a re-run of the old one.** The old row
+ * keeps its claims, its verdicts and its rejection reasons, because that is the
+ * failure history the next attempt is supposed to avoid repeating.
+ *
+ * The pull path had no way to say that. A worker can submit claims and be
+ * gated; it cannot ask for another attempt, and neither could anybody else. So
+ * a fragment that failed its gate stopped there — and if the runner then saw it
+ * needing work with a finished item already against it, the whole packet
+ * stopped with it.
+ *
+ * This is deliberately not "retry the work item". Retrying inside an item is
+ * the queue's job and it already does it. This creates the next *attempt of the
+ * question*, carrying every declaration forward so the new attempt is judged by
+ * the same standard the last one failed — a repair that loses the requirements
+ * answers an easier question than the one that failed.
+ */
+export class FragmentNotRetryable extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FragmentNotRetryable';
+  }
+}
+
+export interface RetryResult {
+  status: 'RETRIED' | 'ALREADY_RETRIED';
+  fragmentKey: string;
+  previousFragmentId: string;
+  newFragmentId: string | null;
+  attempt: number;
+  advanced: AdvanceResult | null;
+}
+
+/** Fragments in this packet that failed and could be attempted again. */
+export interface RetryableFragment {
+  fragmentId: string;
+  fragmentKey: string;
+  question: string;
+  status: ResearchFragment['status'];
+  attempt: number;
+  maxRepairs: number;
+  claims: number;
+  integrityVerdict: string | null;
+  sufficiencyVerdict: string | null;
+  blockedReason: string | null;
+}
+
+export async function findRetryableFragments(
+  orchestrationId: string,
+): Promise<RetryableFragment[]> {
+  const orchestration = await getOrchestration(orchestrationId);
+  if (!orchestration) return [];
+
+  const out: RetryableFragment[] = [];
+  for (const fragment of await currentFragments(orchestration.id)) {
+    if (fragment.status !== 'BLOCKED') continue;
+    // A fragment that has used its repair budget is not retried quietly. §15:
+    // when the ladder or the budget runs out the honest outcome is
+    // "unresolved", recorded as such.
+    if (fragment.attempt > fragment.maxRepairs) continue;
+    out.push({
+      fragmentId: fragment.id,
+      fragmentKey: fragment.fragmentKey,
+      question: fragment.question,
+      status: fragment.status,
+      attempt: fragment.attempt,
+      maxRepairs: fragment.maxRepairs,
+      claims: (await listClaimsForFragment(fragment.id)).length,
+      integrityVerdict: fragment.integrityVerdict,
+      sufficiencyVerdict: fragment.sufficiencyVerdict,
+      blockedReason: fragment.blockedReason,
+    });
+  }
+  return out;
+}
+
+/**
+ * Create the next attempt of one fragment.
+ *
+ * Idempotent on (fragment, attempt): two people pressing this produce one new
+ * row, and pressing it twice after the attempt exists is refused by the
+ * precondition rather than silently making a third.
+ */
+export async function retryFragment(input: {
+  fragmentId: string;
+  reason: string;
+  actor: { type: ActorType; id: string };
+}): Promise<RetryResult> {
+  const previous = await getFragment(input.fragmentId);
+  if (!previous) throw new FragmentNotRetryable('No such fragment.');
+
+  if (previous.status !== 'BLOCKED') {
+    throw new FragmentNotRetryable(
+      `That fragment is ${previous.status}, not BLOCKED. Only a fragment that failed its gate ` +
+        'gets another attempt; anything else is either still running or already accepted.',
+    );
+  }
+  if (previous.attempt > previous.maxRepairs) {
+    throw new FragmentNotRetryable(
+      `That fragment has used its ${previous.maxRepairs} repair attempt(s). The honest outcome ` +
+        'now is unresolved, recorded as such — not a further attempt at the same question.',
+    );
+  }
+
+  const orchestration = await getOrchestration(previous.orchestrationId);
+  if (!orchestration) throw new FragmentNotRetryable('The packet this fragment belongs to is gone.');
+
+  // Already superseded by a later attempt? Then there is nothing to create.
+  const live = await currentFragments(orchestration.id);
+  const current = live.find((fragment) => fragment.fragmentKey === previous.fragmentKey);
+  if (current && current.id !== previous.id) {
+    return {
+      status: 'ALREADY_RETRIED',
+      fragmentKey: previous.fragmentKey,
+      previousFragmentId: previous.id,
+      newFragmentId: current.id,
+      attempt: current.attempt,
+      advanced: null,
+    };
+  }
+
+  const attempt = previous.attempt + 1;
+  const outcome = await runIdempotent<{ fragmentId: string }>(
+    {
+      namespace: RETRY_NAMESPACE,
+      projectId: orchestration.projectId,
+      key: `retry-fragment.${previous.id}.${attempt}`,
+      payload: { previousFragmentId: previous.id, attempt, operation: 'retry-fragment' },
+      principalType: input.actor.type,
+      principalId: input.actor.id,
+    },
+    async () => {
+      const [created] = await createFragments([
+        {
+          orchestrationId: orchestration.id,
+          projectId: previous.projectId,
+          layerId: previous.layerId,
+          fragmentIndex: previous.fragmentIndex,
+          fragmentKey: previous.fragmentKey,
+          // Every declaration, carried forward verbatim. The new attempt is
+          // judged by the standard the last one failed, which is the whole
+          // point — a repair that relaxes the bar answers a different question.
+          question: previous.question,
+          geography: previous.geography,
+          timeframe: previous.timeframe,
+          population: previous.population,
+          definitions: previous.definitions,
+          requiredEvidence: previous.requiredEvidence,
+          acceptableSourceTypes: previous.acceptableSourceTypes,
+          excludedSourceTypes: previous.excludedSourceTypes,
+          completionCriteria: previous.completionCriteria,
+          dependsOn: previous.dependsOn,
+          minIndependentSources: previous.minIndependentSources,
+          requirementIds: previous.requirementIds,
+          evidenceLane: previous.evidenceLane,
+          whyItMatters: previous.whyItMatters,
+          missingEvidence: previous.missingEvidence,
+          whyExistingInsufficient: previous.whyExistingInsufficient,
+          existingClaimIds: previous.existingClaimIds,
+          excludedScope: previous.excludedScope,
+          expectedClaimTypes: previous.expectedClaimTypes,
+          preferredSourceTypes: previous.preferredSourceTypes,
+          prohibitedEvidence: previous.prohibitedEvidence,
+          requiredComparisons: previous.requiredComparisons,
+          requiredCalculations: previous.requiredCalculations,
+          contradictionTargets: previous.contradictionTargets,
+          failureConditions: previous.failureConditions,
+          uncertaintyTolerance: previous.uncertaintyTolerance,
+          priority: previous.priority,
+          estimatedEffort: previous.estimatedEffort,
+          maxRepairs: previous.maxRepairs,
+
+          attempt,
+          parentFragmentId: previous.id,
+          repairReason: input.reason.trim().slice(0, 2000) || 'Another attempt was authorised.',
+          // What the last attempt was told, so a reader can see the new one is
+          // not repeating it. The strategy ladder belongs to the planner; what
+          // this records is the verdict being answered.
+          repairStrategy:
+            [previous.integrityVerdict, previous.sufficiencyVerdict]
+              .filter((part) => part !== null)
+              .join(' / ') || 'no verdict recorded',
+          status: 'QUEUED',
+        },
+      ]);
+      return {
+        resultRef: created!.id,
+        resultSummary: `Attempt ${attempt} of ${previous.fragmentKey}`,
+        value: { fragmentId: created!.id },
+      };
+    },
+  );
+
+  if (outcome.status !== 'EXECUTED') {
+    return {
+      status: 'ALREADY_RETRIED',
+      fragmentKey: previous.fragmentKey,
+      previousFragmentId: previous.id,
+      newFragmentId: outcome.operation.resultRef,
+      attempt,
+      advanced: null,
+    };
+  }
+
+  await recordEvent({
+    projectId: orchestration.projectId,
+    layerId: orchestration.layerId,
+    entityType: 'RUN',
+    entityId: orchestration.runId,
+    eventType: 'RESEARCH_REPLANNED',
+    payload: {
+      recovery: 'retry-fragment',
+      orchestrationId: orchestration.id,
+      fragmentKey: previous.fragmentKey,
+      previousFragmentId: previous.id,
+      previousAttempt: previous.attempt,
+      previousIntegrityVerdict: previous.integrityVerdict,
+      previousSufficiencyVerdict: previous.sufficiencyVerdict,
+      newFragmentId: outcome.value.fragmentId,
+      attempt,
+      actorType: input.actor.type,
+      actorId: input.actor.id,
+      reason: input.reason,
+    },
+  });
+
+  // The old attempt is left exactly as it is. Its claims, verdicts and
+  // rejection reasons are the failure history, and `currentFragments` reads the
+  // highest attempt per key, so the new row supersedes it without deleting it.
+  if (orchestration.status === 'NEEDS_HUMAN') {
+    await updateOrchestration(orchestration.id, {
+      status: 'RESEARCHING',
+      failureReason: null,
+      completedAt: null,
+    });
+  }
+
+  return {
+    status: 'RETRIED',
+    fragmentKey: previous.fragmentKey,
+    previousFragmentId: previous.id,
+    newFragmentId: outcome.value.fragmentId,
+    attempt,
+    advanced: await advancePacket(orchestration.id),
+  };
+}
