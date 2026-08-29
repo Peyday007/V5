@@ -418,18 +418,26 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
         (await listOrchestrationsByProject(project.id)).slice(0, 6).map(async (orchestration) => ({
           orchestration,
           fragments: await currentFragments(orchestration.id),
-          // A packet stopped by a verification that recorded nothing is
-          // recoverable, and the recovery is unreachable without this: the
-          // service exists, and until now the only way to call it was a shell
-          // inside the container.
-          stranded:
-            orchestration.status === 'NEEDS_HUMAN'
-              ? await findStrandedVerifications(orchestration.id)
-              : [],
-          retryable:
-            orchestration.status === 'NEEDS_HUMAN'
-              ? await findRetryableFragments(orchestration.id)
-              : [],
+          // A packet with a verification that recorded nothing is recoverable,
+          // and the recovery is unreachable without this: the service exists,
+          // and until now the only way to call it was a shell inside the
+          // container.
+          //
+          // **Asked unconditionally, not only of a stopped packet.** Gating
+          // these on `status === 'NEEDS_HUMAN'` was wrong twice over. The
+          // status is derived state and goes stale — a verification that runs
+          // out of queue attempts is a queue-side transition, and nothing
+          // re-runs the packet runner afterwards, so a packet sits in
+          // RESEARCHING with a dead verification inside it. And it is
+          // redundant: both services prove their own preconditions, which is
+          // their whole job. A status word cannot make a recovery unsafe that
+          // the service itself would refuse, and it can hide one that is real.
+          //
+          // It cost an operator a trip to a console where the button was not,
+          // because the packet still had queued work and therefore still read
+          // as RESEARCHING.
+          stranded: await findStrandedVerifications(orchestration.id),
+          retryable: await findRetryableFragments(orchestration.id),
           // The whole point of running a packet is reading what it filed, and
           // the main UI has no project switcher — it opens whichever project
           // sorts first. Without a link from here, an operator can watch a
@@ -547,7 +555,9 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
             </div>`
             }
             ${
-              orchestration.status !== 'NEEDS_HUMAN'
+              orchestration.status !== 'NEEDS_HUMAN' &&
+              stranded.length === 0 &&
+              retryable.length === 0
                 ? ''
                 : `<details class="result"><summary>What is actually in this packet</summary>
               ${fragments
@@ -564,14 +574,17 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
               </span></div>`,
                 )
                 .join('')}
-              <p class="note">Shown because a packet that stopped is a packet somebody has to
-                reason about, and a status line summarising twelve fragments into three numbers is
-                not enough to do that with.</p>
+              <p class="note">Shown because a packet with something repairable in it is a packet
+                somebody has to reason about, and a status line summarising twelve fragments into
+                three numbers is not enough to do that with. A packet can be RESEARCHING and still
+                have a dead verification inside it.</p>
             </details>`
             }
             ${
               stranded.length === 0
                 ? orchestration.status === 'NEEDS_HUMAN' && retryable.length === 0
+                  // Only a stopped packet with nothing repairable needs to be
+                  // told so. A running one has no question to answer.
                   ? `<div class="result"><span class="meta">Nothing here can be repaired
                 automatically: no verification stopped without recording a verdict, and no
                 fragment is sitting failed with attempts left. Whatever halted it is something
