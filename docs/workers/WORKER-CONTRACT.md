@@ -159,6 +159,14 @@ now refuses that completion — but the refusal is not the point. `brain_release
 is: it hands the item back, keeps everything you already submitted, and lets
 anybody, including you in a later session, pick it up.
 
+**A release also hands back the attempt, so it never uses the item up.** That
+sentence used to be false. `releaseWork` failed the item with
+`ATTEMPTS_EXHAUSTED` when its budget was spent, which meant the action this
+contract prescribes destroyed the work on the second occasion you needed it —
+and it did, on the first real packet's Texas verification. The attempt budget
+bounds *involuntary* redelivery: a crashed worker, an expired lease. A clean
+hand-back is not an attempt, and is no longer counted as one.
+
 The order when your budget runs out mid-item:
 
 1. Submit whatever you already have, if it is a coherent submission.

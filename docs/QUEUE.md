@@ -84,9 +84,9 @@ The same clause is what makes every one of these take effect immediately:
                     ▼
    ┌────────────► QUEUED ◄──────────────┐
    │                │                   │
-   │             claim                  │ retryable failure, release,
-   │                │                   │ or expiry reclaim — while
-   │                ▼                   │ attempts remain
+   │             claim                  │ retryable failure or expiry
+   │                │                   │ reclaim while attempts remain;
+   │                ▼                   │ release, always
    │             LEASED ────────────────┘
    │            /   │   \
    │  complete /    │    \ fail (attempts exhausted, or not retryable)
@@ -105,7 +105,7 @@ The same clause is what makes every one of these take effect immediately:
 | complete | `LEASED` | the owner, `queue:complete` | lease id + generation | `SUCCEEDED`; attempt closed `SUCCEEDED` |
 | fail (retryable, attempts left) | `LEASED` | the owner, `queue:complete` | lease id + generation | `QUEUED` with backoff; attempt closed `FAILED` |
 | fail (otherwise) | `LEASED` | the owner, `queue:complete` | lease id + generation | `FAILED`; attempt closed `FAILED` |
-| release | `LEASED` | the owner, `queue:complete` | lease id + generation | `QUEUED` (or `FAILED` if spent); attempt closed `RELEASED` |
+| release | `LEASED` | the owner, `queue:complete` | lease id + generation | `QUEUED`, always; the attempt is given back; closed `RELEASED` |
 | cancel | `QUEUED` or `LEASED` | project ADMIN or Brain admin | — | `CANCELLED`; **generation +1**; open attempt closed `CANCELLED` |
 | reclaim | `LEASED`, expired | any eligible worker | previous generation | as claim; previous attempt closed `EXPIRED` |
 
@@ -127,6 +127,14 @@ visibility, and if it never runs, nothing is lost and nothing is stuck.
 Reclaim advances the generation, issues a new lease id, binds the new worker,
 closes the previous attempt as `EXPIRED`, and keeps it. Attempts are bounded by
 `max_attempts`; exhaustion is a deterministic terminal failure.
+
+**A release is not an attempt.** It returns the item to `QUEUED` whatever the
+budget says, and decrements the count, because the budget exists to bound
+redelivery that nobody chose — a crash, an expiry, a failure. A worker handing
+an item back cleanly is the behaviour the worker contract asks for when an
+allowance runs out mid-item, and it used to be the thing that killed the item:
+the first real research packet lost a verification exactly that way. Failing and
+expiring still count, so a poisonous item is still bounded by the same number.
 
 Restart, redeploy and an empty local disk change nothing, because none of this
 is on local disk.

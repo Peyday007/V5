@@ -400,14 +400,53 @@ describe('finishing', () => {
     expect((await getWorkItem(id))?.state).toBe('FAILED');
   });
 
-  it('does not refund the attempt when work is released', async () => {
+  /**
+   * This test used to assert the opposite, and the reversal is deliberate.
+   *
+   * Step 5 counted the attempt at claim time and never gave it back, on the
+   * reasoning that claim time is the only moment it can be counted exactly
+   * once. That reasoning is about *where* to count and is still right — the
+   * count still happens at claim. What it did not decide, because the question
+   * did not exist yet, is what a release means.
+   *
+   * In Step 5 a release meant "not for me". By Step 9 the worker contract
+   * instructs a worker to release when its allowance runs out mid-item, which
+   * is a routine event rather than an incidental one — and under the old rule
+   * doing as instructed on the second occasion killed the item. It did exactly
+   * that to the first real packet's Texas verification, which was carrying nine
+   * claims at the time.
+   *
+   * So the budget now bounds what it is documented to bound: redelivery nobody
+   * chose. A failure counts. An expiry counts. A clean hand-back does not.
+   * A worker that claims and releases in a loop performs no work and changes no
+   * state, and every release is a `RELEASED` row in `work_leases` — visible,
+   * which is the check that suits it.
+   */
+  it('refunds the attempt when work is released, so a hand-back is free', async () => {
     const id = await add(projectA, { maxAttempts: 2 });
     const [claim] = await claimWork({ workerId: workerOne, scopes: scopesFor([projectA]) });
     await releaseWork(proofOf(claim!, workerOne), 'not for me');
     const item = await getWorkItem(id);
     expect(item?.state).toBe('QUEUED');
-    // Counted at claim time, which is the only moment it can be counted once.
-    expect(item?.attemptCount).toBe(1);
+    expect(item?.attemptCount).toBe(0);
+  });
+
+  it('never terminates a released item, even with its budget spent', async () => {
+    const id = await add(projectA, { maxAttempts: 1 });
+    const [claim] = await claimWork({ workerId: workerOne, scopes: scopesFor([projectA]) });
+    await releaseWork(proofOf(claim!, workerOne), 'out of allowance');
+    const item = await getWorkItem(id);
+    expect(item?.state).toBe('QUEUED');
+    expect(item?.failureCategory).toBeNull();
+  });
+
+  it('still exhausts on failure, so a poisonous item is bounded as before', async () => {
+    const id = await add(projectA, { maxAttempts: 1 });
+    const [claim] = await claimWork({ workerId: workerOne, scopes: scopesFor([projectA]) });
+    await failWork(proofOf(claim!, workerOne), { category: 'WORKER_ERROR' });
+    const item = await getWorkItem(id);
+    expect(item?.state).toBe('FAILED');
+    expect(item?.failureCategory).toBe('ATTEMPTS_EXHAUSTED');
   });
 
   it('a stale completion cannot overwrite the new owner or a terminal state', async () => {

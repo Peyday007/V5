@@ -56,6 +56,7 @@ import {
   updateOrchestration,
 } from '../../repos/research.ts';
 import { earlierAuditRole } from './auditBrief.ts';
+import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
 import { enqueueWork, listWorkItems } from '../../repos/workQueue.ts';
 import { workType, AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { recordEvent } from '../../repos/events.ts';
@@ -269,6 +270,54 @@ async function enqueueResearchItem(input: {
   };
 }
 
+/**
+ * Fragments that can never start, and the dependencies that doomed them.
+ *
+ * `readyToResearch` waits for a dependency to be accepted, and says plainly
+ * that a dependency which ended BLOCKED never will. What it does not say is
+ * what happens next, and until now the answer was nothing: a fragment stuck
+ * behind a failed dependency is not TERMINAL, so `advancePacket` counted it as
+ * "still in progress" and returned that answer forever. The packet could never
+ * reach synthesis and could never reach a person. It reported progress it was
+ * not making — the same lie §9 forbids a planner to tell about a document it
+ * cannot read.
+ *
+ * A dependency dooms a fragment when it is terminal without being accepted, or
+ * when it is itself doomed, or when no fragment carries that key at all. The
+ * third is worth including: a plan naming a dependency that does not exist is
+ * waiting on something that cannot arrive.
+ *
+ * Computed to a fixpoint, because doom is transitive — a penalty fragment
+ * waiting on a trigger fragment waiting on a boundary fragment that failed is
+ * as stuck as the boundary one.
+ *
+ * Nothing is mutated. A doomed fragment stays QUEUED, because repairing the
+ * dependency un-dooms it and a status written here would have to be unwritten.
+ */
+function doomedBy(fragments: ResearchFragment[]): Map<string, string[]> {
+  const byKey = new Map(fragments.map((fragment) => [fragment.fragmentKey, fragment]));
+  const doomed = new Map<string, string[]>();
+
+  for (let pass = 0; pass < fragments.length + 1; pass += 1) {
+    let changed = false;
+    for (const fragment of fragments) {
+      if (TERMINAL_FRAGMENT.has(fragment.status) || doomed.has(fragment.fragmentKey)) continue;
+      const blockers = fragment.dependsOn.filter((key) => {
+        const dependency = byKey.get(key);
+        if (!dependency) return true;
+        if (doomed.has(key)) return true;
+        return TERMINAL_FRAGMENT.has(dependency.status) && dependency.status !== 'ACCEPTED';
+      });
+      if (blockers.length > 0) {
+        doomed.set(fragment.fragmentKey, blockers);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  return doomed;
+}
+
 /** Which fragments may start: every dependency of theirs has been accepted. */
 function readyToResearch(fragments: ResearchFragment[]): ResearchFragment[] {
   const accepted = new Set(
@@ -382,9 +431,36 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
     return { orchestrationId, status: 'RESEARCHING', enqueued, waitingOn: null };
   }
 
-  // ---- Still working? Then wait. -----------------------------------------
+  // ---- Still working? Then wait — unless nothing left can move. ----------
   const unfinished = fragments.filter((fragment) => !TERMINAL_FRAGMENT.has(fragment.status));
   if (unfinished.length > 0) {
+    const doomed = doomedBy(fragments);
+    const stuck = unfinished.filter((fragment) => doomed.has(fragment.fragmentKey));
+
+    // Every remaining fragment is waiting on one that failed. Nothing will
+    // arrive to change that, so saying "in progress" would be waiting for an
+    // event that cannot happen. A person decides: repair the dependency, or
+    // accept the packet is short a foundation.
+    if (stuck.length === unfinished.length) {
+      const detail = stuck
+        .map((fragment) => `${fragment.fragmentKey} (waiting on ${doomed.get(fragment.fragmentKey)!.join(', ')})`)
+        .join('; ');
+      await updateOrchestration(orchestration.id, {
+        status: 'NEEDS_HUMAN',
+        failureReason:
+          `${stuck.length} fragment(s) can never start, because every dependency they are ` +
+          `waiting on ended without being accepted: ${detail}. Repair the dependency and its ` +
+          'dependents become researchable again; nothing here is lost.',
+        completedAt: new Date().toISOString(),
+      });
+      return {
+        orchestrationId,
+        status: 'NEEDS_HUMAN',
+        enqueued: [],
+        waitingOn: `a person: ${stuck.length} fragment(s) are waiting on a dependency that failed`,
+      };
+    }
+
     return {
       orchestrationId,
       status: orchestration.status,
@@ -439,6 +515,69 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
         status: 'NEEDS_HUMAN',
         enqueued: [],
         waitingOn: 'a person: no accepted claims',
+      };
+    }
+
+    /**
+     * §16's question, asked before the synthesis job exists rather than after
+     * a worker has written one.
+     *
+     * `assessPacket` checks the packet against the whole goal — mandatory
+     * coverage, foundational fragments settled, one definition, one geography,
+     * one timeframe, one population, calculation inputs themselves accepted,
+     * nothing load-bearing on a single source. Invariant 20 says a packet that
+     * does not cover the goal's mandatory part is not synthesized.
+     *
+     * It was called from `orchestrator.ts` and nowhere else, so it held on the
+     * in-process path and not on the worker path — the third time that exact
+     * asymmetry has cost something, after the archive coverage check and the
+     * dependency-cycle check. The rule is the packet's, not the loop's.
+     *
+     * The push path answers a failure by planning targeted fragments and
+     * re-running. This one stops instead, because on this path spending the
+     * allowance is a decision a person makes: §16 is equally explicit that
+     * research started from a browser is planned in full and approved before
+     * anything is spent, and fragments this created would be researched with
+     * nobody having agreed to them. So the gaps are named and a person decides.
+     */
+    const coverage = await assessPacket({
+      orchestrationId: orchestration.id,
+      projectId: orchestration.projectId,
+    });
+    const failed = coverage.checks.filter((check) => !check.passed);
+    const mandatoryGap = failed.find((check) => check.check === MANDATORY_COVERAGE_CHECK);
+    if (mandatoryGap) {
+      await updateOrchestration(orchestration.id, {
+        status: 'NEEDS_HUMAN',
+        failureReason:
+          'The packet does not cover the goal\'s mandatory part, so it was not synthesized. ' +
+          `${mandatoryGap.detail}` +
+          (failed.length > 1
+            ? ` Also unresolved: ${failed
+                .filter((check) => check !== mandatoryGap)
+                .map((check) => check.check)
+                .join(', ')}.`
+            : ''),
+        completedAt: new Date().toISOString(),
+      });
+      await recordEvent({
+        projectId: orchestration.projectId,
+        layerId: orchestration.layerId,
+        entityType: 'RUN',
+        entityId: orchestration.runId,
+        eventType: 'RESEARCH_COVERAGE_GAP',
+        payload: {
+          orchestrationId: orchestration.id,
+          summary: coverage.summary,
+          targetedRequirementIds: coverage.targetedRequirementIds,
+          failedChecks: failed.map((check) => check.check),
+        },
+      });
+      return {
+        orchestrationId,
+        status: 'NEEDS_HUMAN',
+        enqueued: [],
+        waitingOn: 'a person: the packet does not cover the goal\'s mandatory part',
       };
     }
     enqueued.push(

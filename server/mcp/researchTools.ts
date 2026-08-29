@@ -65,6 +65,7 @@ import { recomputeProject } from '../services/stateEngine.ts';
 import { AUDIT_ROLES, type AuditRole } from '../services/queue/workTypes.ts';
 import { assignmentFor } from '../services/research/assignment.ts';
 import { coverProposal, whyNotResearched } from '../services/research/coverageGate.ts';
+import { planDependencies } from '../services/research/splitting.ts';
 import {
   gateFragment,
   recordFragmentClaims,
@@ -576,6 +577,40 @@ const proposeFragmentsTool: McpTool = {
           throw invalidInput(`Fragment "${fragment.key}" depends on itself.`);
         }
       }
+    }
+
+    /**
+     * And no cycles.
+     *
+     * The check above catches a dependency on a fragment nobody proposed and a
+     * fragment depending on itself. It does not catch two that each wait on the
+     * other, or any longer ring — every key exists, nothing is self-referential,
+     * and not one of them can ever start. The runner would order none of them,
+     * they would sit QUEUED, and the packet would report fragments in progress
+     * that no worker can ever be handed.
+     *
+     * The push path has always refused this: `planDependencies` reports cycles
+     * rather than breaking them arbitrarily, because picking one to go first
+     * hides a planning mistake. The worker path never called it. That is the
+     * same shape as §13's coverage check — a rule one path had and the other
+     * did not — and the fix is to call the existing function rather than write
+     * a second opinion about what a cycle is.
+     */
+    const graph = planDependencies(
+      proposed.map((fragment, index) => ({
+        fragmentKey: fragment.key,
+        dependsOn: fragment.dependsOn,
+        priority: 5,
+        fragmentIndex: index,
+      })),
+    );
+    if (graph.cycles.length > 0) {
+      const rings = graph.cycles.map((cycle) => cycle.join(' -> ')).join('; ');
+      throw invalidInput(
+        `This plan has a dependency cycle: ${rings}. Each fragment in a ring waits for the ` +
+          'next, so none of them can ever start. Decide which question is answerable on its ' +
+          'own and make the others depend on it.',
+      );
     }
 
     /**

@@ -170,6 +170,32 @@ clutter. It was the bug.
 | Diagnosed and fixed | 29 Aug 06:15 |
 | First deploy green on both passes | 29 Aug 06:29 — 145/145, before and after the restart |
 
+## A second batch, found by sweeping rather than by deploying
+
+Five more, collected together and fixed together after the one-fix-per-deploy
+cycle was stopped. Four of them were reachable only because a real worker session
+had run; the fifth was found by asking which other rules live on one path.
+
+| # | Fault | How it showed |
+|---|---|---|
+| 18 | A verification could not be completed by a session that had not submitted the claims | `brain_submit_verification` needs a verdict per claim id and refuses a partial answer; nothing handed a worker the ids. Every redelivery and reissue was uncompletable. |
+| 19 | A release killed the item | The contract says releasing costs the packet nothing. `releaseWork` failed it with `ATTEMPTS_EXHAUSTED` when the budget was spent — so following the contract on the second occasion destroyed the Texas verification. |
+| 20 | A release never advanced the packet | Complete did, fail did, release did not. That is why the packet read `RESEARCHING` with a dead verification and the console offered no recovery. |
+| 21 | A fragment behind a failed dependency stalled the packet silently | It is not terminal, so the runner reported "still in progress" forever. The packet could reach neither synthesis nor a person. |
+| 22 | §16's pre-synthesis packet check ran on one path only | `assessPacket` was called from `orchestrator.ts` and nowhere else, so a worker-driven packet could be synthesized without covering the goal's mandatory part — invariant 20. |
+
+**The pattern behind 18, 22 and the earlier 9 and 13 is one pattern.** A rule
+exists, it is enforced where the in-process loop runs, and the worker path
+reaches the same outcome by a different route that never passes the check.
+Finding them is not a matter of testing harder — every one of these had tests
+that passed. It is a matter of asking, of each rule, *which of the two paths
+actually applies it.*
+
+And 18 is the sharper lesson. Every test in `packet.test.ts` read claim ids with
+`listClaimsForFragment`, and the hosted harness kept them in a local variable.
+Both proved the tool worked. Neither crossed the session boundary the real path
+always crosses, so neither could have caught it.
+
 ## Still open
 
 - Ten fragments remain queued; California is on attempt 2 and Texas is ungated.

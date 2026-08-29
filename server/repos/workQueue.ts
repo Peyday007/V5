@@ -687,24 +687,42 @@ export async function releaseWork(
   ]);
   if (!current) return { ok: false, rejection: 'NOT_FOUND' };
 
-  const exhausted = current.attempt_count >= current.max_attempts;
-  const updated = exhausted
-    ? await db.run(
-        `UPDATE work_items
-            SET state = 'FAILED', failure_category = 'ATTEMPTS_EXHAUSTED',
-                lease_id = NULL, worker_id = NULL, lease_expires_at = NULL,
-                completed_at = ?, updated_at = ?
-          WHERE ${OWNED}`,
-        [now, now, ...ownedParams(proof, now)],
-      )
-    : await db.run(
-        `UPDATE work_items
-            SET state = 'QUEUED', available_at = ?,
-                lease_id = NULL, worker_id = NULL, lease_expires_at = NULL,
-                leased_at = NULL, heartbeat_at = NULL, updated_at = ?
-          WHERE ${OWNED}`,
-        [now, now, ...ownedParams(proof, now)],
-      );
+  /**
+   * A release hands the attempt back. It never terminates the item.
+   *
+   * This used to fail the item with ATTEMPTS_EXHAUSTED when the budget was
+   * spent, and that was wrong in the one situation the budget was never about.
+   *
+   * The attempt budget exists to bound *involuntary* redelivery — a worker that
+   * crashes, or whose lease expires, being handed the same item forever. A
+   * worker that hands the item back cleanly, having checkpointed what it
+   * established, is the opposite of a runaway loop: it is precisely what the
+   * worker contract asks for when an allowance runs out mid-item, and that
+   * contract says in as many words that releasing costs the packet nothing.
+   *
+   * It cost the first real packet its Texas verification. The worker ran out of
+   * budget on the item's second claim, did the right thing, released — and the
+   * queue killed the item on the way out. So the honest options were to change
+   * the sentence or change the code, and the sentence was right.
+   *
+   * Giving the attempt back is what makes it true rather than merely
+   * survivable. An expiry and a failure still count, so redelivery is still
+   * bounded by exactly what it was meant to bound; a claim-and-release pair is
+   * now a no-op on the budget, as it should be, because nothing was tried.
+   *
+   * Written as a CASE rather than MAX/GREATEST: those are spelled differently
+   * on the two backends and the dialect layer rewrites placeholders and rowid,
+   * not scalar functions.
+   */
+  const updated = await db.run(
+    `UPDATE work_items
+        SET state = 'QUEUED', available_at = ?,
+            attempt_count = CASE WHEN attempt_count > 0 THEN attempt_count - 1 ELSE 0 END,
+            lease_id = NULL, worker_id = NULL, lease_expires_at = NULL,
+            leased_at = NULL, heartbeat_at = NULL, updated_at = ?
+      WHERE ${OWNED}`,
+    [now, now, ...ownedParams(proof, now)],
+  );
 
   if (updated.changes === 1) await endLease(proof, now, 'RELEASED', detail ?? null);
   return await settle(proof, updated.changes);

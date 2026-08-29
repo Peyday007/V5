@@ -124,6 +124,21 @@ function distinct(claims: ResearchClaim[], field: 'geography' | 'timeframe' | 'p
  * Each check names the requirements it is about, so a failure produces targeted
  * fragments rather than a second run of everything that already worked.
  */
+/**
+ * The one check that is a refusal rather than a report.
+ *
+ * Invariant 20 is narrow and deliberate: no synthesis over a packet that does
+ * not cover the goal's **mandatory** part. The other checks here — consistent
+ * scope, verified calculation inputs, nothing resting on a single source — are
+ * things a reader must be told about, and the push path duly synthesizes with
+ * them unresolved once it has run out of repairs, carrying the coverage report
+ * into the document. Treating all seven as blocking would stop packets the
+ * invariant does not stop.
+ *
+ * Named once so the runner and the check cannot drift apart on a string.
+ */
+export const MANDATORY_COVERAGE_CHECK = 'Mandatory requirements are covered';
+
 export async function assessPacket(input: {
   orchestrationId: string;
   projectId: string;
@@ -143,7 +158,7 @@ export async function assessPacket(input: {
     return !entry || (entry.status !== 'SATISFIED' && entry.status !== 'PARTIALLY_SATISFIED');
   });
   checks.push({
-    check: 'Mandatory requirements are covered',
+    check: MANDATORY_COVERAGE_CHECK,
     passed: mandatoryOpen.length === 0,
     detail:
       mandatoryOpen.length === 0

@@ -162,7 +162,23 @@ export interface DependencyReport {
  * than resolved: two fragments that each need the other's answer is a planning
  * mistake, and picking one arbitrarily hides it.
  */
-export function planDependencies(fragments: ResearchFragment[]): DependencyReport {
+/**
+ * The minimum a fragment must be to have its dependencies ordered.
+ *
+ * Widened from `ResearchFragment` so the graph can be checked *before* the rows
+ * exist. `brain_propose_fragments` has to refuse a cyclic plan at the planning
+ * pass — a cycle discovered after creation is a packet that waits forever — and
+ * duplicating the traversal to do that is how the two paths drift apart.
+ * `ResearchFragment` satisfies this structurally, so the push path is unchanged.
+ */
+export interface DependencyNode {
+  fragmentKey: string;
+  dependsOn: string[];
+  priority: number;
+  fragmentIndex: number;
+}
+
+export function planDependencies(fragments: DependencyNode[]): DependencyReport {
   const byKey = new Map(fragments.map((fragment) => [fragment.fragmentKey, fragment]));
   const dangling: { key: string; missing: string[] }[] = [];
 

@@ -658,8 +658,10 @@ const releaseTool: McpTool = {
   name: 'brain_release_work',
   title: 'Release a work item',
   description:
-    'Give an item back without failing it — you are shutting down, or it is not yours to do. ' +
-    'It returns to the queue immediately. Idempotent by work item.',
+    'Give an item back without failing it — you are shutting down, out of allowance, or it is ' +
+    'not yours to do. It returns to the queue immediately and hands back the attempt, so ' +
+    'releasing never uses the item up. Checkpoint first: what you established travels to ' +
+    'whoever picks it up. Idempotent by work item.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -692,6 +694,12 @@ const releaseTool: McpTool = {
       },
       async () => await releaseWork(proof, detail),
     );
+
+    // A release changes what work is available, so the packet is re-derived —
+    // the same as a completion and a failure. It was the one of the three that
+    // did not, which is how a released verification left its packet reading
+    // RESEARCHING with a dead item inside it and no recovery offered.
+    await advanceAfter(item);
 
     return {
       projectId: item.projectId,

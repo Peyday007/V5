@@ -29,7 +29,13 @@ import {
   listClaims,
   listClaimsForFragment,
 } from '../server/repos/research.ts';
-import { claimWork, enqueueWork, getWorkItem, listWorkItems } from '../server/repos/workQueue.ts';
+import {
+  claimWork,
+  enqueueWork,
+  getWorkItem,
+  listWorkItems,
+  releaseWork,
+} from '../server/repos/workQueue.ts';
 import { getProjectBySlug } from '../server/repos/projects.ts';
 import { getDocument } from '../server/repos/documents.ts';
 import { listAuditsByProject } from '../server/repos/audits.ts';
@@ -42,6 +48,7 @@ import {
   runFixturePacket,
 } from '../server/services/research/fixtures.ts';
 import { advancePacket, approvePlan, resumePulledPackets } from '../server/services/research/packetRunner.ts';
+import { createRequirements } from '../server/repos/reconciliation.ts';
 import { recoverInterruptedResearch } from '../server/services/research/queue.ts';
 import { updateOrchestration } from '../server/repos/research.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
@@ -1567,3 +1574,268 @@ describe('the audit passes', () => {
     expect(audits[0]!.payload['role']).toBe('PRIMARY');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Handing work back
+// ---------------------------------------------------------------------------
+
+describe('releasing an item', () => {
+  /**
+   * The worker contract says releasing costs the packet nothing, and until now
+   * that was false on the last attempt: `releaseWork` failed the item with
+   * ATTEMPTS_EXHAUSTED when the budget was spent.
+   *
+   * It killed the first real packet's Texas verification. The worker ran out of
+   * allowance on the item's second claim, checkpointed, released — the exact
+   * sequence the contract prescribes — and the queue terminated the item on the
+   * way out, leaving nine claims ungated and ten fragments queued behind them.
+   *
+   * `maxAttempts: 1` so the first claim already spends the budget. That is the
+   * situation the old code failed the item in, and it is not exotic: research
+   * items are registered with two.
+   */
+  async function claimOnly(maxAttempts: number): Promise<ClaimedWork> {
+    await enqueueWork({
+      projectId: project.id,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { note: 'release accounting' },
+      requiredScopes: [],
+      maxAttempts,
+      createdByType: 'SYSTEM',
+    });
+    const [claimed] = await claimWork({
+      workerId,
+      scopes: [{ projectId: project.id, scopes: FULL }],
+      workTypes: ['SYNTHETIC_ECHO'],
+    });
+    if (!claimed) throw new Error('nothing claimable');
+    return claimed;
+  }
+
+  function ownership(claimed: ClaimedWork) {
+    return {
+      workItemId: claimed.workItemId,
+      leaseId: claimed.leaseId,
+      leaseGeneration: claimed.leaseGeneration,
+      workerId,
+    };
+  }
+
+  it('hands the attempt back rather than using the item up', async () => {
+    const claimed = await claimOnly(1);
+    expect((await getWorkItem(claimed.workItemId))?.attemptCount).toBe(1);
+
+    const released = await releaseWork(ownership(claimed), 'out of allowance');
+    expect(released.ok).toBe(true);
+
+    const after = await getWorkItem(claimed.workItemId);
+    expect(after?.state).toBe('QUEUED');
+    expect(after?.attemptCount).toBe(0);
+  });
+
+  it('never terminates the item, however many times it is handed back', async () => {
+    const first = await claimOnly(1);
+    const id = first.workItemId;
+
+    let held: ClaimedWork = first;
+    for (let round = 0; round < 3; round += 1) {
+      const released = await releaseWork(ownership(held), `round ${round}`);
+      expect(released.ok).toBe(true);
+
+      const item = await getWorkItem(id);
+      // Never FAILED, never ATTEMPTS_EXHAUSTED. An expiry and a failure still
+      // count against the budget; a clean hand-back is not an attempt.
+      expect(item?.state).toBe('QUEUED');
+      expect(item?.failureCategory).toBeNull();
+
+      const [again] = await claimWork({
+        workerId,
+        scopes: [{ projectId: project.id, scopes: FULL }],
+        workTypes: ['SYNTHETIC_ECHO'],
+      });
+      expect(again?.workItemId).toBe(id);
+      held = again!;
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A packet that cannot move
+// ---------------------------------------------------------------------------
+
+describe('a fragment waiting on one that failed', () => {
+  /**
+   * `readyToResearch` waits for a dependency to be accepted and says plainly
+   * that a BLOCKED one never will. What happened next was nothing: the waiting
+   * fragment is not terminal, so the runner counted it as "still in progress"
+   * and returned that forever. The packet could reach neither synthesis nor a
+   * person, and reported progress it was not making.
+   */
+  it('stops the packet rather than reporting progress forever', async () => {
+    const orchestration = await makeOrchestration();
+    const trigger = await makeFragment(orchestration, {
+      fragmentKey: 'trigger',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+    });
+    const dependent = await makeFragment(orchestration, {
+      fragmentKey: 'penalty',
+      fragmentIndex: 1,
+      dependsOn: ['trigger'],
+      status: 'QUEUED',
+    });
+
+    const result = await advancePacket(orchestration.id);
+
+    expect(result.status).toBe('NEEDS_HUMAN');
+    expect(result.enqueued).toHaveLength(0);
+    const stopped = await getOrchestration(orchestration.id);
+    // Named, so the operator knows which dependency to repair rather than
+    // being told the packet is stuck.
+    expect(stopped?.failureReason).toContain('penalty');
+    expect(stopped?.failureReason).toContain('trigger');
+    expect(trigger.status).toBe('BLOCKED');
+    expect((await getFragment(dependent.id))?.status).toBe('QUEUED');
+  });
+
+  it('is transitive — a fragment two hops behind a failure is stuck too', async () => {
+    const orchestration = await makeOrchestration();
+    await makeFragment(orchestration, { fragmentKey: 'boundary', fragmentIndex: 0, status: 'BLOCKED' });
+    await makeFragment(orchestration, {
+      fragmentKey: 'trigger',
+      fragmentIndex: 1,
+      dependsOn: ['boundary'],
+      status: 'QUEUED',
+    });
+    await makeFragment(orchestration, {
+      fragmentKey: 'penalty',
+      fragmentIndex: 2,
+      dependsOn: ['trigger'],
+      status: 'QUEUED',
+    });
+
+    const result = await advancePacket(orchestration.id);
+    expect(result.status).toBe('NEEDS_HUMAN');
+    expect((await getOrchestration(orchestration.id))?.failureReason).toContain('penalty');
+  });
+
+  it('keeps waiting while anything else can still move', async () => {
+    const orchestration = await makeOrchestration();
+    await makeFragment(orchestration, { fragmentKey: 'trigger', fragmentIndex: 0, status: 'BLOCKED' });
+    await makeFragment(orchestration, {
+      fragmentKey: 'penalty',
+      fragmentIndex: 1,
+      dependsOn: ['trigger'],
+      status: 'QUEUED',
+    });
+    // Independent of the failure, and researchable. One stuck fragment is not
+    // a stuck packet.
+    await makeFragment(orchestration, {
+      fragmentKey: 'standalone',
+      fragmentIndex: 2,
+      dependsOn: [],
+      status: 'QUEUED',
+    });
+
+    const result = await advancePacket(orchestration.id);
+    expect(result.status).not.toBe('NEEDS_HUMAN');
+    expect(result.enqueued.map((entry) => entry.fragmentKey)).toContain('standalone');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What may be synthesized
+// ---------------------------------------------------------------------------
+
+describe('the packet check before synthesis', () => {
+  /**
+   * Invariant 20: no synthesis over a packet that does not cover the goal's
+   * mandatory part.
+   *
+   * `assessPacket` has enforced that since Step 3 — from `orchestrator.ts`, and
+   * from nowhere else. The worker path enqueued the synthesis job straight off
+   * the accepted fragments, so a packet missing a mandatory requirement got
+   * written up anyway. That is the third time a rule lived on one path and not
+   * the other, after the archive coverage check and the dependency cycles.
+   */
+  it('refuses to queue a synthesis while a mandatory requirement has no evidence', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    await createRequirements([
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requirementKey: 'unanswered',
+        ordinal: 0,
+        statement: 'Whether Texas requires a licence for the same transaction.',
+        necessity: 'MANDATORY',
+        kind: 'RESEARCH',
+      },
+    ]);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(fragment.id);
+    await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+
+    const verify = await claimNextOf('RESEARCH_VERIFY');
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: true, ...MATCHES, note: 'Reads directly.' }],
+      sufficiency: 'SUFFICIENT',
+    });
+    await call('brain_complete_work', { ...proof(verify), summary: 'verified' });
+
+    // The fragment cleared its gate and its claim was accepted. That is not the
+    // same question as whether the packet answers the goal.
+    expect((await getFragment(fragment.id))?.status).toBe('ACCEPTED');
+
+    const items = await listWorkItems(project.id, { limit: 100 });
+    const synthesis = items.filter(
+      (item) => item.orchestrationId === orchestration.id && item.workType === 'RESEARCH_SYNTHESIZE',
+    );
+    expect(synthesis).toHaveLength(0);
+
+    const stopped = await getOrchestration(orchestration.id);
+    expect(stopped?.status).toBe('NEEDS_HUMAN');
+    expect(stopped?.failureReason).toContain('Texas');
+  });
+
+  it('queues it once every mandatory requirement is answered', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(fragment.id);
+    await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+
+    const verify = await claimNextOf('RESEARCH_VERIFY');
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: true, ...MATCHES, note: 'Reads directly.' }],
+      sufficiency: 'SUFFICIENT',
+    });
+    await call('brain_complete_work', { ...proof(verify), summary: 'verified' });
+
+    const items = await listWorkItems(project.id, { limit: 100 });
+    expect(
+      items.filter(
+        (item) => item.orchestrationId === orchestration.id && item.workType === 'RESEARCH_SYNTHESIZE',
+      ),
+    ).toHaveLength(1);
+  });
+});
+
+/** Claim whatever the runner queued next, rather than queueing it ourselves. */
+async function claimNextOf(type: string): Promise<ClaimedWork> {
+  const [claimed] = await claimWork({
+    workerId,
+    scopes: [{ projectId: project.id, scopes: FULL }],
+    workTypes: [type],
+  });
+  if (!claimed) throw new Error(`nothing claimable of type ${type}`);
+  return claimed;
+}

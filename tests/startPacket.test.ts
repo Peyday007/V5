@@ -500,6 +500,49 @@ describe('the coverage gate on a proposed plan', () => {
     expect(await currentFragments(started.orchestration.id)).toHaveLength(0);
   });
 
+  it('refuses a plan whose fragments wait on each other', async () => {
+    const started = await startPacket(goal());
+    const claimed = await claimPlan(started.orchestration.id);
+
+    const refused = await refusal('brain_propose_fragments', {
+      work_item_id: claimed.workItemId,
+      lease_id: claimed.leaseId,
+      lease_generation: claimed.leaseGeneration,
+      fragments: [
+        // Every key exists and neither depends on itself, so both of the
+        // existing checks pass. Neither can ever start.
+        proposal({ key: 'scope', question: 'What counts as a business sale?', depends_on: ['trigger'] }),
+        proposal({ key: 'trigger', question: 'Does a licence apply?', depends_on: ['scope'] }),
+      ],
+    });
+
+    expect(refused.category).toBe('INVALID_INPUT');
+    expect(refused.message).toContain('cycle');
+    expect(refused.message).toContain('scope');
+    expect(refused.message).toContain('trigger');
+    expect(await currentFragments(started.orchestration.id)).toHaveLength(0);
+  });
+
+  it('refuses a longer ring, not only a pair', async () => {
+    const started = await startPacket(goal());
+    const claimed = await claimPlan(started.orchestration.id);
+
+    const refused = await refusal('brain_propose_fragments', {
+      work_item_id: claimed.workItemId,
+      lease_id: claimed.leaseId,
+      lease_generation: claimed.leaseGeneration,
+      fragments: [
+        proposal({ key: 'a', question: 'First question?', depends_on: ['c'] }),
+        proposal({ key: 'b', question: 'Second question?', depends_on: ['a'] }),
+        proposal({ key: 'c', question: 'Third question?', depends_on: ['b'] }),
+      ],
+    });
+
+    expect(refused.category).toBe('INVALID_INPUT');
+    expect(refused.message).toContain('cycle');
+    expect(await currentFragments(started.orchestration.id)).toHaveLength(0);
+  });
+
   it('accepts the same pair once the dependency is declared', async () => {
     const started = await startPacket(goal());
     const claimed = await claimPlan(started.orchestration.id);
