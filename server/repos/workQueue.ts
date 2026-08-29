@@ -939,9 +939,27 @@ export async function checkpointWork(
  * exists — and each row says which attempt wrote it, so nothing is confused
  * about whose finding is whose.
  */
+/**
+ * Every checkpoint on an item, in the order they were written.
+ *
+ * `rowid` rather than `id` as the tiebreaker, and the difference is not
+ * cosmetic. Timestamps are ISO-8601 at millisecond resolution, two checkpoints
+ * from one attempt are routinely written inside the same millisecond, and `id`
+ * is a random identifier — so ordering by it returns an arbitrary permutation
+ * of the notes whenever the clock does not separate them.
+ *
+ * That is exactly wrong for the one thing this table is for: the next attempt
+ * reads these to find out what the last one established, and a log out of order
+ * is worse than no log. `rowid` is the insertion counter, `dialect.ts` maps it
+ * to `seq` on Postgres, and thirty-odd other queries in this codebase already
+ * use it for this reason.
+ *
+ * Found by CI after passing locally many times, which is the signature of an
+ * ordering that depends on how fast the machine is.
+ */
 export async function listCheckpoints(workItemId: string): Promise<WorkItemCheckpoint[]> {
   const rows = await getDb().all<WorkItemCheckpointRow>(
-    `SELECT * FROM work_item_checkpoints WHERE work_item_id = ? ORDER BY created_at, id`,
+    `SELECT * FROM work_item_checkpoints WHERE work_item_id = ? ORDER BY created_at, rowid`,
     [workItemId],
   );
   return rows.map((row) => ({
