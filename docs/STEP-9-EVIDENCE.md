@@ -126,7 +126,7 @@ reads. The tests now assert both, and three fail instead of one.
 
 ## Faults found before the packet ran
 
-Six, and they are recorded rather than quietly fixed because most of them are
+Seven, and they are recorded rather than quietly fixed because most of them are
 the kind that would have been found by a live run going wrong instead.
 
 **1. The runner could create a second work item for one fragment.** The guard
@@ -179,7 +179,23 @@ through to "no fragment cleared its evidence gate", which is the same terminal
 state describing the opposite outcome; it now ends saying what actually
 happened.
 
-**6. The test harness leaked a data root per file.** `process.on('exit')` does
+**6. `brain_submit_audit` could never have accepted an adversarial pass.** The
+tool advertised `material: boolean` on an attack; `parseAdversarialPass` has
+always required `assessment` as an exact enum. A worker following the published
+schema was refused every time, and the refusal named a field the schema never
+mentioned. The adversarial pass is the middle of three and the judge refuses to
+run without it, so **no worker-driven packet could ever have reached a
+verdict** — the exact thing the next live run was going to attempt.
+
+It survived because nothing had ever driven that path: the tool tests stopped
+at the filed report, and the in-process pipeline builds its own JSON rather
+than going through the tool schema. The schema now declares what the validator
+reads; the validator is untouched, because it is the authority. The gap
+schema's two conditional requirements — OTHER_LAYER needs an owning layer,
+TARGETED_RESEARCH_GAP needs a question — were invisible for the same reason and
+are written down now.
+
+**7. The test harness leaked a data root per file.** `process.on('exit')` does
 not fire when vitest signals a worker, so every interrupted run left one
 temporary root per test file behind: 4,762 of them, 26 GB. What that produces
 is a hundred unrelated tests failing on "No space left on device", and it had
@@ -277,6 +293,63 @@ revision, when the fragment asked about **2026-07-28**. A correct fact,
 correctly cited, answering a different question, refused by the fourth gate
 condition. That is the failure mode the scope fields exist for, and it is now
 observed rather than asserted.
+
+### And now on every deploy, over the protocol
+
+The fixture above ran *inside* the Brain. `scripts/verify-hosted.ts` now runs a
+packet through the deployed endpoint instead — ten tool calls over TLS, through
+Fly's edge, against Supabase Postgres and the bucket, with a worker bearer:
+
+```
+A research packet, end to end, over the deployed endpoint
+  PASS  starting a packet queues one planning job and researches nothing
+  PASS  and reads the archive before creating anything — 5 claim(s) across 5 readable document(s)
+  PASS  a worker claims the planning job over MCP
+  PASS  and is handed the assignment, and no prompt
+  PASS  proposes fragments, and the coverage check runs against the live archive
+  PASS  and records a coverage decision for every fragment it proposed
+  PASS  and leaves them PLANNED, so nothing researches an unapproved plan
+  PASS  with no research queued behind them
+  PASS  approval queues the research
+  PASS  a submitted claim is stored unaccepted, whatever the worker said about it
+  PASS  the gate accepts the sourced claim and refuses the unsupported one
+  PASS  and keeps the refusal reason on the claim it rejected
+  PASS  a report citing a refused claim is refused, over the wire
+  PASS  and a report citing only accepted claims is filed as a document
+  PASS  whose bytes come back out of the configured document store — 698 bytes
+  PASS  the PRIMARY audit pass records findings and moves nothing
+  PASS  the ADVERSARIAL audit pass records findings and moves nothing
+  PASS  and only the judge records a verdict — MORE_RESEARCH
+  PASS  all three audit roles ran, strictly in order — 3/3
+  PASS  and the verdict is stored as a structured record, not as prose
+  PASS  and a worker still cannot write into an item it does not hold
+```
+
+145/145, twice, either side of a real restart. It spends nothing: every claim
+is supplied by the script, so what is under test is the gate rather than a
+provider.
+
+**It took four deploys, and three of the four failures were in the check rather
+than in the Brain.** That is worth recording, because each one was a way a
+verification script can be confidently wrong:
+
+1. The check read `document.filesystemPath` to find the filed bytes. That
+   column is the key in local mode and null in cloud mode, so it passed against
+   a folder and failed against a bucket — §1 exactly, and the reason
+   `storageKeyOf` exists.
+2. With the key right, the read still failed: the harness had never called
+   `initStorage`, and `getStorage()` falls back to a local provider when nothing
+   has booted. So it asked the container's disk for a bucket key and reported
+   the live Brain as having filed a document with no bytes behind it. A false
+   alarm on the one invariant that says a row without bytes is not a document.
+3. Then `EMAXCONNSESSION` on the last query of the second pass. The harness runs
+   beside the server and shares its pooler, which allows fifteen clients; two
+   default pools of ten is sixteen. The research phase does an order of
+   magnitude more database work than anything before it, so it was the first
+   thing ever to grow that pool to its limit.
+
+The fourth was real, and is the one that mattered: `brain_submit_audit`
+advertised an adversarial schema its own validator rejected. Recorded above.
 
 ## What nobody has watched happen
 
