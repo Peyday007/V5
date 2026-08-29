@@ -2272,6 +2272,25 @@ async function main(): Promise<void> {
   console.log(`  Documents   ${described.storage.provider} · ${described.storage.target}`);
   console.log('');
 
+  /**
+   * A small pool, because this process is not alone.
+   *
+   * The harness runs *inside* the container, beside the Brain it is verifying,
+   * and both talk to the same Supabase pooler — which in session mode allows
+   * fifteen clients in total. Two pools of the default ten is sixteen, and the
+   * failure it produces is `EMAXCONNSESSION` on whichever query happens to be
+   * running when the sixteenth connection is wanted. That looks like a bug in
+   * that query and is not one.
+   *
+   * The research phase is what made this reachable: it does an order of
+   * magnitude more database work than the checks before it, so it is the first
+   * thing that ever grew this pool to its limit. Two connections is more than
+   * a script that runs one query at a time needs — the only concurrency here
+   * is the six-way idempotency race, and that goes over HTTP into the
+   * server's pool rather than this one.
+   */
+  if (!process.env['BRAIN_DATABASE_POOL_SIZE']) process.env['BRAIN_DATABASE_POOL_SIZE'] = '2';
+
   await initDatabase();
   /**
    * The store, opened explicitly.
