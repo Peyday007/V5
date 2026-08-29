@@ -678,10 +678,29 @@ session has lost the architecture. The only thing worth reporting by hand is how
 a session ended — items completed, queue empty or allowance exhausted — and even
 that is a convenience, not a mechanism.
 
-**Step 9 uses manually initiated Cowork sessions.** A person decides when a
-worker runs. That is the honest description of where this is, and the measured
-cost of it is real: the largest single block of elapsed time in Step 9 was a
-packet sitting in a queue waiting for somebody to say go.
+**Step 9 uses manually initiated Cowork sessions**, with one authorized
+exception in force. A person decides when a worker runs. That is the honest
+description of where this is, and the measured cost of it is real: the largest
+single block of elapsed time in Step 9 was a packet sitting in a queue waiting
+for somebody to say go.
+
+> **Authorized exception — one temporary hourly Cowork scheduled task.**
+> Granted by the operator to finish Step 9's packet without repeatedly starting
+> sessions by hand. Its bounds: it claims only work already queued and
+> authorized; it creates no goal, packet, budget or approval; no paid overages
+> and no external consequential action; it checkpoints and releases unfinished
+> items; and it is paused or deleted by the operator once the packet is
+> terminal. It uses Cowork's built-in scheduling — **no scheduler was built and
+> no application code changed for it.**
+>
+> Four of those bounds are enforced by the Brain rather than by the task's
+> prompt: a `WORKER` principal cannot enqueue, approve a plan, start a packet or
+> widen its own reach, whatever it is told. That is why the exception is safe to
+> grant to an unattended session at all.
+>
+> **This is not Step 10 and does not close it.** It is a temporary operational
+> measure and, if it holds up, evidence toward a mechanism — recorded as
+> evidence only after an unattended run has actually happened, never before.
 
 **Step 10 must implement and prove automatic worker activation or scheduling.**
 Until it does, the Brain never reaches out to Claude, and no document may
