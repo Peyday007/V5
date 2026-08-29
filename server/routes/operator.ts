@@ -512,7 +512,12 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
             }
             ${
               stranded.length === 0
-                ? ''
+                ? orchestration.status === 'NEEDS_HUMAN'
+                  ? `<div class="result"><span class="meta">Nothing here can be reissued
+                automatically: no verification on this packet has stopped without recording a
+                verdict. Whatever halted it is something else, and repairing it blind would be
+                guessing.</span></div>`
+                  : ''
                 : `<div class="result">
               <strong>This can be repaired without losing anything.</strong>
               ${stranded

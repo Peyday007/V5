@@ -95,12 +95,33 @@ export class VerificationWasRecorded extends Error {
 export class NotFinished extends Error {
   constructor(readonly state: string) {
     super(
-      `That item is ${state}. Only an item that finished without recording anything is stranded; ` +
-        'a live one is still someone\'s to finish, and releasing it is the remedy for that.',
+      `That item is ${state}, which means somebody may still finish it. Only an item that has ` +
+        'stopped without recording anything is stranded, and releasing a live one is the remedy ' +
+        'for a live one.',
     );
     this.name = 'NotFinished';
   }
 }
+
+/**
+ * Still someone's to finish.
+ *
+ * The same set `advancePacket` uses, and it has to be — the runner faults a
+ * target when an item for it is **not live** and the state did not move, so a
+ * recovery that defined "finished" more narrowly would refuse to repair
+ * precisely the packets the fault stopped.
+ *
+ * The first version of this looked only at SUCCEEDED, on the assumption that a
+ * worker completing without submitting was the only way to strand a
+ * verification. It is not: an item that failed its last attempt, or one an
+ * administrator cancelled, leaves the fragment just as ungated and trips the
+ * same fault. The live packet showed no repair option at all because of it.
+ *
+ * Reissuing after a FAILED or CANCELLED item is exactly as safe as after a
+ * SUCCEEDED one, and for the same single reason: nothing was recorded, so
+ * there is no verdict for a replacement to contradict.
+ */
+const LIVE_STATES = new Set(['QUEUED', 'LEASED']);
 
 export class ReplacementExists extends Error {
   constructor(readonly workItemId: string) {
@@ -149,7 +170,7 @@ export async function findStrandedVerifications(
 
   const stranded: StrandedVerification[] = [];
   for (const item of items) {
-    if (item.state !== 'SUCCEEDED') continue;
+    if (LIVE_STATES.has(item.state)) continue;
     if (await researchItemRecorded(item)) continue;
     if (!item.fragmentId) continue;
     const fragment = await getFragment(item.fragmentId);
@@ -184,8 +205,8 @@ async function liveOrRecordedReplacement(
   for (const item of items) {
     if (item.id === original.id) continue;
     if (item.fragmentId !== original.fragmentId) continue;
-    if (item.state === 'QUEUED' || item.state === 'LEASED') return item;
-    if (item.state === 'SUCCEEDED' && (await researchItemRecorded(item))) return item;
+    if (LIVE_STATES.has(item.state)) return item;
+    if (await researchItemRecorded(item)) return item;
   }
   return null;
 }
@@ -222,8 +243,9 @@ export async function reissueMissingVerification(input: {
   // 1. It is a verification.
   if (original.workType !== 'RESEARCH_VERIFY') throw new NotAVerification(original.workType);
 
-  // 2. It finished. A live item is not stranded — it is someone's to release.
-  if (original.state !== 'SUCCEEDED') throw new NotFinished(original.state);
+  // 2. It has stopped. A live item is not stranded — it is someone's to
+  //    release, and releasing it is that situation's remedy.
+  if (LIVE_STATES.has(original.state)) throw new NotFinished(original.state);
 
   // 3. It recorded nothing. The whole safety argument rests here: an item with
   //    no verdict behind it has no ledger a replacement could duplicate.

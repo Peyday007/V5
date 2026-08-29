@@ -32,6 +32,7 @@ import {
   claimWork,
   completeWork,
   enqueueWork,
+  failWork,
   getWorkItem,
   listWorkItems,
 } from '../server/repos/workQueue.ts';
@@ -446,6 +447,70 @@ describe('reissuing the verification', () => {
     // The replacement exists; the packet stays cancelled. Reopening something
     // a person closed is not this operation's business.
     expect((await getOrchestration(orchestration.id))?.status).toBe('CANCELLED');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What "finished" has to mean
+// ---------------------------------------------------------------------------
+
+describe('any way an item stops without recording', () => {
+  /**
+   * The live packet found this: the console showed no repair option at all.
+   *
+   * The runner faults a target when an item for it is not *live* and the state
+   * did not move, so a recovery that only recognised SUCCEEDED would refuse to
+   * repair exactly the packets the fault stopped. An item that failed its last
+   * attempt leaves the fragment as ungated as one that was completed without
+   * submitting, and reissuing after either is safe for the same single reason:
+   * nothing was recorded.
+   */
+  it('finds a verification that failed rather than completed', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const definition = workType('RESEARCH_FRAGMENT');
+    await enqueueWork({
+      projectId: project.id, workType: 'RESEARCH_FRAGMENT',
+      payload: definition.validate({}), requiredScopes: definition.requiredScopes,
+      orchestrationId: orchestration.id, fragmentId: fragment.id, createdByType: 'SYSTEM',
+    });
+    const research = await claimOne('RESEARCH_FRAGMENT');
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    await call('brain_complete_work', { ...proof(research), summary: 'in' });
+
+    // The verification is claimed and fails out of attempts.
+    const verify = await claimOne('RESEARCH_VERIFY');
+    await failWork(
+      { workItemId: verify.workItemId, leaseId: verify.leaseId, leaseGeneration: verify.leaseGeneration, workerId },
+      { category: 'ATTEMPTS_EXHAUSTED', detail: 'The source would not load.', retryable: false },
+    );
+
+    const stranded = await findStrandedVerifications(orchestration.id);
+    expect(stranded).toHaveLength(1);
+    expect(stranded[0]!.workItemId).toBe(verify.workItemId);
+
+    const result = await reissueMissingVerification({ workItemId: verify.workItemId, actor: ADMIN });
+    expect(result.status).toBe('REISSUED');
+  });
+
+  it('still refuses an item somebody could yet finish', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const definition = workType('RESEARCH_VERIFY');
+    await enqueueWork({
+      projectId: project.id, workType: 'RESEARCH_VERIFY',
+      payload: definition.validate({}), requiredScopes: definition.requiredScopes,
+      orchestrationId: orchestration.id, fragmentId: fragment.id, createdByType: 'SYSTEM',
+    });
+
+    // QUEUED, never claimed. Nobody is stuck; it simply has not been done.
+    const queued = (await listWorkItems(project.id, { limit: 100 })).find(
+      (item) => item.orchestrationId === orchestration.id && item.workType === 'RESEARCH_VERIFY',
+    );
+    await expect(
+      reissueMissingVerification({ workItemId: queued!.id, actor: ADMIN }),
+    ).rejects.toBeInstanceOf(NotFinished);
+    expect(await findStrandedVerifications(orchestration.id)).toHaveLength(0);
   });
 });
 
