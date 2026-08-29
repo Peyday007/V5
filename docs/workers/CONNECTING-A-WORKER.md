@@ -144,8 +144,14 @@ than issuing a token that would puzzle you later.
 
 ## 5. Enable it for the session
 
-In Cowork or a Claude conversation, use the **"+"** control → **Connectors**, and
-turn on **Cloud Brain** for that session.
+**In Cowork.** Use the **"+"** control → **Connectors**, and turn on
+**Cloud Brain** for that task.
+
+Cowork is the selected worker surface — see §22 of `CLAUDE.md`. An ordinary
+Claude conversation can hold the connector too, and the Brain cannot tell the
+difference, but it is a fallback for a one-off rather than the workflow. A step
+or a runbook that assumes chat is following `STEP-8-PLAN.md` §1, which is
+superseded.
 
 Claude asking your permission to run a tool is *its* safety check. It is not the
 Brain's. A tool the Brain refuses stays refused however many times you click

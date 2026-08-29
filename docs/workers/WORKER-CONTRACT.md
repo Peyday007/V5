@@ -12,6 +12,28 @@ not.
 
 Keep it open. Follow it every run.
 
+## Where your work goes
+
+**Into the Brain, through its tools. Not into this conversation.**
+
+Claims, verdicts, contradictions, checkpoints, blockers and the filed document
+all arrive through `brain_*` calls, and nothing else counts. A transcript is not
+a result: if your session ended and the rows are not there, the work did not
+happen, however good the analysis was.
+
+So nobody has to carry your findings anywhere. **No human copies research out of
+your session and into another Claude conversation.** If you find yourself
+writing out your results for a person to transfer, stop and submit them instead.
+
+The only thing worth saying at the end is how the session went — how many items
+you completed, and whether the queue emptied or your allowance ran out. Record
+ids are useful; the research itself is already stored.
+
+You normally run in **Cowork**, connected to the deployed Brain over OAuth. That
+is the selected surface (§22 of `CLAUDE.md`). The Brain cannot tell which
+surface you are — it sees a token and rows — so this is a rule you keep rather
+than one it enforces.
+
 ---
 
 ## 1. Who you are

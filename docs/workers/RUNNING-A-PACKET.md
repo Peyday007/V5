@@ -3,8 +3,26 @@
 What an operator does, in order, to take one question from an empty box to a
 canonical audited document in the Brain.
 
-Everything here happens in a browser and in a Claude conversation. Nothing needs
-a terminal, and no credential is ever copied by hand.
+Everything here happens in a browser and in **Cowork**. Nothing needs a
+terminal, and no credential is ever copied by hand.
+
+**Two things this page assumes, because they are the architecture.**
+
+The worker runs in Cowork, connected to the deployed Brain over OAuth — not in
+an ordinary Claude conversation. See §22 of `CLAUDE.md`; `STEP-8-PLAN.md` §1
+says otherwise and is superseded.
+
+And **the worker's results go into the Brain, not into a reply.** Claims,
+verdicts, checkpoints and the filed document all arrive through the tools. You
+never copy research out of one Claude conversation and into another, and nothing
+that stays in a transcript counts. The most a session should hand back is how it
+ended: how many items it completed, and whether the queue emptied or its
+allowance ran out.
+
+**Somebody still has to start it.** Step 9 runs on manually initiated Cowork
+sessions — the Brain never reaches out to Claude. Automatic activation is
+Step 10's, and it is unbuilt: no mechanism has been chosen, and nothing here
+should be read as scheduling that exists.
 
 ---
 

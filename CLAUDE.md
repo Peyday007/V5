@@ -650,6 +650,48 @@ Step 8 connects **one** worker and proves a bounded cycle. The first production
 research packet is Step 9, scheduling is Step 10, and a second worker is
 Step 11.
 
+### The worker runs in Cowork. This is settled.
+
+**Cowork is the selected Claude Max worker execution surface.** It connects to
+the deployed Brain through the OAuth flow of §22 — the same `/mcp` endpoint, the
+same 24 tools, the same `WORKER` principal. Nothing about the surface reaches the
+Brain, which sees a bearer token and rows.
+
+**Ordinary Claude chat is not the standard worker workflow.** It can hold the
+connector, and the Brain cannot tell the difference; that is exactly why the
+distinction has to be written down rather than enforced. It is a fallback for a
+one-off, never what a runbook or a step assumes.
+
+`STEP-8-PLAN.md` §1 selects "Claude on the web" and is **superseded**. It was
+Branch A's reasoning, Branch A was not built, and its sole objection to Cowork —
+no static request headers — is void under OAuth. The operative decision is
+*Selected surface: Cowork*, further down that same file.
+
+**A worker writes its results into the Brain and nowhere else.** Claims,
+verdicts, contradictions, checkpoints and documents all arrive through the
+tools. A conversation transcript is not a result, and the terminal state of any
+packet is rows plus stored bytes.
+
+**No human relays research between Claude conversations.** If a session ever
+asks an operator to paste a worker's findings back into Claude Code, that
+session has lost the architecture. The only thing worth reporting by hand is how
+a session ended — items completed, queue empty or allowance exhausted — and even
+that is a convenience, not a mechanism.
+
+**Step 9 uses manually initiated Cowork sessions.** A person decides when a
+worker runs. That is the honest description of where this is, and the measured
+cost of it is real: the largest single block of elapsed time in Step 9 was a
+packet sitting in a queue waiting for somebody to say go.
+
+**Step 10 must implement and prove automatic worker activation or scheduling.**
+Until it does, the Brain never reaches out to Claude, and no document may
+suggest otherwise. **The activation mechanism is unbuilt and undecided** — not
+designed, not prototyped, not chosen. Whatever eventually carries authorization
+into an unattended session is Step 10's to find; CF-8 (live token refresh
+unverified) and CF-11 (the surface decides whether a worker can authorize at
+all) are the two known constraints on it, and neither is solved. Do not
+represent scheduling as working, imminent, or a matter of wiring.
+
 
 ---
 

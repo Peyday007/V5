@@ -113,7 +113,29 @@ them.
 
 ## 1. Selected Claude surface
 
-**Primary: Claude on the web, with a dedicated Project.**
+> ## ⚠ SUPERSEDED — this section chose the wrong surface, and Branch B replaced it
+>
+> **The selected worker execution surface is Cowork.** See
+> [*Selected surface: Cowork*](#selected-surface-cowork) further down this file,
+> which is the operative decision, and §22 of `CLAUDE.md`, which is
+> authoritative.
+>
+> Everything in this section was reasoning about **Branch A**, the static-bearer
+> design. Branch A was not built. It rejected Cowork on one ground — that static
+> request headers are unavailable there — and OAuth makes that ground irrelevant,
+> because a Cowork connector authorizes through the flow rather than through a
+> pasted header.
+>
+> **Do not follow this section.** A later session read it, took "Claude on the
+> web" as current, and spent a working day handing an operator prompts to paste
+> into ordinary Claude conversations and asking them to carry the results back
+> by hand. That is not the architecture: a worker writes into the Brain through
+> `/mcp`, and nobody relays research between conversations.
+>
+> Kept rather than deleted because the reasoning is what makes the correction
+> legible, and because a decision that quietly disappears teaches nothing.
+
+**Primary (Branch A only — superseded): Claude on the web, with a dedicated Project.**
 
 - Custom connectors via remote MCP are documented as available on Claude,
   Cowork and Claude Desktop for Free/Pro/Max/Team/Enterprise, with no connector
@@ -131,6 +153,11 @@ being built for bounded multi-step tool work. It is not selected first because
 the static-header capability that one branch below depends on is reported as
 *not* available for Cowork, and because Projects give a cleaner place to pin the
 operating contract. The choice is recorded so it can be revisited in Step 10.
+
+> **It was revisited immediately, not in Step 10.** Branch B was chosen in this
+> same document and it selects Cowork, because the static-header objection above
+> does not survive OAuth. The paragraph you have just read describes a surface
+> the project does not use.
 
 **Excluded: the Anthropic API.** Step 8 is explicitly a Claude Max
 subscription-backed worker. Using an API key would be easier to automate and
@@ -376,9 +403,16 @@ of a human **it authenticated**.
 
 ### Selected surface: Cowork
 
+**This is the operative decision. It supersedes §1 above.**
+
 The operator has Cowork available. It is built for bounded multi-step tool work,
 which is what a Brain worker does, and the static-header limitation that would
 have ruled it out under Branch A is irrelevant under OAuth.
+
+Ordinary Claude chat is **not** the standard worker workflow. It can hold the
+connector — nothing in the Brain distinguishes the surface a bearer token
+arrives from — but it is a fallback for a one-off, not the path any runbook or
+step should assume.
 
 ### What this adds to Step 8
 

@@ -41,10 +41,36 @@ order is a dependency order, not a preference.
 
 | Step | What it contains |
 |---|---|
-| **9** | Manual end-to-end research packet |
-| **10** | Scheduled firing and interruption recovery |
+| **9** | Manual end-to-end research packet — **manually initiated Cowork sessions** |
+| **10** | Scheduled firing and interruption recovery — **activation mechanism unbuilt and undecided** |
 | **11** | Additional workers and fleet controls |
 | **12** | The control centre — the Brain drives the fleet, not a person |
+
+### What Step 10 has to solve, and has not
+
+**Nothing starts a worker but a person.** Step 9 runs on manually initiated
+Cowork sessions: the Brain queues work and waits, and the largest measured block
+of elapsed time in the whole step was a packet sitting in that queue waiting for
+somebody to say go. That is the honest description of where this is.
+
+**The activation mechanism does not exist.** It has not been designed,
+prototyped or chosen — there is no preferred approach being written up here,
+because there isn't one. Two recorded constraints bound it and neither is
+solved:
+
+- **CF-8** — live token refresh is unverified. Refresh tokens are issued for
+  thirty days and the rotation grant is implemented and tested, but nothing has
+  exercised it against a real surface. Harmless for a bounded session; decide it
+  before anything runs unattended.
+- **CF-11** — the surface decides whether a worker can authorize at all. A chat
+  inherits the account's connector authorization; a Claude Code session
+  authorizes per session and cannot do it non-interactively. So whatever fires
+  an unattended worker has to carry authorization into it, and no mechanism for
+  that has been identified.
+
+Until Step 10 lands and is proven live, **no document may describe the Brain as
+scheduling anything**, and nothing may present activation as a matter of wiring
+up something that already works.
 
 ### What Step 12 is actually for
 
