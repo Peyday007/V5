@@ -579,6 +579,25 @@ export async function resumePulledPackets(): Promise<number> {
     const items = await listWorkItems(orchestration.projectId, { limit: 500 });
     const isPulled = items.some((item) => item.orchestrationId === orchestration.id);
     if (!isPulled) continue;
+
+    /**
+     * Clear a failure the packet has already moved past.
+     *
+     * `failure_reason` is only ever written, never cleared, so a reason
+     * survives whatever comes next and the screen keeps reporting a resolved
+     * problem as a current one. That happened for real: a boot marked a
+     * worker-driven packet interrupted before its plan existed, the worker
+     * then filed twelve fragments and set the status back to PLANNING, and the
+     * console went on saying "interrupted while planning, results were lost"
+     * over a plan that was sitting there intact.
+     *
+     * A live status and a failure reason cannot both be true. The status is
+     * the one derived from rows, so it wins.
+     */
+    if (orchestration.failureReason) {
+      await updateOrchestration(orchestration.id, { failureReason: null });
+    }
+
     try {
       const result = await advancePacket(orchestration.id);
       if (result.enqueued.length > 0) advanced += 1;

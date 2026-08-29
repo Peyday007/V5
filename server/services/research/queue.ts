@@ -197,6 +197,16 @@ export function whenResearchIdle(): Promise<void> {
  * enqueued until it settles. Adding `pending` to it would double-count
  * everything still in the line.
  */
+/**
+ * The provider name a worker-driven packet carries.
+ *
+ * `startPacket` writes it, and it is the only durable mark distinguishing a
+ * packet a worker pulls from a run this process pushes. Compared rather than
+ * inferred from the presence of work items, because the distinction has to
+ * hold at boot, before anything has been read.
+ */
+const WORKER_PROVIDER = 'WORKER';
+
 export function researchQueueDepth(): number {
   return inFlight.size;
 }
@@ -220,7 +230,24 @@ export function isRunning(orchestrationId: string): boolean {
  */
 export async function recoverInterruptedResearch(): Promise<number> {
   const interrupted = (await listPendingOrchestrations()).filter(
-    (orchestration) => !inFlight.has(orchestration.id),
+    (orchestration) =>
+      !inFlight.has(orchestration.id) &&
+      // Never a worker-driven packet.
+      //
+      // Everything below assumes a dead in-process run: it abandons passes,
+      // returns fragments to the queue and writes "their results were lost".
+      // For a pulled packet all three are false and the third is a lie — it
+      // has no process to have died, a worker may be mid-call right now, and
+      // its next step is a function of its rows rather than of anything this
+      // instance was holding. `resumePulledPackets` is its recovery and does
+      // nothing but re-derive.
+      //
+      // Left unguarded this ran on every boot, so **every deploy corrupted
+      // any packet in flight**: a fragment a worker still held a lease on was
+      // silently moved back to QUEUED, which lets the runner create a second
+      // work item for it — a second Step 6 idempotency scope, and therefore a
+      // second claim ledger for one fragment.
+      orchestration.provider !== WORKER_PROVIDER,
   );
   let recovered = 0;
 

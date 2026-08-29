@@ -42,6 +42,8 @@ import {
   runFixturePacket,
 } from '../server/services/research/fixtures.ts';
 import { advancePacket, approvePlan, resumePulledPackets } from '../server/services/research/packetRunner.ts';
+import { recoverInterruptedResearch } from '../server/services/research/queue.ts';
+import { updateOrchestration } from '../server/repos/research.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import type {
   ClaimedWork,
@@ -1066,6 +1068,67 @@ describe('test packets', () => {
     // The first one is still there. Superseded documents keep their rows and
     // their files; they are the layer's provenance.
     expect(await getDocument(firstDoc!.id)).toBeTruthy();
+  });
+
+  it('is not treated as a dead in-process run when the server restarts', async () => {
+    // The bug this pins cost nothing only because it was found before the
+    // first real packet was approved. Boot recovery assumed every pending
+    // orchestration was a push-model run whose process had died, so on every
+    // deploy it marked worker-driven packets INTERRUPTED, abandoned their
+    // passes, and — worst — moved fragments a worker still held a lease on
+    // back to QUEUED. A requeued fragment gets a second work item, which is a
+    // second Step 6 idempotency scope, which is a second claim ledger for one
+    // fragment.
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration, { status: 'RUNNING' });
+    await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    const recovered = await recoverInterruptedResearch();
+
+    expect(recovered).toBe(0);
+    expect((await getOrchestration(orchestration.id))?.status).not.toBe('INTERRUPTED');
+    // The one that matters: a fragment a worker is holding stays held.
+    expect((await getFragment(fragment.id))?.status).toBe('RUNNING');
+  });
+
+  it('still closes a push-model run whose process did die', async () => {
+    // The other half. Guarding on the provider must not turn the recovery off
+    // for the runs it was written for.
+    const run = await createRun({
+      projectId: project.id,
+      layerId: layer.id,
+      runType: 'FOUNDATION',
+      status: 'RUNNING',
+      provider: 'mock',
+    });
+    const pushed = await createOrchestration({
+      projectId: project.id,
+      layerId: layer.id,
+      runId: run.id,
+      title: 'An in-process run',
+      assignment: 'Started by a process that is no longer here.',
+      provider: 'mock',
+    });
+    await updateOrchestration(pushed.id, { status: 'RESEARCHING' });
+
+    expect(await recoverInterruptedResearch()).toBe(1);
+    expect((await getOrchestration(pushed.id))?.status).toBe('INTERRUPTED');
+  });
+
+  it('clears a failure the packet has already moved past', async () => {
+    const orchestration = await makeOrchestration();
+    await makeFragment(orchestration, { status: 'PLANNED' });
+    await claimFor(orchestration, 'RESEARCH_PLAN', null);
+    await updateOrchestration(orchestration.id, {
+      status: 'PLANNING',
+      failureReason: 'Interrupted while planning. 0 pass(es) were in flight.',
+    });
+
+    await resumePulledPackets();
+
+    // A live status and a failure reason cannot both be true, and the console
+    // showed the stale one for a plan that was sitting there intact.
+    expect((await getOrchestration(orchestration.id))?.failureReason).toBeNull();
   });
 
   it('refuse to run the fixture claims against a packet that is not a fixture', async () => {
