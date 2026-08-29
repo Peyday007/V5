@@ -54,6 +54,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ModernMcpClient } from './mcpModernClient.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import { initStorage } from '../server/services/storage/index.ts';
 import {
   createUser,
   createWorker,
@@ -2272,6 +2273,17 @@ async function main(): Promise<void> {
   console.log('');
 
   await initDatabase();
+  /**
+   * The store, opened explicitly.
+   *
+   * `getStorage()` falls back to a local provider when nothing has booted,
+   * which is right for a unit test and wrong for this: without it the harness
+   * asks a folder on the container's disk for a bucket key, gets "no stored
+   * object", and reports the deployment as having filed a document with no
+   * bytes. It cost one deploy to find out, which is one more than the line
+   * below costs.
+   */
+  await initStorage();
 
   let failed = false;
   try {
