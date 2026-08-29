@@ -47,7 +47,9 @@ import type {
 import {
   acceptedClaims,
   currentFragments,
+  getFragment,
   getOrchestration,
+  listClaimsForFragment,
   listFragments,
   listPendingOrchestrations,
   updateFragment,
@@ -119,6 +121,70 @@ export interface AdvanceResult {
 function alreadyCreated(items: WorkItem[], predicate: (item: WorkItem) => boolean): boolean {
   return items.some(predicate);
 }
+
+/**
+ * Did this research item actually record the thing it exists to record?
+ *
+ * Asked per type, against the rows, because that is the only honest answer. An
+ * item's state says a worker said it was done; this says whether the packet
+ * moved.
+ *
+ * Used in two places and for opposite reasons. `brain_complete_work` refuses a
+ * completion when this is false, because an item whose whole purpose is to
+ * record something, completed without recording it, is a contradiction and the
+ * boundary is where contradictions get refused. And `advancePacket` treats a
+ * no-op item as one that never happened, so a packet poisoned by one before
+ * that refusal existed can still be recovered — bounded, because with the
+ * refusal in place no new ones can be made.
+ */
+export async function researchItemRecorded(item: WorkItem): Promise<boolean> {
+  if (!item.orchestrationId) return true;
+  const orchestration = await getOrchestration(item.orchestrationId);
+  if (!orchestration) return true;
+
+  switch (item.workType) {
+    case 'RESEARCH_PLAN':
+      return (await currentFragments(orchestration.id)).length > 0;
+    case 'RESEARCH_FRAGMENT': {
+      if (!item.fragmentId) return true;
+      return (await listClaimsForFragment(item.fragmentId)).length > 0;
+    }
+    case 'RESEARCH_VERIFY': {
+      if (!item.fragmentId) return true;
+      // The gate ran iff it left a verdict. A fragment can fail its gate and
+      // that is a recorded outcome; what is not recorded is no verdict at all.
+      const fragment = await getFragment(item.fragmentId);
+      return Boolean(fragment?.integrityVerdict ?? fragment?.sufficiencyVerdict);
+    }
+    case 'RESEARCH_SYNTHESIZE':
+      return orchestration.documentId !== null;
+    case 'RESEARCH_AUDIT': {
+      const role = item.payload['role'];
+      if (typeof role !== 'string') return true;
+      return await auditRoleSubmitted(orchestration, role as AuditRole);
+    }
+    default:
+      // Not a research item, and not this module's business.
+      return true;
+  }
+}
+
+/**
+ * Why a no-op item is not automatically replaced.
+ *
+ * It is tempting: an item that recorded nothing produced no ledger, so a
+ * replacement could not duplicate one, and the packet would recover itself.
+ * That reasoning holds for a verification and fails for a plan — a planning job
+ * that yields no fragments would be re-issued forever, each new item resetting
+ * the attempt count the last one exhausted, spending the allowance every time.
+ *
+ * So the automatic rule stays what it was: one item per (type, target), for the
+ * life of the packet. What changed is upstream — `brain_complete_work` now
+ * refuses to finish a research item that recorded nothing, so the state this
+ * would have recovered from can no longer be created. Recovering the packets
+ * that reached it before that refusal existed is a deliberate act, and it needs
+ * to be per target rather than a blanket exemption.
+ */
 
 /** Of those, the ones still going to happen or happening right now. */
 function stillRunning(items: WorkItem[], predicate: (item: WorkItem) => boolean): boolean {

@@ -147,6 +147,27 @@ Before you complete anything:
 **Do not report success because you believe you did the work.** Report success
 because the Brain says the work is recorded.
 
+### Running out of budget mid-item
+
+**Release the item. Do not complete it.**
+
+`brain_complete_work` means "the work in this item is done". If you complete a
+research item without having submitted what it exists to record, the packet
+sees a finished job that moved nothing, stops for a person, and the only
+documented remedy discards the accepted research already inside it. The Brain
+now refuses that completion — but the refusal is not the point. `brain_release_work`
+is: it hands the item back, keeps everything you already submitted, and lets
+anybody, including you in a later session, pick it up.
+
+The order when your budget runs out mid-item:
+
+1. Submit whatever you already have, if it is a coherent submission.
+2. `brain_checkpoint_work` with what you established and what is left.
+3. `brain_release_work`.
+4. Say in your report which item you released and why.
+
+Releasing is not failing. It costs the packet nothing.
+
 ## 9. Failing
 
 - Retryable failure: a transient condition that a later attempt could genuinely

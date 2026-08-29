@@ -46,7 +46,7 @@ import {
 import { getDocument, listDocuments } from '../repos/documents.ts';
 import { workType } from '../services/queue/workTypes.ts';
 import { readableText, retrieveEvidence } from '../services/documents/retrieval.ts';
-import { invalidInput, notFoundError } from './errors.ts';
+import { conflictError, invalidInput, notFoundError } from './errors.ts';
 import type { McpTool } from './toolkit.ts';
 import { RESEARCH_TOOLS } from './researchTools.ts';
 import {
@@ -521,6 +521,36 @@ const completeTool: McpTool = {
     const proof = proofFrom(args, item.id, workerId);
     const resultRef = optionalString(args, 'result_ref');
     const summary = optionalString(args, 'summary');
+
+    /**
+     * Research work is done when it has recorded something, not when a worker
+     * says so.
+     *
+     * An item whose entire purpose is to record a verification, completed
+     * without a verification, is a contradiction — and the boundary is where
+     * contradictions get refused rather than stored. Left accepted it poisons
+     * the packet from above: the runner sees a finished item that moved
+     * nothing, correctly stops for a person, and the only documented remedy is
+     * re-planning, which discards the accepted research already inside it.
+     *
+     * This is not hypothetical. The first real packet died on exactly this: a
+     * worker's budget ran out mid-verification and it completed the lease
+     * instead of releasing it, stranding one gated fragment, one ungated one
+     * and ten queued behind them.
+     *
+     * The remedy is in the message, because the worker can act on it: submit,
+     * or release the lease so somebody else can. Releasing is the correct move
+     * when you are out of budget, and it costs the packet nothing.
+     */
+    const { researchItemRecorded } = await import('../services/research/packetRunner.ts');
+    if (!(await researchItemRecorded(item))) {
+      throw conflictError(
+        `This is a ${item.workType} item and nothing has been recorded against it, so completing ` +
+          'it would end the work without doing it. Submit what you found first, or call ' +
+          'brain_release_work to hand the item back — releasing is the right move when you are ' +
+          'out of budget, and it leaves the packet able to continue.',
+      );
+    }
 
     const outcome = await idempotentQueueMutation(
       {

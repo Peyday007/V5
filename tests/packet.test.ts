@@ -1131,6 +1131,46 @@ describe('test packets', () => {
     expect((await getOrchestration(orchestration.id))?.failureReason).toBeNull();
   });
 
+  it('refuses to complete a verification that recorded nothing', async () => {
+    // What actually killed the first real packet. A worker's budget ran out
+    // mid-verification and it completed the lease instead of releasing it. The
+    // runner then saw a finished verification that moved nothing, correctly
+    // stopped for a person, and the only documented remedy — re-plan — throws
+    // away the accepted research already inside the packet.
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    const refused = await refusal('brain_complete_work', { ...proof(verify), summary: 'out of budget' });
+
+    expect(refused.category).toBe('CONFLICT');
+    // The remedy is in the message, because the worker can act on it.
+    expect(refused.message).toContain('brain_release_work');
+    expect((await getWorkItem(verify.workItemId))?.state).toBe('LEASED');
+  });
+
+  it('lets the same item be completed once it has recorded something', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(fragment.id);
+    await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: true, ...MATCHES, note: 'Reads directly.' }],
+      sufficiency: 'SUFFICIENT',
+    });
+    await call('brain_complete_work', { ...proof(verify), summary: 'gated' });
+
+    expect((await getWorkItem(verify.workItemId))?.state).toBe('SUCCEEDED');
+  });
+
   it('refuse to run the fixture claims against a packet that is not a fixture', async () => {
     // The guard that matters most in the file. This path supplies its own
     // claims, so pointing it at real research would write fixture content into
