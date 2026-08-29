@@ -79,6 +79,7 @@ import {
 } from '../server/repos/workQueue.ts';
 import { getDb } from '../server/db/database.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
+import { listOrchestrationsByProject, updateOrchestration } from '../server/repos/research.ts';
 import { getDocument } from '../server/repos/documents.ts';
 import { listCoverage } from '../server/repos/reconciliation.ts';
 import { listAuditsByProject } from '../server/repos/audits.ts';
@@ -789,6 +790,8 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
   });
   const orchestrationId = started.orchestration.id;
 
+  await retireEarlierPackets(fixtures, orchestrationId);
+
   record(
     'starting a packet queues one planning job and researches nothing',
     started.advanced.enqueued.length === 1 &&
@@ -804,7 +807,7 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
 
   /* --- The plan ---------------------------------------------------------- */
 
-  const planClaim = await claimResearch(fixtures, 'RESEARCH_PLAN');
+  const planClaim = await claimResearch(fixtures, 'RESEARCH_PLAN', orchestrationId);
   if (!planClaim) {
     record('a worker claims the planning job over MCP', false, 'nothing claimable');
     return;
@@ -881,7 +884,7 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
 
   /* --- The research, and the gate --------------------------------------- */
 
-  const fragmentClaim = await claimResearch(fixtures, 'RESEARCH_FRAGMENT');
+  const fragmentClaim = await claimResearch(fixtures, 'RESEARCH_FRAGMENT', orchestrationId);
   if (!fragmentClaim) {
     record('approval queues the research', false, 'nothing claimable after approval');
     return;
@@ -923,7 +926,7 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
 
   await worker.call('brain_complete_work', { ...proofOf(fragmentClaim), summary: 'claims in' });
 
-  const verifyClaim = await claimResearch(fixtures, 'RESEARCH_VERIFY');
+  const verifyClaim = await claimResearch(fixtures, 'RESEARCH_VERIFY', orchestrationId);
   if (!verifyClaim) {
     record('the gate runs as its own pass', false, 'no RESEARCH_VERIFY item');
     return;
@@ -959,7 +962,7 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
 
   /* --- The synthesis, and what it may cite ------------------------------ */
 
-  const synthClaim = await claimResearch(fixtures, 'RESEARCH_SYNTHESIZE');
+  const synthClaim = await claimResearch(fixtures, 'RESEARCH_SYNTHESIZE', orchestrationId);
   if (!synthClaim) {
     record('an accepted fragment queues the synthesis', false, 'no RESEARCH_SYNTHESIZE item');
     return;
@@ -1034,7 +1037,7 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
 
   let auditRolesRun = 0;
   for (const role of ['PRIMARY', 'ADVERSARIAL', 'JUDGE'] as const) {
-    const auditClaim = await claimResearch(fixtures, 'RESEARCH_AUDIT');
+    const auditClaim = await claimResearch(fixtures, 'RESEARCH_AUDIT', orchestrationId);
     if (!auditClaim) break;
     const body =
       role === 'PRIMARY'
@@ -1123,23 +1126,90 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
   );
 }
 
-/** Claim one research item of a type, as the worker, through the queue. */
+/**
+ * Retire every research packet an earlier run left behind.
+ *
+ * `drainPreviousRuns` cancels work items this script created directly; research
+ * items are created by the packet runner, so they are not its to cancel and
+ * were never cleared. They accumulated — one packet per deploy, each with a
+ * claimable planning job — and the queue does not care whose they are.
+ *
+ * That is not a tidiness problem. `claimWork` takes the highest-priority item
+ * of a type in the project, so a run would claim an *earlier* packet's plan,
+ * propose fragments into that orchestration, and then read coverage for its own
+ * and find nothing. The three failures that produced looked like a regression
+ * in `brain_propose_fragments` and were this.
+ *
+ * Cancelled rather than deleted: `project_events` records what happened to
+ * them, and the operator console stops offering an approve button for a packet
+ * nobody should approve.
+ */
+async function retireEarlierPackets(fixtures: Fixtures, keepId: string): Promise<void> {
+  const older = (await listOrchestrationsByProject(fixtures.scope.id)).filter(
+    (orchestration) =>
+      orchestration.id !== keepId &&
+      !['COMPLETE', 'CANCELLED', 'FAILED'].includes(orchestration.status),
+  );
+  if (older.length === 0) return;
+
+  const items = await listWorkItems(fixtures.scope.id, { limit: 500 });
+  let cancelledItems = 0;
+  for (const orchestration of older) {
+    for (const item of items) {
+      if (item.orchestrationId !== orchestration.id) continue;
+      if (item.state !== 'QUEUED' && item.state !== 'LEASED') continue;
+      await cancelWork(item.id, 'superseded by a later verification run');
+      cancelledItems += 1;
+    }
+    await updateOrchestration(orchestration.id, {
+      status: 'CANCELLED',
+      cancelReason: 'A later hosted verification run superseded this packet.',
+      cancelledAt: new Date().toISOString(),
+    });
+  }
+  console.log(
+    `  ....  retired ${older.length} earlier packet(s) and ${cancelledItems} of their work item(s)`,
+  );
+}
+
+/**
+ * Claim one research item **of this run's packet**.
+ *
+ * The queue has no per-orchestration claim, so anything else claimable of the
+ * same type can come back instead. Every such item is now cancelled before this
+ * runs — but the check stays, because a claim that silently belongs to another
+ * packet is the failure this whole section is meant to catch rather than
+ * commit.
+ */
 async function claimResearch(
   fixtures: Fixtures,
   workType: string,
+  orchestrationId?: string,
 ): Promise<{ workItemId: string; leaseId: string; leaseGeneration: number } | null> {
   const [claimed] = await claimWork({
     workerId: fixtures.researchWorkerId,
     scopes: [{ projectId: fixtures.scope.id, scopes: RESEARCH_SCOPES }],
     workTypes: [workType],
   });
-  return claimed
-    ? {
-        workItemId: claimed.workItemId,
-        leaseId: claimed.leaseId,
-        leaseGeneration: claimed.leaseGeneration,
-      }
-    : null;
+  if (!claimed) return null;
+
+  if (orchestrationId) {
+    const item = await getWorkItem(claimed.workItemId);
+    if (item?.orchestrationId !== orchestrationId) {
+      record(
+        `claiming ${workType} returned this run's own work item`,
+        false,
+        `got ${item?.orchestrationId ?? 'an item with no packet'}, wanted ${orchestrationId}`,
+      );
+      return null;
+    }
+  }
+
+  return {
+    workItemId: claimed.workItemId,
+    leaseId: claimed.leaseId,
+    leaseGeneration: claimed.leaseGeneration,
+  };
 }
 
 function proofOf(claimed: { workItemId: string; leaseId: string; leaseGeneration: number }): Record<string, unknown> {
