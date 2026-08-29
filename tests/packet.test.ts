@@ -504,6 +504,121 @@ describe('submitting claims', () => {
   });
 });
 
+describe('work its fragment has outgrown', () => {
+  /**
+   * The cause behind the duplicate a worker was handed on the live packet, and
+   * it needed no second work item at all.
+   *
+   * A worker submits a fragment's claims — the fragment moves to VALIDATING —
+   * and then releases the item instead of completing it, which is exactly what
+   * the contract tells it to do when its allowance runs out. The item goes back
+   * to QUEUED and stays claimable: a research assignment for a fragment that
+   * has already been researched. Nothing was stale about it when it was made
+   * and nothing removed it afterwards, so the queue kept offering it.
+   */
+  it('cancels a queued research item whose fragment has already submitted', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    expect((await getFragment(fragment.id))?.status).toBe('VALIDATING');
+
+    // Out of allowance: hand it back rather than complete it.
+    await releaseWork(
+      {
+        workItemId: research.workItemId,
+        leaseId: research.leaseId,
+        leaseGeneration: research.leaseGeneration,
+        workerId,
+      },
+      'out of allowance',
+    );
+    expect((await getWorkItem(research.workItemId))?.state).toBe('QUEUED');
+
+    await advancePacket(orchestration.id);
+
+    const item = await getWorkItem(research.workItemId);
+    expect(item?.state).toBe('CANCELLED');
+    // And so nothing claimable is left that would re-research it.
+    const [claimed] = await claimWork({
+      workerId,
+      scopes: [{ projectId: project.id, scopes: FULL }],
+      workTypes: ['RESEARCH_FRAGMENT'],
+    });
+    expect(claimed).toBeUndefined();
+  });
+
+  it('leaves an item a worker is holding alone', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    // Claims in, fragment VALIDATING, and the worker still holds the lease —
+    // which is the ordinary case, because it submitted a moment ago and is
+    // about to complete. Cancelling here would fail that completion.
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+
+    await advancePacket(orchestration.id);
+
+    expect((await getWorkItem(research.workItemId))?.state).toBe('LEASED');
+    const value = await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+    expect(value['state']).not.toBe('CONFLICT');
+  });
+});
+
+describe('a fragment that has already been researched', () => {
+  /**
+   * Step 6 keys this effect from the work item, so the same item re-submitting
+   * replays. A *second* item for the same fragment is a different scope and had
+   * no protection at all — it would append a second ledger to a fragment the
+   * gate had already been asked about.
+   *
+   * A worker on the live packet was handed exactly that: a research item for a
+   * fragment already VALIDATING with twelve claims on it. Nothing refused it.
+   * The worker noticed and released, which is the right instinct and is not a
+   * control.
+   */
+  it('refuses a second submission from a different work item', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const first = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(first), claims: [SOURCED] });
+    expect((await getFragment(fragment.id))?.status).toBe('VALIDATING');
+
+    // A second item for the same fragment, however it came to exist.
+    const second = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    const refused = await refusal('brain_submit_claims', {
+      ...proof(second),
+      claims: [{ ...SOURCED, claim: 'A second ledger for one fragment.' }],
+    });
+
+    expect(refused.category).toBe('CONFLICT');
+    expect(refused.message).toContain('VALIDATING');
+    // The ledger is untouched: one claim, from the item that was asked.
+    expect(await listClaimsForFragment(fragment.id)).toHaveLength(1);
+  });
+
+  it('still replays a redelivery of the same item, which is not a second ledger', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+
+    // The same item, asked again — the crash-window case Step 6 exists for.
+    // It must not be caught by the refusal above, which is about a different
+    // item, and it must not record anything twice.
+    const again = await call('brain_submit_claims', {
+      ...proof(research),
+      claims: [SOURCED],
+    });
+    expect(again['state']).toBe('ALREADY_RECORDED');
+    expect(await listClaimsForFragment(fragment.id)).toHaveLength(1);
+  });
+});
+
 describe('the gate', () => {
   it('accepts a claim its source supports, in scope', async () => {
     const orchestration = await makeOrchestration();

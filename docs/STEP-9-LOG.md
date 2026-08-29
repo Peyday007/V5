@@ -196,6 +196,31 @@ And 18 is the sharper lesson. Every test in `packet.test.ts` read claim ids with
 Both proved the tool worked. Neither crossed the session boundary the real path
 always crosses, so neither could have caught it.
 
+## Faults 23 and 24 — a research item that outlived its own fragment
+
+A worker was handed a `RESEARCH_FRAGMENT` item for `ny-licence-trigger`, a
+fragment it had finished minutes earlier and which was already VALIDATING with
+twelve claims on it. It recognised the fragment as its own work, released the
+item rather than file a second ledger, and reported it.
+
+There was no second work item. It was the *same* item.
+
+A worker that submits a fragment's claims and then releases rather than
+completes — which the contract instructs when an allowance runs out — leaves
+the item QUEUED while its fragment has moved to VALIDATING. Nothing was stale
+about it when it was created, and nothing removed it afterwards, so the queue
+kept offering a research assignment for a fragment that had already been
+researched.
+
+| # | Fault | Fix |
+|---|---|---|
+| 23 | Nothing refused a second ledger for one fragment | Step 6 keys the effect from the work item, so a redelivery of the *same* item replays — and a different item is a different scope with no protection at all. The state is now checked inside the executor, so a replay short-circuits before it and only a genuinely new scope is judged. |
+| 24 | Queued work outlived the fragment state it served | `advancePacket` retires a QUEUED research item whose fragment has moved past the state that item serves. QUEUED only — an item a worker is holding is not stale, and cancelling underneath it would fail the completion it is about to make. |
+
+**The worker noticing is not a control.** It happened to recognise its own work
+from a few minutes earlier; a different session would not have. Being refused at
+the write boundary is the floor, and not being offered the work is the fix.
+
 ## Still open
 
 - Ten fragments remain queued; California is on attempt 2 and Texas is ungated.

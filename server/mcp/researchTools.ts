@@ -866,6 +866,7 @@ const submitClaimsTool: McpTool = {
       'RESEARCH_FRAGMENT',
     );
     if (!fragment) throw notFoundError();
+
     const proof = proofFrom(args, item.id, workerId);
 
     const rows = objectArray(args, 'claims', MAX_CLAIMS_PER_SUBMISSION);
@@ -905,6 +906,38 @@ const submitClaimsTool: McpTool = {
         payload: { workItemId: item.id, operation: 'submit-claims' },
       },
       async () => {
+        /**
+         * A fragment that has already submitted its claims is not taking more.
+         *
+         * Inside the executor on purpose. Step 6 keys this effect from the work
+         * item, so a redelivery of *this* item never reaches here — it replays,
+         * which is the crash-window case the whole mechanism exists for. What
+         * does reach here is a submission under a scope that has recorded
+         * nothing, and for a fragment already holding claims that means a second
+         * work item: a different id is a different scope, and it would append a
+         * second ledger to a fragment the gate has already been asked about.
+         *
+         * That is what `alreadyCreated` was written to prevent, and its lesson
+         * was that one item per fragment is a rule the *creation* path enforces
+         * while the write path takes its word for it. A worker on the live
+         * packet was handed a research item for a fragment already VALIDATING
+         * with twelve claims on it. Nothing refused it; the worker noticed and
+         * released. Noticing is not a control.
+         *
+         * QUEUED and RUNNING are the states that expect claims. VALIDATING means
+         * they are in and the gate has them; everything else is terminal.
+         */
+        const current = await getFragment(fragment.id);
+        if (current && current.status !== 'QUEUED' && current.status !== 'RUNNING') {
+          throw conflictError(
+            `Fragment "${current.fragmentKey}" is ${current.status} and is not taking claims. ` +
+              `It already holds ${(await listClaimsForFragment(current.id)).length} claim(s) from ` +
+              'another work item, and a second submission would give one fragment two ledgers. ' +
+              'Release this item with brain_release_work and report that a duplicate research ' +
+              'item exists for a fragment that has already been researched.',
+          );
+        }
+
         const passId = await recordPass({
           orchestration,
           fragmentId: fragment.id,

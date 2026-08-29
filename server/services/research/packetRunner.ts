@@ -57,7 +57,7 @@ import {
 } from '../../repos/research.ts';
 import { earlierAuditRole } from './auditBrief.ts';
 import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
-import { enqueueWork, listWorkItems } from '../../repos/workQueue.ts';
+import { cancelWork, enqueueWork, listWorkItems } from '../../repos/workQueue.ts';
 import { workType, AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { recordEvent } from '../../repos/events.ts';
 
@@ -358,7 +358,53 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   const enqueued: AdvanceResult['enqueued'] = [];
   const fragments = await currentFragments(orchestration.id);
-  const items = await itemsFor(orchestration);
+  let items = await itemsFor(orchestration);
+
+  /**
+   * Retire queued work its fragment has already outgrown.
+   *
+   * A worker that submits a fragment's claims and then *releases* the item
+   * rather than completing it — which the contract tells it to do when its
+   * allowance runs out — leaves a `RESEARCH_FRAGMENT` item sitting QUEUED while
+   * its fragment has moved to VALIDATING. Nothing was stale about that item
+   * when it was created and nothing removed it afterwards, so the queue kept
+   * handing it out: a research assignment for a fragment that has already been
+   * researched.
+   *
+   * That happened on the live packet. The worker was given one, recognised the
+   * fragment as its own from a few minutes earlier, and released it rather than
+   * file a second ledger. `brain_submit_claims` now refuses that submission
+   * outright — but being refused is a worse outcome than never being offered
+   * the work, and a queue that hands out work nobody should do is wrong on its
+   * own terms.
+   *
+   * QUEUED only. An item a worker is holding is not stale: the fragment is very
+   * likely VALIDATING *because* that worker just submitted, and cancelling
+   * underneath it would fail the completion it is about to make.
+   */
+  const outgrown = items.filter((item) => {
+    if (item.state !== 'QUEUED') return false;
+    if (!item.fragmentId) return false;
+    const fragment = fragments.find((candidate) => candidate.id === item.fragmentId);
+    if (!fragment) return false;
+    if (item.workType === 'RESEARCH_FRAGMENT') {
+      return fragment.status !== 'QUEUED' && fragment.status !== 'RUNNING';
+    }
+    if (item.workType === 'RESEARCH_VERIFY') {
+      return Boolean(fragment.integrityVerdict ?? fragment.sufficiencyVerdict);
+    }
+    return false;
+  });
+  if (outgrown.length > 0) {
+    for (const item of outgrown) {
+      await cancelWork(
+        item.id,
+        'Its fragment has already moved past the state this item serves, so doing it would ' +
+          'duplicate work that is done.',
+      );
+    }
+    items = await itemsFor(orchestration);
+  }
 
   // ---- Nothing planned yet: ask for a plan. ------------------------------
   if (fragments.length === 0) {
