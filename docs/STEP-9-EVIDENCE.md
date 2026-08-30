@@ -486,6 +486,64 @@ claims what it cannot: the stored claim keeps the full passage, and the ledger
 shows an abridged copy of it, which is a different sentence from the one that
 was there.
 
+### The control measurement
+
+The acceptance instrument (`npm run verify:capability`) was run against this
+packet in production on 2026-08-30, deploy 65. This packet is the **control**:
+it was researched by the engine before the correction, so it is what the
+instrument has to be able to fail.
+
+```
+Packet orc_f4850ad197474c22b5ea — COMPLETE
+  fragments 12 current / 14 attempts
+  claims 118 submitted / 57 citable / 17 from accepted fragments
+
+  PASS  P1   accepted claims from blocked fragments still reach synthesis
+             32 accepted claim(s) sit in blocked fragments; 40 of them are
+             citable (measures the mechanism, not what this packet used)
+  PASS  P1b  claims from blocked fragments carry a coverage annotation
+  FAIL  P2   no fragment was abandoned with repair budget left
+             extraterritorial-nexus at 1/2
+  PASS  P2b  each repair carried a plan, not a re-run
+  N/EX  P3   no conditional dependent was stranded by its dependency
+             no conditional dependency in this packet
+  FAIL  P3c  no dependent was cancelled for its dependency failing
+             ca-penalty, tx-penalty, leasehold-scope-boundary
+  PASS  P3b  dependencies carry kinds — 10 HARD / 0 CONDITIONAL / 0 SEQUENCING
+  N/EX  P4   unreadable sources are recorded as unresolved, not rejected
+  PASS  P5   the packet reached a terminal state
+  PASS  P5b  the queue is empty
+  PASS  P6   the canonical artifact is readable — 28,156 bytes
+  PASS  P6b  every citation resolves to a citable claim — 17, 0 unresolvable
+  FAIL  P6c  incomplete coverage is stated in the report
+             40 claim(s) carried from blocked fragments and the report never
+             says so
+  FAIL  P7   every mandatory requirement is settled or explicitly declared open
+             12 mandatory: 0 satisfied, 10 declared unresolved
+  PASS  P7b  every declared gap carries its reason — 0 unexplained
+
+9/15 clauses passed, 2 not exercised by this packet, 4 failed.
+```
+
+Three numbers in that are worth reading twice.
+
+**57 citable against 17 used.** The corrected query, run over the same rows,
+finds 40 accepted claims that the packet discarded with the fragments that
+produced them. That is the size of the first regression, measured rather than
+argued.
+
+**10 HARD / 0 CONDITIONAL, and three fragments cancelled behind them.** Every
+dependency in this packet was hard because hard was the only kind. `ca-penalty`,
+`tx-penalty` and `leasehold-scope-boundary` were cancelled for their
+dependencies failing, and none of them needed the antecedent settled to be
+researched conditionally.
+
+**P3 is `N/EX`, not `PASS`.** The first version of this instrument printed it as
+a pass — it found no *conditional* dependent stranded, because there were no
+conditional dependents. A clause nothing exercised is not a clause that passed,
+and the fix for that was found by running the instrument against this packet,
+which is the reason to run an instrument against a case you expect it to fail.
+
 ### What closing Step 9 now requires
 
 The mechanical evidence above stands and is not re-run. What is outstanding is
