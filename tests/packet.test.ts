@@ -580,6 +580,11 @@ describe('a research gap that is genuinely exhausted', () => {
         needsResearch: true,
       });
     }
+    await updateOrchestration(orchestration.id, {
+      unresolvedGapPolicy: 'RECORD_GAPS',
+      unresolvedGapAuthorizedBy: 'usr_operator',
+      unresolvedGapAuthorizedAt: new Date().toISOString(),
+    });
     return { orchestration, dead, dependent, requirementIds: [rDead!.id, rDep!.id] };
   }
 
@@ -641,6 +646,12 @@ describe('a research gap that is genuinely exhausted', () => {
         kind: 'RESEARCH',
       },
     ]);
+    await updateOrchestration(orchestration.id, {
+      unresolvedGapPolicy: 'RECORD_GAPS',
+      unresolvedGapAuthorizedBy: 'usr_operator',
+      unresolvedGapAuthorizedAt: new Date().toISOString(),
+    });
+
     // The coverage row the planning pass writes, before anything runs — the
     // runner advances on every completion, so seeding state afterwards would
     // be describing a past it has already moved through.
@@ -713,6 +724,11 @@ describe('a research gap that is genuinely exhausted', () => {
         kind: 'RESEARCH',
       },
     ]);
+    await updateOrchestration(orchestration.id, {
+      unresolvedGapPolicy: 'RECORD_GAPS',
+      unresolvedGapAuthorizedBy: 'usr_operator',
+      unresolvedGapAuthorizedAt: new Date().toISOString(),
+    });
     await makeFragment(orchestration, {
       fragmentKey: 'exhausted',
       fragmentIndex: 0,
@@ -747,6 +763,137 @@ describe('a research gap that is genuinely exhausted', () => {
     expect(count('RESEARCH_SYNTHESIZE')).toBe(1);
     expect(count('RESEARCH_FRAGMENT')).toBe(1);
     expect(count('RESEARCH_VERIFY')).toBe(1);
+  });
+
+  /**
+   * The authorization, which is the whole of the safety argument.
+   *
+   * Recording a gap narrows what the packet claims to answer. Left as a default
+   * it means a Brain that can always declare its way to "complete" whenever
+   * research fails — the exact failure invariant 20 exists to prevent. I
+   * shipped it as a default once; this is the correction.
+   *
+   * A packet with no policy set stops and stays stopped, however exhausted its
+   * fragments are and however many times the runner is called.
+   */
+  it('leaves an unauthorized packet at NEEDS_HUMAN, however often it is advanced', async () => {
+    const orchestration = await makeOrchestration();
+    const [requirement] = await createRequirements([
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requirementKey: 'exhausted',
+        ordinal: 0,
+        statement: 'Whether Texas requires a licence.',
+        necessity: 'MANDATORY',
+        kind: 'RESEARCH',
+      },
+    ]);
+    // Deliberately NOT authorized — unresolvedGapPolicy stays null.
+    expect((await getOrchestration(orchestration.id))?.unresolvedGapPolicy).toBeNull();
+
+    await upsertCoverage({
+      orchestrationId: orchestration.id,
+      requirementId: requirement!.id,
+      status: 'MISSING',
+      confidence: 0.2,
+      reasons: ['Nothing in the archive answers it.'],
+      claimIds: [],
+      documentIds: [],
+      needsResearch: true,
+    });
+    await makeFragment(orchestration, {
+      fragmentKey: 'exhausted',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+      attempt: 2,
+      maxRepairs: 2,
+      requirementIds: [requirement!.id],
+    });
+    const done = await makeFragment(orchestration, { fragmentKey: 'answered', fragmentIndex: 1 });
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', done);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(done.id);
+    await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+    const verify = await claimNextOf('RESEARCH_VERIFY');
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: true, ...MATCHES, note: 'Reads directly.' }],
+      sufficiency: 'SUFFICIENT',
+    });
+    await call('brain_complete_work', { ...proof(verify), summary: 'verified' });
+
+    for (let i = 0; i < 3; i += 1) await advancePacket(orchestration.id);
+
+    // The gap is untouched, nothing was narrowed, and no synthesis exists.
+    const [entry] = await listCoverage(orchestration.id);
+    expect(entry?.status).toBe('MISSING');
+    const after = await getOrchestration(orchestration.id);
+    expect(after?.status).toBe('NEEDS_HUMAN');
+    expect(after?.failureReason).toContain('mandatory');
+    expect(
+      (await listWorkItems(project.id, { limit: 100 })).filter(
+        (item) =>
+          item.orchestrationId === orchestration.id && item.workType === 'RESEARCH_SYNTHESIZE',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('is scoped to the packet: authorizing one leaves its neighbour stopped', async () => {
+    const build = async (
+      authorize: boolean,
+    ): Promise<ResearchOrchestration> => {
+      const orchestration = await makeOrchestration();
+      const [requirement] = await createRequirements([
+        {
+          orchestrationId: orchestration.id,
+          projectId: project.id,
+          layerId: layer.id,
+          requirementKey: 'exhausted',
+          ordinal: 0,
+          statement: 'Whether Texas requires a licence.',
+          necessity: 'MANDATORY',
+          kind: 'RESEARCH',
+        },
+      ]);
+      if (authorize) {
+        await updateOrchestration(orchestration.id, {
+          unresolvedGapPolicy: 'RECORD_GAPS',
+          unresolvedGapAuthorizedBy: 'usr_operator',
+          unresolvedGapAuthorizedAt: new Date().toISOString(),
+        });
+      }
+      await upsertCoverage({
+        orchestrationId: orchestration.id,
+        requirementId: requirement!.id,
+        status: 'MISSING',
+        confidence: 0.2,
+        reasons: ['Nothing in the archive answers it.'],
+        claimIds: [],
+        documentIds: [],
+        needsResearch: true,
+      });
+      await makeFragment(orchestration, {
+        fragmentKey: 'exhausted',
+        fragmentIndex: 0,
+        status: 'BLOCKED',
+        attempt: 2,
+        maxRepairs: 2,
+        requirementIds: [requirement!.id],
+      });
+      await makeFragment(orchestration, { fragmentKey: 'answered', fragmentIndex: 1, status: 'ACCEPTED' });
+      return orchestration;
+    };
+
+    const authorized = await build(true);
+    const untouched = await build(false);
+
+    await advancePacket(authorized.id);
+    await advancePacket(untouched.id);
+
+    expect((await listCoverage(authorized.id))[0]?.status).toBe('NOT_REQUIRED');
+    expect((await listCoverage(untouched.id))[0]?.status).toBe('MISSING');
   });
 
   it('does not fire while the fragment still has a repair attempt left', async () => {

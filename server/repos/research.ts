@@ -33,6 +33,9 @@ import { buildUpdate, fromBool, newId, nowIso, parseJson, toBool, toJson } from 
 
 function mapOrchestration(row: ResearchOrchestrationRow): ResearchOrchestration {
   return {
+    unresolvedGapPolicy: row.unresolved_gap_policy === 'RECORD_GAPS' ? 'RECORD_GAPS' : null,
+    unresolvedGapAuthorizedBy: row.unresolved_gap_authorized_by ?? null,
+    unresolvedGapAuthorizedAt: row.unresolved_gap_authorized_at ?? null,
     id: row.id,
     projectId: row.project_id,
     layerId: row.layer_id,
@@ -323,6 +326,9 @@ export interface UpdateOrchestrationInput {
   autoApprove?: boolean;
   approvedAt?: string | null;
   approvalNote?: string | null;
+  unresolvedGapPolicy?: 'RECORD_GAPS' | null;
+  unresolvedGapAuthorizedBy?: string | null;
+  unresolvedGapAuthorizedAt?: string | null;
 }
 
 export async function updateOrchestration(
@@ -346,6 +352,9 @@ export async function updateOrchestration(
     auto_approve: patch.autoApprove === undefined ? undefined : fromBool(patch.autoApprove),
     approved_at: patch.approvedAt,
     approval_note: patch.approvalNote,
+    unresolved_gap_policy: patch.unresolvedGapPolicy,
+    unresolved_gap_authorized_by: patch.unresolvedGapAuthorizedBy,
+    unresolved_gap_authorized_at: patch.unresolvedGapAuthorizedAt,
   });
   if (!clause) return getOrchestration(id);
   await getDb().run(`UPDATE research_orchestrations SET ${clause}, updated_at = ? WHERE id = ?`, [

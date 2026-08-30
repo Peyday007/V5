@@ -900,6 +900,10 @@ export interface ProviderConnectionRow {
 }
 
 export interface ResearchOrchestrationRow {
+  /** Null unless a person authorized recording unresolved gaps for this packet. */
+  unresolved_gap_policy: string | null;
+  unresolved_gap_authorized_by: string | null;
+  unresolved_gap_authorized_at: string | null;
   id: string;
   project_id: string;
   layer_id: string;
@@ -1899,6 +1903,14 @@ export interface ProviderConnection {
  * not pass, which is a different thing from a job that failed.
  */
 export interface ResearchOrchestration {
+  /**
+   * Set only when a person has authorized this packet to record unresolved
+   * gaps rather than stop. Null on every packet unless somebody said so, and
+   * `advancePacket` refuses to convert an exhausted lane without it.
+   */
+  unresolvedGapPolicy: 'RECORD_GAPS' | null;
+  unresolvedGapAuthorizedBy: string | null;
+  unresolvedGapAuthorizedAt: string | null;
   id: string;
   projectId: string;
   layerId: string;

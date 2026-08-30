@@ -629,6 +629,14 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
    * approval, before the per-fragment loops, before the packet check — and
    * everything downstream reads the coverage it wrote.
    *
+   * **And only when a person has authorized it for this packet.** Narrowing a
+   * goal is a decision about one packet, not something the runner does because
+   * it is stuck. Left as a default it would mean a Brain that can always
+   * declare its way to "complete", which is the exact failure invariant 20
+   * exists to prevent — I shipped it that way once and it was wrong. A packet
+   * with no policy set and an exhausted mandatory requirement stops at
+   * NEEDS_HUMAN and stays there, which is the honest outcome.
+   *
    * Idempotent: it skips any requirement already NOT_REQUIRED and returns the
    * number it closed, so a second call on the same state closes zero and the
    * re-derive below cannot loop. It creates no work items itself, so it cannot
@@ -636,6 +644,7 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
    * `alreadyCreated` guards are what mint, and they are untouched.
    */
   if (
+    orchestration.unresolvedGapPolicy === 'RECORD_GAPS' &&
     !items.some((item) => LIVE_ITEM.has(item.state)) &&
     !fragments.some((fragment) => fragment.status === 'PLANNED')
   ) {
