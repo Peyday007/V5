@@ -141,20 +141,32 @@ same count. The live Step 9 packet spent a day in exactly that state.
 
 ### 3b. What a packet does not answer is recorded, if a person authorized it
 
-Two things can leave a requirement unanswered with no way for the runner to fix
-it, and under `RECORD_GAPS` both are declared as gaps rather than held open:
+The condition is one thing: **the fragment is BLOCKED and this path cannot make
+it researchable again.** On the pull path that is every BLOCKED fragment, for a
+structural reason — §15 requires a repair to search differently from every
+attempt before it, `repair.ts` chooses that strategy, and it is wired only to
+the in-process path. The runner therefore cannot mint a second attempt at any
+attempt count, and one it did mint would re-run a lane the last attempt already
+exhausted.
 
-- **Research that ran out.** The fragment is BLOCKED and `attempt >=
-  maxRepairs`. A fragment that has failed *once* still has a real repair
-  available and is left alone.
-- **Research that could never start.** The fragment is BLOCKED because a
-  prerequisite of its own finished without being accepted. Its attempt count is
-  irrelevant — no attempt at it helps — and the prerequisite that stranded it is
-  written off in the same breath. A packet cannot declare the penalty question
-  out of scope while holding the trigger question open, when the only reason the
-  penalty is unanswerable is that the trigger is. They are one unresolved area.
+The reason is still recorded per fragment, because these are different facts
+about the packet even when they have the same consequence:
 
-The authorization is per packet and carries who made it and when
+- `REPAIRS_EXHAUSTED` — it used its repair budget.
+- `DEPENDENCY_UNMET` — a prerequisite of it ended without being accepted.
+- `STRANDED_A_DEPENDENT` — it is the prerequisite that did that to another.
+- `NO_PLANNABLE_REPAIR` — its evidence failed the gate and no further attempt
+  exists that this packet can plan.
+
+A prerequisite is written off together with what it stranded: a packet cannot
+declare the penalty question out of scope while holding the trigger question
+open, when the only reason the penalty is unanswerable is that the trigger is.
+
+**What keeps this narrow is not the attempt count.** It is the guard on the pass
+— nothing live, nothing awaiting approval, and nothing startable — because
+research that has not been attempted may yet answer the requirement a blocked
+fragment failed on. And before any of it, a person having authorized this
+packet. The authorization is per packet and carries who made it and when
 (`unresolved_gap_policy`, `..._authorized_by`, `..._authorized_at`; see
 `services/research/gapPolicy.ts`). Without it the packet stops at NEEDS_HUMAN and
 stays there, however often the runner is called — a Brain that could always

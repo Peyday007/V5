@@ -486,28 +486,40 @@ async function blockOnFailedDependency(input: {
  * Returns how many requirements it closed, so the caller can re-derive rather
  * than guess what changed.
  *
- * Two things are unresolved, for two different reasons, and both are gaps:
+ * **The condition is one thing: the fragment is BLOCKED and this path cannot
+ * make it researchable again.** On the pull path that is every BLOCKED
+ * fragment, and the reason is structural rather than incidental. §15 requires a
+ * repair to search differently from every attempt before it; `repair.ts` is
+ * what chooses that strategy from a named ladder filtered against earlier
+ * attempts; and it is wired only to the in-process path. So the runner cannot
+ * mint a second attempt at any attempt count — one that it did mint would
+ * re-run a lane the last attempt already exhausted, which is the one thing
+ * Option A forbids outright.
  *
- * **Research that ran out.** The fragment is BLOCKED and `attempt >=
- * maxRepairs`. `>=` rather than `>` because that is the line `retryFragment`
- * uses, and nothing on this path can plan the attempt it would allow: §15
- * requires a repair to search differently from every attempt before it,
- * `repair.ts` chooses that strategy, and it is wired only to the in-process
- * path. A fragment that has failed once still has a real repair available and
- * is left alone.
+ * **An earlier version of this drew the line at the repair budget, and that was
+ * wrong.** It wrote off a fragment at `attempt >= maxRepairs` and left one at
+ * attempt 1 alone, "because a fragment that has failed once still has a real
+ * repair available". The repair it means is `retryFragment` — an *operator*
+ * pressing a control, not something the runner can do — so the sentence was
+ * true about a person and false about this code. The live packet made the
+ * difference visible: `extraterritorial-nexus` sat BLOCKED at attempt 1 of 2
+ * with no dependencies and nothing behind it, holding the last open mandatory
+ * requirement, with an empty queue that no worker session could ever refill.
+ * Waiting for a worker meant waiting forever.
  *
- * **Research that could never start.** The fragment is BLOCKED because a
- * prerequisite of its own finished without being accepted. No attempt at *it*
- * helps, whatever its attempt count says, so the repair budget is not the
- * question — and the prerequisite that stranded it is written off in the same
- * breath. That second half is not generosity: a packet cannot declare the
- * penalty question out of scope while holding the trigger question open, when
- * the only reason the penalty is unanswerable is that the trigger is. They are
- * one unresolved area and they are declared together.
+ * The reason is still recorded per fragment, because "its research ran out",
+ * "its prerequisite never arrived" and "its evidence failed the gate" are
+ * different facts about the packet even when they have the same consequence.
+ * And a prerequisite that stranded a dependent is written off with it: a packet
+ * cannot declare the penalty question out of scope while holding the trigger
+ * question open, when the only reason the penalty is unanswerable is that the
+ * trigger is. They are one unresolved area and are declared together.
  *
- * The narrow case stays narrow. A lone BLOCKED fragment with a repair left and
- * nothing waiting behind it is not written off by either rule; the packet stops
- * at NEEDS_HUMAN and a person decides, which is the honest outcome.
+ * What keeps this narrow is not the attempt count. It is the caller's guard —
+ * nothing live, nothing awaiting approval, nothing startable — and, before all
+ * of it, a person having authorized this packet to record gaps at all. Remove
+ * the authorization and the packet stops at NEEDS_HUMAN and stays there, which
+ * is what invariant 20 is for.
  */
 async function recordUnresolvedGaps(input: {
   orchestration: ResearchOrchestration;
@@ -517,18 +529,25 @@ async function recordUnresolvedGaps(input: {
   const byKey = new Map(fragments.map((fragment) => [fragment.fragmentKey, fragment]));
 
   const writtenOff = new Map<string, ResearchFragment>();
+  const because = new Map<string, string>();
   for (const fragment of fragments) {
     if (fragment.status !== 'BLOCKED') continue;
-    if (fragment.attempt >= fragment.maxRepairs) {
-      writtenOff.set(fragment.id, fragment);
-      continue;
-    }
     const unmet = unmetDependencies(fragment, byKey);
-    if (unmet.length === 0) continue;
     writtenOff.set(fragment.id, fragment);
+    because.set(
+      fragment.id,
+      unmet.length > 0
+        ? 'DEPENDENCY_UNMET'
+        : fragment.attempt >= fragment.maxRepairs
+          ? 'REPAIRS_EXHAUSTED'
+          : 'NO_PLANNABLE_REPAIR',
+    );
+    // The prerequisite goes with its dependent, whatever state it ended in.
     for (const entry of unmet) {
       const dependency = byKey.get(entry.key);
-      if (dependency) writtenOff.set(dependency.id, dependency);
+      if (!dependency || writtenOff.has(dependency.id)) continue;
+      writtenOff.set(dependency.id, dependency);
+      because.set(dependency.id, 'STRANDED_A_DEPENDENT');
     }
   }
   if (writtenOff.size === 0) return 0;
@@ -570,15 +589,21 @@ async function recordUnresolvedGaps(input: {
   };
 
   for (const fragment of unresolved) {
-    const why =
-      fragment.attempt >= fragment.maxRepairs
-        ? `Research exhausted after ${fragment.attempt} attempt(s): ` +
-          `${fragment.blockedReason ?? 'no evidence path remained'}. Recorded as an unresolved ` +
-          'gap rather than answered, and the packet is filed without it.'
-        : `Left unresolved: ${fragment.blockedReason ?? 'its research could not proceed'} ` +
-          'Recorded as an unresolved gap rather than answered, and the packet is filed ' +
-          'without it.';
-    await close(fragment, why);
+    const reason = fragment.blockedReason ?? 'no evidence path remained';
+    const lead =
+      because.get(fragment.id) === 'REPAIRS_EXHAUSTED'
+        ? `Research exhausted after ${fragment.attempt} attempt(s)`
+        : because.get(fragment.id) === 'DEPENDENCY_UNMET'
+          ? 'Never researchable: a prerequisite of it ended without being accepted'
+          : because.get(fragment.id) === 'STRANDED_A_DEPENDENT'
+            ? 'Unresolved, and other fragments were waiting on it'
+            : `Unresolved after ${fragment.attempt} attempt(s), with no further attempt this ` +
+              'packet can plan';
+    await close(
+      fragment,
+      `${lead}: ${reason} Recorded as an unresolved gap rather than answered, and the packet ` +
+        'is filed without it.',
+    );
   }
 
   // Nothing was narrowed, so nothing happened. Returning before the event
@@ -606,8 +631,7 @@ async function recordUnresolvedGaps(input: {
         status: fragment.status,
         attempt: fragment.attempt,
         maxRepairs: fragment.maxRepairs,
-        because:
-          fragment.attempt >= fragment.maxRepairs ? 'REPAIRS_EXHAUSTED' : 'DEPENDENCY_UNMET',
+        because: because.get(fragment.id) ?? 'NO_PLANNABLE_REPAIR',
       })),
       requirementsClosed: closed,
     },
@@ -765,7 +789,13 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
   if (
     orchestration.unresolvedGapPolicy === 'RECORD_GAPS' &&
     !items.some((item) => LIVE_ITEM.has(item.state)) &&
-    !fragments.some((fragment) => fragment.status === 'PLANNED')
+    !fragments.some((fragment) => fragment.status === 'PLANNED') &&
+    // And nothing that could still be started. This is the guard that keeps
+    // the rule narrow now that the attempt count no longer does: research that
+    // has not been attempted may yet answer the requirement a blocked fragment
+    // failed on, so writing anything off while a fragment is startable would
+    // narrow the goal ahead of the evidence.
+    readyToResearch(fragments).length === 0
   ) {
     const closed = await recordUnresolvedGaps({ orchestration, fragments });
     if (closed > 0) return await advancePacket(orchestrationId);

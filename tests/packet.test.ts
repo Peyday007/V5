@@ -957,7 +957,24 @@ describe('a research gap that is genuinely exhausted', () => {
     expect((await listCoverage(untouched.id))[0]?.status).toBe('MISSING');
   });
 
-  it('does not fire while the fragment still has a repair attempt left', async () => {
+  /**
+   * The reversal, recorded rather than quietly dropped.
+   *
+   * This test used to assert that a fragment BLOCKED at attempt 1 of 2 was left
+   * alone, "because a fragment that has failed once still has a real repair
+   * available". The repair it meant is `retryFragment` — an operator pressing a
+   * control — so the sentence was true about a person and false about the
+   * runner, which has no repair planner on this path at any attempt count.
+   *
+   * The live packet made the difference visible: `extraterritorial-nexus` sat
+   * BLOCKED at attempt 1 of 2 with no dependencies and nothing behind it,
+   * holding the last open mandatory requirement, over a queue that no worker
+   * session could ever refill. Left alone meant left forever.
+   *
+   * So an authorized packet writes it off too, and what keeps the rule narrow
+   * is the caller's guard rather than the attempt count — see the test below.
+   */
+  it('writes off a fragment whose repair this path cannot plan, at any attempt count', async () => {
     const orchestration = await makeOrchestration();
     const [requirement] = await createRequirements([
       {
@@ -1007,7 +1024,65 @@ describe('a research gap that is genuinely exhausted', () => {
     await advancePacket(orchestration.id);
 
     const [entry] = await listCoverage(orchestration.id);
-    expect(entry?.status).toBe('MISSING');
+    expect(entry?.status).toBe('NOT_REQUIRED');
+    // Named for what it is: not exhausted repairs, and not a failed
+    // prerequisite — a fragment this packet has no further attempt to give.
+    expect(entry?.userOverride ?? '').toContain('no further attempt');
+  });
+
+  /**
+   * And the guard that replaced the attempt count.
+   *
+   * Research that has not been attempted may yet answer the requirement a
+   * blocked fragment failed on, so nothing is written off while a fragment is
+   * still startable. Without this the broadened rule would narrow the goal
+   * ahead of the evidence, which is the failure Option A exists to avoid.
+   */
+  it('does not fire while another fragment could still be researched', async () => {
+    const orchestration = await makeOrchestration();
+    const [requirement] = await createRequirements([
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requirementKey: 'trigger',
+        ordinal: 0,
+        statement: 'Whether Texas requires a licence.',
+        necessity: 'MANDATORY',
+        kind: 'RESEARCH',
+      },
+    ]);
+    await updateOrchestration(orchestration.id, {
+      unresolvedGapPolicy: 'RECORD_GAPS',
+      unresolvedGapAuthorizedBy: 'usr_operator',
+      unresolvedGapAuthorizedAt: new Date().toISOString(),
+    });
+    await makeFragment(orchestration, {
+      fragmentKey: 'trigger',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+      attempt: 2,
+      maxRepairs: 2,
+      requirementIds: [requirement!.id],
+    });
+    // Approved, never attempted, no dependency in its way.
+    await makeFragment(orchestration, { fragmentKey: 'startable', fragmentIndex: 1 });
+    await upsertCoverage({
+      orchestrationId: orchestration.id,
+      requirementId: requirement!.id,
+      status: 'MISSING',
+      confidence: 0.2,
+      reasons: ['Nothing in the archive answers it.'],
+      claimIds: [],
+      documentIds: [],
+      needsResearch: true,
+    });
+
+    const result = await advancePacket(orchestration.id);
+
+    // The startable fragment got its work, and nothing was narrowed.
+    expect(result.enqueued.map((entry) => entry.fragmentKey)).toEqual(['startable']);
+    expect((await listCoverage(orchestration.id))[0]?.status).toBe('MISSING');
   });
 
   it('does not fire while any work is still live', async () => {
@@ -3141,15 +3216,38 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
     expect((settled.get('RESEARCH_SYNTHESIZE') ?? []).length).toBe(1);
     expect((settled.get('RESEARCH_AUDIT') ?? []).length).toBe(3);
 
-    // One gap event, not one per advance. `project_events` is append-only, so
-    // an event written on every pass past an already-recorded gap is permanent
-    // noise in the packet's own history.
-    const gapEvents = (await listEvents(project.id, 500)).filter(
-      (event) =>
-        event.eventType === 'RESEARCH_COVERAGE_GAP' &&
-        event.payload['orchestrationId'] === orchestration.id,
+    /**
+     * One gap event per narrowing, and none per advance.
+     *
+     * The packet narrows in two waves — the faulted fragment first, then the
+     * dependents once they are terminal — so two events is the honest record
+     * and one would be a lie about when the second decision was taken. What
+     * must never happen is an event on a pass that closed nothing:
+     * `project_events` is append-only, so that noise would be permanent and
+     * would grow on every boot.
+     */
+    const gapEvents = async (): Promise<Record<string, unknown>[]> =>
+      (await listEvents(project.id, 500))
+        .filter(
+          (event) =>
+            event.eventType === 'RESEARCH_COVERAGE_GAP' &&
+            event.payload['orchestrationId'] === orchestration.id,
+        )
+        .map((event) => event.payload);
+
+    const events = await gapEvents();
+    expect(events.length).toBeGreaterThan(0);
+    for (const payload of events) expect(payload['requirementsClosed']).toBeGreaterThan(0);
+    // Three requirements narrowed in total, each exactly once.
+    const closedTotal = events.reduce(
+      (total, payload) => total + (payload['requirementsClosed'] as number),
+      0,
     );
-    expect(gapEvents).toHaveLength(1);
+    expect(closedTotal).toBe(3);
+
+    // And advancing again adds none.
+    await churn();
+    expect(await gapEvents()).toHaveLength(events.length);
   });
 
   /**

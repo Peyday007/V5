@@ -315,6 +315,34 @@ packet was skipped whatever the attempt count was. It is the second vacuous test
 in this step. Both were found by asking what the test would do if the rule were
 deleted; both should have been found by writing them that way.
 
+## Fault 31 — the repair budget was the wrong line
+
+Deploying 27-29 moved the packet a long way and stopped it one requirement short.
+The rows said why: `extraterritorial-nexus`, BLOCKED at attempt 1 of 2, no
+dependencies, nothing waiting behind it, holding the last open mandatory
+requirement — and an empty queue that no worker session could ever refill.
+
+The rule that spared it was mine, from that same batch: *a fragment that has
+failed once still has a real repair available and is left alone.* The repair it
+means is `retryFragment`, which is an operator pressing a control. The runner
+has no repair planner on this path at any attempt count — `repair.ts` chooses
+the strategy and is wired only to the in-process path — so the sentence was true
+about a person and false about the code enforcing it. I had reasoned about the
+budget rather than about what the packet could actually do with it.
+
+So the condition is now what it should always have been: BLOCKED, and no further
+attempt this path can plan. What keeps it narrow moved to where the question is
+really asked — the pass already required nothing live and nothing awaiting
+approval, and now also requires nothing startable, because research that has not
+been attempted may yet answer the requirement a blocked fragment failed on.
+
+| # | Fault | Fix |
+|---|---|---|
+| 31 | An authorized packet was held open by a fragment nothing could restart | Write off a BLOCKED fragment whose repair this path cannot plan, at any attempt count, and record which of the four reasons applies. Guard the pass on nothing being startable rather than on the attempt count. |
+
+The gap event follows the narrowing rather than the advance: a packet that
+narrows in two waves records two, and a pass that closes nothing records none.
+
 ## Still open
 
 - Ten fragments remain queued; California is on attempt 2 and Texas is ungated.
