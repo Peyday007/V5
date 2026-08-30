@@ -105,14 +105,22 @@ async function main(): Promise<void> {
   // --- Report -------------------------------------------------------------
   console.log('CAPABILITY ACCEPTANCE');
   let failed = 0;
+  let vacuous = 0;
   for (const clause of clauses) {
     if (!clause.ok) failed += 1;
-    console.log(`  ${clause.ok ? 'PASS' : 'FAIL'}  ${clause.id.padEnd(4)} ${clause.what}`);
+    else if (clause.vacuous) vacuous += 1;
+    // Three states, not two. A clause the packet gave nothing to judge has not
+    // passed, and printing it as PASS is how an instrument flatters what it
+    // measures.
+    const mark = !clause.ok ? 'FAIL' : clause.vacuous ? 'N/EX' : 'PASS';
+    console.log(`  ${mark}  ${clause.id.padEnd(4)} ${clause.what}`);
     console.log(`              ${clause.detail}`);
   }
+  const passed = clauses.length - failed - vacuous;
   console.log(
-    `\n${clauses.length - failed}/${clauses.length} clauses passed.` +
-      (failed > 0 ? ' The packet does not meet the capability contract.' : ''),
+    `\n${passed}/${clauses.length} clauses passed` +
+      (vacuous > 0 ? `, ${vacuous} not exercised by this packet` : '') +
+      (failed > 0 ? `, ${failed} failed. The packet does not meet the capability contract.` : '.'),
   );
   // Fragment keys, so a reader can see the breadth rather than infer it.
   console.log(`\nFragments: ${fragments.map((f) => `${f.fragmentKey}:${f.status}`).join(', ')}`);

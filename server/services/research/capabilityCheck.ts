@@ -27,6 +27,16 @@ export interface Clause {
   what: string;
   ok: boolean;
   detail: string;
+  /**
+   * True when the packet contained nothing for this clause to judge.
+   *
+   * A clause nothing exercised is not a clause that passed, and printing it as
+   * PASS is how an instrument flatters the thing it is measuring. The first
+   * live packet "passed" the conditional-dependents clause because it had no
+   * conditional dependency at all — every one was HARD, which is precisely the
+   * defect. Vacuous passes are reported as NOT EXERCISED and counted apart.
+   */
+  vacuous?: boolean;
 }
 
 export interface CapabilityInput {
@@ -61,8 +71,8 @@ export function evaluateCapability(input: CapabilityInput): Clause[] {
   } = input;
   const live = items.filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
   const clauses: Clause[] = [];
-  const check = (id: string, what: string, ok: boolean, detail: string): void => {
-    clauses.push({ id, what, ok, detail });
+  const check = (id: string, what: string, ok: boolean, detail: string, vacuous = false): void => {
+    clauses.push({ id, what, ok, detail, vacuous });
   };
 
   // --- P1. Accepted evidence is never discarded --------------------------
@@ -78,11 +88,26 @@ export function evaluateCapability(input: CapabilityInput): Clause[] {
         (fragment) => fragment.id === claim.fragmentId && fragment.status === 'BLOCKED',
       ),
   ).length;
+  /**
+   * A note on what this clause can and cannot tell you.
+   *
+   * `citable` comes from `citableClaims`, which is the *corrected* query. Run
+   * against a packet researched before the correction it reports what would
+   * reach synthesis today, not what reached it then — so it passes on the first
+   * live packet, and the number it prints is the size of the regression rather
+   * than evidence against it: 40 citable against 17 that were actually used.
+   *
+   * So this verifies the carrying mechanism is in place, and it is honest to
+   * say so rather than to let a pass read as proof the packet did the right
+   * thing. What discriminates on a real packet is P2, P3 and P3c.
+   */
   check(
     'P1',
     'accepted claims from blocked fragments still reach synthesis',
     acceptedInBlocked === 0 || fromBlocked >= acceptedInBlocked,
-    `${acceptedInBlocked} accepted claim(s) sit in blocked fragments; ${fromBlocked} of them are citable`,
+    `${acceptedInBlocked} accepted claim(s) sit in blocked fragments; ${fromBlocked} of them are citable` +
+      ' (measures the mechanism, not what this packet used at the time)',
+    acceptedInBlocked === 0,
   );
 
   // And they must be annotated rather than silently promoted: an accepted claim
@@ -144,6 +169,31 @@ export function evaluateCapability(input: CapabilityInput): Clause[] {
     conditional.length === 0
       ? 'no conditional dependency in this packet'
       : `${conditional.length} conditional dependent(s), ${conditionalStranded.length} stranded`,
+    conditional.length === 0,
+  );
+
+  /**
+   * And the failure the first live packet actually shows, which P3 misses.
+   *
+   * That packet passed P3 vacuously: it had no conditional dependency, because
+   * every dependency was HARD — and three fragments were CANCELLED behind them,
+   * which is the whole defect. A dependent cancelled for its dependency's
+   * failure is the thing typed dependencies exist to stop, so it is checked
+   * directly rather than inferred from the absence of a kind nobody used.
+   */
+  const cancelledBehind = fragments.filter(
+    (fragment) =>
+      fragment.status === 'CANCELLED' &&
+      (fragment.dependsOn.length > 0 ||
+        (fragment.cancelledReason ?? '').toLowerCase().includes('depend')),
+  );
+  check(
+    'P3c',
+    'no dependent was cancelled for its dependency failing',
+    cancelledBehind.length === 0,
+    cancelledBehind.length === 0
+      ? 'nothing was cancelled behind a dependency'
+      : cancelledBehind.map((fragment) => fragment.fragmentKey).join(', '),
   );
 
   // The planner must have typed them at all. A packet whose every dependency is
@@ -172,6 +222,10 @@ export function evaluateCapability(input: CapabilityInput): Clause[] {
     'unreadable sources are recorded as unresolved, not rejected',
     misblamed.length === 0,
     `${unread.length} claim(s) with an unread source; ${misblamed.length} wrongly carry a rejection reason`,
+    // Nothing recorded a blocked source, so nothing exercised the rule. On a
+    // packet from before the column existed every row reads RETRIEVED, which
+    // would otherwise be a pass meaning "the question was never asked".
+    unread.length === 0,
   );
 
   // --- P5. One activation drained the authorized lifecycle ----------------
@@ -203,8 +257,19 @@ export function evaluateCapability(input: CapabilityInput): Clause[] {
     const dangling = [...new Set(cited)].filter((claimId) => !known.has(claimId));
     check('P6b', 'every citation resolves to a citable claim', dangling.length === 0,
       `${new Set(cited).size} distinct citation(s); ${dangling.length} unresolvable`);
-    check('P6c', 'incomplete coverage is stated in the report', annotated === 0 || text.includes('coverage'),
-      annotated === 0 ? 'nothing to annotate' : 'the report names the incomplete fragments');
+    // The detail said "the report names the incomplete fragments" whether or
+    // not it did — a diagnostic that reports the pass wording on a failure,
+    // which is the class of defect that already cost this project three
+    // deploys. It now says which of the two happened.
+    const statesCoverage = text.includes('coverage');
+    check('P6c', 'incomplete coverage is stated in the report',
+      annotated === 0 || statesCoverage,
+      annotated === 0
+        ? 'nothing to annotate'
+        : statesCoverage
+          ? `the report names the ${annotated} incomplete claim(s)`
+          : `${annotated} claim(s) carried from blocked fragments and the report never says so`,
+      annotated === 0);
   } else {
     check('P6', 'the canonical artifact is readable from the store', false,
       'no document on the orchestration, or its object could not be read');

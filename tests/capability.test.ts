@@ -572,6 +572,56 @@ describe('the capability check', () => {
     expect(failing(clauses)).toContain('P6b');
   });
 
+  /**
+   * The failure the first live packet actually shows, and which the
+   * conditional-dependent clause misses.
+   *
+   * It passed that clause *vacuously*: it had no conditional dependency,
+   * because every dependency was HARD — and three fragments were cancelled
+   * behind them, which is the defect itself.
+   */
+  it('fails a packet that cancelled a dependent behind its dependency', () => {
+    const clauses = evaluateCapability(
+      input({
+        fragments: [
+          fragment({ id: 'f1', fragmentKey: 'trigger', status: 'BLOCKED', attempt: 2, maxRepairs: 2 }),
+          fragment({
+            id: 'f2',
+            fragmentKey: 'penalty',
+            status: 'CANCELLED',
+            dependsOn: [{ key: 'trigger', kind: 'HARD' }],
+          }),
+        ],
+      }),
+    );
+    // P3 does not catch it — there is no conditional dependency to strand —
+    // and it is reported as not exercised rather than as a pass.
+    const p3 = clauses.find((clause) => clause.id === 'P3')!;
+    expect(p3.ok).toBe(true);
+    expect(p3.vacuous).toBe(true);
+    // P3c does.
+    expect(failing(clauses)).toContain('P3c');
+  });
+
+  /**
+   * A clause the packet gave nothing to judge has not passed.
+   *
+   * Printing it as PASS is how an instrument flatters the thing it measures,
+   * and it is the reason the run above read 11/14 when three of the eleven
+   * were questions nobody had asked.
+   */
+  it('marks a clause nothing exercised as not exercised, rather than passed', () => {
+    const clauses = evaluateCapability(input());
+    const byId = new Map(clauses.map((clause) => [clause.id, clause]));
+    // No blocked fragments, no conditional dependencies, no unread sources.
+    for (const id of ['P1', 'P3', 'P4']) {
+      expect(byId.get(id)!.ok).toBe(true);
+      expect(byId.get(id)!.vacuous).toBe(true);
+    }
+    // And a clause the packet did exercise is a real pass.
+    expect(byId.get('P5')!.vacuous).toBe(false);
+  });
+
   it('fails a declared gap with no reason on it', () => {
     const clauses = evaluateCapability(
       input({
