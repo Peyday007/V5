@@ -217,6 +217,23 @@ A verification you cannot complete is released, not completed — the section
 above. And verifying your own research is a weak check even when it turns up
 adverse findings, so say so in your report when that is what happened.
 
+### Writing the report
+
+**The claim ids are in the assignment here too.** `brain_get_assignment` on a
+`RESEARCH_SYNTHESIZE` item hands back `claims_to_cite`: every claim in the packet
+that cleared the gate, each with the id to cite it by, the sentence it
+establishes, its source and the fragment that established it.
+
+Cite by id, and cite only from that list. `brain_submit_synthesis` resolves every
+`cited_claim_id` against the accepted claims and refuses the **whole report** if
+one does not resolve — not the sentence, the report. Rejected claims and blocked
+fragments contribute nothing, and the list you are given already excludes them.
+
+Say what is missing rather than filling it. A packet reaches synthesis with
+unresolved gaps recorded against it on purpose; a report that quietly reads as
+though the whole assignment were answered is worse than a thin one that names
+what it could not establish.
+
 ## 9. Failing
 
 - Retryable failure: a transient condition that a later attempt could genuinely

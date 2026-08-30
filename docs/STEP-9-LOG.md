@@ -343,6 +343,39 @@ been attempted may yet answer the requirement a blocked fragment failed on.
 The gap event follows the narrowing rather than the advance: a packet that
 narrows in two waves records two, and a pass that closes nothing records none.
 
+## Fault 32 — the synthesis could not be written by the worker it was for
+
+Caught by reading the code before the worker got there, which is the only reason
+it did not cost another hour.
+
+`brain_submit_synthesis` refuses a report whose citations do not resolve to
+accepted claims — the whole report, not the offending sentence. Nothing on the
+tool surface hands a worker those ids. A synthesis work item has no fragment, so
+`assignmentFor` returned the orchestration, the sibling keys, and `claimsToVerify:
+null`. There is no `brain_list_claims`. The report was therefore writable only by
+a session that had submitted the claims itself and still had the ids in front of
+it.
+
+**This is the verification deadlock again, one stage later, and it hid the same
+way.** Every test in `packet.test.ts` reads ids with `listClaimsForFragment` —
+the database, which a worker does not have — and the hosted harness keeps them
+in a local variable left over from its own `brain_submit_claims`. Neither
+crosses the session boundary, so neither could see the gap. Third time.
+
+The assignment for a synthesis now carries `claimsToCite`: every accepted claim
+in the packet, with the id to cite it by, the sentence, its source and the
+fragment that established it. Never truncated — a report may only cite what the
+gate accepted, so an omitted claim is evidence the packet gathered and then left
+out of its own conclusion.
+
+The test that catches it is the one whose shape matters: it reads **nothing**
+from the database. Every id it cites comes out of `brain_get_assignment`. That
+is the shape every worker-path test should have had from the start.
+
+| # | Fault | Fix |
+|---|---|---|
+| 32 | A synthesis assignment carried no claims and no ids, so no worker could write a citable report | `claimsToCite` on the assignment, populated from `acceptedClaims` for `RESEARCH_SYNTHESIZE` only, plus a test that uses only what the assignment carries. |
+
 ## Still open
 
 - Ten fragments remain queued; California is on attempt 2 and Texas is ungated.

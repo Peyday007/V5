@@ -3162,6 +3162,68 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
     expect(remaining).toHaveLength(0);
   });
 
+  /**
+   * A worker writes the report from the assignment alone.
+   *
+   * `brain_submit_synthesis` refuses a report whose citations do not resolve to
+   * accepted claims — the whole report, not the sentence — and until now the
+   * assignment for a synthesis item carried no claims and no ids. A synthesis
+   * item has no fragment, so `claimsToVerify` was null and there was nothing
+   * else to read. The report was writable only by a session that had submitted
+   * the claims itself and still had the ids in front of it.
+   *
+   * Every test in this file, and the hosted harness, were exactly that session:
+   * they take ids from `listClaimsForFragment` or from a local variable left
+   * over from `brain_submit_claims`. The gap could not show. It is the same
+   * blind spot that hid the verification deadlock a stage earlier, and the only
+   * test shape that catches it is this one — **nothing here reads the
+   * database.** Every id used comes out of `brain_get_assignment`.
+   */
+  it('hands the synthesis the accepted ledger, so the report is writable from the assignment alone', async () => {
+    const { orchestration } = await strandedPacket(true);
+
+    const synth = await claimQueued('RESEARCH_SYNTHESIZE');
+    const value = await call('brain_get_assignment', { work_item_id: synth.workItemId });
+    const assignment = value['assignment'] as Record<string, unknown>;
+    const ledger = assignment['claimsToCite'] as Record<string, unknown>[] | null;
+
+    // The ledger is there, and it is the accepted claims — not every claim
+    // submitted, because a report may only cite what the gate accepted.
+    expect(Array.isArray(ledger)).toBe(true);
+    expect(ledger!.length).toBeGreaterThan(0);
+    expect(ledger!.length).toBe((await acceptedClaims(orchestration.id)).length);
+
+    // Each entry carries what a citation needs: the id to cite it by, the
+    // sentence, where it came from, and which fragment established it.
+    for (const entry of ledger!) {
+      expect(typeof entry['claimId']).toBe('string');
+      expect(typeof entry['claim']).toBe('string');
+      expect(entry['sourceUrl']).toBeTruthy();
+      expect(entry['fragmentKey']).toBeTruthy();
+    }
+
+    // And the report goes in, cited only from what the assignment handed over.
+    const citedIds = ledger!.map((entry) => entry['claimId'] as string);
+    await call('brain_submit_synthesis', {
+      ...proof(synth),
+      report: `The answered question is settled [${citedIds.join('] [')}].`,
+      cited_claim_ids: citedIds,
+    });
+    await call('brain_complete_work', { ...proof(synth), summary: 'filed' });
+
+    expect((await getOrchestration(orchestration.id))?.documentId).not.toBeNull();
+  });
+
+  /** A synthesis ledger is for a synthesis. Nothing else is handed one. */
+  it('carries no ledger on any other kind of work', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration);
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+
+    const value = await call('brain_get_assignment', { work_item_id: research.workItemId });
+    expect((value['assignment'] as Record<string, unknown>)['claimsToCite']).toBeNull();
+  });
+
   it('creates no second of anything, however often it is advanced or restarted', async () => {
     const { orchestration, answeredClaimId } = await strandedPacket(true);
 

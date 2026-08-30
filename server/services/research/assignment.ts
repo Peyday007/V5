@@ -53,7 +53,13 @@ import type {
   WorkItem,
   WorkItemCheckpoint,
 } from '../../domain/types.ts';
-import { getOrchestration, getFragment, currentFragments, listClaimsForFragment } from '../../repos/research.ts';
+import {
+  acceptedClaims,
+  currentFragments,
+  getFragment,
+  getOrchestration,
+  listClaimsForFragment,
+} from '../../repos/research.ts';
 import { getLayer } from '../../repos/layers.ts';
 import { getProject } from '../../repos/projects.ts';
 import { listCheckpoints } from '../../repos/workQueue.ts';
@@ -90,6 +96,16 @@ export interface AssignmentView {
    * the ones it could not.
    */
   claimsToVerify: ClaimToVerifyView[] | null;
+  /**
+   * The ledger a synthesis is written from: every accepted claim in the packet,
+   * with the id the report has to cite it by.
+   *
+   * Null on every other work type. Never truncated, for the same reason
+   * `claimsToVerify` is not — a report may only cite claims the gate accepted,
+   * so an omitted claim is evidence the packet gathered and then silently left
+   * out of its own conclusion.
+   */
+  claimsToCite: ClaimToCiteView[] | null;
 }
 
 /**
@@ -116,6 +132,25 @@ export interface ClaimToVerifyView {
   population: string | null;
   definition: string | null;
   primarySource: boolean;
+}
+
+/**
+ * One accepted claim, as the report has to refer to it.
+ *
+ * Narrower than `ClaimToVerifyView` on purpose: verification needs the scope
+ * fields because judging scope is its whole job, and synthesis needs the id,
+ * the sentence, where it came from and which fragment established it. The
+ * scope questions were answered at the gate and are not reopened here.
+ */
+export interface ClaimToCiteView {
+  claimId: string;
+  fragmentKey: string | null;
+  claim: string;
+  claimType: string;
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+  evidenceExcerpt: string | null;
+  evidenceLocator: string | null;
 }
 
 export interface FragmentView {
@@ -213,6 +248,22 @@ function toVerify(claims: ResearchClaim[]): ClaimToVerifyView[] {
   }));
 }
 
+function toCite(
+  claims: ResearchClaim[],
+  fragmentKeys: Map<string, string>,
+): ClaimToCiteView[] {
+  return claims.map((claim) => ({
+    claimId: claim.id,
+    fragmentKey: claim.fragmentId ? (fragmentKeys.get(claim.fragmentId) ?? null) : null,
+    claim: claim.claim,
+    claimType: claim.claimType,
+    sourceUrl: claim.sourceUrl,
+    sourceTitle: claim.sourceTitle,
+    evidenceExcerpt: claim.evidenceExcerpt,
+    evidenceLocator: claim.evidenceLocator,
+  }));
+}
+
 /** Accepted claims only. A dependency's rejected working is not evidence. */
 function established(claims: ResearchClaim[]): DependencyView['established'] {
   return claims
@@ -293,6 +344,30 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
     claimsToVerify:
       item.workType === 'RESEARCH_VERIFY' && fragment
         ? toVerify(await listClaimsForFragment(fragment.id))
+        : null,
+    /**
+     * The deadlock this closes is the one `claimsToVerify` closed a stage
+     * earlier, and it is the same mistake made twice.
+     *
+     * `brain_submit_synthesis` refuses a report whose citations do not resolve
+     * to accepted claims — the whole report, not the sentence. Nothing handed a
+     * worker those ids: a synthesis item has no fragment, so the assignment
+     * carried the orchestration, the sibling keys and nothing else. The report
+     * was therefore writable only by a session that had submitted the claims
+     * itself and still had the ids in front of it.
+     *
+     * Which is exactly what every test and the hosted harness were: they read
+     * ids from `listClaimsForFragment` or kept them in a local variable, so the
+     * gap could not show. It is the third time that blind spot has cost a live
+     * packet a stop, and the shape of the test that catches it is the one that
+     * reads *only* what the assignment carries.
+     */
+    claimsToCite:
+      item.workType === 'RESEARCH_SYNTHESIZE'
+        ? toCite(
+            await acceptedClaims(orchestration.id),
+            new Map(current.map((candidate) => [candidate.id, candidate.fragmentKey])),
+          )
         : null,
     checkpoints: checkpoints.map((checkpoint: WorkItemCheckpoint) => ({
       attemptNumber: checkpoint.attemptNumber,
