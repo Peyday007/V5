@@ -41,6 +41,7 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     retrievedAt: '2026-01-05',
     confidence: 0.8,
     contradictionState: 'UNCHALLENGED',
+    retrievalState: 'RETRIEVED',
     contradictionNote: null,
     validationState: 'SOURCED',
     validationDetail: null,
@@ -87,6 +88,7 @@ function fragment(overrides: Partial<ResearchFragment> = {}): ResearchFragment {
     completionCriteria: ['a sourced figure'],
     dependsOn: [],
     minIndependentSources: 1,
+    nextRetryAt: null,
     status: 'RUNNING',
     attempt: 1,
     parentFragmentId: null,
@@ -348,6 +350,7 @@ describe('a fragment that is really several', () => {
       failedConditions: ['COVERAGE'],
       reasons: [],
       unresolvedGaps: [],
+      unresolvedRetrieval: [],
     });
 
     expect(signal).toBeTruthy();
@@ -363,7 +366,7 @@ describe('a fragment that is really several', () => {
 describe('the dependency graph', () => {
   it('orders foundations before what rests on them', () => {
     const fragments = [
-      fragment({ fragmentKey: 'downstream', dependsOn: ['definition'], priority: 5 }),
+      fragment({ fragmentKey: 'downstream', dependsOn: [{ key: 'definition', kind: 'HARD' }], priority: 5 }),
       fragment({ fragmentKey: 'definition', dependsOn: [], priority: 1 }),
     ];
     const plan = planDependencies(fragments);
@@ -373,8 +376,8 @@ describe('the dependency graph', () => {
 
   it('surfaces a circular dependency instead of quietly picking a side', () => {
     const fragments = [
-      fragment({ fragmentKey: 'a', dependsOn: ['b'] }),
-      fragment({ fragmentKey: 'b', dependsOn: ['a'] }),
+      fragment({ fragmentKey: 'a', dependsOn: [{ key: 'b', kind: 'HARD' }] }),
+      fragment({ fragmentKey: 'b', dependsOn: [{ key: 'a', kind: 'HARD' }] }),
     ];
     const plan = planDependencies(fragments);
     expect(plan.cycles.length).toBeGreaterThan(0);
@@ -382,7 +385,7 @@ describe('the dependency graph', () => {
   });
 
   it('reports a dependency on a fragment nobody planned', () => {
-    const plan = planDependencies([fragment({ fragmentKey: 'a', dependsOn: ['missing'] })]);
+    const plan = planDependencies([fragment({ fragmentKey: 'a', dependsOn: [{ key: 'missing', kind: 'HARD' }] })]);
     expect(plan.danglingDependencies).toEqual([{ key: 'a', missing: ['missing'] }]);
   });
 });

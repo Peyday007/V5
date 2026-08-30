@@ -46,7 +46,10 @@
  * worker what to say. It says what is being asked and what would count as an
  * answer, which is the difference between an assignment and a script.
  */
+import { bundleKeyFor } from './bundling.ts';
+import { RESEARCH_METHOD_SUMMARY, RESEARCH_METHOD_VERSION } from './method.ts';
 import type {
+  DependencyKind,
   FragmentDependency,
   ResearchClaim,
   ResearchFragment,
@@ -55,7 +58,7 @@ import type {
   WorkItemCheckpoint,
 } from '../../domain/types.ts';
 import {
-  acceptedClaims,
+  citableClaims,
   currentFragments,
   getFragment,
   getOrchestration,
@@ -107,6 +110,37 @@ export interface AssignmentView {
    * out of its own conclusion.
    */
   claimsToCite: ClaimToCiteView[] | null;
+  /**
+   * What each dependency actually established, for a fragment allowed to start
+   * before its dependency succeeded.
+   *
+   * A CONDITIONAL dependent has to carry its condition into its claims — *if
+   * the transaction falls within the statute's scope, then…* — and it cannot do
+   * that without being told what the dependency settled and what it did not.
+   * Null for work that has no fragment.
+   */
+  dependencyOutcomes: DependencyOutcomeView[] | null;
+  /**
+   * Fragments that may safely be researched in the same session as this one:
+   * same scope, same source ecosystem, no dependency between them.
+   *
+   * A hint about batching, not an instruction. Each still has its own work
+   * item, its own lease and its own idempotency scope — one item per bundle
+   * would put several effects under one key, which is what §20 forbids.
+   */
+  bundleKey: string | null;
+  /** The standing research method, and the revision of it this run was given. */
+  method: { version: string; summary: string } | null;
+}
+
+export interface DependencyOutcomeView {
+  key: string;
+  kind: DependencyKind;
+  status: string;
+  /** What it established, if anything, so the dependent can build on it. */
+  established: string[];
+  /** What it did not, so the dependent states that as a condition. */
+  unresolved: string | null;
 }
 
 /**
@@ -318,6 +352,26 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
     }
   }
 
+  const dependencyOutcomes: DependencyOutcomeView[] | null = fragment ? [] : null;
+  if (fragment && dependencyOutcomes) {
+    for (const declared of fragment.dependsOn) {
+      const target = current.find((entry) => entry.fragmentKey === declared.key);
+      dependencyOutcomes.push({
+        key: declared.key,
+        kind: declared.kind,
+        status: target?.status ?? 'ABSENT',
+        established: target
+          ? established(await listClaimsForFragment(target.id)).map((entry) => entry.claim)
+          : [],
+        unresolved:
+          target && target.status === 'ACCEPTED'
+            ? null
+            : (target?.blockedReason ??
+              'This question was not settled, so anything resting on it must be stated as a condition.'),
+      });
+    }
+  }
+
   const layer = await getLayer(orchestration.layerId);
   const project = await getProject(orchestration.projectId);
   const checkpoints = await listCheckpoints(item.id);
@@ -367,10 +421,17 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
     claimsToCite:
       item.workType === 'RESEARCH_SYNTHESIZE'
         ? toCite(
-            await acceptedClaims(orchestration.id),
+            await citableClaims(orchestration.id),
             new Map(current.map((candidate) => [candidate.id, candidate.fragmentKey])),
           )
         : null,
+    /**
+     * What each dependency left behind, for a fragment that was allowed to
+     * start without waiting for it to succeed.
+     */
+    dependencyOutcomes,
+    bundleKey: fragment ? bundleKeyFor(fragment, current) : null,
+    method: { version: RESEARCH_METHOD_VERSION, summary: RESEARCH_METHOD_SUMMARY },
     checkpoints: checkpoints.map((checkpoint: WorkItemCheckpoint) => ({
       attemptNumber: checkpoint.attemptNumber,
       leaseGeneration: checkpoint.leaseGeneration,

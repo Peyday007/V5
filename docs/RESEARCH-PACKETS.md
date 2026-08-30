@@ -267,7 +267,9 @@ read.
 
 ## The tool surface
 
-Ten new tools, taking the permanent surface to twenty-four. Each is a thin
+Ten new tools, taking the permanent surface to twenty-four — twenty-five once
+`brain_research_method` was added to carry the standing method to a worker that
+cannot read this repository. Each is a thin
 wrapper over a service that already existed, and each names a scope that already
 existed.
 

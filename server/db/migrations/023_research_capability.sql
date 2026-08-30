@@ -26,3 +26,17 @@ ALTER TABLE research_fragments ADD COLUMN next_retry_at TEXT;
 -- before this migration keeps the blocking behaviour it was written with. A
 -- backfill would have rewritten history to say something the planner never
 -- decided.
+
+-- Which fragments may be researched in one session: same scope, same source
+-- ecosystem, no dependency between them. `bundling.ts` already worked this out
+-- and only the in-process path could see it, so a pulling worker had no way to
+-- know that three of the items in front of it belonged together.
+--
+-- A name on the item rather than one item per bundle. Bundling several
+-- fragments into a single work item would put them under one Step 6
+-- idempotency scope, and a redelivery could then record one fragment's ledger
+-- against another fragment's key — the exact duplication the scope exists to
+-- prevent. One item per fragment, one key per effect, and a shared name so an
+-- activation can claim the set deliberately.
+ALTER TABLE work_items ADD COLUMN bundle_key TEXT;
+CREATE INDEX IF NOT EXISTS idx_work_items_bundle ON work_items(project_id, orchestration_id, bundle_key);

@@ -206,3 +206,31 @@ export function assertSeparable(
   }
   return { ok: true };
 }
+
+/**
+ * Which bundle this fragment belongs to, named so a worker can see it.
+ *
+ * Bundling already decides which fragments may share one session: same scope,
+ * same source ecosystem, no dependency between them. That analysis was reachable
+ * only from the in-process path, so a pulling worker had no way to know that
+ * three of the items in front of it were safely researched together.
+ *
+ * What it deliberately does **not** do is put them under one work item. That
+ * would give several fragments one Step 6 idempotency scope, and a redelivery
+ * could then record one fragment's ledger against another's key. One item per
+ * fragment, one key per effect, and a shared name so a session can claim the
+ * set on purpose.
+ */
+export function bundleKeyFor(fragment: ResearchFragment, all: ResearchFragment[]): string | null {
+  const bundles = bundleFragments(all.filter((entry) => entry.status !== 'CANCELLED'));
+  const found = bundles.find((bundle) =>
+    bundle.fragments.some((entry) => entry.id === fragment.id),
+  );
+  if (!found || found.fragments.length < 2) return null;
+  // Named from the bundle's members rather than its index, so it is stable
+  // across advances: an index shifts whenever a neighbour is cancelled.
+  return found.fragments
+    .map((entry) => entry.fragmentKey)
+    .sort()
+    .join('+');
+}

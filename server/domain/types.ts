@@ -2998,6 +2998,7 @@ export const WORK_FAILURE_CATEGORIES = [
 export type WorkFailureCategory = (typeof WORK_FAILURE_CATEGORIES)[number];
 
 export interface WorkItemRow {
+  bundle_key?: string | null;
   id: string;
   project_id: string;
   work_type: string;

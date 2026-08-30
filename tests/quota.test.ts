@@ -59,7 +59,7 @@ describe('what the allowance is spent on first', () => {
       brief({ fragmentKey: 'supporting', priority: 5 }),
       brief({ fragmentKey: 'optional', priority: 8 }),
       // Something rests on 'premise', which is what makes it foundational.
-      brief({ fragmentKey: 'dependent', dependsOn: ['premise'] }),
+      brief({ fragmentKey: 'dependent', dependsOn: [{ key: 'premise', kind: 'HARD' }] }),
     ];
     const tier = (key: string) => tierOf(all.find((entry) => entry.fragmentKey === key)!, all).tier;
 
@@ -131,6 +131,7 @@ function fragment(overrides: Partial<ResearchFragment> & { fragmentKey: string }
     completionCriteria: [],
     dependsOn: overrides.dependsOn ?? [],
     minIndependentSources: 2,
+    nextRetryAt: null,
     status: 'QUEUED',
     attempt: 1,
     parentFragmentId: null,
@@ -157,7 +158,7 @@ describe('choosing between fragments that are all ready', () => {
       fragment({ fragmentKey: 'premise', priority: 2, fragmentIndex: 1 }),
       fragment({ fragmentKey: 'boundary', requirementIds: [], priority: 1, fragmentIndex: 2 }),
     ];
-    const order = executionOrder(all, [...all, fragment({ fragmentKey: 'rests-on', dependsOn: ['premise'] })]);
+    const order = executionOrder(all, [...all, fragment({ fragmentKey: 'rests-on', dependsOn: [{ key: 'premise', kind: 'HARD' }] })]);
     expect(order.map((entry) => entry.fragmentKey)).toEqual(['boundary', 'premise', 'optional']);
   });
 

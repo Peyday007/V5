@@ -251,6 +251,8 @@ export interface EnqueueInput {
    */
   orchestrationId?: string | null;
   fragmentId?: string | null;
+  /** Fragments safely researched in one session share this name. */
+  bundleKey?: string | null;
   createdByType: ActorType;
   createdById?: string | null;
 }
@@ -274,12 +276,12 @@ export async function enqueueWork(input: EnqueueInput): Promise<WorkItem> {
        required_scopes, target_worker_id, attempt_count, max_attempts, lease_generation,
        lease_id, worker_id, lease_credential_id, leased_at, heartbeat_at, lease_expires_at,
        result_ref, result_summary, failure_category, cancelled_reason, correlation_id,
-       orchestration_id, fragment_id,
+       orchestration_id, fragment_id, bundle_key,
        created_by_type, created_by_id, created_at, updated_at, completed_at)
      VALUES (?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?, 0, ?, 0,
              NULL, NULL, NULL, NULL, NULL, NULL,
              NULL, NULL, NULL, NULL, ?,
-             ?, ?,
+             ?, ?, ?,
              ?, ?, ?, ?, NULL)`,
     [
       id,
@@ -294,6 +296,7 @@ export async function enqueueWork(input: EnqueueInput): Promise<WorkItem> {
       input.correlationId ?? null,
       input.orchestrationId ?? null,
       input.fragmentId ?? null,
+      input.bundleKey ?? null,
       input.createdByType,
       input.createdById ?? null,
       at,
@@ -321,6 +324,17 @@ export interface ClaimInput {
   /** Live membership, read this request. Never anything the caller sent. */
   scopes: ClaimScope[];
   workTypes?: string[];
+  /**
+   * Narrow a claim to one packet, and optionally to one bundle within it.
+   *
+   * An activation started to drain a particular packet should not be able to
+   * pick up somebody else's work because it happened to be higher priority.
+   * Both are filters over rows the *server* holds — the caller names a packet
+   * it may already reach, it does not gain reach by naming one. Authorization
+   * is still membership and scopes, checked per item, unchanged.
+   */
+  orchestrationId?: string | null;
+  bundleKey?: string | null;
   limit?: number;
   leaseMs?: number;
   requestId?: string | null;
@@ -360,6 +374,14 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
     if (input.workTypes && input.workTypes.length > 0) {
       typeClause = ` AND work_type IN (${input.workTypes.map(() => '?').join(', ')})`;
       params.push(...input.workTypes);
+    }
+    if (input.orchestrationId) {
+      typeClause += ' AND orchestration_id = ?';
+      params.push(input.orchestrationId);
+    }
+    if (input.bundleKey) {
+      typeClause += ' AND bundle_key = ?';
+      params.push(input.bundleKey);
     }
     params.push(input.workerId);
 

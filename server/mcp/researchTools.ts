@@ -31,7 +31,9 @@
  * principal is a permission oracle.
  */
 import crypto from 'node:crypto';
+import { RETRIEVAL_STATES } from '../domain/types.ts';
 import type {
+  RetrievalState,
   Principal,
   ResearchFragment,
   ResearchOrchestration,
@@ -810,6 +812,22 @@ const proposeFragmentsTool: McpTool = {
   },
 };
 
+/**
+ * The retrieval state a worker reported, matched exactly.
+ *
+ * Anything unrecognised is refused rather than guessed at: a misspelled state
+ * must not quietly excuse a claim from the rejection rate, which is the one
+ * thing this field could be abused for.
+ */
+function retrievalStateOf(row: Record<string, unknown>, where: string): RetrievalState {
+  const raw = row['retrieval_state'];
+  if (raw === undefined || raw === null) return 'RETRIEVED';
+  if (typeof raw !== 'string' || !(RETRIEVAL_STATES as readonly string[]).includes(raw)) {
+    throw invalidInput(`${where}: retrieval_state must be one of ${RETRIEVAL_STATES.join(', ')}.`);
+  }
+  return raw as RetrievalState;
+}
+
 const submitClaimsTool: McpTool = {
   name: 'brain_submit_claims',
   title: 'Submit a fragment\'s claims',
@@ -839,6 +857,16 @@ const submitClaimsTool: McpTool = {
             evidence_excerpt: { type: 'string', description: 'The passage, quoted.' },
             evidence_locator: { type: 'string', description: 'Page, section, table.' },
             evidence_lane: { type: 'string', description: 'Which required lane this fills.' },
+            retrieval_state: {
+              type: 'string',
+              enum: [...RETRIEVAL_STATES],
+              description:
+                'Default RETRIEVED. Set PAYWALLED, ROBOTS_BLOCKED, JS_ONLY or NOT_REACHABLE when ' +
+                'you could not actually read the source. A claim you could not check is recorded ' +
+                'as unresolved and named in the report — it is neither accepted nor counted ' +
+                'against the fragment. Do not drop it, and do not infer the page you could not ' +
+                'open.',
+            },
             retrieved_at: { type: 'string' },
             confidence: { type: 'number', minimum: 0, maximum: 1 },
             primary_source: { type: 'boolean', description: 'The body that produced the data.' },
@@ -888,6 +916,7 @@ const submitClaimsTool: McpTool = {
         retrievedAt: maybeStr(row, 'retrieved_at', where, 64),
         confidence: confidence(row, where),
         evidenceLane: maybeStr(row, 'evidence_lane', where, MAX_LIST_ITEM_CHARS),
+        retrievalState: retrievalStateOf(row, where),
         derived: bool(row, 'derived', where, false),
         derivedFrom: strList(row, 'derived_from', where),
       };

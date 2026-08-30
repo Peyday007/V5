@@ -53,6 +53,7 @@ function fragment(overrides: Partial<ResearchFragment> = {}): ResearchFragment {
     completionCriteria: ['a figure with its definition'],
     dependsOn: [],
     minIndependentSources: 2,
+    nextRetryAt: null,
     status: 'BLOCKED',
     attempt: 1,
     parentFragmentId: null,
@@ -103,6 +104,7 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     retrievedAt: '2025-01-05',
     confidence: 0.8,
     contradictionState: 'UNCHALLENGED',
+    retrievalState: 'RETRIEVED',
     contradictionNote: null,
     validationState: 'SOURCED',
     validationDetail: null,
@@ -131,6 +133,7 @@ function gate(overrides: Partial<GateResult> = {}): GateResult {
     failedConditions: ['COVERAGE'],
     reasons: ['The accepted evidence rests on one publisher.'],
     unresolvedGaps: [],
+    unresolvedRetrieval: [],
     ...overrides,
   };
 }
@@ -235,6 +238,7 @@ describe('a repair plan', () => {
       claims: [
         claim({
           contradictionState: 'CONTESTED',
+          retrievalState: 'RETRIEVED',
           contradictionNote: 'Another agency publishes a different figure.',
         }),
       ],

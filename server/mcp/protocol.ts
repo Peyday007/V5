@@ -12,6 +12,7 @@
  * that knows what a well-formed MCP message looks like, so that the layers
  * above can be about Brain instead.
  */
+import { RESEARCH_METHOD_SUMMARY } from '../services/research/method.ts';
 
 /* ------------------------------------------------------------------------ */
 /* Versions                                                                  */
@@ -314,10 +315,28 @@ export function serverCapabilities(): Record<string, unknown> {
   return { tools: { listChanged: false } };
 }
 
+/**
+ * What every client is told, in both eras.
+ *
+ * This is the one path that puts Brain's own words into a worker's context
+ * without a person carrying them: clients place `instructions` in the model's
+ * context, and it is emitted by discovery in the modern era and by `initialize`
+ * in the legacy one. A method kept only in `docs/` reaches nobody — Cowork
+ * never sees this repository — and a method pasted into a scheduled task's
+ * prompt is maintained by hand and drifts.
+ *
+ * So the research method rides here, in summary, with the full contract behind
+ * `brain_research_method`. Both come from `services/research/method.ts` so they
+ * cannot disagree with each other or with the document.
+ *
+ * Kept compact deliberately: it is in every client's context on every
+ * connection, whether or not that client will ever research anything.
+ */
 export const SERVER_INSTRUCTIONS =
   'Brain is a research-operations platform. These tools read project state and ' +
   'operate the durable work queue: claim an item, heartbeat while working on it, ' +
   'then complete, fail or release it. Every call is authorized against the ' +
   'credential you presented, so a tool may be listed and still refuse. Mutating ' +
   'calls are idempotent by work item, so a retry after a timeout is safe and ' +
-  'will not perform the effect twice.';
+  'will not perform the effect twice.\n\n' +
+  RESEARCH_METHOD_SUMMARY;

@@ -658,6 +658,8 @@ export async function abandonRunningPasses(orchestrationId: string, error: strin
 // ---------------------------------------------------------------------------
 
 export interface InsertClaimInput {
+  /** Whether the worker could actually read the source. Defaults to RETRIEVED. */
+  retrievalState?: RetrievalState;
   orchestrationId: string;
   fragmentId: string | null;
   passId: string | null;
@@ -710,9 +712,9 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
            accepted, rejection_reason, scope_match, claim_type, source_group, primary_source,
            geography, timeframe, population, definition, requirement_ids, job_id,
-           content_hash, created_at)
+           content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane, input.retrievedAt,
@@ -725,7 +727,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
           input.claimType ?? 'SOURCED_FACT', input.sourceGroup ?? null,
           fromBool(input.primarySource ?? false), input.geography ?? null, input.timeframe ?? null,
           input.population ?? null, input.definition ?? null, toJson(input.requirementIds ?? []),
-          input.jobId ?? null, input.contentHash, ts],
+          input.jobId ?? null, input.contentHash, input.retrievalState ?? 'RETRIEVED', ts],
       );
     }
   });

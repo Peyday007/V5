@@ -59,6 +59,7 @@ function fragment(overrides: Partial<ResearchFragment> & { fragmentKey: string }
     completionCriteria: ['a figure with its definition'],
     dependsOn: [],
     minIndependentSources: 2,
+    nextRetryAt: null,
     status: 'PLANNED',
     attempt: 1,
     parentFragmentId: null,
@@ -134,7 +135,7 @@ describe('fragments that can share one job', () => {
   it('never puts a fragment in the same job as the fragment it depends on', () => {
     const bundles = bundleFragments([
       fragment({ fragmentKey: 'base' }),
-      fragment({ fragmentKey: 'derived', dependsOn: ['base'] }),
+      fragment({ fragmentKey: 'derived', dependsOn: [{ key: 'base', kind: 'HARD' }] }),
     ]);
     expect(bundles).toHaveLength(2);
     expect(bundles[0]!.fragments[0]!.fragmentKey).toBe('base');

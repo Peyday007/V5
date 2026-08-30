@@ -49,6 +49,7 @@ import { readableText, retrieveEvidence } from '../services/documents/retrieval.
 import { conflictError, invalidInput, notFoundError } from './errors.ts';
 import type { McpTool } from './toolkit.ts';
 import { RESEARCH_TOOLS } from './researchTools.ts';
+import { RESEARCH_METHOD, RESEARCH_METHOD_VERSION } from '../services/research/method.ts';
 import {
   COMPLETE_NAMESPACE,
   FAIL_NAMESPACE,
@@ -366,6 +367,17 @@ const claimWorkTool: McpTool = {
         description: 'Optional. Narrow to one project you already hold a claim scope on.',
       },
       work_types: { type: 'array', items: { type: 'string' }, description: 'Optional filter.' },
+      orchestration_id: {
+        type: 'string',
+        description:
+          'Optional. Take only work belonging to this research packet, so a session started to ' +
+          'drain one packet cannot pick up unrelated work.',
+      },
+      bundle_key: {
+        type: 'string',
+        description:
+          'Optional. Take only the fragments an assignment named as safely researched together.',
+      },
       limit: { type: 'integer', minimum: 1, maximum: 25, description: 'How many to take.' },
       lease_ms: { type: 'integer', minimum: 0, description: 'Requested lease length; the server clamps it.' },
     },
@@ -409,6 +421,11 @@ const claimWorkTool: McpTool = {
       credentialId: principal.credentialId,
       scopes: eligible,
       workTypes: rawTypes as string[] | undefined,
+      // Filters over rows the server holds, not a widening of reach: naming a
+      // packet does not grant access to it. Authorization is still membership
+      // and scopes, checked per item.
+      orchestrationId: optionalString(args, 'orchestration_id'),
+      bundleKey: optionalString(args, 'bundle_key'),
       limit: optionalInteger(args, 'limit') ?? 1,
       leaseMs: optionalInteger(args, 'lease_ms') ?? undefined,
       requestId,
@@ -854,6 +871,38 @@ const searchEvidenceTool: McpTool = {
  * guarantees it — a `Map` built from an object would depend on insertion order
  * nobody is checking.
  */
+
+/**
+ * The standing research method, in full.
+ *
+ * `SERVER_INSTRUCTIONS` carries the summary into every client's context
+ * automatically; this is the rest of it, for a worker about to research and
+ * wanting the whole contract rather than the précis.
+ *
+ * No scope required, and none should be. It discloses nothing about any
+ * project, credential or packet — it is the same text for every caller, and a
+ * worker that cannot read how it is expected to work is a worker set up to fail
+ * the gate for reasons nobody told it about.
+ *
+ * Versioned so a run can record which revision produced it, and served from the
+ * same constant `docs/workers/WORKER-CONTRACT.md` is checked against.
+ */
+const researchMethodTool: McpTool = {
+  name: 'brain_research_method',
+  title: 'How Brain expects research to be done',
+  description:
+    'The standing research method: search breadth, reading full sources, source classification, ' +
+    'recovering from blocked sources and reporting the ones you could not read, stating ' +
+    'uncertainty, carrying conditions forward, and checking your own findings adversarially. ' +
+    'Method only — it never says what to conclude.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  annotations: { title: 'Research method', ...READ_ONLY },
+  run: async () => ({
+    projectId: null,
+    value: { version: RESEARCH_METHOD_VERSION, method: RESEARCH_METHOD },
+  }),
+};
+
 export const TOOLS: readonly McpTool[] = [
   whoami,
   listProjectsTool,
@@ -869,6 +918,7 @@ export const TOOLS: readonly McpTool[] = [
   releaseTool,
   documentTextTool,
   searchEvidenceTool,
+  researchMethodTool,
   // Step 9. In a second file because there are eight of them and this one was
   // already long, and in the *same* array because there is one surface. A
   // second registry would be a second place to forget something.

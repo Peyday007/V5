@@ -40,6 +40,7 @@
  */
 import { dependencyKeys } from '../../domain/dependencies.ts';
 import { repairable, TERMINAL_ORCHESTRATION } from './outcome.ts';
+import { bundleKeyFor } from './bundling.ts';
 import type {
   ResearchFragment,
   ResearchOrchestration,
@@ -299,6 +300,7 @@ async function enqueueResearchItem(input: {
   fragment?: ResearchFragment | null;
   payload?: Record<string, unknown>;
   priority?: number;
+  bundleKey?: string | null;
 }): Promise<{ workType: string; workItemId: string; fragmentKey: string | null }> {
   const definition = workType(input.type);
   const item = await enqueueWork({
@@ -309,6 +311,9 @@ async function enqueueResearchItem(input: {
     maxAttempts: definition.defaultMaxAttempts,
     orchestrationId: input.orchestration.id,
     fragmentId: input.fragment?.id ?? null,
+    // Named on the item so a worker can claim the set a bundle describes,
+    // without the bundle ever becoming one item and one idempotency scope.
+    bundleKey: input.bundleKey ?? null,
     priority: input.priority ?? 6,
     // The Brain created this, not a person and not a worker. A worker cannot
     // create its own work, which is why no worker scope grants enqueueing.
@@ -1083,7 +1088,12 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
       continue;
     }
     enqueued.push(
-      await enqueueResearchItem({ orchestration, type: 'RESEARCH_FRAGMENT', fragment }),
+      await enqueueResearchItem({
+        orchestration,
+        type: 'RESEARCH_FRAGMENT',
+        fragment,
+        bundleKey: bundleKeyFor(fragment, fragments),
+      }),
     );
   }
 
