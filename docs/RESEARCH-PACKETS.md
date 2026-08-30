@@ -176,6 +176,61 @@ Nothing about the gate changes either way. The claims, the verdicts and the
 rejection reasons stay exactly as they are; what is narrowed is what the packet
 claims to answer, and the report carries the gaps inside it.
 
+### 3c. Six rules the first live packet taught, the hard way
+
+The engine described above ran once, end to end, and produced a New-York-only
+answer to a five-state question. None of the causes were the evidence bar being
+too strict; all six were mechanisms that discarded work the research had already
+done. They are stated here because each one reads like a reasonable rule until
+you watch it run.
+
+**Accepted evidence outlives its fragment.** A fragment can fail its coverage
+bar while the individual claims inside it passed every one of the seven
+conditions. Those claims are evidence. `citableClaims` carries them into
+synthesis; `acceptedClaims` — which decides whether a *fragment* answered its
+question — is unchanged. Every carried claim is annotated where it is cited: it
+is accepted evidence, and the requirement behind it is not settled. Both are
+true, and saying only the first is how a packet overstates itself while saying
+only the second is how it throws away work it paid for.
+
+**How many sources is a property of the claim, not of the plan.** One directly
+inspected primary source settles a statutory fact. An organisation's own site
+needs a second source independent of it. A disputed estimate needs corroboration
+and a forecast is never a fact whatever supports it. `standards.ts` decides this
+per claim; the fragment's own declaration still binds where the assignment asked
+for more; and the planner no longer guesses a number before it can know what
+kind of claim will answer the question.
+
+**A dependency says how much it blocks.** `HARD` — a definition the dependent
+cannot be phrased without — must be accepted first. `CONDITIONAL` — a penalty
+that applies if a licence is required — proceeds as soon as the dependency is
+*terminal*, carrying the condition into its claims rather than pretending the
+antecedent was proved. `SEQUENCING` orders work and blocks nothing. Before this
+every dependency was hard, so an unsettled trigger cancelled every question
+behind it.
+
+**A source nobody could read is not a rejected claim.** Paywalls, robots
+exclusions and dead links are ordinary. A claim whose source could not be opened
+gets no verdict at all — not accepted, not rejected — is reported as unresolved,
+and is excluded from the rejection rate, which otherwise failed whole fragments
+for the sourcing of pages nobody could see.
+
+**A failed fragment is repaired on both paths.** §15's ladder chooses a strategy
+from what actually failed and filters it against every strategy an earlier
+attempt used. It was wired only to the in-process path, so on the worker path a
+failed fragment got zero planned attempts. The runner plans them now, and stops
+one attempt short of the hard limit: the last attempt is the one the ladder has
+no new idea for, so spending it is a person's judgement rather than a timer's.
+
+**Terminality is not the research outcome.** A judge that says `MORE_RESEARCH`
+has not said the packet is done. `COMPLETE` means the judge advanced it;
+`AWAITING_REPAIR` means an attempt is available and is being taken;
+`COMPLETE_WITH_GAPS` means the run is honestly out of attempts and a person had
+already authorized filing short; `NEEDS_HUMAN` means continuing needs an
+authorization the packet does not have. And a non-terminal packet may never sit
+with an empty queue and no explanation — the state nothing picks up and nothing
+reports, which is where the first live packet spent a day.
+
 ### 4. Approval is a decision, not a transition
 
 `advancePacket` refuses to queue a `PLANNED` fragment. Approval is

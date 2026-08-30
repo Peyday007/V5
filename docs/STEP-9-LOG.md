@@ -422,6 +422,75 @@ tests — ids read from the database, which a worker does not have, so a deadloc
 at the session boundary could not show. Both are worth remembering as *classes*
 rather than as nine separate stories.
 
+## Faults 34–40 — the capability batch's own defects
+
+The correction batch was written, typechecked, and then run against both
+suites, and the suites found seven defects in it. Recorded because a batch whose
+own faults go unrecorded is exactly the shape of the thing it was fixing.
+
+**34 — a cast that hid a missing field.** `gateShapeFor` reconstructed enough of
+a `GateResult` to choose a repair ladder and asserted the rest with
+`as ReturnType<typeof gateShapeFor>`. It was missing `coverage`, so
+`buildRepairPlan` threw on the first repair the runner ever tried to plan. The
+cast is what made it compile; without it the compiler would have named the
+missing field. It now reconstructs the whole result from the decisions each
+claim and fragment already persists — reading recorded history rather than
+re-judging evidence, which would have been a second gate verdict over claims
+whose verification verdicts are not all stored, and could quietly have differed
+from the one the fragment was actually failed for.
+
+**35 — the comment said the opposite of the code.** The repair pass was placed
+*after* the write-off pass, under a heading reading "Repair what can still be
+repaired, before writing anything off". So a fragment with budget left was
+declared an unresolved gap, and `mintRepairs` never ran on it. The single most
+important ordering in the batch, inverted, with its own rule written above it.
+
+**36 — an attempt whose instruction was not to attempt.** `buildRepairPlan`
+answers "the ladder is spent" by planning `MARK_UNRESOLVED`. The runner checked
+for an *empty* strategy list, which never happens, so it called `retryFragment`
+and created an attempt carrying "mark this unresolved" as its assignment.
+
+**37 — re-entrancy.** `retryFragment` ends by advancing the packet, which is
+right for an operator pressing retry and wrong from inside the runner:
+`advancePacket` → `mintRepairs` → `retryFragment` → `advancePacket`. The nested
+pass minted work and wrote a status against a half-finished repair round, and
+the outer pass then reasoned on a snapshot the nested one had already
+invalidated. It takes `advance: false` now, and the option's note says why.
+
+**38 — a branch writing a status it could not know.** `mintRepairs` set
+`AWAITING_REPAIR` after creating an attempt — over a packet whose queue was
+about to be full of claimable research for exactly that attempt. It writes no
+status now; the re-derive that follows sees the whole state and decides.
+
+**39 — the invariant caught the wrong thing.** The empty-queue rule downgraded a
+packet waiting for a person to approve its plan. That queue is empty on purpose:
+it is the §16 gate. "A human is needed" was true in the uselessly literal sense
+while destroying the distinction the rule exists to draw.
+
+**40 — three statements of a general minimum.** `MIN_INDEPENDENT_SOURCES_FLOOR`
+refused any plan below 2, `plan.ts` defaulted to 2, and the gate enforced
+whichever number reached it. §14 says there is no general minimum. The first fix
+removed the fragment's declaration from the gate entirely, which fixed the
+regression and broke §12 — a fragment that deliberately asks for two independent
+sources must get two. The floor is 1, the planner declares 1 for an ordinary gap
+and 3 for a contested one, and the gate takes the higher of the declaration and
+the claim-type standard. Fixed where each wrong number is produced, rather than
+where they all happened to arrive.
+
+Two more were found by the acceptance tests rather than by the suites: a claim
+whose source could not be read was still being *judged and accepted* (excluding
+it from the counts after judgement is not the same as not judging it), and the
+empty-queue invariant had no test at all — removing it entirely broke nothing,
+which is the shape of a rule that looks enforced and is not.
+
+The pattern across 34–40 is not the earlier one. Six of the seven are the same
+mistake in a different register: **a rule stated correctly in a comment or a
+constant, and implemented somewhere it does not apply** — ordering, a cast, a
+status write, a re-entrant call. The earlier nine were rules enforced on one
+path and absent on another. These are rules written down and then not obeyed by
+the code sitting under them, which is harder to see, because reading the file
+tells you the rule is there.
+
 ## Still open
 
 - **The research itself is thin, and that is a real outcome rather than a
@@ -430,11 +499,16 @@ rather than as nine separate stories.
   question this packet was asked has a New York answer and nothing else, and the
   reason is in the rejection notes: legislature sites defend against automated
   retrieval, and the gate refused what came back from the mirrors.
-- **A repair on the pull path.** §15's ladder — search differently from every
-  earlier attempt — lives in `repair.ts` and is wired only to the in-process
-  path. That is why a blocked fragment is written off rather than retried here,
-  and it is the largest single thing standing between this packet's result and a
-  good one.
+- ~~**A repair on the pull path.**~~ **Closed by the capability batch.** §15's
+  ladder is wired to both paths now: the runner plans the attempt from what
+  actually failed, filtered against every strategy an earlier attempt used, and
+  stops one attempt short of the hard limit — the last one belongs to a person,
+  because it is the one the ladder has no new idea for. This was correctly
+  identified here as "the largest single thing standing between this packet's
+  result and a good one", and it was one of four; the others were accepted
+  evidence discarded with its fragment, a flat source floor applied before
+  anyone knew what would answer the question, and dependencies that blocked
+  absolutely.
 - The budget system itself — packets per goal, fragments across them, a time
   limit, external spend fixed at zero — specified and deliberately not built.
   The numbers it needs are now measured rather than guessed: three work items
