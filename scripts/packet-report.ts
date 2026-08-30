@@ -31,7 +31,9 @@ import {
 } from '../server/repos/research.ts';
 import { listCoverage, listRequirements } from '../server/repos/reconciliation.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
-import { readObject } from '../server/services/storage.ts';
+import { objectExists, objectSize, readObject, storageKeyOf } from '../server/services/storage.ts';
+import { getCurrentExtractionRun } from '../server/repos/extraction.ts';
+import { listDocuments } from '../server/repos/documents.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -146,19 +148,63 @@ async function main(): Promise<void> {
 
   // The canonical artifact, proven by reading it back out of the configured
   // store rather than by trusting the row that points at it.
+  //
+  // Resolved through `storageKeyOf`, which is what every reader in the app
+  // uses: it prefers `storage_key` and falls back to `filesystem_path`, so a
+  // row written before the storage abstraction still resolves. Reading
+  // `storage_key` directly — which this did at first — reports a document as
+  // missing that the Brain itself can serve perfectly well.
   let documentBytes = 0;
   let canonicalName = '—';
   if (packet.documentId) {
     const document = await getDocument(packet.documentId);
     canonicalName = document?.canonicalName ?? '—';
-    if (document?.storageKey) {
+    const key = storageKeyOf(document);
+    console.log(`  document    ${canonicalName} — id ${packet.documentId}`);
+    console.log(`              version ${document?.version ?? '—'} · status ${document?.status ?? '—'} · type ${document?.documentType ?? '—'}`);
+    console.log(`              storage_key     ${document?.storageKey ?? '—'}`);
+    console.log(`              filesystem_path ${document?.filesystemPath ?? '—'}`);
+    console.log(`              resolved key    ${key ?? '—'}`);
+    console.log(`              superseded_by   ${document?.supersededByDocumentId ?? '—'}`);
+    if (key) {
+      console.log(`              exists          ${await objectExists(key)}`);
+      const size = await objectSize(key);
+      console.log(`              head size       ${size ?? '—'}`);
       try {
-        documentBytes = (await readObject(document.storageKey)).length;
+        documentBytes = (await readObject(key)).length;
       } catch (error) {
-        console.log(`  document    unreadable: ${(error as Error).message}`);
+        console.log(`              READ FAILED     ${(error as Error).message}`);
       }
     }
-    console.log(`  document    ${canonicalName} — ${documentBytes} byte(s)`);
+    console.log(`              read bytes      ${documentBytes}`);
+
+    // What the auditor actually read. The audit works from extracted blocks
+    // rather than raw bytes, so a passing audit says nothing about whether the
+    // file is still there — and that difference is exactly what has to be
+    // visible when a packet is being closed.
+    const extraction = await getCurrentExtractionRun(packet.documentId);
+    console.log(
+      `              extraction      ${extraction?.status ?? 'none'}` +
+        (extraction ? ` · ${extraction.characterCount ?? 0} char(s) · ${extraction.pagesReadable ?? 0}/${extraction.pagesExpected ?? 0} page(s)` : ''),
+    );
+  }
+
+  // Every document this layer holds under a related name, so a supersession
+  // that moved the bytes somewhere else is visible rather than inferred.
+  const siblings = (await listDocuments(packet.projectId)).filter(
+    (document) => document.layerId === packet.layerId,
+  );
+  if (siblings.length > 0) {
+    console.log('');
+    console.log(`LAYER DOCUMENTS (${siblings.length})`);
+    for (const document of siblings) {
+      const key = storageKeyOf(document);
+      console.log(
+        `  ${(document.canonicalName ?? document.id).slice(0, 44).padEnd(46)}` +
+          ` ${(document.version ?? '—').padEnd(6)} ${(document.status ?? '—').padEnd(10)}` +
+          ` bytes ${key ? ((await objectSize(key)) ?? 'missing') : 'no key'}`,
+      );
+    }
   }
 
   const synth = items.filter((item) => item.workType === 'RESEARCH_SYNTHESIZE');
