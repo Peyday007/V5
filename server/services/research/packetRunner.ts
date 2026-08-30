@@ -394,8 +394,32 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
     return { orchestrationId, status: 'GONE', enqueued: [], waitingOn: 'no such orchestration' };
   }
 
-  const done = ['COMPLETE', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN'];
-  if (done.includes(orchestration.status)) {
+  /**
+   * Only a genuinely finished packet stops the runner.
+   *
+   * `NEEDS_HUMAN` used to be in this list, and that was an intentional rule
+   * applied at the wrong granularity rather than a slip. Three of these four
+   * mean the packet is over. `NEEDS_HUMAN` means a decision is *outstanding* —
+   * the packet is not finished, and other approved fragments may be perfectly
+   * runnable. When the rule was written a fault killed the packet anyway, so
+   * the difference never showed.
+   *
+   * It became load-bearing the moment `faultedFragment` let one fragment fail
+   * without taking the packet with it. From then on a packet could be
+   * NEEDS_HUMAN *and* hold healthy, approved, never-attempted work — and this
+   * early return refused to mint any of it. Combined with
+   * `listPendingOrchestrations`, which excluded the same status, the state was
+   * absorbing: nothing re-entered it but an operator pressing a recovery
+   * control.
+   *
+   * So a blocked fragment no longer prevents unrelated approved research from
+   * becoming claimable. Nothing about *what* may be minted changes: the
+   * per-target `alreadyCreated` guard, `stillRunning`, the attempt budget and
+   * the fencing generation are all untouched, so work is still created exactly
+   * once per (type, target) for the life of the packet.
+   */
+  const finished = ['COMPLETE', 'FAILED', 'CANCELLED'];
+  if (finished.includes(orchestration.status)) {
     return {
       orchestrationId,
       status: orchestration.status,
@@ -523,7 +547,17 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   if (enqueued.length > 0) {
     if (orchestration.status !== 'RESEARCHING') {
-      await updateOrchestration(orchestration.id, { status: 'RESEARCHING' });
+      // Work exists, so the packet is researching — including when it was
+      // NEEDS_HUMAN a moment ago. The reason goes with the status: a packet
+      // that is running must not still be showing why it stopped, and the
+      // decision itself lives on the blocked fragments, which keep their
+      // BLOCKED status and their reasons. If nothing else can move later, the
+      // checks below set NEEDS_HUMAN again with a reason that is current.
+      await updateOrchestration(orchestration.id, {
+        status: 'RESEARCHING',
+        failureReason: null,
+        completedAt: null,
+      });
     }
     return { orchestrationId, status: 'RESEARCHING', enqueued, waitingOn: null };
   }
@@ -883,7 +917,7 @@ export async function resumePulledPackets(): Promise<number> {
     if (!isPulled) continue;
 
     /**
-     * Clear a failure the packet has already moved past.
+     * A stale failure is cleared by the advance that supersedes it, not here.
      *
      * `failure_reason` is only ever written, never cleared, so a reason
      * survives whatever comes next and the screen keeps reporting a resolved
@@ -894,9 +928,18 @@ export async function resumePulledPackets(): Promise<number> {
      * over a plan that was sitting there intact.
      *
      * A live status and a failure reason cannot both be true. The status is
-     * the one derived from rows, so it wins.
+     * the one derived from rows, so it wins — *unless the status is itself the
+     * report of the failure.* This used to clear unconditionally, which was
+     * safe only while NEEDS_HUMAN packets were excluded from
+     * `listPendingOrchestrations`. Now that they are included — a pending
+     * decision is not a finished packet — clearing on sight would erase the
+     * question a person is being asked, on every boot.
+     *
+     * So: stale for a live status, current for NEEDS_HUMAN. `advancePacket`
+     * clears it there, at the point it actually enqueues work, because that is
+     * the moment the reason stops being true.
      */
-    if (orchestration.failureReason) {
+    if (orchestration.failureReason && orchestration.status !== 'NEEDS_HUMAN') {
       await updateOrchestration(orchestration.id, { failureReason: null });
     }
 

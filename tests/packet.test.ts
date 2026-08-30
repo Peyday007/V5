@@ -505,6 +505,134 @@ describe('submitting claims', () => {
   });
 });
 
+describe('a packet stopped for a person', () => {
+  /**
+   * `NEEDS_HUMAN` was in the same list as COMPLETE, FAILED and CANCELLED, and
+   * `advancePacket` returned on sight of any of them. Three of those four mean
+   * the packet is over; the fourth means a decision is outstanding, which is a
+   * different thing entirely.
+   *
+   * The difference did not exist while a fault killed the packet. It became
+   * load-bearing the moment one fragment could fail without taking the packet
+   * with it: from then on a packet could be NEEDS_HUMAN and still hold
+   * approved, never-attempted fragments, and the early return refused to mint
+   * any of them. `listPendingOrchestrations` excluded the same status, so boot
+   * recovery skipped it too — the state was absorbing, and only an operator
+   * pressing a recovery control got out.
+   *
+   * Five independent approved fragments sat unminted behind exactly this.
+   */
+  it('still mints independent approved fragments, exactly once each', async () => {
+    const orchestration = await makeOrchestration();
+    const blocked = await makeFragment(orchestration, {
+      fragmentKey: 'exhausted',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+    });
+    const independent = await Promise.all([
+      makeFragment(orchestration, { fragmentKey: 'alpha', fragmentIndex: 1, status: 'QUEUED' }),
+      makeFragment(orchestration, { fragmentKey: 'beta', fragmentIndex: 2, status: 'QUEUED' }),
+      makeFragment(orchestration, { fragmentKey: 'gamma', fragmentIndex: 3, status: 'QUEUED' }),
+    ]);
+
+    // The packet has already been stopped for a person over the blocked one.
+    await updateOrchestration(orchestration.id, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'A fragment exhausted its evidence paths.',
+    });
+
+    const result = await advancePacket(orchestration.id);
+
+    expect(result.enqueued).toHaveLength(3);
+    expect(result.enqueued.map((entry) => entry.fragmentKey).sort()).toEqual([
+      'alpha',
+      'beta',
+      'gamma',
+    ]);
+    // Running again, because the packet is live and the work exists.
+    expect((await getOrchestration(orchestration.id))?.status).toBe('RESEARCHING');
+    expect((await getOrchestration(orchestration.id))?.failureReason).toBeNull();
+    // The blocked fragment is untouched — the decision still lives on it.
+    expect((await getFragment(blocked.id))?.status).toBe('BLOCKED');
+
+    // Exactly one item each, and every one claimable.
+    const items = (await listWorkItems(project.id, { limit: 100 })).filter(
+      (item) => item.orchestrationId === orchestration.id && item.workType === 'RESEARCH_FRAGMENT',
+    );
+    expect(items).toHaveLength(3);
+    for (const fragment of independent) {
+      const mine = items.filter((item) => item.fragmentId === fragment.id);
+      expect(mine).toHaveLength(1);
+      expect(mine[0]!.state).toBe('QUEUED');
+    }
+  });
+
+  it('does not mint a second time when called again', async () => {
+    const orchestration = await makeOrchestration();
+    await makeFragment(orchestration, { fragmentKey: 'exhausted', fragmentIndex: 0, status: 'BLOCKED' });
+    await makeFragment(orchestration, { fragmentKey: 'alpha', fragmentIndex: 1, status: 'QUEUED' });
+    await updateOrchestration(orchestration.id, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'A fragment exhausted its evidence paths.',
+    });
+
+    await advancePacket(orchestration.id);
+    const second = await advancePacket(orchestration.id);
+
+    // Idempotent by construction: alreadyCreated and stillRunning are
+    // unchanged, so lifting the early return cannot duplicate work.
+    expect(second.enqueued).toHaveLength(0);
+    const items = (await listWorkItems(project.id, { limit: 100 })).filter(
+      (item) => item.orchestrationId === orchestration.id && item.workType === 'RESEARCH_FRAGMENT',
+    );
+    expect(items).toHaveLength(1);
+  });
+
+  it('leaves a genuinely finished packet alone', async () => {
+    const orchestration = await makeOrchestration();
+    await makeFragment(orchestration, { fragmentKey: 'alpha', fragmentIndex: 0, status: 'QUEUED' });
+    for (const status of ['COMPLETE', 'CANCELLED', 'FAILED'] as const) {
+      await updateOrchestration(orchestration.id, { status });
+      const result = await advancePacket(orchestration.id);
+      expect(result.enqueued).toHaveLength(0);
+      expect(result.waitingOn).toContain(status);
+    }
+  });
+
+  it('keeps the reason a person is being asked for across a boot sweep', async () => {
+    const orchestration = await makeOrchestration();
+    await makeFragment(orchestration, { fragmentKey: 'exhausted', fragmentIndex: 0, status: 'BLOCKED' });
+    await updateOrchestration(orchestration.id, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'A fragment exhausted its evidence paths.',
+    });
+    // Something for resumePulledPackets to recognise as worker-driven.
+    await enqueueWork({
+      projectId: project.id,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { note: 'marker' },
+      requiredScopes: [],
+      orchestrationId: orchestration.id,
+      createdByType: 'SYSTEM',
+    });
+
+    await resumePulledPackets();
+
+    // Nothing could move, so the question stands. What must not happen is the
+    // reason being blanked on sight, which is what clearing unconditionally in
+    // the boot sweep would do — a person would be asked to decide something the
+    // screen no longer states.
+    //
+    // Being *re-derived* is fine and better: the advance re-evaluated the
+    // packet and wrote a reason that is current, rather than preserving one
+    // written earlier. The invariant is that the packet still stops for a
+    // person and still says why, not that the sentence is unchanged.
+    const after = await getOrchestration(orchestration.id);
+    expect(after?.status).toBe('NEEDS_HUMAN');
+    expect((after?.failureReason ?? '').length).toBeGreaterThan(0);
+  });
+});
+
 describe('one fragment faulting', () => {
   /**
    * The defect two worker sessions in a row reported, and the reason neither

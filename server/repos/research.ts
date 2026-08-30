@@ -259,7 +259,14 @@ export async function listOrchestrationsByProject(projectId: string): Promise<Re
 export async function listPendingOrchestrations(): Promise<ResearchOrchestration[]> {
   return (await getDb().all<ResearchOrchestrationRow>(
       `SELECT * FROM research_orchestrations
-       WHERE status IN ('QUEUED','PLANNING','RESEARCHING','SYNTHESIZING','AUDITING')
+       -- NEEDS_HUMAN is included deliberately. A decision being outstanding is
+       -- not the same as the packet being over, and a packet in that state can
+       -- still hold approved fragments that have never been attempted. Leaving
+       -- it out made the status absorbing: boot recovery skipped it, and
+       -- advancePacket returned early, so the only way back was an operator
+       -- pressing a recovery control. COMPLETE, FAILED and CANCELLED are the
+       -- genuinely finished ones and stay out.
+       WHERE status IN ('QUEUED','PLANNING','RESEARCHING','SYNTHESIZING','AUDITING','NEEDS_HUMAN')
        ORDER BY queued_at, rowid`,
     ))
     .map(mapOrchestration);
