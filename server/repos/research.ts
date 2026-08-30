@@ -517,6 +517,18 @@ export interface UpdateFragmentInput {
   completedAt?: string | null;
   acceptedAt?: string | null;
   cancelledReason?: string | null;
+  /**
+   * When a deferred repair is due back.
+   *
+   * The packet runner's empty-queue invariant accepts `AWAITING_REPAIR` on one
+   * of two proofs: claimable repair work, or this — a durable record of when
+   * the fragment returns. No production path sets it today, because every
+   * repair the runner plans is minted immediately, so in practice an
+   * `AWAITING_REPAIR` packet with an empty queue always becomes `NEEDS_HUMAN`.
+   * It is writable so the second half of that contract is expressible and
+   * provable rather than an unreachable branch that merely looks like a rule.
+   */
+  nextRetryAt?: string | null;
 }
 
 export async function updateFragment(id: string, patch: UpdateFragmentInput): Promise<ResearchFragment | null> {
@@ -531,6 +543,7 @@ export async function updateFragment(id: string, patch: UpdateFragmentInput): Pr
     completed_at: patch.completedAt,
     accepted_at: patch.acceptedAt,
     cancelled_reason: patch.cancelledReason,
+    next_retry_at: patch.nextRetryAt,
   });
   if (!clause) return getFragment(id);
   await getDb().run(`UPDATE research_fragments SET ${clause}, updated_at = ? WHERE id = ?`, [

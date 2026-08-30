@@ -153,6 +153,22 @@ export function applyGate(input: {
   const derived = claims.filter((claim) => claim.derived);
 
   for (const claim of direct) {
+    /**
+     * A source nobody could open gets no verdict at all.
+     *
+     * Not accepted — nothing confirms it. Not rejected — nothing refutes it
+     * either, and recording a refusal would put a permanent rejection reason on
+     * a claim whose only problem was a paywall, which then counts against the
+     * fragment's rejection rate and can fail the whole thing for untrustworthy
+     * sourcing. A blocked source and a false claim are different facts.
+     *
+     * Skipped before judgement rather than filtered after it, so it is absent
+     * from `results` and therefore from every count derived from them. It is
+     * reported instead, in `unresolvedRetrieval`, which is what lets the packet
+     * say what it did not manage to check.
+     */
+    if (claim.retrievalState !== 'RETRIEVED') continue;
+
     // 1 and 3 are already settled by source validation: no URL, an unusable URL
     // or no passage all mean the claim was never evidence.
     if (!claim.sourced) {
@@ -245,6 +261,8 @@ export function applyGate(input: {
   // 7 — a calculation is only as good as its inputs, and an input that is not
   // itself an accepted claim makes the result an assumption.
   for (const claim of derived) {
+    // Same rule for a calculation whose own source could not be read.
+    if (claim.retrievalState !== 'RETRIEVED') continue;
     const inputs = claim.derivedFrom;
     if (inputs.length === 0) {
       reject(

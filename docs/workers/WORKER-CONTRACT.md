@@ -305,6 +305,69 @@ answer.
   must agree, and an advancing verdict is refused while a foundational gap is
   open.
 
+## 11a. The research method
+
+Everything above is about the *mechanics* — leases, idempotency, what to submit.
+This is about how the research itself is done, and it is the half that was
+missing. The pull path told a worker what a fragment declared and never told it
+how to go about answering one, so the first live packet was researched with
+whatever method the session happened to bring.
+
+**This section is generated from `server/services/research/method.ts`, version
+`2026-08-30.1`, and a test fails if the two disagree.** That matters because the
+constant is what a worker actually receives at runtime — abridged in the MCP
+`instructions` field every client reads at connect, and in full from
+`brain_research_method`, which you can call before you start. A method written
+only here would be a document; a method a worker cannot read is not a contract.
+
+The sections, verbatim from what the worker is served:
+
+### Search broadly, then read fully
+Start wide enough to find the sources you did not already know about, then
+**open them**. A snippet is a pointer to evidence, not evidence. Quote from the
+document you opened, and record the locator you read it at.
+
+### Prefer primary sources, and say which is which
+Statute, regulation, regulator guidance, court records, filings, standards
+bodies and first-party contracts settle facts. Classify every source you cite as
+PRIMARY, SECONDARY or ANECDOTAL. An organisation's own site is conclusive about
+what it says and worth nothing as independent confirmation of whether it is true.
+
+### When a source is blocked, recover — then report it
+Paywalls, robots exclusions, JavaScript-only pages, 403s and dead links are
+ordinary. Try the alternatives: an official mirror, the regulator's own copy,
+the filing rather than the summary, a cached authoritative version, a different
+official jurisdiction page.
+
+If you still cannot read it, **submit the claim with its retrieval state set**
+(PAYWALLED, ROBOTS_BLOCKED, JS_ONLY, NOT_REACHABLE). Do not quietly drop it and
+do not substitute a source you did not read. A claim you could not check is not
+a claim you got wrong: it is recorded as unresolved, named in the report, and
+excluded from the fragment's rejection rate. Inferring the content of a page you
+could not open is the one thing that would make this worse than saying nothing.
+
+### State uncertainty explicitly
+Submit what you actually found, including what you could not source. Everything
+you submit is stored unaccepted and the Brain's gate decides. There is nothing
+to gain by overstating support and something real to lose: a claim waved through
+is one the packet then rests on.
+
+### Carry your conditions
+If your assignment says a dependency did not establish something, your claims
+must say so. Write the conditional — "if the transaction falls within the
+statute's scope, then…" — rather than asserting the antecedent nobody proved.
+
+### Attack your own findings before submitting
+Ask what would have to be true for your conclusion to be wrong, and go look for
+it. Where two sources disagree, work out first whether they are answering
+different questions — a different definition, timeframe, geography or population
+explains most apparent contradictions completely. Report the disagreement rather
+than averaging it away.
+
+### Finish honestly
+A bounded answer with its gaps named is worth more than a complete-looking one
+that hides them. Name what is unresolved, and why.
+
 ## 12. Scope for this step
 
 Step 9 is one manually initiated packet, start to finish, on one account.

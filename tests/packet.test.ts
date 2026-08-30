@@ -1207,6 +1207,99 @@ describe('a research gap that is genuinely exhausted', () => {
   });
 });
 
+describe('the empty-queue invariant', () => {
+  /**
+   * The state that cost the live packet a day, and the one nothing tested.
+   *
+   * A packet that is not terminal, has nothing claimable, and has no reason on
+   * it is invisible: no worker touches it because nothing is claimable, no
+   * report calls it finished because it is not terminal, and the runner is only
+   * called when something completes — which nothing will. It does not resolve,
+   * and it does not ask for help.
+   *
+   * `AWAITING_REPAIR` is held to the stronger test, because it is the status
+   * most able to hide in: a sentence saying a repair is coming reads like
+   * progress. Either there is claimable or leased repair work, or a fragment
+   * records when it comes back. With neither, nothing is pending and the packet
+   * belongs to a person.
+   */
+  it('turns an AWAITING_REPAIR packet with nothing pending into a decision', async () => {
+    const orchestration = await makeOrchestration();
+    // RUNNING with no work item: nothing exists that could ever complete it.
+    await makeFragment(orchestration, { fragmentKey: 'trigger', fragmentIndex: 0, status: 'RUNNING' });
+    await updateOrchestration(orchestration.id, { status: 'AWAITING_REPAIR' });
+
+    const result = await advancePacket(orchestration.id);
+
+    expect(result.status).toBe('NEEDS_HUMAN');
+    const after = await getOrchestration(orchestration.id);
+    expect(after?.status).toBe('NEEDS_HUMAN');
+    // The reason says why it is a decision rather than a wait, which is the
+    // difference a person needs in order to act on it.
+    expect(after?.failureReason).toContain('no claimable work');
+    expect(after?.completedAt).not.toBeNull();
+  });
+
+  /**
+   * And the other half: a repair with a durable return time is a real wait, so
+   * it is left alone.
+   *
+   * Nothing in the runner sets `next_retry_at` today — every repair it plans is
+   * minted immediately — so this proves the branch rather than a live path. It
+   * is here because a rule with an unreachable half is a rule that looks
+   * stricter than it is, and the next person to add a deferral needs the
+   * contract to already be true.
+   */
+  it('leaves a repair alone when a fragment records when it returns', async () => {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration, {
+      fragmentKey: 'trigger',
+      fragmentIndex: 0,
+      status: 'RUNNING',
+    });
+    await updateFragment(fragment.id, { nextRetryAt: new Date(Date.now() + 3_600_000).toISOString() });
+    await updateOrchestration(orchestration.id, { status: 'AWAITING_REPAIR' });
+
+    const result = await advancePacket(orchestration.id);
+
+    expect(result.status).toBe('AWAITING_REPAIR');
+    expect((await getOrchestration(orchestration.id))?.status).toBe('AWAITING_REPAIR');
+  });
+
+  /** Any other non-terminal status with an empty queue is the same bug. */
+  it('reports a stalled packet rather than inventing work to unstick it', async () => {
+    const orchestration = await makeOrchestration();
+    await makeFragment(orchestration, { fragmentKey: 'trigger', fragmentIndex: 0, status: 'RUNNING' });
+    await updateOrchestration(orchestration.id, { status: 'RESEARCHING' });
+
+    const result = await advancePacket(orchestration.id);
+
+    expect(result.status).toBe('NEEDS_HUMAN');
+    const after = await getOrchestration(orchestration.id);
+    // Reported, not repaired: minting work here would hide whichever branch
+    // failed to mint or to conclude, which is the bug rather than the symptom.
+    expect(after?.failureReason).toContain('RESEARCHING');
+    expect(after?.failureReason).toContain('nothing queued');
+    expect(
+      (await listWorkItems(project.id, { limit: 50 })).filter(
+        (item) => item.orchestrationId === orchestration.id,
+      ),
+    ).toHaveLength(0);
+  });
+
+  /** A packet held at the approval gate has an empty queue on purpose. */
+  it('does not call the approval gate a stall', async () => {
+    const orchestration = await makeOrchestration();
+    await makeFragment(orchestration, { fragmentKey: 'trigger', fragmentIndex: 0, status: 'PLANNED' });
+
+    const result = await advancePacket(orchestration.id);
+
+    expect(result.status).not.toBe('NEEDS_HUMAN');
+    expect(result.waitingOn).toContain('approve');
+    expect((await getOrchestration(orchestration.id))?.failureReason).toBeNull();
+  });
+});
+
 describe('a packet stopped for a person', () => {
   /**
    * `NEEDS_HUMAN` was in the same list as COMPLETE, FAILED and CANCELLED, and
