@@ -30,9 +30,11 @@ described in [`IDENTITY.md`](IDENTITY.md). Step 5's evidence is in
 [`EFFECTS.md`](EFFECTS.md). Step 7's is in
 [`STEP-7-EVIDENCE.md`](STEP-7-EVIDENCE.md) and its design in
 [`MCP.md`](MCP.md). Step 8's is in [`STEP-8-EVIDENCE.md`](STEP-8-EVIDENCE.md),
-with the runbook and the worker's own contract in [`workers/`](workers/). Each
-evidence file says what was proven, what merely passes its tests, and what
-nobody has run.
+with the runbook and the worker's own contract in [`workers/`](workers/).
+Step 9's is in [`STEP-9-EVIDENCE.md`](STEP-9-EVIDENCE.md), its design in
+[`RESEARCH-PACKETS.md`](RESEARCH-PACKETS.md), and the faults it cost in
+[`STEP-9-LOG.md`](STEP-9-LOG.md). Each evidence file says what was proven, what
+merely passes its tests, and what nobody has run.
 
 ## Ahead
 
@@ -41,27 +43,37 @@ order is a dependency order, not a preference.
 
 | Step | What it contains |
 |---|---|
-| **9** | Manual end-to-end research packet — **manually initiated Cowork sessions** |
+| **9** | Manual end-to-end research packet — **complete**; one packet terminal, filed and audited ([evidence](STEP-9-EVIDENCE.md)) |
 | **10** | Scheduled firing and interruption recovery — **activation mechanism unbuilt and undecided** |
 | **11** | Additional workers and fleet controls |
 | **12** | The control centre — the Brain drives the fleet, not a person |
 
 ### What Step 10 has to solve, and has not
 
-**Nothing starts a worker but a person.** Step 9 runs on manually initiated
-Cowork sessions: the Brain queues work and waits, and the largest measured block
-of elapsed time in the whole step was a packet sitting in that queue waiting for
-somebody to say go. That is the honest description of where this is.
+**Nothing starts a worker but a person, and that is still true.** Step 9 ran on
+manually initiated Cowork sessions, and the largest measured block of elapsed
+time in the whole step was a packet sitting in the queue waiting for somebody to
+say go.
+
+Step 9's last stretch — synthesis, three audit roles, the judge's verdict — was
+in fact claimed and completed by a Cowork **scheduled task** with nobody
+attending it, under the narrow one-off exception recorded in `CLAUDE.md` §22.
+That is real evidence and it is recorded as such, but it is evidence about
+*Cowork's* scheduler, not about anything the Brain does. **The Brain still never
+reaches out to Claude.** An operator's scheduled task drained a queue; that is
+not an activation mechanism the platform owns, and it does not close this step.
 
 **The activation mechanism does not exist.** It has not been designed,
 prototyped or chosen — there is no preferred approach being written up here,
 because there isn't one. Two recorded constraints bound it and neither is
 solved:
 
-- **CF-8** — live token refresh is unverified. Refresh tokens are issued for
-  thirty days and the rotation grant is implemented and tested, but nothing has
-  exercised it against a real surface. Harmless for a bounded session; decide it
-  before anything runs unattended.
+- **CF-8** — live token refresh is unverified, and Step 9 did not touch it. An
+  unattended occurrence reconnecting is not proof that a token refreshed;
+  nothing has yet observed one expiring and being renewed mid-packet. Refresh
+  tokens are issued for thirty days and the rotation grant is implemented and
+  tested, but nothing has exercised it against a real surface. Harmless for a
+  bounded session; decide it before anything runs unattended for long.
 - **CF-11** — the surface decides whether a worker can authorize at all. A chat
   inherits the account's connector authorization; a Claude Code session
   authorizes per session and cannot do it non-interactively. So whatever fires

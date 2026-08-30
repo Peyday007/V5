@@ -373,19 +373,104 @@ claims unsourced rather than backfilling them from Justia or FindLaw mirrors.
 That is the correct behaviour under §14 and nothing in the Brain enforced it —
 which is worth knowing before Florida, New York and Illinois do the same.
 
+## And then the packet finished, with nobody watching
+
+On **30 August** the packet reached a filed, audited, terminal state. The last
+stretch — synthesis, all three audit roles, the judge's verdict — was claimed
+and completed by a Cowork scheduled task while no person was attending it, and
+no result was carried by hand between a conversation and the Brain.
+
+| | |
+|---|---|
+| Synthesis | `RESEARCH_SYNTHESIZE` SUCCEEDED; report filed as `Monetization Logic v1` |
+| PRIMARY | pass ordinal 5, COMPLETE 09:13:07Z |
+| ADVERSARIAL | pass ordinal 6, COMPLETE 09:17:09Z |
+| JUDGE | pass ordinal 7, COMPLETE 09:19:00Z |
+| Verdict | `aud_96ffd94239624b45bb03` — `MORE_RESEARCH`, 9 structured gaps |
+| Packet | `COMPLETE`, nothing queued or leased |
+| Artifact | 28,261 bytes, read back out of the bucket at 10:10Z |
+
+The three roles were offered one at a time, in order, and only the judge moved
+state — the §8 separation, driven for the first time by a real worker rather
+than by a test.
+
+**What the packet actually answers is narrow, and that is the honest result.**
+Two of twelve fragments cleared the gate (`ny-licence-trigger`, `ny-penalty`);
+17 of 118 submitted claims were accepted. Ten requirements are recorded as
+declared gaps, each carrying the reason it is unresolved. The judge read that
+and said `MORE_RESEARCH`, which is correct: this is a New York answer to a
+five-state question, filed with what it could not establish named inside it.
+Step 9 asked whether the machinery could carry a packet from intent to an
+audited document with every claim gated on the way in. It can, and did. It did
+not ask for the research to be good.
+
 ## What nobody has watched happen
 
-**A packet reaching a filed, audited document from real research.** The gate has
-now been applied to real claims and the synthesis-and-audit half has now run
-over the wire, but not on the same packet. Ten fragments remain queued.
+**An allowance boundary that did not cost something.** Earlier live worker
+sessions ended by running out of budget mid-item. The refusal in
+`brain_complete_work` prevents the corruption; it does not prevent the
+interruption.
 
-**Three audit roles argued by a real worker.** Sequencing is proven; the
-adversarial pass being genuinely adversarial is not.
+**A second packet.** Everything here is one orchestration. The runner's
+per-target guards are proven by test and by four days of repeated advances on
+this packet, not by a second live packet running beside it.
 
-**An allowance boundary that did not cost something.** Both live worker sessions
-ended by running out of budget mid-item, and the second one stopped the packet
-outright. The refusal added in `brain_complete_work` prevents the corruption;
-it does not prevent the interruption.
+**Automatic activation by the Brain.** The Brain still never reaches out to
+Claude. What ran unattended was a Cowork scheduled task the operator created —
+their scheduler, not Brain's — under the narrow exception recorded in
+`CLAUDE.md` §22. That is evidence toward Step 10 and is recorded as evidence
+only because an unattended run has now actually happened. It is not Step 10 and
+does not close it: the activation mechanism remains unbuilt and undecided.
+
+**CF-8 is not touched by this.** The worker reconnecting on a later occurrence
+is not proof that a token refreshed; nothing here observed a token expiring and
+being renewed mid-packet.
+
+---
+
+## Step 9 closure matrix
+
+Every line read from authoritative rows through `scripts/packet-report.ts`
+against the deployed Brain, not from a worker's report of itself.
+
+| Closure requirement | State | Evidence |
+|---|---|---|
+| The target packet is terminally successful | ✅ | `orc_f4850ad197474c22b5ea` — `status=COMPLETE`, `completed_at` set |
+| Synthesis completed | ✅ | one `RESEARCH_SYNTHESIZE`, SUCCEEDED; `documentId` set |
+| All three audit roles completed, in order | ✅ | passes ordinal 5 / 6 / 7 — PRIMARY 09:13:07Z, ADVERSARIAL 09:17:09Z, JUDGE 09:19:00Z |
+| The judge's verdict is recorded, structured | ✅ | `aud_96ffd94239624b45bb03` — `MORE_RESEARCH`, 9 classified gaps, not prose |
+| The canonical final packet exists in Brain storage | ✅ | `Monetization Logic v1` — 28,261 bytes read back from `supabase · …/brain` |
+| Evidence, claims, gaps, sources, audit history durable | ✅ | 118 claims stored / 17 accepted with rejection reasons kept; 24 passes; 12 coverage rows, 10 `NOT_REQUIRED` each with a note; 29 work items with their attempt history |
+| Queue completion | ✅ | `claimable=0`; no item QUEUED or LEASED |
+| Terminal state and document survive restart/redeploy | ✅ | document written ~09:12; deploys 61, 62 and 63 each replaced and restarted the machine; read back whole at 10:10Z |
+| Closure evidence recorded | ✅ | this file, plus the fault log in `STEP-9-LOG.md` |
+
+**Where to inspect it.** `/operator` on the deployed Brain lists the packet under
+its project; the filed report is served from the document store through the
+Brain's own `/files` route. `npm run report:packet -- --orchestration
+orc_f4850ad197474c22b5ea` prints every row above, and the **Packet report**
+workflow runs the same thing against production without a terminal.
+
+**The hourly Cowork scheduled task has done its job and should be paused or
+deleted.** Its authorization in `CLAUDE.md` §22 was explicitly bounded to
+finishing this packet, and the packet is terminal. Leaving it running would be a
+standing unattended worker nobody has scoped work for.
+
+## What this step cost, in faults
+
+Nine defects were found between the first live packet and closure, all on the
+worker path, and the pattern in them is worth more than the list. Six were the
+same shape: **a rule enforced where `orchestrator.ts` runs, reached by the
+worker path through a route that never passes the check.** Three more were the
+same blind spot in the tests — ids read from the database, which a worker does
+not have, so a deadlock at the session boundary could not show.
+
+The one that cost the most elapsed time was not in the Brain at all: a
+diagnostic script that opened the database without opening the store, reported
+every document in the project as missing, and produced a reading indistinguishable
+from the §18 cloud-fallback failure. It was very nearly reported as one. The
+lesson is the same one §9 draws about documents: *a tool that has not read the
+thing it is reporting on must say so, not return an empty answer.*
 
 ---
 

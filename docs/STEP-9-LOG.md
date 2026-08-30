@@ -376,10 +376,65 @@ is the shape every worker-path test should have had from the start.
 |---|---|---|
 | 32 | A synthesis assignment carried no claims and no ids, so no worker could write a citable report | `claimsToCite` on the assignment, populated from `acceptedClaims` for `RESEARCH_SYNTHESIZE` only, plus a test that uses only what the assignment carries. |
 
+## Fault 33 — a report that had not read the thing it reported on
+
+The packet reached COMPLETE with its canonical artifact reading zero bytes, and
+that reading was produced entirely by the diagnostic script written to find it.
+
+`getStorage()` falls back to a local provider when nothing has been initialised.
+That is deliberate and documented — it is for unit tests that never boot — and
+it is safe precisely because cloud mode goes through `initStorage`, which
+verifies with a real operation and stops the process if the bucket does not
+answer. `packet-report.ts` opened the database and never opened the store, so it
+inherited the fallback, looked on the machine's own disk, and found nothing.
+
+What it printed was `store local · /app/data` beside rows each saying
+`storage_provider SUPABASE` — a reading indistinguishable from the §18
+cloud-fallback failure, and one I came close to reporting as exactly that. It
+cost three deploys of diagnostics to disprove something that was never true.
+
+The rows had been right the whole time: `file_size 28261` against an extraction
+that read 27,881 characters is a document written and read back correctly, and
+with the store open the same script reads 28,261 bytes out of the bucket.
+
+| # | Fault | Fix |
+|---|---|---|
+| 33 | A diagnostic reported every document in the project missing, because it read documents without opening the store | `initStorage()` beside `initDatabase()`, as `verify-hosted.ts` and the server's own boot both do. Reaching the first read is now itself proof the configured store answers. |
+
+The general lesson is one this codebase already draws about documents, in §9: a
+tool that has not read the thing it is reporting on must say so rather than
+return an empty answer. A reader that silently falls back to the wrong store is
+the same failure wearing a different hat, and the place it did damage was a
+script rather than the Brain only by luck.
+
+## How it ended
+
+The packet is terminal. Synthesis, the three audit roles in order, and the
+judge's verdict were all claimed and completed by an unattended Cowork scheduled
+task; the filed report is 28,261 bytes in the bucket and reads back whole after
+three further machine restarts. The closure matrix is in
+[`STEP-9-EVIDENCE.md`](STEP-9-EVIDENCE.md).
+
+Nine faults were found between the first live packet and closure. Six were one
+shape — a rule enforced where `orchestrator.ts` runs, reached by the worker path
+through a route that never passes the check. Three were one blind spot in the
+tests — ids read from the database, which a worker does not have, so a deadlock
+at the session boundary could not show. Both are worth remembering as *classes*
+rather than as nine separate stories.
+
 ## Still open
 
-- Ten fragments remain queued; California is on attempt 2 and Texas is ungated.
-  The packet needs one more worker session, and that is the whole remainder.
+- **The research itself is thin, and that is a real outcome rather than a
+  process failure.** Two of twelve fragments cleared the gate; ten requirements
+  are filed as declared gaps. The judge said `MORE_RESEARCH` and was right. The
+  question this packet was asked has a New York answer and nothing else, and the
+  reason is in the rejection notes: legislature sites defend against automated
+  retrieval, and the gate refused what came back from the mirrors.
+- **A repair on the pull path.** §15's ladder — search differently from every
+  earlier attempt — lives in `repair.ts` and is wired only to the in-process
+  path. That is why a blocked fragment is written off rather than retried here,
+  and it is the largest single thing standing between this packet's result and a
+  good one.
 - The budget system itself — packets per goal, fragments across them, a time
   limit, external spend fixed at zero — specified and deliberately not built.
   The numbers it needs are now measured rather than guessed: three work items

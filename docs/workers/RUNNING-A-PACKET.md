@@ -19,10 +19,15 @@ that stays in a transcript counts. The most a session should hand back is how it
 ended: how many items it completed, and whether the queue emptied or its
 allowance ran out.
 
-**Somebody still has to start it.** Step 9 runs on manually initiated Cowork
-sessions — the Brain never reaches out to Claude. Automatic activation is
-Step 10's, and it is unbuilt: no mechanism has been chosen, and nothing here
-should be read as scheduling that exists.
+**Somebody still has to start it.** The Brain never reaches out to Claude.
+Automatic activation is Step 10's, and it is unbuilt: no mechanism has been
+chosen, and nothing here should be read as scheduling that exists.
+
+A Cowork **scheduled task** can drain a queue unattended, and one did for the
+end of Step 9's packet under the bounded exception in `CLAUDE.md` §22. That is
+Cowork's scheduler, not Brain's, and it claims only work a person already
+authorized and queued. If you use one, bound it the same way and pause it when
+the work it was created for is done.
 
 ---
 
