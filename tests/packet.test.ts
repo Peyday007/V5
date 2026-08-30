@@ -551,7 +551,9 @@ describe('a research gap that is genuinely exhausted', () => {
       fragmentKey: 'trigger',
       fragmentIndex: 0,
       status: 'BLOCKED',
-      attempt: 3,
+      // Failed, repaired, failed again: at the repair budget, which is as far
+      // as this path can honestly take it.
+      attempt: 2,
       maxRepairs: 2,
       requirementIds: [rDead!.id],
     });
@@ -624,7 +626,7 @@ describe('a research gap that is genuinely exhausted', () => {
       fragmentKey: 'trigger',
       fragmentIndex: 0,
       status: 'BLOCKED',
-      // One attempt used of two allowed. Research is still the answer here.
+      // Failed once. A real repair is still available, on a different lane.
       attempt: 1,
       maxRepairs: 2,
       requirementIds: [requirement!.id],

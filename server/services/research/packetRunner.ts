@@ -390,9 +390,21 @@ function readyToResearch(fragments: ResearchFragment[]): ResearchFragment[] {
  * is live or claimable. Returns how many requirements it closed, so the caller
  * can re-derive rather than guess what changed.
  *
- * "Exhausted" is a narrow test: the fragment is BLOCKED *and* it has used its
- * repair budget. A fragment with an attempt left is not exhausted, and a
- * different evidence path is still the right answer for it.
+ * "Exhausted" is: the fragment is BLOCKED and has been through at least one
+ * repair — `attempt >= maxRepairs`, not `>`.
+ *
+ * The stricter `>` was wrong, and wrong in the direction that matters: it is
+ * the line `retryFragment` uses to decide whether *another* attempt may be
+ * created, and a fragment sitting at attempt 2 of 2 still has one. But nothing
+ * on this path can plan that attempt. §15 requires a repair to search
+ * differently from every attempt before it, `repair.ts` is what chooses that
+ * strategy, and it is wired only to the in-process path. A repair minted here
+ * would re-run a lane the last attempt already exhausted, which is the one
+ * thing Option A forbids outright.
+ *
+ * So a fragment that has failed, been repaired, and failed again is exhausted
+ * as far as this path can honestly take it. A fragment that has failed once has
+ * a real repair available and is left alone.
  */
 async function recordExhaustedGaps(input: {
   orchestration: ResearchOrchestration;
@@ -401,7 +413,7 @@ async function recordExhaustedGaps(input: {
 }): Promise<number> {
   const { orchestration, fragments, doomed } = input;
   const exhausted = fragments.filter(
-    (fragment) => fragment.status === 'BLOCKED' && fragment.attempt > fragment.maxRepairs,
+    (fragment) => fragment.status === 'BLOCKED' && fragment.attempt >= fragment.maxRepairs,
   );
   if (exhausted.length === 0) return 0;
 
