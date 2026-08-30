@@ -32,7 +32,7 @@ import {
 import { listCoverage, listRequirements } from '../server/repos/reconciliation.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { objectExists, objectSize, readObject, storageKeyOf } from '../server/services/storage.ts';
-import { getStorage } from '../server/services/storage/index.ts';
+import { getStorage, initStorage } from '../server/services/storage/index.ts';
 import { getCurrentExtractionRun } from '../server/repos/extraction.ts';
 import { listDocuments } from '../server/repos/documents.ts';
 
@@ -53,6 +53,23 @@ function trim(value: string | null | undefined, width = 96): string {
 async function main(): Promise<void> {
   if (!process.env['BRAIN_DATABASE_POOL_SIZE']) process.env['BRAIN_DATABASE_POOL_SIZE'] = '2';
   await initDatabase();
+
+  /**
+   * And the store. Leaving this out is what made the first version of this
+   * report lie, and it lied in the worst available direction.
+   *
+   * `getStorage()` falls back to a local provider when nothing has been
+   * initialised — deliberately, for unit tests that never boot. A script that
+   * opens the database and then reads documents therefore looks on the
+   * machine's own disk while the bytes are in the bucket, and reports every
+   * document in the project as missing. That reads exactly like the §18
+   * failure it is not: rows saying SUPABASE, a store answering `local`, and
+   * nothing found. `verify-hosted.ts` calls both, and so must this.
+   *
+   * `initStorage` verifies with a real operation, so reaching the next line is
+   * itself the proof that the configured store answers.
+   */
+  await initStorage();
 
   const orchestrationId = flag('orchestration');
   if (!orchestrationId) {
