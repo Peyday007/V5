@@ -32,6 +32,7 @@ import {
 import { listCoverage, listRequirements } from '../server/repos/reconciliation.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { objectExists, objectSize, readObject, storageKeyOf } from '../server/services/storage.ts';
+import { getStorage } from '../server/services/storage/index.ts';
 import { getCurrentExtractionRun } from '../server/repos/extraction.ts';
 import { listDocuments } from '../server/repos/documents.ts';
 
@@ -197,22 +198,40 @@ async function main(): Promise<void> {
     );
   }
 
-  // Every document this layer holds under a related name, so a supersession
-  // that moved the bytes somewhere else is visible rather than inferred.
-  const siblings = (await listDocuments(packet.projectId)).filter(
-    (document) => document.layerId === packet.layerId,
-  );
-  if (siblings.length > 0) {
+  /**
+   * Every document in the project, and whether its bytes are actually there.
+   *
+   * The summary is the diagnosis. One document missing out of many is a write
+   * that failed for that document. *Every* document missing is not a document
+   * problem at all — it means the rows and the store disagree about where the
+   * bytes live, which is the §18 failure: a Brain writing research somewhere
+   * nobody else can see it while reporting itself cloud-backed.
+   */
+  const documents = await listDocuments(packet.projectId);
+  if (documents.length > 0) {
+    const sized = await Promise.all(
+      documents.map(async (document) => {
+        const key = storageKeyOf(document);
+        return { document, key, size: key ? await objectSize(key) : null };
+      }),
+    );
+    const present = sized.filter((entry) => entry.size !== null);
+    const missing = sized.filter((entry) => entry.size === null);
     console.log('');
-    console.log(`LAYER DOCUMENTS (${siblings.length})`);
-    for (const document of siblings) {
-      const key = storageKeyOf(document);
+    console.log(
+      `PROJECT DOCUMENTS (${documents.length}) — ${present.length} with bytes, ${missing.length} missing`,
+    );
+    console.log(`  store       ${getStorage().kind} · ${getStorage().describe()}`);
+    for (const entry of sized.slice(0, 40)) {
       console.log(
-        `  ${(document.canonicalName ?? document.id).slice(0, 44).padEnd(46)}` +
-          ` ${(document.version ?? '—').padEnd(6)} ${(document.status ?? '—').padEnd(10)}` +
-          ` bytes ${key ? ((await objectSize(key)) ?? 'missing') : 'no key'}`,
+        `  ${(entry.document.canonicalName ?? entry.document.id).slice(0, 40).padEnd(42)}` +
+          ` ${(entry.document.version ?? '—').padEnd(6)}` +
+          ` ${(entry.document.storageProvider ?? '—').padEnd(9)}` +
+          ` file_size ${String(entry.document.fileSize ?? '—').padEnd(8)}` +
+          ` bytes ${entry.size ?? 'MISSING'}`,
       );
     }
+    if (sized.length > 40) console.log(`  … and ${sized.length - 40} more`);
   }
 
   const synth = items.filter((item) => item.workType === 'RESEARCH_SYNTHESIZE');
