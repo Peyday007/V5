@@ -7,7 +7,14 @@
  * claimed, and on what basis, cannot be quietly revised afterwards.
  */
 import { getDb } from '../db/database.ts';
+import {
+  parseDependencies,
+  serializeDependencies,
+  toDependencies,
+} from '../domain/dependencies.ts';
 import type {
+  FragmentDependency,
+  RetrievalState,
   ClaimType,
   ClaimValidationState,
   ContradictionKind,
@@ -88,7 +95,7 @@ function mapFragment(row: ResearchFragmentRow): ResearchFragment {
     acceptableSourceTypes: parseJson<string[]>(row.acceptable_source_types, []),
     excludedSourceTypes: parseJson<string[]>(row.excluded_source_types, []),
     completionCriteria: parseJson<string[]>(row.completion_criteria, []),
-    dependsOn: parseJson<string[]>(row.depends_on, []),
+    dependsOn: parseDependencies(row.depends_on),
     minIndependentSources: Number(row.min_independent_sources),
     status: row.status as FragmentStatus,
     attempt: Number(row.attempt),
@@ -154,6 +161,9 @@ function mapPass(row: ResearchPassRow): ResearchPass {
 
 function mapClaim(row: ResearchClaimRow): ResearchClaim {
   return {
+    // A row written before the column existed reads RETRIEVED, which is what it
+    // meant: it was fetched, and the gate's verdict on it stands.
+    retrievalState: (row.retrieval_state ?? 'RETRIEVED') as RetrievalState,
     id: row.id,
     orchestrationId: row.orchestration_id,
     fragmentId: row.fragment_id,
@@ -394,7 +404,7 @@ export interface CreateFragmentInput {
   acceptableSourceTypes: string[];
   excludedSourceTypes: string[];
   completionCriteria: string[];
-  dependsOn: string[];
+  dependsOn: (string | FragmentDependency)[];
   minIndependentSources: number;
   attempt?: number;
   parentFragmentId?: string | null;
@@ -449,7 +459,7 @@ export async function createFragments(inputs: CreateFragmentInput[]): Promise<Re
           input.fragmentKey, input.question, input.geography ?? null, input.timeframe ?? null,
           input.population ?? null, input.definitions ?? null, toJson(input.requiredEvidence),
           toJson(input.acceptableSourceTypes), toJson(input.excludedSourceTypes),
-          toJson(input.completionCriteria), toJson(input.dependsOn), input.minIndependentSources,
+          toJson(input.completionCriteria), serializeDependencies(toDependencies(input.dependsOn)), input.minIndependentSources,
           input.status ?? 'PLANNED', input.attempt ?? 1, input.parentFragmentId ?? null,
           input.repairReason ?? null, input.repairStrategy ?? null,
           toJson(input.requirementIds ?? []), input.evidenceLane ?? null,
@@ -751,6 +761,71 @@ export async function acceptedClaims(orchestrationId: string): Promise<ResearchC
       [orchestrationId],
     ))
     .map(mapClaim);
+}
+
+/**
+ * The claims a report may cite, and why that is a wider set than `acceptedClaims`.
+ *
+ * `acceptedClaims` answers "which claims belong to fragments that met their
+ * bar", and three callers on the in-process path depend on exactly that. This
+ * answers a different question: **which gated evidence does this packet
+ * actually hold.**
+ *
+ * The difference cost the first live packet most of its research. Three
+ * fragments recorded `integrity PASS` — their surviving claims had a canonical
+ * URL, a verified supporting passage and matching scope — and fell short only
+ * on coverage, which is a statement about the *question* being incompletely
+ * answered, not about the claims being unsound. Because the report could only
+ * cite claims from ACCEPTED fragments, every one of those verified statutory
+ * facts was discarded, and a five-state question was answered for one state.
+ *
+ * So a BLOCKED fragment's accepted claims are citable. What does **not** change
+ * is coverage: `assessPacket` still counts a requirement as answered only when
+ * an ACCEPTED fragment carries it, so contributing evidence never becomes a
+ * settled requirement. The ledger says which is which, per claim.
+ *
+ * REJECTED and CANCELLED stay out. A rejected fragment's findings were refused,
+ * and a cancelled one was never researched.
+ */
+export async function citableClaims(orchestrationId: string): Promise<ResearchClaim[]> {
+  return (await getDb().all<ResearchClaimRow>(
+      `SELECT c.* FROM research_claims c
+         JOIN research_fragments f ON f.id = c.fragment_id
+        WHERE c.orchestration_id = ? AND c.accepted = 1
+          AND f.status IN ('ACCEPTED', 'BLOCKED')
+        ORDER BY f.fragment_index, c.created_at, c.rowid`,
+      [orchestrationId],
+    ))
+    .map(mapClaim);
+}
+
+/**
+ * Which fragment each citable claim came from, and whether that fragment met
+ * its bar — so the ledger can say so beside the claim rather than leaving a
+ * reader to assume every cited claim rests on a settled question.
+ */
+export async function citableClaimCoverage(
+  orchestrationId: string,
+): Promise<Map<string, { fragmentKey: string; status: string; reason: string | null }>> {
+  const rows = await getDb().all<{
+    id: string;
+    fragment_key: string;
+    status: string;
+    blocked_reason: string | null;
+  }>(
+    `SELECT c.id, f.fragment_key, f.status, f.blocked_reason
+       FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+      WHERE c.orchestration_id = ? AND c.accepted = 1
+        AND f.status IN ('ACCEPTED', 'BLOCKED')`,
+    [orchestrationId],
+  );
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      { fragmentKey: row.fragment_key, status: row.status, reason: row.blocked_reason },
+    ]),
+  );
 }
 
 /**

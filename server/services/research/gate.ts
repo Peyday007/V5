@@ -59,6 +59,12 @@ export interface LaneCoverage {
 export interface GateResult {
   integrity: 'PASS' | 'FAIL';
   sufficiency: 'SUFFICIENT' | 'INSUFFICIENT';
+  /**
+   * Claims whose source could not be read, named so the report can say what
+   * was not checked. Neither accepted nor rejected: the gate has no verdict on
+   * evidence nobody could open.
+   */
+  unresolvedRetrieval: { claimId: string; claim: string; sourceUrl: string | null; state: string }[];
   claims: ClaimJudgement[];
   acceptedClaims: number;
   rejectedClaims: number;
@@ -306,8 +312,60 @@ export function applyGate(input: {
     results.filter((r) => !r.accepted).map((r) => r.failedCondition!).filter(Boolean),
   );
 
+  /**
+   * Claims whose source could not be read at all.
+   *
+   * Neither accepted nor rejected, because neither is true of them: nobody
+   * judged the evidence, so the gate has no verdict to give. They are carried
+   * out of here by name so the report can say what was not checked.
+   *
+   * Keeping them out of the rejection rate is the point. Paywalls, robots
+   * exclusions, JavaScript shells and dead links are ordinary — the archive's
+   * best research run hit all four and named fourteen items it could not
+   * resolve. Scoring those as rejections is what pushes a fragment past the
+   * majority-rejected line and fails it for untrustworthy sourcing, which is
+   * the opposite of what happened.
+   */
+  const unretrieved = claims.filter((claim) => claim.retrievalState !== 'RETRIEVED');
+
   const uncoveredLanes = coverage.filter((lane) => !lane.meetsThreshold);
-  const enoughSources = independentSources >= fragment.minIndependentSources;
+  /**
+   * How many independent sources this fragment actually needs.
+   *
+   * `standards.ts` already decides this per claim, and decides it correctly:
+   * one directly inspected primary source settles a statutory fact, an
+   * organisation's own statement about itself needs a second source
+   * independent of it, a disputed estimate needs two. The fragment then
+   * applied a flat number the planner had declared up front, before anyone
+   * knew what kind of claims the answer would consist of.
+   *
+   * That flat number is what failed three fragments of the first live packet
+   * whose integrity had passed: each had a directly-quoted statute, which is
+   * sufficient by the standard for what it was claiming, and insufficient by a
+   * number chosen before the research happened.
+   *
+   * So the floor is derived from the claims that survived, and the planner's
+   * declaration is deliberately *not* consulted as a second floor; see below.
+   */
+  const derivedFloor = acceptedList.reduce(
+    (highest, claim) => Math.max(highest, effectiveStandard(claim).minIndependentSources),
+    0,
+  );
+
+  /**
+   * The planner's own number is not the maximum of the two. Taking the higher
+   * would leave the bug exactly where it was: `plan.ts` declares 2 for any
+   * MISSING requirement, before it can possibly know that the answer will be a
+   * single quoted statute. Where a question really is contested, the claims
+   * that answer it are typed as the contested things they are and
+   * `effectiveStandard` raises their floor itself — which is the mechanism
+   * that should decide this, and the only one that sees the evidence.
+   *
+   * With no accepted claims the floor is 0 and the fragment fails on being
+   * empty, a line above, with a clearer reason than an arithmetic one.
+   */
+  const requiredSources = derivedFloor;
+  const enoughSources = independentSources >= requiredSources;
   if (uncoveredLanes.length > 0 || !enoughSources) failedConditions.add('COVERAGE');
 
   // Integrity is about the claims that survive, not about whether anything was
@@ -324,8 +382,9 @@ export function applyGate(input: {
   const refutedUnresolved = claims.some(
     (claim) => claim.contradictionState === 'REFUTED' && !(claim.contradictionNote ?? '').trim(),
   );
-  const rejectionRate = results.length === 0 ? 1 : (results.length - acceptedList.length) / results.length;
-  const mostlyRejected = results.length >= 2 && rejectionRate > 0.5;
+  const judged = results.length;
+  const rejectionRate = judged === 0 ? 1 : (judged - acceptedList.length) / judged;
+  const mostlyRejected = judged >= 2 && rejectionRate > 0.5;
 
   const integrity: GateResult['integrity'] =
     acceptedList.length > 0 && !refutedUnresolved && !mostlyRejected ? 'PASS' : 'FAIL';
@@ -339,6 +398,12 @@ export function applyGate(input: {
       ? 'SUFFICIENT'
       : 'INSUFFICIENT';
 
+  if (unretrieved.length > 0) {
+    reasons.push(
+      `${unretrieved.length} claim(s) could not be checked because their source could not be ` +
+        'read; they are recorded as unresolved rather than refused.',
+    );
+  }
   if (acceptedList.length === 0) {
     reasons.push('No claim in this fragment survived the evidence gate.');
   } else if (mostlyRejected) {
@@ -379,6 +444,12 @@ export function applyGate(input: {
   return {
     integrity,
     sufficiency,
+    unresolvedRetrieval: unretrieved.map((claim) => ({
+      claimId: claim.id,
+      claim: claim.claim,
+      sourceUrl: claim.sourceUrl,
+      state: claim.retrievalState,
+    })),
     claims: results,
     acceptedClaims: acceptedList.length,
     rejectedClaims: results.length - acceptedList.length,

@@ -26,6 +26,7 @@
  * kills the work rather than orphaning it.
  */
 import crypto from 'node:crypto';
+import { dependencyKeys } from '../../domain/dependencies.ts';
 import type {
   Layer,
   Project,
@@ -571,7 +572,7 @@ async function dependencyClaims(
   fragment: ResearchFragment,
 ): Promise<{ fragmentKey: string; claim: ResearchClaim }[]> {
   if (fragment.dependsOn.length === 0) return [];
-  const wanted = new Set(fragment.dependsOn);
+  const wanted = new Set(dependencyKeys(fragment.dependsOn));
   const out: { fragmentKey: string; claim: ResearchClaim }[] = [];
   for (const other of await currentFragments(orchestrationId)) {
     if (!wanted.has(other.fragmentKey) || other.status !== 'ACCEPTED') continue;
@@ -781,6 +782,7 @@ function failedGate(message: string): GateResult {
     failedConditions: [],
     reasons: [message],
     unresolvedGaps: [],
+    unresolvedRetrieval: [],
   };
 }
 

@@ -18,6 +18,7 @@
  * afterwards, because a plan nobody can check is not a plan.
  */
 import type {
+  FragmentDependency,
   BoundaryContract,
   CoverageStatus,
   ExistingClaim,
@@ -66,7 +67,7 @@ export interface ReviewFragment {
   tier: string;
   tierReason: string;
   jobIndex: number;
-  dependsOn: string[];
+  dependsOn: FragmentDependency[];
 }
 
 export interface ReviewJob {

@@ -13,6 +13,7 @@
  * the fragments together is rejected rather than untangled, because untangling
  * it would mean guessing which claim belonged to which question.
  */
+import { dependencyKeys } from '../../domain/dependencies.ts';
 import type { ResearchFragment } from '../../domain/types.ts';
 import type { JobKind } from '../../domain/types.ts';
 
@@ -90,8 +91,13 @@ export function bundleFragments(fragments: ResearchFragment[]): Bundle[] {
       if (!sharesEcosystem(first, fragment)) return false;
       // A fragment that depends on another in the same bundle would be asked to
       // build on an answer that does not exist yet.
-      if (bundle.fragments.some((entry) => fragment.dependsOn.includes(entry.fragmentKey))) return false;
-      if (bundle.fragments.some((entry) => entry.dependsOn.includes(fragment.fragmentKey))) return false;
+      // Compared by key, and across every kind rather than only the blocking
+      // ones: a conditional dependent may run before its dependency, but not
+      // *beside* it in one session, because the condition it has to carry is
+      // whatever that dependency ends up establishing.
+      const keysOf = (entry: ResearchFragment): string[] => dependencyKeys(entry.dependsOn);
+      if (bundle.fragments.some((entry) => keysOf(fragment).includes(entry.fragmentKey))) return false;
+      if (bundle.fragments.some((entry) => keysOf(entry).includes(fragment.fragmentKey))) return false;
       const size = bundle.fragments.reduce((sum, entry) => sum + promptWeight(entry), 0);
       return size + promptWeight(fragment) <= MAX_BUNDLE_PROMPT_CHARS;
     });

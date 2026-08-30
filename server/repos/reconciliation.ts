@@ -8,7 +8,13 @@
  * override is recorded beside the reasoning it replaced.
  */
 import { getDb } from '../db/database.ts';
+import {
+  parseDependencies,
+  serializeDependencies,
+  toDependencies,
+} from '../domain/dependencies.ts';
 import type {
+  FragmentDependency,
   BoundaryContract,
   BoundaryContractRow,
   ClaimType,
@@ -176,7 +182,7 @@ function mapRequirement(row: RequirementRow): Requirement {
     rationale: row.rationale,
     requiredEvidence: parseJson<string[]>(row.required_evidence, []),
     completionCriteria: parseJson<string[]>(row.completion_criteria, []),
-    dependsOn: parseJson<string[]>(row.depends_on, []),
+    dependsOn: parseDependencies(row.depends_on),
     owningLayerId: row.owning_layer_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -195,7 +201,7 @@ export interface CreateRequirementInput {
   rationale?: string | null;
   requiredEvidence?: string[];
   completionCriteria?: string[];
-  dependsOn?: string[];
+  dependsOn?: (string | FragmentDependency)[];
   owningLayerId?: string | null;
 }
 
@@ -216,7 +222,7 @@ export async function createRequirements(inputs: CreateRequirementInput[]): Prom
         [id, input.orchestrationId, input.projectId, input.layerId, input.requirementKey,
           input.ordinal, input.statement, input.necessity, input.kind, input.rationale ?? null,
           toJson(input.requiredEvidence ?? []), toJson(input.completionCriteria ?? []),
-          toJson(input.dependsOn ?? []), input.owningLayerId ?? null, ts, ts],
+          serializeDependencies(toDependencies(input.dependsOn)), input.owningLayerId ?? null, ts, ts],
       );
     }
   });

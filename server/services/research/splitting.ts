@@ -12,7 +12,9 @@
  * answer that may have to be thrown away, so foundations go first and cycles are
  * surfaced rather than silently ordered around.
  */
-import type { ResearchFragment } from '../../domain/types.ts';
+import { dependencyKeys, toDependencies } from '../../domain/dependencies.ts';
+import type {
+  FragmentDependency, ResearchFragment } from '../../domain/types.ts';
 import { createFragments, type CreateFragmentInput } from '../../repos/research.ts';
 import type { GateResult } from './gate.ts';
 
@@ -173,7 +175,7 @@ export interface DependencyReport {
  */
 export interface DependencyNode {
   fragmentKey: string;
-  dependsOn: string[];
+  dependsOn: readonly (string | FragmentDependency)[];
   priority: number;
   fragmentIndex: number;
 }
@@ -184,11 +186,15 @@ export function planDependencies(fragments: DependencyNode[]): DependencyReport 
 
   const edges = new Map<string, string[]>();
   for (const fragment of fragments) {
-    const missing = fragment.dependsOn.filter((key) => !byKey.has(key));
+    // Every kind is an edge here. A cycle is a cycle whether or not it blocks:
+    // two fragments each conditioning on the other's outcome cannot both be
+    // ordered second, and a plan that says so is wrong before anything runs.
+    const declared = dependencyKeys(toDependencies(fragment.dependsOn));
+    const missing = declared.filter((key) => !byKey.has(key));
     if (missing.length > 0) dangling.push({ key: fragment.fragmentKey, missing });
     edges.set(
       fragment.fragmentKey,
-      fragment.dependsOn.filter((key) => byKey.has(key)),
+      declared.filter((key) => byKey.has(key)),
     );
   }
 
@@ -227,7 +233,7 @@ export function dependenciesSettled(
 ): boolean {
   const settled = new Set(['ACCEPTED', 'REJECTED', 'NEEDS_HUMAN', 'CANCELLED']);
   const byKey = new Map(fragments.map((entry) => [entry.fragmentKey, entry]));
-  return fragment.dependsOn.every((key) => {
+  return dependencyKeys(fragment.dependsOn).every((key) => {
     const dependency = byKey.get(key);
     return dependency === undefined || settled.has(dependency.status);
   });

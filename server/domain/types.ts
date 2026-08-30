@@ -392,6 +392,16 @@ export const ORCHESTRATION_STATUSES = [
   // the user's allowance is spent on it.
   'AWAITING_APPROVAL',
   'COMPLETE',
+  /**
+   * Filed, audited, and honestly short of the goal.
+   *
+   * The judge said MORE_RESEARCH and there is no repair this run can plan or
+   * pay for. The workflow is over; the research question is not. Distinguishing
+   * this from COMPLETE is what stops a packet whose own judge asked for more
+   * work from reading as an answer — which is exactly how the first live packet
+   * came to look closeable.
+   */
+  'COMPLETE_WITH_GAPS',
   'FAILED',
   'CANCELLED',
   'INTERRUPTED',
@@ -574,6 +584,55 @@ export const SUFFICIENCY_VERDICTS = ['SUFFICIENT', 'INSUFFICIENT'] as const;
 export type SufficiencyVerdict = (typeof SUFFICIENCY_VERDICTS)[number];
 
 /** What later passes did to a claim. Silence is not agreement, so nothing defaults to SUPPORTED. */
+/**
+ * Whether the researcher actually got to read the source.
+ *
+ * Separate from the gate's verdict on purpose, and the distinction is the whole
+ * point: a claim whose source is paywalled has not been judged, and a claim
+ * that was judged and refused has. Counting the first as the second is how a
+ * run that hit four paywalls ends up scored like a run that invented four
+ * citations.
+ *
+ * Anything other than RETRIEVED is neither accepted nor rejected. It is carried
+ * into the report as an unresolved item, named, so a reader knows what was not
+ * checked rather than being told nothing about it.
+ */
+export const RETRIEVAL_STATES = [
+  'RETRIEVED',
+  'PAYWALLED',
+  'ROBOTS_BLOCKED',
+  'JS_ONLY',
+  'NOT_REACHABLE',
+] as const;
+export type RetrievalState = (typeof RETRIEVAL_STATES)[number];
+
+/**
+ * What one fragment needing another actually means.
+ *
+ * Every dependency used to block: a fragment waited until the one it named was
+ * ACCEPTED, and if that never happened it was never researched. For a
+ * definition that is right — you cannot answer a question whose terms nobody
+ * has settled. For most dependencies it is far too strong, and it cost the
+ * first live packet five fragments that were never attempted because a
+ * neighbouring question failed.
+ *
+ * - `HARD` — the dependent cannot be stated at all until this is accepted.
+ *   Definitions and scope boundaries.
+ * - `CONDITIONAL` — the dependent can be researched now and stated as a
+ *   conditional: *if the transaction falls within Article 12-A, then …*. The
+ *   assignment carries what the dependency did and did not establish, and the
+ *   worker is required to carry the condition into its claims.
+ * - `SEQUENCING` — a preference about order and nothing more. Never blocks,
+ *   never dooms.
+ */
+export const DEPENDENCY_KINDS = ['HARD', 'CONDITIONAL', 'SEQUENCING'] as const;
+export type DependencyKind = (typeof DEPENDENCY_KINDS)[number];
+
+export interface FragmentDependency {
+  key: string;
+  kind: DependencyKind;
+}
+
 export const CONTRADICTION_STATES = ['UNCHALLENGED', 'SUPPORTED', 'CONTESTED', 'REFUTED'] as const;
 export type ContradictionState = (typeof CONTRADICTION_STATES)[number];
 
@@ -939,6 +998,7 @@ export interface ResearchOrchestrationRow {
 }
 
 export interface ResearchFragmentRow {
+  next_retry_at?: string | null;
   requirement_ids: string;
   evidence_lane: string | null;
   why_it_matters: string | null;
@@ -1016,6 +1076,7 @@ export interface ResearchPassRow {
 }
 
 export interface ResearchClaimRow {
+  retrieval_state?: string | null;
   claim_type: string;
   source_group: string | null;
   primary_source: number;
@@ -1773,7 +1834,7 @@ export interface Requirement {
   rationale: string | null;
   requiredEvidence: string[];
   completionCriteria: string[];
-  dependsOn: string[];
+  dependsOn: FragmentDependency[];
   owningLayerId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -2054,7 +2115,7 @@ export interface ResearchFragment {
   acceptableSourceTypes: string[];
   excludedSourceTypes: string[];
   completionCriteria: string[];
-  dependsOn: string[];
+  dependsOn: FragmentDependency[];
   minIndependentSources: number;
   status: FragmentStatus;
   attempt: number;
@@ -2128,6 +2189,7 @@ export interface ResearchClaim {
   retrievedAt: string | null;
   confidence: number;
   contradictionState: ContradictionState;
+  retrievalState: RetrievalState;
   contradictionNote: string | null;
   validationState: ClaimValidationState;
   validationDetail: string | null;

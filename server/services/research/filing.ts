@@ -22,7 +22,7 @@ import type { ResearchClaim, ResearchOrchestration } from '../../domain/types.ts
 import { getLayer } from '../../repos/layers.ts';
 import { getProject } from '../../repos/projects.ts';
 import { getRun } from '../../repos/runs.ts';
-import { acceptedClaims, updateOrchestration } from '../../repos/research.ts';
+import { citableClaimCoverage, citableClaims, updateOrchestration } from '../../repos/research.ts';
 import { registerRunArtifact, targetVersionForRun } from '../runArtifacts.ts';
 import { enqueueExtraction } from '../documents/queue.ts';
 import { isAuditable } from '../documents/quality.ts';
@@ -54,7 +54,38 @@ export class NothingToFile extends Error {
  * a passage. A report filed without it would be prose that happens to be true;
  * with it, a reader can check.
  */
-export function appendLedger(report: string, claims: ResearchClaim[]): string {
+
+/**
+ * The passage, and an honest mark when it did not fit.
+ *
+ * The ledger's own preamble used to promise "the exact passage is preserved"
+ * directly above a hard 400-character slice with no marker, so a cut quotation
+ * was indistinguishable from a complete one and could be carried onward as if
+ * exact. The stored excerpt was never truncated — only the rendering was — so
+ * nothing was lost except the reader's ability to tell.
+ */
+function excerpt(value: string | null): string {
+  const flat = (value ?? '').replace(/\s+/g, ' ').trim();
+  return flat.length > 400 ? `${flat.slice(0, 399)}…` : flat;
+}
+
+/** Said beside the claim, because a reader cannot infer it from the citation. */
+function coverageNote(
+  entry: { fragmentKey: string; status: string; reason: string | null } | undefined,
+): string | null {
+  if (!entry || entry.status !== 'BLOCKED') return null;
+  return (
+    `  - Coverage: **incomplete** — fragment \`${entry.fragmentKey}\` did not meet its evidence ` +
+    `bar${entry.reason ? `: ${entry.reason.replace(/\s+/g, ' ').slice(0, 200)}` : '.'} ` +
+    'This claim is accepted evidence; the requirement it belongs to is not settled.'
+  );
+}
+
+export function appendLedger(
+  report: string,
+  claims: ResearchClaim[],
+  coverage: Map<string, { fragmentKey: string; status: string; reason: string | null }> = new Map(),
+): string {
   const lines = [
     report.trim(),
     '',
@@ -63,8 +94,12 @@ export function appendLedger(report: string, claims: ResearchClaim[]): string {
     '## Evidence ledger',
     '',
     'Every claim below passed the fragment evidence gate: it has a canonical source URL, the',
-    'source was verified to support it, the exact passage is preserved, and its scope matches',
-    'the fragment that produced it.',
+    'source was verified to support it, and its scope matches the fragment that produced it.',
+    'Passages are quoted from the stored excerpt and are truncated at 400 characters, marked',
+    'with an ellipsis where that happened; the full excerpt is held against the claim.',
+    '',
+    'A claim marked **coverage incomplete** is accepted evidence whose fragment did not answer',
+    'its question to the declared bar. The claim stands; the requirement behind it does not.',
     '',
   ];
   for (const claim of claims) {
@@ -83,8 +118,9 @@ export function appendLedger(report: string, claims: ResearchClaim[]): string {
       `  - Source: ${claim.sourcePublisher ?? 'unknown publisher'} — ${claim.sourceTitle ?? 'untitled'}` +
         `${claim.sourceDate ? ` (${claim.sourceDate})` : ''}`,
       `  - URL: ${claim.sourceUrl}`,
-      `  - Passage: "${(claim.evidenceExcerpt ?? '').replace(/\s+/g, ' ').slice(0, 400)}"` +
+      `  - Passage: "${excerpt(claim.evidenceExcerpt)}"` +
         `${claim.evidenceLocator ? ` — ${claim.evidenceLocator}` : ''}`,
+      coverageNote(coverage.get(claim.id)),
       claim.retrievedAt ? `  - Retrieved: ${claim.retrievedAt}` : null,
       claim.contradictionState !== 'UNCHALLENGED'
         ? `  - Contradiction state: ${claim.contradictionState}${claim.contradictionNote ? ` — ${claim.contradictionNote}` : ''}`
@@ -127,7 +163,7 @@ export async function assertCitable(
   orchestrationId: string,
   citedClaimIds: string[],
 ): Promise<ResearchClaim[]> {
-  const accepted = await acceptedClaims(orchestrationId);
+  const accepted = await citableClaims(orchestrationId);
   if (accepted.length === 0) {
     // Refusing rather than filing an empty packet. A report with no accepted
     // evidence behind it is the thing this whole engine exists to make
@@ -173,7 +209,11 @@ export async function fileResearchPacket(input: {
   });
 
   const version = await targetVersionForRun(run, layer.id, project.id);
-  const body = appendLedger(appendLimitations(input.reportText, input.stillMissing), accepted);
+  const body = appendLedger(
+    appendLimitations(input.reportText, input.stillMissing),
+    accepted,
+    await citableClaimCoverage(orchestration.id),
+  );
 
   const filed = await registerRunArtifact({
     run,

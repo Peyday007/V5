@@ -12,6 +12,7 @@
  * behind it — because the response to a coverage failure is targeted research
  * into what is missing, never a re-run of work that already succeeded.
  */
+import { dependencyKeys } from '../../domain/dependencies.ts';
 import type {
   ExistingClaim,
   Requirement,
@@ -205,7 +206,7 @@ export async function assessPacket(input: {
   // 2. Foundational fragments are resolved, or blocked on purpose and in view.
   const foundationalOpen = fragments.filter(
     (fragment) =>
-      fragments.some((other) => other.dependsOn.includes(fragment.fragmentKey)) &&
+      fragments.some((other) => dependencyKeys(other.dependsOn).includes(fragment.fragmentKey)) &&
       !['ACCEPTED', 'REJECTED', 'CANCELLED', 'NEEDS_HUMAN'].includes(fragment.status),
   );
   checks.push({

@@ -19,6 +19,7 @@
  * fragments every sentence has stopped being a plan.
  */
 import type {
+  FragmentDependency,
   BoundaryContract,
   CoverageStatus,
   ExistingClaim,
@@ -181,6 +182,41 @@ export async function reconcile(input: {
   };
 }
 
+
+/**
+ * Decide what each of a requirement's dependencies actually means.
+ *
+ * The rule is narrow and mechanical, because a planner cannot read intent:
+ *
+ * - A dependency on a **DEFINITION** is `HARD`. You cannot answer a question
+ *   whose terms nobody has settled, and a conditional phrasing would just be
+ *   restating the ambiguity.
+ * - Every other dependency is `CONDITIONAL`. The dependent can be researched
+ *   now and stated as a conditional, carrying what its dependency did and did
+ *   not establish — which is what the assignment hands it.
+ * - A dependency naming a requirement this plan does not contain stays `HARD`.
+ *   Not knowing what something is, is not a reason to stop waiting for it.
+ *
+ * The default before this existed was that everything blocked, and it cost the
+ * first live packet five fragments that were never attempted because a
+ * neighbouring question failed. A penalty is researchable without the licence
+ * trigger being settled, so long as it says so.
+ */
+export function typeDependencies(
+  dependencies: FragmentDependency[],
+  siblings: Requirement[],
+): FragmentDependency[] {
+  const byKey = new Map(siblings.map((requirement) => [requirement.requirementKey, requirement]));
+  return dependencies.map((dependency) => {
+    // A kind already decided is kept. A worker that declared SEQUENCING knows
+    // something about its own question that this rule does not.
+    if (dependency.kind !== 'HARD') return dependency;
+    const target = byKey.get(dependency.key);
+    if (!target) return dependency;
+    return { key: dependency.key, kind: target.kind === 'DEFINITION' ? 'HARD' : 'CONDITIONAL' };
+  });
+}
+
 /**
  * A fragment brief built from one gap.
  *
@@ -194,6 +230,14 @@ export function briefFromGap(input: {
   assessment: CoverageAssessment;
   contract: BoundaryContract | null;
   index: number;
+  /**
+   * The requirements this plan is being built from, so a dependency can be
+   * typed rather than assumed to block.
+   *
+   * Omitted only by callers that have no graph to consult — and then every
+   * dependency stays HARD, which is what it meant before kinds existed.
+   */
+  siblings?: Requirement[];
 }): Parameters<typeof createFragments>[0][number] {
   const { assessment, contract } = input;
   const requirement = assessment.requirement;
@@ -234,7 +278,7 @@ export function briefFromGap(input: {
       requirement.completionCriteria.length > 0
         ? requirement.completionCriteria
         : ['a claim with a canonical source URL and the exact supporting passage'],
-    dependsOn: requirement.dependsOn,
+    dependsOn: typeDependencies(requirement.dependsOn, input.siblings ?? []),
     minIndependentSources: minSources,
     status: 'QUEUED' as const,
     requirementIds: [requirement.id],
@@ -351,6 +395,7 @@ export async function planFragmentsFromGaps(input: {
       assessment,
       contract: input.reconciliation.contract,
       index,
+      siblings: input.reconciliation.requirements,
     });
     if (taken.has(brief.fragmentKey)) continue;
 

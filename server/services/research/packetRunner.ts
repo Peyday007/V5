@@ -38,6 +38,7 @@
  * approval is a separate entry point a person calls, and the ordinary advance
  * refuses to queue a PLANNED fragment.
  */
+import { dependencyKeys } from '../../domain/dependencies.ts';
 import type {
   ResearchFragment,
   ResearchOrchestration,
@@ -351,12 +352,20 @@ function doomedBy(fragments: ResearchFragment[]): Map<string, string[]> {
     let changed = false;
     for (const fragment of fragments) {
       if (TERMINAL_FRAGMENT.has(fragment.status) || doomed.has(fragment.fragmentKey)) continue;
-      const blockers = fragment.dependsOn.filter((key) => {
-        const dependency = byKey.get(key);
-        if (!dependency) return true;
-        if (doomed.has(key)) return true;
-        return TERMINAL_FRAGMENT.has(dependency.status) && dependency.status !== 'ACCEPTED';
-      });
+      // Only a HARD dependency dooms. A conditional dependent can be
+      // researched and stated as a conditional, and a sequencing one was never
+      // waiting on an answer at all — writing either of them off because a
+      // neighbour failed is what cost the first live packet five fragments
+      // nobody ever attempted.
+      const blockers = fragment.dependsOn
+        .filter((declared) => declared.kind === 'HARD')
+        .map((declared) => declared.key)
+        .filter((key) => {
+          const dependency = byKey.get(key);
+          if (!dependency) return true;
+          if (doomed.has(key)) return true;
+          return TERMINAL_FRAGMENT.has(dependency.status) && dependency.status !== 'ACCEPTED';
+        });
       if (blockers.length > 0) {
         doomed.set(fragment.fragmentKey, blockers);
         changed = true;
@@ -372,6 +381,7 @@ function readyToResearch(fragments: ResearchFragment[]): ResearchFragment[] {
   const accepted = new Set(
     fragments.filter((f) => f.status === 'ACCEPTED').map((f) => f.fragmentKey),
   );
+  const byKey = new Map(fragments.map((fragment) => [fragment.fragmentKey, fragment]));
   return fragments.filter((fragment) => {
     if (fragment.status !== 'QUEUED') return false;
     // A dependency that ended BLOCKED never becomes accepted, so a fragment
@@ -379,7 +389,14 @@ function readyToResearch(fragments: ResearchFragment[]): ResearchFragment[] {
     // the honest outcome is that the packet is short a foundation, and the
     // packet assessment says so. Silently starting it would produce an answer
     // resting on a definition nobody established.
-    return fragment.dependsOn.every((key) => accepted.has(key));
+    return fragment.dependsOn.every((declared) => {
+      if (declared.kind === 'SEQUENCING') return true;
+      if (declared.kind === 'HARD') return accepted.has(declared.key);
+      // CONDITIONAL: the dependency has to have *finished*, so the dependent
+      // knows what it is conditioning on. It does not have to have succeeded.
+      const dependency = byKey.get(declared.key);
+      return dependency ? TERMINAL_FRAGMENT.has(dependency.status) : true;
+    });
   });
 }
 
@@ -399,14 +416,17 @@ function unmetDependencies(
   byKey: Map<string, ResearchFragment>,
 ): { key: string; became: string }[] {
   const unmet: { key: string; became: string }[] = [];
-  for (const key of fragment.dependsOn) {
-    const dependency = byKey.get(key);
+  for (const declared of fragment.dependsOn) {
+    // Sequencing is a preference about order. It never blocks and it never
+    // dooms, so it is never unmet.
+    if (declared.kind === 'SEQUENCING') continue;
+    const dependency = byKey.get(declared.key);
     if (!dependency) {
-      unmet.push({ key, became: 'no fragment carries that key' });
+      unmet.push({ key: declared.key, became: 'no fragment carries that key' });
       continue;
     }
     if (TERMINAL_FRAGMENT.has(dependency.status) && dependency.status !== 'ACCEPTED') {
-      unmet.push({ key, became: dependency.status });
+      unmet.push({ key: declared.key, became: dependency.status });
     }
   }
   return unmet;
@@ -451,7 +471,7 @@ async function blockOnFailedDependency(input: {
     const detail =
       unmet.length > 0
         ? unmet.map((entry) => `${entry.key} (${entry.became})`).join(', ')
-        : fragment.dependsOn.join(', ');
+        : dependencyKeys(fragment.dependsOn).join(', ');
     const reason =
       `Not researched: it depends on ${detail}, and that never arrives. ` +
       'Answering it would rest on a foundation nobody established. Repair the dependency ' +

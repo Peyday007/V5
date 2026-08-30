@@ -47,6 +47,7 @@
  * answer, which is the difference between an assignment and a script.
  */
 import type {
+  FragmentDependency,
   ResearchClaim,
   ResearchFragment,
   ResearchOrchestration,
@@ -168,7 +169,7 @@ export interface FragmentView {
   acceptableSourceTypes: string[];
   excludedSourceTypes: string[];
   completionCriteria: string[];
-  dependsOn: string[];
+  dependsOn: FragmentDependency[];
   minIndependentSources: number;
   expectedClaimTypes: string[];
   prohibitedEvidence: string[];
@@ -304,7 +305,8 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
 
   const dependencies: DependencyView[] = [];
   if (fragment) {
-    for (const key of fragment.dependsOn) {
+    for (const declared of fragment.dependsOn) {
+      const key = declared.key;
       const dependency = current.find((candidate) => candidate.fragmentKey === key);
       if (!dependency) continue;
       dependencies.push({

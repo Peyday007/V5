@@ -14,7 +14,9 @@
  * And spending the user's money is never a default — a paid overage happens only
  * when they have turned it on, and the pause says so plainly when they have not.
  */
-import type { ProviderQuota, ResearchFragment } from '../../domain/types.ts';
+import { dependencyKeys, toDependencies } from '../../domain/dependencies.ts';
+import type {
+  FragmentDependency, ProviderQuota, ResearchFragment } from '../../domain/types.ts';
 import type { AIProvider } from '../../providers/types.ts';
 
 /**
@@ -54,7 +56,7 @@ function assign(tier: PriorityTier, reason: string): TierAssignment {
  */
 export interface TierInput {
   fragmentKey: string;
-  dependsOn?: string[];
+  dependsOn?: readonly (string | FragmentDependency)[];
   requirementIds?: string[];
   expectedClaimTypes?: string[];
   requiredCalculations?: string[];
@@ -65,7 +67,7 @@ export interface TierInput {
 
 /** Everything that names this fragment as a premise. */
 function dependents(fragment: TierInput, all: TierInput[]): number {
-  return all.filter((entry) => (entry.dependsOn ?? []).includes(fragment.fragmentKey)).length;
+  return all.filter((entry) => dependencyKeys(toDependencies(entry.dependsOn)).includes(fragment.fragmentKey)).length;
 }
 
 /**
