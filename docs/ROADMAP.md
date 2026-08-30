@@ -36,6 +36,25 @@ Step 9's is in [`STEP-9-EVIDENCE.md`](STEP-9-EVIDENCE.md), its design in
 [`STEP-9-LOG.md`](STEP-9-LOG.md). Each evidence file says what was proven, what
 merely passes its tests, and what nobody has run.
 
+> **Step 9 is open.** Its mechanical half is proven and is not being re-run: a
+> real worker carried a packet from a human's intent to a filed, audited,
+> citable document with every claim gated on the way in. Its substantive half
+> is not. The requirement is *"one **genuinely useful** research packet"*, and
+> the packet that ran answered one of five states and was labelled interim by
+> its own judge.
+>
+> The causes were mechanisms that discarded work the research had already
+> done — accepted claims thrown away with the fragment that produced them, a
+> flat source floor applied before anyone knew what kind of claim would answer
+> the question, no planned repair on the worker path, and dependencies that
+> blocked absolutely. They are corrected; what closes the step is a fresh
+> packet through the corrected engine, not a re-reading of the old one.
+>
+> An earlier version of the evidence file said Step 9 "did not ask for the
+> research to be good". It did ask, in the sentence that opens its own plan.
+> That correction is recorded in `STEP-9-EVIDENCE.md` rather than quietly
+> edited away.
+
 ## Ahead
 
 Each of these is a separate step on purpose. They are listed in order and the

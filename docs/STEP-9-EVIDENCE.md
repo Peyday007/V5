@@ -400,9 +400,99 @@ Two of twelve fragments cleared the gate (`ny-licence-trigger`, `ny-penalty`);
 declared gaps, each carrying the reason it is unresolved. The judge read that
 and said `MORE_RESEARCH`, which is correct: this is a New York answer to a
 five-state question, filed with what it could not establish named inside it.
-Step 9 asked whether the machinery could carry a packet from intent to an
-audited document with every claim gated on the way in. It can, and did. It did
-not ask for the research to be good.
+## Step 9 is not closed, and this section is the correction
+
+**The sentence that used to end the section above was wrong, and it was my
+wrong sentence.** It read: *"Step 9 asked whether the machinery could carry a
+packet from intent to an audited document with every claim gated on the way in.
+It can, and did. It did not ask for the research to be good."*
+
+The second half is false, and it is false against a requirement quoted six
+lines earlier in this project's own plan. `STEP-9-PLAN.md` opens with it:
+
+> **Can a real Claude Max worker, over the deployed MCP gateway, carry one
+> genuinely useful research packet from a human's intent to a canonical,
+> audited, citable document in the Brain — with every claim gated on the way
+> in and nothing invented anywhere?**
+
+*Genuinely useful* is in the requirement, and the plan spends a section
+(§3, "What 'genuinely useful' has to mean here") defining it — beginning
+*"The spec forbids a demo"* and requiring a question *"whose answer changes
+what somebody does next"*. Dropping those two words turned a substantive bar
+into a mechanical one, and then reported the mechanical one as met. Restating a
+requirement more weakly than it was written, in the document that certifies it,
+is the worst version of this mistake available.
+
+**The honest verdict: Step 9 passed its mechanical proof and failed
+substantive acceptance.**
+
+| | |
+|---|---|
+| The machinery carried a packet intent → gated claims → synthesis → three audit roles → filed document | **met**, and the table above is the evidence |
+| Nothing was invented; every accepted claim resolves to a source and a passage | **met** |
+| One **genuinely useful** packet | **not met** |
+
+Two of twelve fragments cleared the gate. The filed report answers New York and
+labels itself an interim packet; the question asked about five states. The
+judge's own verdict was `MORE_RESEARCH`. A one-state answer to a five-state
+question does not change what somebody does next, which is the plan's own test.
+
+### Why, and what was done about it
+
+The causes were not the evidence bar being too strict. They were four
+mechanisms that discarded work the research had already done, diagnosed against
+the archive's own best research run — a 13,400-word decision-useful report from
+a single earlier Cowork session — and corrected in the batch recorded in
+`STEP-9-LOG.md`:
+
+1. **Accepted claims from fragments that failed coverage were discarded
+   entirely.** Three fragments recorded integrity `PASS` and lost every accepted
+   claim. `citableClaims` now carries them into synthesis with an explicit
+   coverage annotation: they are evidence, and the requirement they belong to is
+   still open. Both things are true and both are now said.
+2. **A flat "two independent sources" was applied before anyone could know what
+   kind of claim would answer the question.** Three places imposed it
+   independently. §14 says there is no general minimum; the standard is now per
+   claim type, with the fragment's own declaration still binding where it asks
+   for more.
+3. **A failed fragment got zero planned repairs on the worker path.** §15's
+   ladder existed and was wired only to the in-process path. It is wired to both.
+4. **Every dependency blocked absolutely**, so the penalty questions were
+   cancelled by an unsettled licence trigger rather than researched
+   conditionally. Dependencies are typed now: `HARD`, `CONDITIONAL`,
+   `SEQUENCING`.
+
+### The two inspection findings
+
+**1. The New York penalties are not stated conditionally.** The filed report
+gives § 442-e penalties and the § 442-d fee-recovery bar without making them
+conditional on the transaction falling within Article 12-A — which is precisely
+the question `ny-licence-trigger` did not settle. The report asserts the
+consequence while its own antecedent is open.
+
+The filed document is not edited: §5, a canonical artifact is provenance. The
+correction is structural and is in the batch — the research method now carries a
+**Carry your conditions** section, served to the worker at runtime rather than
+stored in a repository it cannot read, and typed dependencies mean a dependent
+fragment is told its antecedent is unsettled instead of being cancelled. A
+corrected statement of the New York position is a new synthesis over a new
+packet, not a rewrite of this one.
+
+**2. Ledger passages are truncated mid-sentence while the preamble claimed the
+exact passage was preserved.** Both halves were wrong. `excerpt()` cut at 400
+characters with no marker, and the preamble asserted a property the file did not
+have. The excerpt is now marked where it is cut, and the preamble no longer
+claims what it cannot: the stored claim keeps the full passage, and the ledger
+shows an abridged copy of it, which is a different sentence from the one that
+was there.
+
+### What closing Step 9 now requires
+
+The mechanical evidence above stands and is not re-run. What is outstanding is
+the substantive half: a packet that answers the question it was given, produced
+by the corrected engine, with the same gating and the same provenance. That is
+the fresh-packet acceptance proof — a new orchestration, not a mutation of this
+one, which stays `COMPLETE` as the record of what actually happened.
 
 ## What nobody has watched happen
 
