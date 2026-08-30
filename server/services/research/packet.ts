@@ -181,7 +181,15 @@ export async function assessPacket(input: {
     if (requirement.kind === 'OTHER_LAYER' || requirement.kind === 'IRRELEVANT') return false;
     if (answeredByResearch.has(requirement.id)) return false;
     const entry = byRequirement.get(requirement.id);
-    return !entry || (entry.status !== 'SATISFIED' && entry.status !== 'PARTIALLY_SATISFIED');
+    if (!entry) return true;
+    // NOT_REQUIRED is a decision, not an absence. It is written by
+    // `overrideCoverage` — by a person, or by the runner recording a gap whose
+    // research is exhausted — and it always carries the note saying why. A
+    // requirement somebody has explicitly taken out of scope is not an open
+    // mandatory gap, and treating it as one would leave the packet unable to
+    // finish for a reason that has already been answered.
+    if (entry.status === 'NOT_REQUIRED') return false;
+    return entry.status !== 'SATISFIED' && entry.status !== 'PARTIALLY_SATISFIED';
   });
   checks.push({
     check: MANDATORY_COVERAGE_CHECK,

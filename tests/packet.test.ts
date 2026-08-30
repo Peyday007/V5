@@ -49,9 +49,9 @@ import {
   runFixturePacket,
 } from '../server/services/research/fixtures.ts';
 import { advancePacket, approvePlan, resumePulledPackets } from '../server/services/research/packetRunner.ts';
-import { createRequirements } from '../server/repos/reconciliation.ts';
+import { createRequirements, listCoverage, upsertCoverage } from '../server/repos/reconciliation.ts';
 import { recoverInterruptedResearch } from '../server/services/research/queue.ts';
-import { updateOrchestration } from '../server/repos/research.ts';
+import { updateFragment, updateOrchestration } from '../server/repos/research.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import type {
   ClaimedWork,
@@ -502,6 +502,167 @@ describe('submitting claims', () => {
 
     expect(again['state']).toBe('ALREADY_RECORDED');
     expect(await listClaimsForFragment(fragment.id)).toHaveLength(1);
+  });
+});
+
+describe('a research gap that is genuinely exhausted', () => {
+  /**
+   * Option A, authorized for this packet: when a fragment has spent its repair
+   * budget and no evidence path remains, record the gap and file what the
+   * evidence supports, rather than holding the packet open forever.
+   *
+   * What must not happen is a Brain that can declare its way to "complete".
+   * So this is narrow: it fires only when nothing is live or claimable, only
+   * for a fragment that is BLOCKED *and* out of attempts, and it changes no
+   * gate — the claims, verdicts and rejection reasons stay exactly as they are.
+   * It narrows what the packet claims to answer; it does not change what it
+   * found.
+   */
+  async function exhaustedPacket(): Promise<{
+    orchestration: ResearchOrchestration;
+    dead: ResearchFragment;
+    dependent: ResearchFragment;
+    requirementIds: string[];
+  }> {
+    const orchestration = await makeOrchestration();
+    const [rDead, rDep] = await createRequirements([
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requirementKey: 'trigger',
+        ordinal: 0,
+        statement: 'Whether Texas requires a licence.',
+        necessity: 'MANDATORY',
+        kind: 'RESEARCH',
+      },
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requirementKey: 'penalty',
+        ordinal: 1,
+        statement: 'The penalty for acting without that licence.',
+        necessity: 'MANDATORY',
+        kind: 'RESEARCH',
+      },
+    ]);
+    const dead = await makeFragment(orchestration, {
+      fragmentKey: 'trigger',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+      attempt: 3,
+      maxRepairs: 2,
+      requirementIds: [rDead!.id],
+    });
+    await updateFragment(dead.id, {
+      blockedReason: 'The statute site refuses automated retrieval.',
+    });
+    const dependent = await makeFragment(orchestration, {
+      fragmentKey: 'penalty',
+      fragmentIndex: 1,
+      status: 'QUEUED',
+      dependsOn: ['trigger'],
+      requirementIds: [rDep!.id],
+    });
+    // Coverage rows, as the planning pass writes them.
+    for (const requirement of [rDead!, rDep!]) {
+      await upsertCoverage({
+        orchestrationId: orchestration.id,
+        requirementId: requirement.id,
+        status: 'MISSING',
+        confidence: 0.2,
+        reasons: ['Nothing in the archive answers it.'],
+        claimIds: [],
+        documentIds: [],
+        needsResearch: true,
+      });
+    }
+    return { orchestration, dead, dependent, requirementIds: [rDead!.id, rDep!.id] };
+  }
+
+  it('records the gap, cancels what depended on it, and stops blocking synthesis', async () => {
+    const { orchestration, dead, dependent } = await exhaustedPacket();
+
+    await advancePacket(orchestration.id);
+
+    // The exhausted fragment is untouched: its evidence and its reason are the
+    // history, and Option A preserves them.
+    const deadAfter = await getFragment(dead.id);
+    expect(deadAfter?.status).toBe('BLOCKED');
+    expect(deadAfter?.blockedReason).toContain('refuses automated retrieval');
+
+    // The dependent is cancelled, naming what never arrived.
+    const depAfter = await getFragment(dependent.id);
+    expect(depAfter?.status).toBe('CANCELLED');
+    expect(depAfter?.blockedReason).toContain('trigger');
+
+    // Both requirements are recorded as explicitly not required, with why.
+    const coverage = await listCoverage(orchestration.id);
+    expect(coverage).toHaveLength(2);
+    for (const entry of coverage) {
+      expect(entry.status).toBe('NOT_REQUIRED');
+      expect((entry.userOverride ?? '').length).toBeGreaterThan(0);
+    }
+  });
+
+  it('does not fire while the fragment still has a repair attempt left', async () => {
+    const orchestration = await makeOrchestration();
+    const [requirement] = await createRequirements([
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requirementKey: 'trigger',
+        ordinal: 0,
+        statement: 'Whether Texas requires a licence.',
+        necessity: 'MANDATORY',
+        kind: 'RESEARCH',
+      },
+    ]);
+    await makeFragment(orchestration, {
+      fragmentKey: 'trigger',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+      // One attempt used of two allowed. Research is still the answer here.
+      attempt: 1,
+      maxRepairs: 2,
+      requirementIds: [requirement!.id],
+    });
+    await upsertCoverage({
+      orchestrationId: orchestration.id,
+      requirementId: requirement!.id,
+      status: 'MISSING',
+      confidence: 0.2,
+      reasons: ['Nothing in the archive answers it.'],
+      claimIds: [],
+      documentIds: [],
+      needsResearch: true,
+    });
+
+    await advancePacket(orchestration.id);
+
+    const [entry] = await listCoverage(orchestration.id);
+    expect(entry?.status).toBe('MISSING');
+  });
+
+  it('does not fire while any work is still live', async () => {
+    const { orchestration } = await exhaustedPacket();
+    // Something claimable elsewhere in the packet: research may yet change the
+    // picture, so nothing is written off.
+    await enqueueWork({
+      projectId: project.id,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { note: 'still going' },
+      requiredScopes: [],
+      orchestrationId: orchestration.id,
+      createdByType: 'SYSTEM',
+    });
+
+    await advancePacket(orchestration.id);
+
+    const coverage = await listCoverage(orchestration.id);
+    expect(coverage.every((entry) => entry.status === 'MISSING')).toBe(true);
   });
 });
 

@@ -57,6 +57,7 @@ import {
 } from '../../repos/research.ts';
 import { earlierAuditRole } from './auditBrief.ts';
 import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
+import { listCoverage, overrideCoverage } from '../../repos/reconciliation.ts';
 import { cancelWork, enqueueWork, listWorkItems } from '../../repos/workQueue.ts';
 import { workType, AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { recordEvent } from '../../repos/events.ts';
@@ -383,6 +384,86 @@ function readyToResearch(fragments: ResearchFragment[]): ResearchFragment[] {
 }
 
 /**
+ * Record an exhausted research gap, and let the packet finish around it.
+ *
+ * Called only from the stall branch of `advancePacket`, and only when nothing
+ * is live or claimable. Returns how many requirements it closed, so the caller
+ * can re-derive rather than guess what changed.
+ *
+ * "Exhausted" is a narrow test: the fragment is BLOCKED *and* it has used its
+ * repair budget. A fragment with an attempt left is not exhausted, and a
+ * different evidence path is still the right answer for it.
+ */
+async function recordExhaustedGaps(input: {
+  orchestration: ResearchOrchestration;
+  fragments: ResearchFragment[];
+  doomed: Map<string, string[]>;
+}): Promise<number> {
+  const { orchestration, fragments, doomed } = input;
+  const exhausted = fragments.filter(
+    (fragment) => fragment.status === 'BLOCKED' && fragment.attempt > fragment.maxRepairs,
+  );
+  if (exhausted.length === 0) return 0;
+
+  const coverage = await listCoverage(orchestration.id);
+  const byRequirement = new Map(coverage.map((entry) => [entry.requirementId, entry]));
+  let closed = 0;
+
+  const close = async (fragment: ResearchFragment, why: string): Promise<void> => {
+    for (const requirementId of fragment.requirementIds) {
+      const entry = byRequirement.get(requirementId);
+      if (!entry) continue;
+      if (entry.status === 'NOT_REQUIRED') continue;
+      await overrideCoverage(entry.id, { status: 'NOT_REQUIRED', note: why, needsResearch: false });
+      closed += 1;
+    }
+  };
+
+  for (const fragment of exhausted) {
+    await close(
+      fragment,
+      `Research exhausted after ${fragment.attempt} attempt(s): ` +
+        `${fragment.blockedReason ?? 'no evidence path remained'}. Recorded as an unresolved ` +
+        'gap rather than answered, and the packet is filed without it.',
+    );
+  }
+
+  // And everything that was only waiting on one of those. Cancelled rather than
+  // left QUEUED: the prerequisite is never arriving, and a fragment that cannot
+  // start is not in progress.
+  const exhaustedKeys = new Set(exhausted.map((fragment) => fragment.fragmentKey));
+  for (const fragment of fragments) {
+    if (TERMINAL_FRAGMENT.has(fragment.status)) continue;
+    const blockers = doomed.get(fragment.fragmentKey);
+    if (!blockers || !blockers.some((key) => exhaustedKeys.has(key))) continue;
+    const why =
+      `Not researched: it depends on ${blockers.join(', ')}, whose research is exhausted. ` +
+      'Answering it would rest on a foundation nobody established.';
+    await updateFragment(fragment.id, {
+      status: 'CANCELLED',
+      blockedReason: why,
+      completedAt: new Date().toISOString(),
+    });
+    await close(fragment, why);
+  }
+
+  await recordEvent({
+    projectId: orchestration.projectId,
+    layerId: orchestration.layerId,
+    entityType: 'RUN',
+    entityId: orchestration.runId,
+    eventType: 'RESEARCH_COVERAGE_GAP',
+    payload: {
+      orchestrationId: orchestration.id,
+      resolution: 'UNRESOLVED_GAP_RECORDED',
+      exhaustedFragments: exhausted.map((fragment) => fragment.fragmentKey),
+      requirementsClosed: closed,
+    },
+  });
+  return closed;
+}
+
+/**
  * Decide what work should exist for this packet, and make it so.
  *
  * Idempotent by construction: every branch checks the queue for live work of
@@ -567,6 +648,34 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
   if (unfinished.length > 0) {
     const doomed = doomedBy(fragments);
     const stuck = unfinished.filter((fragment) => doomed.has(fragment.fragmentKey));
+
+    /**
+     * Everything left is waiting on research that has genuinely run out.
+     *
+     * The packet's own goal is then unreachable as written, and there are only
+     * two honest endings: stop and ask a person, or record the gap and file
+     * what the evidence actually supports. Invariant 20 forbids the third —
+     * synthesizing as though the missing part were answered — and nothing here
+     * touches it: no gate is relaxed, no claim is accepted that was not, and no
+     * exhausted lane is retried without a different evidence path.
+     *
+     * What is recorded is a *coverage decision*, in the column built for it:
+     * the requirement behind an exhausted fragment becomes NOT_REQUIRED with
+     * the exhaustion reason as its note, and the fragments waiting on it are
+     * cancelled naming the prerequisite that never arrived. The claims,
+     * verdicts and rejection reasons all stay exactly where they are — this
+     * narrows what the packet claims to answer, and changes nothing about what
+     * it found.
+     *
+     * Bounded deliberately. It fires only when no work is live, nothing is
+     * claimable, and every remaining fragment is waiting on one that is BLOCKED
+     * with its repair attempts spent. While any attempt remains, research is
+     * still the answer and this does not run.
+     */
+    if (!items.some((item) => LIVE_ITEM.has(item.state))) {
+      const resolved = await recordExhaustedGaps({ orchestration, fragments, doomed });
+      if (resolved > 0) return await advancePacket(orchestrationId);
+    }
 
     // Every remaining fragment is waiting on one that failed. Nothing will
     // arrive to change that, so saying "in progress" would be waiting for an
