@@ -35,6 +35,14 @@ on:
         description: 'What is being deployed, for the run log'
         required: false
         default: 'manual deploy'
+      authorize_gap_orchestration:
+        description: 'Optional: orchestration id to authorize for RECORD_GAPS (one packet, once)'
+        required: false
+        default: ''
+      authorize_gap_admin:
+        description: 'Optional: administrator email the authorization is recorded against'
+        required: false
+        default: ''
 
 # Two deploys of one app at once is a race whose loser is whichever image
 # finishes second. The second run waits rather than being cancelled: a deploy
@@ -346,6 +354,34 @@ jobs:
 
       # Both verification steps are `continue-on-error` so that neither can skip
       # the secret removal. The run's verdict is decided here instead.
+      # -------------------------------------------------------------------
+      # A one-packet authorization, run from the release pipeline
+      # -------------------------------------------------------------------
+      #
+      # Recording an unresolved gap narrows what a packet claims to answer, so
+      # it is a decision a person makes about one orchestration rather than a
+      # default the runner applies when it is stuck. The decision reaches the
+      # database here because this pipeline is the established way into the
+      # container, and because handing a shell operation back to the operator is
+      # how a recovery ends up unreachable.
+      #
+      # Skipped on every deploy that does not name a packet, which is all of
+      # them but the one. Idempotent by the packet's own state: a repeat run
+      # reports the authorization that already exists and rewrites neither its
+      # author nor its timestamp.
+      - name: Authorize one packet for RECORD_GAPS
+        if: inputs.authorize_gap_orchestration != '' && inputs.authorize_gap_admin != ''
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "sh /app/scripts/authorize-gap-policy.sh --orchestration ${{ inputs.authorize_gap_orchestration }} --admin ${{ inputs.authorize_gap_admin }}" \
+            2>&1 | tee gap-policy.txt
+          set -e
+          grep -q '^GAP-POLICY: OK' gap-policy.txt
+
       - name: The verdict
         if: always()
         run: |

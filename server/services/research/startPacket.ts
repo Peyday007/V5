@@ -33,7 +33,7 @@ import type {
 import { getProject } from '../../repos/projects.ts';
 import { listLayers } from '../../repos/layers.ts';
 import { createRun } from '../../repos/runs.ts';
-import { createOrchestration } from '../../repos/research.ts';
+import { createOrchestration, getOrchestration, updateOrchestration } from '../../repos/research.ts';
 import { runTypeForNewPacket } from '../runArtifacts.ts';
 import { inventoryProject } from '../reconcile/plan.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
@@ -194,6 +194,19 @@ export interface StartPacketInput {
    * caller that has not already made that decision must not reach here.
    */
   startedBy?: { kind: 'PERSON' | 'BRAIN'; id: string } | undefined;
+  /**
+   * Whether this packet may record an unresolved gap instead of stopping.
+   *
+   * Omitted means it may not, which is the only safe default: narrowing a goal
+   * because research failed is a decision about one packet, and a Brain that
+   * did it on its own could always declare its way to "complete". Set it here
+   * and the runner converts an exhausted lane into a declared gap; leave it and
+   * an exhausted packet stops at NEEDS_HUMAN for a person.
+   *
+   * Recorded with who decided, because an authorization with no author is not
+   * one.
+   */
+  unresolvedGap?: { policy: 'RECORD_GAPS'; authorizedBy: string } | undefined;
 }
 
 export interface StartPacketResult {
@@ -272,13 +285,24 @@ export async function startPacket(input: StartPacketInput): Promise<StartPacketR
     autoApprove: input.approval.mode !== 'PER_PACKET',
   });
 
+  if (input.unresolvedGap) {
+    await updateOrchestration(orchestration.id, {
+      unresolvedGapPolicy: input.unresolvedGap.policy,
+      unresolvedGapAuthorizedBy: input.unresolvedGap.authorizedBy,
+      unresolvedGapAuthorizedAt: new Date().toISOString(),
+    });
+  }
+
   const advanced = await advancePacket(orchestration.id);
+  // Re-read, so the caller is handed the row as it now is rather than as it was
+  // a write ago. The policy above is part of the packet's identity.
+  const created = (await getOrchestration(orchestration.id)) ?? orchestration;
 
   return {
     project,
     layer,
     run,
-    orchestration,
+    orchestration: created,
     advanced,
     archive,
     claimants: await countClaimants(project.id, advanced),

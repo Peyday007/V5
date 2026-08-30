@@ -49,6 +49,10 @@ import {
   runFixturePacket,
 } from '../server/services/research/fixtures.ts';
 import { advancePacket, approvePlan, resumePulledPackets } from '../server/services/research/packetRunner.ts';
+import {
+  authorizeUnresolvedGaps,
+  GapPolicyRefused,
+} from '../server/services/research/gapPolicy.ts';
 import { createRequirements, listCoverage, upsertCoverage } from '../server/repos/reconciliation.ts';
 import { recoverInterruptedResearch } from '../server/services/research/queue.ts';
 import { updateFragment, updateOrchestration } from '../server/repos/research.ts';
@@ -502,6 +506,55 @@ describe('submitting claims', () => {
 
     expect(again['state']).toBe('ALREADY_RECORDED');
     expect(await listClaimsForFragment(fragment.id)).toHaveLength(1);
+  });
+});
+
+describe('authorizing a packet to record gaps', () => {
+  it('records who decided and when, and is idempotent', async () => {
+    const orchestration = await makeOrchestration();
+    expect((await getOrchestration(orchestration.id))?.unresolvedGapPolicy).toBeNull();
+
+    const first = await authorizeUnresolvedGaps({
+      orchestrationId: orchestration.id,
+      authorizedBy: { id: 'usr_operator', email: 'operator@example.com' },
+    });
+    expect(first.status).toBe('AUTHORIZED');
+    expect(first.orchestration.unresolvedGapPolicy).toBe('RECORD_GAPS');
+    expect(first.orchestration.unresolvedGapAuthorizedBy).toBe('usr_operator');
+    const at = first.orchestration.unresolvedGapAuthorizedAt;
+    expect((at ?? '').length).toBeGreaterThan(0);
+
+    // Running it again is the ordinary case — a release step re-runs, somebody
+    // repeats a command — and it must not rewrite the author or the time.
+    const second = await authorizeUnresolvedGaps({
+      orchestrationId: orchestration.id,
+      authorizedBy: { id: 'usr_someone_else', email: 'else@example.com' },
+    });
+    expect(second.status).toBe('ALREADY_AUTHORIZED');
+    expect(second.orchestration.unresolvedGapAuthorizedBy).toBe('usr_operator');
+    expect(second.orchestration.unresolvedGapAuthorizedAt).toBe(at);
+  });
+
+  it('authorizes exactly the packet named and no other', async () => {
+    const target = await makeOrchestration();
+    const bystander = await makeOrchestration();
+
+    await authorizeUnresolvedGaps({
+      orchestrationId: target.id,
+      authorizedBy: { id: 'usr_operator', email: 'operator@example.com' },
+    });
+
+    expect((await getOrchestration(target.id))?.unresolvedGapPolicy).toBe('RECORD_GAPS');
+    expect((await getOrchestration(bystander.id))?.unresolvedGapPolicy).toBeNull();
+  });
+
+  it('refuses an orchestration that does not exist', async () => {
+    await expect(
+      authorizeUnresolvedGaps({
+        orchestrationId: 'orc_nothing',
+        authorizedBy: { id: 'usr_operator', email: 'operator@example.com' },
+      }),
+    ).rejects.toThrow(GapPolicyRefused);
   });
 });
 

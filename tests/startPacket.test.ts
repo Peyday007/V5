@@ -627,3 +627,21 @@ describe('the coverage gate on a proposed plan', () => {
     expect(fragment!.requirementIds).toHaveLength(1);
   });
 });
+
+describe('the unresolved-gap policy as a packet input', () => {
+  it('is absent unless the caller asks for it', async () => {
+    const started = await startPacket(goal());
+    expect(started.orchestration.unresolvedGapPolicy).toBeNull();
+    expect(started.orchestration.unresolvedGapAuthorizedBy).toBeNull();
+  });
+
+  it('is recorded with its author when the caller authorizes it', async () => {
+    const started = await startPacket({
+      ...goal(),
+      unresolvedGap: { policy: 'RECORD_GAPS', authorizedBy: 'usr_operator' },
+    });
+    expect(started.orchestration.unresolvedGapPolicy).toBe('RECORD_GAPS');
+    expect(started.orchestration.unresolvedGapAuthorizedBy).toBe('usr_operator');
+    expect((started.orchestration.unresolvedGapAuthorizedAt ?? '').length).toBeGreaterThan(0);
+  });
+});
