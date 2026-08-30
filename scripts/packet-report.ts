@@ -162,6 +162,14 @@ async function main(): Promise<void> {
     const key = storageKeyOf(document);
     console.log(`  document    ${canonicalName} — id ${packet.documentId}`);
     console.log(`              version ${document?.version ?? '—'} · status ${document?.status ?? '—'} · type ${document?.documentType ?? '—'}`);
+    // The two fields that tell "written somewhere else" apart from "never
+    // written". `storage_provider` is recorded per document at write time
+    // rather than inferred from configuration, so a row saying `local` on a
+    // cloud-mode Brain means the bytes went to a machine disk that does not
+    // survive a restart — which is a different fault, with a different fix,
+    // from a key that never received an object at all. `file_size` is what the
+    // writer believed it had written.
+    console.log(`              storage_provider ${document?.storageProvider ?? '—'} · file_size ${document?.fileSize ?? '—'}`);
     console.log(`              storage_key     ${document?.storageKey ?? '—'}`);
     console.log(`              filesystem_path ${document?.filesystemPath ?? '—'}`);
     console.log(`              resolved key    ${key ?? '—'}`);
