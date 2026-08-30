@@ -306,11 +306,29 @@ class AcceptanceWorker implements AIProvider {
       const lane = this.#lane(request.prompt, key);
       // The vendor-count fragment comes back on one publisher first, and is
       // repaired onto a second.
+      //
+      // Typed as self-reports, which is what makes one publisher insufficient
+      // *here*: an organisation's own count of its market establishes what it
+      // says, not the fact, so §14 requires a source independent of it. The
+      // fragment's declared minimum is no longer what decides this — the
+      // planner stopped guessing a flat 2 before it could know what kind of
+      // claim would answer the question, which is what wrongly failed three
+      // fragments of the first live packet.
       if (key.includes('vendor') && attempt === 1) {
         return claimBlock(
           [
-            { claim: 'There are 1,200 vendors.', url: 'https://www.sec.gov/a.htm', publisher: 'SEC' },
-            { claim: 'The count rose in 2024.', url: 'https://www.sec.gov/b.htm', publisher: 'SEC' },
+            {
+              claim: 'There are 1,200 vendors.',
+              url: 'https://www.vendorinc.example/a.htm',
+              publisher: 'Vendor Inc',
+              claimType: 'SELF_REPORT',
+            },
+            {
+              claim: 'The count rose in 2024.',
+              url: 'https://www.vendorinc.example/b.htm',
+              publisher: 'Vendor Inc',
+              claimType: 'SELF_REPORT',
+            },
           ],
           lane,
         );

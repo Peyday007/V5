@@ -47,8 +47,30 @@ import {
  */
 export const MAX_FRAGMENTS = 60;
 
-/** A fragment cannot rest on one source and call itself covered. */
-export const MIN_INDEPENDENT_SOURCES_FLOOR = 2;
+/**
+ * A fragment must rest on at least one source. It must not be told in advance
+ * how many more.
+ *
+ * This was 2, and it was a general minimum — the thing §14 says does not exist.
+ * "Two independent sources" is right for a disputed market estimate and wrong
+ * for a statutory fact, where one directly inspected primary source settles the
+ * question and a second adds nothing but cost. Enforced here, before any
+ * evidence exists, it applied the contested-estimate bar to every question a
+ * plan could ask.
+ *
+ * It was one of three places that independently imposed the same number, and
+ * together they failed three fragments of the first live packet whose integrity
+ * had *passed*: each had quoted the statute it was asked about, and each was
+ * refused for having found only the one source that answers such a question.
+ *
+ * So the floor is now what it can honestly be: a fragment resting on nothing is
+ * not covered. How many sources a *claim* needs is decided per claim by
+ * `standards.ts`, from what the claim asserts, once there is something to
+ * judge — and the gate raises the fragment's bar to match. A fragment whose
+ * question really is contested still declares more, and the planner still
+ * declares 3 for a requirement the archive already found contradictory.
+ */
+export const MIN_INDEPENDENT_SOURCES_FLOOR = 1;
 const MIN_INDEPENDENT_SOURCES_CEILING = 10;
 
 function fail<T>(error: string): ParseResult<T> {

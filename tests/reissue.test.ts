@@ -540,37 +540,73 @@ describe('any way an item stops without recording', () => {
 // Another attempt at a fragment that failed its gate
 // ---------------------------------------------------------------------------
 
-/** Research a fragment and have the gate reject it, as the live one was. */
+/**
+ * A fragment the *operator's* retry still applies to.
+ *
+ * Research it, have the gate reject it, and let the packet runner take the
+ * automatic attempt §15 entitles it to — then have the gate reject that one
+ * too. What is left is a fragment at the last attempt in its budget, which is
+ * precisely the case this control exists for now.
+ *
+ * The division is deliberate and is enforced by two different numbers.
+ * `buildRepairPlan` stops planning once `maxRepairs - attempt + 1 <= 1`, so the
+ * runner spends every attempt the ladder has a fresh strategy for and no more.
+ * `retryFragment` refuses only at `attempt > maxRepairs`, one later. The gap
+ * between them is the final attempt, and it belongs to a person: it is the one
+ * the automatic ladder has no new idea for, so spending it is a judgement about
+ * whether this question is worth another try — not something to do on a timer.
+ *
+ * Before the runner had a repair planner, the first gate failure left the
+ * fragment sitting for an operator, which is why these tests used to reach that
+ * state in one round. They now take two, because the first one no longer waits
+ * for anybody.
+ */
 async function gatedAndBlocked(): Promise<{
   orchestration: ResearchOrchestration;
   fragment: ResearchFragment;
   claimId: string;
 }> {
   const orchestration = await makeOrchestration();
-  const fragment = await makeFragment(orchestration);
+  const first = await makeFragment(orchestration);
   const definition = workType('RESEARCH_FRAGMENT');
   await enqueueWork({
     projectId: project.id, workType: 'RESEARCH_FRAGMENT',
     payload: definition.validate({}), requiredScopes: definition.requiredScopes,
-    orchestrationId: orchestration.id, fragmentId: fragment.id, createdByType: 'SYSTEM',
+    orchestrationId: orchestration.id, fragmentId: first.id, createdByType: 'SYSTEM',
   });
-  const research = await claimOne('RESEARCH_FRAGMENT');
-  await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
-  await call('brain_complete_work', { ...proof(research), summary: 'in' });
-  const [claim] = await listClaimsForFragment(fragment.id);
 
-  const verify = await claimOne('RESEARCH_VERIFY');
-  await call('brain_submit_verification', {
-    ...proof(verify),
-    verdicts: [{ claim_id: claim!.id, supports_claim: false, ...MATCHES, note: 'Says something else.' }],
-    sufficiency: 'INSUFFICIENT',
-  });
-  await call('brain_complete_work', { ...proof(verify), summary: 'gated' });
+  /** Research one attempt, then have verification reject every claim in it. */
+  const failOnce = async (fragmentId: string): Promise<string> => {
+    const research = await claimOne('RESEARCH_FRAGMENT');
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    await call('brain_complete_work', { ...proof(research), summary: 'in' });
+    const [claim] = await listClaimsForFragment(fragmentId);
+
+    const verify = await claimOne('RESEARCH_VERIFY');
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [
+        { claim_id: claim!.id, supports_claim: false, ...MATCHES, note: 'Says something else.' },
+      ],
+      sufficiency: 'INSUFFICIENT',
+    });
+    await call('brain_complete_work', { ...proof(verify), summary: 'gated' });
+    return claim!.id;
+  };
+
+  await failOnce(first.id);
+
+  // The runner's own attempt, minted by the packet's reaction to the failure
+  // rather than by anything here.
+  const [second] = await currentFragments(orchestration.id);
+  expect(second!.id).not.toBe(first.id);
+  expect(second!.attempt).toBe(2);
+  const claimId = await failOnce(second!.id);
 
   return {
     orchestration: (await getOrchestration(orchestration.id))!,
-    fragment: (await getFragment(fragment.id))!,
-    claimId: claim!.id,
+    fragment: (await getFragment(second!.id))!,
+    claimId,
   };
 }
 
@@ -595,7 +631,8 @@ describe('trying a failed fragment again', () => {
     });
 
     expect(result.status).toBe('RETRIED');
-    expect(result.attempt).toBe(2);
+    // Three, not two: the runner already took the second.
+    expect(result.attempt).toBe(3);
 
     // The failed attempt is untouched. Its claims and its rejection reason are
     // the history the next attempt exists not to repeat — §15 and invariant 5.
@@ -611,7 +648,7 @@ describe('trying a failed fragment again', () => {
     // And the new one carries every declaration forward, so it is judged by the
     // standard the last one failed.
     const next = await getFragment(result.newFragmentId!);
-    expect(next?.attempt).toBe(2);
+    expect(next?.attempt).toBe(3);
     expect(next?.parentFragmentId).toBe(fragment.id);
     expect(next?.status).toBe('QUEUED');
     expect(next?.question).toBe(fragment.question);

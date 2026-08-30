@@ -153,6 +153,14 @@ interface ClaimInput {
   lane?: string;
   derived?: boolean;
   derivedFrom?: string[];
+  /**
+   * What kind of thing the claim asserts, which is what decides how much
+   * corroboration it needs (§14). `SOURCED_FACT` — one authoritative primary
+   * source is enough — is the default and the common case; `SELF_REPORT` is an
+   * organisation describing itself, which establishes what it says and not
+   * whether it is true, so it needs a source independent of that organisation.
+   */
+  type?: 'SOURCED_FACT' | 'SELF_REPORT' | 'QUOTATION' | 'FORECAST';
 }
 
 function claims(list: ClaimInput[]): unknown {
@@ -160,6 +168,7 @@ function claims(list: ClaimInput[]): unknown {
     searchQueries: ['site:bls.gov telemarketers employment'],
     claims: list.map((entry) => ({
       claim: entry.claim,
+      claimType: entry.type ?? 'SOURCED_FACT',
       evidenceLane: entry.lane ?? 'official statistics',
       sourceUrl: entry.url === undefined ? 'https://www.bls.gov/oes/current/oes419041.htm' : entry.url,
       sourceTitle: 'Occupational Employment and Wage Statistics',
@@ -450,7 +459,12 @@ describe('an assignment is decomposed before anything is researched', () => {
       expect(fragment.requiredEvidence.length).toBeGreaterThan(0);
       expect(fragment.acceptableSourceTypes.length).toBeGreaterThan(0);
       expect(fragment.completionCriteria.length).toBeGreaterThan(0);
-      expect(fragment.minIndependentSources).toBeGreaterThanOrEqual(2);
+      // One, not two. A plain MISSING requirement gets no corroboration bar
+      // from the planner, which cannot know what kind of claim will answer it;
+      // `standards.ts` raises the bar per claim once there is evidence to type.
+      // The old assertion was `>= 2`, and that flat default is what failed
+      // three fragments of the live packet whose integrity had passed.
+      expect(fragment.minIndependentSources).toBeGreaterThanOrEqual(1);
       expect(fragment.geography).toBe('United States');
       expect(fragment.timeframe).toBe('2023');
       expect(fragment.population).toContain('B2B');
@@ -651,13 +665,30 @@ describe('the evidence gate', () => {
     expect(derived.rejectionReason).toMatch(/input claim\(s\) were not accepted/i);
   });
 
+  /**
+   * Two ways a fragment can rest on one publisher, and they are different
+   * mechanisms now.
+   *
+   * This one is per *claim*: a self-report is an organisation describing
+   * itself, so its own standard requires a source independent of it (§14), and
+   * the claims are rejected individually. Integrity fails because nothing
+   * survived, not because a count came up short.
+   *
+   * The other is per *fragment*: claims that are each fine, on a question whose
+   * assignment deliberately asked for two independent sources. That case needs
+   * a fragment that declares the higher bar, which the planner no longer does
+   * by default, and it is held by `standards.test.ts` — "counts fragment
+   * coverage by independent source, not by claim" — where `applyGate` is called
+   * with the fragment constructed directly. Both still fail; they now fail for
+   * the reason that is actually true of them.
+   */
   it('rejects a fragment resting on a single publisher', async () => {
     const { id } = await run({
       claims: {
         'fragment-1': [
           claims([
-            { claim: 'A', url: 'https://www.bls.gov/one.htm' },
-            { claim: 'B', url: 'https://www.bls.gov/two.htm' },
+            { claim: 'A', url: 'https://www.vendorinc.example/about.htm', type: 'SELF_REPORT' },
+            { claim: 'B', url: 'https://www.vendorinc.example/press.htm', type: 'SELF_REPORT' },
           ]),
         ],
       },
@@ -665,10 +696,11 @@ describe('the evidence gate', () => {
     });
     const attempts = (await listFragments(id)).filter((entry) => entry.fragmentKey === 'fragment-1');
     const first = attempts[0]!;
-    expect(first.integrityVerdict).toBe('PASS');
-    expect(first.sufficiencyVerdict).toBe('INSUFFICIENT');
+    // Nothing survived, so integrity fails rather than sufficiency counting
+    // short — and the reason names the standard the claims fell at.
+    expect(first.integrityVerdict).toBe('FAIL');
     expect(first.status).not.toBe('ACCEPTED');
-    expect(first.blockedReason).toMatch(/independent source/i);
+    expect(first.blockedReason).toMatch(/independent|corroborat/i);
   });
 
   it('counts a contested claim only when somebody said what was done about it', async () => {
@@ -698,13 +730,15 @@ describe('a fragment that fails its gate', () => {
         'fragment-1': [
           // First attempt: one publisher, so coverage fails.
           claims([
-            { claim: 'A', url: 'https://www.bls.gov/one.htm' },
-            { claim: 'B', url: 'https://www.bls.gov/two.htm' },
+            { claim: 'A', url: 'https://www.vendorinc.example/about.htm', type: 'SELF_REPORT' },
+            { claim: 'B', url: 'https://www.vendorinc.example/press.htm', type: 'SELF_REPORT' },
           ]),
-          // Repair: two publishers.
+          // Repair: the organisation's own statement, plus a source independent
+          // of it. That is what a self-report needs and what the first attempt
+          // did not have.
           claims([
-            { claim: 'A', url: 'https://www.bls.gov/one.htm' },
-            { claim: 'B', url: 'https://www.census.gov/two.html' },
+            { claim: 'A', url: 'https://www.vendorinc.example/about.htm', type: 'SELF_REPORT' },
+            { claim: 'B', url: 'https://www.census.gov/two.html', type: 'SELF_REPORT' },
           ]),
         ],
       },
@@ -715,7 +749,10 @@ describe('a fragment that fails its gate', () => {
     expect(attempts.length).toBeGreaterThanOrEqual(2);
     expect(attempts[0]!.status).toBe('BLOCKED');
     expect(attempts[1]!.attempt).toBe(2);
-    expect(attempts[1]!.repairStrategy).toMatch(/different publishers/i);
+    // Chosen from what actually failed: the plan names the lane no accepted
+    // claim reached, rather than a generic "try again".
+    expect(attempts[1]!.repairStrategy).toMatch(/official statistics/i);
+    expect(attempts[1]!.repairStrategy!.length).toBeGreaterThan(80);
     expect(attempts[1]!.status).toBe('ACCEPTED');
 
     // The repair prompt told the worker what had failed and what not to repeat.
@@ -730,9 +767,13 @@ describe('a fragment that fails its gate', () => {
   });
 
   it('is rejected after the attempt cap, and its failure history is kept', async () => {
+    // One organisation, describing itself, twice. Two pages of one publisher are
+    // one source, and a self-report needs a source independent of the
+    // organisation making it — so this ledger cannot clear the gate however
+    // often it is submitted.
     const oneSource = claims([
-      { claim: 'A', url: 'https://www.bls.gov/one.htm' },
-      { claim: 'B', url: 'https://www.bls.gov/two.htm' },
+      { claim: 'A', url: 'https://www.vendorinc.example/about.htm', type: 'SELF_REPORT' },
+      { claim: 'B', url: 'https://www.vendorinc.example/press.htm', type: 'SELF_REPORT' },
     ]);
     const { id } = await run({
       claims: { 'fragment-1': [oneSource, oneSource, oneSource, oneSource] },
@@ -885,8 +926,8 @@ describe('a run that runs out of allowance', () => {
         // not move when the allowance is short.
         'fragment-6': [
           claims([
-            { claim: 'A', url: 'https://www.bls.gov/one.htm' },
-            { claim: 'B', url: 'https://www.bls.gov/two.htm' },
+            { claim: 'A', url: 'https://www.vendorinc.example/about.htm', type: 'SELF_REPORT' },
+            { claim: 'B', url: 'https://www.vendorinc.example/press.htm', type: 'SELF_REPORT' },
           ]),
         ],
       },

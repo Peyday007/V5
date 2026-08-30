@@ -23,6 +23,7 @@ import { importFile } from '../server/services/importer.ts';
 import { whenExtractionIdle } from '../server/services/documents/queue.ts';
 import { createWorker, grantMembership, revokeMembership } from '../server/repos/identity.ts';
 import { claimWork, enqueueWork, listWorkItems } from '../server/repos/workQueue.ts';
+import { dependencyKeys } from '../server/domain/dependencies.ts';
 import { currentFragments, getOrchestration } from '../server/repos/research.ts';
 import { listRequirements, listCoverage } from '../server/repos/reconciliation.ts';
 import { getRun } from '../server/repos/runs.ts';
@@ -564,7 +565,11 @@ describe('the coverage gate on a proposed plan', () => {
     expect(value['proposed']).toBe(2);
     const fragments = await currentFragments(started.orchestration.id);
     const penalty = fragments.find((f) => f.fragmentKey === 'ca-penalty');
-    expect(penalty?.dependsOn).toEqual(['ca-licence-trigger']);
+    // Typed now, not a bare string: a dependency says how much it blocks. A
+    // key proposed without a kind reads HARD, which is what it meant before
+    // kinds existed — the conservative reading, and no row is rewritten.
+    expect(dependencyKeys(penalty?.dependsOn ?? [])).toEqual(['ca-licence-trigger']);
+    expect(penalty?.dependsOn).toEqual([{ key: 'ca-licence-trigger', kind: 'HARD' }]);
   });
 
   it('records the decision behind every fragment, kept or dropped', async () => {

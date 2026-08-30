@@ -170,6 +170,24 @@ async function makeOrchestration(): Promise<ResearchOrchestration> {
   });
 }
 
+/**
+ * A fragment that has genuinely run out of attempts.
+ *
+ * `BLOCKED` on its own used to mean "dead end", because the runner had no
+ * repair planner on the worker path: anything blocked was written off or left
+ * to strand its dependents. That was the capability regression — a fragment
+ * with two attempts left was treated as unanswerable — and the runner now
+ * plans a repair whenever the ladder still has a rung and the budget still has
+ * an attempt.
+ *
+ * So a fixture has to say which it means, and every test below that is about
+ * *stalling* rather than about *repairing* says it with this. The number comes
+ * from `buildRepairPlan`, which plans `MARK_UNRESOLVED` once
+ * `maxRepairs - attempt + 1 <= 1`: at attempt 2 of 2 there is no further search
+ * worth spending the allowance on.
+ */
+const EXHAUSTED = { attempt: 2, maxRepairs: 2 } as const;
+
 async function makeFragment(
   orchestration: ResearchOrchestration,
   over: Partial<Parameters<typeof createFragments>[0][number]> = {},
@@ -974,7 +992,24 @@ describe('a research gap that is genuinely exhausted', () => {
    * So an authorized packet writes it off too, and what keeps the rule narrow
    * is the caller's guard rather than the attempt count — see the test below.
    */
-  it('writes off a fragment whose repair this path cannot plan, at any attempt count', async () => {
+  /**
+   * The rule this test carries has now been written three times, and the third
+   * is the first that is about the code rather than about a gap in it.
+   *
+   * 1. Originally: "a fragment that failed once still has a real repair
+   *    available, so it is left alone." That described what should happen, and
+   *    the runner did not do it.
+   * 2. Then, correcting myself: "the worker path has no repair planner at any
+   *    attempt count, so it writes the fragment off." True of the code, and the
+   *    reason the live packet resolved 2 fragments of 12.
+   * 3. Now: the planner is wired to this path, so (1) is true again — and this
+   *    time because the capability exists, not because it was assumed to.
+   *
+   * Recorded rather than quietly rewritten, because "the test changed with the
+   * behaviour" and "the test was bent to match a regression" look identical
+   * afterwards unless the history is written down.
+   */
+  it('repairs a fragment that still has an attempt, rather than writing it off', async () => {
     const orchestration = await makeOrchestration();
     const [requirement] = await createRequirements([
       {
@@ -988,11 +1023,80 @@ describe('a research gap that is genuinely exhausted', () => {
         kind: 'RESEARCH',
       },
     ]);
-    // Authorized, deliberately. This test was written without the
-    // authorization and therefore proved nothing: the gap pass would have
-    // skipped the packet whatever the fragment's attempt count was, so it
-    // passed for the wrong reason. The rule under test is the repair budget,
-    // so everything else has to be permissive.
+    // Authorized to declare gaps, deliberately: the packet is *allowed* to
+    // write this requirement off, and the point of the test is that it does not
+    // do so while an attempt remains. Without the authorization the gap pass
+    // would skip the packet anyway and the test would pass for the wrong
+    // reason — which is exactly how its previous version proved nothing.
+    await updateOrchestration(orchestration.id, {
+      unresolvedGapPolicy: 'RECORD_GAPS',
+      unresolvedGapAuthorizedBy: 'usr_operator',
+      unresolvedGapAuthorizedAt: new Date().toISOString(),
+    });
+    const failed = await makeFragment(orchestration, {
+      fragmentKey: 'trigger',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+      // Failed once, with a budget of two. A real repair is still available.
+      attempt: 1,
+      maxRepairs: 2,
+      requirementIds: [requirement!.id],
+    });
+    await updateFragment(failed.id, {
+      blockedReason: 'No accepted evidence in the statute lane.',
+    });
+    await upsertCoverage({
+      orchestrationId: orchestration.id,
+      requirementId: requirement!.id,
+      status: 'MISSING',
+      confidence: 0.2,
+      reasons: ['Nothing in the archive answers it.'],
+      claimIds: [],
+      documentIds: [],
+      needsResearch: true,
+    });
+
+    const result = await advancePacket(orchestration.id);
+
+    // The requirement is untouched. Nothing was narrowed while the question
+    // could still be answered.
+    expect((await listCoverage(orchestration.id))[0]?.status).toBe('MISSING');
+
+    // A second attempt exists, carrying a plan rather than the same search.
+    const current = await currentFragments(orchestration.id);
+    const retried = current.find((fragment) => fragment.fragmentKey === 'trigger');
+    expect(retried?.attempt).toBe(2);
+    expect(retried?.status).toBe('QUEUED');
+    expect(retried?.id).not.toBe(failed.id);
+    // The plan names a strategy and where to look instead — the thing that
+    // makes a second attempt worth its cost. A bare "try again" is what §15
+    // forbids.
+    expect((retried?.repairReason ?? '').length).toBeGreaterThan(40);
+
+    // And it is claimable: the repair is backed by work, not by a sentence.
+    expect(result.enqueued.map((entry) => entry.fragmentKey)).toEqual(['trigger']);
+    expect((await getOrchestration(orchestration.id))?.status).toBe('RESEARCHING');
+
+    // The failed attempt keeps its row and its reason — §5.
+    const previous = await getFragment(failed.id);
+    expect(previous?.status).toBe('BLOCKED');
+    expect(previous?.blockedReason).toContain('statute lane');
+  });
+
+  it('writes off a fragment once the ladder has nothing new to try', async () => {
+    const orchestration = await makeOrchestration();
+    const [requirement] = await createRequirements([
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requirementKey: 'trigger',
+        ordinal: 0,
+        statement: 'Whether Texas requires a licence.',
+        necessity: 'MANDATORY',
+        kind: 'RESEARCH',
+      },
+    ]);
     await updateOrchestration(orchestration.id, {
       unresolvedGapPolicy: 'RECORD_GAPS',
       unresolvedGapAuthorizedBy: 'usr_operator',
@@ -1002,12 +1106,7 @@ describe('a research gap that is genuinely exhausted', () => {
       fragmentKey: 'trigger',
       fragmentIndex: 0,
       status: 'BLOCKED',
-      // Failed once. A real repair is still available, on a different lane —
-      // and nothing is waiting behind it, so it is not stranding anything
-      // either. Both conditions have to be false for the packet to be left
-      // alone, and this is the case where they are.
-      attempt: 1,
-      maxRepairs: 2,
+      ...EXHAUSTED,
       requirementIds: [requirement!.id],
     });
     await upsertCoverage({
@@ -1023,11 +1122,14 @@ describe('a research gap that is genuinely exhausted', () => {
 
     await advancePacket(orchestration.id);
 
+    // No third attempt was created: the budget is the budget.
+    const current = await currentFragments(orchestration.id);
+    expect(current.filter((fragment) => fragment.fragmentKey === 'trigger')).toHaveLength(1);
+    expect(current[0]?.attempt).toBe(2);
+
     const [entry] = await listCoverage(orchestration.id);
     expect(entry?.status).toBe('NOT_REQUIRED');
-    // Named for what it is: not exhausted repairs, and not a failed
-    // prerequisite — a fragment this packet has no further attempt to give.
-    expect(entry?.userOverride ?? '').toContain('no further attempt');
+    expect(entry?.userOverride ?? '').toContain('attempt');
   });
 
   /**
@@ -1128,6 +1230,7 @@ describe('a packet stopped for a person', () => {
       fragmentKey: 'exhausted',
       fragmentIndex: 0,
       status: 'BLOCKED',
+      ...EXHAUSTED,
     });
     const independent = await Promise.all([
       makeFragment(orchestration, { fragmentKey: 'alpha', fragmentIndex: 1, status: 'QUEUED' }),
@@ -1169,7 +1272,12 @@ describe('a packet stopped for a person', () => {
 
   it('does not mint a second time when called again', async () => {
     const orchestration = await makeOrchestration();
-    await makeFragment(orchestration, { fragmentKey: 'exhausted', fragmentIndex: 0, status: 'BLOCKED' });
+    await makeFragment(orchestration, {
+      fragmentKey: 'exhausted',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+      ...EXHAUSTED,
+    });
     await makeFragment(orchestration, { fragmentKey: 'alpha', fragmentIndex: 1, status: 'QUEUED' });
     await updateOrchestration(orchestration.id, {
       status: 'NEEDS_HUMAN',
@@ -1201,7 +1309,12 @@ describe('a packet stopped for a person', () => {
 
   it('keeps the reason a person is being asked for across a boot sweep', async () => {
     const orchestration = await makeOrchestration();
-    await makeFragment(orchestration, { fragmentKey: 'exhausted', fragmentIndex: 0, status: 'BLOCKED' });
+    await makeFragment(orchestration, {
+      fragmentKey: 'exhausted',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+      ...EXHAUSTED,
+    });
     await updateOrchestration(orchestration.id, {
       status: 'NEEDS_HUMAN',
       failureReason: 'A fragment exhausted its evidence paths.',
@@ -1746,25 +1859,52 @@ describe('the packet runner', () => {
       (item) => item.workType === 'RESEARCH_FRAGMENT' && item.fragmentId === fragment.id,
     );
     expect(research_items).toHaveLength(1);
-    expect(result.enqueued).toHaveLength(0);
     expect((await getFragment(fragment.id))?.status).toBe('BLOCKED');
 
     /**
-     * And the packet stops, because in *this* packet there is nothing else.
+     * And the packet takes its second attempt rather than stopping.
      *
-     * This used to assert the opposite, on the reasoning that a fault belongs
-     * to the fragment rather than to the packet — which is right, and is
-     * exactly why `faultedFragment` no longer stops the packet. But the
-     * fixture has one fragment, so "the packet is still going" was never true
-     * of it: the pass said so only because it was reading a snapshot taken
-     * before the fault, in which the fragment still looked QUEUED. That stale
-     * read is what left the live packet reporting progress it was not making.
+     * The fault is real — a worker completed the item without ever submitting
+     * claims — but it is a fault in one attempt, not an answer about the
+     * question. The fragment has a repair budget, so §15's response is another
+     * attempt against a different search, and a worker whose allowance ran out
+     * mid-fragment must not be able to end a packet.
      *
-     * The claim this test was reaching for — one fault must not freeze the
-     * healthy fragments beside it — has its own test, with siblings in it, in
-     * "a packet stopped for a person".
+     * This assertion has moved twice. It first said the packet keeps going, on
+     * a snapshot taken before the fault, in which the fragment still looked
+     * QUEUED — a stale read that let the live packet report progress it was not
+     * making. It was then corrected to NEEDS_HUMAN, which was right *while the
+     * runner had no repair planner*: with no attempt available, one fragment
+     * and a fault, there genuinely was nothing left to do. Now there is.
+     *
+     * What has not changed is the thing this test is named for. One work item
+     * per target, for the life of the packet: the repair is a new fragment with
+     * its own id, and the faulted one still has exactly one item above.
      */
-    expect(result.status).toBe('NEEDS_HUMAN');
+    expect(result.status).toBe('RESEARCHING');
+    expect(result.enqueued).toHaveLength(1);
+    const current = await currentFragments(orchestration.id);
+    expect(current).toHaveLength(1);
+    expect(current[0]!.id).not.toBe(fragment.id);
+    expect(current[0]!.attempt).toBe(2);
+    expect((await getOrchestration(orchestration.id))?.failureReason).toBeNull();
+
+    // The exhausted end of the same path, driven the same way rather than by
+    // setting a column: fault the repair too, and the budget is gone. Then the
+    // fault does stop the packet, and says which of the two reasons it is.
+    // The runner's own item for the repair — not a fresh one, which would leave
+    // the minted item live and the packet legitimately still researching.
+    const [repairItem] = (await listWorkItems(project.id, {})).filter(
+      (item) => item.workType === 'RESEARCH_FRAGMENT' && item.fragmentId === current[0]!.id,
+    );
+    await getDb().run(
+      `UPDATE work_items SET state = 'SUCCEEDED', lease_id = NULL, worker_id = NULL,
+        lease_expires_at = NULL WHERE id = ?`,
+      [repairItem!.id],
+    );
+    await advancePacket(orchestration.id);
+    const exhausted = await advancePacket(orchestration.id);
+    expect(exhausted.status).toBe('NEEDS_HUMAN');
     expect((await getOrchestration(orchestration.id))?.failureReason).toContain(
       'No fragment cleared its evidence gate',
     );
@@ -2609,6 +2749,7 @@ describe('a fragment waiting on one that failed', () => {
       fragmentKey: 'trigger',
       fragmentIndex: 0,
       status: 'BLOCKED',
+      ...EXHAUSTED,
     });
     const dependent = await makeFragment(orchestration, {
       fragmentKey: 'penalty',
@@ -2643,7 +2784,12 @@ describe('a fragment waiting on one that failed', () => {
 
   it('is transitive — a fragment two hops behind a failure is stuck too', async () => {
     const orchestration = await makeOrchestration();
-    await makeFragment(orchestration, { fragmentKey: 'boundary', fragmentIndex: 0, status: 'BLOCKED' });
+    await makeFragment(orchestration, {
+      fragmentKey: 'boundary',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+      ...EXHAUSTED,
+    });
     await makeFragment(orchestration, {
       fragmentKey: 'trigger',
       fragmentIndex: 1,
@@ -2673,7 +2819,12 @@ describe('a fragment waiting on one that failed', () => {
 
   it('keeps waiting while anything else can still move', async () => {
     const orchestration = await makeOrchestration();
-    await makeFragment(orchestration, { fragmentKey: 'trigger', fragmentIndex: 0, status: 'BLOCKED' });
+    await makeFragment(orchestration, {
+      fragmentKey: 'trigger',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+      ...EXHAUSTED,
+    });
     await makeFragment(orchestration, {
       fragmentKey: 'penalty',
       fragmentIndex: 1,
@@ -2988,9 +3139,49 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
       retryable: false,
     });
 
+    /**
+     * And then the repair, which is new — and is the difference between this
+     * packet and the one that actually ran.
+     *
+     * In production the trigger fragment failed here, once, with two repair
+     * attempts still in its budget, and the runner stranded both dependents and
+     * declared three gaps. It had no repair planner on this path, so a fragment
+     * that failed its first attempt was treated as unanswerable. That is most
+     * of the distance between the filed New-York-only interim packet and a
+     * five-state answer.
+     *
+     * The runner now plans the second attempt from what failed. So the fixture
+     * has to spend it before the packet can honestly be called stranded: fail,
+     * repair, fail again, *then* out of attempts. The stranding tests below are
+     * unchanged in what they assert; they are simply reached the way a packet
+     * with a repair budget actually reaches them.
+     */
+    // No advance call here: `brain_fail_work` already made one, and that is the
+    // point. The repair has to be minted by the packet's own reaction to the
+    // failure, because in production nothing else was ever going to call the
+    // runner again.
+    const repaired = (await currentFragments(orchestration.id)).find(
+      (fragment) => fragment.fragmentKey === 'trigger',
+    )!;
+    expect(repaired.attempt).toBe(2);
+    expect(repaired.id).not.toBe(trigger.id);
+    expect(repaired.status).toBe('QUEUED');
+
+    const repairResearch = await claimQueued('RESEARCH_FRAGMENT', repaired.id);
+    await call('brain_submit_claims', { ...proof(repairResearch), claims: [SOURCED] });
+    await call('brain_complete_work', { ...proof(repairResearch), summary: 'claims in' });
+    const repairVerify = await claimQueued('RESEARCH_VERIFY', repaired.id);
+    await call('brain_fail_work', {
+      ...proof(repairVerify),
+      category: 'WORKER_ERROR',
+      detail: 'the allowance ran out mid-verification',
+      retryable: false,
+    });
+
     return {
       orchestration: (await getOrchestration(orchestration.id))!,
-      trigger,
+      // The current attempt, which is the one the packet is now stopped on.
+      trigger: (await getFragment(repaired.id))!,
       dependents,
       answeredClaimId,
       requirementIds: requirements.map((requirement) => requirement.id),
@@ -3054,13 +3245,18 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
      * precisely where the live one stopped.
      */
 
-    // 1. The prerequisite is blocked by the fault, and still repairable — so
-    //    the exhausted-gap rule is *not* what is operating here.
+    // 1. The prerequisite is blocked by the fault, and has now spent its
+    //    repair budget — which is what makes the stranding below honest.
+    //
+    //    This assertion used to read `attempt < maxRepairs`, with a note that
+    //    the fragment was "still repairable — so the exhausted-gap rule is not
+    //    what is operating here". That was true, and it was the bug: a fragment
+    //    with attempts left was stranding its dependents instead of using them.
     const live = await currentFragments(orchestration.id);
     const byKey = new Map(live.map((fragment) => [fragment.fragmentKey, fragment]));
     const blockedTrigger = byKey.get('trigger')!;
     expect(blockedTrigger.status).toBe('BLOCKED');
-    expect(blockedTrigger.attempt).toBeLessThan(blockedTrigger.maxRepairs);
+    expect(blockedTrigger.attempt).toBe(blockedTrigger.maxRepairs);
     expect(blockedTrigger.blockedReason).toContain('verification');
     expect(blockedTrigger.id).toBe(trigger.id);
 
@@ -3259,12 +3455,26 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
 
     const items = await itemsByType(orchestration.id);
     const count = (type: string): number => (items.get(type) ?? []).length;
-    // One research item and one verification per fragment that got that far,
-    // one synthesis, three audits — one per role, never a fourth.
+    // One research item and one verification per fragment *attempt* that got
+    // that far, one synthesis, three audits — one per role, never a fourth.
+    //
+    // Three rather than two of each: `answered`, the trigger's first attempt,
+    // and the trigger's repair. A repair is a new attempt of the question with
+    // its own fragment row, its own claims and its own verdict — §5 — so its
+    // work items are not duplicates of the first attempt's. The duplicate this
+    // test is actually about is a second item for the *same* target, and the
+    // per-attempt breakdown below is what rules that out.
     expect(count('RESEARCH_SYNTHESIZE')).toBe(1);
     expect(count('RESEARCH_AUDIT')).toBe(3);
-    expect(count('RESEARCH_FRAGMENT')).toBe(2);
-    expect(count('RESEARCH_VERIFY')).toBe(2);
+    expect(count('RESEARCH_FRAGMENT')).toBe(3);
+    expect(count('RESEARCH_VERIFY')).toBe(3);
+    for (const type of ['RESEARCH_FRAGMENT', 'RESEARCH_VERIFY']) {
+      const perTarget = new Map<string, number>();
+      for (const item of items.get(type) ?? []) {
+        perTarget.set(item.fragmentId ?? '', (perTarget.get(item.fragmentId ?? '') ?? 0) + 1);
+      }
+      for (const [, seen] of perTarget) expect(seen).toBe(1);
+    }
 
     // One document, one audit, one accepted claim ledger.
     expect(await listAuditsByProject(project.id)).toHaveLength(1);

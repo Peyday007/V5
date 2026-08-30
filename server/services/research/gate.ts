@@ -353,18 +353,27 @@ export function applyGate(input: {
   );
 
   /**
-   * The planner's own number is not the maximum of the two. Taking the higher
-   * would leave the bug exactly where it was: `plan.ts` declares 2 for any
-   * MISSING requirement, before it can possibly know that the answer will be a
-   * single quoted statute. Where a question really is contested, the claims
-   * that answer it are typed as the contested things they are and
-   * `effectiveStandard` raises their floor itself — which is the mechanism
-   * that should decide this, and the only one that sees the evidence.
+   * The higher of the two, so each can only ever raise the bar.
    *
-   * With no accepted claims the floor is 0 and the fragment fails on being
-   * empty, a line above, with a clearer reason than an arithmetic one.
+   * An earlier version of this fix took the derived floor *alone* and dropped
+   * the fragment's declaration entirely. That fixed the live regression and
+   * broke something real: §12 says a fragment's declarations are what the gate
+   * is applied against, so a fragment that deliberately asks for two
+   * independent sources must get two. Ignoring it would let two pages of one
+   * press release satisfy a question whose whole difficulty is that publishers
+   * disagree.
+   *
+   * The declaration was only ever wrong because the *planner* declared 2 for
+   * every MISSING requirement before it could know what would answer it, and
+   * the schema refused anything lower. Both of those are now fixed where the
+   * number is produced, which is where a wrong default belongs. What is left
+   * here is the honest rule: the assignment's bar, or the bar the evidence's
+   * own claim types demand, whichever is higher.
+   *
+   * With no accepted claims the derived floor is 0 and the fragment fails on
+   * being empty, a line above, with a clearer reason than an arithmetic one.
    */
-  const requiredSources = derivedFloor;
+  const requiredSources = Math.max(fragment.minIndependentSources, derivedFloor);
   const enoughSources = independentSources >= requiredSources;
   if (uncoveredLanes.length > 0 || !enoughSources) failedConditions.add('COVERAGE');
 

@@ -247,15 +247,27 @@ export function briefFromGap(input: {
     requirement.requiredEvidence[0] ??
     (assessment.gapType === 'UNRESOLVED_CONTRADICTION' ? 'contradiction resolution' : 'primary source');
 
-  // What "enough" means depends on why the gap is open. A contested requirement
-  // needs corroboration; a definition mismatch needs one source that measures
-  // the right thing.
+  /**
+   * What "enough" means depends on why the gap is open — and where the archive
+   * gives no reason to think otherwise, it is not the planner's to decide.
+   *
+   * A requirement the archive found *contradictory*, or resting on sources that
+   * turned out to be one source, needs corroboration and says so: 3. A
+   * definition mismatch needs one source that measures the right thing: 1.
+   *
+   * Everything else — an ordinary MISSING requirement — declares 1, and used to
+   * declare 2. That 2 was a guess made before anyone could know what kind of
+   * claim would answer the question, and for a statutory question the answer is
+   * a quoted statute, which is conclusive on its own (§14). The gate raises the
+   * bar per claim from `standards.ts` once there is evidence to type, so a
+   * question that really is contested is still held to a higher standard —
+   * decided by the claims that answer it rather than by a number chosen in
+   * advance of them.
+   */
   const minSources =
     assessment.status === 'CONTRADICTED' || assessment.gapType === 'INSUFFICIENT_INDEPENDENCE'
       ? 3
-      : assessment.status === 'DEFINITION_MISMATCH'
-        ? 1
-        : 2;
+      : 1;
 
   return {
     orchestrationId: '',

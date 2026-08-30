@@ -42,11 +42,14 @@ import { dependencyKeys } from '../../domain/dependencies.ts';
 import { repairable, TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { bundleKeyFor } from './bundling.ts';
 import type {
+  ResearchClaim,
   ResearchFragment,
   ResearchOrchestration,
   WorkItem,
   WorkerScope,
 } from '../../domain/types.ts';
+import type { ClaimJudgement, GateCondition, GateResult, LaneCoverage } from './gate.ts';
+import { countIndependentSources, duplicateGroups } from './standards.ts';
 import {
   acceptedClaims,
   currentFragments,
@@ -706,7 +709,7 @@ async function mintRepairs(input: {
     const claims = await listClaimsForFragment(fragment.id);
     const plan = buildRepairPlan({
       fragment,
-      gate: gateShapeFor(fragment),
+      gate: gateShapeFor(fragment, claims),
       history,
       claims,
       // Splitting is decided on the in-process path by `shouldSplit`, which
@@ -717,15 +720,30 @@ async function mintRepairs(input: {
       splitRequired: false,
       remainingBudget: Math.max(0, fragment.maxRepairs - fragment.attempt + 1),
     });
-    // The ladder is exhausted: every strategy this failure suggests has been
-    // tried. That is the honest "unresolved" §15 describes, not another round.
-    if (plan.strategies.length === 0) continue;
+    /**
+     * The ladder is exhausted, so there is no repair to make.
+     *
+     * `buildRepairPlan` says so by planning `MARK_UNRESOLVED` — when every
+     * strategy this failure suggests has already been tried, or when the budget
+     * is down to its last attempt. That is an instruction to stop, and creating
+     * an attempt carrying it would be a fragment whose assignment is "do not
+     * attempt this". It is left for the gap pass below, which is where an
+     * honestly unresolved fragment belongs.
+     *
+     * Note this stops one attempt earlier than `retryFragment` would refuse.
+     * The planner is the stricter of the two and it is the one that knows what
+     * has been searched, so it decides.
+     */
+    if (plan.strategies.every((strategy) => strategy === 'MARK_UNRESOLVED')) continue;
 
     try {
       const outcome = await retryFragment({
         fragmentId: fragment.id,
         reason: describeRepairPlan(plan),
         actor: { type: 'SYSTEM', id: 'packet-runner' },
+        // Never from inside the runner: see the option's own note. The caller
+        // re-derives as soon as this loop finishes.
+        advance: false,
       });
       if (outcome.status === 'RETRIED') created += 1;
     } catch (error) {
@@ -735,45 +753,132 @@ async function mintRepairs(input: {
     }
   }
 
-  if (created > 0) {
-    await updateOrchestration(orchestration.id, {
-      status: 'AWAITING_REPAIR',
-      failureReason: null,
-      completedAt: null,
-    });
-  }
+  /**
+   * No status is written here, deliberately.
+   *
+   * A minted repair is a QUEUED fragment, and the re-derive that follows will
+   * enqueue research for it and set `RESEARCHING` — which is the truth, because
+   * the packet has claimable work. Writing `AWAITING_REPAIR` from inside this
+   * function overwrote that with a state meaning "waiting for something that is
+   * not queued yet", on a packet whose queue was about to be full.
+   *
+   * `AWAITING_REPAIR` belongs to `outcomeFor`, on the judge path: the moment
+   * between a MORE_RESEARCH verdict and the runner minting the attempt. This
+   * function is what ends that moment, not what begins it.
+   */
   return created;
 }
 
 /**
- * What `buildRepairPlan` needs to know about the failure, from the fragment.
+ * The gate result this fragment already received, rebuilt from its own rows.
  *
- * The full `GateResult` is not stored — the verdicts and the reason are. This
- * reconstructs enough of it to choose a ladder: which conditions failed is
- * recoverable from the recorded reason, and where it is not, the default ladder
- * applies, which is exactly what `buildRepairPlan` falls back to anyway.
+ * `buildRepairPlan` needs the whole `GateResult` — which conditions failed,
+ * which lanes are empty, how many independent sources the accepted evidence
+ * actually rests on — and none of that is stored as a blob. What is stored is
+ * every decision it was made of: each claim carries its own `accepted`,
+ * `rejectionReason` and `validationState`, and the fragment carries the two
+ * verdicts and the reason it was blocked.
+ *
+ * So this reads the recorded decisions rather than re-judging the evidence.
+ * That distinction is §12's: acceptance is decided once, at the gate. Calling
+ * `applyGate` again here would be a second judgement — over claims whose
+ * verification verdicts are not all persisted, so it could quietly reach a
+ * different answer than the one the fragment was actually failed for, and plan
+ * a repair for a failure that never happened.
+ *
+ * Counting is delegated to `standards.ts`, the same module the gate itself
+ * used, so "how many independent sources" means one thing in both places.
  */
-function gateShapeFor(fragment: ResearchFragment): Parameters<
-  typeof import('./repair.ts').buildRepairPlan
->[0]['gate'] {
-  const reason = fragment.blockedReason ?? '';
-  const failedConditions = GATE_CONDITION_HINTS.filter(([, needle]) =>
-    reason.toLowerCase().includes(needle),
-  ).map(([condition]) => condition);
+function gateShapeFor(fragment: ResearchFragment, claims: ResearchClaim[]): GateResult {
+  const results: ClaimJudgement[] = claims.map((claim) => ({
+    claimId: claim.id,
+    accepted: claim.accepted,
+    failedCondition: claim.accepted ? null : conditionFor(claim),
+    reason: claim.accepted ? null : (claim.rejectionReason ?? claim.validationDetail),
+  }));
+  const accepted = claims.filter((claim) => claim.accepted);
+
+  const coverage: LaneCoverage[] = fragment.requiredEvidence.map((lane) => {
+    const inLane = accepted.filter((claim) => claim.evidenceLane === lane);
+    return {
+      lane,
+      acceptedClaims: inLane.length,
+      independentSources: countIndependentSources(inLane),
+      meetsThreshold: inLane.length > 0,
+    };
+  });
+
+  const independentSources = countIndependentSources(accepted);
+  const failedConditions = new Set<GateCondition>();
+  // Per-claim: the condition each rejected claim actually failed.
+  for (const result of results) {
+    if (result.failedCondition) failedConditions.add(result.failedCondition);
+  }
+  // Fragment-wide: an empty lane or too few publishers is a coverage failure
+  // whatever the individual claims did, and it is the one that decides the
+  // ladder most often.
+  if (coverage.some((lane) => !lane.meetsThreshold)) failedConditions.add('COVERAGE');
+  if (independentSources < fragment.minIndependentSources) failedConditions.add('COVERAGE');
+
+  const reason = fragment.blockedReason ?? fragment.missingEvidence ?? '';
   return {
     integrity: fragment.integrityVerdict === 'PASS' ? 'PASS' : 'FAIL',
     sufficiency: fragment.sufficiencyVerdict === 'SUFFICIENT' ? 'SUFFICIENT' : 'INSUFFICIENT',
-    failedConditions,
+    // A claim whose source could not be read is not a rejected claim (§4 of the
+    // correction batch), so it is reported here rather than counted as failure.
+    unresolvedRetrieval: claims
+      .filter((claim) => claim.retrievalState !== 'RETRIEVED')
+      .map((claim) => ({
+        claimId: claim.id,
+        claim: claim.claim,
+        sourceUrl: claim.sourceUrl,
+        state: claim.retrievalState,
+      })),
+    claims: results,
+    acceptedClaims: accepted.length,
+    rejectedClaims: results.filter((result) => !result.accepted).length,
+    independentSources,
+    coverage,
+    duplicateSourceGroups: duplicateGroups(accepted),
+    failedConditions: [...failedConditions],
     reasons: reason ? [reason] : [],
-  } as ReturnType<typeof gateShapeFor>;
+    unresolvedGaps: fragment.missingEvidence ? [fragment.missingEvidence] : [],
+  };
 }
 
-/** Recovering which gate condition failed from the reason it recorded. */
-const GATE_CONDITION_HINTS: [string, string][] = [
-  ['SOURCE_PRESENT', 'no source url'],
-  ['SOURCE_SUPPORTS', 'directly supports'],
-  ['PASSAGE_PRESENT', 'passage'],
-  ['SCOPE_MATCH', 'scope, date, geography'],
+/**
+ * Which gate condition a rejected claim failed, from what its row records.
+ *
+ * The condition itself is not a column — only the sentence the gate wrote when
+ * it rejected the claim. Those sentences come from `gate.ts` and are stable, so
+ * matching them recovers the condition for the common cases; anything
+ * unrecognised falls through to `SOURCE_SUPPORTS`, which is the broadest ladder
+ * and therefore the safe default: it proposes more places to look rather than
+ * fewer.
+ */
+function conditionFor(claim: ResearchClaim): GateCondition {
+  if (claim.validationState === 'NO_EVIDENCE') return 'LOCATOR';
+  if (!claim.sourced) return 'SOURCE_URL';
+  if (claim.derived) return 'DERIVATIONS';
+  if (claim.contradictionState === 'CONTESTED' || claim.contradictionState === 'REFUTED') {
+    return 'CONTRADICTIONS';
+  }
+  const reason = (claim.rejectionReason ?? '').toLowerCase();
+  for (const [condition, needle] of GATE_CONDITION_HINTS) {
+    if (reason.includes(needle)) return condition;
+  }
+  return 'SOURCE_SUPPORTS';
+}
+
+/** Recovering which gate condition failed from the sentence it recorded. */
+const GATE_CONDITION_HINTS: [GateCondition, string][] = [
+  ['SOURCE_URL', 'no usable source'],
+  ['SOURCE_SUPPORTS', 'directly support'],
+  ['SOURCE_SUPPORTS', 'nothing confirms'],
+  ['LOCATOR', 'passage'],
+  ['SCOPE_MATCH', 'scope'],
+  ['SCOPE_MATCH', 'geography'],
+  ['SCOPE_MATCH', 'timeframe'],
   ['CONTRADICTIONS', 'contradiction'],
   ['COVERAGE', 'lane'],
   ['DERIVATIONS', 'calculation'],
@@ -831,6 +936,25 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
   }
 
   if (result.status === 'NEEDS_HUMAN') return result;
+
+  /**
+   * A packet waiting for a person to approve its plan has an empty queue on
+   * purpose, and that is the §16 gate rather than a stall.
+   *
+   * This guard exists to catch a packet nothing will ever pick up. A packet
+   * held at approval is picked up the moment somebody approves it, the console
+   * shows it as awaiting approval, and the runner is called again by the
+   * approval itself. Downgrading it to NEEDS_HUMAN would be true in the
+   * uselessly literal sense — a human is indeed needed — while destroying the
+   * distinction between "waiting for the approval it was designed to wait for"
+   * and "stuck in a state no one can resolve".
+   *
+   * Read from the rows rather than from `waitingOn`, which is prose.
+   */
+  const unapproved = (await currentFragments(orchestrationId)).filter(
+    (fragment) => fragment.status === 'PLANNED',
+  );
+  if (unapproved.length > 0) return result;
 
   /**
    * Any other non-terminal status with an empty queue is the bug this guard
@@ -989,21 +1113,6 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
    * duplicate a fragment, a synthesis or an audit — the existing per-target
    * `alreadyCreated` guards are what mint, and they are untouched.
    */
-  if (
-    orchestration.unresolvedGapPolicy === 'RECORD_GAPS' &&
-    !items.some((item) => LIVE_ITEM.has(item.state)) &&
-    !fragments.some((fragment) => fragment.status === 'PLANNED') &&
-    // And nothing that could still be started. This is the guard that keeps
-    // the rule narrow now that the attempt count no longer does: research that
-    // has not been attempted may yet answer the requirement a blocked fragment
-    // failed on, so writing anything off while a fragment is startable would
-    // narrow the goal ahead of the evidence.
-    readyToResearch(fragments).length === 0
-  ) {
-    const closed = await recordUnresolvedGaps({ orchestration, fragments });
-    if (closed > 0) return await advancePacket(orchestrationId);
-  }
-
   /**
    * Repair what can still be repaired, before writing anything off.
    *
@@ -1022,6 +1131,21 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
   if (!items.some((item) => LIVE_ITEM.has(item.state))) {
     const repaired = await mintRepairs({ orchestration, fragments, items });
     if (repaired > 0) return await advancePacket(orchestrationId);
+  }
+
+  if (
+    orchestration.unresolvedGapPolicy === 'RECORD_GAPS' &&
+    !items.some((item) => LIVE_ITEM.has(item.state)) &&
+    !fragments.some((fragment) => fragment.status === 'PLANNED') &&
+    // And nothing that could still be started. This is the guard that keeps
+    // the rule narrow now that the attempt count no longer does: research that
+    // has not been attempted may yet answer the requirement a blocked fragment
+    // failed on, so writing anything off while a fragment is startable would
+    // narrow the goal ahead of the evidence.
+    readyToResearch(fragments).length === 0
+  ) {
+    const closed = await recordUnresolvedGaps({ orchestration, fragments });
+    if (closed > 0) return await advancePacket(orchestrationId);
   }
 
   const awaitingApproval = fragments.filter((fragment) => fragment.status === 'PLANNED');

@@ -510,6 +510,20 @@ export async function retryFragment(input: {
   fragmentId: string;
   reason: string;
   actor: { type: ActorType; id: string };
+  /**
+   * Whether to advance the packet before returning. True for an operator
+   * pressing retry, who wants the new attempt to become claimable work in the
+   * same request.
+   *
+   * The packet runner passes false, and must: it calls this from inside its own
+   * advance, so leaving it true makes the call re-enter the runner —
+   * `advancePacket` → `mintRepairs` → `retryFragment` → `advancePacket`. That
+   * nested pass mints work and writes a status against a half-finished
+   * repair round, and the outer pass then reasons on a snapshot the nested one
+   * has already invalidated. The runner re-derives immediately afterwards
+   * anyway, so the nested advance is duplicated work with a race in it.
+   */
+  advance?: boolean;
 }): Promise<RetryResult> {
   const previous = await getFragment(input.fragmentId);
   if (!previous) throw new FragmentNotRetryable('No such fragment.');
@@ -666,6 +680,6 @@ export async function retryFragment(input: {
     previousFragmentId: previous.id,
     newFragmentId: outcome.value.fragmentId,
     attempt,
-    advanced: await advancePacket(orchestration.id),
+    advanced: input.advance === false ? null : await advancePacket(orchestration.id),
   };
 }
