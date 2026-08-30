@@ -24,7 +24,8 @@
     "preflight": "tsx --env-file-if-exists=.env scripts/preflight.ts",
     "reissue:verification": "tsx scripts/reissue-verification.ts",
     "authorize:gap-policy": "tsx scripts/authorize-gap-policy.ts",
-    "report:packet": "tsx scripts/packet-report.ts"
+    "report:packet": "tsx scripts/packet-report.ts",
+    "verify:capability": "tsx scripts/verify-research-capability.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

@@ -34,6 +34,10 @@ import {
   RESEARCH_METHOD_VERSION,
 } from '../server/services/research/method.ts';
 import { SERVER_INSTRUCTIONS } from '../server/mcp/protocol.ts';
+import {
+  evaluateCapability,
+  type CapabilityInput,
+} from '../server/services/research/capabilityCheck.ts';
 import { findTool } from '../server/mcp/tools.ts';
 import { readFileSync } from 'node:fs';
 
@@ -415,5 +419,166 @@ describe('the research method', () => {
       .map((line) => line.slice(3).trim());
     expect(sections.length).toBeGreaterThanOrEqual(7);
     for (const section of sections) expect(doc).toContain(section);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. The acceptance instrument itself
+// ---------------------------------------------------------------------------
+
+describe('the capability check', () => {
+  /**
+   * The instrument has to discriminate, or the production proof is a
+   * formatting exercise.
+   *
+   * So it is run twice over the same shape of packet: once as the first live
+   * one actually was, and once as a corrected one should be. Anything that
+   * passes both is not measuring the correction.
+   */
+  function input(over: Partial<CapabilityInput> = {}): CapabilityInput {
+    const good = claim({ id: 'clm_aaaaaaaaaaaaaaaaaaaa', accepted: true, fragmentId: 'f1' });
+    return {
+      orchestration: {
+        id: 'orc_x',
+        projectId: 'prj_x',
+        status: 'COMPLETE',
+        documentId: 'doc_x',
+        completedAt: new Date().toISOString(),
+      } as ResearchOrchestration,
+      fragments: [fragment({ id: 'f1', fragmentKey: 'ny', status: 'ACCEPTED' })],
+      attempts: [fragment({ id: 'f1', fragmentKey: 'ny', status: 'ACCEPTED' })],
+      claims: [good],
+      citable: [good],
+      accepted: [good],
+      coverage: new Map(),
+      requirements: [],
+      requirementCoverage: [],
+      items: [],
+      documentText: `The answer, citing ${good.id}.`,
+      ...over,
+    };
+  }
+
+  const failing = (clauses: ReturnType<typeof evaluateCapability>): string[] =>
+    clauses.filter((clause) => !clause.ok).map((clause) => clause.id);
+
+  it('passes a packet that shows every corrected behaviour', () => {
+    expect(failing(evaluateCapability(input()))).toEqual([]);
+  });
+
+  /**
+   * The regression, as it actually was: a fragment that recorded integrity
+   * PASS, was blocked for coverage, and had its accepted claim discarded.
+   */
+  it('fails a packet that discarded accepted evidence with its fragment', () => {
+    const orphan = claim({ id: 'clm_bbbbbbbbbbbbbbbbbbbb', accepted: true, fragmentId: 'f2' });
+    const clauses = evaluateCapability(
+      input({
+        fragments: [
+          fragment({ id: 'f1', fragmentKey: 'ny', status: 'ACCEPTED' }),
+          fragment({
+            id: 'f2',
+            fragmentKey: 'tx',
+            status: 'BLOCKED',
+            attempt: 2,
+            maxRepairs: 2,
+            integrityVerdict: 'PASS',
+          }),
+        ],
+        claims: [claim({ id: 'clm_aaaaaaaaaaaaaaaaaaaa', accepted: true, fragmentId: 'f1' }), orphan],
+        // Discarded: the claim is accepted and not citable.
+        citable: [claim({ id: 'clm_aaaaaaaaaaaaaaaaaaaa', accepted: true, fragmentId: 'f1' })],
+        accepted: [claim({ id: 'clm_aaaaaaaaaaaaaaaaaaaa', accepted: true, fragmentId: 'f1' })],
+      }),
+    );
+    expect(failing(clauses)).toContain('P1');
+  });
+
+  it('fails a packet that abandoned a fragment with repair budget left', () => {
+    const clauses = evaluateCapability(
+      input({
+        fragments: [
+          fragment({ id: 'f1', fragmentKey: 'ny', status: 'ACCEPTED' }),
+          fragment({
+            id: 'f2',
+            fragmentKey: 'tx',
+            status: 'BLOCKED',
+            attempt: 1,
+            maxRepairs: 2,
+            blockedReason: 'The statute site refuses automated retrieval.',
+          }),
+        ],
+      }),
+    );
+    expect(failing(clauses)).toContain('P2');
+  });
+
+  it('fails a packet that stranded a conditional dependent', () => {
+    const clauses = evaluateCapability(
+      input({
+        fragments: [
+          fragment({ id: 'f1', fragmentKey: 'trigger', status: 'BLOCKED', attempt: 2, maxRepairs: 2 }),
+          fragment({
+            id: 'f2',
+            fragmentKey: 'penalty',
+            status: 'BLOCKED',
+            attempt: 2,
+            maxRepairs: 2,
+            dependsOn: [{ key: 'trigger', kind: 'CONDITIONAL' }],
+            blockedReason: 'Its dependency trigger never produced accepted evidence.',
+          }),
+        ],
+      }),
+    );
+    expect(failing(clauses)).toContain('P3');
+  });
+
+  it('fails a packet that blamed the research for an unreadable source', () => {
+    const clauses = evaluateCapability(
+      input({
+        claims: [
+          claim({ id: 'clm_aaaaaaaaaaaaaaaaaaaa', accepted: true, fragmentId: 'f1' }),
+          claim({
+            id: 'clm_cccccccccccccccccccc',
+            retrievalState: 'PAYWALLED',
+            accepted: false,
+            rejectionReason: 'The source does not support the claim.',
+          }),
+        ],
+      }),
+    );
+    expect(failing(clauses)).toContain('P4');
+  });
+
+  it('fails a packet left non-terminal, or with work still queued', () => {
+    expect(
+      failing(
+        evaluateCapability(input({ orchestration: { id: 'orc_x', projectId: 'prj_x', status: 'AWAITING_REPAIR', documentId: 'doc_x' } as ResearchOrchestration })),
+      ),
+    ).toContain('P5');
+    expect(
+      failing(
+        evaluateCapability(
+          input({ items: [{ state: 'QUEUED', orchestrationId: 'orc_x' } as never] }),
+        ),
+      ),
+    ).toContain('P5b');
+  });
+
+  it('fails a report citing a claim the packet cannot resolve', () => {
+    const clauses = evaluateCapability(
+      input({ documentText: 'The answer, citing clm_dddddddddddddddddddd.' }),
+    );
+    expect(failing(clauses)).toContain('P6b');
+  });
+
+  it('fails a declared gap with no reason on it', () => {
+    const clauses = evaluateCapability(
+      input({
+        requirements: [{ necessity: 'MANDATORY' } as Requirement],
+        requirementCoverage: [{ status: 'NOT_REQUIRED', userOverride: null } as never],
+      }),
+    );
+    expect(failing(clauses)).toContain('P7b');
   });
 });

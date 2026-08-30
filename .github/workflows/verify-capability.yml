@@ -1,0 +1,54 @@
+# Judging a packet against the capability contract, without a terminal.
+#
+# The sibling of `packet-report.yml`, and separate from it for the same reason
+# that one is separate from `deploy.yml`: this asks a different question. The
+# report says what the rows contain; this says whether what they contain shows
+# the behaviour the correction batch was supposed to restore — accepted evidence
+# never discarded, every eligible fragment attempted, conditional dependents
+# continued, unreadable sources reported rather than blamed, and the packet
+# terminal with an empty queue.
+#
+# Read-only, in the script and here. The one thing it can do to production is
+# read it. It exits non-zero when a clause fails, so the answer is the job
+# status rather than somebody's reading of the log.
+#
+# It is meant for a *fresh* packet. Running it against the first live one
+# (orc_f4850ad197474c22b5ea) is expected to fail several clauses: that packet
+# was researched by the engine before the correction, so it is the control.
+name: Verify research capability
+
+on:
+  workflow_dispatch:
+    inputs:
+      orchestration:
+        description: 'Orchestration id to judge (orc_...)'
+        required: true
+
+# Never at the same time as a deploy: the machine is being replaced during one.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Judge the packet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Verify
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          # The script exits non-zero when a clause fails, and `tee` would
+          # otherwise hide that behind its own success. pipefail keeps the
+          # verdict, and the grep is a floor: a run that printed no verdict at
+          # all (a crashed container, a lost session) must not read as a pass.
+          set -o pipefail
+          flyctl ssh console --app "$app" \
+            -C "sh /app/scripts/verify-capability.sh --orchestration ${{ inputs.orchestration }}" \
+            2>&1 | tee capability.txt
+          grep -q 'clauses passed' capability.txt
