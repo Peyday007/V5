@@ -39,6 +39,7 @@
  * refuses to queue a PLANNED fragment.
  */
 import { dependencyKeys } from '../../domain/dependencies.ts';
+import { repairable, TERMINAL_ORCHESTRATION } from './outcome.ts';
 import type {
   ResearchFragment,
   ResearchOrchestration,
@@ -660,12 +661,189 @@ async function recordUnresolvedGaps(input: {
 }
 
 /**
+ * Give a failed fragment the next attempt §15 says it is owed.
+ *
+ * The plan comes from `repair.ts`, which is the part that makes a second
+ * attempt worth making: strategies come from a named ladder chosen from what
+ * actually failed, and every one already used by an earlier attempt is filtered
+ * out. A retry without that is the same search twice, which §15 forbids and
+ * which is why this path had none.
+ *
+ * `retryFragment` creates the new attempt, carrying every declaration forward
+ * so the repair is judged by the standard the last attempt failed — a repair
+ * that relaxes the bar answers an easier question. It is idempotent on
+ * (fragment, attempt), so two advances a millisecond apart produce one attempt.
+ *
+ * Returns how many it created, so the caller re-derives rather than guessing.
+ */
+async function mintRepairs(input: {
+  orchestration: ResearchOrchestration;
+  fragments: ResearchFragment[];
+  items: WorkItem[];
+}): Promise<number> {
+  const { orchestration, fragments } = input;
+  const candidates = repairable(fragments);
+  if (candidates.length === 0) return 0;
+
+  const { buildRepairPlan, describeRepairPlan } = await import('./repair.ts');
+  const { retryFragment, FragmentNotRetryable } = await import('./reissue.ts');
+  const { listFragments } = await import('../../repos/research.ts');
+
+  let created = 0;
+  for (const fragment of candidates) {
+    // Doomed by a HARD dependency that never arrived? Repairing this one
+    // changes nothing; the dependency is what needs the attempt.
+    if (doomedBy(fragments).has(fragment.fragmentKey)) continue;
+
+    const history = (await listFragments(orchestration.id)).filter(
+      (entry) => entry.fragmentKey === fragment.fragmentKey,
+    );
+    const claims = await listClaimsForFragment(fragment.id);
+    const plan = buildRepairPlan({
+      fragment,
+      gate: gateShapeFor(fragment),
+      history,
+      claims,
+      // Splitting is decided on the in-process path by `shouldSplit`, which
+      // reads the failed attempt's own passes. This path has the claims but not
+      // that analysis, so it does not claim to know: a repair that should have
+      // been a split is still a repair, and the next attempt's failure will say
+      // so more clearly than a guess here would.
+      splitRequired: false,
+      remainingBudget: Math.max(0, fragment.maxRepairs - fragment.attempt + 1),
+    });
+    // The ladder is exhausted: every strategy this failure suggests has been
+    // tried. That is the honest "unresolved" §15 describes, not another round.
+    if (plan.strategies.length === 0) continue;
+
+    try {
+      const outcome = await retryFragment({
+        fragmentId: fragment.id,
+        reason: describeRepairPlan(plan),
+        actor: { type: 'SYSTEM', id: 'packet-runner' },
+      });
+      if (outcome.status === 'RETRIED') created += 1;
+    } catch (error) {
+      // Not retryable is an ordinary answer here — the budget ran out between
+      // the check and the call, or a later attempt already exists.
+      if (!(error instanceof FragmentNotRetryable)) throw error;
+    }
+  }
+
+  if (created > 0) {
+    await updateOrchestration(orchestration.id, {
+      status: 'AWAITING_REPAIR',
+      failureReason: null,
+      completedAt: null,
+    });
+  }
+  return created;
+}
+
+/**
+ * What `buildRepairPlan` needs to know about the failure, from the fragment.
+ *
+ * The full `GateResult` is not stored — the verdicts and the reason are. This
+ * reconstructs enough of it to choose a ladder: which conditions failed is
+ * recoverable from the recorded reason, and where it is not, the default ladder
+ * applies, which is exactly what `buildRepairPlan` falls back to anyway.
+ */
+function gateShapeFor(fragment: ResearchFragment): Parameters<
+  typeof import('./repair.ts').buildRepairPlan
+>[0]['gate'] {
+  const reason = fragment.blockedReason ?? '';
+  const failedConditions = GATE_CONDITION_HINTS.filter(([, needle]) =>
+    reason.toLowerCase().includes(needle),
+  ).map(([condition]) => condition);
+  return {
+    integrity: fragment.integrityVerdict === 'PASS' ? 'PASS' : 'FAIL',
+    sufficiency: fragment.sufficiencyVerdict === 'SUFFICIENT' ? 'SUFFICIENT' : 'INSUFFICIENT',
+    failedConditions,
+    reasons: reason ? [reason] : [],
+  } as ReturnType<typeof gateShapeFor>;
+}
+
+/** Recovering which gate condition failed from the reason it recorded. */
+const GATE_CONDITION_HINTS: [string, string][] = [
+  ['SOURCE_PRESENT', 'no source url'],
+  ['SOURCE_SUPPORTS', 'directly supports'],
+  ['PASSAGE_PRESENT', 'passage'],
+  ['SCOPE_MATCH', 'scope, date, geography'],
+  ['CONTRADICTIONS', 'contradiction'],
+  ['COVERAGE', 'lane'],
+  ['DERIVATIONS', 'calculation'],
+];
+
+/**
  * Decide what work should exist for this packet, and make it so.
  *
  * Idempotent by construction: every branch checks the queue for live work of
  * the kind it is about to create before creating any.
  */
+/**
+ * Every advance, with the one thing that must be true when it returns.
+ *
+ * **A non-terminal packet may never sit with an empty queue and no reason.**
+ * That state is invisible: nothing is claimable, so no worker touches it;
+ * nothing is terminal, so no report says it is finished; and the runner is only
+ * called when something completes, which nothing will. The first live packet
+ * spent a day in it.
+ *
+ * `AWAITING_REPAIR` with only a sentence is the same failure wearing a better
+ * word, so it is held to the stronger test: either there is claimable or leased
+ * repair work, or a fragment carries a `next_retry_at` saying when it returns.
+ * With neither, the packet is not awaiting anything and belongs to a person.
+ *
+ * Checked here rather than at each of the dozen returns, because a rule
+ * enforced at some exits is a rule with a hole at the others.
+ */
 export async function advancePacket(orchestrationId: string): Promise<AdvanceResult> {
+  const result = await advanceOnce(orchestrationId);
+  if (TERMINAL_ORCHESTRATION.has(result.status)) return result;
+
+  const items = await listWorkItems(
+    (await getOrchestration(orchestrationId))?.projectId ?? '',
+    { limit: 500 },
+  );
+  const live = items.filter(
+    (item) => item.orchestrationId === orchestrationId && LIVE_ITEM.has(item.state),
+  );
+  if (live.length > 0) return result;
+
+  if (result.status === 'AWAITING_REPAIR') {
+    const waiting = (await currentFragments(orchestrationId)).some(
+      (fragment) => fragment.nextRetryAt !== null,
+    );
+    if (waiting) return result;
+    await updateOrchestration(orchestrationId, {
+      status: 'NEEDS_HUMAN',
+      failureReason:
+        'The packet was left awaiting a repair that has no claimable work and no scheduled ' +
+        'time to return. Nothing would ever pick it up, so it is a decision rather than a wait.',
+      completedAt: new Date().toISOString(),
+    });
+    return { ...result, status: 'NEEDS_HUMAN', waitingOn: 'a person: no repair is actually pending' };
+  }
+
+  if (result.status === 'NEEDS_HUMAN') return result;
+
+  /**
+   * Any other non-terminal status with an empty queue is the bug this guard
+   * exists for. It is reported rather than repaired: inventing work here would
+   * hide whichever branch failed to mint or to conclude.
+   */
+  await updateOrchestration(orchestrationId, {
+    status: 'NEEDS_HUMAN',
+    failureReason:
+      `The packet was left ${result.status} with nothing queued and nothing to do` +
+      `${result.waitingOn ? ` (waiting on: ${result.waitingOn})` : ''}. That state cannot ` +
+      'resolve itself, so it is a decision rather than a wait.',
+    completedAt: new Date().toISOString(),
+  });
+  return { ...result, status: 'NEEDS_HUMAN', waitingOn: `a person: left ${result.status} with an empty queue` };
+}
+
+async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
   const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) {
     return { orchestrationId, status: 'GONE', enqueued: [], waitingOn: 'no such orchestration' };
@@ -695,7 +873,7 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
    * the fencing generation are all untouched, so work is still created exactly
    * once per (type, target) for the life of the packet.
    */
-  const finished = ['COMPLETE', 'FAILED', 'CANCELLED'];
+  const finished = [...TERMINAL_ORCHESTRATION];
   if (finished.includes(orchestration.status)) {
     return {
       orchestrationId,
@@ -819,6 +997,26 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
   ) {
     const closed = await recordUnresolvedGaps({ orchestration, fragments });
     if (closed > 0) return await advancePacket(orchestrationId);
+  }
+
+  /**
+   * Repair what can still be repaired, before writing anything off.
+   *
+   * §15's ladder — search differently from every attempt before it — lives in
+   * `repair.ts` and was wired only to the in-process path. On the worker path a
+   * failed fragment therefore got *zero* planned attempts, not two: it was
+   * blocked, then declared a gap. That is most of the difference between this
+   * packet and the archive's best research run, which reformulated and tried
+   * different source ecosystems until it either had the answer or could say
+   * precisely why it did not.
+   *
+   * Bounded exactly as the in-process path is: `MAX_FRAGMENT_ATTEMPTS`, and
+   * every strategy filtered against every earlier attempt, so no two attempts
+   * can be the same search twice.
+   */
+  if (!items.some((item) => LIVE_ITEM.has(item.state))) {
+    const repaired = await mintRepairs({ orchestration, fragments, items });
+    if (repaired > 0) return await advancePacket(orchestrationId);
   }
 
   const awaitingApproval = fragments.filter((fragment) => fragment.status === 'PLANNED');

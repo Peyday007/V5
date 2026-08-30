@@ -96,6 +96,7 @@ function mapFragment(row: ResearchFragmentRow): ResearchFragment {
     excludedSourceTypes: parseJson<string[]>(row.excluded_source_types, []),
     completionCriteria: parseJson<string[]>(row.completion_criteria, []),
     dependsOn: parseDependencies(row.depends_on),
+    nextRetryAt: row.next_retry_at ?? null,
     minIndependentSources: Number(row.min_independent_sources),
     status: row.status as FragmentStatus,
     attempt: Number(row.attempt),

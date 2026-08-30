@@ -37,6 +37,8 @@ import type {
   ResearchOrchestration,
   WorkItem,
 } from '../domain/types.ts';
+import { outcomeFor, TERMINAL_ORCHESTRATION } from '../services/research/outcome.ts';
+import { currentFragments as currentFragmentsForOutcome } from '../repos/research.ts';
 import {
   ASSIGNMENT_VERDICTS,
   AUDIT_VERDICTS,
@@ -1739,13 +1741,32 @@ const submitAuditTool: McpTool = {
           model: workerId,
         });
 
+        /**
+         * The verdict decides the research outcome; the rows decide the
+         * workflow state. Hardcoding COMPLETE here is what let a packet whose
+         * judge said MORE_RESEARCH read as finished.
+         */
+        const outcome = outcomeFor({
+          verdict: recorded.audit.verdict,
+          orchestration,
+          fragments: await currentFragmentsForOutcome(orchestration.id),
+        });
         await updateOrchestration(orchestration.id, {
-          status: 'COMPLETE',
+          status: outcome,
           auditId: recorded.audit.id,
           verdict: recorded.audit.verdict,
-          completedAt: new Date().toISOString(),
+          // A packet going back for repair has not completed. Stamping it
+          // would leave a completion time on a run that then carries on.
+          completedAt: TERMINAL_ORCHESTRATION.has(outcome) ? new Date().toISOString() : null,
         });
         await recomputeProject(orchestration.projectId);
+        // A repairable outcome has to be backed by work, not by a status. The
+        // advance is what mints it, and the empty-queue invariant refuses to
+        // leave AWAITING_REPAIR standing without it.
+        if (outcome === 'AWAITING_REPAIR') {
+          const { advancePacket } = await import('../services/research/packetRunner.ts');
+          await advancePacket(orchestration.id);
+        }
 
         return {
           resultRef: recorded.audit.id,
@@ -1756,7 +1777,7 @@ const submitAuditTool: McpTool = {
             advancesState: true,
             auditId: recorded.audit.id,
             verdict: recorded.audit.verdict,
-            orchestrationStatus: 'COMPLETE',
+            orchestrationStatus: outcome,
           },
         };
       },

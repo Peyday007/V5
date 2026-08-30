@@ -2117,6 +2117,14 @@ export interface ResearchFragment {
   completionCriteria: string[];
   dependsOn: FragmentDependency[];
   minIndependentSources: number;
+  /**
+   * When a planned repair returns, for a fragment waiting rather than working.
+   *
+   * What makes `AWAITING_REPAIR` provable: a packet in that state must have
+   * claimable repair work or a fragment naming a time. Neither, and it is not
+   * awaiting anything.
+   */
+  nextRetryAt: string | null;
   status: FragmentStatus;
   attempt: number;
   parentFragmentId: string | null;
