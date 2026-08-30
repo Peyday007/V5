@@ -608,6 +608,147 @@ describe('a research gap that is genuinely exhausted', () => {
     }
   });
 
+  /**
+   * The case the first version missed, and the one the live packet was in.
+   *
+   * Every fragment terminal, nothing live, nothing claimable, one exhausted
+   * fragment holding an open mandatory requirement. The gap recording was
+   * called only from the branch that runs when fragments are still *waiting*,
+   * so a finished-but-gapped packet never reached it: no work, no way forward,
+   * and the mandatory-coverage check refusing the synthesis forever.
+   */
+  it('records the gap and queues the synthesis when every fragment is already terminal', async () => {
+    const orchestration = await makeOrchestration();
+    const [rDead, rDone] = await createRequirements([
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requirementKey: 'exhausted',
+        ordinal: 0,
+        statement: 'Whether Texas requires a licence.',
+        necessity: 'MANDATORY',
+        kind: 'RESEARCH',
+      },
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requirementKey: 'answered',
+        ordinal: 1,
+        statement: 'Whether California requires a licence.',
+        necessity: 'MANDATORY',
+        kind: 'RESEARCH',
+      },
+    ]);
+    // The coverage row the planning pass writes, before anything runs — the
+    // runner advances on every completion, so seeding state afterwards would
+    // be describing a past it has already moved through.
+    await upsertCoverage({
+      orchestrationId: orchestration.id,
+      requirementId: rDead!.id,
+      status: 'MISSING',
+      confidence: 0.2,
+      reasons: ['Nothing in the archive answers it.'],
+      claimIds: [],
+      documentIds: [],
+      needsResearch: true,
+    });
+
+    // One exhausted, one that cleared its gate with an accepted claim.
+    await makeFragment(orchestration, {
+      fragmentKey: 'exhausted',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+      attempt: 2,
+      maxRepairs: 2,
+      requirementIds: [rDead!.id],
+    });
+    const done = await makeFragment(orchestration, {
+      fragmentKey: 'answered',
+      fragmentIndex: 1,
+      requirementIds: [rDone!.id],
+    });
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', done);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(done.id);
+    await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+    const verify = await claimNextOf('RESEARCH_VERIFY');
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: true, ...MATCHES, note: 'Reads directly.' }],
+      sufficiency: 'SUFFICIENT',
+    });
+    await call('brain_complete_work', { ...proof(verify), summary: 'verified' });
+
+    // Every fragment is now terminal and nothing is live.
+    await advancePacket(orchestration.id);
+
+    // The gap is recorded...
+    const coverage = await listCoverage(orchestration.id);
+    const gap = coverage.find((entry) => entry.requirementId === rDead!.id);
+    expect(gap?.status).toBe('NOT_REQUIRED');
+    expect((gap?.userOverride ?? '').length).toBeGreaterThan(0);
+
+    // ...and the packet moved on rather than stopping forever.
+    const items = (await listWorkItems(project.id, { limit: 100 })).filter(
+      (item) =>
+        item.orchestrationId === orchestration.id && item.workType === 'RESEARCH_SYNTHESIZE',
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]!.state).toBe('QUEUED');
+  });
+
+  it('does not duplicate the synthesis on a second advance', async () => {
+    const orchestration = await makeOrchestration();
+    const [requirement] = await createRequirements([
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requirementKey: 'exhausted',
+        ordinal: 0,
+        statement: 'Whether Texas requires a licence.',
+        necessity: 'MANDATORY',
+        kind: 'RESEARCH',
+      },
+    ]);
+    await makeFragment(orchestration, {
+      fragmentKey: 'exhausted',
+      fragmentIndex: 0,
+      status: 'BLOCKED',
+      attempt: 2,
+      maxRepairs: 2,
+      requirementIds: [requirement!.id],
+    });
+    const done = await makeFragment(orchestration, { fragmentKey: 'answered', fragmentIndex: 1 });
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', done);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(done.id);
+    await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+    const verify = await claimNextOf('RESEARCH_VERIFY');
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: true, ...MATCHES, note: 'Reads directly.' }],
+      sufficiency: 'SUFFICIENT',
+    });
+    await call('brain_complete_work', { ...proof(verify), summary: 'verified' });
+
+    await advancePacket(orchestration.id);
+    await advancePacket(orchestration.id);
+    await advancePacket(orchestration.id);
+
+    // One synthesis, one fragment item each, one verification each — the
+    // recursion and the re-derive cannot mint a second of anything.
+    const mine = (await listWorkItems(project.id, { limit: 200 })).filter(
+      (item) => item.orchestrationId === orchestration.id,
+    );
+    const count = (type: string): number => mine.filter((i) => i.workType === type).length;
+    expect(count('RESEARCH_SYNTHESIZE')).toBe(1);
+    expect(count('RESEARCH_FRAGMENT')).toBe(1);
+    expect(count('RESEARCH_VERIFY')).toBe(1);
+  });
+
   it('does not fire while the fragment still has a repair attempt left', async () => {
     const orchestration = await makeOrchestration();
     const [requirement] = await createRequirements([

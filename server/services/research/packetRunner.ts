@@ -57,7 +57,7 @@ import {
 } from '../../repos/research.ts';
 import { earlierAuditRole } from './auditBrief.ts';
 import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
-import { listCoverage, overrideCoverage } from '../../repos/reconciliation.ts';
+import { listCoverage, overrideCoverage, upsertCoverage } from '../../repos/reconciliation.ts';
 import { cancelWork, enqueueWork, listWorkItems } from '../../repos/workQueue.ts';
 import { workType, AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { recordEvent } from '../../repos/events.ts';
@@ -424,9 +424,30 @@ async function recordExhaustedGaps(input: {
   const close = async (fragment: ResearchFragment, why: string): Promise<void> => {
     for (const requirementId of fragment.requirementIds) {
       const entry = byRequirement.get(requirementId);
-      if (!entry) continue;
-      if (entry.status === 'NOT_REQUIRED') continue;
-      await overrideCoverage(entry.id, { status: 'NOT_REQUIRED', note: why, needsResearch: false });
+      if (entry?.status === 'NOT_REQUIRED') continue;
+      // A requirement with no coverage row at all has to be closable too.
+      // Skipping it left the requirement permanently open — the planning pass
+      // does write a row per proposed fragment, so this is rare, but "rare"
+      // and "cannot happen" are different and the difference is a packet that
+      // can never finish.
+      const target =
+        entry ??
+        (await upsertCoverage({
+          orchestrationId: orchestration.id,
+          requirementId,
+          status: 'NOT_REQUIRED',
+          reasons: [why],
+          claimIds: [],
+          documentIds: [],
+          confidence: 0,
+          needsResearch: false,
+        }));
+      await overrideCoverage(target.id, {
+        status: 'NOT_REQUIRED',
+        note: why,
+        needsResearch: false,
+      });
+      byRequirement.set(requirementId, { ...target, status: 'NOT_REQUIRED' });
       closed += 1;
     }
   };
@@ -592,6 +613,40 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
   // The gate §16 requires. A PLANNED fragment is a proposal a person has not
   // looked at, and the runner must not be the thing that decides to spend the
   // allowance on it.
+  /**
+   * Close out research that has genuinely run out, before deciding anything.
+   *
+   * Option A, and it belongs here rather than in the stall branch below. The
+   * first version was called only from `if (unfinished.length > 0)` — the case
+   * where fragments are still waiting on something — and that is exactly the
+   * case a finished-but-gapped packet is *not* in. When every fragment is
+   * already terminal the stall branch never runs, so the gaps were never
+   * recorded, and the mandatory-coverage check then refused the synthesis
+   * forever. The packet had no live work, no claimable work, and no way
+   * forward, which is the shape the operator was looking at.
+   *
+   * So it runs once, early, on every advance where nothing is live — before
+   * approval, before the per-fragment loops, before the packet check — and
+   * everything downstream reads the coverage it wrote.
+   *
+   * Idempotent: it skips any requirement already NOT_REQUIRED and returns the
+   * number it closed, so a second call on the same state closes zero and the
+   * re-derive below cannot loop. It creates no work items itself, so it cannot
+   * duplicate a fragment, a synthesis or an audit — the existing per-target
+   * `alreadyCreated` guards are what mint, and they are untouched.
+   */
+  if (
+    !items.some((item) => LIVE_ITEM.has(item.state)) &&
+    !fragments.some((fragment) => fragment.status === 'PLANNED')
+  ) {
+    const closed = await recordExhaustedGaps({
+      orchestration,
+      fragments,
+      doomed: doomedBy(fragments),
+    });
+    if (closed > 0) return await advancePacket(orchestrationId);
+  }
+
   const awaitingApproval = fragments.filter((fragment) => fragment.status === 'PLANNED');
   if (awaitingApproval.length > 0) {
     return {
@@ -661,38 +716,6 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
     const doomed = doomedBy(fragments);
     const stuck = unfinished.filter((fragment) => doomed.has(fragment.fragmentKey));
 
-    /**
-     * Everything left is waiting on research that has genuinely run out.
-     *
-     * The packet's own goal is then unreachable as written, and there are only
-     * two honest endings: stop and ask a person, or record the gap and file
-     * what the evidence actually supports. Invariant 20 forbids the third —
-     * synthesizing as though the missing part were answered — and nothing here
-     * touches it: no gate is relaxed, no claim is accepted that was not, and no
-     * exhausted lane is retried without a different evidence path.
-     *
-     * What is recorded is a *coverage decision*, in the column built for it:
-     * the requirement behind an exhausted fragment becomes NOT_REQUIRED with
-     * the exhaustion reason as its note, and the fragments waiting on it are
-     * cancelled naming the prerequisite that never arrived. The claims,
-     * verdicts and rejection reasons all stay exactly where they are — this
-     * narrows what the packet claims to answer, and changes nothing about what
-     * it found.
-     *
-     * Bounded deliberately. It fires only when no work is live, nothing is
-     * claimable, and every remaining fragment is waiting on one that is BLOCKED
-     * with its repair attempts spent. While any attempt remains, research is
-     * still the answer and this does not run.
-     */
-    if (!items.some((item) => LIVE_ITEM.has(item.state))) {
-      const resolved = await recordExhaustedGaps({ orchestration, fragments, doomed });
-      if (resolved > 0) return await advancePacket(orchestrationId);
-    }
-
-    // Every remaining fragment is waiting on one that failed. Nothing will
-    // arrive to change that, so saying "in progress" would be waiting for an
-    // event that cannot happen. A person decides: repair the dependency, or
-    // accept the packet is short a foundation.
     if (stuck.length === unfinished.length) {
       const detail = stuck
         .map((fragment) => `${fragment.fragmentKey} (waiting on ${doomed.get(fragment.fragmentKey)!.join(', ')})`)
