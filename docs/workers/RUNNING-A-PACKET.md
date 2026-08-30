@@ -199,6 +199,58 @@ None of these retries by itself, deliberately. **A repair is planned; a retry is
 not a repair.** Re-running the same search is how an allowance gets spent
 learning nothing.
 
+## The capability acceptance run
+
+A specific instance of everything above, run once to prove the correction
+batch. It is written down because "we ran it and it looked better" is not a
+result, and because the comparison only means anything if the two packets were
+asked the same question.
+
+**The question is the one the first live packet was given, word for word.** Same
+project (Deal Dispatch), same layer (Monetization Logic), same archive, same
+evidence bar. Only the engine differs. A narrower question would be a packet
+that answered something easier than the one that beat it.
+
+> In California, Texas, Florida, New York and Illinois, does a person who
+> arranges the sale of a privately held business for a success fee need a
+> real-estate broker or business-broker licence when the transaction transfers
+> no real property and no lease interest — and what is the exact statutory or
+> regulatory provision that settles it in each state?
+
+**Pause every recurring Cowork schedule first.** The hourly task from Step 9 was
+authorized only to finish that packet, and that packet is terminal. A second
+worker drifting into this run would make it impossible to say which activation
+did what, which is the whole measurement.
+
+**It takes two activations, and that is the approval gate rather than a
+fault.** `PER_PACKET` is the only approval mode the Brain supports, and it sets
+`autoApprove: false` deliberately: §16 says a person sees the plan before the
+allowance is spent on it. So:
+
+| | Who | What happens |
+|---|---|---|
+| Create the packet | you, at `/operator` | A `RESEARCH_PLAN` item is queued. Nothing is spent. |
+| **Activation 1** | a Cowork occurrence | The worker reads the archive, proposes fragments, and the packet **stops**. The session ending here is correct. |
+| Approve the plan | you, at `/operator` | You see the goal as Brain read it, what the archive already answers, the genuine gaps, and the jobs proposed. |
+| **Activation 2** | one Cowork occurrence | The measured one: approval → research → repair → synthesis → three audit roles → terminal. |
+
+**Then judge it, and do not judge it by reading it.** Run the **Verify research
+capability** workflow against the new orchestration id. It prints a clause per
+line and fails the job if any clause failed, so the answer is a job status
+rather than an impression.
+
+The control reading, against the pre-correction packet, is recorded in
+`STEP-9-EVIDENCE.md`: **9/15 passed, 2 not exercised, 4 failed**. That is what
+the instrument produces on a packet that has the defect. A fresh packet that
+does not beat it has not demonstrated anything, whatever the report reads like.
+
+**What "better" has to mean here.** Not a higher clause count on its own — the
+clauses check that no mechanism threw work away, not that the research is good.
+The substantive test is the one `STEP-9-PLAN.md` set and this project failed
+once: a *genuinely useful* packet, meaning an answer that changes what somebody
+does next. For this question that is coverage of the five states it names, with
+each answer resolving to the provision that settles it.
+
 ## What this cannot do yet
 
 - **Nothing is scheduled.** Every packet starts with a person pressing a button
