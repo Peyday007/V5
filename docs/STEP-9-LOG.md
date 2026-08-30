@@ -251,6 +251,70 @@ requirement is answered" — against a fixture with no requirements at all, so i
 passed vacuously. The deployed harness caught it on the first pass. A test that
 cannot fail is worse than no test, because it is counted.
 
+
+## Faults 27, 28 and 29 — why the packet could not reach synthesis
+
+The packet held seven accepted fragments, an authorization to record unresolved
+gaps, and no way forward. Every advance returned the same sentence: *2
+fragment(s) are waiting on a dependency that failed.* Three defects on one path,
+and each hid the next.
+
+**27 — a stranded fragment was never resolved.** `doomedBy` computed which
+fragments could never start and deliberately mutated nothing, on the reasoning
+that repairing a dependency un-dooms its dependents. That holds while anything
+else can move. It stops holding at the point nothing can, and there the runner
+left two fragments QUEUED forever: never offered to a worker, never retryable
+(`retryFragment` accepts only a BLOCKED fragment), with the only account of it an
+aggregate sentence on the orchestration that the next advance rewrote.
+
+Now, once every unfinished fragment is waiting on something that is not coming,
+each is resolved to BLOCKED carrying its own cause. Unconditionally — a fragment
+that can never start is a fact, not a decision about scope.
+
+**28 — the gap rule did not cover the case the packet was in.** Recording an
+unresolved gap fired only for a fragment that was BLOCKED *and* out of repairs.
+The fragment stranding the two dependents was BLOCKED at attempt 1 of 2 — a
+verification work item had gone terminal without recording a verdict, and
+`faultedFragment` blocks without spending an attempt. So it was repairable in
+principle, nothing on the pull path can plan a repair, and its requirement stayed
+open, which kept the mandatory-coverage check refusing the synthesis.
+
+A second category now exists: a fragment BLOCKED because a prerequisite of its
+own ended without acceptance, whatever its attempt count, together with the
+prerequisite that stranded it. A packet cannot declare the penalty question out
+of scope while holding open the trigger question that is the only reason the
+penalty is unanswerable.
+
+**29 — a pass that faulted a fragment kept reading the array it started with.**
+`faultedFragment` blocks a fragment in the database while `fragments` is the
+snapshot the pass began from, and everything after those loops reads that
+snapshot. So the blocked fragment still looked VALIDATING, its dependents were
+not yet doomed, and the pass concluded the packet was making progress.
+
+This is why the state was *absorbing* rather than merely wrong. The failing
+verification advanced the packet, the fault blocked the trigger fragment, and the
+same call then decided its dependents were "still in progress" — and since the
+packet had no other work, nothing ever called the runner again to notice. A pass
+that changed a fragment's status now re-derives from the rows.
+
+| # | Fault | Fix |
+|---|---|---|
+| 27 | A fragment stranded by a failed prerequisite stayed QUEUED forever | Resolve it to BLOCKED with the precise cause once nothing else can move. BLOCKED, not CANCELLED, so `retryFragment` still accepts it. |
+| 28 | An unresolved gap was only recorded for exhausted repairs | A dependency that ended without acceptance is the second way research becomes impossible; the stranded subtree is declared together, under the same per-packet authorization. |
+| 29 | An advance reasoned on from a snapshot it had already invalidated | Re-derive after a fault, carrying forward whatever the pass already enqueued so nothing is minted twice. |
+
+A fourth thing fell out of 29 while fixing it: one pass can both fault a fragment
+and mint work for a healthy one, and the "this packet is running again" status
+update lived only on the path the re-derive skips. A packet could come out of an
+advance holding a claimable item and still reading NEEDS_HUMAN. The update is now
+written before the re-derive.
+
+**And a test that could not fail.** The rule "a fragment with a repair attempt
+left is not written off" had a test that never set the gap authorization, so the
+packet was skipped whatever the attempt count was. It is the second vacuous test
+in this step. Both were found by asking what the test would do if the rule were
+deleted; both should have been found by writing them that way.
+
 ## Still open
 
 - Ten fragments remain queued; California is on attempt 2 and Texas is ungated.

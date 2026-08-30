@@ -634,6 +634,30 @@ If it says **NO ACCOUNTS** instead, the bootstrap did not run — the log line
 below the banner says why, and it is almost always that only one of the two
 variables was set.
 
+## 4.4b Reading a packet's rows without deploying anything
+
+A research packet takes hours and several worker sessions, and the question you
+keep needing answered is what the Brain actually holds right now: which
+fragments are terminal, which requirements are still open, what is claimable,
+whether the document exists.
+
+Repository → **Actions** → **Packet report** → **Run workflow** → paste the
+orchestration id.
+
+It runs `scripts/packet-report.ts` inside the deployed container and prints the
+rows. It is read-only in both the script and the workflow: no build, no deploy,
+no restart, no write. It shares the deploy concurrency group, so it will never
+read a machine that is being replaced.
+
+Locally, against the local Brain:
+
+```bash
+npm run report:packet -- --orchestration orc_xxx
+```
+
+Nothing it prints is a credential. It names what a project contains, never where
+it is kept.
+
 ## 4.5 Sign in and take ownership
 
 Open the site. If `BRAIN_ACCESS_TOKEN` is still set you will get the browser's

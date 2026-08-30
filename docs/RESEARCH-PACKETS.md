@@ -117,10 +117,52 @@ operation.** What that actually repairs is narrow and real — a shutdown betwee
 a worker's completion and the enqueue that should have followed it.
 
 Dependencies are respected: a fragment whose dependency is not yet ACCEPTED is
-not queued. A dependency that ended BLOCKED never becomes accepted, so a
-fragment waiting on it waits — deliberately. The honest outcome is that the
-packet is short a foundation, and the packet assessment says so; starting it
-anyway would produce an answer resting on a definition nobody established.
+not queued. A dependency that ended without being accepted never will be, so a
+fragment waiting on it is never started — deliberately. Starting it anyway would
+produce an answer resting on a definition nobody established.
+
+**Waiting is a state until nothing else can move; then it is a result.** Once
+every unfinished fragment in the packet is waiting on something that is not
+coming, each of them is resolved to `BLOCKED`, carrying the dependency it was
+waiting on and what became of it. `BLOCKED` rather than `CANCELLED`, because
+`retryFragment` accepts only a BLOCKED fragment: this is the status that keeps
+the remedy — repair the dependency, then retry what was waiting on it — actually
+available to a person.
+
+That is not a decision about scope, so it happens whether or not the packet is
+authorized to record gaps. What the authorization decides is what comes next:
+whether the requirements those fragments leave open are declared as unresolved
+gaps, or whether the packet stops at NEEDS_HUMAN over them.
+
+Leaving them QUEUED, which is what the runner used to do, was the failure it was
+trying to avoid. Nothing would ever offer them to a worker, nothing would ever
+retry them, and every later advance recomputed the same doom and reported the
+same count. The live Step 9 packet spent a day in exactly that state.
+
+### 3b. What a packet does not answer is recorded, if a person authorized it
+
+Two things can leave a requirement unanswered with no way for the runner to fix
+it, and under `RECORD_GAPS` both are declared as gaps rather than held open:
+
+- **Research that ran out.** The fragment is BLOCKED and `attempt >=
+  maxRepairs`. A fragment that has failed *once* still has a real repair
+  available and is left alone.
+- **Research that could never start.** The fragment is BLOCKED because a
+  prerequisite of its own finished without being accepted. Its attempt count is
+  irrelevant — no attempt at it helps — and the prerequisite that stranded it is
+  written off in the same breath. A packet cannot declare the penalty question
+  out of scope while holding the trigger question open, when the only reason the
+  penalty is unanswerable is that the trigger is. They are one unresolved area.
+
+The authorization is per packet and carries who made it and when
+(`unresolved_gap_policy`, `..._authorized_by`, `..._authorized_at`; see
+`services/research/gapPolicy.ts`). Without it the packet stops at NEEDS_HUMAN and
+stays there, however often the runner is called — a Brain that could always
+declare its way to "complete" is what invariant 20 exists to prevent.
+
+Nothing about the gate changes either way. The claims, the verdicts and the
+rejection reasons stay exactly as they are; what is narrowed is what the packet
+claims to answer, and the report carries the gaps inside it.
 
 ### 4. Approval is a decision, not a transition
 

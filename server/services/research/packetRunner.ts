@@ -384,38 +384,155 @@ function readyToResearch(fragments: ResearchFragment[]): ResearchFragment[] {
 }
 
 /**
- * Record an exhausted research gap, and let the packet finish around it.
+ * Which of a fragment's dependencies it is never going to get.
  *
- * Called only from the stall branch of `advancePacket`, and only when nothing
- * is live or claimable. Returns how many requirements it closed, so the caller
- * can re-derive rather than guess what changed.
+ * A dependency is unmet when the fragment carrying that key has finished
+ * without being accepted, or when no fragment carries the key at all. Both mean
+ * the same thing to whatever is waiting: the foundation it was promised is not
+ * coming, and no further attempt at *this* fragment changes that.
  *
- * "Exhausted" is: the fragment is BLOCKED and has been through at least one
- * repair — `attempt >= maxRepairs`, not `>`.
- *
- * The stricter `>` was wrong, and wrong in the direction that matters: it is
- * the line `retryFragment` uses to decide whether *another* attempt may be
- * created, and a fragment sitting at attempt 2 of 2 still has one. But nothing
- * on this path can plan that attempt. §15 requires a repair to search
- * differently from every attempt before it, `repair.ts` is what chooses that
- * strategy, and it is wired only to the in-process path. A repair minted here
- * would re-run a lane the last attempt already exhausted, which is the one
- * thing Option A forbids outright.
- *
- * So a fragment that has failed, been repaired, and failed again is exhausted
- * as far as this path can honestly take it. A fragment that has failed once has
- * a real repair available and is left alone.
+ * One direct level only. Transitive doom is `doomedBy`'s job; this answers the
+ * narrower question of what to name in a reason a person reads.
  */
-async function recordExhaustedGaps(input: {
+function unmetDependencies(
+  fragment: ResearchFragment,
+  byKey: Map<string, ResearchFragment>,
+): { key: string; became: string }[] {
+  const unmet: { key: string; became: string }[] = [];
+  for (const key of fragment.dependsOn) {
+    const dependency = byKey.get(key);
+    if (!dependency) {
+      unmet.push({ key, became: 'no fragment carries that key' });
+      continue;
+    }
+    if (TERMINAL_FRAGMENT.has(dependency.status) && dependency.status !== 'ACCEPTED') {
+      unmet.push({ key, became: dependency.status });
+    }
+  }
+  return unmet;
+}
+
+/**
+ * Fragments that can never start become terminal, naming exactly why.
+ *
+ * `doomedBy` deliberately mutates nothing, and said so: repairing a dependency
+ * un-dooms its dependents, and a status written the moment doom appears would
+ * have to be unwritten. That reasoning is right while anything else in the
+ * packet can still move. It stops being right at the point nothing can — and
+ * the packet was then left holding QUEUED fragments that no advance would ever
+ * offer to a worker, forever, with the only account of it an aggregate sentence
+ * on the orchestration.
+ *
+ * That is the state the live packet reached: two penalty fragments waiting on a
+ * trigger fragment whose verification faulted. Every advance recomputed the
+ * same doom, reported the same count, and moved nothing.
+ *
+ * So when every unfinished fragment is doomed, each one is resolved to BLOCKED
+ * with its own reason. **BLOCKED rather than CANCELLED on purpose**:
+ * `retryFragment` only accepts a BLOCKED fragment, so this is the status that
+ * keeps the documented remedy — repair the dependency, then retry what was
+ * waiting on it — actually available. A cancelled fragment is one nobody may
+ * pick back up.
+ */
+async function blockOnFailedDependency(input: {
+  orchestration: ResearchOrchestration;
+  stranded: ResearchFragment[];
+  fragments: ResearchFragment[];
+}): Promise<void> {
+  const { orchestration, stranded, fragments } = input;
+  const byKey = new Map(fragments.map((fragment) => [fragment.fragmentKey, fragment]));
+  const at = new Date().toISOString();
+
+  for (const fragment of stranded) {
+    const unmet = unmetDependencies(fragment, byKey);
+    // Transitively doomed: its own dependencies are still live-looking, but
+    // something further up is not coming. Name the whole chain rather than
+    // nothing.
+    const detail =
+      unmet.length > 0
+        ? unmet.map((entry) => `${entry.key} (${entry.became})`).join(', ')
+        : fragment.dependsOn.join(', ');
+    const reason =
+      `Not researched: it depends on ${detail}, and that never arrives. ` +
+      'Answering it would rest on a foundation nobody established. Repair the dependency ' +
+      'and this fragment can be retried.';
+    await updateFragment(fragment.id, {
+      status: 'BLOCKED',
+      blockedReason: reason,
+      completedAt: at,
+    });
+    await recordEvent({
+      projectId: orchestration.projectId,
+      layerId: orchestration.layerId,
+      entityType: 'RUN',
+      entityId: orchestration.runId,
+      eventType: 'RESEARCH_FRAGMENT_REJECTED',
+      payload: {
+        orchestrationId: orchestration.id,
+        fragmentId: fragment.id,
+        fragmentKey: fragment.fragmentKey,
+        what: 'dependency',
+        reason,
+      },
+    });
+  }
+}
+
+/**
+ * Record what this packet is not going to answer, and let it finish around it.
+ *
+ * Runs early on every advance where nothing is live and nothing is awaiting
+ * approval, and only on a packet a person has authorized for `RECORD_GAPS`.
+ * Returns how many requirements it closed, so the caller can re-derive rather
+ * than guess what changed.
+ *
+ * Two things are unresolved, for two different reasons, and both are gaps:
+ *
+ * **Research that ran out.** The fragment is BLOCKED and `attempt >=
+ * maxRepairs`. `>=` rather than `>` because that is the line `retryFragment`
+ * uses, and nothing on this path can plan the attempt it would allow: §15
+ * requires a repair to search differently from every attempt before it,
+ * `repair.ts` chooses that strategy, and it is wired only to the in-process
+ * path. A fragment that has failed once still has a real repair available and
+ * is left alone.
+ *
+ * **Research that could never start.** The fragment is BLOCKED because a
+ * prerequisite of its own finished without being accepted. No attempt at *it*
+ * helps, whatever its attempt count says, so the repair budget is not the
+ * question — and the prerequisite that stranded it is written off in the same
+ * breath. That second half is not generosity: a packet cannot declare the
+ * penalty question out of scope while holding the trigger question open, when
+ * the only reason the penalty is unanswerable is that the trigger is. They are
+ * one unresolved area and they are declared together.
+ *
+ * The narrow case stays narrow. A lone BLOCKED fragment with a repair left and
+ * nothing waiting behind it is not written off by either rule; the packet stops
+ * at NEEDS_HUMAN and a person decides, which is the honest outcome.
+ */
+async function recordUnresolvedGaps(input: {
   orchestration: ResearchOrchestration;
   fragments: ResearchFragment[];
-  doomed: Map<string, string[]>;
 }): Promise<number> {
-  const { orchestration, fragments, doomed } = input;
-  const exhausted = fragments.filter(
-    (fragment) => fragment.status === 'BLOCKED' && fragment.attempt >= fragment.maxRepairs,
-  );
-  if (exhausted.length === 0) return 0;
+  const { orchestration, fragments } = input;
+  const byKey = new Map(fragments.map((fragment) => [fragment.fragmentKey, fragment]));
+
+  const writtenOff = new Map<string, ResearchFragment>();
+  for (const fragment of fragments) {
+    if (fragment.status !== 'BLOCKED') continue;
+    if (fragment.attempt >= fragment.maxRepairs) {
+      writtenOff.set(fragment.id, fragment);
+      continue;
+    }
+    const unmet = unmetDependencies(fragment, byKey);
+    if (unmet.length === 0) continue;
+    writtenOff.set(fragment.id, fragment);
+    for (const entry of unmet) {
+      const dependency = byKey.get(entry.key);
+      if (dependency) writtenOff.set(dependency.id, dependency);
+    }
+  }
+  if (writtenOff.size === 0) return 0;
+  const unresolved = [...writtenOff.values()];
 
   const coverage = await listCoverage(orchestration.id);
   const byRequirement = new Map(coverage.map((entry) => [entry.requirementId, entry]));
@@ -452,33 +569,24 @@ async function recordExhaustedGaps(input: {
     }
   };
 
-  for (const fragment of exhausted) {
-    await close(
-      fragment,
-      `Research exhausted after ${fragment.attempt} attempt(s): ` +
-        `${fragment.blockedReason ?? 'no evidence path remained'}. Recorded as an unresolved ` +
-        'gap rather than answered, and the packet is filed without it.',
-    );
-  }
-
-  // And everything that was only waiting on one of those. Cancelled rather than
-  // left QUEUED: the prerequisite is never arriving, and a fragment that cannot
-  // start is not in progress.
-  const exhaustedKeys = new Set(exhausted.map((fragment) => fragment.fragmentKey));
-  for (const fragment of fragments) {
-    if (TERMINAL_FRAGMENT.has(fragment.status)) continue;
-    const blockers = doomed.get(fragment.fragmentKey);
-    if (!blockers || !blockers.some((key) => exhaustedKeys.has(key))) continue;
+  for (const fragment of unresolved) {
     const why =
-      `Not researched: it depends on ${blockers.join(', ')}, whose research is exhausted. ` +
-      'Answering it would rest on a foundation nobody established.';
-    await updateFragment(fragment.id, {
-      status: 'CANCELLED',
-      blockedReason: why,
-      completedAt: new Date().toISOString(),
-    });
+      fragment.attempt >= fragment.maxRepairs
+        ? `Research exhausted after ${fragment.attempt} attempt(s): ` +
+          `${fragment.blockedReason ?? 'no evidence path remained'}. Recorded as an unresolved ` +
+          'gap rather than answered, and the packet is filed without it.'
+        : `Left unresolved: ${fragment.blockedReason ?? 'its research could not proceed'} ` +
+          'Recorded as an unresolved gap rather than answered, and the packet is filed ' +
+          'without it.';
     await close(fragment, why);
   }
+
+  // Nothing was narrowed, so nothing happened. Returning before the event
+  // matters: `advancePacket` runs on every completion and every boot, and the
+  // written-off fragments stay written off, so an event recorded on the way
+  // past would be appended again on every pass until the packet went terminal.
+  // `project_events` is append-only — a duplicate there is permanent.
+  if (closed === 0) return 0;
 
   await recordEvent({
     projectId: orchestration.projectId,
@@ -489,7 +597,18 @@ async function recordExhaustedGaps(input: {
     payload: {
       orchestrationId: orchestration.id,
       resolution: 'UNRESOLVED_GAP_RECORDED',
-      exhaustedFragments: exhausted.map((fragment) => fragment.fragmentKey),
+      // Named per fragment with why it is unresolved, because "the packet was
+      // filed without four of its states" is a different fact from "one
+      // fragment ran out of retries" and the event is the only durable record
+      // of which one happened.
+      unresolvedFragments: unresolved.map((fragment) => ({
+        fragmentKey: fragment.fragmentKey,
+        status: fragment.status,
+        attempt: fragment.attempt,
+        maxRepairs: fragment.maxRepairs,
+        because:
+          fragment.attempt >= fragment.maxRepairs ? 'REPAIRS_EXHAUSTED' : 'DEPENDENCY_UNMET',
+      })),
       requirementsClosed: closed,
     },
   });
@@ -648,11 +767,7 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
     !items.some((item) => LIVE_ITEM.has(item.state)) &&
     !fragments.some((fragment) => fragment.status === 'PLANNED')
   ) {
-    const closed = await recordExhaustedGaps({
-      orchestration,
-      fragments,
-      doomed: doomedBy(fragments),
-    });
+    const closed = await recordUnresolvedGaps({ orchestration, fragments });
     if (closed > 0) return await advancePacket(orchestrationId);
   }
 
@@ -666,6 +781,26 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
     };
   }
 
+  /**
+   * A fault this pass records, which makes the array below it stale.
+   *
+   * `faultedFragment` blocks a fragment in the database while `fragments` is
+   * the snapshot this pass started from, and everything after these loops reads
+   * that snapshot: which fragments are unfinished, which are doomed by a
+   * dependency that ended without acceptance, whether anything can still move.
+   * A fragment blocked a few lines earlier still reads VALIDATING there, so its
+   * dependents are not yet doomed and the pass concludes the packet is making
+   * progress.
+   *
+   * It cost the live packet a full stop. The failing verification advanced the
+   * packet, the fault blocked the trigger fragment, and the same call then
+   * decided its two dependents were "still in progress" — so nothing resolved
+   * them, and because the packet had no other work, nothing ever called the
+   * runner again to notice. The correction is one re-derive: a pass that
+   * changed a fragment's status finishes by reading the rows back.
+   */
+  let faulted = 0;
+
   // ---- Fragments whose claims are in: gate them. -------------------------
   for (const fragment of fragments.filter((f) => f.status === 'VALIDATING')) {
     const verifyItem = (item: WorkItem): boolean =>
@@ -674,6 +809,7 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
     if (alreadyCreated(items, verifyItem)) {
       // This fragment is stuck. The others are not, and the loop goes on.
       await faultedFragment({ orchestration, fragment, what: 'verification' });
+      faulted += 1;
       continue;
     }
     enqueued.push(
@@ -695,6 +831,7 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
     if (stillRunning(items, researchItem)) continue;
     if (alreadyCreated(items, researchItem)) {
       await faultedFragment({ orchestration, fragment, what: 'research' });
+      faulted += 1;
       continue;
     }
     enqueued.push(
@@ -702,20 +839,36 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
     );
   }
 
+  if (enqueued.length > 0 && orchestration.status !== 'RESEARCHING') {
+    // Work exists, so the packet is researching — including when it was
+    // NEEDS_HUMAN a moment ago. The reason goes with the status: a packet that
+    // is running must not still be showing why it stopped, and the decision
+    // itself lives on the blocked fragments, which keep their BLOCKED status
+    // and their reasons. If nothing else can move later, the checks below set
+    // NEEDS_HUMAN again with a reason that is current.
+    //
+    // Written *before* the re-derive below rather than after it. One pass can
+    // both fault a fragment and mint work for a healthy one, and if the status
+    // were only written on the path that returns from here, the re-derive would
+    // skip it: the next pass sees the new item as live, waits on it, and leaves
+    // the packet reading NEEDS_HUMAN while its queue is not empty.
+    await updateOrchestration(orchestration.id, {
+      status: 'RESEARCHING',
+      failureReason: null,
+      completedAt: null,
+    });
+  }
+
+  if (faulted > 0) {
+    // Re-derive rather than reason on from the snapshot. Whatever this pass
+    // already enqueued is in the queue, so the next pass sees it through
+    // `alreadyCreated` and cannot mint a second — it is carried into the result
+    // only so a caller is told about work this call created.
+    const next = await advancePacket(orchestrationId);
+    return { ...next, enqueued: [...enqueued, ...next.enqueued] };
+  }
+
   if (enqueued.length > 0) {
-    if (orchestration.status !== 'RESEARCHING') {
-      // Work exists, so the packet is researching — including when it was
-      // NEEDS_HUMAN a moment ago. The reason goes with the status: a packet
-      // that is running must not still be showing why it stopped, and the
-      // decision itself lives on the blocked fragments, which keep their
-      // BLOCKED status and their reasons. If nothing else can move later, the
-      // checks below set NEEDS_HUMAN again with a reason that is current.
-      await updateOrchestration(orchestration.id, {
-        status: 'RESEARCHING',
-        failureReason: null,
-        completedAt: null,
-      });
-    }
     return { orchestrationId, status: 'RESEARCHING', enqueued, waitingOn: null };
   }
 
@@ -726,23 +879,24 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
     const stuck = unfinished.filter((fragment) => doomed.has(fragment.fragmentKey));
 
     if (stuck.length === unfinished.length) {
-      const detail = stuck
-        .map((fragment) => `${fragment.fragmentKey} (waiting on ${doomed.get(fragment.fragmentKey)!.join(', ')})`)
-        .join('; ');
-      await updateOrchestration(orchestration.id, {
-        status: 'NEEDS_HUMAN',
-        failureReason:
-          `${stuck.length} fragment(s) can never start, because every dependency they are ` +
-          `waiting on ended without being accepted: ${detail}. Repair the dependency and its ` +
-          'dependents become researchable again; nothing here is lost.',
-        completedAt: new Date().toISOString(),
-      });
-      return {
-        orchestrationId,
-        status: 'NEEDS_HUMAN',
-        enqueued: [],
-        waitingOn: `a person: ${stuck.length} fragment(s) are waiting on a dependency that failed`,
-      };
+      /**
+       * Nothing left can move, so waiting is no longer a state — it is a
+       * result. This used to write the count onto the orchestration and leave
+       * the fragments QUEUED, which meant every later advance recomputed the
+       * same doom and moved nothing, and the fragments themselves carried no
+       * account of why they were never offered to a worker.
+       *
+       * Resolving them is not a decision about scope, so it is not gated on the
+       * gap authorization: a fragment that can never start is a fact whatever
+       * the packet is allowed to declare afterwards. What the authorization
+       * decides is the next thing — whether the requirements they leave open
+       * are recorded as declared gaps, or whether the packet stops for a person
+       * over them. That happens on the re-derive below, which is why this
+       * recurses rather than returning: the pass that reads the fragments it
+       * just wrote is the one that decides what the packet does about them.
+       */
+      await blockOnFailedDependency({ orchestration, stranded: stuck, fragments });
+      return await advancePacket(orchestrationId);
     }
 
     return {

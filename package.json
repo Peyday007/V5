@@ -23,7 +23,8 @@
     "verify:hosted": "node --import tsx scripts/verify-hosted.ts",
     "preflight": "tsx --env-file-if-exists=.env scripts/preflight.ts",
     "reissue:verification": "tsx scripts/reissue-verification.ts",
-    "authorize:gap-policy": "tsx scripts/authorize-gap-policy.ts"
+    "authorize:gap-policy": "tsx scripts/authorize-gap-policy.ts",
+    "report:packet": "tsx scripts/packet-report.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

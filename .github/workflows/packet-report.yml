@@ -1,0 +1,49 @@
+# Reading one packet's authoritative rows, without a terminal and without a
+# person relaying them.
+#
+# Separate from `deploy.yml` on purpose. Watching a live packet means asking the
+# same question every so often — has the worker claimed the synthesis, did the
+# judge record a verdict, is anything still leased — and asking it through the
+# deploy pipeline would mean building an image, redeploying the app and running
+# the full hosted verification to read four numbers. That is eight minutes and a
+# restart per question, so in practice it would not be asked, and the answer
+# would come from somebody's screenshot instead.
+#
+# It is read-only, in the script and here: it opens the database, prints, and
+# closes. No deploy, no restart, no migration, no write. The one thing it can do
+# to production is read it.
+name: Packet report
+
+on:
+  workflow_dispatch:
+    inputs:
+      orchestration:
+        description: 'Orchestration id to report on (orc_...)'
+        required: true
+
+# Never at the same time as a deploy: the machine is being replaced during one,
+# and a report that raced a restart would be reporting whichever half answered.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Read the packet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Report
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "sh /app/scripts/packet-report.sh --orchestration ${{ inputs.orchestration }}" \
+            2>&1 | tee packet-report.txt
+          set -e
+          grep -q '^PACKET-REPORT: OK' packet-report.txt

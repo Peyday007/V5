@@ -40,6 +40,7 @@ import {
 import { getProjectBySlug } from '../server/repos/projects.ts';
 import { getDocument } from '../server/repos/documents.ts';
 import { listAuditsByProject } from '../server/repos/audits.ts';
+import { listEvents } from '../server/repos/events.ts';
 import { parseAdversarialPass } from '../server/services/audit/schema.ts';
 import { readObject } from '../server/services/storage.ts';
 import {
@@ -65,6 +66,7 @@ import type {
   ResearchFragment,
   ResearchOrchestration,
   WorkerScope,
+  WorkItem,
 } from '../server/domain/types.ts';
 
 /** Everything a research worker holds, so a missing scope is a deliberate test. */
@@ -652,9 +654,15 @@ describe('a research gap that is genuinely exhausted', () => {
     expect(deadAfter?.status).toBe('BLOCKED');
     expect(deadAfter?.blockedReason).toContain('refuses automated retrieval');
 
-    // The dependent is cancelled, naming what never arrived.
+    // The dependent is terminal, naming what never arrived.
+    //
+    // BLOCKED, where this once wrote CANCELLED. `retryFragment` accepts only a
+    // BLOCKED fragment, so BLOCKED is the status that keeps the documented
+    // remedy available: repair the dependency, then retry what was waiting on
+    // it. Cancelled is a fragment nobody may pick back up, which is a stronger
+    // statement than the runner is entitled to make on its own.
     const depAfter = await getFragment(dependent.id);
-    expect(depAfter?.status).toBe('CANCELLED');
+    expect(depAfter?.status).toBe('BLOCKED');
     expect(depAfter?.blockedReason).toContain('trigger');
 
     // Both requirements are recorded as explicitly not required, with why.
@@ -963,11 +971,24 @@ describe('a research gap that is genuinely exhausted', () => {
         kind: 'RESEARCH',
       },
     ]);
+    // Authorized, deliberately. This test was written without the
+    // authorization and therefore proved nothing: the gap pass would have
+    // skipped the packet whatever the fragment's attempt count was, so it
+    // passed for the wrong reason. The rule under test is the repair budget,
+    // so everything else has to be permissive.
+    await updateOrchestration(orchestration.id, {
+      unresolvedGapPolicy: 'RECORD_GAPS',
+      unresolvedGapAuthorizedBy: 'usr_operator',
+      unresolvedGapAuthorizedAt: new Date().toISOString(),
+    });
     await makeFragment(orchestration, {
       fragmentKey: 'trigger',
       fragmentIndex: 0,
       status: 'BLOCKED',
-      // Failed once. A real repair is still available, on a different lane.
+      // Failed once. A real repair is still available, on a different lane —
+      // and nothing is waiting behind it, so it is not stranding anything
+      // either. Both conditions have to be false for the packet to be left
+      // alone, and this is the case where they are.
       attempt: 1,
       maxRepairs: 2,
       requirementIds: [requirement!.id],
@@ -1651,11 +1672,27 @@ describe('the packet runner', () => {
     );
     expect(research_items).toHaveLength(1);
     expect(result.enqueued).toHaveLength(0);
-    // The fragment is blocked; the packet is not. A fault belongs to the
-    // fragment it happened to — stopping the packet froze every healthy
-    // fragment beside it, because advancePacket short-circuits on NEEDS_HUMAN.
     expect((await getFragment(fragment.id))?.status).toBe('BLOCKED');
-    expect(result.status).not.toBe('NEEDS_HUMAN');
+
+    /**
+     * And the packet stops, because in *this* packet there is nothing else.
+     *
+     * This used to assert the opposite, on the reasoning that a fault belongs
+     * to the fragment rather than to the packet — which is right, and is
+     * exactly why `faultedFragment` no longer stops the packet. But the
+     * fixture has one fragment, so "the packet is still going" was never true
+     * of it: the pass said so only because it was reading a snapshot taken
+     * before the fault, in which the fragment still looked QUEUED. That stale
+     * read is what left the live packet reporting progress it was not making.
+     *
+     * The claim this test was reaching for — one fault must not freeze the
+     * healthy fragments beside it — has its own test, with siblings in it, in
+     * "a packet stopped for a person".
+     */
+    expect(result.status).toBe('NEEDS_HUMAN');
+    expect((await getOrchestration(orchestration.id))?.failureReason).toContain(
+      'No fragment cleared its evidence gate',
+    );
   });
 
   it('stops rather than re-planning when a plan job produced no fragments', async () => {
@@ -2509,13 +2546,24 @@ describe('a fragment waiting on one that failed', () => {
 
     expect(result.status).toBe('NEEDS_HUMAN');
     expect(result.enqueued).toHaveLength(0);
-    const stopped = await getOrchestration(orchestration.id);
-    // Named, so the operator knows which dependency to repair rather than
-    // being told the packet is stuck.
-    expect(stopped?.failureReason).toContain('penalty');
-    expect(stopped?.failureReason).toContain('trigger');
     expect(trigger.status).toBe('BLOCKED');
-    expect((await getFragment(dependent.id))?.status).toBe('QUEUED');
+
+    /**
+     * And the waiting fragment is *resolved*, not left waiting.
+     *
+     * This test used to assert the opposite — that `penalty` stayed QUEUED and
+     * the orchestration's reason named it. Stopping the packet was the right
+     * half; leaving the fragment QUEUED was not. Nothing would ever offer it to
+     * a worker, nothing would ever retry it, and the only account of why was an
+     * aggregate sentence on the orchestration that the next advance rewrote.
+     *
+     * The reason belongs on the fragment it is about, and the fragment has to
+     * be terminal for the packet to be able to finish around it.
+     */
+    const stranded = await getFragment(dependent.id);
+    expect(stranded?.status).toBe('BLOCKED');
+    expect(stranded?.blockedReason).toContain('trigger');
+    expect(stranded?.completedAt).not.toBeNull();
   });
 
   it('is transitive — a fragment two hops behind a failure is stuck too', async () => {
@@ -2536,7 +2584,16 @@ describe('a fragment waiting on one that failed', () => {
 
     const result = await advancePacket(orchestration.id);
     expect(result.status).toBe('NEEDS_HUMAN');
-    expect((await getOrchestration(orchestration.id))?.failureReason).toContain('penalty');
+
+    // Both hops are resolved, each naming the dependency directly above it.
+    // `penalty` waited on `trigger`, which waited on `boundary`; saying
+    // "boundary" to `penalty` would name a fragment it has never heard of.
+    const live = await currentFragments(orchestration.id);
+    const byKey = new Map(live.map((fragment) => [fragment.fragmentKey, fragment]));
+    expect(byKey.get('trigger')?.status).toBe('BLOCKED');
+    expect(byKey.get('trigger')?.blockedReason).toContain('boundary');
+    expect(byKey.get('penalty')?.status).toBe('BLOCKED');
+    expect(byKey.get('penalty')?.blockedReason).toContain('trigger');
   });
 
   it('keeps waiting while anything else can still move', async () => {
@@ -2685,3 +2742,492 @@ async function claimNextOf(type: string): Promise<ClaimedWork> {
   if (!claimed) throw new Error(`nothing claimable of type ${type}`);
   return claimed;
 }
+
+// ---------------------------------------------------------------------------
+// The rest of the packet: a stranded dependency, through to a filed and
+// audited report
+// ---------------------------------------------------------------------------
+
+/**
+ * The live Step 9 packet's exact shape, and everything that has to happen after
+ * it.
+ *
+ * The state it reached was not one any test described. A verification work item
+ * went terminal without recording a verdict, so `faultedFragment` blocked its
+ * fragment — at attempt 1 of 2, which is *repairable*, so the exhausted-gap
+ * rule did not apply to it. Two penalty fragments depended on that fragment.
+ * They were doomed, they were not terminal, and nothing ever made them
+ * terminal, so `advancePacket` recomputed the same doom on every call and
+ * reported "2 fragment(s) are waiting on a dependency that failed" forever. The
+ * packet held seven accepted fragments, an authorization to record gaps, and no
+ * way to reach synthesis.
+ *
+ * So this drives the whole remainder in one test — the state machine's own
+ * transitions, never a hand-written row — because each stage's trigger is the
+ * previous stage completing, and a suite that enqueues each stage itself proves
+ * the tools and skips the thing that was actually broken.
+ */
+describe('a packet stranded behind a failed prerequisite, to terminal completion', () => {
+  interface Stranded {
+    orchestration: ResearchOrchestration;
+    trigger: ResearchFragment;
+    dependents: ResearchFragment[];
+    answeredClaimId: string;
+    requirementIds: string[];
+  }
+
+  const ownershipOf = (claimed: ClaimedWork) => ({
+    workItemId: claimed.workItemId,
+    leaseId: claimed.leaseId,
+    leaseGeneration: claimed.leaseGeneration,
+    workerId,
+  });
+
+  /** Claim the item the runner queued for one fragment, handing back the rest. */
+  async function claimQueued(type: string, fragmentId?: string): Promise<ClaimedWork> {
+    const held: ClaimedWork[] = [];
+    for (let round = 0; round < 8; round += 1) {
+      const [claimed] = await claimWork({
+        workerId,
+        scopes: [{ projectId: project.id, scopes: FULL }],
+        workTypes: [type],
+      });
+      if (!claimed) break;
+      const item = await getWorkItem(claimed.workItemId);
+      if (!fragmentId || item?.fragmentId === fragmentId) {
+        for (const other of held) await releaseWork(ownershipOf(other), 'not this fragment');
+        return claimed;
+      }
+      held.push(claimed);
+    }
+    for (const other of held) await releaseWork(ownershipOf(other), 'not this fragment');
+    throw new Error(`the runner queued no ${type}${fragmentId ? ` for ${fragmentId}` : ''}`);
+  }
+
+  /** Research a fragment and gate it, as a worker does, all the way to ACCEPTED. */
+  async function researchAndAccept(fragment: ResearchFragment): Promise<string> {
+    const research = await claimQueued('RESEARCH_FRAGMENT', fragment.id);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    const [stored] = await listClaimsForFragment(fragment.id);
+    await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+
+    const verify = await claimQueued('RESEARCH_VERIFY', fragment.id);
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: stored!.id, supports_claim: true, ...MATCHES, note: 'Reads directly.' }],
+      sufficiency: 'SUFFICIENT',
+    });
+    await call('brain_complete_work', { ...proof(verify), summary: 'verified' });
+    return stored!.id;
+  }
+
+  /**
+   * Build the production shape, through the real transitions.
+   *
+   * Four mandatory requirements, one fragment each: one answered and accepted,
+   * one whose verification dies, and two waiting on that one.
+   */
+  async function strandedPacket(authorize: boolean): Promise<Stranded> {
+    const orchestration = await makeOrchestration();
+    const requirements = await createRequirements(
+      ['answered', 'trigger', 'penalty-criminal', 'penalty-civil'].map((key, ordinal) => ({
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requirementKey: key,
+        ordinal,
+        statement: `Whether ${key} is settled.`,
+        necessity: 'MANDATORY' as const,
+        kind: 'RESEARCH' as const,
+      })),
+    );
+    // The coverage rows the planning pass writes, before anything runs.
+    for (const requirement of requirements) {
+      await upsertCoverage({
+        orchestrationId: orchestration.id,
+        requirementId: requirement.id,
+        status: 'MISSING',
+        confidence: 0.2,
+        reasons: ['Nothing in the archive answers it.'],
+        claimIds: [],
+        documentIds: [],
+        needsResearch: true,
+      });
+    }
+
+    const answered = await makeFragment(orchestration, {
+      fragmentKey: 'answered',
+      fragmentIndex: 0,
+      requirementIds: [requirements[0]!.id],
+    });
+    const trigger = await makeFragment(orchestration, {
+      fragmentKey: 'trigger',
+      fragmentIndex: 1,
+      requirementIds: [requirements[1]!.id],
+    });
+    const dependents = [
+      await makeFragment(orchestration, {
+        fragmentKey: 'penalty-criminal',
+        fragmentIndex: 2,
+        dependsOn: ['trigger'],
+        requirementIds: [requirements[2]!.id],
+      }),
+      await makeFragment(orchestration, {
+        fragmentKey: 'penalty-civil',
+        fragmentIndex: 3,
+        dependsOn: ['trigger'],
+        requirementIds: [requirements[3]!.id],
+      }),
+    ];
+
+    if (authorize) {
+      await authorizeUnresolvedGaps({
+        orchestrationId: orchestration.id,
+        authorizedBy: { id: 'usr_operator', email: 'operator@example.test' },
+      });
+    }
+
+    // The runner mints the work, rather than the test doing it: what broke in
+    // production was the state machine's own decisions, so every item here has
+    // to be one it decided to create.
+    const opened = await advancePacket(orchestration.id);
+    expect(opened.enqueued.map((entry) => entry.fragmentKey).sort()).toEqual([
+      'answered',
+      'trigger',
+    ]);
+
+    // One fragment researched, verified and accepted, so the packet holds real
+    // evidence — a packet with none stops for a different reason entirely.
+    const answeredClaimId = await researchAndAccept(answered);
+
+    // And the one that fails the way the live packet's did: a verification work
+    // item that goes terminal without recording a verdict.
+    const research = await claimQueued('RESEARCH_FRAGMENT', trigger.id);
+    await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+    await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+    const doomedVerify = await claimQueued('RESEARCH_VERIFY', trigger.id);
+    await call('brain_fail_work', {
+      ...proof(doomedVerify),
+      category: 'WORKER_ERROR',
+      detail: 'the allowance ran out mid-verification',
+      retryable: false,
+    });
+
+    return {
+      orchestration: (await getOrchestration(orchestration.id))!,
+      trigger,
+      dependents,
+      answeredClaimId,
+      requirementIds: requirements.map((requirement) => requirement.id),
+    };
+  }
+
+  /** Every work item this packet has ever had, by type. */
+  async function itemsByType(orchestrationId: string): Promise<Map<string, WorkItem[]>> {
+    const mine = (await listWorkItems(project.id, { limit: 300 })).filter(
+      (item) => item.orchestrationId === orchestrationId,
+    );
+    const byType = new Map<string, WorkItem[]>();
+    for (const item of mine) byType.set(item.workType, [...(byType.get(item.workType) ?? []), item]);
+    return byType;
+  }
+
+  const PRIMARY = {
+    assignment_satisfied: 'PARTIAL',
+    requirement_findings: ['One requirement is answered from its own statute.'],
+    structural_findings: [],
+    boundary_findings: [],
+    consistency_findings: [],
+    candidate_gaps: [],
+    notes: 'The declared gaps are named in the report itself.',
+  };
+
+  const ADVERSARIAL = {
+    attacks: [
+      {
+        attack: 'The report files a conclusion while three requirements were never researched.',
+        assessment: 'NOT_MATERIAL',
+        reasoning: 'They are declared as unresolved gaps in the report rather than answered.',
+      },
+    ],
+    strongest_reason_not_to_advance: 'Three of four requirements carry no evidence at all.',
+  };
+
+  const JUDGE = {
+    verdict: 'READY_FOR_SYNTHESIS',
+    summary: 'What the packet claims is supported; what it does not claim is declared.',
+    next_action: 'File it, with the gaps recorded.',
+    gap_classifications: [],
+    foundational_gap_count: 0,
+    targeted_research_runs_required: 0,
+    synthesis_ready: true,
+    freeze_ready: false,
+    confidence: 0.7,
+  };
+
+  it('resolves the stranded dependents, records the gaps, and reaches exactly one synthesis', async () => {
+    const { orchestration, trigger, dependents } = await strandedPacket(true);
+
+    /**
+     * Nothing is advanced here on purpose.
+     *
+     * The failing verification's own `brain_fail_work` is the last thing
+     * `strandedPacket` does, and that call advances the packet. It has to be
+     * enough: once the trigger fragment is blocked there is no more work in
+     * this packet, so nothing else will ever call the runner. A packet that
+     * needs one more nudge from somewhere is a packet that stops, and that is
+     * precisely where the live one stopped.
+     */
+
+    // 1. The prerequisite is blocked by the fault, and still repairable — so
+    //    the exhausted-gap rule is *not* what is operating here.
+    const live = await currentFragments(orchestration.id);
+    const byKey = new Map(live.map((fragment) => [fragment.fragmentKey, fragment]));
+    const blockedTrigger = byKey.get('trigger')!;
+    expect(blockedTrigger.status).toBe('BLOCKED');
+    expect(blockedTrigger.attempt).toBeLessThan(blockedTrigger.maxRepairs);
+    expect(blockedTrigger.blockedReason).toContain('verification');
+    expect(blockedTrigger.id).toBe(trigger.id);
+
+    // 2. Both dependents are terminal, each naming the prerequisite, each with
+    //    a completion time. Not QUEUED, which is what they used to be forever.
+    for (const dependent of dependents) {
+      const after = byKey.get(dependent.fragmentKey)!;
+      expect(after.status).toBe('BLOCKED');
+      expect(after.blockedReason).toContain('trigger');
+      expect(after.completedAt).not.toBeNull();
+    }
+
+    // 3. The requirements they leave open are recorded as declared gaps, with
+    //    a note saying why — including the prerequisite's own, because a packet
+    //    cannot declare the penalty question out of scope while holding open
+    //    the trigger question that is the only reason it is unanswerable.
+    const coverage = await listCoverage(orchestration.id);
+    const closed = coverage.filter((entry) => entry.status === 'NOT_REQUIRED');
+    expect(closed).toHaveLength(3);
+    for (const entry of closed) expect((entry.userOverride ?? '').length).toBeGreaterThan(0);
+    // The answered one is untouched: nothing was narrowed that was researched.
+    const answered = coverage.find((entry) => !closed.includes(entry));
+    expect(answered?.status).toBe('MISSING');
+
+    // 4. And exactly one synthesis is claimable.
+    const items = await itemsByType(orchestration.id);
+    expect(items.get('RESEARCH_SYNTHESIZE')).toHaveLength(1);
+    expect(items.get('RESEARCH_SYNTHESIZE')![0]!.state).toBe('QUEUED');
+    expect((await getOrchestration(orchestration.id))?.status).toBe('SYNTHESIZING');
+
+    // 5. And advancing again changes none of it.
+    await advancePacket(orchestration.id);
+    await advancePacket(orchestration.id);
+    const again = await itemsByType(orchestration.id);
+    expect(again.get('RESEARCH_SYNTHESIZE')).toHaveLength(1);
+    expect(
+      (await listCoverage(orchestration.id)).filter((entry) => entry.status === 'NOT_REQUIRED'),
+    ).toHaveLength(3);
+  });
+
+  it('runs synthesis, then the three audit roles one at a time, to a terminal packet', async () => {
+    const { orchestration, answeredClaimId } = await strandedPacket(true);
+
+    // ---- Synthesis -------------------------------------------------------
+    const synth = await claimQueued('RESEARCH_SYNTHESIZE');
+    await call('brain_submit_synthesis', {
+      ...proof(synth),
+      report:
+        `California defines a real estate broker at section 10131 [${answeredClaimId}]. ` +
+        'The trigger question and both penalty questions are recorded as unresolved gaps.',
+      cited_claim_ids: [answeredClaimId],
+    });
+    await call('brain_complete_work', { ...proof(synth), summary: 'filed' });
+
+    // The canonical artifact exists, and its bytes come back out of the store.
+    const filed = await getOrchestration(orchestration.id);
+    expect(filed?.documentId).not.toBeNull();
+    const document = await getDocument(filed!.documentId!);
+    expect(document?.canonicalName).toBeTruthy();
+    const bytes = await readObject(document!.storageKey!);
+    expect(bytes.toString('utf8')).toContain('section 10131');
+
+    // ---- The three roles, strictly in order -------------------------------
+    const roles: string[] = [];
+    for (const expected of ['PRIMARY', 'ADVERSARIAL', 'JUDGE']) {
+      const queued = (await itemsByType(orchestration.id)).get('RESEARCH_AUDIT') ?? [];
+      const open = queued.filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
+      // Exactly one role is offered at a time. Three opinions in parallel is a
+      // different and much weaker thing than one argument.
+      expect(open).toHaveLength(1);
+      expect(open[0]!.payload['role']).toBe(expected);
+
+      const claimed = await claimQueued('RESEARCH_AUDIT');
+      const field = expected === 'PRIMARY' ? 'primary' : expected === 'ADVERSARIAL' ? 'adversarial' : 'judge';
+      const body = expected === 'PRIMARY' ? PRIMARY : expected === 'ADVERSARIAL' ? ADVERSARIAL : JUDGE;
+      const value = await call('brain_submit_audit', { ...proof(claimed), [field]: body });
+      roles.push(value['role'] as string);
+      expect(value['advancesState']).toBe(expected === 'JUDGE');
+      await call('brain_complete_work', { ...proof(claimed), summary: `${expected} in` });
+    }
+    expect(roles).toEqual(['PRIMARY', 'ADVERSARIAL', 'JUDGE']);
+
+    // ---- Terminal ---------------------------------------------------------
+    const done = await getOrchestration(orchestration.id);
+    expect(done?.status).toBe('COMPLETE');
+    expect(done?.completedAt).not.toBeNull();
+    expect(done?.verdict).toBe('READY_FOR_SYNTHESIS');
+
+    // The judge's verdict is a structured record, not prose.
+    const audits = await listAuditsByProject(project.id);
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.verdict).toBe('READY_FOR_SYNTHESIS');
+    expect(done?.auditId).toBe(audits[0]!.id);
+
+    // Nothing is left queued or leased for this packet.
+    const remaining = [...(await itemsByType(orchestration.id)).values()]
+      .flat()
+      .filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
+    expect(remaining).toHaveLength(0);
+  });
+
+  it('creates no second of anything, however often it is advanced or restarted', async () => {
+    const { orchestration, answeredClaimId } = await strandedPacket(true);
+
+    // Advancing repeatedly at every stage, and a boot sweep between each — the
+    // two paths that both call the runner, which is where a duplicate would
+    // come from if `alreadyCreated` were ever wrong.
+    const churn = async (): Promise<void> => {
+      await advancePacket(orchestration.id);
+      await advancePacket(orchestration.id);
+      await resumePulledPackets();
+    };
+
+    await churn();
+    const synth = await claimQueued('RESEARCH_SYNTHESIZE');
+    await call('brain_submit_synthesis', {
+      ...proof(synth),
+      report: `Section 10131 [${answeredClaimId}].`,
+      cited_claim_ids: [answeredClaimId],
+    });
+    await call('brain_complete_work', { ...proof(synth), summary: 'filed' });
+    await churn();
+
+    for (const [field, body] of [
+      ['primary', PRIMARY],
+      ['adversarial', ADVERSARIAL],
+      ['judge', JUDGE],
+    ] as [string, Record<string, unknown>][]) {
+      const claimed = await claimQueued('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(claimed), [field]: body });
+      await call('brain_complete_work', { ...proof(claimed), summary: `${field} in` });
+      await churn();
+    }
+
+    const items = await itemsByType(orchestration.id);
+    const count = (type: string): number => (items.get(type) ?? []).length;
+    // One research item and one verification per fragment that got that far,
+    // one synthesis, three audits — one per role, never a fourth.
+    expect(count('RESEARCH_SYNTHESIZE')).toBe(1);
+    expect(count('RESEARCH_AUDIT')).toBe(3);
+    expect(count('RESEARCH_FRAGMENT')).toBe(2);
+    expect(count('RESEARCH_VERIFY')).toBe(2);
+
+    // One document, one audit, one accepted claim ledger.
+    expect(await listAuditsByProject(project.id)).toHaveLength(1);
+    expect(await acceptedClaims(orchestration.id)).toHaveLength(1);
+    const after = await getOrchestration(orchestration.id);
+    expect(after?.status).toBe('COMPLETE');
+
+    // And a boot sweep against a finished packet queues nothing at all.
+    await resumePulledPackets();
+    const settled = await itemsByType(orchestration.id);
+    expect((settled.get('RESEARCH_SYNTHESIZE') ?? []).length).toBe(1);
+    expect((settled.get('RESEARCH_AUDIT') ?? []).length).toBe(3);
+
+    // One gap event, not one per advance. `project_events` is append-only, so
+    // an event written on every pass past an already-recorded gap is permanent
+    // noise in the packet's own history.
+    const gapEvents = (await listEvents(project.id, 500)).filter(
+      (event) =>
+        event.eventType === 'RESEARCH_COVERAGE_GAP' &&
+        event.payload['orchestrationId'] === orchestration.id,
+    );
+    expect(gapEvents).toHaveLength(1);
+  });
+
+  /**
+   * One pass, one fault, and a healthy fragment beside it.
+   *
+   * The re-derive that resolves a stranded dependent runs in the middle of a
+   * pass that may have already minted work — and the status update that says
+   * "this packet is running again" used to live on the path the re-derive
+   * skips. So a packet could come out of an advance holding a claimable item
+   * and still reading NEEDS_HUMAN, which is the stale-reason problem the
+   * runner has been bitten by twice.
+   */
+  it('reports itself researching when one pass both faults a fragment and mints work', async () => {
+    const orchestration = await makeOrchestration();
+    const faulting = await makeFragment(orchestration, {
+      fragmentKey: 'faulting',
+      fragmentIndex: 0,
+    });
+    await makeFragment(orchestration, { fragmentKey: 'healthy', fragmentIndex: 1 });
+
+    // The packet has already been stopped for a person over something else.
+    await updateOrchestration(orchestration.id, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'An earlier fragment exhausted its evidence paths.',
+    });
+
+    // A research item that completed without ever recording a claim: the fault
+    // this pass will find, on `faulting` only.
+    const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', faulting);
+    await getDb().run(
+      `UPDATE work_items SET state = 'SUCCEEDED', lease_id = NULL, worker_id = NULL,
+        lease_expires_at = NULL WHERE id = ?`,
+      [research.workItemId],
+    );
+
+    const result = await advancePacket(orchestration.id);
+
+    // The healthy fragment got its work, in the same call that faulted the
+    // other one, and the result says so.
+    expect(result.enqueued.map((entry) => entry.fragmentKey)).toEqual(['healthy']);
+    const after = await getOrchestration(orchestration.id);
+    expect(after?.status).toBe('RESEARCHING');
+    expect(after?.failureReason).toBeNull();
+    expect((await getFragment(faulting.id))?.status).toBe('BLOCKED');
+  });
+
+  /**
+   * The same stranding, on a packet nobody authorized.
+   *
+   * The dependents still become terminal, because a fragment that can never
+   * start is a fact rather than a decision about scope. What does not happen is
+   * the narrowing: no requirement is written off, no synthesis is minted, and
+   * the packet stops for a person and stays stopped however often it is
+   * advanced or rebooted.
+   */
+  it('leaves the unauthorized twin at NEEDS_HUMAN with nothing narrowed', async () => {
+    const { orchestration, dependents } = await strandedPacket(false);
+
+    for (let i = 0; i < 3; i += 1) await advancePacket(orchestration.id);
+    await resumePulledPackets();
+
+    const live = await currentFragments(orchestration.id);
+    const byKey = new Map(live.map((fragment) => [fragment.fragmentKey, fragment]));
+    for (const dependent of dependents) {
+      expect(byKey.get(dependent.fragmentKey)?.status).toBe('BLOCKED');
+      expect(byKey.get(dependent.fragmentKey)?.blockedReason).toContain('trigger');
+    }
+
+    // Nothing narrowed.
+    const coverage = await listCoverage(orchestration.id);
+    expect(coverage.every((entry) => entry.status === 'MISSING')).toBe(true);
+
+    // Nothing minted, and the packet says why it stopped.
+    const items = await itemsByType(orchestration.id);
+    expect(items.get('RESEARCH_SYNTHESIZE') ?? []).toHaveLength(0);
+    const stopped = await getOrchestration(orchestration.id);
+    expect(stopped?.status).toBe('NEEDS_HUMAN');
+    expect(stopped?.failureReason).toContain('mandatory');
+    expect(stopped?.documentId).toBeNull();
+  });
+});
