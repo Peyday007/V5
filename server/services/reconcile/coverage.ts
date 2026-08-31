@@ -51,7 +51,10 @@ function terms(text: string): Set<string> {
 
 /** How much of the requirement's vocabulary a claim actually uses. */
 function relevance(requirement: Requirement, claim: ExistingClaim): number {
-  const wanted = terms(`${requirement.statement} ${requirement.requiredEvidence.join(' ')}`);
+  // The lane *descriptions*: term matching works on the prose, and the ids are
+  // deliberately terse, so joining those instead would throw the meaning away.
+  const laneWords = requirement.requiredEvidence.map((lane) => lane.description).join(' ');
+  const wanted = terms(`${requirement.statement} ${laneWords}`);
   if (wanted.size === 0) return 0;
   const found = terms(claim.claim);
   let hits = 0;

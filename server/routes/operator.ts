@@ -20,6 +20,7 @@
  * There is no privileged path, and no operation available here that an
  * administrator could not already perform.
  */
+import { describeLane } from '../domain/evidenceLanes.ts';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { authenticateRequest, originIsSameSite } from '../services/identity/authenticate.ts';
@@ -477,7 +478,7 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
                     fragment.timeframe,
                     fragment.population,
                     `${fragment.minIndependentSources} independent source(s)`,
-                    `lanes: ${fragment.requiredEvidence.join(', ') || 'none declared'}`,
+                    `lanes: ${fragment.requiredEvidence.map(describeLane).join('; ') || 'none declared'}`,
                   ]
                     .filter((part) => Boolean(part))
                     .join(' · '),

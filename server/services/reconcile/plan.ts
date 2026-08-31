@@ -19,6 +19,7 @@
  * fragments every sentence has stopped being a plan.
  */
 import type {
+  EvidenceLane,
   FragmentDependency,
   BoundaryContract,
   CoverageStatus,
@@ -243,9 +244,25 @@ export function briefFromGap(input: {
   const requirement = assessment.requirement;
   const key = slug(requirement.requirementKey || requirement.statement, `gap-${input.index + 1}`);
 
-  const lane =
+  /**
+   * The lane a fragment falls back to when its requirement declared none.
+   *
+   * A stable id with the prose beside it, never prose used as the id — that
+   * conflation is what made a fragment's evidence uncountable.
+   */
+  const lane: EvidenceLane =
     requirement.requiredEvidence[0] ??
-    (assessment.gapType === 'UNRESOLVED_CONTRADICTION' ? 'contradiction resolution' : 'primary source');
+    (assessment.gapType === 'UNRESOLVED_CONTRADICTION'
+      ? {
+          id: 'contradiction_resolution',
+          description: 'The source that settles which of the conflicting accounts is right.',
+          necessity: 'REQUIRED',
+        }
+      : {
+          id: 'primary_source',
+          description: 'A primary source that states the answer directly.',
+          necessity: 'REQUIRED',
+        });
 
   /**
    * What "enough" means depends on why the gap is open — and where the archive
@@ -294,7 +311,7 @@ export function briefFromGap(input: {
     minIndependentSources: minSources,
     status: 'QUEUED' as const,
     requirementIds: [requirement.id],
-    evidenceLane: lane,
+    evidenceLane: lane.id,
     whyItMatters: requirement.rationale ?? requirement.statement,
     missingEvidence: assessment.gapDetail ?? requirement.statement,
     whyExistingInsufficient: assessment.reasons.join(' '),
@@ -435,7 +452,13 @@ export async function planFragmentsFromGaps(input: {
       timeframe: input.reconciliation.contract?.timeframe ?? null,
       population: input.reconciliation.contract?.population ?? null,
       definitions: null,
-      requiredEvidence: ['authoritative definition'],
+      requiredEvidence: [
+        {
+          id: 'authoritative_definition',
+          description: 'An authoritative definition of the term, quoted, with its source.',
+          necessity: 'REQUIRED',
+        },
+      ],
       acceptableSourceTypes: ['standards bodies', 'statutory definitions', 'official classifications'],
       excludedSourceTypes: ['vendor marketing pages'],
       completionCriteria: ['one authoritative definition, quoted, with its source'],

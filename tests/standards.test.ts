@@ -82,7 +82,7 @@ function fragment(overrides: Partial<ResearchFragment> = {}): ResearchFragment {
     timeframe: null,
     population: null,
     definitions: null,
-    requiredEvidence: ['official statistics'],
+    requiredEvidence: [{ id: 'official_statistics', description: 'official statistics', necessity: 'REQUIRED' }],
     acceptableSourceTypes: ['government statistics'],
     excludedSourceTypes: [],
     completionCriteria: ['a sourced figure'],
@@ -334,7 +334,7 @@ describe('a fragment that is really several', () => {
   });
 
   it('is split when some evidence lanes are complete and others are empty', () => {
-    const target = fragment({ requiredEvidence: ['statutory text', 'regulator guidance'] });
+    const target = fragment({ requiredEvidence: [{ id: 'statutory_text', description: 'statutory text', necessity: 'REQUIRED' }, { id: 'regulator_guidance', description: 'regulator guidance', necessity: 'REQUIRED' }] });
     const signal = shouldSplit(target, {
       integrity: 'PASS',
       sufficiency: 'INSUFFICIENT',
@@ -343,8 +343,8 @@ describe('a fragment that is really several', () => {
       rejectedClaims: 0,
       independentSources: 2,
       coverage: [
-        { lane: 'statutory text', acceptedClaims: 2, independentSources: 2, meetsThreshold: true },
-        { lane: 'regulator guidance', acceptedClaims: 0, independentSources: 0, meetsThreshold: false },
+        { lane: 'statutory text', description: 'statutory text', necessity: 'REQUIRED', acceptedClaims: 2, independentSources: 2, meetsThreshold: true },
+        { lane: 'regulator guidance', description: 'regulator guidance', necessity: 'REQUIRED', acceptedClaims: 0, independentSources: 0, meetsThreshold: false },
       ],
       duplicateSourceGroups: [],
       failedConditions: ['COVERAGE'],

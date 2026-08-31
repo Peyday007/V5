@@ -6,6 +6,8 @@
  * never in its text or its source — the point of a ledger is that what was
  * claimed, and on what basis, cannot be quietly revised afterwards.
  */
+import { parseLanes, serializeLanes } from '../domain/evidenceLanes.ts';
+import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
 import {
   parseDependencies,
@@ -91,7 +93,7 @@ function mapFragment(row: ResearchFragmentRow): ResearchFragment {
     timeframe: row.timeframe,
     population: row.population,
     definitions: row.definitions,
-    requiredEvidence: parseJson<string[]>(row.required_evidence, []),
+    requiredEvidence: parseLanes(parseJson<unknown[]>(row.required_evidence, [])),
     acceptableSourceTypes: parseJson<string[]>(row.acceptable_source_types, []),
     excludedSourceTypes: parseJson<string[]>(row.excluded_source_types, []),
     completionCriteria: parseJson<string[]>(row.completion_criteria, []),
@@ -401,7 +403,7 @@ export interface CreateFragmentInput {
   timeframe?: string | null;
   population?: string | null;
   definitions?: string | null;
-  requiredEvidence: string[];
+  requiredEvidence: EvidenceLane[];
   acceptableSourceTypes: string[];
   excludedSourceTypes: string[];
   completionCriteria: string[];
@@ -458,7 +460,7 @@ export async function createFragments(inputs: CreateFragmentInput[]): Promise<Re
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.projectId, input.layerId, input.fragmentIndex,
           input.fragmentKey, input.question, input.geography ?? null, input.timeframe ?? null,
-          input.population ?? null, input.definitions ?? null, toJson(input.requiredEvidence),
+          input.population ?? null, input.definitions ?? null, toJson(serializeLanes(input.requiredEvidence)),
           toJson(input.acceptableSourceTypes), toJson(input.excludedSourceTypes),
           toJson(input.completionCriteria), serializeDependencies(toDependencies(input.dependsOn)), input.minIndependentSources,
           input.status ?? 'PLANNED', input.attempt ?? 1, input.parentFragmentId ?? null,

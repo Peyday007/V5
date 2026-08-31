@@ -19,6 +19,7 @@
  * string, a bucket key or a token: it reports what a project contains, never
  * where it is kept.
  */
+import { describeLane, laneIds } from '../server/domain/evidenceLanes.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { getDocument } from '../server/repos/documents.ts';
 import { listAuditsByProject } from '../server/repos/audits.ts';
@@ -132,7 +133,7 @@ async function main(): Promise<void> {
       tally.set(key, (tally.get(key) ?? 0) + 1);
     }
     console.log(
-      `      lanes     declared [${fragment.requiredEvidence.join(', ')}]` +
+      `      lanes     declared [${laneIds(fragment.requiredEvidence).join(', ')}]` +
         `  claims ${mine.length} (${accepted.length} accepted)` +
         `  untagged ${accepted.filter((claim) => !claim.evidenceLane).length}`,
     );
@@ -164,7 +165,11 @@ async function main(): Promise<void> {
     }
     // And the lanes as declared, in full — they are matched by exact string, so
     // their exact text is the contract a worker has to reproduce.
-    for (const lane of fragment.requiredEvidence) console.log(`      lane      "${lane}"`);
+    // Both halves, always: the id coverage counts by and the question it is
+    // asking. A report that printed only one of them could not tell a reader
+    // whether a lane was empty because nothing was found or because nothing
+    // was tagged with the right key.
+    for (const lane of fragment.requiredEvidence) console.log(`      lane      ${describeLane(lane)}`);
     if (fragment.blockedReason) console.log(`      because   ${trim(fragment.blockedReason)}`);
   }
 

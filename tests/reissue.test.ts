@@ -130,7 +130,7 @@ async function makeFragment(orchestration: ResearchOrchestration): Promise<Resea
     fragmentIndex: 0, fragmentKey: 'tx-licence-trigger',
     question: 'Does Texas require a licence for a success fee on a business sale?',
     geography: 'Texas', timeframe: 'in force as at 2026', population: null, definitions: null,
-    requiredEvidence: ['statute'], acceptableSourceTypes: ['statute'], excludedSourceTypes: [],
+    requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }], acceptableSourceTypes: ['statute'], excludedSourceTypes: [],
     completionCriteria: ['One statute section that answers yes or no.'],
     dependsOn: [], minIndependentSources: 1, status: 'QUEUED',
   }]);
@@ -696,7 +696,7 @@ describe('trying a failed fragment again', () => {
       orchestrationId: orchestration.id, projectId: project.id, layerId: layer.id,
       fragmentIndex: 0, fragmentKey: 'spent-fragment',
       question: 'A question that has had every attempt it is going to get.',
-      requiredEvidence: ['statute'], acceptableSourceTypes: ['statute'], excludedSourceTypes: [],
+      requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }], acceptableSourceTypes: ['statute'], excludedSourceTypes: [],
       completionCriteria: ['a section'], dependsOn: [], minIndependentSources: 1,
       status: 'BLOCKED', attempt: 3, maxRepairs: 2,
     }]);

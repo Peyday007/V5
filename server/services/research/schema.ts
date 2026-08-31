@@ -12,6 +12,7 @@
  * the evidence gate exists to keep out of the synthesis. So validation is where
  * it is caught, not somewhere downstream where it might be argued about.
  */
+import { isLaneId, LANE_NECESSITIES, laneIdFrom } from '../../domain/evidenceLanes.ts';
 import {
   CLAIM_TYPES,
   CONTRADICTION_STATES,
@@ -24,6 +25,8 @@ import {
   type RequirementNecessity,
   type SufficiencyVerdict,
   type RetrievalState,
+  type EvidenceLane,
+  type LaneNecessity,
 } from '../../domain/types.ts';
 import {
   booleanField,
@@ -125,7 +128,7 @@ export interface ParsedRequirement {
   necessity: RequirementNecessity;
   kind: RequirementKind;
   rationale: string | null;
-  requiredEvidence: string[];
+  requiredEvidence: EvidenceLane[];
   completionCriteria: string[];
   dependsOn: string[];
   owningLayerName: string | null;
@@ -249,7 +252,7 @@ export function parseGoalPlan(text: string): ParseResult<GoalPlanOutput> {
 
     const rationale = stringField(row['rationale'], `${where}.rationale`);
     if (!rationale.ok) return rationale;
-    const requiredEvidence = stringArray(row['requiredEvidence'], `${where}.requiredEvidence`);
+    const requiredEvidence = laneArray(row['requiredEvidence'], `${where}.requiredEvidence`);
     if (!requiredEvidence.ok) return requiredEvidence;
     const completionCriteria = stringArray(row['completionCriteria'], `${where}.completionCriteria`);
     if (!completionCriteria.ok) return completionCriteria;
@@ -335,7 +338,7 @@ export interface PlannedFragment {
   timeframe: string | null;
   population: string | null;
   definitions: string | null;
-  requiredEvidence: string[];
+  requiredEvidence: EvidenceLane[];
   acceptableSourceTypes: string[];
   excludedSourceTypes: string[];
   completionCriteria: string[];
@@ -392,7 +395,7 @@ export function parsePlanPass(text: string): ParseResult<PlanPassOutput> {
       return fail(`"${where}.question" contains more than one question; fragments ask exactly one.`);
     }
 
-    const requiredEvidence = stringArray(row['requiredEvidence'], `${where}.requiredEvidence`);
+    const requiredEvidence = laneArray(row['requiredEvidence'], `${where}.requiredEvidence`);
     if (!requiredEvidence.ok) return requiredEvidence;
     if (requiredEvidence.value.length === 0) {
       return fail(
@@ -526,6 +529,80 @@ export interface ResearchPassOutput {
   searchQueries: string[];
   unresolved: string[];
   notes: string;
+}
+
+/**
+ * Evidence lanes as a plan declares them.
+ *
+ * Accepts either shape and says which it got. An object with `id`,
+ * `description` and `necessity` is the intended one: the id is the key
+ * coverage compares, the description is the question, and the necessity says
+ * whether an empty lane fails the fragment.
+ *
+ * A bare string is still accepted and read as a description with a derived id
+ * and `REQUIRED` — the meaning it had when every lane was mandatory prose. It
+ * is a fallback rather than the path: a derived id names whatever the sentence
+ * opened with, where a declared one names the concept.
+ *
+ * A declared id that is not id-shaped is **refused** rather than slugged. That
+ * is the whole correction: the packet that failed used 160-character sentences
+ * as identifiers, and quietly turning a sentence into an id would leave the
+ * plan believing it had named something.
+ */
+function laneArray(value: unknown, where: string): ParseResult<EvidenceLane[]> {
+  if (value === undefined || value === null) return { ok: true, value: [] };
+  if (!Array.isArray(value)) return fail(`"${where}" must be an array.`);
+  const lanes: EvidenceLane[] = [];
+  for (const [index, entry] of value.entries()) {
+    const at = `${where}[${index}]`;
+    if (typeof entry === 'string') {
+      const description = entry.trim();
+      if (description.length === 0) return fail(`"${at}" is empty.`);
+      lanes.push({ id: laneIdFrom(description), description, necessity: 'REQUIRED' });
+      continue;
+    }
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return fail(`"${at}" must be an object with id, description and necessity, or a string.`);
+    }
+    const row = entry as Record<string, unknown>;
+    const description = stringField(row['description'], `${at}.description`);
+    if (!description.ok) return description;
+    if (description.value.trim().length === 0) return fail(`"${at}.description" is empty.`);
+
+    const rawId = row['id'];
+    if (rawId !== undefined && typeof rawId !== 'string') return fail(`"${at}.id" must be a string.`);
+    const declared = typeof rawId === 'string' ? rawId.trim() : '';
+    if (declared.length > 0 && !isLaneId(declared)) {
+      return fail(
+        `"${at}.id" is ${JSON.stringify(declared.slice(0, 60))}, which is not an identifier. ` +
+          'A lane id is short, stable and machine-shaped — lowercase letters, digits and ' +
+          'underscores, starting with a letter, at most 40 characters, like ' +
+          '"operative_authority". The sentence describing the lane goes in "description"; a ' +
+          'description used as an id is what made a fragment\'s evidence uncountable.',
+      );
+    }
+    const necessity = row['necessity'] === undefined
+      ? { ok: true as const, value: 'REQUIRED' as LaneNecessity }
+      : strictEnum(row['necessity'], LANE_NECESSITIES, `${at}.necessity`);
+    if (!necessity.ok) return necessity;
+
+    lanes.push({
+      id: declared.length > 0 ? declared : laneIdFrom(description.value),
+      description: description.value.trim(),
+      necessity: necessity.value as LaneNecessity,
+    });
+  }
+  const ids = new Set<string>();
+  for (const lane of lanes) {
+    if (ids.has(lane.id)) {
+      return fail(
+        `"${where}" declares the lane id "${lane.id}" twice. Coverage is counted per id, so two ` +
+          'lanes sharing one are indistinguishable to the gate.',
+      );
+    }
+    ids.add(lane.id);
+  }
+  return { ok: true, value: lanes };
 }
 
 function parseClaim(row: Record<string, unknown>, where: string): ParseResult<ParsedClaim> {

@@ -799,9 +799,11 @@ function gateShapeFor(fragment: ResearchFragment, claims: ResearchClaim[]): Gate
   const accepted = claims.filter((claim) => claim.accepted);
 
   const coverage: LaneCoverage[] = fragment.requiredEvidence.map((lane) => {
-    const inLane = accepted.filter((claim) => claim.evidenceLane === lane);
+    const inLane = accepted.filter((claim) => claim.evidenceLane === lane.id);
     return {
-      lane,
+      lane: lane.id,
+      description: lane.description,
+      necessity: lane.necessity,
       acceptedClaims: inLane.length,
       independentSources: countIndependentSources(inLane),
       meetsThreshold: inLane.length > 0,
@@ -817,7 +819,12 @@ function gateShapeFor(fragment: ResearchFragment, claims: ResearchClaim[]): Gate
   // Fragment-wide: an empty lane or too few publishers is a coverage failure
   // whatever the individual claims did, and it is the one that decides the
   // ladder most often.
-  if (coverage.some((lane) => !lane.meetsThreshold)) failedConditions.add('COVERAGE');
+  // Only a REQUIRED lane failing is a coverage failure — the same rule the gate
+  // itself applies, and it has to be the same here or a repair would be planned
+  // for a lane that never blocked anything.
+  if (coverage.some((lane) => !lane.meetsThreshold && lane.necessity === 'REQUIRED')) {
+    failedConditions.add('COVERAGE');
+  }
   if (independentSources < fragment.minIndependentSources) failedConditions.add('COVERAGE');
 
   const reason = fragment.blockedReason ?? fragment.missingEvidence ?? '';

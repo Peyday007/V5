@@ -23,7 +23,7 @@
  * reappearing in a later attempt's synthesis: acceptance is decided once, at the
  * gate, against the evidence as it stood.
  */
-import type { ResearchClaim, ResearchFragment } from '../../domain/types.ts';
+import type { LaneNecessity, ResearchClaim, ResearchFragment } from '../../domain/types.ts';
 import type { ClaimScopeMatch } from './schema.ts';
 import { countIndependentSources, duplicateGroups, effectiveStandard } from './standards.ts';
 
@@ -50,7 +50,11 @@ export interface ClaimJudgement {
 }
 
 export interface LaneCoverage {
+  /** The lane's stable id — what a claim's `evidence_lane` carries. */
   lane: string;
+  /** The question in full, so a reader is not left holding an identifier. */
+  description: string;
+  necessity: LaneNecessity;
   acceptedClaims: number;
   independentSources: number;
   meetsThreshold: boolean;
@@ -313,13 +317,24 @@ export function applyGate(input: {
   const independentSources = countIndependentSources(acceptedList);
   const duplicates = duplicateGroups(acceptedList);
 
+  /**
+   * Coverage, keyed by the lane's **id** rather than its description.
+   *
+   * The description is the question and can be a paragraph; the id is the key
+   * and is short and stable. Matching on the description made a worker
+   * reproduce 160 characters exactly for its evidence to count, which is how
+   * the first fresh acceptance packet returned 24 accepted claims and covered
+   * nothing.
+   */
   const coverage: LaneCoverage[] = fragment.requiredEvidence.map((lane) => {
-    const inLane = acceptedList.filter((claim) => claim.evidenceLane === lane);
+    const inLane = acceptedList.filter((claim) => claim.evidenceLane === lane.id);
     const sources = new Set(
       inLane.map((claim) => sourceIdentity(claim.sourceUrl)).filter((id): id is string => id !== null),
     );
     return {
-      lane,
+      lane: lane.id,
+      description: lane.description,
+      necessity: lane.necessity,
       acceptedClaims: inLane.length,
       independentSources: sources.size,
       meetsThreshold: inLane.length > 0,
@@ -346,7 +361,25 @@ export function applyGate(input: {
    */
   const unretrieved = claims.filter((claim) => claim.retrievalState !== 'RETRIEVED');
 
-  const uncoveredLanes = coverage.filter((lane) => !lane.meetsThreshold);
+  /**
+   * Only a REQUIRED lane can fail the fragment.
+   *
+   * Every lane used to be mandatory, including ones whose own description
+   * ended "…if any exists on point" — so a fragment that correctly established
+   * a regulator has published nothing was failed for it. An acceptable
+   * *category* of source is not automatically a mandatory coverage
+   * requirement.
+   *
+   * A CONDITIONAL lane left empty is still reported: the question was asked
+   * and is open, and a reader needs to know that. An OPTIONAL one is
+   * enrichment and is silent.
+   */
+  const uncoveredLanes = coverage.filter(
+    (lane) => !lane.meetsThreshold && lane.necessity === 'REQUIRED',
+  );
+  const openConditional = coverage.filter(
+    (lane) => !lane.meetsThreshold && lane.necessity === 'CONDITIONAL',
+  );
   /**
    * How many independent sources this fragment actually needs.
    *
@@ -448,7 +481,7 @@ export function applyGate(input: {
       if (uncoveredLanes.length > 0) {
         reasons.push(
           `${uncoveredLanes.length} required evidence lane(s) have no accepted claim: ` +
-            uncoveredLanes.map((lane) => lane.lane).join(', '),
+            uncoveredLanes.map((lane) => `${lane.lane} (${lane.description})`).join('; '),
         );
       }
       if (!enoughSources) {
@@ -460,6 +493,13 @@ export function applyGate(input: {
       continue;
     }
     reasons.push(`${count} claim(s) failed: ${GATE_CONDITIONS[condition].toLowerCase()}.`);
+  }
+  if (openConditional.length > 0) {
+    reasons.push(
+      `${openConditional.length} conditional lane(s) are open and do not block: ` +
+        openConditional.map((lane) => lane.lane).join(', ') +
+        '. They were asked and nothing was accepted for them.',
+    );
   }
   if (verification.sufficiency === 'INSUFFICIENT' && uncoveredLanes.length === 0) {
     reasons.push(

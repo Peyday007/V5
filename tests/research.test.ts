@@ -169,7 +169,9 @@ function claims(list: ClaimInput[]): unknown {
     claims: list.map((entry) => ({
       claim: entry.claim,
       claimType: entry.type ?? 'SOURCED_FACT',
-      evidenceLane: entry.lane ?? 'official statistics',
+      // The lane **id**, which is what coverage counts by. The declared lane's
+      // description is prose; its id is the key, and a claim names the key.
+      evidenceLane: entry.lane ?? 'official_statistics',
       sourceUrl: entry.url === undefined ? 'https://www.bls.gov/oes/current/oes419041.htm' : entry.url,
       sourceTitle: 'Occupational Employment and Wage Statistics',
       sourcePublisher: 'Bureau of Labor Statistics',
@@ -751,6 +753,9 @@ describe('a fragment that fails its gate', () => {
     expect(attempts[1]!.attempt).toBe(2);
     // Chosen from what actually failed: the plan names the lane no accepted
     // claim reached, rather than a generic "try again".
+    // Both halves: the lane id a claim must carry, and the description saying
+    // what it is asking for.
+    expect(attempts[1]!.repairStrategy).toMatch(/official_statistics/);
     expect(attempts[1]!.repairStrategy).toMatch(/official statistics/i);
     expect(attempts[1]!.repairStrategy!.length).toBeGreaterThan(80);
     expect(attempts[1]!.status).toBe('ACCEPTED');
@@ -1387,7 +1392,7 @@ describe('the job survives what happens to it', () => {
         fragmentIndex: 0,
         fragmentKey: 'fragment-1',
         question: 'q',
-        requiredEvidence: ['official statistics'],
+        requiredEvidence: [{ id: 'official_statistics', description: 'official statistics', necessity: 'REQUIRED' }],
         acceptableSourceTypes: ['government dataset'],
         excludedSourceTypes: [],
         completionCriteria: ['a figure'],

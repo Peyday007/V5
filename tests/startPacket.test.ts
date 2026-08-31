@@ -24,6 +24,7 @@ import { whenExtractionIdle } from '../server/services/documents/queue.ts';
 import { createWorker, grantMembership, revokeMembership } from '../server/repos/identity.ts';
 import { claimWork, enqueueWork, listWorkItems } from '../server/repos/workQueue.ts';
 import { dependencyKeys } from '../server/domain/dependencies.ts';
+import { isLaneId } from '../server/domain/evidenceLanes.ts';
 import { currentFragments, getOrchestration } from '../server/repos/research.ts';
 import { listRequirements, listCoverage } from '../server/repos/reconciliation.ts';
 import { getRun } from '../server/repos/runs.ts';
@@ -570,6 +571,93 @@ describe('the coverage gate on a proposed plan', () => {
     // kinds existed — the conservative reading, and no row is rewritten.
     expect(dependencyKeys(penalty?.dependsOn ?? [])).toEqual(['ca-licence-trigger']);
     expect(penalty?.dependsOn).toEqual([{ key: 'ca-licence-trigger', kind: 'HARD' }]);
+  });
+
+  /**
+   * A lane is an id, a description and a necessity — and the id is refused
+   * rather than repaired when it is a sentence.
+   *
+   * The packet before this declared lanes like "Definitions in NY Real
+   * Property Law Art. 12-A deciding whether 'real estate broker' activity
+   * includes or excludes arranging a business sale with no realty
+   * transferred", three per fragment, matched by exact string. Quietly slugging
+   * that into an id would leave the plan believing it had named a concept when
+   * it had named a paragraph, so the plan is refused and told what an id is.
+   */
+  it('refuses a lane id that is a sentence, and says what one looks like', async () => {
+    const started = await startPacket(goal());
+    const claimed = await claimPlan(started.orchestration.id);
+
+    const refusal = await call('brain_propose_fragments', {
+      work_item_id: claimed.workItemId,
+      lease_id: claimed.leaseId,
+      lease_generation: claimed.leaseGeneration,
+      fragments: [
+        proposal({
+          required_evidence: [
+            {
+              id: "Definitions in NY Real Property Law Art. 12-A deciding whether 'real estate " +
+                "broker' activity includes arranging a business sale",
+              description: 'The operative definition.',
+              necessity: 'REQUIRED',
+            },
+          ],
+        }),
+      ],
+    })
+      .then(() => null)
+      .catch((error: unknown) => error as Error);
+
+    expect(refusal).toBeTruthy();
+    expect(refusal!.message).toMatch(/not an identifier/i);
+    expect(refusal!.message).toContain('operative_authority');
+    expect(await currentFragments(started.orchestration.id)).toHaveLength(0);
+  });
+
+  it('keeps a declared id, its description and its necessity, apart', async () => {
+    const started = await startPacket(goal());
+    const claimed = await claimPlan(started.orchestration.id);
+
+    await call('brain_propose_fragments', {
+      work_item_id: claimed.workItemId,
+      lease_id: claimed.leaseId,
+      lease_generation: claimed.leaseGeneration,
+      fragments: [
+        proposal({
+          key: 'ny-licence',
+          required_evidence: [
+            {
+              id: 'operative_authority',
+              description: 'The statute or regulation that settles whether a licence is required.',
+              necessity: 'REQUIRED',
+            },
+            {
+              id: 'regulator_guidance',
+              description: 'Published regulator guidance on business-only sales, if any exists.',
+              necessity: 'CONDITIONAL',
+            },
+          ],
+        }),
+      ],
+    });
+
+    const [fragment] = await currentFragments(started.orchestration.id);
+    expect(fragment!.requiredEvidence).toEqual([
+      {
+        id: 'operative_authority',
+        description: 'The statute or regulation that settles whether a licence is required.',
+        necessity: 'REQUIRED',
+      },
+      {
+        id: 'regulator_guidance',
+        description: 'Published regulator guidance on business-only sales, if any exists.',
+        necessity: 'CONDITIONAL',
+      },
+    ]);
+    // The fragment's own lane label, when it has one, is an id and never a
+    // sentence. `brain_propose_fragments` leaves it unset; the archive-derived
+    // planner sets it, and both go through the same shape.
+    expect(fragment!.evidenceLane === null || isLaneId(fragment!.evidenceLane)).toBe(true);
   });
 
   it('records the decision behind every fragment, kept or dropped', async () => {

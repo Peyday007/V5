@@ -423,7 +423,13 @@ export async function planContradictionFragments(input: {
       timeframe: input.parent.timeframe,
       population: input.parent.population,
       definitions: input.parent.definitions,
-      requiredEvidence: ['the source that resolves the disagreement'],
+      requiredEvidence: [
+        {
+          id: 'resolving_source',
+          description: 'The source that resolves the disagreement between the two accounts.',
+          necessity: 'REQUIRED',
+        },
+      ],
       acceptableSourceTypes: input.parent.acceptableSourceTypes,
       excludedSourceTypes: input.parent.excludedSourceTypes,
       completionCriteria: [

@@ -53,7 +53,8 @@
  * So the packet files its document and stops, saying so. Watching the audit run
  * needs a worker, which is the one part of this that costs something.
  */
-import type { Layer, Project, ResearchFragment, ResearchOrchestration } from '../../domain/types.ts';
+import type {
+  EvidenceLane, Layer, Project, ResearchFragment, ResearchOrchestration } from '../../domain/types.ts';
 import { createLayer, listLayers } from '../../repos/layers.ts';
 import { createProject, getProjectBySlug } from '../../repos/projects.ts';
 import { createRun } from '../../repos/runs.ts';
@@ -100,7 +101,7 @@ interface FixtureFragment {
   geography: string | null;
   timeframe: string | null;
   definitions: string | null;
-  requiredEvidence: string[];
+  requiredEvidence: EvidenceLane[];
   acceptableSourceTypes: string[];
   excludedSourceTypes: string[];
   completionCriteria: string[];
@@ -172,7 +173,9 @@ const FRAGMENTS: FixtureFragment[] = [
     geography: null,
     timeframe: 'RFC 9728 as published',
     definitions: 'Protected resource meaning an OAuth 2.0 resource server.',
-    requiredEvidence: ['specification'],
+    requiredEvidence: [
+      { id: 'specification', description: 'The specification text itself.', necessity: 'REQUIRED' },
+    ],
     acceptableSourceTypes: ['RFC', 'W3C recommendation'],
     excludedSourceTypes: ['blog post', 'vendor documentation'],
     completionCriteria: ['One RFC section that names the metadata document and its location.'],
@@ -224,7 +227,9 @@ const FRAGMENTS: FixtureFragment[] = [
     geography: null,
     timeframe: 'RFC 7591 as published',
     definitions: 'Client meaning an OAuth 2.0 client as that RFC defines it.',
-    requiredEvidence: ['specification'],
+    requiredEvidence: [
+      { id: 'specification', description: 'The specification text itself.', necessity: 'REQUIRED' },
+    ],
     acceptableSourceTypes: ['RFC'],
     excludedSourceTypes: ['blog post'],
     completionCriteria: ['One RFC section describing the registration request.'],
@@ -275,7 +280,9 @@ const FRAGMENTS: FixtureFragment[] = [
     geography: null,
     timeframe: 'the 2026-07-28 revision specifically',
     definitions: 'Session identifier meaning the Mcp-Session-Id header of earlier revisions.',
-    requiredEvidence: ['specification'],
+    requiredEvidence: [
+      { id: 'specification', description: 'The specification text itself.', necessity: 'REQUIRED' },
+    ],
     acceptableSourceTypes: ['protocol specification'],
     excludedSourceTypes: ['blog post'],
     completionCriteria: ['A statement from the revision itself, not from an earlier one.'],

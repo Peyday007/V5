@@ -7,6 +7,8 @@
  * because a user who disagrees with a coverage status can overrule it and the
  * override is recorded beside the reasoning it replaced.
  */
+import { parseLanes, serializeLanes } from '../domain/evidenceLanes.ts';
+import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
 import {
   parseDependencies,
@@ -180,7 +182,7 @@ function mapRequirement(row: RequirementRow): Requirement {
     necessity: row.necessity as RequirementNecessity,
     kind: row.kind as RequirementKind,
     rationale: row.rationale,
-    requiredEvidence: parseJson<string[]>(row.required_evidence, []),
+    requiredEvidence: parseLanes(parseJson<unknown[]>(row.required_evidence, [])),
     completionCriteria: parseJson<string[]>(row.completion_criteria, []),
     dependsOn: parseDependencies(row.depends_on),
     owningLayerId: row.owning_layer_id,
@@ -199,7 +201,7 @@ export interface CreateRequirementInput {
   necessity: RequirementNecessity;
   kind: RequirementKind;
   rationale?: string | null;
-  requiredEvidence?: string[];
+  requiredEvidence?: EvidenceLane[];
   completionCriteria?: string[];
   dependsOn?: (string | FragmentDependency)[];
   owningLayerId?: string | null;
@@ -221,7 +223,7 @@ export async function createRequirements(inputs: CreateRequirementInput[]): Prom
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.projectId, input.layerId, input.requirementKey,
           input.ordinal, input.statement, input.necessity, input.kind, input.rationale ?? null,
-          toJson(input.requiredEvidence ?? []), toJson(input.completionCriteria ?? []),
+          toJson(serializeLanes(input.requiredEvidence ?? [])), toJson(input.completionCriteria ?? []),
           serializeDependencies(toDependencies(input.dependsOn)), input.owningLayerId ?? null, ts, ts],
       );
     }

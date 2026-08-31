@@ -204,7 +204,7 @@ async function makeFragment(
       timeframe: 'in force as at 2026',
       population: null,
       definitions: 'Business sale meaning a transfer of a going concern with no real property.',
-      requiredEvidence: ['statute'],
+      requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }],
       acceptableSourceTypes: ['statute', 'regulator guidance'],
       excludedSourceTypes: ['law firm blog'],
       completionCriteria: ['One statute section that answers yes or no.'],
@@ -308,7 +308,13 @@ describe('reading an assignment', () => {
     // would mean the worker researched against something other than the bar.
     expect(declared['question']).toBe(fragment.question);
     expect(declared['geography']).toBe('California, United States');
-    expect(declared['requiredEvidence']).toEqual(['statute']);
+    // The lane whole: the id a claim must name, the question in full, and
+    // whether an empty lane fails the fragment. Prose is the description now,
+    // never the key.
+    expect(declared['requiredEvidence']).toEqual([
+      { id: 'statute', description: 'statute', necessity: 'REQUIRED' },
+    ]);
+    expect(declared['evidenceLaneIds']).toEqual(['statute']);
     expect(declared['excludedSourceTypes']).toEqual(['law firm blog']);
     expect(declared['minIndependentSources']).toBe(1);
     expect(declared['completionCriteria']).toEqual(['One statute section that answers yes or no.']);
@@ -1228,7 +1234,7 @@ describe('the evidence lane a claim fills', () => {
     work: ClaimedWork;
   }> {
     const orchestration = await makeOrchestration();
-    const fragment = await makeFragment(orchestration, { requiredEvidence: ['statute'] });
+    const fragment = await makeFragment(orchestration, { requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }] });
     return {
       orchestration,
       fragment,
@@ -2030,7 +2036,7 @@ describe('the packet runner', () => {
         fragmentIndex: 0,
         fragmentKey: 'definitions',
         question: 'What counts as a business sale here?',
-        requiredEvidence: ['statute'],
+        requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }],
         acceptableSourceTypes: [],
         excludedSourceTypes: [],
         completionCriteria: ['A definition'],
@@ -2045,7 +2051,7 @@ describe('the packet runner', () => {
         fragmentIndex: 1,
         fragmentKey: 'licence-california',
         question: 'Does California require a licence?',
-        requiredEvidence: ['statute'],
+        requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }],
         acceptableSourceTypes: [],
         excludedSourceTypes: [],
         completionCriteria: ['A section'],

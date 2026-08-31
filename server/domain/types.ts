@@ -434,6 +434,32 @@ export const FRAGMENT_STATUSES = [
 export type FragmentStatus = (typeof FRAGMENT_STATUSES)[number];
 
 /** What a claim is, which decides what would count as evidence for it. */
+/**
+ * Whether an empty evidence lane fails the fragment.
+ *
+ * `REQUIRED` is the only one coverage blocks on. A lane whose own description
+ * ends "…if any exists on point" is asking whether something exists, and a
+ * fragment must not fail for correctly reporting that it does not — an
+ * acceptable *category* of source is not automatically a mandatory coverage
+ * requirement. `CONDITIONAL` says the question was asked and left open, and is
+ * reported as such; `OPTIONAL` is enrichment and is silent when empty.
+ */
+export type LaneNecessity = 'REQUIRED' | 'OPTIONAL' | 'CONDITIONAL';
+
+/**
+ * One thing a fragment is asking for.
+ *
+ * The `id` is the key — short, stable, machine-shaped, and what a claim's
+ * `evidence_lane` carries. The `description` is the question in full, which is
+ * what the worker needs to research it and is never used for matching. Keeping
+ * them apart is the whole point: see `domain/evidenceLanes.ts`.
+ */
+export interface EvidenceLane {
+  id: string;
+  description: string;
+  necessity: LaneNecessity;
+}
+
 export const CLAIM_TYPES = [
   'SOURCED_FACT',
   'SELF_REPORT',
@@ -1832,7 +1858,7 @@ export interface Requirement {
   necessity: RequirementNecessity;
   kind: RequirementKind;
   rationale: string | null;
-  requiredEvidence: string[];
+  requiredEvidence: EvidenceLane[];
   completionCriteria: string[];
   dependsOn: FragmentDependency[];
   owningLayerId: string | null;
@@ -2111,7 +2137,7 @@ export interface ResearchFragment {
   timeframe: string | null;
   population: string | null;
   definitions: string | null;
-  requiredEvidence: string[];
+  requiredEvidence: EvidenceLane[];
   acceptableSourceTypes: string[];
   excludedSourceTypes: string[];
   completionCriteria: string[];

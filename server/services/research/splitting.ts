@@ -120,7 +120,7 @@ export async function splitFragment(input: {
     requirementIds: fragment.requirementIds,
     evidenceLane:
       signal.questions.length === fragment.requiredEvidence.length
-        ? (fragment.requiredEvidence[offset] ?? fragment.evidenceLane)
+        ? (fragment.requiredEvidence[offset]?.id ?? fragment.evidenceLane)
         : fragment.evidenceLane,
     whyItMatters: fragment.whyItMatters,
     missingEvidence: fragment.missingEvidence,

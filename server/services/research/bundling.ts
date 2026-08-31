@@ -66,7 +66,7 @@ function lower(value: string): string {
 function promptWeight(fragment: ResearchFragment): number {
   return (
     fragment.question.length +
-    fragment.requiredEvidence.join(' ').length +
+    fragment.requiredEvidence.map((lane) => lane.description).join(' ').length +
     fragment.completionCriteria.join(' ').length +
     (fragment.whyExistingInsufficient?.length ?? 0) +
     600

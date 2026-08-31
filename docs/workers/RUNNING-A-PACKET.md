@@ -272,9 +272,23 @@ Out of scope: transactions that include real property or a lease interest;
 whether the interests sold are securities, and federal securities law
 generally; tax treatment; and any jurisdiction other than the five named.
 
+Evidence lanes: plan each state's fragment with these three, by id —
+`operative_authority` (REQUIRED: the statute or regulation that settles it,
+quoted at the section relied on), `exemptions_or_inclusions` (REQUIRED: any
+express exemption or express inclusion for business or goodwill sales separate
+from real property, quoted at the section), and `regulator_guidance`
+(CONDITIONAL: the licensing regulator's own published guidance, FAQ or advisory
+opinion on business-only sales, if any exists on point).
+
 This is research, not legal advice. Nothing depends on it before a person has
 read it.
 ```
+
+**Why `regulator_guidance` is CONDITIONAL and the other two are not.** It asks
+whether something exists. A state whose regulator has published nothing on the
+point is a complete answer to that lane, not a failure to cover it — and the
+run before this failed all five states partly by treating exactly such a lane as
+mandatory. Only a REQUIRED lane failing blocks a fragment.
 
 **Pause every recurring Cowork schedule first.** The hourly task from Step 9 was
 authorized only to finish that packet, and that packet is terminal. A second

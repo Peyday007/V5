@@ -27,6 +27,7 @@
  *   the same result.
  */
 import type { ResearchClaim, ResearchFragment, RetrievalState } from '../../domain/types.ts';
+import { laneIds } from '../../domain/evidenceLanes.ts';
 import { validateClaim, type RawClaim } from './sources.ts';
 
 /** What a claim has to carry for the gate to be able to place it. */
@@ -79,7 +80,10 @@ export function laneProblems(
   fragment: Pick<ResearchFragment, 'requiredEvidence'>,
   claims: LaneCandidate[],
 ): LaneProblem[] {
-  const declared = new Set(fragment.requiredEvidence);
+  // Ids, not descriptions. A claim names the lane it fills by its identifier;
+  // the description is the question, and matching on it is what made a worker
+  // reproduce 160 characters exactly for its evidence to count.
+  const declared = new Set(laneIds(fragment.requiredEvidence));
   const problems: LaneProblem[] = [];
   claims.forEach((claim, index) => {
     const lane = claim.evidenceLane;
@@ -102,7 +106,8 @@ export function explainLaneProblems(
   fragment: Pick<ResearchFragment, 'requiredEvidence' | 'fragmentKey'>,
   problems: LaneProblem[],
 ): string {
-  const allowed = fragment.requiredEvidence.map((lane) => `"${lane}"`).join(', ');
+  const allowed = fragment.requiredEvidence.map((lane) => `"${lane.id}" (${lane.description})`)
+    .join('; ');
   const missing = problems.filter((problem) => problem.why === 'MISSING');
   const undeclared = problems.filter((problem) => problem.why === 'UNDECLARED');
   const parts: string[] = [];
@@ -110,7 +115,8 @@ export function explainLaneProblems(
   parts.push(
     `Every claim must say which of this fragment's declared evidence lanes it fills. ` +
       `Fragment "${fragment.fragmentKey}" declares: ${allowed}. Set "evidence_lane" to one of ` +
-      'those strings exactly — they are the same values `brain_get_assignment` returns as ' +
+      'those **ids** — the short identifier in quotes, never the description after it. ' +
+      '`brain_get_assignment` returns the ids as `evidenceLaneIds` and each lane in full as ' +
       '`requiredEvidence`.',
   );
 

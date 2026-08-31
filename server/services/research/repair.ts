@@ -229,7 +229,18 @@ export function buildRepairPlan(input: BuildRepairPlanInput): RepairPlan {
     .filter((claim) => !claim.accepted)
     .map((claim) => ({ claim: claim.claim, why: claim.rejectionReason ?? 'rejected by the gate' }));
 
-  const missingLanes = gate.coverage.filter((lane) => !lane.meetsThreshold).map((lane) => lane.lane);
+  /**
+   * Only lanes that actually block. A CONDITIONAL or OPTIONAL lane left empty
+   * is reported by the gate and does not fail the fragment, so planning a
+   * repair to fill one would spend an attempt on something that cost nothing.
+   */
+  const missing = gate.coverage.filter(
+    (lane) => !lane.meetsThreshold && lane.necessity === 'REQUIRED',
+  );
+  // The id is what a claim must be tagged with; the description is what the
+  // lane is asking for. A repair instruction needs both — the id alone is not
+  // researchable, and the description alone is what the worker could not match.
+  const missingLanes = missing.map((lane) => `${lane.lane} (${lane.description})`);
   /**
    * Lanes empty because nothing was *tagged* are a different failure from
    * lanes empty because nothing was found, and the plan has to say which.

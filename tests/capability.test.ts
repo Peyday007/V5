@@ -110,7 +110,7 @@ function fragment(overrides: Partial<ResearchFragment> = {}): ResearchFragment {
     timeframe: null,
     population: null,
     definitions: null,
-    requiredEvidence: ['statute'],
+    requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }],
     acceptableSourceTypes: ['statute'],
     excludedSourceTypes: [],
     completionCriteria: ['one section'],

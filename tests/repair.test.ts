@@ -47,7 +47,7 @@ function fragment(overrides: Partial<ResearchFragment> = {}): ResearchFragment {
     timeframe: '2023',
     population: 'B2B firms',
     definitions: 'Outsourced SDR: an external firm booking qualified meetings.',
-    requiredEvidence: ['official statistics'],
+    requiredEvidence: [{ id: 'official_statistics', description: 'official statistics', necessity: 'REQUIRED' }],
     acceptableSourceTypes: ['government dataset'],
     excludedSourceTypes: [],
     completionCriteria: ['a figure with its definition'],
@@ -176,9 +176,9 @@ describe('a repair plan', () => {
    */
   it('says the evidence is unlabelled, not missing, when that is what happened', () => {
     const plan = buildRepairPlan({
-      fragment: fragment({ requiredEvidence: ['statute'] }),
+      fragment: fragment({ requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }] }),
       gate: gate({
-        coverage: [{ lane: 'statute', acceptedClaims: 0, independentSources: 0, meetsThreshold: false }],
+        coverage: [{ lane: 'statute', description: 'statute', necessity: 'REQUIRED', acceptedClaims: 0, independentSources: 0, meetsThreshold: false }],
       }),
       history: [fragment()],
       claims: [
@@ -194,11 +194,70 @@ describe('a repair plan', () => {
     expect(plan.missingEvidence).toContain('statute');
   });
 
+  /**
+   * A repair is planned for lanes that actually blocked, and nothing else.
+   *
+   * A CONDITIONAL lane left empty does not fail the fragment, so naming it as
+   * missing evidence would spend a research attempt filling something that
+   * cost nothing — and would send the worker looking for a regulator advisory
+   * that the gate has already accepted may not exist.
+   */
+  it('names only the lanes that actually blocked, not the optional ones', () => {
+    const plan = buildRepairPlan({
+      fragment: fragment({
+        requiredEvidence: [
+          { id: 'operative_authority', description: 'The statute.', necessity: 'REQUIRED' },
+          { id: 'regulator_guidance', description: 'Guidance, if any.', necessity: 'CONDITIONAL' },
+          { id: 'commentary', description: 'Commentary.', necessity: 'OPTIONAL' },
+        ],
+      }),
+      gate: gate({
+        coverage: [
+          {
+            lane: 'operative_authority',
+            description: 'The statute.',
+            necessity: 'REQUIRED',
+            acceptedClaims: 0,
+            independentSources: 0,
+            meetsThreshold: false,
+          },
+          {
+            lane: 'regulator_guidance',
+            description: 'Guidance, if any.',
+            necessity: 'CONDITIONAL',
+            acceptedClaims: 0,
+            independentSources: 0,
+            meetsThreshold: false,
+          },
+          {
+            lane: 'commentary',
+            description: 'Commentary.',
+            necessity: 'OPTIONAL',
+            acceptedClaims: 0,
+            independentSources: 0,
+            meetsThreshold: false,
+          },
+        ],
+      }),
+      history: [fragment()],
+      claims: [claim({ accepted: false, evidenceLane: 'operative_authority' })],
+      splitRequired: false,
+      remainingBudget: 2,
+    });
+
+    // The id that blocked, and the description saying what it asks for.
+    expect(plan.missingEvidence).toContain('operative_authority');
+    expect(plan.missingEvidence).toContain('The statute.');
+    // Not the ones that did not.
+    expect(plan.missingEvidence).not.toContain('regulator_guidance');
+    expect(plan.missingEvidence).not.toContain('commentary');
+  });
+
   it('still says the evidence is missing when the lane is genuinely empty', () => {
     const plan = buildRepairPlan({
-      fragment: fragment({ requiredEvidence: ['statute'] }),
+      fragment: fragment({ requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }] }),
       gate: gate({
-        coverage: [{ lane: 'statute', acceptedClaims: 0, independentSources: 0, meetsThreshold: false }],
+        coverage: [{ lane: 'statute', description: 'statute', necessity: 'REQUIRED', acceptedClaims: 0, independentSources: 0, meetsThreshold: false }],
       }),
       history: [fragment()],
       // Tagged, and rejected — so the lane really has nothing in it.

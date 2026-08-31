@@ -69,6 +69,8 @@ import { recomputeProject } from '../services/stateEngine.ts';
 import { AUDIT_ROLES, type AuditRole } from '../services/queue/workTypes.ts';
 import { assignmentFor } from '../services/research/assignment.ts';
 import { explainLaneProblems, laneProblems } from '../services/research/lanes.ts';
+import { isLaneId, laneIdFrom, LANE_NECESSITIES } from '../domain/evidenceLanes.ts';
+import type { EvidenceLane, LaneNecessity } from '../domain/types.ts';
 import { coverProposal, whyNotResearched } from '../services/research/coverageGate.ts';
 import { planDependencies } from '../services/research/splitting.ts';
 import {
@@ -185,6 +187,81 @@ function str(row: Record<string, unknown>, field: string, where: string, max: nu
     throw invalidInput(`${where}.${field} may be at most ${max} characters.`);
   }
   return trimmed;
+}
+
+/**
+ * Evidence lanes from a worker's fragment proposal.
+ *
+ * The id is refused rather than repaired when it is not id-shaped. A lane id
+ * is the key coverage counts by, and quietly slugging a sentence into one
+ * would leave the plan believing it had named a concept when it had named a
+ * paragraph — which is exactly the state the packet before this could not get
+ * out of.
+ */
+function laneList(row: Record<string, unknown>, field: string, where: string): EvidenceLane[] {
+  const value = row[field];
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw invalidInput(`${where}.${field} must be an array.`);
+  const lanes: EvidenceLane[] = [];
+  const seen = new Set<string>();
+  for (const [index, entry] of value.entries()) {
+    const at = `${where}.${field}[${index}]`;
+    /**
+     * A bare string is still accepted, with a derived id.
+     *
+     * The rule being enforced is that a *description is not an identifier*, and
+     * deriving a short stable id from one honours that — where refusing the
+     * whole plan would only mean a worker that phrased it the old way loses its
+     * planning pass. What is refused is an `id` that was supplied and is not
+     * id-shaped: that is somebody trying to name a concept and putting a
+     * sentence in the slot, which is the mistake worth stopping.
+     *
+     * The plan schema's `laneArray` makes exactly the same accommodation, and
+     * the two must agree — a fragment proposed through one path and replanned
+     * through the other has to mean the same thing.
+     */
+    if (typeof entry === 'string') {
+      const description = entry.trim();
+      if (description.length === 0) throw invalidInput(`${at} is empty.`);
+      const derived = laneIdFrom(description);
+      if (seen.has(derived)) throw invalidInput(`${at} derives the lane id "${derived}" twice.`);
+      seen.add(derived);
+      lanes.push({ id: derived, description, necessity: 'REQUIRED' });
+      continue;
+    }
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw invalidInput(`${at} must be an object with id, description and necessity.`);
+    }
+    const lane = entry as Record<string, unknown>;
+    /**
+     * Read raw, judged by `isLaneId`.
+     *
+     * Not through `str(..., 40)`: a sentence in the id slot is longer than 40
+     * characters, so the length check would fire first and answer "may be at
+     * most 40 characters" — true, and useless. `isLaneId` enforces the same
+     * bound and lets the message say what an identifier actually is, which is
+     * the thing the caller got wrong.
+     */
+    const rawId = lane['id'];
+    if (typeof rawId !== 'string') throw invalidInput(`${at}.id must be a string.`);
+    const id = rawId.trim();
+    if (!isLaneId(id)) {
+      throw invalidInput(
+        `${at}.id is ${JSON.stringify(id.slice(0, 60))}, which is not an identifier. Use ` +
+          'lowercase letters, digits and underscores, starting with a letter — ' +
+          '"operative_authority", "exemptions_or_inclusions", "regulator_guidance". The sentence ' +
+          'goes in "description".',
+      );
+    }
+    if (seen.has(id)) throw invalidInput(`${at}.id "${id}" is declared twice in one fragment.`);
+    seen.add(id);
+    lanes.push({
+      id,
+      description: str(lane, 'description', at, MAX_LIST_ITEM_CHARS),
+      necessity: oneOf(lane, 'necessity', at, LANE_NECESSITIES, 'REQUIRED') as LaneNecessity,
+    });
+  }
+  return lanes;
 }
 
 function maybeStr(row: Record<string, unknown>, field: string, where: string, max: number): string | null {
@@ -495,7 +572,36 @@ const proposeFragmentsTool: McpTool = {
             timeframe: { type: 'string' },
             population: { type: 'string' },
             definitions: { type: 'string' },
-            required_evidence: { type: 'array', items: { type: 'string' } },
+            required_evidence: {
+              type: 'array',
+              description:
+                'The lanes this fragment is asking for. Each is an object: `id` is a short, ' +
+                'stable identifier a claim will name to fill it (lowercase letters, digits and ' +
+                'underscores, at most 40 characters — "operative_authority", not a sentence); ' +
+                '`description` is the question in full; `necessity` is REQUIRED, CONDITIONAL or ' +
+                'OPTIONAL. Only a REQUIRED lane failing blocks the fragment, so a lane that asks ' +
+                'whether something exists at all — a regulator advisory, if any — is CONDITIONAL, ' +
+                'not REQUIRED. An acceptable category of source is not automatically a mandatory ' +
+                'coverage requirement.',
+              items: {
+                oneOf: [
+                  {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      description: { type: 'string' },
+                      necessity: { type: 'string', enum: [...LANE_NECESSITIES] },
+                    },
+                    required: ['id', 'description', 'necessity'],
+                    additionalProperties: false,
+                  },
+                  // A bare description, kept so an older phrasing still plans.
+                  // Its id is derived, which names whatever the sentence opened
+                  // with rather than the concept — declare the object instead.
+                  { type: 'string' },
+                ],
+              },
+            },
             acceptable_source_types: { type: 'array', items: { type: 'string' } },
             excluded_source_types: { type: 'array', items: { type: 'string' } },
             completion_criteria: { type: 'array', items: { type: 'string' } },
@@ -531,7 +637,7 @@ const proposeFragmentsTool: McpTool = {
       if (keys.has(key)) throw invalidInput(`${where}.key duplicates an earlier fragment.`);
       keys.add(key);
 
-      const requiredEvidence = strList(row, 'required_evidence', where);
+      const requiredEvidence = laneList(row, 'required_evidence', where);
       const completionCriteria = strList(row, 'completion_criteria', where);
       // The two declarations the gate cannot work without. A fragment with no
       // lanes has nothing to cover and a fragment with no completion criteria

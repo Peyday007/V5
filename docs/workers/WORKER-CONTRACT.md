@@ -314,7 +314,7 @@ how to go about answering one, so the first live packet was researched with
 whatever method the session happened to bring.
 
 **This section is generated from `server/services/research/method.ts`, version
-`2026-08-31.1`, and a test fails if the two disagree.** That matters because the
+`2026-08-31.2`, and a test fails if the two disagree.** That matters because the
 constant is what a worker actually receives at runtime — abridged in the MCP
 `instructions` field every client reads at connect, and in full from
 `brain_research_method`, which you can call before you start. A method written
@@ -347,10 +347,18 @@ excluded from the fragment's rejection rate. Inferring the content of a page you
 could not open is the one thing that would make this worse than saying nothing.
 
 ### Say which declared lane every claim fills
-Your assignment lists the fragment's evidence lanes as `requiredEvidence`. Set
-each claim's **`evidence_lane` to one of those strings, verbatim**. The gate asks
-per lane whether any accepted claim filled it, so an untagged claim answers
-nothing — however well sourced, verified and in scope it is.
+Each lane in your assignment has three parts: an **`id`** like
+`operative_authority`, a **`description`** saying what it is asking for, and a
+**`necessity`**. Set each claim's `evidence_lane` to a lane's **id** — never its
+description. The ids are listed on their own as `evidenceLaneIds`.
+
+The gate asks per lane whether any accepted claim carries its id, so an untagged
+claim answers nothing — however well sourced, verified and in scope it is.
+
+Only a **REQUIRED** lane failing blocks the fragment. A **CONDITIONAL** lane is a
+question that may have no answer — a regulator advisory, if one exists — and
+reporting honestly that nothing exists is a complete answer to it, not a
+failure. An **OPTIONAL** lane is enrichment.
 
 This applies to claims that could be accepted. A claim with no usable source, or
 one whose source you could not read, is still submitted **without** a lane and

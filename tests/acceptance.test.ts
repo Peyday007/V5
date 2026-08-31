@@ -103,7 +103,7 @@ const PLAN = {
       necessity: 'MANDATORY',
       kind: 'RESEARCH',
       rationale: 'The layer cannot size the market without it.',
-      requiredEvidence: ['official statistics'],
+      requiredEvidence: [{ id: 'official_statistics', description: 'official statistics', necessity: 'REQUIRED' }],
       completionCriteria: ['a figure with its definition and measurement date'],
       dependsOn: [],
       owningLayer: '',
@@ -114,7 +114,7 @@ const PLAN = {
       necessity: 'MANDATORY',
       kind: 'RESEARCH',
       rationale: 'Routing depends on it.',
-      requiredEvidence: ['primary legislation'],
+      requiredEvidence: [{ id: 'primary_legislation', description: 'primary legislation', necessity: 'REQUIRED' }],
       completionCriteria: ['the statutory provision, quoted'],
       dependsOn: [],
       owningLayer: '',
@@ -125,7 +125,7 @@ const PLAN = {
       necessity: 'SUPPORTING',
       kind: 'RESEARCH',
       rationale: 'It bounds the routing problem.',
-      requiredEvidence: ['official registries'],
+      requiredEvidence: [{ id: 'official_registries', description: 'official registries', necessity: 'REQUIRED' }],
       completionCriteria: ['a count with its source'],
       dependsOn: [],
       owningLayer: '',
@@ -136,7 +136,7 @@ const PLAN = {
       necessity: 'SUPPORTING',
       kind: 'RESEARCH',
       rationale: 'It sets the routing deadline.',
-      requiredEvidence: ['official statistics'],
+      requiredEvidence: [{ id: 'official_statistics', description: 'official statistics', necessity: 'REQUIRED' }],
       completionCriteria: ['a duration with its source'],
       dependsOn: [],
       owningLayer: '',
@@ -152,7 +152,7 @@ interface ScriptedClaim {
   primarySource?: boolean;
 }
 
-function claimBlock(list: ScriptedClaim[], lane = 'official statistics'): unknown {
+function claimBlock(list: ScriptedClaim[], lane = 'official_statistics'): unknown {
   return {
     searchQueries: ['site:bls.gov telemarketers employment'],
     claims: list.map((entry) => ({
@@ -280,8 +280,18 @@ class AcceptanceWorker implements AIProvider {
    */
   #lane(prompt: string, key: string): string {
     const after = prompt.slice(prompt.indexOf(`FRAGMENT: ${key}`));
-    const lanes = /^REQUIRED EVIDENCE LANES: (.+)$/m.exec(after)?.[1] ?? 'official statistics';
-    return lanes.split('|')[0]!.trim();
+    const lanes = /^REQUIRED EVIDENCE LANES: (.+)$/m.exec(after)?.[1] ?? 'official_statistics';
+    /**
+     * The **id**, which is the leading token of each lane.
+     *
+     * The brief lists a lane as `id — description`, or `id (optional) —
+     * description`, and only the id is the key coverage counts by. A worker
+     * that tags a claim with the description has answered nothing, which is
+     * exactly how the first fresh acceptance packet returned 24 accepted
+     * claims and covered no lane at all — so the script reads it the way a
+     * worker now has to.
+     */
+    return lanes.split('|')[0]!.trim().split(/\s/)[0]!;
   }
 
   async runResearch(request: ResearchRequest): Promise<ResearchResponse> {

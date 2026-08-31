@@ -20,6 +20,7 @@
  * check itself can never be the reason a packet costs anything.
  */
 import type {
+  EvidenceLane,
   BoundaryContract,
   CoverageStatus,
   ResearchOrchestration,
@@ -48,7 +49,7 @@ export interface ProposedScope {
   timeframe: string | null;
   population: string | null;
   definitions: string | null;
-  requiredEvidence: string[];
+  requiredEvidence: EvidenceLane[];
   completionCriteria: string[];
   whyItMatters: string | null;
 }

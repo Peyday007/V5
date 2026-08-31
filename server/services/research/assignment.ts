@@ -48,7 +48,9 @@
  */
 import { bundleKeyFor } from './bundling.ts';
 import { RESEARCH_METHOD_SUMMARY, RESEARCH_METHOD_VERSION } from './method.ts';
+import { laneIds } from '../../domain/evidenceLanes.ts';
 import type {
+  EvidenceLane,
   DependencyKind,
   FragmentDependency,
   ResearchClaim,
@@ -199,7 +201,18 @@ export interface FragmentView {
   timeframe: string | null;
   population: string | null;
   definitions: string | null;
-  requiredEvidence: string[];
+  /**
+   * The lanes this fragment is asking for, whole.
+   *
+   * Each carries the `id` a claim's `evidence_lane` must be set to, the
+   * `description` that is the actual question, and whether an empty lane fails
+   * the fragment. All three are here because a worker needs the description to
+   * research it and the id to make the evidence count, and the packet that
+   * failed had only prose — which is both at once and useful as neither.
+   */
+  requiredEvidence: EvidenceLane[];
+  /** Just the ids, so the permitted values are unmissable. */
+  evidenceLaneIds: string[];
   acceptableSourceTypes: string[];
   excludedSourceTypes: string[];
   completionCriteria: string[];
@@ -244,6 +257,7 @@ function viewFragment(fragment: ResearchFragment): FragmentView {
     population: fragment.population,
     definitions: fragment.definitions,
     requiredEvidence: fragment.requiredEvidence,
+    evidenceLaneIds: laneIds(fragment.requiredEvidence),
     acceptableSourceTypes: fragment.acceptableSourceTypes,
     excludedSourceTypes: fragment.excludedSourceTypes,
     completionCriteria: fragment.completionCriteria,

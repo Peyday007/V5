@@ -16,6 +16,7 @@
  * sources is fenced and introduced as material to be used, which is the same
  * rule the ingestion pipeline applies: text found in a file is data.
  */
+import { describeLane } from '../../domain/evidenceLanes.ts';
 import type {
   ExistingClaim,
   Layer,
@@ -159,7 +160,13 @@ export function buildGoalPlanPrompt(input: {
       "necessity": "MANDATORY | SUPPORTING | OPTIONAL",
       "kind": "RESEARCH | DEFINITION | COMPARISON | CALCULATION | OTHER_LAYER | IMPLEMENTATION | EMPIRICAL_VALIDATION | TUNING | OPTIONAL_ENRICHMENT | IRRELEVANT",
       "rationale": "why the goal needs it",
-      "requiredEvidence": ["what kind of evidence would establish it"],
+      "requiredEvidence": [
+        {
+          "id": "operative_authority",
+          "description": "what kind of evidence would establish it",
+          "necessity": "REQUIRED"
+        }
+      ],
       "completionCriteria": ["how you know it is established"],
       "dependsOn": ["other-requirement-key"],
       "owningLayer": "for OTHER_LAYER only, which layer owns it"
@@ -184,7 +191,9 @@ function fragmentBrief(fragment: ResearchFragment): string {
     fragment.timeframe ? `TIMEFRAME: ${fragment.timeframe}` : null,
     fragment.population ? `POPULATION: ${fragment.population}` : null,
     fragment.definitions ? `DEFINITIONS: ${fragment.definitions}` : null,
-    `REQUIRED EVIDENCE LANES: ${fragment.requiredEvidence.join(' | ')}`,
+    // id, necessity and description, because the worker needs the id to tag a
+    // claim and the description to know what the lane is asking for.
+    `REQUIRED EVIDENCE LANES: ${fragment.requiredEvidence.map(describeLane).join(' | ')}`,
     `ACCEPTABLE SOURCES: ${fragment.acceptableSourceTypes.join(' | ')}`,
     fragment.excludedSourceTypes.length > 0
       ? `EXCLUDED SOURCES (do not cite these): ${fragment.excludedSourceTypes.join(' | ')}`

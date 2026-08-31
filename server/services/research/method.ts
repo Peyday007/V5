@@ -43,7 +43,7 @@
  */
 
 /** Bumped when the text changes, and recorded on the run that used it. */
-export const RESEARCH_METHOD_VERSION = '2026-08-31.1';
+export const RESEARCH_METHOD_VERSION = '2026-08-31.2';
 
 /**
  * The standing method, restored from the workflow that produced the archive's
@@ -85,10 +85,18 @@ excluded from the fragment's rejection rate. Inferring the content of a page you
 could not open is the one thing that would make this worse than saying nothing.
 
 ## Say which declared lane every claim fills
-Your assignment lists the fragment's evidence lanes as \`requiredEvidence\`. Set
-each claim's **\`evidence_lane\` to one of those strings, verbatim**. The gate asks
-per lane whether any accepted claim filled it, so an untagged claim answers
-nothing — however well sourced, verified and in scope it is.
+Each lane in your assignment has three parts: an **\`id\`** like
+\`operative_authority\`, a **\`description\`** saying what it is asking for, and a
+**\`necessity\`**. Set each claim's \`evidence_lane\` to a lane's **id** — never its
+description. The ids are listed on their own as \`evidenceLaneIds\`.
+
+The gate asks per lane whether any accepted claim carries its id, so an untagged
+claim answers nothing — however well sourced, verified and in scope it is.
+
+Only a **REQUIRED** lane failing blocks the fragment. A **CONDITIONAL** lane is a
+question that may have no answer — a regulator advisory, if one exists — and
+reporting honestly that nothing exists is a complete answer to it, not a
+failure. An **OPTIONAL** lane is enrichment.
 
 This applies to claims that could be accepted. A claim with no usable source, or
 one whose source you could not read, is still submitted **without** a lane and
@@ -127,7 +135,7 @@ that hides them. Name what is unresolved, and why.
 
 /** The compact form, for the MCP `instructions` field every client already reads. */
 export const RESEARCH_METHOD_SUMMARY =
-  'When you research: tag every claim with one of the fragment\'s declared requiredEvidence lanes in evidence_lane, verbatim, or the submission is refused whole before anything is stored; search broadly, then open full sources rather than quoting snippets; ' +
+  'When you research: set every claim\'s evidence_lane to one of the fragment\'s declared lane **ids** (never a description), or the submission is refused whole before anything is stored; search broadly, then open full sources rather than quoting snippets; ' +
   'prefer primary evidence and classify each source PRIMARY, SECONDARY or ANECDOTAL; when a ' +
   'source is paywalled, robots-blocked, JavaScript-only or unreachable, try an official ' +
   'alternative and, if it is still unreadable, submit the claim with its retrieval state set ' +

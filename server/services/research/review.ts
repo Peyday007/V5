@@ -18,6 +18,7 @@
  * afterwards, because a plan nobody can check is not a plan.
  */
 import type {
+  EvidenceLane,
   FragmentDependency,
   BoundaryContract,
   CoverageStatus,
@@ -255,7 +256,7 @@ export interface ReviewDecisions {
     statement: string;
     necessity?: 'MANDATORY' | 'SUPPORTING' | 'OPTIONAL';
     kind?: Requirement['kind'];
-    requiredEvidence?: string[];
+    requiredEvidence?: EvidenceLane[];
     completionCriteria?: string[];
   }[];
   /** Fragment keys the user does not want researched. */
@@ -346,7 +347,9 @@ export async function applyReviewDecisions(
         necessity: entry.necessity ?? 'MANDATORY',
         kind: entry.kind ?? 'RESEARCH',
         rationale: 'Added during review: you said the goal needs it.',
-        requiredEvidence: entry.requiredEvidence ?? ['a primary source that states it'],
+        requiredEvidence: entry.requiredEvidence ?? [
+          { id: 'primary_source', description: 'A primary source that states the answer directly.', necessity: 'REQUIRED' },
+        ],
         completionCriteria: entry.completionCriteria ?? [
           'a claim with a canonical source URL and the exact supporting passage',
         ],

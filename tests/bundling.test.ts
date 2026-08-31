@@ -53,7 +53,7 @@ function fragment(overrides: Partial<ResearchFragment> & { fragmentKey: string }
     timeframe: '2023',
     population: 'B2B firms',
     definitions: 'Outsourced SDR: an external firm booking qualified meetings.',
-    requiredEvidence: ['official statistics'],
+    requiredEvidence: [{ id: 'official_statistics', description: 'official statistics', necessity: 'REQUIRED' }],
     acceptableSourceTypes: ['government dataset', 'regulator publication'],
     excludedSourceTypes: [],
     completionCriteria: ['a figure with its definition'],

@@ -433,7 +433,13 @@ export async function planCoverageFragments(input: {
         requiredEvidence:
           requirement.requiredEvidence.length > 0
             ? requirement.requiredEvidence
-            : ['a primary source that states it'],
+            : [
+                {
+                  id: 'primary_source',
+                  description: 'A primary source that states the answer directly.',
+                  necessity: 'REQUIRED' as const,
+                },
+              ],
         acceptableSourceTypes: ['government statistics', 'regulatory filings', 'official registries'],
         excludedSourceTypes: ['vendor marketing pages', 'unattributed summaries'],
         completionCriteria:
@@ -444,7 +450,7 @@ export async function planCoverageFragments(input: {
         minIndependentSources: 2,
         status: 'QUEUED',
         requirementIds: [requirement.id],
-        evidenceLane: requirement.requiredEvidence[0] ?? 'primary source',
+        evidenceLane: requirement.requiredEvidence[0]?.id ?? 'primary_source',
         whyItMatters: requirement.rationale ?? requirement.statement,
         missingEvidence: check.detail,
         whyExistingInsufficient: `The packet failed this check before synthesis: ${check.check}.`,
