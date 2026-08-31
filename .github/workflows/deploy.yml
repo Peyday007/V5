@@ -134,10 +134,45 @@ jobs:
       # --ha=false, for the reason in fly.toml: the extraction and research
       # queues are per-instance and nothing coordinates two of them yet. Step 5
       # adds the claiming and leases that make a second machine safe.
+      #
+      # And a second attempt on Fly's own builder, because the first one is not
+      # Fly's. `--remote-only` routes the build to a Depot builder, and twice in
+      # three deploys that builder never completed its handshake:
+      #
+      #   Waiting for depot builder...
+      #   error releasing builder: deadline_exceeded: context deadline exceeded
+      #   Error: ... failed to list workers: Unavailable: connection error:
+      #   desc = "transport: authentication handshake failed: EOF"
+      #
+      # flyctl makes two five-minute attempts of its own and then gives up, so
+      # the failure has an exact ten-minute signature and says nothing about the
+      # commit being deployed. Falling back to `--depot=false` builds on a
+      # `fly-builder` machine in the app's own organisation instead — slower,
+      # and a machine that has to be provisioned, which is why it is the
+      # fallback rather than the default.
+      #
+      # The fallback is taken only for a builder failure. A build that fails
+      # because the code does not compile must fail here, once, rather than be
+      # compiled again somewhere else to fail identically.
       - name: Deploy
-        run: flyctl deploy --ha=false --remote-only
+        id: release
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -o pipefail
+          if flyctl deploy --ha=false --remote-only 2>&1 | tee deploy.txt; then
+            exit 0
+          fi
+          if ! grep -qiE 'depot builder|failed to list workers|authentication handshake failed|error releasing builder' deploy.txt; then
+            echo "::error::The deploy failed for a reason that is not the builder. Read the output above."
+            exit 1
+          fi
+          if ! flyctl deploy --help 2>&1 | grep -q -- '--depot'; then
+            echo "::error::The Depot builder never answered and this flyctl has no --depot flag to fall back to. Re-run the workflow."
+            exit 1
+          fi
+          echo "::warning::The Depot builder never answered. Building on Fly's own remote builder instead."
+          flyctl deploy --ha=false --remote-only --depot=false
 
       # When a deploy fails, say why here rather than sending somebody to a
       # dashboard.
@@ -277,8 +312,13 @@ jobs:
       # having: it is a real, unannounced restart of the production Brain, and
       # the checks below run against what came back. An account that did not
       # survive it would be found here rather than by somebody signing in.
+      # `always()` so a failed *verification* cannot leave a live password in
+      # the deployment store — but only once a release actually happened. When
+      # the build never produced an image there is nothing new running, and the
+      # rest of this job must keep its hands off a production machine that is
+      # serving the previous version perfectly well.
       - name: Spend the bootstrap secrets
-        if: always()
+        if: always() && steps.release.outcome == 'success'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -311,7 +351,7 @@ jobs:
       # The process that created them is gone, so nothing in the container can
       # fake that.
       - name: Restart it, so persistence means something
-        if: always()
+        if: always() && steps.release.outcome == 'success'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -319,7 +359,7 @@ jobs:
           flyctl apps restart "$app"
 
       - name: Wait for it to answer after the restart
-        if: always()
+        if: always() && steps.release.outcome == 'success'
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           for attempt in $(seq 1 30); do
@@ -382,13 +422,27 @@ jobs:
           set -e
           grep -q '^GAP-POLICY: OK' gap-policy.txt
 
+      # The release is asked about first, and separately.
+      #
+      # When the builder failed, every step that could have proven anything was
+      # skipped, and this step reported "the hosted verification did not pass" —
+      # true, useless, and pointing at the wrong steps. Worse, the restart above
+      # used to run anyway, so the machine came back healthy on the *previous*
+      # image and the site looked entirely fine while running stale code. A red
+      # run nobody can read is how that gets missed.
       - name: The verdict
         if: always()
         run: |
+          release='${{ steps.release.outcome }}'
           before='${{ steps.hosted.outcome }}'
           after='${{ steps.hosted_after.outcome }}'
+          echo "release:             $release"
           echo "hosted verification: $before"
           echo "after the restart:   $after"
+          if [ "$release" != "success" ]; then
+            echo "::error::No new image was released, so nothing in this commit is live and the app is still serving the previous version. Read the Deploy step; the checks below it were skipped on purpose."
+            exit 1
+          fi
           if [ "$before" != "success" ] || [ "$after" != "success" ]; then
             echo "::error::The hosted verification did not pass. Read the two steps above."
             exit 1
