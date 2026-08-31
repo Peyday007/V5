@@ -836,7 +836,16 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
         question: 'Does the deployed Brain record a claim, gate it, and file the result?',
         geography: 'Not applicable',
         timeframe: '2026',
-        required_evidence: ['a supplied fixture claim'],
+        // Declared in full: a short stable id, the sentence that says what the
+        // lane is asking for, and how much its absence costs. The id is what a
+        // claim carries; the description is what a reader is shown.
+        required_evidence: [
+          {
+            id: 'supplied_fixture',
+            description: 'A claim supplied by this verification fixture rather than researched.',
+            necessity: 'REQUIRED',
+          },
+        ],
         acceptable_source_types: ['verification fixture'],
         completion_criteria: ['one claim recorded, gated and cited in a filed report'],
         min_independent_sources: 1,
@@ -889,6 +898,59 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
   }
   record('approval queues the research', true, fragmentClaim.workItemId);
 
+  // -------------------------------------------------------------------
+  // A lane is an id, and a wrong one costs nothing
+  // -------------------------------------------------------------------
+  //
+  // The packet that reached NEEDS_HUMAN did so because every claim arrived
+  // with no lane, both attempts were spent on the metadata rather than on the
+  // research, and 56 sourced claims were stranded behind a field. So the
+  // refusal is proven here the same way everything else in this file is:
+  // against the deployment, over the internet, before the real submission.
+  //
+  // The description is the tempting wrong answer — it is the human-readable
+  // half of the same lane, and it is what an earlier version of this very
+  // script sent. It must be refused, and the refusal must cost nothing.
+  const beforeRefusal = (await currentFragments(orchestrationId)).find(
+    (fragment) => fragment.id === planned[0]!.id,
+  );
+  const proseLane = await worker.callTool('brain_submit_claims', {
+    ...proofOf(fragmentClaim),
+    claims: [
+      {
+        claim: 'A claim labelled with the lane\'s description rather than its id.',
+        claim_type: 'SOURCED_FACT',
+        source_url: 'https://example.invalid/hosted-verification-fixture',
+        evidence_excerpt: 'Supplied by the verification script rather than researched.',
+        evidence_locator: 'fixture',
+        evidence_lane: 'A claim supplied by this verification fixture rather than researched.',
+        confidence: 0.9,
+      },
+    ],
+  });
+  record(
+    'a claim labelled with a lane description rather than its id is refused',
+    proseLane.result?.isError === true,
+    proseLane.result?.isError === true ? 'isError true' : 'accepted, which it must not be',
+  );
+  const afterRefusal = (await currentFragments(orchestrationId)).find(
+    (fragment) => fragment.id === planned[0]!.id,
+  );
+  record(
+    'and the refusal stored nothing',
+    (await listClaimsForFragment(planned[0]!.id)).length === 0,
+    `${(await listClaimsForFragment(planned[0]!.id)).length} claim(s) stored`,
+  );
+  record(
+    'and spent no attempt, so the same work item can still be submitted to',
+    Boolean(beforeRefusal) &&
+      Boolean(afterRefusal) &&
+      afterRefusal!.attempt === beforeRefusal!.attempt &&
+      afterRefusal!.status === beforeRefusal!.status,
+    `attempt ${String(beforeRefusal?.attempt)} -> ${String(afterRefusal?.attempt)}, ` +
+      `status ${String(beforeRefusal?.status)} -> ${String(afterRefusal?.status)}`,
+  );
+
   await worker.call('brain_submit_claims', {
     ...proofOf(fragmentClaim),
     claims: [
@@ -901,7 +963,7 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
         source_date: '2026-01-01',
         evidence_excerpt: 'Supplied by the verification script rather than researched.',
         evidence_locator: 'fixture',
-        evidence_lane: 'a supplied fixture claim',
+        evidence_lane: 'supplied_fixture',
         retrieved_at: '2026-01-01',
         confidence: 0.9,
         primary_source: true,
