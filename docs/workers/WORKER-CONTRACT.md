@@ -314,7 +314,7 @@ how to go about answering one, so the first live packet was researched with
 whatever method the session happened to bring.
 
 **This section is generated from `server/services/research/method.ts`, version
-`2026-08-30.1`, and a test fails if the two disagree.** That matters because the
+`2026-08-31.1`, and a test fails if the two disagree.** That matters because the
 constant is what a worker actually receives at runtime — abridged in the MCP
 `instructions` field every client reads at connect, and in full from
 `brain_research_method`, which you can call before you start. A method written
@@ -345,6 +345,24 @@ do not substitute a source you did not read. A claim you could not check is not
 a claim you got wrong: it is recorded as unresolved, named in the report, and
 excluded from the fragment's rejection rate. Inferring the content of a page you
 could not open is the one thing that would make this worse than saying nothing.
+
+### Say which declared lane every claim fills
+Your assignment lists the fragment's evidence lanes as `requiredEvidence`. Set
+each claim's **`evidence_lane` to one of those strings, verbatim**. The gate asks
+per lane whether any accepted claim filled it, so an untagged claim answers
+nothing — however well sourced, verified and in scope it is.
+
+This applies to claims that could be accepted. A claim with no usable source, or
+one whose source you could not read, is still submitted **without** a lane and
+is still kept — recorded as unsourced or unresolved rather than dropped. It
+fills no lane either way.
+
+A submission with a missing or undeclared lane is refused whole, before anything
+is stored and without spending your attempt: fix the field and submit the same
+claims again on the same work item. If a claim fills none of the declared lanes
+it does not belong to this fragment — leave it out and use
+`brain_report_blocker` to say the fragment needs a lane it does not have, rather
+than labelling it with a lane it does not fill.
 
 ### State uncertainty explicitly
 Submit what you actually found, including what you could not source. Everything

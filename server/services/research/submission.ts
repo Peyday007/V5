@@ -98,6 +98,12 @@ export async function recordFragmentClaims(input: {
         evidenceExcerpt: claim.evidenceExcerpt ?? null,
         evidenceLocator: claim.evidenceLocator ?? null,
         evidenceLane: claim.evidenceLane ?? null,
+        // Carried through rather than defaulted here. This mapper dropped it,
+        // so every claim landed RETRIEVED however the worker had marked it —
+        // and a claim whose source nobody could open was then judged as though
+        // somebody had read it. The gate's whole unresolved-retrieval path was
+        // unreachable from the worker path because of this one missing line.
+        retrievalState: claim.retrievalState ?? 'RETRIEVED',
         retrievedAt: claim.retrievedAt ?? null,
         confidence: claim.confidence,
         validationState: validated.validationState,

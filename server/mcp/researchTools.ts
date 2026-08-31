@@ -68,6 +68,7 @@ import {
 import { recomputeProject } from '../services/stateEngine.ts';
 import { AUDIT_ROLES, type AuditRole } from '../services/queue/workTypes.ts';
 import { assignmentFor } from '../services/research/assignment.ts';
+import { explainLaneProblems, laneProblems } from '../services/research/lanes.ts';
 import { coverProposal, whyNotResearched } from '../services/research/coverageGate.ts';
 import { planDependencies } from '../services/research/splitting.ts';
 import {
@@ -856,7 +857,14 @@ const submitClaimsTool: McpTool = {
             source_date: { type: 'string' },
             evidence_excerpt: { type: 'string', description: 'The passage, quoted.' },
             evidence_locator: { type: 'string', description: 'Page, section, table.' },
-            evidence_lane: { type: 'string', description: 'Which required lane this fills.' },
+            evidence_lane: {
+              type: 'string',
+              description:
+                'Required. Which of this fragment\'s declared evidence lanes the claim fills — ' +
+                'exactly one of the strings brain_get_assignment returns as `requiredEvidence`, ' +
+                'verbatim. The gate asks per lane whether any accepted claim filled it, so an ' +
+                'untagged claim cannot answer the question it was found for, however good it is.',
+            },
             retrieval_state: {
               type: 'string',
               enum: [...RETRIEVAL_STATES],
@@ -874,6 +882,13 @@ const submitClaimsTool: McpTool = {
             derived: { type: 'boolean' },
             derived_from: { type: 'array', items: { type: 'string' } },
           },
+          // Not `evidence_lane`: a claim with no usable source, or one whose
+          // source could not be read, is submitted deliberately without a lane
+          // and must still be accepted into the ledger. Which claims must carry
+          // one is a judgement about the claim rather than a shape, so it is
+          // made in `lanes.ts` against the same `validateClaim` that decides
+          // what counts as sourced, and refused there with a message that can
+          // explain itself.
           required: ['claim'],
           additionalProperties: false,
         },
@@ -921,6 +936,24 @@ const submitClaimsTool: McpTool = {
         derivedFrom: strList(row, 'derived_from', where),
       };
     });
+
+    /**
+     * The lanes, before anything is stored.
+     *
+     * Deliberately outside `idempotentEffect`, and that placement is the whole
+     * point of item 5: nothing is written, no pass is recorded, the fragment
+     * stays QUEUED, and the idempotency scope for this work item is never
+     * opened — so the worker fixes the field and submits the same claims again
+     * on the same item. A metadata requirement Brain failed to state must not
+     * be able to spend a research attempt.
+     *
+     * The first fresh acceptance packet spent ten of them that way: five
+     * fragments, two attempts each, 56 claims that passed integrity and scope
+     * matching, and not one lane covered because the field was optional and
+     * absent read as null.
+     */
+    const problems = laneProblems(fragment, claims);
+    if (problems.length > 0) throw invalidInput(explainLaneProblems(fragment, problems));
 
     const outcome = await idempotentEffect(
       {

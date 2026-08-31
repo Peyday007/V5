@@ -27,6 +27,7 @@ import {
   currentFragments,
   getOrchestration,
   listClaims,
+  listClaimsForFragment,
   listPasses,
 } from '../server/repos/research.ts';
 import { listCoverage, listRequirements } from '../server/repos/reconciliation.ts';
@@ -110,6 +111,36 @@ async function main(): Promise<void> {
         ` integrity ${fragment.integrityVerdict ?? '—'}` +
         ` sufficiency ${fragment.sufficiencyVerdict ?? '—'}`,
     );
+    /**
+     * The lanes, and how the claims are tagged against them.
+     *
+     * A fragment can hold accepted, sourced, verified, in-scope claims and
+     * still fail its coverage check on a missing `evidence_lane` — which is
+     * how the first fresh acceptance packet spent ten research attempts and
+     * produced no document. Nothing in this report could see it: the fragment
+     * line said `sufficiency INSUFFICIENT` and the claims all looked fine.
+     *
+     * So the two things that decide coverage are printed side by side: which
+     * lanes the fragment declared, and what its accepted claims actually claim
+     * to fill. `untagged` is the number this exists to make visible.
+     */
+    const mine = await listClaimsForFragment(fragment.id);
+    const accepted = mine.filter((claim) => claim.accepted);
+    const tally = new Map<string, number>();
+    for (const claim of accepted) {
+      const key = claim.evidenceLane ?? '(untagged)';
+      tally.set(key, (tally.get(key) ?? 0) + 1);
+    }
+    console.log(
+      `      lanes     declared [${fragment.requiredEvidence.join(', ')}]` +
+        `  claims ${mine.length} (${accepted.length} accepted)` +
+        `  untagged ${accepted.filter((claim) => !claim.evidenceLane).length}`,
+    );
+    if (tally.size > 0) {
+      console.log(
+        `      tagged    ${[...tally.entries()].map(([lane, n]) => `${lane}×${n}`).join(', ')}`,
+      );
+    }
     if (fragment.blockedReason) console.log(`      because   ${trim(fragment.blockedReason)}`);
   }
 

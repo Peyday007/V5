@@ -162,6 +162,55 @@ describe('a repair plan', () => {
     expect(text).toMatch(/2 attempts remain/);
   });
 
+  /**
+   * The failure the first fresh acceptance packet was told it had, and did not.
+   *
+   * Five fragments returned claims that were sourced, verified, in scope and
+   * accepted, and every declared lane read empty because none of them carried
+   * an `evidence_lane`. The plan said "No accepted evidence in: statute" — so
+   * the repair went looking for a statute the fragment had already quoted,
+   * spent the attempt, and failed identically.
+   *
+   * A plan that misdiagnoses is worse than no plan: it converts a free
+   * correction into a spent research attempt.
+   */
+  it('says the evidence is unlabelled, not missing, when that is what happened', () => {
+    const plan = buildRepairPlan({
+      fragment: fragment({ requiredEvidence: ['statute'] }),
+      gate: gate({
+        coverage: [{ lane: 'statute', acceptedClaims: 0, independentSources: 0, meetsThreshold: false }],
+      }),
+      history: [fragment()],
+      claims: [
+        claim({ accepted: true, evidenceLane: null }),
+        claim({ id: 'clm_2', accepted: true, evidenceLane: null }),
+      ],
+      splitRequired: false,
+      remainingBudget: 2,
+    });
+
+    expect(plan.missingEvidence).toMatch(/carry no evidence lane/i);
+    expect(plan.missingEvidence).toMatch(/not missing — it is unlabelled/i);
+    expect(plan.missingEvidence).toContain('statute');
+  });
+
+  it('still says the evidence is missing when the lane is genuinely empty', () => {
+    const plan = buildRepairPlan({
+      fragment: fragment({ requiredEvidence: ['statute'] }),
+      gate: gate({
+        coverage: [{ lane: 'statute', acceptedClaims: 0, independentSources: 0, meetsThreshold: false }],
+      }),
+      history: [fragment()],
+      // Tagged, and rejected — so the lane really has nothing in it.
+      claims: [claim({ accepted: false, evidenceLane: 'statute' })],
+      splitRequired: false,
+      remainingBudget: 2,
+    });
+
+    expect(plan.missingEvidence).toMatch(/no accepted evidence in: statute/i);
+    expect(plan.missingEvidence).not.toMatch(/unlabelled/i);
+  });
+
   it('takes its alternative terminology from what the sources actually said', () => {
     const plan = buildRepairPlan({
       fragment: fragment({ question: 'How many people work in the occupation?' }),

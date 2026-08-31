@@ -20,6 +20,7 @@ import type {
   ResearchFragment,
 } from '../../domain/types.ts';
 import type { GateResult } from './gate.ts';
+import { untaggedAccepted } from './lanes.ts';
 
 /**
  * What to try, in the order it is worth trying.
@@ -229,6 +230,23 @@ export function buildRepairPlan(input: BuildRepairPlanInput): RepairPlan {
     .map((claim) => ({ claim: claim.claim, why: claim.rejectionReason ?? 'rejected by the gate' }));
 
   const missingLanes = gate.coverage.filter((lane) => !lane.meetsThreshold).map((lane) => lane.lane);
+  /**
+   * Lanes empty because nothing was *tagged* are a different failure from
+   * lanes empty because nothing was found, and the plan has to say which.
+   *
+   * The first fresh acceptance packet failed on the first and was told the
+   * second: "No accepted evidence in: statute", when the statute had been
+   * quoted, sourced, verified and accepted, and simply not labelled. So the
+   * repair went looking for evidence the fragment already held, spent the
+   * attempt, and produced the same result. A repair aimed at the wrong failure
+   * is worse than no repair.
+   *
+   * `brain_submit_claims` now refuses an untagged claim outright, so this
+   * cannot arise from a new run. It stays because a packet from before that
+   * refusal can still be repaired, and because a plan that misdiagnoses is the
+   * kind of thing that should be impossible rather than fixed once.
+   */
+  const untagged = untaggedAccepted(input.claims);
   const contested = input.claims.find(
     (claim) => claim.contradictionState === 'CONTESTED' || claim.contradictionState === 'REFUTED',
   );
@@ -237,7 +255,13 @@ export function buildRepairPlan(input: BuildRepairPlanInput): RepairPlan {
     failedRequirement: fragment.missingEvidence ?? fragment.question,
     affectedClaims: rejected.slice(0, 20),
     missingEvidence:
-      missingLanes.length > 0
+      missingLanes.length > 0 && untagged > 0
+        ? `${untagged} accepted claim(s) carry no evidence lane, so ${missingLanes.length} ` +
+          `declared lane(s) read as empty: ${missingLanes.join(', ')}. The evidence is not ` +
+          'missing — it is unlabelled. Resubmit the same claims with "evidence_lane" set to one ' +
+          'of the fragment\'s declared lanes, and search further only for a lane that genuinely ' +
+          'has nothing in it.'
+        : missingLanes.length > 0
         ? `No accepted evidence in: ${missingLanes.join(', ')}.`
         : gate.independentSources < fragment.minIndependentSources
           ? `Corroboration is missing: the accepted evidence rests on ${gate.independentSources} ` +

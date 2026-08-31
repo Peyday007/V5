@@ -1207,6 +1207,156 @@ describe('a research gap that is genuinely exhausted', () => {
   });
 });
 
+describe('the evidence lane a claim fills', () => {
+  /**
+   * The fault the first fresh acceptance packet died of, and it is not the
+   * worker's.
+   *
+   * All five states were researched, repaired and re-researched: 5 research
+   * items, 5 verifications, 5 repairs, 5 more verifications, 56 claims, every
+   * one passing integrity and scope matching. Not one fragment became
+   * SUFFICIENT, because `evidence_lane` was optional, absent read as null, and
+   * the gate matches a lane by exact string. Ten research attempts bought
+   * nothing, and the packet reached NEEDS_HUMAN with no document.
+   *
+   * A field the Brain requires and did not insist on is the Brain's fault, and
+   * it must not be able to spend a worker's attempt.
+   */
+  async function researching(): Promise<{
+    orchestration: ResearchOrchestration;
+    fragment: ResearchFragment;
+    work: ClaimedWork;
+  }> {
+    const orchestration = await makeOrchestration();
+    const fragment = await makeFragment(orchestration, { requiredEvidence: ['statute'] });
+    return {
+      orchestration,
+      fragment,
+      work: await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment),
+    };
+  }
+
+  it('refuses a claim with no lane, before anything is stored', async () => {
+    const { fragment, work } = await researching();
+    const { evidence_lane: _omitted, ...untagged } = SOURCED;
+
+    const refusal = await call('brain_submit_claims', { ...proof(work), claims: [untagged] })
+      .then(() => null)
+      .catch((error: unknown) => error as Error);
+
+    expect(refusal).toBeTruthy();
+    // The message has to teach: it names the lanes this fragment declared,
+    // because the worker's next move is to set one of them.
+    expect(refusal!.message).toContain('statute');
+    expect(refusal!.message).toContain('evidence_lane');
+
+    // And nothing happened. No claim, no pass, and the fragment is still
+    // QUEUED — so the same work item can carry the corrected submission.
+    expect(await listClaimsForFragment(fragment.id)).toHaveLength(0);
+    const after = await getFragment(fragment.id);
+    expect(after?.status).toBe('QUEUED');
+    expect(after?.attempt).toBe(1);
+  });
+
+  it('refuses a lane the fragment never declared, and says which it has', async () => {
+    const { fragment, work } = await researching();
+
+    const refusal = await call('brain_submit_claims', {
+      ...proof(work),
+      claims: [{ ...SOURCED, evidence_lane: 'regulator guidance' }],
+    })
+      .then(() => null)
+      .catch((error: unknown) => error as Error);
+
+    expect(refusal).toBeTruthy();
+    expect(refusal!.message).toContain('regulator guidance');
+    expect(refusal!.message).toContain('"statute"');
+    expect(await listClaimsForFragment(fragment.id)).toHaveLength(0);
+    expect((await getFragment(fragment.id))?.status).toBe('QUEUED');
+  });
+
+  /**
+   * And the claims the rule must *not* reach.
+   *
+   * Writing this rule broke a truthfulness control on the first attempt, which
+   * is how the exemption was found: requiring a lane on every claim would have
+   * refused a submission carrying an unsourced one, and the worker's cheapest
+   * way out of that refusal is to drop the claim — exactly what "keep an
+   * unsourced claim, marked, rather than dropping it" exists to prevent.
+   *
+   * A lane is a statement about coverage, and coverage counts accepted claims.
+   * A claim that cannot be accepted cannot fill a lane, so demanding one buys
+   * nothing and creates a reason to leave the claim out.
+   */
+  it('does not demand a lane from a claim that could never be accepted', async () => {
+    const { fragment, work } = await researching();
+
+    await call('brain_submit_claims', {
+      ...proof(work),
+      claims: [
+        SOURCED,
+        // No source at all: kept, marked, and no lane asked for.
+        { claim: 'Most states probably require one.', confidence: 0.4 },
+        // A source that could not be read: recorded as unresolved, same rule.
+        {
+          ...SOURCED,
+          claim: 'The regulator publishes guidance behind a paywall.',
+          evidence_lane: undefined,
+          retrieval_state: 'PAYWALLED',
+        },
+      ],
+    });
+
+    const stored = await listClaimsForFragment(fragment.id);
+    expect(stored).toHaveLength(3);
+    expect(stored.filter((claim) => !claim.sourced)).toHaveLength(1);
+    expect(stored.filter((claim) => claim.retrievalState !== 'RETRIEVED')).toHaveLength(1);
+    // The one that could be accepted carries its lane; the other two do not
+    // need one and were not dropped to get past the check.
+    expect(stored.filter((claim) => claim.evidenceLane === 'statute')).toHaveLength(1);
+  });
+
+  /**
+   * The point of refusing early rather than at the gate: the attempt survives.
+   *
+   * A refused submission has to be re-submittable on the *same* work item —
+   * otherwise the correction costs a repair, which is the cost this whole fix
+   * exists to remove.
+   */
+  it('lets the same item carry the corrected submission, and then covers the lane', async () => {
+    const { orchestration, fragment, work } = await researching();
+    const { evidence_lane: _omitted, ...untagged } = SOURCED;
+    await expect(
+      call('brain_submit_claims', { ...proof(work), claims: [untagged] }),
+    ).rejects.toBeTruthy();
+
+    // Same item, same lease, corrected field.
+    await call('brain_submit_claims', { ...proof(work), claims: [SOURCED] });
+
+    const claims = await listClaimsForFragment(fragment.id);
+    expect(claims).toHaveLength(1);
+    expect(claims[0]!.evidenceLane).toBe('statute');
+    expect((await getFragment(fragment.id))?.status).toBe('VALIDATING');
+    expect((await getFragment(fragment.id))?.attempt).toBe(1);
+
+    // And the lane the gate asks about is now filled: verification accepts it
+    // and the fragment reaches ACCEPTED rather than blocking on coverage.
+    await call('brain_complete_work', { ...proof(work), summary: 'claims in' });
+    const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+    await call('brain_submit_verification', {
+      ...proof(verify),
+      verdicts: [{ claim_id: claims[0]!.id, supports_claim: true, ...MATCHES, note: 'It says so.' }],
+      sufficiency: 'SUFFICIENT',
+    });
+    await call('brain_complete_work', { ...proof(verify), summary: 'verified' });
+
+    const gated = await getFragment(fragment.id);
+    expect(gated?.integrityVerdict).toBe('PASS');
+    expect(gated?.sufficiencyVerdict).toBe('SUFFICIENT');
+    expect(gated?.status).toBe('ACCEPTED');
+  });
+});
+
 describe('the empty-queue invariant', () => {
   /**
    * The state that cost the live packet a day, and the one nothing tested.

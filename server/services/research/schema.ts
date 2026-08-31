@@ -23,6 +23,7 @@ import {
   type RequirementKind,
   type RequirementNecessity,
   type SufficiencyVerdict,
+  type RetrievalState,
 } from '../../domain/types.ts';
 import {
   booleanField,
@@ -506,6 +507,16 @@ export interface ParsedClaim {
   retrievedAt: string | null;
   confidence: number;
   evidenceLane: string | null;
+  /**
+   * Whether the worker could actually read the source.
+   *
+   * Optional here because the in-process research passes do not set it — a
+   * scripted provider has no retrieval to fail — and absent means RETRIEVED.
+   * The worker path does set it, and it has to survive the trip to storage:
+   * a claim marked PAYWALLED that lands as RETRIEVED is judged as though
+   * somebody had read the page, which is the opposite of what marking it says.
+   */
+  retrievalState?: RetrievalState;
   derived: boolean;
   derivedFrom: string[];
 }
