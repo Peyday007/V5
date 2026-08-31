@@ -211,11 +211,70 @@ project (Deal Dispatch), same layer (Monetization Logic), same archive, same
 evidence bar. Only the engine differs. A narrower question would be a packet
 that answered something easier than the one that beat it.
 
-> In California, Texas, Florida, New York and Illinois, does a person who
-> arranges the sale of a privately held business for a success fee need a
-> real-estate broker or business-broker licence when the transaction transfers
-> no real property and no lease interest — and what is the exact statutory or
-> regulatory provision that settles it in each state?
+### Where the control is
+
+`/operator` is one long page. The packet form is **four cards below Workers** —
+scroll, or find it with your browser's find-on-page. Three fields and a button:
+
+| Field | What goes in it |
+|---|---|
+| **Layer this answers for** | `Deal Dispatch — Monetization Logic` |
+| **Title** | `Licensure of success-fee business brokerage in five states` |
+| **The assignment** | the text below, whole |
+| **Plan it** | the button |
+
+It queues one planning job and stops. Nothing is researched and nothing is
+spent until you have read the plan and approved it.
+
+### The assignment, to paste whole
+
+The boundaries are part of it, not preamble. They become each fragment's
+evidence bar, and the plan is refused rather than accepted loosely if a
+fragment has no declared scope — so pasting only the question would produce a
+worse packet than the one this is meant to beat.
+
+```text
+In California, Texas, Florida, New York and Illinois, does a person who
+arranges the sale of a privately held business for a success fee need a
+real-estate broker or business-broker licence when the transaction transfers no
+real property and no lease interest — and what is the exact statutory or
+regulatory provision that settles it in each state?
+
+Geography: the states of California, Texas, Florida, New York and Illinois,
+United States. State law only.
+
+Timeframe: the law in force as at 2026.
+
+Population: a natural person or firm that introduces a buyer to a seller and is
+compensated by a fee contingent on closing, acting as an intermediary rather
+than as a principal.
+
+Definitions: "arranges" means introducing, negotiating or otherwise procuring a
+purchaser, whether or not the person signs anything. "Success fee" means
+compensation contingent on the transaction closing. "No real property" means
+the transaction transfers no fee interest and no lease interest in land,
+including no assignment of premises; a sale that includes any real property or
+leasehold falls outside this question.
+
+What counts as done: for each of the five states, a yes or no on whether a
+licence is required, resolving to the exact statute section or regulator
+provision that settles it, quoted at the passage relied on. A state whose answer
+is genuinely unsettled is reported as unsettled, with the search that
+establishes that, rather than answered by inference.
+
+Acceptable sources: the statute or regulation itself, and the licensing
+regulator's own published guidance. Excluded: law-firm summaries, brokerage
+marketing pages, unattributed articles and search-result snippets. A state
+answered from a secondary summary rather than the provision itself is a
+failure, not a thin answer.
+
+Out of scope: transactions that include real property or a lease interest;
+whether the interests sold are securities, and federal securities law
+generally; tax treatment; and any jurisdiction other than the five named.
+
+This is research, not legal advice. Nothing depends on it before a person has
+read it.
+```
 
 **Pause every recurring Cowork schedule first.** The hourly task from Step 9 was
 authorized only to finish that packet, and that packet is terminal. A second
