@@ -10,6 +10,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
+import { isLaneId } from '../server/domain/evidenceLanes.ts';
 import { importFile } from '../server/services/importer.ts';
 import { whenExtractionIdle } from '../server/services/documents/queue.ts';
 import { createRun } from '../server/repos/runs.ts';
@@ -620,6 +621,12 @@ describe('replanning after evidence lands', () => {
     expect(resolution).toHaveLength(1);
     expect(resolution[0]!.contradictionTargets).toHaveLength(2);
     expect(resolution[0]!.minIndependentSources).toBe(3);
+    // Its lane is the id of the lane it declares, not the sentence beside it.
+    // `splitting.ts` inherits this column, so prose here would become a child
+    // fragment's lane id — one no claim could ever legally carry.
+    expect(resolution[0]!.requiredEvidence.map((lane) => lane.id)).toEqual(['resolving_source']);
+    expect(resolution[0]!.evidenceLane).toBe('resolving_source');
+    expect(isLaneId(resolution[0]!.evidenceLane!)).toBe(true);
     // It runs before ordinary evidence work, because everything built on either
     // claim is unsafe until it is settled.
     expect(resolution[0]!.priority).toBe(PRIORITY_TIERS.indexOf('CONTRADICTION_RESOLUTION') + 1);

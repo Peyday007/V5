@@ -466,7 +466,10 @@ export async function planFragmentsFromGaps(input: {
       minIndependentSources: 1,
       status: 'QUEUED' as const,
       requirementIds: [],
-      evidenceLane: 'authoritative definition',
+      // The id of the lane declared just above, not a prose restatement of it.
+      // `splitting.ts` falls back to this column when a child fragment has no
+      // lane of its own, so a sentence here would become a child's lane id.
+      evidenceLane: 'authoritative_definition',
       whyItMatters: ambiguity.why,
       missingEvidence: ambiguity.question,
       whyExistingInsufficient:

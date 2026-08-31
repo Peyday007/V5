@@ -12,7 +12,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
-import type { BoundaryContract, Requirement } from '../server/domain/types.ts';
+import type { BoundaryContract, Requirement, ResearchFragment } from '../server/domain/types.ts';
+import { isLaneId, laneIds } from '../server/domain/evidenceLanes.ts';
 import { importFile } from '../server/services/importer.ts';
 import { whenExtractionIdle } from '../server/services/documents/queue.ts';
 import { updateDocument } from '../server/repos/documents.ts';
@@ -36,6 +37,31 @@ import { PRIORITY_TIERS } from '../server/services/research/quota.ts';
 
 let fixture: TestProject;
 let orchestrationId: string;
+
+/**
+ * Every lane a planner declares is an id with a description beside it, and a
+ * fragment's own lane label is one of the ids it declared.
+ *
+ * The second half is not decoration. `splitting.ts` falls back to
+ * `fragment.evidenceLane` when a child fragment has no lane of its own, so a
+ * sentence in that column becomes a child's lane id — and a claim can then
+ * never carry it, because the tool refuses anything that is not id-shaped.
+ * Two planner paths declared `authoritative_definition` and `resolving_source`
+ * properly and then wrote the prose beside them into this column.
+ */
+function expectLanesAreIds(fragments: ResearchFragment[]): void {
+  for (const fragment of fragments) {
+    for (const lane of fragment.requiredEvidence) {
+      expect(isLaneId(lane.id)).toBe(true);
+      expect(lane.description.trim().length).toBeGreaterThan(0);
+      expect(lane.description).not.toBe(lane.id);
+    }
+    if (fragment.evidenceLane !== null) {
+      expect(isLaneId(fragment.evidenceLane)).toBe(true);
+      expect(laneIds(fragment.requiredEvidence)).toContain(fragment.evidenceLane);
+    }
+  }
+}
 
 /** An orchestration to hang requirements and coverage off. */
 async function newAssignment(): Promise<string> {
@@ -403,6 +429,7 @@ describe('fragments are created only for genuine gaps', () => {
     const fragments = await planFragmentsFromGaps({ orchestrationId, reconciliation: result });
 
     expect(fragments).toHaveLength(1);
+    expectLanesAreIds(fragments);
     const fragment = fragments[0]!;
     expect(fragment.requirementIds).toHaveLength(1);
     expect(fragment.whyExistingInsufficient).toMatch(/nothing in the project/i);
@@ -507,6 +534,8 @@ describe('fragments are created only for genuine gaps', () => {
 
     const boundary = fragments.find((fragment) => fragment.fragmentKey.startsWith('boundary-'));
     expect(boundary).toBeTruthy();
+    expectLanesAreIds(fragments);
+    expect(boundary!.evidenceLane).toBe('authoritative_definition');
     // A boundary question runs before everything it would scope.
     expect(boundary!.priority).toBe(PRIORITY_TIERS.indexOf('BOUNDARY_AND_DEFINITION') + 1);
     expect(boundary!.priority).toBe(1);

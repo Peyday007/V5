@@ -441,7 +441,8 @@ export async function planContradictionFragments(input: {
       minIndependentSources: 3,
       status: 'QUEUED',
       requirementIds: input.parent.requirementIds,
-      evidenceLane: 'contradiction resolution',
+      // The declared lane's id, for the reason in plan.ts.
+      evidenceLane: 'resolving_source',
       whyItMatters:
         'Two claims on the same scope cannot both be right, and everything built on either of ' +
         'them is unsafe until it is settled.',
