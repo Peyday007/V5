@@ -141,6 +141,30 @@ async function main(): Promise<void> {
         `      tagged    ${[...tally.entries()].map(([lane, n]) => `${lane}×${n}`).join(', ')}`,
       );
     }
+    /**
+     * Why the rejected claims were rejected, grouped.
+     *
+     * A fragment reading `integrity PASS` with nothing accepted is not a
+     * contradiction — integrity is about the claims that survived, and it is
+     * vacuously true when none did — but it means the fragment line alone
+     * cannot tell "the evidence was good and unlabelled" from "every claim was
+     * refused". Those need completely different responses, and the first fresh
+     * acceptance packet looked like the first and may be the second.
+     */
+    const refused = mine.filter((claim) => !claim.accepted && claim.rejectionReason);
+    if (refused.length > 0) {
+      const reasons = new Map<string, number>();
+      for (const claim of refused) {
+        const key = trim(claim.rejectionReason, 72);
+        reasons.set(key, (reasons.get(key) ?? 0) + 1);
+      }
+      for (const [reason, n] of [...reasons.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)) {
+        console.log(`      rejected  ${String(n).padStart(3)} × ${reason}`);
+      }
+    }
+    // And the lanes as declared, in full — they are matched by exact string, so
+    // their exact text is the contract a worker has to reproduce.
+    for (const lane of fragment.requiredEvidence) console.log(`      lane      "${lane}"`);
     if (fragment.blockedReason) console.log(`      because   ${trim(fragment.blockedReason)}`);
   }
 
