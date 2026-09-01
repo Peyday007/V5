@@ -272,7 +272,7 @@ is what is under test, so the harness's only actions are create and read.
 
 ---
 
-## Two findings about measurement itself
+## Findings about measurement itself
 
 ### A competing schedule was draining the acceptance bins
 
@@ -288,6 +288,32 @@ as closure evidence, and any bin it drains is a bin Brain did not activate.
 With it disabled there is **no other activation source**, which is what makes
 the acceptance argument clean: nobody presses anything, and a bin still goes
 from `READY` to `COMPLETE`.
+
+### A fired activation that never arrives is not retried
+
+Found while reasoning about the fix above, not yet fixed, and recorded rather
+than built speculatively.
+
+An intent goes `PENDING → SENDING → SENT`. Once `SENT`, nothing revisits it. If
+the activation Brain fired never produces a worker — exactly what is happening
+right now, because fired sessions stall at a permission prompt — the bin keeps
+its `SENT` intent at that generation, and `ensureDispatchIntent` cannot make
+another one because the unique key `(bin_id, lease_generation)` already holds
+it. Brain fires once and then waits forever.
+
+It is not a permanent strand, and the reason is worth stating because it is what
+makes leaving it defensible for now: the bin stays dispatchable, so **any**
+worker that checks in takes it, and the permanent instructions tell every worker
+to ask for another bin after finishing one. The fleet self-heals as long as
+something succeeds. What it cannot do is recover from being *entirely* idle with
+one stranded bin.
+
+The fix has a shape — treat an activation that has not checked in within some
+deadline as a failed attempt, advancing the generation so the ordinary ensure
+path issues a fresh intent — but the deadline is a capacity judgement, and the
+only honest source for it is the measurement the ramp has not yet produced.
+Choosing a number now would be inventing the operating standard this step is
+supposed to derive. Carried forward with the ramp.
 
 ### The permanent prompt is duplicated in the routine
 
