@@ -18,6 +18,9 @@
  *   reconcile             run the governing-invariant pass
  *   standards             the measurements Step 11 will start from
  *   fire-check            whether activation is configured, without the token
+ *   trace <binId>         one bin's dispatches, events and units, in order
+ *   watch [secs] [every]  follow the bins from inside the machine until they settle
+ *   ramp <n> [units] [secs]  one rung of the concurrency ramp: seed, watch, measure
  */
 import { initDatabase, getDb } from '../server/db/database.ts';
 import { initStorage } from '../server/services/storage/index.ts';
@@ -25,8 +28,10 @@ import { createProject, getProjectBySlug } from '../server/repos/projects.ts';
 import { grantMembership, listWorkers } from '../server/repos/identity.ts';
 import {
   createBin,
+  getBin,
   listBins,
   listBinEvents,
+  listBinUnitResults,
   listDispatchesForBin,
   sweepExpiredBinLeases,
 } from '../server/repos/bins.ts';
@@ -106,6 +111,101 @@ function tinyManifest(projectId: string, index: number, units: number): BinManif
     retry: { maxAttempts: 3, backoffSeconds: 30 },
     stoppingConditions: ['every declared unit has a value Brain recomputes to the same thing'],
   };
+}
+
+
+/**
+ * Follow a set of bins until they settle, from inside the machine.
+ *
+ * A snapshot taken from a workflow run answers "what is true now" and costs a
+ * ninety-second round trip to ask. Dispatch is a process with a shape — ready,
+ * fired, assigned, drained — and the shape is the thing being measured, so the
+ * observation belongs next to the database rather than three network hops away.
+ *
+ * It reports transitions rather than a poll log: a line appears when a bin
+ * changes state, and nothing is printed while the fleet is simply working.
+ */
+async function watchBins(
+  projectId: string,
+  deadlineMs: number,
+  everyMs: number,
+  only?: Set<string>,
+): Promise<{ settled: boolean; bins: string[] }> {
+  const started = Date.now();
+  const seen = new Map<string, string>();
+  let ids: string[] = [];
+  for (;;) {
+    const all = await listBins({ projectId, limit: 500 });
+    const bins = only ? all.filter((b) => only.has(b.id)) : all;
+    ids = bins.map((b) => b.id);
+    const elapsed = Math.round((Date.now() - started) / 1000);
+    for (const bin of bins) {
+      const was = seen.get(bin.id);
+      if (was === bin.state) continue;
+      seen.set(bin.id, bin.state);
+      if (was === undefined && bin.state === 'READY') continue;
+      const units = bin.state === 'COMPLETE' ? (await listBinUnitResults(bin.id)).length : 0;
+      console.log(
+        `  +${String(elapsed).padStart(4)}s  ${bin.id}  ${(was ?? 'new').padEnd(9)} -> ` +
+          `${bin.state.padEnd(11)} gen ${bin.leaseGeneration}` +
+          (units ? ` units ${units}` : '') +
+          (bin.terminalReason ? `  ${bin.terminalReason.slice(0, 90)}` : ''),
+      );
+    }
+    const pending = bins.filter(
+      (b) => b.state === 'READY' || b.state === 'LEASED' || b.state === 'DRAFT',
+    );
+    if (bins.length > 0 && pending.length === 0) return { settled: true, bins: ids };
+    if (Date.now() - started >= deadlineMs) return { settled: false, bins: ids };
+    await new Promise((resolve) => setTimeout(resolve, everyMs));
+  }
+}
+
+/** ready -> assigned -> complete, per bin, from the bin's own row and events. */
+async function measureBins(ids: string[]): Promise<void> {
+  console.log('');
+  console.log('  bin                       ready→assigned  assigned→done  ready→done  units  gen');
+  const waits: number[] = [];
+  const works: number[] = [];
+  const totals: number[] = [];
+  for (const id of ids) {
+    const events = await listBinEvents(id, 500);
+    const assigned = events.find((e) => e.eventType === 'BIN_ASSIGNED');
+    const bin = await getBin(id);
+    if (!bin) continue;
+    const readyAt = bin.readyAt ? new Date(bin.readyAt).getTime() : null;
+    const assignedAt = assigned ? new Date(assigned.at).getTime() : null;
+    const doneAt = bin.completedAt ? new Date(bin.completedAt).getTime() : null;
+    const wait = readyAt !== null && assignedAt !== null ? assignedAt - readyAt : null;
+    const work = assignedAt !== null && doneAt !== null ? doneAt - assignedAt : null;
+    const total = readyAt !== null && doneAt !== null ? doneAt - readyAt : null;
+    if (wait !== null) waits.push(wait);
+    if (work !== null) works.push(work);
+    if (total !== null) totals.push(total);
+    const units = (await listBinUnitResults(id)).length;
+    const ms = (v: number | null): string => (v === null ? '—' : `${Math.round(v / 100) / 10}s`);
+    console.log(
+      `  ${id}  ${ms(wait).padStart(14)}  ${ms(work).padStart(13)}  ${ms(total).padStart(10)}  ` +
+        `${String(units).padStart(5)}  ${bin.leaseGeneration}`,
+    );
+  }
+  const stat = (values: number[], label: string): void => {
+    if (values.length === 0) {
+      console.log(`  ${label.padEnd(16)} —`);
+      return;
+    }
+    const sorted = [...values].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)]!;
+    console.log(
+      `  ${label.padEnd(16)} median ${Math.round(median / 100) / 10}s  ` +
+        `min ${Math.round(sorted[0]! / 100) / 10}s  max ${Math.round(sorted[sorted.length - 1]! / 100) / 10}s  ` +
+        `n=${sorted.length}`,
+    );
+  };
+  console.log('');
+  stat(waits, 'queue wait');
+  stat(works, 'drain');
+  stat(totals, 'ready→done');
 }
 
 async function main(): Promise<void> {
@@ -243,6 +343,144 @@ async function main(): Promise<void> {
     console.log(`  completion refusals  ${refusals}`);
     console.log(`  quality signals      ${signals}`);
     console.log(`STEP10: OK standards bins=${bins.length}`);
+    return;
+  }
+
+  if (command === 'trace') {
+    // Who did what to one bin, in order. The question this answers is not
+    // "what state is it in" but "which activation caused this" — and during
+    // acceptance that distinction is the whole point: a bin drained by a
+    // worker Brain did not fire proves the bin protocol and nothing about
+    // dispatch.
+    const id = arg(0);
+    if (!id) {
+      console.log('STEP10: OK trace bin=—  (pass a bin id)');
+      return;
+    }
+    const bin = await getBin(id);
+    if (!bin) {
+      console.log(`STEP10: OK trace bin=${id} found=false`);
+      return;
+    }
+    console.log(`BIN ${bin.id}  ${bin.state}  gen ${bin.leaseGeneration}`);
+    console.log(`  title      ${bin.title}`);
+    console.log(`  ready      ${bin.readyAt ?? '—'}`);
+    console.log(`  completed  ${bin.completedAt ?? '—'}`);
+    console.log(`  worker     ${bin.workerId ?? '—'}  lease ${bin.leaseId ?? '—'}`);
+    console.log(`  session    ${bin.leaseSessionRef ?? '—'}`);
+    console.log(`  heartbeat  ${bin.heartbeatAt ?? '—'}  expires ${bin.leaseExpiresAt ?? '—'}`);
+    console.log(`  renewals   ${bin.leaseRenewals}  refusals ${bin.refusalCount}`);
+    if (bin.terminalReason) console.log(`  terminal   ${bin.terminalReason}`);
+    if (bin.checkpoint) {
+      console.log(`  checkpoint ${JSON.stringify(bin.checkpoint).slice(0, 240)}`);
+    }
+    console.log('');
+    console.log('  DISPATCH');
+    for (const dispatch of await listDispatchesForBin(bin.id)) {
+      console.log(
+        `    gen ${dispatch.leaseGeneration}  ${dispatch.state.padEnd(10)} ` +
+          `attempt ${dispatch.attemptCount}/${dispatch.maxAttempts}  sent ${dispatch.sentAt ?? '—'}  ` +
+          `session ${dispatch.sessionRef ?? '—'}`,
+      );
+      if (dispatch.lastError) {
+        console.log(`      ${dispatch.lastErrorKind}: ${dispatch.lastError.slice(0, 160)}`);
+      }
+    }
+    console.log('');
+    console.log('  EVENTS');
+    for (const event of await listBinEvents(bin.id, 500)) {
+      console.log(
+        `    ${event.at}  ${event.eventType.padEnd(24)} ` +
+          `worker ${(event.workerId ?? '—').padEnd(24)} session ${event.sessionRef ?? '—'}` +
+          (event.outcome ? `  ${event.outcome}` : '') +
+          (event.reason ? `  ${event.reason.slice(0, 80)}` : ''),
+      );
+    }
+    console.log('');
+    console.log('  UNITS');
+    for (const unit of await listBinUnitResults(bin.id)) {
+      console.log(
+        `    ${unit.unitKey.padEnd(6)} ${unit.contentHash.slice(0, 16)}  ` +
+          `by ${unit.submittedBy ?? '—'}  ${unit.createdAt}`,
+      );
+    }
+    console.log('');
+    console.log(`STEP10: OK trace bin=${bin.id} state=${bin.state}`);
+    return;
+  }
+
+  if (command === 'watch') {
+    const projectId = (await getProjectBySlug(SLUG))?.id;
+    if (!projectId) {
+      console.log('STEP10: OK watch bins=0');
+      return;
+    }
+    const seconds = Math.max(10, Math.min(3000, Number(arg(0) ?? '600')));
+    const every = Math.max(2, Math.min(60, Number(arg(1) ?? '10')));
+    console.log(`STEP10 WATCH ${seconds}s every ${every}s`);
+    const result = await watchBins(projectId, seconds * 1000, every * 1000);
+    await measureBins(result.bins);
+    console.log('');
+    console.log(`STEP10: OK watch settled=${result.settled} bins=${result.bins.length}`);
+    return;
+  }
+
+  if (command === 'ramp') {
+    // One rung. Seed n bins at once, then watch them settle without touching
+    // anything else: the dispatcher is the thing under test, so the harness
+    // must not fire, assign, or nudge. Its only actions are create and read.
+    const projectId = await scope();
+    const count = Math.max(1, Math.min(60, Number(arg(0) ?? '1')));
+    const units = Math.max(1, Math.min(20, Number(arg(1) ?? '3')));
+    const seconds = Math.max(30, Math.min(3000, Number(arg(2) ?? '900')));
+    const existing = (await listBins({ projectId, limit: 500 })).length;
+    const made: string[] = [];
+    const seededAt = Date.now();
+    for (let index = 0; index < count; index += 1) {
+      const bin = await createBin({
+        projectId,
+        kind: 'DETERMINISTIC_CHECK',
+        title: `Acceptance bin ${existing + index + 1}`,
+        objective: `Establish ${units} checkable values.`,
+        rationale: 'Measuring the dispatcher, not researching anything.',
+        manifest: tinyManifest(projectId, existing + index + 1, units),
+        completionContract: 'DETERMINISTIC_UNITS_V1',
+        createdByType: 'SYSTEM',
+        createdById: 'step10-harness',
+        ready: true,
+        priority: 5,
+      });
+      made.push(bin.id);
+    }
+    console.log(`STEP10 RAMP rung=${count} units=${units} deadline=${seconds}s`);
+    const only = new Set(made);
+    const result = await watchBins(projectId, seconds * 1000, 10_000, only);
+    const wall = Math.round((Date.now() - seededAt) / 100) / 10;
+    await measureBins(made);
+    const after = await listBins({ projectId, limit: 500 });
+    const mine = after.filter((b) => only.has(b.id));
+    const complete = mine.filter((b) => b.state === 'COMPLETE').length;
+    const stuck = mine.filter((b) => b.state === 'READY' || b.state === 'LEASED');
+    const bad = mine.filter(
+      (b) => b.state === 'FAILED' || b.state === 'NEEDS_HUMAN' || b.state === 'CANCELLED',
+    );
+    let sent = 0;
+    let intents = 0;
+    for (const bin of mine) {
+      const dispatches = await listDispatchesForBin(bin.id);
+      intents += dispatches.length;
+      sent += dispatches.filter((d) => d.state === 'SENT').length;
+    }
+    console.log('');
+    console.log(`  rung wall clock  ${wall}s`);
+    console.log(`  complete         ${complete}/${count}`);
+    console.log(`  still open       ${stuck.length}  ${stuck.map((b) => b.state).join(' ')}`);
+    console.log(`  not complete     ${bad.length}  ${bad.map((b) => `${b.id}:${b.state}`).join(' ')}`);
+    console.log(`  dispatch intents ${intents}  sent ${sent}`);
+    console.log('');
+    console.log(
+      `STEP10: OK ramp=${count} complete=${complete} settled=${result.settled} wall=${wall}s`,
+    );
     return;
   }
 

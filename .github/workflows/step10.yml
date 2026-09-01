@@ -15,15 +15,19 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'setup | seed | report | tick | reconcile | standards | fire-check'
+        description: 'setup | seed | report | tick | reconcile | standards | fire-check | trace | watch | ramp'
         required: true
         default: report
       arg1:
-        description: 'First argument (e.g. how many bins to seed)'
+        description: 'First argument (bins to seed, a bin id, or seconds to watch)'
         required: false
         default: ''
       arg2:
-        description: 'Second argument (e.g. units per bin)'
+        description: 'Second argument (units per bin, or the poll interval)'
+        required: false
+        default: ''
+      arg3:
+        description: 'Third argument (a ramp rung deadline, in seconds)'
         required: false
         default: ''
 
@@ -42,14 +46,36 @@ jobs:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      # A rung of the ramp watches from inside the machine until the fleet
+      # settles, so this step outlives a snapshot by design. The cap is the
+      # harness's own deadline plus room for the connection itself.
       - name: Run
+        timeout-minutes: 60
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Through the environment, never interpolated into the shell: an
+          # input pasted into a command line is an injection whatever the
+          # dispatcher intended, and the guard should not be "only I can run
+          # this workflow".
+          STEP10_COMMAND: ${{ inputs.command }}
+          STEP10_ARG1: ${{ inputs.arg1 }}
+          STEP10_ARG2: ${{ inputs.arg2 }}
+          STEP10_ARG3: ${{ inputs.arg3 }}
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          for value in "$STEP10_COMMAND" "$STEP10_ARG1" "$STEP10_ARG2" "$STEP10_ARG3"; do
+            case "$value" in
+              ''|*[!A-Za-z0-9_-]*)
+                if [ -n "$value" ]; then
+                  echo "::error::Refusing '$value': arguments are letters, digits, dash and underscore."
+                  exit 1
+                fi
+                ;;
+            esac
+          done
           set +e
           flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/step10.sh ${{ inputs.command }} ${{ inputs.arg1 }} ${{ inputs.arg2 }}" \
+            -C "sh /app/scripts/step10.sh $STEP10_COMMAND $STEP10_ARG1 $STEP10_ARG2 $STEP10_ARG3" \
             2>&1 | tee step10.txt
           set -e
           grep -q '^STEP10: OK' step10.txt
