@@ -45,6 +45,21 @@ function flag(name: string): string | null {
   return argv[index + 1] ?? null;
 }
 
+/** Break a long reason into readable lines, keeping every word of it. */
+function wrap(text: string, width: number): string[] {
+  const lines: string[] = [];
+  let line = '';
+  for (const word of text.replace(/\s+/g, ' ').trim().split(' ')) {
+    if (line.length + word.length + 1 > width && line.length > 0) {
+      lines.push(line);
+      line = '';
+    }
+    line = line.length > 0 ? `${line} ${word}` : word;
+  }
+  if (line.length > 0) lines.push(line);
+  return lines;
+}
+
 /** One line, never wrapped, never a wall of JSON. */
 function trim(value: string | null | undefined, width = 96): string {
   if (!value) return '—';
@@ -107,7 +122,21 @@ async function main(): Promise<void> {
   console.log(`  document    ${packet.documentId ?? '—'}`);
   console.log(`  audit       ${packet.auditId ?? '—'}   verdict ${packet.verdict ?? '—'}`);
   console.log(`  completed   ${packet.completedAt ?? '—'}`);
-  console.log(`  failure     ${trim(packet.failureReason)}`);
+  /*
+   * In full, wrapped, never trimmed.
+   *
+   * This was `trim(...)` at 96 characters like every other line, and on the
+   * first automatic approval refusal it printed
+   * `… fragment "licence-trigger" accepts …` and stopped — the exact sentence a
+   * person is being escalated to read. A failure reason is the one field in
+   * this report whose whole value is the part that does not fit on a line.
+   */
+  if (packet.failureReason) {
+    console.log('  failure');
+    for (const line of wrap(packet.failureReason, 92)) console.log(`      ${line}`);
+  } else {
+    console.log('  failure     —');
+  }
 
   const fragments = await currentFragments(packet.id);
   console.log('');
@@ -182,6 +211,16 @@ async function main(): Promise<void> {
     // asking. A report that printed only one of them could not tell a reader
     // whether a lane was empty because nothing was found or because nothing
     // was tagged with the right key.
+    // What this fragment says it may and may not cite. The evidence gate and
+    // the approval envelope are both applied against these exact strings, so a
+    // report that omits them cannot explain either verdict.
+    console.log(
+      `      sources   accepts [${fragment.acceptableSourceTypes.join(' | ')}]` +
+        (fragment.excludedSourceTypes.length > 0
+          ? `  excludes [${fragment.excludedSourceTypes.join(' | ')}]`
+          : ''),
+    );
+    console.log(`      bar       min independent sources ${fragment.minIndependentSources}`);
     for (const lane of fragment.requiredEvidence) console.log(`      lane      ${describeLane(lane)}`);
     if (fragment.blockedReason) console.log(`      because   ${trim(fragment.blockedReason)}`);
   }

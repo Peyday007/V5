@@ -346,6 +346,70 @@ confinement was never too wide. It was too narrow to be usable.
   and an audit row; it never resets the count, never lowers a ceiling, and
   cannot touch a terminal bin.
 
+## The fourth defect the real packet found — a true sentence in the wrong packet
+
+**Every worker was told a person had to approve the plan, so the packet that
+did not need one never submitted its plan for checking.**
+
+With the confinement fixed, the next activation did exactly what it should. At
+20:28:21 `BIN_ITEM_CLAIMED` — the first time a research bin ever handed its
+worker a queue item — and by 20:30 all four fragments were written, scoped,
+lane-tagged and stored. Then:
+
+```
+20:30:33  BIN_CHECKPOINT
+20:30:37  BIN_RELEASED   "Proposed and submitted the 4 research fragments for
+                          orc_9b2965e776bb4de7ab9f …"
+```
+
+and the packet report, sixteen minutes later:
+
+```
+status      PLANNING   pass PLAN
+approval    STEP10_MICHIGAN_LICENSING_V1 — authorized by operator:step-10-acceptance
+FRAGMENTS (4)   licence-trigger / real-property-condition /
+                exemption-inclusion / consequences — all PLANNED
+WORK ITEMS (1)  RESEARCH_PLAN wki_5e9cce901e714a80a548 LEASED attempt 2/3
+```
+
+The plan existed and was never evaluated, because the worker **released the bin
+without completing the work item** — and completing the item is what calls
+`advancePacket`, which is the only place the envelope is applied.
+
+**It was doing what it was told.** `brain_propose_fragments` returned
+`status: 'AWAITING_APPROVAL'` regardless of the packet's approval mode, and its
+own description read *"Proposals only — nothing is researched until a person
+approves."* Both are true of most packets and false of this one. An earlier
+release reason, from the activation before, says it in the worker's own words:
+*"Still blocked on human plan approval for orc_9b2965e776bb4de7ab9f."*
+
+**The correction is to make the sentence true rather than to remove it.** Brain
+knows which mode a packet is in — it is a column Brain owns — so the tool
+reports it: `AWAITING_SYSTEM_APPROVAL` when an envelope is named,
+`AWAITING_HUMAN_APPROVAL` otherwise, each with the next step. In **both** modes
+that step is *complete this work item*, which was always right: a
+human-approved packet also needs its plan item finished before the bin can park
+at `NEEDS_HUMAN`. Leaving it leased was never correct in either mode, which is
+the sign the fix is at the right level.
+
+Nothing about the gate moved. The envelope is still the only thing that may
+approve without a person, still a pure function over rows, still applied after
+the item completes, and the packet still stops at `NEEDS_HUMAN` on any
+deviation.
+
+Two tests cover it and one fails when it is inverted — with the envelope forced
+out of the answer, the tool says `AWAITING_HUMAN_APPROVAL` to a packet nobody
+needs to approve. The second test is the inversion in the other direction: an
+ordinary packet must still be told a person decides.
+
+**This is the general shape of both real-packet defects, and it is worth naming
+once.** Six clean ramp rungs and 71 bin tests said nothing about either, because
+every synthetic bin carries its work inside its own manifest and needs no
+approval at all. A research bin is the only thing that exercises the queue
+confinement or the approval mode, so the first real packet was the first test of
+either. The ramp measured dispatch, correctly, and proved nothing about the
+thing dispatch exists to start.
+
 ## The bug that only Postgres could find
 
 `claimDispatchIntent` originally swapped on `attempt_count`:
