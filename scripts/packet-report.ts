@@ -116,7 +116,11 @@ async function main(): Promise<void> {
     console.log(
       `  ${fragment.fragmentKey.padEnd(28)} ${fragment.status.padEnd(11)}` +
         ` attempt ${fragment.attempt}/${fragment.maxRepairs}` +
-        ` deps [${fragment.dependsOn.join(', ')}]` +
+        // Through `dependencyKeys`, because a dependency is an object with a
+        // key and a kind. Joining the objects printed `[object Object]`, which
+        // is exactly the field a reader checks when asking why a fragment has
+        // not started.
+        ` deps [${fragment.dependsOn.map((d) => `${d.key}:${d.kind}`).join(', ')}]` +
         ` reqs ${fragment.requirementIds.length}` +
         ` integrity ${fragment.integrityVerdict ?? '—'}` +
         ` sufficiency ${fragment.sufficiencyVerdict ?? '—'}`,

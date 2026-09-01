@@ -36,6 +36,7 @@ import {
   startPacket,
   SUPPORTED_APPROVAL_MODES,
 } from '../server/services/research/startPacket.ts';
+import { MICHIGAN_LICENSING_ASSIGNMENT } from '../server/services/research/approvalEnvelope.ts';
 import type { ClaimedWork, Layer, Principal, WorkerScope } from '../server/domain/types.ts';
 
 const FULL: WorkerScope[] = [
@@ -219,6 +220,65 @@ function goal(over: Partial<Parameters<typeof startPacket>[0]> = {}): Parameters
 // ---------------------------------------------------------------------------
 // The operation the console used to be
 // ---------------------------------------------------------------------------
+
+describe('what the plan tool tells a worker to do next', () => {
+  /*
+   * The defect that stopped the first real packet, one layer above the queue.
+   *
+   * This tool answered `AWAITING_APPROVAL` whatever the packet's approval mode
+   * was, and its description said "nothing is researched until a person
+   * approves". For a packet carrying an envelope both were false. The worker
+   * proposed all four fragments, read that a human was needed, and released the
+   * bin **without completing the work item** — and completing it is the only
+   * thing that calls `advancePacket`, which is the only place the envelope is
+   * evaluated. The plan was written, correct, and never checked.
+   *
+   * So the tool has to say which approval is coming, and in both modes it has
+   * to say the item still needs completing. Nothing about the gate moves.
+   */
+  it('tells a preauthorized packet that Brain approves it, and to finish the item', async () => {
+    const started = await startPacket(
+      goal({
+        assignment: MICHIGAN_LICENSING_ASSIGNMENT,
+        approval: {
+          mode: 'AUTO_WITHIN_ENVELOPE',
+          envelopeId: 'STEP10_MICHIGAN_LICENSING_V1',
+          authorizedBy: 'operator:test',
+        },
+      }),
+    );
+    const claimed = await claimPlan(started.orchestration.id);
+    const value = await call('brain_propose_fragments', {
+      work_item_id: claimed.workItemId,
+      lease_id: claimed.leaseId,
+      lease_generation: claimed.leaseGeneration,
+      fragments: [proposal()],
+    });
+
+    expect(value['status']).toBe('AWAITING_SYSTEM_APPROVAL');
+    const next = String(value['nextStep']);
+    expect(next).toMatch(/complete this work item/i);
+    // The inversion. A worker told to wait for somebody is a worker that does
+    // not complete the item, which is exactly what happened in production.
+    expect(next).not.toMatch(/wait for a person|until a person|human approval/i);
+  });
+
+  it('tells an ordinary packet a person decides, and still to finish the item', async () => {
+    const started = await startPacket(goal());
+    const claimed = await claimPlan(started.orchestration.id);
+    const value = await call('brain_propose_fragments', {
+      work_item_id: claimed.workItemId,
+      lease_id: claimed.leaseId,
+      lease_generation: claimed.leaseGeneration,
+      fragments: [proposal()],
+    });
+
+    expect(value['status']).toBe('AWAITING_HUMAN_APPROVAL');
+    const next = String(value['nextStep']);
+    expect(next).toMatch(/complete this work item/i);
+    expect(next).toMatch(/person/i);
+  });
+});
 
 describe('startPacket', () => {
   it('creates the run and the orchestration and queues exactly one planning job', async () => {
@@ -453,7 +513,7 @@ describe('the coverage gate on a proposed plan', () => {
 
     expect(value['proposed']).toBe(1);
     expect(value['fragmentKeys']).toEqual(['licence-california']);
-    expect(value['status']).toBe('AWAITING_APPROVAL');
+    expect(value['status']).toBe('AWAITING_HUMAN_APPROVAL');
 
     const fragments = await currentFragments(started.orchestration.id);
     expect(fragments.map((fragment) => fragment.fragmentKey)).toEqual(['licence-california']);

@@ -743,10 +743,19 @@ routine configured to check the repository out. Both are the operator's to set.
 
 **CF-8 is untouched.** Live token refresh is still unverified.
 
-So: one unattended worker has now completed bins end to end, and "Brain runs a
-worker" is accurate. **"Brain runs a fleet" is not yet** — the concurrency ramp
-has not run, no real research bin has gone through, and the timing figures so
-far are contaminated by the outage that preceded the fix.
+So: one unattended worker has completed bins end to end, and the concurrency
+ramp has since run six rungs — 1, 2, 5, 10, 20, 30 — on an unblocked fleet.
+Rungs 1 to 20 completed every bin, with zero duplicate activations, zero fenced
+stale writes and zero stranded bins across all of them. **"Brain runs a fleet of
+ten on one routine" is accurate.**
+
+**The ceiling is a per-routine fire limit, not the subscription allowance**, and
+an earlier report of mine said the opposite. Rung 20 finished twenty bins from
+thirteen activations because a worker that finishes one asks for another; rung
+30 had every dispatch refused, and Brain paused, kept every bin and resumed by
+itself. A throttled fleet therefore loses throughput rather than work, and more
+capacity means more routines rather than more allowance. **The recommended
+operating ceiling is 10 concurrent bins on one routine.**
 
 
 ---

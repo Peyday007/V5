@@ -553,7 +553,9 @@ const proposeFragmentsTool: McpTool = {
     'actually answer, with the boundaries that make an answer checkable: geography, timeframe, ' +
     'population, definitions, the evidence lanes it needs, what may and may not be cited, what ' +
     'done means, and how many independent sources it takes. A fragment missing those cannot be ' +
-    'judged and is refused here. Proposals only — nothing is researched until a person approves.',
+    'judged and is refused here. Proposals only — nothing is researched until the plan is ' +
+    'approved, and the result tells you which approval this packet is waiting for and what to ' +
+    'do next.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -892,6 +894,27 @@ const proposeFragmentsTool: McpTool = {
 
         await updateOrchestration(orchestration.id, { status: 'PLANNING', currentPass: 'PLAN' });
 
+        /*
+         * Which kind of approval this packet is actually waiting for, and what
+         * the worker has to do next.
+         *
+         * This said `AWAITING_APPROVAL` unconditionally, and the tool's own
+         * description said "nothing is researched until a person approves". For
+         * a packet carrying an approval envelope both are false, and the first
+         * real one cost a full stop: the worker proposed all four fragments,
+         * read that a human was needed, released the bin — *without completing
+         * the work item*. Completing it is what calls `advancePacket`, and
+         * `advancePacket` is where the envelope is evaluated. So the packet sat
+         * at PLANNING with its plan written and nothing to trigger the check.
+         *
+         * The correction is to say the true thing. Brain knows which mode this
+         * packet is in, from a column it owns, so the worker is told which
+         * approval is coming and — in both modes — that the item it holds still
+         * has to be completed. Nothing about the gate moves: the envelope is
+         * still the only thing that may approve automatically, still applied by
+         * a pure function over rows, still after this item finishes.
+         */
+        const automatic = orchestration.approvalEnvelopeId !== null;
         return {
           resultRef: passId,
           resultSummary: `${created.length} fragments proposed`,
@@ -904,7 +927,17 @@ const proposeFragmentsTool: McpTool = {
               documentsUnreadable: coverage.documentsUnreadable,
               existingClaims: coverage.existingClaims,
             },
-            status: 'AWAITING_APPROVAL',
+            status: automatic ? 'AWAITING_SYSTEM_APPROVAL' : 'AWAITING_HUMAN_APPROVAL',
+            nextStep: automatic
+              ? 'Complete this work item now. This packet was preauthorized against a named ' +
+                'approval envelope, so when the item completes Brain checks the plan against ' +
+                'those limits by itself: if it fits, research is queued and you can carry on ' +
+                'claiming work; if it does not, the packet stops for a person. Do not wait for ' +
+                'anybody, and do not release without completing — nothing is checked until you do.'
+              : 'Complete this work item now. The packet then waits for a person to approve the ' +
+                'plan, and there is nothing more for you to do on it until they have. Do not ' +
+                'release without completing: the plan you wrote is only submitted when the item ' +
+                'finishes.',
           },
         };
       },
