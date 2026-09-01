@@ -18,6 +18,8 @@
  *   reconcile             run the governing-invariant pass
  *   standards             the measurements Step 11 will start from
  *   fire-check            whether activation is configured, without the token
+ *   research-start        the one real-research acceptance packet, and its bin
+ *   research-ready <bin>  make that bin dispatchable again after approval
  *   cancel-ready <n>      cancel exactly n READY acceptance bins, or refuse
  *   cancel-bin <binId>    cancel one named unleased acceptance bin
  *   prompt                the exact prompt a worker routine must hold
@@ -38,9 +40,14 @@ import {
   listBinEvents,
   listBinUnitResults,
   listDispatchesForBin,
+  markBinReady,
   sweepExpiredBinLeases,
 } from '../server/repos/bins.ts';
 import { reconcileBins } from '../server/services/bins/service.ts';
+import { startPacket } from '../server/services/research/startPacket.ts';
+import { getOrchestration } from '../server/repos/research.ts';
+import { listLayers } from '../server/repos/layers.ts';
+import { DEAL_DISPATCH_SLUG } from '../server/seed.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import { describeFireTarget } from '../server/services/dispatch/fire.ts';
 import {
@@ -49,6 +56,8 @@ import {
   WORKER_INSTRUCTIONS_VERSION,
 } from '../server/services/bins/workerInstructions.ts';
 import type { BinManifest, WorkerScope } from '../server/domain/types.ts';
+
+const ASSIGNMENT = "Determine whether, under Michigan law, a success-fee intermediary who arranges\nthe sale of a privately held business must hold a real-estate broker licence, a\nbusiness-broker licence, or any equivalent licence, when the transaction\ntransfers no interest in real property and no lease.\n\nDecision this informs: whether a success-fee intermediary may lawfully operate\nin Michigan without a licence, and what follows if it may not.\n\nAudience: the operator of a business-brokerage platform deciding whether\nMichigan is a state it can serve.\n\nIn scope, and only this:\n  1. The licence trigger \u2014 the Michigan statutory definition of the licensed\n     activity, quoting the language that says what conduct requires a licence.\n  2. The real-property condition \u2014 the specific provision determining whether\n     the trigger depends on an interest in real property or a lease, including\n     how Michigan treats a \"business opportunity\" or \"business enterprise\".\n  3. The applicable inclusion or exemption \u2014 any express Michigan carve-out or\n     inclusion addressing business brokers, business-opportunity brokers or M&A\n     intermediaries dealing in businesses with no real-property component,\n     with its exact scope and conditions.\n  4. Material consequences of getting it wrong \u2014 the penalty, the enforceability\n     of the fee agreement, and any private right of action, each from the\n     statute or regulation that creates it.\n\nOut of scope: other states; federal securities-broker registration; tax; the\n2023 federal M&A broker exemption except where Michigan law refers to it;\nanything not needed to answer the four items above.\n\nEvidence standard: primary sources only \u2014 the Michigan Occupational Code and\nits licensing article, the administrative rules, and published guidance or\ndeclaratory rulings from Michigan's Department of Licensing and Regulatory\nAffairs or the Board of Real Estate Brokers and Salespersons. A law-firm\narticle, a brokerage association page or a secondary summary may be used to\nlocate a primary source and may not support a claim on its own.\n\nCompletion standard: each of the four items answered from a quoted primary\nprovision with its citation, or explicitly recorded as unresolved with the\nsearch that failed. A statutory question is settled by one directly inspected\nprimary source; it does not need two, and it is not settled by two secondary\nones.";
 
 const SLUG = 'step-10-acceptance';
 const NAME = 'Step 10 acceptance';
@@ -440,6 +449,151 @@ async function main(): Promise<void> {
     console.log(`  completion refusals  ${refusals}`);
     console.log(`  quality signals      ${signals}`);
     console.log(`STEP10: OK standards bins=${bins.length}`);
+    return;
+  }
+
+  if (command === 'research-start') {
+    /*
+     * The real-research acceptance bin.
+     *
+     * This is deliberately thin. It does not plan anything, decompose
+     * anything, or decide what to research: it calls `startPacket`, which is
+     * the same function the operator console calls, and then creates a bin
+     * pointing at what that returned. There is no second orchestration system
+     * here and there must never be one — if this file ever starts making
+     * research decisions, the thing it is testing has been replaced by a
+     * simulation of itself.
+     *
+     * `startPacket` queues exactly one planning job and stops. That is §16: a
+     * run a person initiated is planned in full and then waits, so the plan can
+     * be read before anything is spent. The bin is created READY so Brain
+     * dispatches a worker to do that planning — and when the packet lands at
+     * AWAITING_APPROVAL the contract refuses with HUMAN, the bin goes
+     * NEEDS_HUMAN, and the fleet goes quiet until a person approves.
+     */
+    const project = await getProjectBySlug(DEAL_DISPATCH_SLUG);
+    if (!project) {
+      console.log('STEP10 RESEARCH REFUSED: the Deal Dispatch project does not exist.');
+      process.exitCode = 1;
+      return;
+    }
+    const layer = (await listLayers(project.id)).find((l) => l.name === 'Monetization Logic');
+    if (!layer) {
+      console.log('STEP10 RESEARCH REFUSED: no Monetization Logic layer.');
+      process.exitCode = 1;
+      return;
+    }
+
+    const started = await startPacket({
+      projectId: project.id,
+      layerId: layer.id,
+      title: 'Michigan intermediary licensing for a no-real-property business sale',
+      assignment: ASSIGNMENT,
+      // The same policy the console uses. A person reads this plan and approves
+      // it; nothing here approves anything.
+      approval: { mode: 'PER_PACKET' },
+      startedBy: { kind: 'PERSON', id: 'step10-acceptance' },
+    });
+
+    const orchestration = started.orchestration;
+    const bin = await createBin({
+      projectId: project.id,
+      layerId: layer.id,
+      kind: 'RESEARCH_PACKET',
+      title: 'Step 10 acceptance — one real research packet',
+      objective:
+        'Carry one bounded, genuinely useful research packet from an approved plan to an audited, ' +
+        'citable document, with Brain deciding when it is finished.',
+      rationale:
+        'The synthetic ramp measured dispatch. This measures whether the thing dispatch exists to ' +
+        'start can actually do the work.',
+      manifest: {
+        objective: 'Drain this research packet to its own terminal state.',
+        why:
+          'Every control this packet passes through belongs to Step 9 and is reused unchanged. ' +
+          'What is being tested is that Brain starts the worker and judges the result.',
+        lineage: {
+          projectId: project.id,
+          layerId: layer.id,
+          goal: 'Michigan licensing for a success-fee intermediary, no real property transferred.',
+          orchestrationId: orchestration.id,
+        },
+        units: [],
+        acceptableSources: [
+          'Michigan Occupational Code and its licensing article',
+          'Michigan administrative rules',
+          'Published LARA or Board guidance and declaratory rulings',
+        ],
+        excludedSources: [
+          'Law-firm articles, association pages and secondary summaries as support for a claim',
+          'Other states, federal securities-broker registration, and tax',
+        ],
+        evidence: [
+          'Each in-scope item answered from a quoted primary provision with its citation, or ' +
+            'explicitly recorded as unresolved with the search that failed',
+        ],
+        outputs: ['One filed, audited document with a claim ledger inside it'],
+        authorizedActions: [
+          'brain_claim_work and the research tools, for work items belonging to this packet',
+        ],
+        prohibitedActions: [
+          'any spend beyond this packet',
+          'any work item outside this orchestration',
+          'enabling paid overage',
+        ],
+        budgetUnits: 1,
+        retry: { maxAttempts: 3, backoffSeconds: 60 },
+        stoppingConditions: [
+          'The packet reaches its own terminal state and the filed document has bytes in the store',
+        ],
+      },
+      completionContract: 'RESEARCH_PACKET_V1',
+      orchestrationId: orchestration.id,
+      createdByType: 'SYSTEM',
+      createdById: 'step10-acceptance',
+      ready: true,
+      priority: 9,
+      maxAttempts: 5,
+    });
+
+    console.log('STEP10 RESEARCH');
+    console.log(`  project        ${project.slug} ${project.id}`);
+    console.log(`  layer          ${layer.name} ${layer.id}`);
+    console.log(`  orchestration  ${orchestration.id}  ${orchestration.status}`);
+    console.log(`  run            ${started.run.id}`);
+    console.log(`  bin            ${bin.id}  ${bin.state}`);
+    console.log(`  archive census ${JSON.stringify(started.archive)}`);
+    console.log(`STEP10: OK research-start orchestration=${orchestration.id} bin=${bin.id}`);
+    return;
+  }
+
+  if (command === 'research-ready') {
+    // After a person approves the plan. The bin was parked at NEEDS_HUMAN
+    // precisely because a person had to decide; this is that decision landing,
+    // and nothing else about the bin changes.
+    const id = arg(0);
+    if (!id) {
+      console.log('STEP10 REFUSED: pass the bin id.');
+      process.exitCode = 1;
+      return;
+    }
+    const before = await getBin(id);
+    if (!before) {
+      console.log('STEP10 REFUSED: no such bin.');
+      process.exitCode = 1;
+      return;
+    }
+    if (before.orchestrationId) {
+      const packet = await getOrchestration(before.orchestrationId);
+      console.log(`  packet ${before.orchestrationId} is ${packet?.status ?? 'missing'}`);
+      if (packet && packet.status === 'AWAITING_APPROVAL') {
+        console.log('STEP10 REFUSED: that packet is still awaiting approval. Approve it first.');
+        process.exitCode = 1;
+        return;
+      }
+    }
+    const after = await markBinReady(id);
+    console.log(`STEP10: OK research-ready ${id} was=${before.state} now=${after?.state ?? '—'}`);
     return;
   }
 

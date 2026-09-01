@@ -16,6 +16,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getDb } from '../server/db/database.ts';
 import { createProject } from '../server/repos/projects.ts';
+import { createOrchestration, updateOrchestration } from '../server/repos/research.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { listLayers } from '../server/repos/layers.ts';
 import { createWorker } from '../server/repos/identity.ts';
 import { freshProject } from './helpers.ts';
 import {
@@ -1039,6 +1042,89 @@ describe('retiring a bin cannot reach one that is working or finished', () => {
     const bin = (await getBin(binId))!;
     expect(await resolveNeedsHumanBin(binId, bin.leaseGeneration, 'CANCELLED', 'no')).toBe(false);
     expect((await getBin(binId))!.state).toBe('READY');
+  });
+});
+
+/* ========================================================================= */
+
+describe('a packet waiting for a person is not work a worker can retry', () => {
+  /*
+   * §16 stops a browser-initiated run after planning so somebody can read the
+   * plan before anything is spent. The bin contract used to call that state
+   * RETRY, which is wrong in a way that costs real money: no amount of worker
+   * effort advances an unapproved packet, so a worker would be dispatched,
+   * bounce off it, and be dispatched again — spending the routine's fire budget
+   * to be told the same thing each time.
+   *
+   * HUMAN is the honest verdict. The bin parks at NEEDS_HUMAN, which is exactly
+   * what it is, and stops being dispatchable, so the fleet goes quiet until the
+   * person decides.
+   */
+  async function researchBin(status: 'AWAITING_APPROVAL' | 'RESEARCHING'): Promise<string> {
+    const layerId = (await listLayers(projectA))[0]!.id;
+    const run = await createRun({
+      projectId: projectA,
+      layerId,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'a bounded licensing question',
+    });
+    const orchestration = await createOrchestration({
+      projectId: projectA,
+      layerId,
+      runId: run.id,
+      title: 'a bounded licensing question',
+      assignment: 'the four things that answer it',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    await updateOrchestration(orchestration.id, { status });
+    const bin = await createBin({
+      projectId: projectA,
+      kind: 'RESEARCH_PACKET',
+      title: 'one real research packet',
+      objective: 'drain it',
+      manifest: { ...unitsManifest(projectA, 0), units: [] },
+      completionContract: 'RESEARCH_PACKET_V1',
+      orchestrationId: orchestration.id,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+    });
+    return bin.id;
+  }
+
+  it('refuses to HUMAN while the plan is unapproved, so nobody is dispatched at it again', async () => {
+    const binId = await researchBin('AWAITING_APPROVAL');
+    const verdict = await evaluateContract((await getBin(binId))!);
+    expect(verdict.satisfied).toBe(false);
+    expect(verdict.disposition).toBe('HUMAN');
+    expect(verdict.reasons.join(' ')).toMatch(/approve/i);
+  });
+
+  it('parks the bin at NEEDS_HUMAN, out of the dispatchable set', async () => {
+    const binId = await researchBin('AWAITING_APPROVAL');
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const outcome = await requestCompletion({
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+    expect(outcome.terminal).toBe(true);
+    expect(outcome.state).toBe('NEEDS_HUMAN');
+
+    // The point of the whole change: it no longer earns activations.
+    expect((await listDispatchableBins()).map((b) => b.id)).not.toContain(binId);
+    expect((await dispatchTick({ burst: 1 })).intentsCreated).toBe(0);
+  });
+
+  it('still says RETRY for a packet that is merely unfinished', async () => {
+    // The correction must not swallow the ordinary case. A packet that is
+    // running is work in progress, and the worker should carry on with it.
+    const binId = await researchBin('RESEARCHING');
+    const verdict = await evaluateContract((await getBin(binId))!);
+    expect(verdict.satisfied).toBe(false);
+    expect(verdict.disposition).toBe('RETRY');
   });
 });
 

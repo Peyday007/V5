@@ -229,6 +229,29 @@ async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
 
   const reasons: string[] = [];
 
+  // Waiting for a person is not something a worker can retry its way out of.
+  //
+  // §16 stops a browser-initiated run after planning so somebody can read the
+  // plan before anything is spent. For the bin that means the honest verdict is
+  // HUMAN, not RETRY: no amount of worker effort advances an unapproved packet,
+  // and a bin left RETRYing would bounce a worker off it on every activation,
+  // spending the routine's fire budget to be told the same thing again.
+  //
+  // Refused this way the bin goes NEEDS_HUMAN, which is exactly what it is, and
+  // stops being dispatchable — so the fleet is quiet while the plan waits. When
+  // the plan is approved the bin is made ready again and the ordinary path
+  // takes it from there.
+  if (orchestration.status === 'AWAITING_APPROVAL') {
+    return refuse(
+      'HUMAN',
+      [
+        'The packet is planned and waiting for a person to approve it. Nothing is spent until ' +
+          'somebody reads the plan and approves it, so this bin is not work a worker can finish.',
+      ],
+      observed,
+    );
+  }
+
   if (orchestration.status !== 'COMPLETE') {
     reasons.push(
       `The packet is ${orchestration.status}, not COMPLETE. A bin is terminal when its packet is, ` +
