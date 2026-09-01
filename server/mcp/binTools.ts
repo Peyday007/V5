@@ -284,7 +284,11 @@ const submitUnitTool: McpTool = {
   description:
     'Store the answer for one declared unit of your bin. The unit key must be one the manifest ' +
     'declares. Brain recomputes what it can and compares, so a placeholder, a restatement of the ' +
-    'input, or the same content submitted for several units will not satisfy the contract.',
+    'input, or the same content submitted for several units will not satisfy the contract. ' +
+    'Submitting a unit you have already answered REPLACES your earlier value while you still hold ' +
+    'the bin, so if Brain refuses completion because a unit does not match, fix that unit and send ' +
+    'it again — the reply says `corrected: true` when it replaced something. Re-sending the same ' +
+    'value changes nothing and is reported as already stored.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -317,7 +321,15 @@ const submitUnitTool: McpTool = {
       );
     }
     return {
-      value: { held: true, stored: result.stored, alreadyStored: result.alreadyStored },
+      value: {
+        held: true,
+        stored: result.stored,
+        alreadyStored: result.alreadyStored,
+        // Named so a worker can tell "I replaced a wrong value" from "nothing
+        // happened". Without it a correction reads identically to a duplicate,
+        // which is how one bin spent three attempts stuck on a typo.
+        corrected: result.corrected,
+      },
       projectId: null,
     };
   },

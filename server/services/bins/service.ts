@@ -228,7 +228,14 @@ export async function nextItemInBin(input: {
 
 export type SubmitUnitResult =
   | { held: false }
-  | { held: true; stored: boolean; alreadyStored: boolean; unknownUnit: boolean };
+  | {
+      held: true;
+      stored: boolean;
+      alreadyStored: boolean;
+      unknownUnit: boolean;
+      /** True when this replaced a different value the same unit already held. */
+      corrected: boolean;
+    };
 
 /**
  * Store one unit's answer against the bin this worker holds.
@@ -249,9 +256,11 @@ export async function submitUnit(input: {
   if (!bin) return { held: false };
 
   const declared = (bin.manifest.units ?? []).some((unit) => unit.key === input.unitKey);
-  if (!declared) return { held: true, stored: false, alreadyStored: false, unknownUnit: true };
+  if (!declared) {
+    return { held: true, stored: false, alreadyStored: false, unknownUnit: true, corrected: false };
+  }
 
-  const stored = await putBinUnitResult({
+  const outcome = await putBinUnitResult({
     binId: bin.id,
     unitKey: input.unitKey,
     workItemId: input.workItemId ?? null,
@@ -270,11 +279,24 @@ export async function submitUnit(input: {
     workerId: input.workerId,
     leaseId: input.proof.leaseId,
     leaseGeneration: input.proof.leaseGeneration,
-    measures: { unitKey: input.unitKey, bytes: input.value.length },
-    outcome: stored ? 'STORED' : 'DUPLICATE',
+    // The replaced hash goes into the append-only record. That is what keeps a
+    // correction from being a silent overwrite: this table holds the current
+    // value, the event history holds every value the unit ever had.
+    measures: {
+      unitKey: input.unitKey,
+      bytes: input.value.length,
+      ...(outcome.previousHash ? { replacedContentHash: outcome.previousHash } : {}),
+    },
+    outcome: outcome.corrected ? 'CORRECTED' : outcome.stored ? 'STORED' : 'DUPLICATE',
   });
 
-  return { held: true, stored, alreadyStored: !stored, unknownUnit: false };
+  return {
+    held: true,
+    stored: outcome.stored,
+    alreadyStored: !outcome.stored,
+    unknownUnit: false,
+    corrected: outcome.corrected,
+  };
 }
 
 /* ------------------------------------------------------------------------- */

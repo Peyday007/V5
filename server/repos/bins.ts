@@ -940,8 +940,49 @@ export interface PutUnitResultInput {
  * second, which is the Step 6 shape applied to the smallest possible effect.
  * Returns whether this call was the one that inserted.
  */
-export async function putBinUnitResult(input: PutUnitResultInput): Promise<boolean> {
-  const result = await getDb().run(
+export interface PutUnitResultOutcome {
+  stored: boolean;
+  corrected: boolean;
+  previousHash: string | null;
+}
+
+/**
+ * Store a unit's answer, or correct one already stored.
+ *
+ * Originally this was `ON CONFLICT DO NOTHING`, on the reasoning that a stored
+ * result is a record and records are not overwritten. Production disagreed in
+ * the most direct way available: a worker submitted a truncated sha-256 for one
+ * unit, Brain correctly refused the bin's completion three times, and the
+ * worker could not fix it — every correction came back DUPLICATE. It released
+ * the bin saying so, exhausted its attempts, and the bin was permanently dead
+ * from one transcription slip.
+ *
+ * First-write-wins is the wrong rule here, and the reason it is safe to change
+ * is the same reason the refusal worked: **Brain recomputes the value itself.**
+ * A correction cannot launder a wrong answer past the contract — it only lets a
+ * worker try again at the thing Brain will check anyway. Refusing corrections
+ * does not buy integrity; it only converts a recoverable mistake into a dead
+ * bin.
+ *
+ * §17 — no new evidence silently overwriting old evidence — is honoured by the
+ * word *silently*: the replaced content hash is returned and written into the
+ * append-only `bin_events` row, so every value a unit ever held stays in the
+ * history even though only the current one is in this table.
+ *
+ * A correction is refused once the bin is no longer leased by the caller, so a
+ * completed bin's results are immutable and a worker that lost its lease cannot
+ * rewrite the winner's work. That proof lives inside both statements rather
+ * than in a check before them — the ownership the caller last saw is carried in
+ * the clause, so there is no read-then-write window for a race to live in.
+ */
+export async function putBinUnitResult(
+  input: PutUnitResultInput,
+): Promise<PutUnitResultOutcome> {
+  const db = getDb();
+  const at = binNow();
+  const value = input.value.slice(0, MAX_UNIT_VALUE_CHARS);
+
+  const inserted = await db.run(
     `INSERT INTO bin_unit_results (id, bin_id, unit_key, work_item_id, value, content_hash,
        lease_id, lease_generation, submitted_by, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -951,15 +992,62 @@ export async function putBinUnitResult(input: PutUnitResultInput): Promise<boole
       input.binId,
       input.unitKey,
       input.workItemId ?? null,
-      input.value.slice(0, MAX_UNIT_VALUE_CHARS),
+      value,
       input.contentHash,
       input.leaseId,
       input.leaseGeneration,
       input.submittedBy ?? null,
-      binNow(),
+      at,
     ],
   );
-  return result.changes === 1;
+  if (inserted.changes === 1) return { stored: true, corrected: false, previousHash: null };
+
+  // Something is already there. Read what it was, so the event can say what the
+  // correction replaced, then swap it under the caller's own lease.
+  const existing = await db.get<BinUnitResultRow>(
+    `SELECT * FROM bin_unit_results WHERE bin_id = ? AND unit_key = ?`,
+    [input.binId, input.unitKey],
+  );
+  if (!existing) return { stored: false, corrected: false, previousHash: null };
+  if (existing.content_hash === input.contentHash) {
+    return { stored: false, corrected: false, previousHash: existing.content_hash };
+  }
+
+  const updated = await db.run(
+    `UPDATE bin_unit_results
+        SET value = ?, content_hash = ?, work_item_id = ?,
+            lease_id = ?, lease_generation = ?, submitted_by = ?, created_at = ?
+      WHERE bin_id = ? AND unit_key = ? AND content_hash = ?
+        AND EXISTS (
+          SELECT 1 FROM bins b
+           WHERE b.id = bin_unit_results.bin_id
+             AND b.state = 'LEASED'
+             AND b.lease_id = ?
+             AND b.lease_generation = ?
+             AND b.worker_id = ?
+             AND b.lease_expires_at > ?
+        )`,
+    [
+      value,
+      input.contentHash,
+      input.workItemId ?? null,
+      input.leaseId,
+      input.leaseGeneration,
+      input.submittedBy ?? null,
+      at,
+      input.binId,
+      input.unitKey,
+      existing.content_hash,
+      input.leaseId,
+      input.leaseGeneration,
+      input.submittedBy ?? null,
+      at,
+    ],
+  );
+  if (updated.changes !== 1) {
+    return { stored: false, corrected: false, previousHash: existing.content_hash };
+  }
+  return { stored: true, corrected: true, previousHash: existing.content_hash };
 }
 
 export async function listBinUnitResults(binId: string): Promise<BinUnitResult[]> {

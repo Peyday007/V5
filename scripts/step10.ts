@@ -228,14 +228,25 @@ async function measureBins(ids: string[]): Promise<void> {
     }
     for (const n of sentPerGeneration.values()) if (n > 1) duplicateSends += n - 1;
 
-    const readyAt = bin.readyAt ? new Date(bin.readyAt).getTime() : null;
+    // The FIRST time it was ready, from the append-only event — not bin.readyAt,
+    // which is reset every time a released bin returns to READY. Measuring
+    // against the moving one produced negative latencies in rung 1: a dispatch
+    // sent before a later re-ready looks like it was sent before the bin
+    // existed.
+    const firstReady = events
+      .filter((e) => e.eventType === 'BIN_READY')
+      .map((e) => new Date(e.at).getTime())
+      .sort((a, b) => a - b)[0];
+    const readyAt = firstReady ?? (bin.readyAt ? new Date(bin.readyAt).getTime() : null);
     const firstSent = dispatches
       .filter((d) => d.sentAt)
       .map((d) => new Date(d.sentAt!).getTime())
       .sort((a, b) => a - b)[0];
-    const assigned = events.find(
-      (e) => e.eventType === 'BIN_ASSIGNED' || e.eventType === 'BIN_TAKEOVER',
-    );
+    // The first assignment, likewise: a bin reassigned after a release must not
+    // report the last pickup as its queue wait.
+    const assigned = events
+      .filter((e) => e.eventType === 'BIN_ASSIGNED' || e.eventType === 'BIN_TAKEOVER')
+      .sort((a, b) => a.at.localeCompare(b.at))[0];
     const assignedAt = assigned ? new Date(assigned.at).getTime() : null;
     const doneAt = bin.completedAt ? new Date(bin.completedAt).getTime() : null;
 

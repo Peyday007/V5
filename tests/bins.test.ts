@@ -31,6 +31,7 @@ import {
   getBin,
   heartbeatBin,
   listBinEvents,
+  listBinUnitResults,
   listDispatchesForBin,
   markDispatchFailed,
   markDispatchSent,
@@ -343,6 +344,139 @@ describe('a dead worker is taken over from its checkpoint', () => {
 });
 
 /* ========================================================================= */
+
+/* ========================================================================= */
+
+describe('a worker can correct a unit it got wrong', () => {
+  /*
+   * Found in production, in the most direct way available. A worker submitted a
+   * truncated sha-256 for one unit; Brain correctly refused the bin's
+   * completion; the worker tried to fix it and every correction came back
+   * DUPLICATE, because the write was ON CONFLICT DO NOTHING. It released the
+   * bin explaining exactly that, exhausted its three attempts, and one
+   * transcription slip killed the bin permanently.
+   *
+   * The rule is safe to relax for the same reason the refusal worked: Brain
+   * recomputes the value itself, so a correction cannot launder a wrong answer
+   * past the contract. Refusing corrections bought no integrity and converted a
+   * recoverable mistake into a dead bin.
+   */
+
+  it('replaces a wrong value, and the bin then completes', async () => {
+    const binId = await makeBin(projectA, { units: 2 });
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const proof = proofFrom(assigned, workerOne);
+    const units = assigned.bin.manifest.units;
+
+    // The production failure exactly: one unit truncated, the rest right.
+    const wrong = UNIT_TRANSFORMS[units[0]!.transform]!(units[0]!.input).slice(0, 12);
+    await submitUnit({ workerId: workerOne, proof, unitKey: units[0]!.key, value: wrong });
+    await submitUnit({
+      workerId: workerOne,
+      proof,
+      unitKey: units[1]!.key,
+      value: UNIT_TRANSFORMS[units[1]!.transform]!(units[1]!.input),
+    });
+
+    const refused = await requestCompletion({ workerId: workerOne, proof });
+    expect(refused.terminal).toBe(false);
+
+    // Fix it. This is the call that used to come back DUPLICATE forever.
+    const fix = await submitUnit({
+      workerId: workerOne,
+      proof,
+      unitKey: units[0]!.key,
+      value: UNIT_TRANSFORMS[units[0]!.transform]!(units[0]!.input),
+    });
+    expect(fix).toMatchObject({ held: true, stored: true, corrected: true });
+
+    const outcome = await requestCompletion({ workerId: workerOne, proof });
+    expect(outcome.terminal).toBe(true);
+    expect(outcome.state).toBe('COMPLETE');
+  });
+
+  it('records what it replaced, so nothing is overwritten silently', async () => {
+    const binId = await makeBin(projectA, { units: 1 });
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const proof = proofFrom(assigned, workerOne);
+    const unit = assigned.bin.manifest.units[0]!;
+
+    await submitUnit({ workerId: workerOne, proof, unitKey: unit.key, value: 'first answer' });
+    const firstHash = hashUnitValue('first answer');
+    await submitUnit({ workerId: workerOne, proof, unitKey: unit.key, value: 'second answer' });
+
+    const events = await listBinEvents(binId, 200);
+    const corrected = events.find((e) => e.outcome === 'CORRECTED');
+    expect(corrected).toBeDefined();
+    // The append-only history holds every value the unit ever had, even though
+    // the table holds only the current one.
+    expect(corrected!.measures['replacedContentHash']).toBe(firstHash);
+  });
+
+  it('reports an identical resubmission as already stored, not as a correction', async () => {
+    await makeBin(projectA, { units: 1 });
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const proof = proofFrom(assigned, workerOne);
+    const unit = assigned.bin.manifest.units[0]!;
+
+    await submitUnit({ workerId: workerOne, proof, unitKey: unit.key, value: 'same' });
+    const again = await submitUnit({ workerId: workerOne, proof, unitKey: unit.key, value: 'same' });
+    expect(again).toMatchObject({ held: true, stored: false, alreadyStored: true, corrected: false });
+  });
+
+  it('refuses a correction from a worker whose lease is gone', async () => {
+    // The fence again, at a new write. Relaxing first-write-wins must not mean
+    // the loser of a takeover can rewrite the winner's work.
+    const binId = await makeBin(projectA, { units: 1 });
+    const first = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const staleProof = proofFrom(first, workerOne);
+    const unit = first.bin.manifest.units[0]!;
+    await submitUnit({ workerId: workerOne, proof: staleProof, unitKey: unit.key, value: 'mine' });
+
+    await expireBinLease(binId);
+    const second = (await assignNextBin({ workerId: workerTwo, projectIds: [projectA] }))!;
+    expect(second.takeover).toBe(true);
+
+    const stale = await submitUnit({
+      workerId: workerOne,
+      proof: staleProof,
+      unitKey: unit.key,
+      value: 'stolen',
+    });
+    expect(stale).toEqual({ held: false });
+
+    const results = await listBinUnitResults(binId);
+    expect(results[0]!.value).toBe('mine');
+
+    // And the current holder can still correct it.
+    const ok = await submitUnit({
+      workerId: workerTwo,
+      proof: proofFrom(second, workerTwo),
+      unitKey: unit.key,
+      value: 'theirs',
+    });
+    expect(ok).toMatchObject({ stored: true, corrected: true });
+  });
+
+  it('leaves a completed bin\'s results immutable', async () => {
+    const binId = await makeBin(projectA, { units: 1 });
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const proof = proofFrom(assigned, workerOne);
+    const unit = assigned.bin.manifest.units[0]!;
+    await submitUnit({
+      workerId: workerOne,
+      proof,
+      unitKey: unit.key,
+      value: UNIT_TRANSFORMS[unit.transform]!(unit.input),
+    });
+    expect((await requestCompletion({ workerId: workerOne, proof })).state).toBe('COMPLETE');
+
+    const after = await submitUnit({ workerId: workerOne, proof, unitKey: unit.key, value: 'later' });
+    expect(after).toEqual({ held: false });
+    const results = await listBinUnitResults(binId);
+    expect(results[0]!.value).toBe(UNIT_TRANSFORMS[unit.transform]!(unit.input));
+  });
+});
 
 describe('a worker stays inside its bin', () => {
   it('is handed only items belonging to the bin it holds', async () => {
