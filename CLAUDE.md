@@ -703,13 +703,36 @@ for somebody to say go.
 > evidence only after an unattended run has actually happened, never before.
 
 **Step 10 must implement and prove automatic worker activation or scheduling.**
-Until it does, the Brain never reaches out to Claude, and no document may
-suggest otherwise. **The activation mechanism is unbuilt and undecided** — not
-designed, not prototyped, not chosen. Whatever eventually carries authorization
-into an unattended session is Step 10's to find; CF-8 (live token refresh
-unverified) and CF-11 (the surface decides whether a worker can authorize at
-all) are the two known constraints on it, and neither is solved. Do not
-represent scheduling as working, imminent, or a matter of wiring.
+It has implemented it. It has not yet proven it, and those are different
+sentences.
+
+**Brain now reaches out to Claude.** A bin becoming `READY` writes a durable
+dispatch intent, and a ten-second tick turns intents into a fire against the
+worker's routine — measured in production at 4.7 seconds from ready to fired,
+with nobody involved. An earlier version of this paragraph said the mechanism
+was unbuilt and undecided. That was true when it was written and is not true
+now; the correction is recorded rather than quietly deleted, the same way §22
+records Step 7's wrong reasoning about OAuth.
+
+**What is unproven is that a fired worker can act.** The activation arrives and
+stops at a permission prompt on its first connector tool call, with nobody
+present to answer. That is **CF-11 confirmed rather than theorised**: a routine
+carries a tool allowlist, attaching a connector does not grant its tools, and
+the setting that would is in the provider's UI and not reachable from Brain.
+The split it establishes is the durable rule:
+
+> **Brain owns dispatch. The surface owns whether a worker may act.** A worker
+> identity that can authorize non-interactively is granted where the worker
+> runs, not where the work is held. No amount of Brain-side code substitutes
+> for it, and Brain must never mint its own workers or choose their permissions
+> to get around it.
+
+**CF-8 is untouched.** Live token refresh is still unverified.
+
+So: the dispatcher working is not the same claim as the fleet working. Until an
+unattended worker has completed a bin end to end, do not represent scheduling as
+working, and do not describe the platform as running itself. Saying "Brain
+fires" is now accurate; saying "Brain runs workers" is not yet.
 
 
 ---

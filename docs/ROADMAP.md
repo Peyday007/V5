@@ -67,41 +67,51 @@ order is a dependency order, not a preference.
 | **11** | Additional workers and fleet controls |
 | **12** | The control centre — the Brain drives the fleet, not a person |
 
-### What Step 10 has to solve, and has not
+### Where Step 10 actually is
 
-**Nothing starts a worker but a person, and that is still true.** Step 9 ran on
-manually initiated Cowork sessions, and the largest measured block of elapsed
-time in the whole step was a packet sitting in the queue waiting for somebody to
-say go.
+**The mechanism exists and it fires.** This section previously said it had not
+been designed, prototyped or chosen. That is no longer true and the correction
+belongs here rather than in a commit message nobody reads.
 
-Step 9's last stretch — synthesis, three audit roles, the judge's verdict — was
-in fact claimed and completed by a Cowork **scheduled task** with nobody
-attending it, under the narrow one-off exception recorded in `CLAUDE.md` §22.
-That is real evidence and it is recorded as such, but it is evidence about
-*Cowork's* scheduler, not about anything the Brain does. **The Brain still never
-reaches out to Claude.** An operator's scheduled task drained a queue; that is
-not an activation mechanism the platform owns, and it does not close this step.
+`services/dispatch/loop.ts` is a ten-second tick that reads two tables and
+sometimes makes one HTTP request. A bin becoming `READY` writes a durable intent
+keyed `(bin_id, lease_generation)`; a separate pass turns intents into calls, so
+a crash between the two loses nothing. In production it took a bin from ready to
+a fired activation in **4.7 seconds** with nobody involved, and it redrives what
+a restart interrupted.
 
-**The activation mechanism does not exist.** It has not been designed,
-prototyped or chosen — there is no preferred approach being written up here,
-because there isn't one. Two recorded constraints bound it and neither is
-solved:
+**What is not proven is that a fired worker can do anything.** The activation
+arrives and then stops at a permission prompt on its first connector tool call,
+with nobody there to answer it. That is **CF-11 confirmed rather than
+theorised**: the routine carries an explicit tool allowlist naming no connector
+tool, and attaching the connector — which was done — does not grant the tools.
+The remedy is an operator setting in the provider's own UI, and it is not
+reachable from Brain: `update_trigger` exposes only name, cron, enabled, model
+and prompt.
 
-- **CF-8** — live token refresh is unverified, and Step 9 did not touch it. An
-  unattended occurrence reconnecting is not proof that a token refreshed;
-  nothing has yet observed one expiring and being renewed mid-packet. Refresh
-  tokens are issued for thirty days and the rotation grant is implemented and
-  tested, but nothing has exercised it against a real surface. Harmless for a
-  bounded session; decide it before anything runs unattended for long.
-- **CF-11** — the surface decides whether a worker can authorize at all. A chat
-  inherits the account's connector authorization; a Claude Code session
-  authorizes per session and cannot do it non-interactively. So whatever fires
-  an unattended worker has to carry authorization into it, and no mechanism for
-  that has been identified.
+So the honest position is narrower and more specific than "no mechanism has been
+identified", and it splits in two:
 
-Until Step 10 lands and is proven live, **no document may describe the Brain as
-scheduling anything**, and nothing may present activation as a matter of wiring
-up something that already works.
+- **Brain's half is built and proven live.** Dispatch, the outbox, fencing,
+  bin confinement, and Brain-decided completion.
+- **The surface's half is a configuration Brain cannot make.** A worker
+  identity that can authorize non-interactively is granted where the worker
+  runs, not where the work is held.
+
+**CF-8 is untouched and still open.** Live token refresh is unverified; nothing
+has observed a token expiring and being renewed mid-packet. Refresh tokens are
+issued for thirty days and the rotation grant is implemented and tested, but
+nothing has exercised it against a real surface. Harmless for a bounded session;
+decide it before anything runs unattended for long.
+
+**The concurrency ramp has not run**, and no operating standards have been
+derived, because a rung measures how many activations drain in parallel and none
+currently drains at all.
+
+Until an unattended worker has actually completed a bin end to end, **no
+document may describe the Brain as scheduling anything**, and nothing may
+present activation as a matter of wiring up something that already works. The
+dispatcher working is not the same claim as the fleet working.
 
 ### What Step 12 is actually for
 
