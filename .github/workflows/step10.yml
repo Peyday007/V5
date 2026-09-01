@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'setup | seed | report | tick | reconcile | standards | fire-check | trace | watch | ramp'
+        description: 'setup | seed | report | tick | reconcile | standards | fire-check | prompt | trace | watch | ramp'
         required: true
         default: report
       arg1:

@@ -18,6 +18,7 @@
  *   reconcile             run the governing-invariant pass
  *   standards             the measurements Step 11 will start from
  *   fire-check            whether activation is configured, without the token
+ *   prompt                the exact prompt a worker routine must hold
  *   trace <binId>         one bin's dispatches, events and units, in order
  *   watch [secs] [every]  follow the bins from inside the machine until they settle
  *   ramp <n> [units] [secs]  one rung of the concurrency ramp: seed, watch, measure
@@ -38,6 +39,11 @@ import {
 import { reconcileBins } from '../server/services/bins/service.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import { describeFireTarget } from '../server/services/dispatch/fire.ts';
+import {
+  instructionProblems,
+  WORKER_INSTRUCTIONS,
+  WORKER_INSTRUCTIONS_VERSION,
+} from '../server/services/bins/workerInstructions.ts';
 import type { BinManifest, WorkerScope } from '../server/domain/types.ts';
 
 const SLUG = 'step-10-acceptance';
@@ -343,6 +349,34 @@ async function main(): Promise<void> {
     console.log(`  completion refusals  ${refusals}`);
     console.log(`  quality signals      ${signals}`);
     console.log(`STEP10: OK standards bins=${bins.length}`);
+    return;
+  }
+
+  if (command === 'prompt') {
+    // Printed from the constant, never kept as a second copy of it.
+    //
+    // A routine holds its own copy of this text, made when it was created, and
+    // Brain can neither see nor fix drift in it — so the one thing that must
+    // not happen is a *third* copy sitting in the repository going stale. When
+    // somebody has to recreate a routine, they should be reading today's
+    // prompt out of today's deployment.
+    //
+    // Gated on the contract the instructions are supposed to satisfy: a prompt
+    // that names an id, a project or a subject is one this platform must never
+    // hand anybody, and refusing here costs a round trip where shipping it
+    // costs a worker that thinks it has an assignment of its own.
+    const problems = instructionProblems();
+    if (problems.length > 0) {
+      console.log(`STEP10 PROMPT REFUSED version=${WORKER_INSTRUCTIONS_VERSION}`);
+      for (const problem of problems) console.log(`  ${problem}`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`STEP10 PROMPT version=${WORKER_INSTRUCTIONS_VERSION}`);
+    console.log('--- begin ---');
+    console.log(WORKER_INSTRUCTIONS);
+    console.log('--- end ---');
+    console.log(`STEP10: OK prompt version=${WORKER_INSTRUCTIONS_VERSION}`);
     return;
   }
 
