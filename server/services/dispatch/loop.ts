@@ -31,7 +31,9 @@
  *      first means the send pass never spends an activation on a bin that no
  *      longer wants one.
  *
- *   2. **Ensure.** Every READY bin gets an intent at its current generation.
+ *   2. **Ensure.** Every dispatchable bin gets an intent at its current
+ *      generation — READY, or LEASED with a lease that has run out, which is
+ *      exactly what the assigner will hand to the next worker who asks.
  *      `ON CONFLICT DO NOTHING` makes this idempotent, so running it every tick
  *      forever creates exactly one row per bin per generation. This is also the
  *      recovery path: a lease that expires advances the generation, and the bin
@@ -53,7 +55,8 @@ import {
   claimDispatchIntent,
   ensureDispatchIntent,
   getBin,
-  listBins,
+  isDispatchable,
+  listDispatchableBins,
   markDispatchFailed,
   markDispatchSent,
   recordBinEvent,
@@ -106,15 +109,17 @@ export async function dispatchTick(
 
   result.superseded = await supersedeStaleIntents();
 
-  // Ensure intent for everything ready. Bounded: the dispatcher reads a page of
-  // ready bins, not the world.
-  const ready = await listBins({ states: ['READY'], limit: 200 });
-  for (const bin of ready) {
+  // Ensure intent for everything a worker could be given — which is not the
+  // same set as "READY". A bin whose worker died is claimable the moment its
+  // lease runs out, and `listDispatchableBins` is the assigner's own predicate
+  // rather than a second opinion about it. Bounded: a page, not the world.
+  //
+  // The intent is keyed at the bin's *current* generation, so a takeover that
+  // advances the generation supersedes this one through the ordinary path.
+  // Bins out of attempts are excluded by the same query, because firing at a
+  // bin no worker is allowed to take burns an activation for nothing.
+  for (const bin of await listDispatchableBins(200)) {
     if (options.projectIds && !options.projectIds.includes(bin.projectId)) continue;
-    // A bin out of attempts is not dispatchable. Reconciliation decides what
-    // becomes of it; firing at it would burn activations against a bin no
-    // worker is allowed to take.
-    if (bin.attemptCount >= bin.maxAttempts) continue;
     if (await ensureDispatchIntent(bin)) result.intentsCreated += 1;
   }
 
@@ -139,7 +144,7 @@ export async function dispatchTick(
     // the milliseconds since, and an activation for a bin somebody already
     // holds is a wasted one.
     const bin = await getBin(intent.binId);
-    if (!bin || bin.state !== 'READY' || bin.leaseGeneration !== intent.leaseGeneration) {
+    if (!bin || !isDispatchable(bin) || bin.leaseGeneration !== intent.leaseGeneration) {
       await markDispatchFailed(intent.id, {
         kind: 'SUPERSEDED',
         message: 'The bin was taken or moved on before this intent was sent.',
@@ -243,16 +248,18 @@ export function stopDispatcher(): void {
  * inferred from a gap.
  */
 export async function recoverDispatchAtBoot(): Promise<number> {
-  const ready = await listBins({ states: ['READY'], limit: 500 });
+  // The same set the tick uses. A restart is also the moment when leases that
+  // expired while the process was down become claimable, and those bins need
+  // an activation just as much as the ones that were merely waiting.
+  const dispatchable = await listDispatchableBins(500);
   let created = 0;
-  for (const bin of ready) {
-    if (bin.attemptCount >= bin.maxAttempts) continue;
+  for (const bin of dispatchable) {
     if (await ensureDispatchIntent(bin)) created += 1;
   }
   await recordBinEvent({
     eventType: 'DISPATCH_BOOT_RECOVERY',
     outcome: 'REDRIVEN',
-    measures: { readyBins: ready.length, intentsCreated: created },
+    measures: { dispatchableBins: dispatchable.length, intentsCreated: created },
   });
   return created;
 }

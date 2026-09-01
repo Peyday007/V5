@@ -107,10 +107,14 @@ version matched its own tool-name prefix `bin_` and had to be corrected.
 
 ### The tests
 
-`tests/bins.test.ts` — **44 tests, all passing**, on SQLite and on Postgres —
-across atomic assignment, the fence, dead-worker takeover, bin confinement,
-Brain-decides-completion, dispatch intent, one-activation-drains, the governing
-invariant, telemetry, and the permanent instructions.
+`tests/bins.test.ts` — **49 tests, all passing**, on SQLite and on Postgres —
+across atomic assignment, the fence, dead-worker takeover, dead-worker
+*dispatch*, bin confinement, Brain-decides-completion, dispatch intent,
+one-activation-drains, the governing invariant, telemetry, and the permanent
+instructions.
+
+The whole suite: **1120/1120 on Postgres**, 1095 passing and 25 skipped on
+SQLite.
 
 Two of them exist because inverting the code did **not** break them at first:
 the assignment CAS's generation guard and the ownership clause's generation
@@ -118,6 +122,57 @@ term were both being carried by neighbouring predicates — the state-and-expiry
 check, and freshly minted lease ids. The tests were tightened until removing the
 generation term alone fails. Recorded rather than quietly fixed, because a test
 that passes for the wrong reason is worse than a missing one.
+
+---
+
+## The defect production found
+
+**The dispatcher and the assigner disagreed about what "there is work" means,
+and only one of them could start a worker.**
+
+A live trace of `bin_a25fbc6da09445a0ad2c` read:
+
+```
+05:19:14.849  BIN_READY
+05:19:18.168  DISPATCH_INTENT   PENDING
+05:19:19.611  DISPATCH_SENT     session_01PwUw2v5iK5sUtDvyPMJXDL
+05:37:14.363  BIN_ASSIGNED      wkr_1cdd82cfb2a54faf8edd
+              no units, no further heartbeat
+  lease expires 05:52:14 — still LEASED when read at 06:03:55
+```
+
+Eleven minutes past its own expiry, still held by a worker that had stopped.
+`assignNextBin` would have handed it to the next worker who asked — it has
+always selected `READY OR (LEASED AND lease_expires_at <= now)`, which is §19's
+property that recovery must not depend on one process staying alive. But three
+other places wrote the predicate out again and all three said only `READY`:
+
+| where | predicate |
+|---|---|
+| `assignNextBin` | `READY OR (LEASED AND expired)` |
+| `dispatchTick` ensure pass | `states: ['READY']` |
+| `dispatchTick` pre-fire re-read | `bin.state !== 'READY'` |
+| `supersedeStaleIntents` | `state <> 'READY'` |
+
+So a worker that dies leaves a bin that is claimable and **never activated**.
+If something else happens to be ready, another worker eventually stumbles on it;
+if nothing is, nobody ever calls and the bin waits forever. That is precisely
+the promise Step 10 exists to keep, failing in the one case it was built for.
+
+The fix is one exported predicate — `DISPATCHABLE_SQL`, `isDispatchable`,
+`listDispatchableBins` — used by all four. Deliberately **not** fixed by calling
+`sweepExpiredBinLeases` on a timer: a sweeper that must run for stranded work to
+be recovered is exactly the dependency on a living process that §19 forbids,
+wearing a different hat. The sweeper stays what Step 5 said it was — metrics.
+
+Five tests cover it, and two of them fail when the fix is inverted: the ensure
+pass narrowed back to `READY` strands the bin, and the supersede pass widened
+back to `<> 'READY'` retires the new intent a moment after it is created — which
+would have made the fix invisible rather than merely absent.
+
+This is the same failure mode as the evidence-lane defect earlier in this
+project and the `attempt_count` claim bug below: **a rule written out in several
+places drifts, and the copy that drifts is the one nobody is looking at.**
 
 ---
 
@@ -206,7 +261,9 @@ is what is under test, so the harness's only actions are create and read.
 ### Production proofs still outstanding
 
 - one bounded **real research bin** through the full lifecycle
-- worker death and takeover **in production** (proven in tests, not live)
+- worker death and takeover **in production**. A worker did die in production —
+  that is how the dispatch defect above was found — but the takeover half has
+  only been proven in tests, because taking over requires an activation.
 - duplicate-trigger behaviour **in production**
 - restart and redeploy persistence **in production** (`DISPATCH_BOOT_RECOVERY`
   rows exist, but no deliberate mid-flight restart has been performed)

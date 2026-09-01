@@ -22,6 +22,8 @@ import {
   assignNextBin,
   checkpointBin,
   claimDispatchIntent,
+  isDispatchable,
+  listDispatchableBins,
   countDispatches,
   createBin,
   ensureDispatchIntent,
@@ -45,7 +47,7 @@ import {
   UNIT_TRANSFORMS,
 } from '../server/services/bins/contracts.ts';
 import { nextItemInBin, reconcileBins, requestCompletion, submitUnit } from '../server/services/bins/service.ts';
-import { dispatchTick } from '../server/services/dispatch/loop.ts';
+import { dispatchTick, recoverDispatchAtBoot } from '../server/services/dispatch/loop.ts';
 import {
   instructionProblems,
   WORKER_INSTRUCTIONS,
@@ -679,6 +681,101 @@ describe('dispatch intent', () => {
 });
 
 /* ========================================================================= */
+
+/* ========================================================================= */
+
+describe('a bin whose worker died is dispatchable, not merely claimable', () => {
+  /*
+   * Found in production rather than here, which is why it is written down at
+   * this length. `assignNextBin` had always treated an expired lease as
+   * claimable — the §19 property that recovery must not depend on one process
+   * staying alive. The dispatcher asked a different question: it looked only
+   * for `state = 'READY'`.
+   *
+   * So a worker that died left a bin the assigner would happily hand to the
+   * next caller and the dispatcher would never start anyone for. With nothing
+   * else ready, nobody ever calls, and the bin waits forever. The two halves
+   * of the system disagreed about what "there is work" means, and only one of
+   * them could start a worker.
+   */
+
+  it('is what the assigner already thought, said once instead of four times', async () => {
+    const binId = await makeBin(projectA);
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+
+    // While the lease is live the bin belongs to somebody. Nobody else's.
+    expect(isDispatchable((await getBin(binId))!)).toBe(false);
+    expect((await listDispatchableBins()).map((b) => b.id)).not.toContain(binId);
+
+    // The session vanishes. Nothing runs a sweeper; the lease simply lapses.
+    await expireBinLease(binId);
+
+    expect(isDispatchable((await getBin(binId))!)).toBe(true);
+    expect((await listDispatchableBins()).map((b) => b.id)).toContain(binId);
+    // And the assigner agrees, which is the whole point of one predicate.
+    const second = (await assignNextBin({ workerId: workerTwo, projectIds: [projectA] }))!;
+    expect(second.takeover).toBe(true);
+    void assigned;
+  });
+
+  it('earns an activation from the tick, which is the bug this fixes', async () => {
+    const binId = await makeBin(projectA);
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    // The intent that put it there is spent; the bin is on generation 1 now.
+    expect(assigned.leaseGeneration).toBe(1);
+
+    await dispatchTick({ burst: 1 });
+    expect(await countDispatches(binId, 'PENDING')).toBe(0);
+
+    await expireBinLease(binId);
+
+    // Before the fix this created nothing and the bin was stranded.
+    const tick = await dispatchTick({ burst: 1 });
+    expect(tick.intentsCreated).toBe(1);
+    const intents = await listDispatchesForBin(binId);
+    expect(intents.some((d) => d.leaseGeneration === 1)).toBe(true);
+  });
+
+  it('keeps that intent rather than superseding it a moment later', async () => {
+    // The supersede pass runs first on every tick. It used to retire anything
+    // whose bin was not READY, which would have deleted the intent the ensure
+    // pass had just created — the fix would have been invisible and useless.
+    const binId = await makeBin(projectA);
+    await assignNextBin({ workerId: workerOne, projectIds: [projectA] });
+    await expireBinLease(binId);
+    await dispatchTick({ burst: 1 });
+
+    expect(await supersedeStaleIntents()).toBe(0);
+    expect(await countDispatches(binId, 'PENDING')).toBe(1);
+  });
+
+  it('stops earning activations once the bin is out of attempts', async () => {
+    // Otherwise a bin whose workers keep dying is an unbounded activation
+    // source, and the ceiling is the user's allowance.
+    const binId = await makeBin(projectA);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const held = await assignNextBin({ workerId: workerOne, projectIds: [projectA] });
+      expect(held).not.toBeNull();
+      await expireBinLease(binId);
+    }
+    const bin = (await getBin(binId))!;
+    expect(bin.attemptCount).toBe(bin.maxAttempts);
+
+    expect((await listDispatchableBins()).map((b) => b.id)).not.toContain(binId);
+    expect((await dispatchTick({ burst: 1 })).intentsCreated).toBe(0);
+    // And no worker may take it either, so the two agree at the ceiling too.
+    expect(await assignNextBin({ workerId: workerTwo, projectIds: [projectA] })).toBeNull();
+  });
+
+  it('is redriven at boot, because a restart is when leases lapse unattended', async () => {
+    const binId = await makeBin(projectA);
+    await assignNextBin({ workerId: workerOne, projectIds: [projectA] });
+    await expireBinLease(binId);
+
+    expect(await recoverDispatchAtBoot()).toBe(1);
+    expect(await countDispatches(binId, 'PENDING')).toBe(1);
+  });
+});
 
 describe('one activation drains a bin, then asks for another', () => {
   it('finishes every unit and is then given a different bin', async () => {

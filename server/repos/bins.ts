@@ -518,6 +518,49 @@ export interface AssignedBin {
  * `attempt_count` advances here rather than at release: the attempt is the
  * assignment, whether or not whoever held it last ever came back.
  */
+/**
+ * What "there is work for a worker" means, in one place.
+ *
+ * This predicate was written out four times — the assigner, the dispatcher's
+ * ensure pass, its pre-fire re-read, and the supersede pass — and three of them
+ * said `state = 'READY'` while the assigner said READY *or* a LEASED bin whose
+ * lease has run out. The disagreement is not cosmetic: a worker that dies
+ * leaves a bin the assigner will happily hand to the next caller and the
+ * dispatcher will never start anyone for. If nothing else is ready, nothing
+ * ever comes, and the bin waits forever.
+ *
+ * Fixed here rather than by calling the sweeper on a timer, because §19 is
+ * explicit that an expired lease is claimable work and recovery must never
+ * depend on one process staying alive. A sweeper that has to run for stranded
+ * work to be recovered is that dependency wearing a different hat.
+ *
+ * One `?`, bound to now.
+ */
+export const DISPATCHABLE_SQL = "(state = 'READY' OR (state = 'LEASED' AND lease_expires_at <= ?))";
+
+/** The same question asked of a row already in memory. */
+export function isDispatchable(bin: Bin, now: string = binNow()): boolean {
+  if (bin.state === 'READY') return true;
+  if (bin.state !== 'LEASED') return false;
+  return bin.leaseExpiresAt !== null && bin.leaseExpiresAt <= now;
+}
+
+/**
+ * Every bin that deserves an activation, in the order a worker would be given
+ * them. Bounded: the dispatcher reads a page, not the world.
+ */
+export async function listDispatchableBins(limit = 200): Promise<Bin[]> {
+  const rows = await getDb().all<BinRow>(
+    `SELECT * FROM bins
+      WHERE ${DISPATCHABLE_SQL}
+        AND attempt_count < max_attempts
+      ORDER BY priority DESC, created_at, rowid
+      LIMIT ?`,
+    [binNow(), Math.min(500, Math.max(1, limit))],
+  );
+  return rows.map(mapBin);
+}
+
 export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin | null> {
   const db = getDb();
   const leaseMs = clampBinLeaseMs(input.leaseMs);
@@ -532,7 +575,7 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
     // decided. Two workers see the same list and the swap settles the rest.
     const candidates = await db.all<BinRow>(
       `SELECT * FROM bins
-        WHERE (state = 'READY' OR (state = 'LEASED' AND lease_expires_at <= ?))
+        WHERE ${DISPATCHABLE_SQL}
           AND project_id IN (${input.projectIds.map(() => '?').join(', ')})
           AND attempt_count < max_attempts
         ORDER BY priority DESC, created_at, rowid
@@ -568,7 +611,7 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
                 updated_at = ?
           WHERE id = ?
             AND lease_generation = ?
-            AND (state = 'READY' OR (state = 'LEASED' AND lease_expires_at <= ?))`,
+            AND ${DISPATCHABLE_SQL}`,
         [
           nextGeneration,
           leaseId,
@@ -1117,10 +1160,10 @@ export async function supersedeStaleIntents(): Promise<number> {
       WHERE state = 'PENDING'
         AND bin_id IN (
           SELECT id FROM bins
-           WHERE state <> 'READY'
+           WHERE NOT ${DISPATCHABLE_SQL}
               OR lease_generation <> bin_dispatch.lease_generation
         )`,
-    [at],
+    [at, at],
   );
   return result.changes;
 }
