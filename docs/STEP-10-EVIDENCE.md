@@ -272,6 +272,51 @@ machine here may do and not something to take without being asked. It is also
 unnecessary — §22's shape already says the operator authorizes and the worker is
 authorized. Step 10 requires *activation* to be unattended, not *provisioning*.
 
+### The project-scope permission rule cannot reach a fired worker
+
+The documented remedy for an MCP tool that prompts is a `permissions.allow`
+entry in the project's `.claude/settings.json`. It is committed
+(`mcp__cloud-brain` and `mcp__cloud-brain__*`, with no `ask` or `deny` rule
+anywhere in the repository to override it) and it changes nothing here, for a
+reason worth writing down rather than rediscovering:
+
+**A fired worker session has no repository, so there is no project for project
+settings to belong to.**
+
+The comparison is between two sessions in the same environment
+(`env_01UpEZ7tNouciRZB7PTwo4XS`):
+
+| | `session_context` |
+|---|---|
+| a session with the repo | `sources: [{git_repository: {url: .../Peyday007/V5}}]`, `outcomes: [… branches: ["claude/zealous-hypatia-78a2yp"]]` |
+| a fired Brain worker | `{autofix_on_pr_create: false, permission_mode: "auto"}` — no `sources` key at all |
+
+The routine agrees: its `job_config.ccr` carries an `environment_id` and an
+`allowed_tools` list and no `sources`, and its `derived_state` reads
+`folders_state: "FOLDERS_STATE_NONE"`.
+
+So there are **two independent gates**, and an earlier note here named only the
+first:
+
+1. the routine's `session_context.allowed_tools`, which lists no `mcp__*` tool;
+2. the absence of a checkout, which makes project settings unreadable.
+
+Fixing (2) alone would only help if a settings file may pre-approve a tool the
+session allowlist omits. Fixing (1) needs no checkout at all. That is why the
+remedy is the routine's own tool selection, and attaching the repository is
+worth doing as well rather than instead.
+
+Proven, not inferred: bin `bin_1dfcc6475f7e43e8bd11` went `READY` at
+07:16:26, Brain fired at 07:16:37 into session
+`cse_01AQjdv9F56g2vDkEMeNVksN` — created **after** the rule was committed and
+pushed — and that session sat at `SESSION_STATUS_BUCKET_BLOCKED` on
+`mcp__cloud-brain__brain_check_in`. Brain's own rows show `DISPATCH_SENT` and
+then nothing: no `BIN_ASSIGNED`, no units, the bin still `READY`.
+
+An account-level "Always allow" on the connector was also tried and changed
+nothing; the routine's `updated_at` stayed at 05:10, so that setting writes
+nowhere near the routine.
+
 ### The concurrency ramp — not run
 
 1 → 2 → 5 → 10 → 20 → 30 → 50 has not been executed, because a rung measures
