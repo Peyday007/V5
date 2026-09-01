@@ -303,8 +303,8 @@ dispatcher is what is under test, so its only actions are create and read.
 | 5 | 70.6s | 5/5 | 14.8s | 29.2s | 26.0s | 56.0s | 5 | 0 | 0 | 0 | 0 | 0 | 0 | none |
 | 10 | 91.1s | 10/10 | 14.1s | 27.3s | 28.1s | 61.1s | 10 | 0 | 0 | **3** | 0 | 0 | 0 | none |
 | 20 | 111.8s | 20/20 | 19.1s | 41.0s | 24.7s | 62.9s | 20 | 0 | 0 | 1 | 0 | 0 | 0 | **RATE_LIMIT×4** |
-| 30 | *running* | | | | | | | | | | | | | |
-| 50 | *not yet run* | | | | | | | | | | | | | |
+| 30 | 2405.7s | **0/30** | — | — | — | — | 0 | 0 | 0 | 0 | 0 | 0 | 30 `READY` | **RATE_LIMIT×30** |
+| 50 | *not run* — see below | | | | | | | | | | | | | |
 
 All medians. `ready→fired` at rung 20 is n=13 rather than n=20, because seven
 activations were never sent — see below. **Across every rung: zero duplicate
@@ -333,6 +333,65 @@ produced, because it means **activations are not bins**: a worker that finishes
 one bin asks for another, so a rate-limited fleet degrades in throughput rather
 than in completeness. Brain's own behaviour on the limit was what §16 requires —
 back off, stop the burst, keep the accepted work, spend nothing more.
+
+### The ceiling, and what Brain did when it arrived
+
+Rung 30 is the answer to "how many workers". Not one of its thirty activations
+was sent: every dispatch attempt returned `RATE_LIMIT`, the account's five-hour
+allowance having been consumed by the ramp. The rung ran its full 40-minute
+deadline and completed nothing.
+
+**What matters is the shape of the failure.** All thirty bins were still
+`READY`, each holding its intent, none failed, none stranded, none corrupted,
+and no paid overage was enabled. `reconcileBins` then examined all thirty-one
+open bins and called **thirty of them healthy** — waiting for an allowance is
+not a fault — escalating exactly one, the bin the correction defect had killed
+earlier, to `NEEDS_HUMAN`. That is §16 working: *the run pauses, keeps every
+queued item, and resumes when the allowance comes back. It is never a reason to
+lower the evidence bar.*
+
+Rung 50 was not run. With zero activations available it could only have produced
+`RATE_LIMIT×50` after another forty minutes — the same finding at a higher
+number, bought with more of the user's allowance. The ceiling was located at 20
+and confirmed at 30; a third measurement of the same wall is not evidence.
+
+### The operating standards this produced
+
+There are **two different ceilings** and conflating them would give bad advice.
+
+**Concurrency ceiling — 10 simultaneous activations.** Rungs 1 through 10 sent
+every activation with no throttling at all. Rung 20 sent 13 of 20 before the
+provider refused. The wall is therefore between 10 and 20 in-flight sessions,
+and 10 is the highest number actually observed clean. Recommend **10**, and
+treat 13 as the observed edge rather than a target.
+
+**Window ceiling — unmeasured, and honestly so.** Roughly 42 worker activations
+plus this heavy interactive session exhausted one five-hour window. The
+worker-only figure cannot be separated from that, because the operator's own
+session draws on the same allowance. What can be said is that a fleet sized for
+the concurrency ceiling will exhaust a five-hour window in well under an hour of
+continuous work, so **the binding constraint is the window, not the burst.**
+
+**`DISPATCH_BURST = 5` per ten-second tick is too aggressive for this provider.**
+It offers 30 activations a minute against a wall around 13 in flight. It was a
+deliberate starting point — the code says so — and the ramp is what it was
+waiting for. Lowering it is Step 11's capacity-aware routing, not a Step 10
+patch, but the number it should start from is now measured rather than guessed.
+
+**Ordinary bin size — considerably larger than three trivial units.** The
+acceptance bins drained in 21–32 s median while queue wait ran 22–41 s, so more
+than half of each bin's wall-clock was activation overhead. That is fine for a
+dispatch test and wrong as a standard. A bin should carry enough work that
+starting a worker is a rounding error: **aim for five to ten minutes of drain**,
+which for research means roughly one fragment or a small dependent group, not a
+single claim.
+
+**Activations are not bins, and this is the most useful thing the ramp found.**
+Rung 20 completed twenty bins from thirteen activations — 1.54 bins each —
+because a worker that finishes one bin asks for another. A throttled fleet
+therefore loses *throughput*, not *work*. Sizing a fleet one-worker-per-bin
+over-provisions it.
+
 
 ### Production proofs still outstanding
 
