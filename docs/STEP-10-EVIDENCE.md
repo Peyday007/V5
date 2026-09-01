@@ -289,15 +289,50 @@ second backend has been the only thing that made a concurrency defect visible.
 
 ## What is NOT proven
 
-### The concurrency ramp — not run
+### The concurrency ramp
 
-1 → 2 → 5 → 10 → 20 → 30 → 50 has not been executed. Until now a rung would have
-measured nothing, because no activation drained at all; that is no longer true
-and the ramp is the next thing to run. `scripts/step10.ts ramp` is written and
-deployed, seeds a rung, watches it settle from inside the machine, and reports
-queue wait, drain time and ready-to-done with medians. It never fires, assigns
-or nudges — the dispatcher is what is under test, so the harness's only actions
-are create and read.
+Seven rungs, each seeding N bins of 3 units at once and watching them settle
+from inside the machine. The harness never fires, assigns or nudges — the
+dispatcher is what is under test, so its only actions are create and read.
+
+| rung | wall | complete | ready→fired | queue wait | drain | ready→done | assign | take | dup | refuse | expiry | stale | stranded | provider |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 (first) | 902.9s | **0/1** | — | — | — | — | 3 | 0 | 0 | 3 | 0 | 0 | 1 `READY` | none |
+| 1 (rerun) | 60.3s | 1/1 | 7.1s | 22.2s | 32.2s | 54.4s | 1 | 0 | 0 | 0 | 0 | 0 | 0 | none |
+| 2 | 50.3s | 2/2 | 9.9s | 24.0s | 21.2s | 45.2s | 2 | 0 | 0 | 0 | 0 | 0 | 0 | none |
+| 5 | 70.6s | 5/5 | 14.8s | 29.2s | 26.0s | 56.0s | 5 | 0 | 0 | 0 | 0 | 0 | 0 | none |
+| 10 | 91.1s | 10/10 | 14.1s | 27.3s | 28.1s | 61.1s | 10 | 0 | 0 | **3** | 0 | 0 | 0 | none |
+| 20 | 111.8s | 20/20 | 19.1s | 41.0s | 24.7s | 62.9s | 20 | 0 | 0 | 1 | 0 | 0 | 0 | **RATE_LIMIT×4** |
+| 30 | *running* | | | | | | | | | | | | | |
+| 50 | *not yet run* | | | | | | | | | | | | | |
+
+All medians. `ready→fired` at rung 20 is n=13 rather than n=20, because seven
+activations were never sent — see below. **Across every rung: zero duplicate
+activations, zero fenced stale writes, zero takeovers, zero stranded bins.** The
+fence held without ever being tested by a real collision, which is worth saying
+precisely rather than claiming it was stressed.
+
+Ready→fired grows with rung size — 7.1s, 9.9s, 14.8s, 14.1s, 19.1s — and that is
+`DISPATCH_BURST = 5` per ten-second tick becoming visible, not the provider
+slowing down. A rung of 20 needs four ticks before the last intent is even
+attempted.
+
+**Rung 1 failed the first time and found a defect** — a unit result could not be
+corrected, so one truncated hash killed a bin permanently. Fixed, deployed, and
+the rung rerun clean. Written up under *The second defect production found*.
+
+**Rung 10 is the most valuable row in the table**: three completion refusals
+*and* ten of ten complete. Brain caught three wrong values under load and the
+workers corrected them. Before the fix those were three dead bins; the same
+numbers now describe a fleet recovering from its own mistakes.
+
+**Rung 20 is where the provider ceiling appears.** Four dispatch attempts came
+back `RATE_LIMIT`, so only 13 of 20 activations were ever sent — and all 20 bins
+still completed. That is the single most useful operating fact the ramp
+produced, because it means **activations are not bins**: a worker that finishes
+one bin asks for another, so a rate-limited fleet degrades in throughput rather
+than in completeness. Brain's own behaviour on the limit was what §16 requires —
+back off, stop the burst, keep the accepted work, spend nothing more.
 
 ### Production proofs still outstanding
 
