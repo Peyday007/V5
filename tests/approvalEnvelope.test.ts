@@ -72,6 +72,96 @@ describe('a plan inside the envelope is approved', () => {
   });
 });
 
+describe('the source classes the authorized assignment actually names', () => {
+  /*
+   * The first real plan was refused, and the refusal was wrong.
+   *
+   * It declared these four and only these four — they are the four the pinned
+   * assignment names in its evidence standard — and three of them matched. The
+   * fourth did not, because Michigan publishes its administrative rules as the
+   * Michigan Administrative *Code* and the list spelled `administrative rule`.
+   *
+   * The strings below are verbatim from the plan the worker filed, so this
+   * test is the check being applied to the words a planner really used rather
+   * than to words chosen to pass it.
+   */
+  const AS_FILED = [
+    'Michigan Occupational Code (MCL) full text',
+    'Michigan Administrative Code / R rules',
+    'Published LARA guidance',
+    'Board of Real Estate Brokers and Salespersons declaratory rulings',
+  ];
+
+  it('accepts every one of them, individually', () => {
+    for (const source of AS_FILED) {
+      const verdict = planFitsEnvelope({
+        envelope: ENVELOPE,
+        orchestration: packet(),
+        fragments: [fragment({ acceptableSourceTypes: [source] })],
+      });
+      expect(verdict.reasons.join(' '), source).not.toMatch(/accepts/);
+    }
+  });
+
+  it('approves the plan as filed', () => {
+    const verdict = planFitsEnvelope({
+      envelope: ENVELOPE,
+      orchestration: packet(),
+      fragments: [fragment({ acceptableSourceTypes: AS_FILED })],
+    });
+    expect(verdict.fits).toBe(true);
+  });
+
+  /*
+   * And the half that makes the correction a correction rather than a
+   * widening: everything the assignment excludes is still refused when a
+   * fragment declares it *acceptable*. If any of these ever passes, the list
+   * has stopped meaning "primary statutes, regulations and regulator sources".
+   */
+  const STILL_REFUSED = [
+    'Law-firm articles and secondary summaries used to support a claim',
+    'Brokerage association guidance pages',
+    'Practitioner blog posts and newsletters',
+    'Wikipedia and general reference sites',
+    'Vendor marketing material',
+  ];
+
+  it('still refuses every secondary class, one at a time', () => {
+    for (const source of STILL_REFUSED) {
+      const verdict = planFitsEnvelope({
+        envelope: ENVELOPE,
+        orchestration: packet(),
+        fragments: [fragment({ acceptableSourceTypes: [source] })],
+      });
+      expect(verdict.fits, source).toBe(false);
+      expect(verdict.reasons.join(' ')).toMatch(/not a primary statute, regulation or regulator/);
+    }
+  });
+
+  it('refuses a plan that adds one secondary class to the four good ones', () => {
+    const verdict = planFitsEnvelope({
+      envelope: ENVELOPE,
+      orchestration: packet(),
+      fragments: [
+        fragment({ acceptableSourceTypes: [...AS_FILED, 'Law-firm client alerts'] }),
+      ],
+    });
+    expect(verdict.fits).toBe(false);
+  });
+
+  it('records the validator version that made the decision', () => {
+    const verdict = planFitsEnvelope({
+      envelope: ENVELOPE,
+      orchestration: packet(),
+      fragments: [fragment({ acceptableSourceTypes: AS_FILED })],
+    });
+    // Bumped when the checks changed meaning, so an approval recorded before
+    // the correction and one recorded after are distinguishable in the audit.
+    expect(verdict.validatorVersion).toBe(ENVELOPE_VALIDATOR_VERSION);
+    expect(verdict.validatorVersion).toBe('2026-09-01.2');
+  });
+});
+
 describe('a plan outside the envelope goes to a person', () => {
   it('refuses an assignment that drifted by even one word', () => {
     const verdict = planFitsEnvelope({

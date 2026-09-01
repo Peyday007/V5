@@ -51,7 +51,7 @@ import type { ResearchFragment, ResearchOrchestration } from '../../domain/types
  * Recorded on every automatic approval, because "Brain approved this" is only
  * auditable if you can tell which rules it applied.
  */
-export const ENVELOPE_VALIDATOR_VERSION = '2026-09-01.1';
+export const ENVELOPE_VALIDATOR_VERSION = '2026-09-01.2';
 
 /** The exact assignment the Step 10 envelope authorizes, and nothing else. */
 export const MICHIGAN_LICENSING_ASSIGNMENT = `Determine whether, under Michigan law, a success-fee intermediary who arranges
@@ -135,8 +135,34 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
     geography: /michigan|\bmi\b/i,
     forbiddenScope:
       /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|minnesota|mississippi|missouri|montana|nebraska|nevada|ohio|oklahoma|oregon|pennsylvania|tennessee|texas|utah|vermont|virginia|washington|wisconsin|wyoming|new york|new jersey|north carolina|south carolina|west virginia|rhode island|new hampshire|new mexico|north dakota|south dakota)\b/i,
+    /*
+     * `administrative code` is here because the first real plan was refused
+     * without it, and the refusal was wrong.
+     *
+     * The plan declared exactly four source classes — the Michigan
+     * Occupational Code, "Michigan Administrative Code / R rules", published
+     * LARA guidance, and Board declaratory rulings — which are the four the
+     * authorized assignment names, and it excluded exactly what the assignment
+     * excludes. Three matched. The fourth did not, because Michigan publishes
+     * its administrative rules as the Michigan Administrative *Code*, and this
+     * list spelled `administrative rule`.
+     *
+     * That is a defect in the check rather than a plan outside the
+     * authorization, and the difference matters: the envelope's authorization
+     * is the assignment text pinned by digest, which says in as many words
+     * "the Michigan Occupational Code and its licensing article, **the
+     * administrative rules**, and published guidance or declaratory rulings".
+     * The list is an implementation of that sentence and it failed to spell
+     * one of the four things the sentence names. Adding it admits no class the
+     * operator did not authorize — law-firm articles, other states, federal
+     * securities material and tax law are all still refused, which the tests
+     * assert directly.
+     *
+     * The validator version is bumped for it, because an audit row saying
+     * "Brain approved this" is only auditable if it says which rules applied.
+     */
     allowedSourceTypes:
-      /(statut|regulation|administrative rule|occupational code|licensing act|regulator|declaratory ruling|attorney general|agency guidance|lara|department of licensing|board of real estate|official|primary|government|case law|court)/i,
+      /(statut|regulation|administrative rule|administrative code|occupational code|licensing act|regulator|declaratory ruling|attorney general|agency guidance|lara|department of licensing|board of real estate|official|primary|government|case law|court)/i,
     forbiddenActions:
       /\b(purchase|pay|payment|subscribe|subscription|invoice|licence fee to access|paywall bypass|contact|telephone|phone call|email the|write to|submit a request to|file a complaint|register with|apply for)\b/i,
     minIndependentSourcesFloor: 1,
