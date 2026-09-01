@@ -337,9 +337,27 @@ back off, stop the burst, keep the accepted work, spend nothing more.
 ### The ceiling, and what Brain did when it arrived
 
 Rung 30 is the answer to "how many workers". Not one of its thirty activations
-was sent: every dispatch attempt returned `RATE_LIMIT`, the account's five-hour
-allowance having been consumed by the ramp. The rung ran its full 40-minute
-deadline and completed nothing.
+was sent: every dispatch attempt returned `RATE_LIMIT`. The rung ran its full
+40-minute deadline and completed nothing.
+
+**The ceiling is not what I first said it was.** I reported the account's
+five-hour subscription allowance as exhausted. The provider's own message,
+stored on the dispatch row and read back afterwards, says otherwise:
+
+```
+RATE_LIMIT 429 {"error":{"message":"This routine's fire rate limit has been
+reached. Try again in 52m35s.","type":"rate_limit_error"}}
+```
+
+**It is a per-routine fire rate limit, on the order of an hour**, not a
+subscription ceiling. That changes the remedy completely. More capacity does not
+mean a larger plan or paid overages — it means **more routines**, each with its
+own fire budget, which is a configuration the operator makes on the provider and
+Brain then dispatches across. It also explains the recovery below, which happened
+about ninety minutes later rather than at any subscription boundary.
+
+Recorded as a correction rather than quietly amended, because the wrong version
+would have sent somebody to buy capacity they already had.
 
 **What matters is the shape of the failure.** All thirty bins were still
 `READY`, each holding its intent, none failed, none stranded, none corrupted,
@@ -355,22 +373,54 @@ Rung 50 was not run. With zero activations available it could only have produced
 number, bought with more of the user's allowance. The ceiling was located at 20
 and confirmed at 30; a third measurement of the same wall is not evidence.
 
+### Unattended recovery from the ceiling — PROVEN
+
+The thirty bins rung 30 could not start were left `READY`, each holding its
+dispatch intent. Nobody touched them. When the routine's fire budget refilled,
+Brain re-fired on its own and **drained all thirty**, and the operator returned
+to a project with no `READY` bins at all — 76 bins, 75 `COMPLETE`, and the one
+deliberately broken bin still correctly escalated.
+
+The evidence is in the totals: `DISPATCH_RETRY 35` and `PROVIDER_ALLOWANCE 34`
+alongside `BIN_COMPLETION_ACCEPTED 75`. The backoff recorded every refusal,
+waited, and then spent the budget it was owed.
+
+This is §16's promise met without anyone present: *the run pauses, keeps every
+queued item, and resumes when the allowance comes back.* It was not staged — the
+ramp ran out of budget for real, and the recovery is what happened next.
+
+The operator's cancel command, aimed at those thirty bins afterwards, refused:
+
+```
+STEP10 CANCEL REFUSED: expected 30 READY bins, found 0. Nothing was changed.
+```
+
+which is the interlock doing exactly the job it was built for — a rung that
+drained while the operator was deciding stops the command rather than being
+swept into it.
+
+
 ### The operating standards this produced
 
 There are **two different ceilings** and conflating them would give bad advice.
 
-**Concurrency ceiling — 10 simultaneous activations.** Rungs 1 through 10 sent
-every activation with no throttling at all. Rung 20 sent 13 of 20 before the
-provider refused. The wall is therefore between 10 and 20 in-flight sessions,
-and 10 is the highest number actually observed clean. Recommend **10**, and
-treat 13 as the observed edge rather than a target.
+**Recommended ceiling — 10 activations per routine per hour.** Rungs 1 through
+10 sent every activation with nothing refused. Rung 20 sent 13 of 20 before the
+provider stopped it. Ten is the highest figure observed entirely clean and 13 is
+the observed edge, so **10 is the recommendation** — close enough to the wall to
+be useful, far enough from it that an ordinary burst does not spend the hour.
 
-**Window ceiling — unmeasured, and honestly so.** Roughly 42 worker activations
-plus this heavy interactive session exhausted one five-hour window. The
-worker-only figure cannot be separated from that, because the operator's own
-session draws on the same allowance. What can be said is that a fleet sized for
-the concurrency ceiling will exhaust a five-hour window in well under an hour of
-continuous work, so **the binding constraint is the window, not the burst.**
+**Fire-rate ceiling — about 13 fires per routine per hour.** This is the real
+constraint and it belongs to the *routine*, not the account: the provider
+refused with "This routine's fire rate limit has been reached. Try again in
+52m35s." Rungs 1–10 fit inside it; rung 20 spent the rest of it; rung 30 arrived
+with none left.
+
+The consequence for capacity planning is the opposite of what a subscription
+ceiling would imply. **A second worker routine doubles the fire budget**, and
+costs nothing but configuration. A fleet that needs to sustain more than roughly
+13 activations an hour needs more routines to fire at, and Brain already treats
+the routine as a configured target rather than a hard-coded one.
 
 **`DISPATCH_BURST = 5` per ten-second tick is too aggressive for this provider.**
 It offers 30 activations a minute against a wall around 13 in flight. It was a
