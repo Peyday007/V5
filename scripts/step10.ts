@@ -168,33 +168,95 @@ async function watchBins(
 }
 
 /** ready -> assigned -> complete, per bin, from the bin's own row and events. */
+/**
+ * The rung, measured. Every number the acceptance asks for, from rows only.
+ *
+ * Ready→fired is the dispatcher's own latency and comes from the dispatch row's
+ * `sent_at`, not from any event a worker wrote. Ready→assigned is queue wait:
+ * how long ready work waited for somebody to take it. The two are different
+ * questions and conflating them would hide exactly the failure this step spent
+ * a morning on — a bin fired at in three seconds and picked up forty minutes
+ * later is a dispatcher working and a fleet that is not.
+ */
 async function measureBins(ids: string[]): Promise<void> {
   console.log('');
-  console.log('  bin                       ready→assigned  assigned→done  ready→done  units  gen');
+  console.log('  bin                       ready→fired  ready→assigned  drain  ready→done  units  gen');
+  const fires: number[] = [];
   const waits: number[] = [];
   const works: number[] = [];
   const totals: number[] = [];
+  let takeovers = 0;
+  let refusals = 0;
+  let staleWrites = 0;
+  let leaseExpiries = 0;
+  let duplicateSends = 0;
+  let assignments = 0;
+  const throttles = new Map<string, number>();
+  const stranded: string[] = [];
+
   for (const id of ids) {
     const events = await listBinEvents(id, 500);
-    const assigned = events.find((e) => e.eventType === 'BIN_ASSIGNED');
     const bin = await getBin(id);
     if (!bin) continue;
+    const dispatches = await listDispatchesForBin(bin.id);
+
+    for (const event of events) {
+      if (event.eventType === 'BIN_TAKEOVER') takeovers += 1;
+      if (event.eventType === 'BIN_ASSIGNED' || event.eventType === 'BIN_TAKEOVER') assignments += 1;
+      if (event.eventType === 'BIN_COMPLETION_REFUSED') refusals += 1;
+      // The fence, observed rather than assumed: a write from a worker that no
+      // longer holds the lease. Zero of these under load is the claim; one of
+      // them accepted would be the defect.
+      if (event.eventType === 'BIN_STALE_WRITE') staleWrites += 1;
+      if (event.eventType === 'BIN_LEASE_EXPIRED') leaseExpiries += 1;
+    }
+
+    // A duplicate activation is two SENT intents at one generation. The unique
+    // index makes that impossible, so this counts the thing the index is meant
+    // to prevent rather than trusting that it did.
+    const sentPerGeneration = new Map<number, number>();
+    for (const dispatch of dispatches) {
+      if (dispatch.state === 'SENT') {
+        sentPerGeneration.set(
+          dispatch.leaseGeneration,
+          (sentPerGeneration.get(dispatch.leaseGeneration) ?? 0) + 1,
+        );
+      }
+      if (dispatch.lastErrorKind) {
+        throttles.set(dispatch.lastErrorKind, (throttles.get(dispatch.lastErrorKind) ?? 0) + 1);
+      }
+    }
+    for (const n of sentPerGeneration.values()) if (n > 1) duplicateSends += n - 1;
+
     const readyAt = bin.readyAt ? new Date(bin.readyAt).getTime() : null;
+    const firstSent = dispatches
+      .filter((d) => d.sentAt)
+      .map((d) => new Date(d.sentAt!).getTime())
+      .sort((a, b) => a - b)[0];
+    const assigned = events.find(
+      (e) => e.eventType === 'BIN_ASSIGNED' || e.eventType === 'BIN_TAKEOVER',
+    );
     const assignedAt = assigned ? new Date(assigned.at).getTime() : null;
     const doneAt = bin.completedAt ? new Date(bin.completedAt).getTime() : null;
+
+    const fired = readyAt !== null && firstSent !== undefined ? firstSent - readyAt : null;
     const wait = readyAt !== null && assignedAt !== null ? assignedAt - readyAt : null;
     const work = assignedAt !== null && doneAt !== null ? doneAt - assignedAt : null;
     const total = readyAt !== null && doneAt !== null ? doneAt - readyAt : null;
+    if (fired !== null) fires.push(fired);
     if (wait !== null) waits.push(wait);
     if (work !== null) works.push(work);
     if (total !== null) totals.push(total);
+    if (bin.state !== 'COMPLETE') stranded.push(`${bin.id}:${bin.state}`);
+
     const units = (await listBinUnitResults(id)).length;
     const ms = (v: number | null): string => (v === null ? '—' : `${Math.round(v / 100) / 10}s`);
     console.log(
-      `  ${id}  ${ms(wait).padStart(14)}  ${ms(work).padStart(13)}  ${ms(total).padStart(10)}  ` +
-        `${String(units).padStart(5)}  ${bin.leaseGeneration}`,
+      `  ${id}  ${ms(fired).padStart(11)}  ${ms(wait).padStart(14)}  ${ms(work).padStart(5)}  ` +
+        `${ms(total).padStart(10)}  ${String(units).padStart(5)}  ${bin.leaseGeneration}`,
     );
   }
+
   const stat = (values: number[], label: string): void => {
     if (values.length === 0) {
       console.log(`  ${label.padEnd(16)} —`);
@@ -202,16 +264,30 @@ async function measureBins(ids: string[]): Promise<void> {
     }
     const sorted = [...values].sort((a, b) => a - b);
     const median = sorted[Math.floor(sorted.length / 2)]!;
+    const p = (v: number): number => Math.round(v / 100) / 10;
     console.log(
-      `  ${label.padEnd(16)} median ${Math.round(median / 100) / 10}s  ` +
-        `min ${Math.round(sorted[0]! / 100) / 10}s  max ${Math.round(sorted[sorted.length - 1]! / 100) / 10}s  ` +
-        `n=${sorted.length}`,
+      `  ${label.padEnd(16)} median ${p(median)}s  min ${p(sorted[0]!)}s  ` +
+        `max ${p(sorted[sorted.length - 1]!)}s  n=${sorted.length}`,
     );
   };
   console.log('');
+  stat(fires, 'ready→fired');
   stat(waits, 'queue wait');
   stat(works, 'drain');
   stat(totals, 'ready→done');
+  console.log('');
+  console.log(`  assignments          ${assignments}`);
+  console.log(`  takeovers            ${takeovers}`);
+  console.log(`  duplicate activations ${duplicateSends}`);
+  console.log(`  completion refusals  ${refusals}`);
+  console.log(`  lease expiries       ${leaseExpiries}`);
+  console.log(`  fenced stale writes  ${staleWrites}  (refused; >0 is correct behaviour, not a fault)`);
+  console.log(`  not complete         ${stranded.length}${stranded.length ? '  ' + stranded.join(' ') : ''}`);
+  console.log(
+    `  provider errors      ${
+      throttles.size === 0 ? 'none' : [...throttles].map(([k, n]) => `${k}×${n}`).join(' ')
+    }`,
+  );
 }
 
 async function main(): Promise<void> {
@@ -347,6 +423,8 @@ async function main(): Promise<void> {
     console.log(`  lease renewals       ${renewals}`);
     console.log(`  takeovers            ${takeovers}`);
     console.log(`  completion refusals  ${refusals}`);
+  console.log(`  lease expiries       ${leaseExpiries}`);
+  console.log(`  fenced stale writes  ${staleWrites}  (refused; >0 is correct behaviour, not a fault)`);
     console.log(`  quality signals      ${signals}`);
     console.log(`STEP10: OK standards bins=${bins.length}`);
     return;
