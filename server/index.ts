@@ -48,6 +48,8 @@ import { recoverInterruptedExtractions } from './services/documents/extraction.t
 import { ocrStatus } from './services/documents/ocr.ts';
 import { queueUnreadDocuments } from './services/documents/queue.ts';
 import { recoverInterruptedResearch } from './services/research/queue.ts';
+import { recoverDispatchAtBoot, startDispatcher } from './services/dispatch/loop.ts';
+import { describeFireTarget } from './services/dispatch/fire.ts';
 import { resumePulledPackets } from './services/research/packetRunner.ts';
 import { recoverInterruptedImports } from './services/archive/import.ts';
 
@@ -314,6 +316,23 @@ function logBanner(
     }`,
   );
   console.log(`  Outer gate      ${describeAccessGate(gate)}`);
+  // Whether this Brain can start a worker by itself, said plainly.
+  //
+  // Names the routine and whether a credential is present, never the
+  // credential — the same rule this banner already follows for the database and
+  // the bucket. An unconfigured deployment is a normal state and says so: it
+  // still serves workers that arrive by other means, it simply never starts
+  // one.
+  {
+    const fire = describeFireTarget();
+    console.log(
+      `  Activation      ${
+        fire.configured
+          ? `routine ${fire.routineId} · token set${fire.routineVersion ? ` · prompt ${fire.routineVersion}` : ''}`
+          : 'none — set BRAIN_ROUTINE_ID and BRAIN_ROUTINE_TOKEN to let Brain start its own workers'
+      }`,
+    );
+  }
   console.log(`  Data root       ${DATA_ROOT}`);
   console.log(
     applied.length > 0
@@ -506,6 +525,23 @@ async function main(): Promise<void> {
   if (resumed > 0) {
     console.log(`  ${resumed} worker-driven research packet(s) picked back up from their rows`);
   }
+
+  // Dispatch intent the last shutdown never sent.
+  //
+  // The outbox is the reason a crash between "this bin is ready" and "a worker
+  // was started for it" loses nothing: the intent is a row, it is still there,
+  // and the first tick after boot sends it. This call only makes that visible
+  // in the telemetry, so a restart appears in the record rather than being
+  // inferred from a gap in it.
+  const redriven = await recoverDispatchAtBoot();
+  if (redriven > 0) {
+    console.log(`  ${redriven} ready bin(s) had no dispatch intent and now do`);
+  }
+
+  // The dispatcher itself. A plain interval, no model, and nothing waiting on a
+  // socket: it reads two indexed tables and occasionally makes one HTTP call.
+  // An idle Brain spends essentially nothing here.
+  startDispatcher();
 
   // A folder import interrupted by the shutdown is paused rather than left
   // looking live. Nothing already imported is re-read when it resumes.

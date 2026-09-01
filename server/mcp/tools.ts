@@ -49,6 +49,8 @@ import { readableText, retrieveEvidence } from '../services/documents/retrieval.
 import { conflictError, invalidInput, notFoundError } from './errors.ts';
 import type { McpTool } from './toolkit.ts';
 import { RESEARCH_TOOLS } from './researchTools.ts';
+import { BIN_TOOLS } from './binTools.ts';
+import { activeBinForWorker } from '../repos/bins.ts';
 import { RESEARCH_METHOD, RESEARCH_METHOD_VERSION } from '../services/research/method.ts';
 import {
   COMPLETE_NAMESPACE,
@@ -416,6 +418,18 @@ const claimWorkTool: McpTool = {
       throw invalidInput('work_types must be an array of strings when present.');
     }
 
+    // A worker inside a bin stays inside it.
+    //
+    // Step 10 leases a whole mission to a worker, and the isolation that buys
+    // is worth nothing if the same worker can then reach past the bin into the
+    // project's wider queue. The confinement is derived from the server's own
+    // rows — the bin this worker currently holds — rather than from the worker
+    // remembering to stay put, so it is not something a caller can decline.
+    //
+    // Absent a held bin this is null and the tool behaves exactly as Step 5
+    // built it, which is what keeps every pre-Step-10 caller working.
+    const heldBin = await activeBinForWorker(workerId);
+
     const claimed = await claimWork({
       workerId,
       credentialId: principal.credentialId,
@@ -426,6 +440,7 @@ const claimWorkTool: McpTool = {
       // and scopes, checked per item.
       orchestrationId: optionalString(args, 'orchestration_id'),
       bundleKey: optionalString(args, 'bundle_key'),
+      binId: heldBin?.id ?? null,
       limit: optionalInteger(args, 'limit') ?? 1,
       leaseMs: optionalInteger(args, 'lease_ms') ?? undefined,
       requestId,
@@ -923,6 +938,11 @@ export const TOOLS: readonly McpTool[] = [
   // already long, and in the *same* array because there is one surface. A
   // second registry would be a second place to forget something.
   ...RESEARCH_TOOLS,
+  // Step 10. The bin surface: check in, drain, ask whether it is finished.
+  // Same array, same reason. Every caller sees the same list — which tools a
+  // caller may *succeed* with is decided at execution time by the one policy
+  // module, never by filtering this.
+  ...BIN_TOOLS,
 ];
 
 const BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));

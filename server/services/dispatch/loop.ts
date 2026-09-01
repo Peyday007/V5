@@ -1,0 +1,258 @@
+/**
+ * The dispatcher: ready work becomes a running worker, with no model involved.
+ *
+ * This is the piece Step 10 exists to build, and the thing worth noticing about
+ * it is how little it is. It is a `setInterval` that reads two tables and
+ * sometimes makes one HTTP request. There is no model here, nothing waiting on
+ * a socket, and nothing that has to stay alive for the system to be correct.
+ *
+ * ---------------------------------------------------------------------------
+ * Why an outbox rather than firing at the transition
+ * ---------------------------------------------------------------------------
+ *
+ * The obvious design is to POST to `/fire` at the moment a bin becomes READY.
+ * It is wrong for one reason: the transition happens inside a request, and the
+ * request can commit and then the process can die before the HTTP call is made.
+ * The bin would sit READY forever with nothing coming for it, and nothing in
+ * the system would know it had been missed.
+ *
+ * So the transition writes an *intent* — a durable row saying this bin, at this
+ * generation, deserves a worker — and a separate pass turns intents into calls.
+ * A crash between the two loses nothing: the intent is still there at boot, and
+ * the first tick after a restart redrives it. That is the whole of
+ * "dispatch must survive application restart".
+ *
+ * ---------------------------------------------------------------------------
+ * The three passes, and why they are in this order
+ * ---------------------------------------------------------------------------
+ *
+ *   1. **Supersede.** Retire intents for bins that have moved on — leased,
+ *      completed, cancelled, or advanced to a newer generation. Doing this
+ *      first means the send pass never spends an activation on a bin that no
+ *      longer wants one.
+ *
+ *   2. **Ensure.** Every READY bin gets an intent at its current generation.
+ *      `ON CONFLICT DO NOTHING` makes this idempotent, so running it every tick
+ *      forever creates exactly one row per bin per generation. This is also the
+ *      recovery path: a lease that expires advances the generation, and the bin
+ *      earns a fresh intent through the same code that gave it its first one.
+ *
+ *   3. **Send.** Take pending intents whose backoff has elapsed and fire them,
+ *      one at a time, up to a burst limit.
+ *
+ * ---------------------------------------------------------------------------
+ * What this deliberately does not do
+ * ---------------------------------------------------------------------------
+ *
+ * It does not decide how many workers the fleet should have, does not model
+ * capacity, and does not learn anything. One ready bin is one activation
+ * attempt. That is Step 10's job — a correct basic dispatcher — and
+ * capacity-aware routing is explicitly Step 11's.
+ */
+import {
+  claimDispatchIntent,
+  ensureDispatchIntent,
+  getBin,
+  listBins,
+  markDispatchFailed,
+  markDispatchSent,
+  recordBinEvent,
+  supersedeStaleIntents,
+} from '../../repos/bins.ts';
+import { fireConfig, fireRoutine, isFireConfigured, isRetryable, recordAllowanceObservation } from './fire.ts';
+
+/**
+ * How often the loop wakes.
+ *
+ * Ten seconds. Fast enough that a person watching a bin go ready does not
+ * wonder whether the system noticed, slow enough that an idle Brain does
+ * essentially nothing — two indexed reads that return nothing.
+ */
+export const DISPATCH_TICK_MS = 10_000;
+
+/**
+ * How many activations one tick may start.
+ *
+ * A burst limit rather than a fleet size. It stops a hundred bins going ready
+ * at once from firing a hundred sessions inside ten seconds and colliding with
+ * the account's daily allowance in a way nobody could read afterwards. The
+ * acceptance ramp measures what the right number is; this is the starting
+ * point.
+ */
+export const DISPATCH_BURST = 5;
+
+export interface TickResult {
+  superseded: number;
+  intentsCreated: number;
+  fired: number;
+  failed: number;
+  skippedNotConfigured: boolean;
+}
+
+/**
+ * One pass. Exported so a test can drive it directly rather than waiting for a
+ * timer, and so the acceptance harness can step the dispatcher deliberately.
+ */
+export async function dispatchTick(
+  options: { burst?: number; projectIds?: string[] } = {},
+): Promise<TickResult> {
+  const result: TickResult = {
+    superseded: 0,
+    intentsCreated: 0,
+    fired: 0,
+    failed: 0,
+    skippedNotConfigured: false,
+  };
+
+  result.superseded = await supersedeStaleIntents();
+
+  // Ensure intent for everything ready. Bounded: the dispatcher reads a page of
+  // ready bins, not the world.
+  const ready = await listBins({ states: ['READY'], limit: 200 });
+  for (const bin of ready) {
+    if (options.projectIds && !options.projectIds.includes(bin.projectId)) continue;
+    // A bin out of attempts is not dispatchable. Reconciliation decides what
+    // becomes of it; firing at it would burn activations against a bin no
+    // worker is allowed to take.
+    if (bin.attemptCount >= bin.maxAttempts) continue;
+    if (await ensureDispatchIntent(bin)) result.intentsCreated += 1;
+  }
+
+  // Nothing configured is a normal state, not an error: a deployment without a
+  // trigger still runs, still accepts workers that arrive by other means, and
+  // simply never starts one itself. Saying so once per tick would be noise, so
+  // it is reported in the result and left to the caller.
+  if (!isFireConfigured()) {
+    result.skippedNotConfigured = true;
+    return result;
+  }
+
+  const burst = Math.max(1, options.burst ?? DISPATCH_BURST);
+  const config = fireConfig();
+
+  for (let sent = 0; sent < burst; sent += 1) {
+    const intent = await claimDispatchIntent();
+    if (!intent) break;
+
+    // Re-read the bin between claiming the intent and firing. The supersede
+    // pass ran at the top of this tick, but a worker may have taken the bin in
+    // the milliseconds since, and an activation for a bin somebody already
+    // holds is a wasted one.
+    const bin = await getBin(intent.binId);
+    if (!bin || bin.state !== 'READY' || bin.leaseGeneration !== intent.leaseGeneration) {
+      await markDispatchFailed(intent.id, {
+        kind: 'SUPERSEDED',
+        message: 'The bin was taken or moved on before this intent was sent.',
+      });
+      continue;
+    }
+
+    const outcome = await fireRoutine();
+    if (outcome.ok) {
+      await markDispatchSent(intent.id, {
+        routineRef: outcome.routineId,
+        routineVersion: config.routineVersion,
+        sessionRef: outcome.sessionRef,
+        fireEventId: outcome.fireEventId,
+      });
+      result.fired += 1;
+      continue;
+    }
+
+    await recordAllowanceObservation({
+      binId: intent.binId,
+      kind: outcome.kind,
+      retryAfterMs: outcome.retryAfterMs,
+      message: outcome.message,
+    });
+
+    if (!isRetryable(outcome.kind)) {
+      // A wrong token, a deleted routine or a paused one will not be fixed by
+      // trying again in five seconds. The intent is failed straight to
+      // abandoned by exhausting it, and the reason is kept.
+      await markDispatchFailed(intent.id, {
+        kind: outcome.kind,
+        message: outcome.message,
+        retryAfterMs: 24 * 60 * 60 * 1000,
+      });
+      result.failed += 1;
+      // A non-retryable failure applies to every intent, not just this one, so
+      // there is no point walking the rest of the burst into the same wall.
+      break;
+    }
+
+    await markDispatchFailed(intent.id, {
+      kind: outcome.kind,
+      message: outcome.message,
+      retryAfterMs: outcome.retryAfterMs,
+    });
+    result.failed += 1;
+    // A rate limit is about the account, not this intent. Stop the burst and
+    // let the backoff decide when to try again.
+    if (outcome.kind === 'RATE_LIMIT') break;
+  }
+
+  return result;
+}
+
+let timer: ReturnType<typeof setInterval> | null = null;
+let running = false;
+
+/**
+ * Start the loop.
+ *
+ * Idempotent, and it never overlaps itself: a tick that runs long simply means
+ * the next one is skipped, which is preferable to two passes racing over the
+ * same intents. `unref` so an idle timer cannot hold a process open — the
+ * dispatcher is a background convenience, not a reason for the Brain to stay
+ * alive.
+ */
+export function startDispatcher(intervalMs = DISPATCH_TICK_MS): void {
+  if (timer) return;
+  timer = setInterval(() => {
+    if (running) return;
+    running = true;
+    void dispatchTick()
+      .catch(async (error: unknown) => {
+        await recordBinEvent({
+          eventType: 'DISPATCH_TICK_FAILED',
+          outcome: 'ERROR',
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        running = false;
+      });
+  }, Math.max(1_000, intervalMs));
+  timer.unref?.();
+}
+
+export function stopDispatcher(): void {
+  if (!timer) return;
+  clearInterval(timer);
+  timer = null;
+}
+
+/**
+ * Redrive whatever a restart interrupted.
+ *
+ * Called once at boot. It does not need to do anything clever, because the
+ * outbox already holds the truth: any intent still PENDING is one that was
+ * never sent, and the ordinary tick will send it. This exists to say so out
+ * loud in the telemetry, so a restart is visible in the record rather than
+ * inferred from a gap.
+ */
+export async function recoverDispatchAtBoot(): Promise<number> {
+  const ready = await listBins({ states: ['READY'], limit: 500 });
+  let created = 0;
+  for (const bin of ready) {
+    if (bin.attemptCount >= bin.maxAttempts) continue;
+    if (await ensureDispatchIntent(bin)) created += 1;
+  }
+  await recordBinEvent({
+    eventType: 'DISPATCH_BOOT_RECOVERY',
+    outcome: 'REDRIVEN',
+    measures: { readyBins: ready.length, intentsCreated: created },
+  });
+  return created;
+}

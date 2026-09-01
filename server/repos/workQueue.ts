@@ -167,6 +167,7 @@ export function mapWorkItem(row: WorkItemRow): WorkItem {
     correlationId: row.correlation_id,
     orchestrationId: row.orchestration_id,
     fragmentId: row.fragment_id,
+    binId: row.bin_id ?? null,
     createdByType: row.created_by_type as ActorType,
     createdById: row.created_by_id,
     createdAt: row.created_at,
@@ -221,6 +222,31 @@ export async function listWorkItems(
   return rows.map(mapWorkItem);
 }
 
+/**
+ * Every unit of one bin, whatever state it is in.
+ *
+ * A bin's units are ordinary queue rows; this is the only thing that gathers
+ * them, and it is a read. Nothing here decides ownership.
+ */
+export async function listWorkItemsForBin(binId: string): Promise<WorkItem[]> {
+  const rows = await getDb().all<WorkItemRow>(
+    `SELECT * FROM work_items WHERE bin_id = ?
+      ORDER BY priority DESC, available_at, created_at, id LIMIT 500`,
+    [binId],
+  );
+  return rows.map(mapWorkItem);
+}
+
+/** Every unit of one research packet, whatever state it is in. */
+export async function listWorkItemsForOrchestration(orchestrationId: string): Promise<WorkItem[]> {
+  const rows = await getDb().all<WorkItemRow>(
+    `SELECT * FROM work_items WHERE orchestration_id = ?
+      ORDER BY priority DESC, available_at, created_at, id LIMIT 500`,
+    [orchestrationId],
+  );
+  return rows.map(mapWorkItem);
+}
+
 /** The attempt history for one item, oldest first. */
 export async function listLeases(workItemId: string): Promise<WorkLease[]> {
   const rows = await getDb().all<WorkLeaseRow>(
@@ -253,6 +279,8 @@ export interface EnqueueInput {
   fragmentId?: string | null;
   /** Fragments safely researched in one session share this name. */
   bundleKey?: string | null;
+  /** The bin this unit belongs to. A bin's units are ordinary queue rows. */
+  binId?: string | null;
   createdByType: ActorType;
   createdById?: string | null;
 }
@@ -276,12 +304,12 @@ export async function enqueueWork(input: EnqueueInput): Promise<WorkItem> {
        required_scopes, target_worker_id, attempt_count, max_attempts, lease_generation,
        lease_id, worker_id, lease_credential_id, leased_at, heartbeat_at, lease_expires_at,
        result_ref, result_summary, failure_category, cancelled_reason, correlation_id,
-       orchestration_id, fragment_id, bundle_key,
+       orchestration_id, fragment_id, bundle_key, bin_id,
        created_by_type, created_by_id, created_at, updated_at, completed_at)
      VALUES (?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?, 0, ?, 0,
              NULL, NULL, NULL, NULL, NULL, NULL,
              NULL, NULL, NULL, NULL, ?,
-             ?, ?, ?,
+             ?, ?, ?, ?,
              ?, ?, ?, ?, NULL)`,
     [
       id,
@@ -297,6 +325,7 @@ export async function enqueueWork(input: EnqueueInput): Promise<WorkItem> {
       input.orchestrationId ?? null,
       input.fragmentId ?? null,
       input.bundleKey ?? null,
+      input.binId ?? null,
       input.createdByType,
       input.createdById ?? null,
       at,
@@ -335,6 +364,14 @@ export interface ClaimInput {
    */
   orchestrationId?: string | null;
   bundleKey?: string | null;
+  /**
+   * Narrow a claim to one bin.
+   *
+   * Step 10's worker never passes this itself: the bin is read from the lease
+   * the worker holds, so naming one is not a way to reach another. It is a
+   * filter over rows the server already decided the caller may see.
+   */
+  binId?: string | null;
   limit?: number;
   leaseMs?: number;
   requestId?: string | null;
@@ -382,6 +419,10 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
     if (input.bundleKey) {
       typeClause += ' AND bundle_key = ?';
       params.push(input.bundleKey);
+    }
+    if (input.binId) {
+      typeClause += ' AND bin_id = ?';
+      params.push(input.binId);
     }
     params.push(input.workerId);
 

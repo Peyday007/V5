@@ -1,0 +1,55 @@
+# Driving and reading the Step 10 dispatch acceptance, without a terminal.
+#
+# Separate from `deploy.yml` for the reason `packet-report.yml` is: measuring a
+# dispatcher means asking the same questions repeatedly — how many bins are
+# ready, what did the provider say, how long did they wait — and asking them
+# through the deploy pipeline would cost a build, a redeploy and a restart every
+# time.
+#
+# Every subcommand is either a read or an operator action a person is already
+# authorized to take, and all of them are confined to the harness's own
+# acceptance project.
+name: Step 10
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'setup | seed | report | tick | reconcile | standards | fire-check'
+        required: true
+        default: report
+      arg1:
+        description: 'First argument (e.g. how many bins to seed)'
+        required: false
+        default: ''
+      arg2:
+        description: 'Second argument (e.g. units per bin)'
+        required: false
+        default: ''
+
+# Never at the same time as a deploy: the machine is being replaced during one,
+# and a measurement that raced a restart would be measuring whichever half
+# answered.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  step10:
+    name: Step 10 harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Run
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "sh /app/scripts/step10.sh ${{ inputs.command }} ${{ inputs.arg1 }} ${{ inputs.arg2 }}" \
+            2>&1 | tee step10.txt
+          set -e
+          grep -q '^STEP10: OK' step10.txt

@@ -3025,6 +3025,8 @@ export type WorkFailureCategory = (typeof WORK_FAILURE_CATEGORIES)[number];
 
 export interface WorkItemRow {
   bundle_key?: string | null;
+  /** Which bin this unit belongs to. Null for work that predates Step 10. */
+  bin_id?: string | null;
   id: string;
   project_id: string;
   work_type: string;
@@ -3123,6 +3125,14 @@ export interface WorkItem {
    */
   orchestrationId: string | null;
   fragmentId: string | null;
+  /**
+   * The bin this unit belongs to, when it belongs to one.
+   *
+   * A bin's internal units are ordinary queue rows — same claim, same lease,
+   * same fence. This column is the only thing that makes them the bin's, which
+   * is what keeps Step 10 from growing a second queue beside the first.
+   */
+  binId: string | null;
   createdByType: ActorType;
   createdById: string | null;
   createdAt: string;
@@ -3492,4 +3502,270 @@ export interface OAuthToken {
   lastUsedAt: string | null;
   revokedAt: string | null;
   parentTokenId: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Step 10 — bins
+// ---------------------------------------------------------------------------
+//
+// A bin is one complete idea: the objective, the manifest that fully specifies
+// it, and the contract that decides whether it was finished. It is deliberately
+// subject-free — the dispatcher must stay indifferent to what a bin is about,
+// or Step 12 cannot add a new kind of mission without rewriting it.
+
+export const BIN_STATES = [
+  'DRAFT',
+  'READY',
+  'LEASED',
+  'COMPLETE',
+  'FAILED',
+  'NEEDS_HUMAN',
+  'CANCELLED',
+] as const;
+export type BinState = (typeof BIN_STATES)[number];
+
+/** Which server-side predicate decides that a bin is finished. */
+export const COMPLETION_CONTRACTS = ['RESEARCH_PACKET_V1', 'DETERMINISTIC_UNITS_V1'] as const;
+export type CompletionContract = (typeof COMPLETION_CONTRACTS)[number];
+
+export const BIN_DISPATCH_STATES = ['PENDING', 'SENDING', 'SENT', 'ABANDONED', 'SUPERSEDED'] as const;
+export type BinDispatchState = (typeof BIN_DISPATCH_STATES)[number];
+
+/**
+ * One internal unit of a generic bin.
+ *
+ * `transform` names a pure function Brain can run itself, which is what makes
+ * `DETERMINISTIC_UNITS_V1` a check rather than an echo: the worker submits an
+ * answer and Brain recomputes it from `input` instead of taking the answer's
+ * word for itself.
+ */
+export interface BinUnitSpec {
+  key: string;
+  establishes: string;
+  input: string;
+  transform: string;
+  dependsOn: string[];
+}
+
+/**
+ * The complete work package, authored by Brain before assignment.
+ *
+ * Every field here is something the worker is told rather than something it
+ * decides. A worker that could choose its own scope, its own unit count or its
+ * own stopping condition would be planning, and planning is not what an
+ * interchangeable worker is for.
+ */
+export interface BinManifest {
+  objective: string;
+  why: string;
+  lineage: {
+    projectId: string;
+    layerId: string | null;
+    goal: string | null;
+    orchestrationId: string | null;
+  };
+  units: BinUnitSpec[];
+  acceptableSources: string[];
+  excludedSources: string[];
+  evidence: string[];
+  outputs: string[];
+  authorizedActions: string[];
+  prohibitedActions: string[];
+  budgetUnits: number | null;
+  retry: { maxAttempts: number; backoffSeconds: number };
+  stoppingConditions: string[];
+}
+
+export interface BinRow {
+  id: string;
+  project_id: string;
+  layer_id: string | null;
+  kind: string;
+  title: string;
+  objective: string;
+  rationale: string | null;
+  manifest: string;
+  completion_contract: string;
+  contract_version: number;
+  state: string;
+  priority: number;
+  orchestration_id: string | null;
+  budget_units: number | null;
+  attempt_count: number;
+  max_attempts: number;
+  lease_generation: number;
+  lease_id: string | null;
+  worker_id: string | null;
+  lease_credential_id: string | null;
+  lease_session_ref: string | null;
+  leased_at: string | null;
+  heartbeat_at: string | null;
+  lease_expires_at: string | null;
+  lease_renewals: number;
+  checkpoint: string | null;
+  checkpoint_at: string | null;
+  terminal_reason: string | null;
+  last_refusal: string | null;
+  refusal_count: number;
+  created_by_type: string;
+  created_by_id: string | null;
+  created_at: string;
+  updated_at: string;
+  ready_at: string | null;
+  completed_at: string | null;
+}
+
+export interface Bin {
+  id: string;
+  projectId: string;
+  layerId: string | null;
+  kind: string;
+  title: string;
+  objective: string;
+  rationale: string | null;
+  manifest: BinManifest;
+  completionContract: CompletionContract;
+  contractVersion: number;
+  state: BinState;
+  priority: number;
+  orchestrationId: string | null;
+  budgetUnits: number | null;
+  attemptCount: number;
+  maxAttempts: number;
+  /** The fencing token. Advances on every assignment and every cancellation. */
+  leaseGeneration: number;
+  leaseId: string | null;
+  workerId: string | null;
+  leaseCredentialId: string | null;
+  leaseSessionRef: string | null;
+  leasedAt: string | null;
+  heartbeatAt: string | null;
+  leaseExpiresAt: string | null;
+  leaseRenewals: number;
+  checkpoint: Record<string, unknown> | null;
+  checkpointAt: string | null;
+  terminalReason: string | null;
+  lastRefusal: string | null;
+  refusalCount: number;
+  createdByType: string;
+  createdById: string | null;
+  createdAt: string;
+  updatedAt: string;
+  readyAt: string | null;
+  completedAt: string | null;
+}
+
+export interface BinDispatchRow {
+  id: string;
+  bin_id: string;
+  lease_generation: number;
+  state: string;
+  attempt_count: number;
+  max_attempts: number;
+  next_attempt_at: string;
+  routine_ref: string | null;
+  routine_version: string | null;
+  fire_event_id: string | null;
+  session_ref: string | null;
+  last_error_kind: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  sent_at: string | null;
+}
+
+export interface BinDispatch {
+  id: string;
+  binId: string;
+  leaseGeneration: number;
+  state: BinDispatchState;
+  attemptCount: number;
+  maxAttempts: number;
+  nextAttemptAt: string;
+  routineRef: string | null;
+  routineVersion: string | null;
+  fireEventId: string | null;
+  sessionRef: string | null;
+  lastErrorKind: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  sentAt: string | null;
+}
+
+export interface BinUnitResultRow {
+  id: string;
+  bin_id: string;
+  unit_key: string;
+  work_item_id: string | null;
+  value: string;
+  content_hash: string;
+  lease_id: string | null;
+  lease_generation: number | null;
+  submitted_by: string | null;
+  created_at: string;
+}
+
+export interface BinUnitResult {
+  id: string;
+  binId: string;
+  unitKey: string;
+  workItemId: string | null;
+  value: string;
+  contentHash: string;
+  leaseId: string | null;
+  leaseGeneration: number | null;
+  submittedBy: string | null;
+  createdAt: string;
+}
+
+export interface BinEventRow {
+  id: string;
+  event_type: string;
+  at: string;
+  bin_id: string | null;
+  project_id: string | null;
+  layer_id: string | null;
+  orchestration_id: string | null;
+  work_item_id: string | null;
+  worker_id: string | null;
+  session_ref: string | null;
+  routine_ref: string | null;
+  routine_version: string | null;
+  fire_event_id: string | null;
+  provider: string | null;
+  lease_id: string | null;
+  lease_generation: number | null;
+  attempt: number | null;
+  duration_ms: number | null;
+  measures: string;
+  outcome: string | null;
+  reason: string | null;
+  is_proxy: number;
+}
+
+export interface BinEvent {
+  id: string;
+  eventType: string;
+  at: string;
+  binId: string | null;
+  projectId: string | null;
+  layerId: string | null;
+  orchestrationId: string | null;
+  workItemId: string | null;
+  workerId: string | null;
+  sessionRef: string | null;
+  routineRef: string | null;
+  routineVersion: string | null;
+  fireEventId: string | null;
+  provider: string | null;
+  leaseId: string | null;
+  leaseGeneration: number | null;
+  attempt: number | null;
+  durationMs: number | null;
+  measures: Record<string, unknown>;
+  outcome: string | null;
+  reason: string | null;
+  /** True when a usage figure here is an observable proxy, not the provider's own accounting. */
+  isProxy: boolean;
 }

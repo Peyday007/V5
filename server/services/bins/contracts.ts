@@ -1,0 +1,366 @@
+/**
+ * What it takes for a bin to be finished, decided by Brain.
+ *
+ * The rule this module exists to enforce is one sentence: **a worker's
+ * statement that it is done is not evidence that it is done.** So
+ * `brain_bin_complete` does not complete anything. It asks for an evaluation,
+ * and the evaluation reads durable records — rows and stored bytes — and
+ * returns a verdict the worker had no hand in.
+ *
+ * Three properties every contract must have, and which the tests check by
+ * inversion rather than by reading:
+ *
+ *   - **Deterministic.** The same rows give the same verdict, always. Nothing
+ *     here consults a clock, a random source, or a model.
+ *   - **Replayable.** Evaluating twice changes nothing and answers the same.
+ *     A verdict that could only be obtained once is not auditable.
+ *   - **Sourced.** Every reason names the record that was missing or wrong, so
+ *     a refusal tells the worker what to do next instead of just saying no.
+ *
+ * Contracts are versioned because missions outlive code. A bin records which
+ * contract and which revision judged it, so a bin completed in March can still
+ * be explained in September after the contract has moved on.
+ */
+import { createHash } from 'node:crypto';
+import type { Bin, BinManifest, BinUnitSpec } from '../../domain/types.ts';
+import { listBinUnitResults } from '../../repos/bins.ts';
+import { getOrchestration } from '../../repos/research.ts';
+import { listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
+import { getDocument } from '../../repos/documents.ts';
+import { listAuditsByProject } from '../../repos/audits.ts';
+import { readObject, storageKeyOf } from '../storage.ts';
+
+/** What an evaluation concluded, and why. */
+export interface ContractVerdict {
+  /** True only when the bin may become COMPLETE. */
+  satisfied: boolean;
+  /**
+   * When not satisfied: whether more work could still satisfy it.
+   *
+   * `RETRY` means the worker should keep going. `HUMAN` means no amount of
+   * further work by this worker can resolve it, and the governing invariant
+   * requires exactly one precise decision to be named.
+   */
+  disposition: 'SATISFIED' | 'RETRY' | 'HUMAN';
+  /** Every reason, each naming the record that was missing or wrong. */
+  reasons: string[];
+  /** What the evaluation actually read, for the report and for replay. */
+  observed: Record<string, unknown>;
+}
+
+function satisfied(observed: Record<string, unknown>): ContractVerdict {
+  return { satisfied: true, disposition: 'SATISFIED', reasons: [], observed };
+}
+
+function refuse(
+  disposition: 'RETRY' | 'HUMAN',
+  reasons: string[],
+  observed: Record<string, unknown>,
+): ContractVerdict {
+  return { satisfied: false, disposition, reasons, observed };
+}
+
+export function hashUnitValue(value: string): string {
+  return createHash('sha256').update(value.trim()).digest('hex');
+}
+
+/* ------------------------------------------------------------------------- */
+/* The deterministic transforms a generic bin may declare                     */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The named pure functions Brain can run itself.
+ *
+ * This is what makes `DETERMINISTIC_UNITS_V1` a check rather than an echo. The
+ * manifest declares an input and a transform; the worker submits an answer;
+ * Brain recomputes the answer from the input and compares. A worker that simply
+ * returns what it was given fails, which is exactly the property a test bin
+ * needs if it is going to prove anything about completion validation.
+ *
+ * Small and closed on purpose. A transform registry that could run arbitrary
+ * expressions would be a work type meaning "run this", which §19 forbids.
+ */
+export const UNIT_TRANSFORMS: Record<string, (input: string) => string> = {
+  /** The sha-256 of the input, lowercase hex. Cheap, and impossible to guess. */
+  sha256: (input) => createHash('sha256').update(input).digest('hex'),
+  /** The input reversed. Trivial, and still not the input. */
+  reverse: (input) => [...input].reverse().join(''),
+  /** How many words the input has, as a decimal string. */
+  word_count: (input) => String(input.trim().split(/\s+/).filter(Boolean).length),
+  /** The input upper-cased. */
+  upper: (input) => input.toUpperCase(),
+};
+
+export function isKnownTransform(name: string): boolean {
+  return Object.hasOwn(UNIT_TRANSFORMS, name);
+}
+
+/* ------------------------------------------------------------------------- */
+/* DETERMINISTIC_UNITS_V1                                                     */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Every declared unit has a stored result, and Brain's own recomputation agrees.
+ *
+ * Two refusals are worth telling apart and are told apart here: a unit with no
+ * result at all is work still to do (`RETRY`), and a unit whose stored answer
+ * is wrong is a worker producing bad output (`RETRY` too, because the correct
+ * value can still be submitted — but it is counted separately and the reason
+ * says which).
+ */
+async function evaluateDeterministicUnits(bin: Bin): Promise<ContractVerdict> {
+  const units: BinUnitSpec[] = bin.manifest.units ?? [];
+  const results = await listBinUnitResults(bin.id);
+  const byKey = new Map(results.map((row) => [row.unitKey, row]));
+
+  const missing: string[] = [];
+  const wrong: string[] = [];
+  const unknownTransform: string[] = [];
+
+  for (const unit of units) {
+    const stored = byKey.get(unit.key);
+    if (!stored) {
+      missing.push(unit.key);
+      continue;
+    }
+    const transform = UNIT_TRANSFORMS[unit.transform];
+    if (!transform) {
+      // The manifest named something Brain cannot compute, so Brain cannot
+      // check it. That is a fault in the bin rather than in the worker, and no
+      // amount of further work resolves it.
+      unknownTransform.push(`${unit.key} (${unit.transform})`);
+      continue;
+    }
+    if (transform(unit.input).trim() !== stored.value.trim()) wrong.push(unit.key);
+  }
+
+  // Distinct content is checked because a bin whose every unit stores the same
+  // string is a worker answering by rote. With real transforms over distinct
+  // inputs the values differ, so a collision is a signal rather than a rule.
+  const distinct = new Set(results.map((row) => row.contentHash)).size;
+
+  const observed = {
+    unitsDeclared: units.length,
+    resultsStored: results.length,
+    distinctValues: distinct,
+    missing,
+    wrong,
+    unknownTransform,
+  };
+
+  if (unknownTransform.length > 0) {
+    return refuse(
+      'HUMAN',
+      [
+        `The manifest names ${unknownTransform.length} transform(s) Brain cannot compute, so it ` +
+          `cannot check the answer: ${unknownTransform.join(', ')}. The bin was authored wrong; ` +
+          'no further work by a worker can satisfy it.',
+      ],
+      observed,
+    );
+  }
+  if (units.length === 0) {
+    return refuse(
+      'HUMAN',
+      ['The manifest declares no units, so there is nothing this contract could verify.'],
+      observed,
+    );
+  }
+  const reasons: string[] = [];
+  if (missing.length > 0) {
+    reasons.push(
+      `${missing.length} declared unit(s) have no stored result: ${missing.join(', ')}.`,
+    );
+  }
+  if (wrong.length > 0) {
+    reasons.push(
+      `${wrong.length} unit(s) stored a value that does not match Brain's own recomputation: ` +
+        `${wrong.join(', ')}.`,
+    );
+  }
+  if (reasons.length > 0) return refuse('RETRY', reasons, observed);
+  return satisfied(observed);
+}
+
+/* ------------------------------------------------------------------------- */
+/* RESEARCH_PACKET_V1                                                         */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Step 9's controls, reused whole rather than restated.
+ *
+ * Everything this reads was already decided by the machinery that decided it:
+ * the gate accepted the claims, the verification passes recorded their
+ * verdicts, the synthesis check refused a report citing anything unaccepted,
+ * the three audit roles ran in order and only the judge's structured output
+ * reached `recordAudit`. This contract does not re-judge any of that. It
+ * establishes that the packet actually reached its own terminal state and that
+ * the artifact it claims to have filed exists and has bytes.
+ *
+ * That last clause is not paranoia. Step 9 spent three deploys on a report that
+ * said every document in the project was missing, and the difference between
+ * "the row says COMPLETE" and "the bytes are in the store" is exactly the
+ * difference §9 draws between a document existing and having been read.
+ */
+async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
+  const orchestrationId = bin.orchestrationId;
+  if (!orchestrationId) {
+    return refuse(
+      'HUMAN',
+      ['This bin declares RESEARCH_PACKET_V1 but links to no orchestration, so there is no packet to judge.'],
+      {},
+    );
+  }
+  const orchestration = await getOrchestration(orchestrationId);
+  if (!orchestration) {
+    return refuse('HUMAN', [`Orchestration ${orchestrationId} does not exist.`], { orchestrationId });
+  }
+
+  const items = await listWorkItemsForOrchestration(orchestrationId);
+  const open = items.filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
+
+  const observed: Record<string, unknown> = {
+    orchestrationId,
+    orchestrationStatus: orchestration.status,
+    workItems: items.length,
+    openWorkItems: open.length,
+    documentId: orchestration.documentId,
+  };
+
+  const reasons: string[] = [];
+
+  if (orchestration.status !== 'COMPLETE') {
+    reasons.push(
+      `The packet is ${orchestration.status}, not COMPLETE. A bin is terminal when its packet is, ` +
+        'and the packet runner decides that from its own fragments, verdicts and audits.',
+    );
+  }
+  if (open.length > 0) {
+    reasons.push(
+      `${open.length} work item(s) in this packet are still queued or leased, so the packet is ` +
+        'not finished whatever its status column says.',
+    );
+  }
+
+  // The artifact, resolved the way every reader in the app resolves it, and
+  // read rather than assumed.
+  if (!orchestration.documentId) {
+    reasons.push('The packet filed no document, so there is no artifact to point at.');
+  } else {
+    const document = await getDocument(orchestration.documentId);
+    if (!document) {
+      reasons.push(`The packet names document ${orchestration.documentId}, which does not exist.`);
+    } else {
+      observed['documentName'] = document.canonicalName;
+      // Resolved the way every reader in the app resolves it, rather than by
+      // reading the column: a row written before the storage abstraction still
+      // resolves through the filesystem path, and a reporter that reads the
+      // column calls a document missing that the Brain can serve perfectly well.
+      const key = storageKeyOf(document);
+      try {
+        const bytes = key ? await readObject(key) : null;
+        observed['documentBytes'] = bytes?.length ?? 0;
+        if (!bytes || bytes.length === 0) {
+          reasons.push(
+            `The filed document ${document.id} has no bytes in the configured store. A row that ` +
+              'says COMPLETE over an artifact nobody can read is the one thing this check exists for.',
+          );
+        }
+      } catch (error) {
+        observed['documentBytes'] = null;
+        reasons.push(
+          `The filed document ${document.id} could not be read from the store: ` +
+            `${error instanceof Error ? error.message : String(error)}.`,
+        );
+      }
+    }
+  }
+
+  // The audit trail. `listAuditsByProject` is the same reader the console uses.
+  const audits = (await listAuditsByProject(bin.projectId)).filter(
+    (audit) => audit.runId === orchestration.runId,
+  );
+  observed['audits'] = audits.length;
+  if (audits.length === 0) {
+    reasons.push('No audit was recorded for this packet, so nothing judged the report.');
+  }
+
+  if (reasons.length > 0) {
+    // A packet that is still running is work in progress; one that has gone
+    // terminal in a state that is not COMPLETE cannot be fixed by this worker.
+    const terminal = ['COMPLETE', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN'].includes(
+      orchestration.status,
+    );
+    return refuse(terminal && orchestration.status !== 'COMPLETE' ? 'HUMAN' : 'RETRY', reasons, observed);
+  }
+  return satisfied(observed);
+}
+
+/* ------------------------------------------------------------------------- */
+/* The registry                                                               */
+/* ------------------------------------------------------------------------- */
+
+type Evaluator = (bin: Bin) => Promise<ContractVerdict>;
+
+const EVALUATORS: Record<string, Evaluator> = {
+  DETERMINISTIC_UNITS_V1: evaluateDeterministicUnits,
+  RESEARCH_PACKET_V1: evaluateResearchPacket,
+};
+
+/**
+ * Evaluate a bin's contract.
+ *
+ * The only entry point, and the only thing allowed to conclude that a bin is
+ * finished. An unknown contract is a refusal rather than a pass: a bin whose
+ * standard cannot be evaluated is satisfied vacuously otherwise, which is the
+ * outcome this whole module exists to prevent.
+ */
+export async function evaluateContract(bin: Bin): Promise<ContractVerdict> {
+  const evaluator = EVALUATORS[bin.completionContract];
+  if (!evaluator) {
+    return refuse(
+      'HUMAN',
+      [
+        `No evaluator is registered for completion contract "${bin.completionContract}", so this ` +
+          'bin cannot be judged. It is refused rather than passed: a mission with no standard is ' +
+          'satisfied vacuously, which is worse than being refused.',
+      ],
+      { completionContract: bin.completionContract },
+    );
+  }
+  return await evaluator(bin);
+}
+
+/** Whether a manifest can be dispatched at all. Checked before a bin goes READY. */
+export function manifestProblems(
+  contract: string,
+  manifest: BinManifest,
+): string[] {
+  const problems: string[] = [];
+  if (!EVALUATORS[contract]) {
+    problems.push(`"${contract}" is not a registered completion contract.`);
+  }
+  if (!manifest.objective || manifest.objective.trim().length === 0) {
+    problems.push('The manifest has no objective, so nothing says what the bin is for.');
+  }
+  if (contract === 'DETERMINISTIC_UNITS_V1') {
+    if ((manifest.units ?? []).length === 0) {
+      problems.push('DETERMINISTIC_UNITS_V1 requires at least one declared unit.');
+    }
+    const keys = new Set<string>();
+    for (const unit of manifest.units ?? []) {
+      if (keys.has(unit.key)) problems.push(`Unit key "${unit.key}" is declared twice.`);
+      keys.add(unit.key);
+      if (!isKnownTransform(unit.transform)) {
+        problems.push(
+          `Unit "${unit.key}" names transform "${unit.transform}", which Brain cannot compute — ` +
+            'so it could never check the answer.',
+        );
+      }
+    }
+  }
+  if (contract === 'RESEARCH_PACKET_V1' && !manifest.lineage?.orchestrationId) {
+    problems.push('RESEARCH_PACKET_V1 requires the manifest to name the orchestration it drives.');
+  }
+  return problems;
+}
