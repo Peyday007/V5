@@ -170,6 +170,29 @@ pass narrowed back to `READY` strands the bin, and the supersede pass widened
 back to `<> 'READY'` retires the new intent a moment after it is created — which
 would have made the fix invisible rather than merely absent.
 
+### Verified live, on the bin that exposed it
+
+The same bin, after the fix shipped:
+
+```
+DISPATCH
+  gen 0  SENT  sent 05:19:19.581Z  session_01PwUw2v5iK5sUtDvyPMJXDL
+  gen 1  SENT  sent 06:20:42.962Z  session_01BqPG6pBHW4ms6vjjt8yjYx
+
+06:20:31.283  DISPATCH_INTENT  PENDING
+06:20:42.996  DISPATCH_SENT    session_01BqPG6pBHW4ms6vjjt8yjYx
+```
+
+An intent at generation 1, for a bin whose recorded state is `LEASED` with a
+lease that ran out an hour earlier, followed by an activation. Before the fix
+that bin had no intent and would never have had one. Exactly one intent was
+created, because the unique key held.
+
+That is half of worker-death recovery proven in production: **Brain now
+re-dispatches for a dead worker's bin.** The other half — another worker
+actually taking it over from the checkpoint — still needs an activation that can
+act, so it remains proven only in tests.
+
 This is the same failure mode as the evidence-lane defect earlier in this
 project and the `attempt_count` claim bug below: **a rule written out in several
 places drifts, and the copy that drifts is the one nobody is looking at.**
@@ -324,9 +347,22 @@ Brain. Carried forward.
 
 ---
 
-## The frozen baseline
+## The frozen baseline, re-read
 
-Step 9's closure evidence must be byte-identical to
-[`STEP-10-PLAN.md`](STEP-10-PLAN.md)'s record. Re-read at the end of this step
-and reported there.
+`orc_be4ddfe7388b40be9e01` read from authoritative rows at 2026-09-01T06:26Z,
+after every change in this step, against the record in
+[`STEP-10-PLAN.md`](STEP-10-PLAN.md):
+
+| Field | Baseline | Re-read | |
+|---|---|---|---|
+| Orchestration | `COMPLETE` | `COMPLETE` | ✓ |
+| Work items | 15 SUCCEEDED — 1 PLAN, 5 FRAGMENT, 5 VERIFY, 1 SYNTHESIZE, 3 AUDIT | 15 — 1/5/5/1/3, all SUCCEEDED | ✓ |
+| Claimable | 0 | 0 | ✓ |
+| Claims | 26 stored, 16 accepted | 26 stored, 16 accepted | ✓ |
+| Passes | 15 | 15 | ✓ |
+| Audit | `aud_e4fdb58b2ae34c0bbac7` READY_FOR_SYNTHESIS, 2 gaps | identical | ✓ |
+| Document | `doc_57277dfc5f1242b4b7ab` v1B, 26,900 bytes, present, extraction READY | 26,900 bytes read from the bucket, extraction READY, 26,528 chars | ✓ |
+
+Not reopened, rerun, superseded, recovered or modified. Step 10 ran in its own
+project throughout and no subcommand of its harness can reach Deal Dispatch.
 
