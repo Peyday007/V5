@@ -629,8 +629,21 @@ async function main(): Promise<void> {
      */
     const id = arg(0);
     const to = Number(arg(1) ?? '0');
-    if (!id || !Number.isInteger(to) || to < 1 || to > 25) {
-      console.log('STEP10 REFUSED: pass a bin id and a new ceiling between 1 and 25.');
+    /*
+     * The upper bound is 100 rather than 25, and the reason is arithmetic.
+     *
+     * A bin's attempt count is its *assignment* count, and a long research
+     * packet is inherently many assignments: four fragments, their
+     * verifications, a synthesis and three audit roles, across sessions that
+     * each end when their allowance does. Twenty-five was picked when the only
+     * bins were three-unit deterministic ones that drained in a single
+     * activation, and the real packet reached it having spent twenty-four
+     * assignments on defects and a blocked network — leaving one for the work.
+     * A ceiling that has to be raised every few activations is a ceiling that
+     * stops being read and starts being clicked through.
+     */
+    if (!id || !Number.isInteger(to) || to < 1 || to > 100) {
+      console.log('STEP10 REFUSED: pass a bin id and a new ceiling between 1 and 100.');
       process.exitCode = 1;
       return;
     }
