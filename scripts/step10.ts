@@ -45,6 +45,9 @@ import {
 } from '../server/repos/bins.ts';
 import { reconcileBins } from '../server/services/bins/service.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
+import {
+  MICHIGAN_LICENSING_ASSIGNMENT,
+} from '../server/services/research/approvalEnvelope.ts';
 import { getOrchestration } from '../server/repos/research.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import { DEAL_DISPATCH_SLUG } from '../server/seed.ts';
@@ -56,8 +59,6 @@ import {
   WORKER_INSTRUCTIONS_VERSION,
 } from '../server/services/bins/workerInstructions.ts';
 import type { BinManifest, WorkerScope } from '../server/domain/types.ts';
-
-const ASSIGNMENT = "Determine whether, under Michigan law, a success-fee intermediary who arranges\nthe sale of a privately held business must hold a real-estate broker licence, a\nbusiness-broker licence, or any equivalent licence, when the transaction\ntransfers no interest in real property and no lease.\n\nDecision this informs: whether a success-fee intermediary may lawfully operate\nin Michigan without a licence, and what follows if it may not.\n\nAudience: the operator of a business-brokerage platform deciding whether\nMichigan is a state it can serve.\n\nIn scope, and only this:\n  1. The licence trigger \u2014 the Michigan statutory definition of the licensed\n     activity, quoting the language that says what conduct requires a licence.\n  2. The real-property condition \u2014 the specific provision determining whether\n     the trigger depends on an interest in real property or a lease, including\n     how Michigan treats a \"business opportunity\" or \"business enterprise\".\n  3. The applicable inclusion or exemption \u2014 any express Michigan carve-out or\n     inclusion addressing business brokers, business-opportunity brokers or M&A\n     intermediaries dealing in businesses with no real-property component,\n     with its exact scope and conditions.\n  4. Material consequences of getting it wrong \u2014 the penalty, the enforceability\n     of the fee agreement, and any private right of action, each from the\n     statute or regulation that creates it.\n\nOut of scope: other states; federal securities-broker registration; tax; the\n2023 federal M&A broker exemption except where Michigan law refers to it;\nanything not needed to answer the four items above.\n\nEvidence standard: primary sources only \u2014 the Michigan Occupational Code and\nits licensing article, the administrative rules, and published guidance or\ndeclaratory rulings from Michigan's Department of Licensing and Regulatory\nAffairs or the Board of Real Estate Brokers and Salespersons. A law-firm\narticle, a brokerage association page or a secondary summary may be used to\nlocate a primary source and may not support a claim on its own.\n\nCompletion standard: each of the four items answered from a quoted primary\nprovision with its citation, or explicitly recorded as unresolved with the\nsearch that failed. A statutory question is settled by one directly inspected\nprimary source; it does not need two, and it is not settled by two secondary\nones.";
 
 const SLUG = 'step-10-acceptance';
 const NAME = 'Step 10 acceptance';
@@ -488,10 +489,17 @@ async function main(): Promise<void> {
       projectId: project.id,
       layerId: layer.id,
       title: 'Michigan intermediary licensing for a no-real-property business sale',
-      assignment: ASSIGNMENT,
-      // The same policy the console uses. A person reads this plan and approves
-      // it; nothing here approves anything.
-      approval: { mode: 'PER_PACKET' },
+      assignment: MICHIGAN_LICENSING_ASSIGNMENT,
+      // The operator authorized this exact topic, scope, source restriction and
+      // execution in advance, so the judgement has already been made and asking
+      // again would add a delay rather than a decision. The envelope is named,
+      // not supplied — this file cannot widen the limits its own packet will be
+      // judged against.
+      approval: {
+        mode: 'AUTO_WITHIN_ENVELOPE',
+        envelopeId: 'STEP10_MICHIGAN_LICENSING_V1',
+        authorizedBy: 'operator:step-10-acceptance',
+      },
       startedBy: { kind: 'PERSON', id: 'step10-acceptance' },
     });
 

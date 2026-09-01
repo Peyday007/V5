@@ -45,6 +45,9 @@ function mapOrchestration(row: ResearchOrchestrationRow): ResearchOrchestration 
     unresolvedGapPolicy: row.unresolved_gap_policy === 'RECORD_GAPS' ? 'RECORD_GAPS' : null,
     unresolvedGapAuthorizedBy: row.unresolved_gap_authorized_by ?? null,
     unresolvedGapAuthorizedAt: row.unresolved_gap_authorized_at ?? null,
+    approvalEnvelopeId: row.approval_envelope_id ?? null,
+    approvalEnvelopeAuthorizedBy: row.approval_envelope_authorized_by ?? null,
+    approvalEnvelopeAuthorizedAt: row.approval_envelope_authorized_at ?? null,
     id: row.id,
     projectId: row.project_id,
     layerId: row.layer_id,
@@ -342,6 +345,9 @@ export interface UpdateOrchestrationInput {
   unresolvedGapPolicy?: 'RECORD_GAPS' | null;
   unresolvedGapAuthorizedBy?: string | null;
   unresolvedGapAuthorizedAt?: string | null;
+  approvalEnvelopeId?: string | null;
+  approvalEnvelopeAuthorizedBy?: string | null;
+  approvalEnvelopeAuthorizedAt?: string | null;
 }
 
 export async function updateOrchestration(
@@ -368,6 +374,9 @@ export async function updateOrchestration(
     unresolved_gap_policy: patch.unresolvedGapPolicy,
     unresolved_gap_authorized_by: patch.unresolvedGapAuthorizedBy,
     unresolved_gap_authorized_at: patch.unresolvedGapAuthorizedAt,
+    approval_envelope_id: patch.approvalEnvelopeId,
+    approval_envelope_authorized_by: patch.approvalEnvelopeAuthorizedBy,
+    approval_envelope_authorized_at: patch.approvalEnvelopeAuthorizedAt,
   });
   if (!clause) return getOrchestration(id);
   await getDb().run(`UPDATE research_orchestrations SET ${clause}, updated_at = ? WHERE id = ?`, [

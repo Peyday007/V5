@@ -194,6 +194,10 @@ export const EVENT_TYPES = [
   'RESEARCH_REPLANNED',
   'RESEARCH_PLAN_REVIEWED',
   'RESEARCH_AWAITING_APPROVAL',
+  /** Brain approved a plan against a preauthorized envelope, with no person. */
+  'RESEARCH_PLAN_SYSTEM_APPROVED',
+  /** A proposed plan fell outside its envelope and went to a person instead. */
+  'RESEARCH_PLAN_OUTSIDE_ENVELOPE',
   'RESEARCH_COVERAGE_GAP',
   'RESEARCH_CANCELLED',
   'RESEARCH_FAILED',
@@ -985,6 +989,10 @@ export interface ProviderConnectionRow {
 }
 
 export interface ResearchOrchestrationRow {
+  /** Null unless a person preauthorized an envelope this plan may be approved against. */
+  approval_envelope_id: string | null;
+  approval_envelope_authorized_by: string | null;
+  approval_envelope_authorized_at: string | null;
   /** Null unless a person authorized recording unresolved gaps for this packet. */
   unresolved_gap_policy: string | null;
   unresolved_gap_authorized_by: string | null;
@@ -1998,6 +2006,16 @@ export interface ResearchOrchestration {
   unresolvedGapPolicy: 'RECORD_GAPS' | null;
   unresolvedGapAuthorizedBy: string | null;
   unresolvedGapAuthorizedAt: string | null;
+  /**
+   * The preauthorized envelope this plan may be approved against, if any.
+   *
+   * A *reference*, never the limits themselves: the envelope is defined in
+   * code, so whoever starts a packet cannot supply the rules their own plan
+   * will be judged by. Null means the ordinary rule — a person approves.
+   */
+  approvalEnvelopeId: string | null;
+  approvalEnvelopeAuthorizedBy: string | null;
+  approvalEnvelopeAuthorizedAt: string | null;
   id: string;
   projectId: string;
   layerId: string;

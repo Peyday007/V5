@@ -38,6 +38,7 @@
  * approval is a separate entry point a person calls, and the ordinary advance
  * refuses to queue a PLANNED fragment.
  */
+import { getApprovalEnvelope, planFitsEnvelope } from './approvalEnvelope.ts';
 import { dependencyKeys } from '../../domain/dependencies.ts';
 import { repairable, TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { bundleKeyFor } from './bundling.ts';
@@ -1157,6 +1158,91 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
 
   const awaitingApproval = fragments.filter((fragment) => fragment.status === 'PLANNED');
   if (awaitingApproval.length > 0) {
+    /*
+     * A plan a person authorized the limits of in advance.
+     *
+     * Everything above this line has already happened: the packet was planned
+     * in full, by a worker, and the proposal is sitting in the database. What
+     * the envelope decides is only whether *this* proposal is inside limits
+     * somebody set before it existed — a pure function over these rows, with no
+     * model asked and nothing to argue with.
+     *
+     * A miss is an escalation, not a negotiation. The packet stops at
+     * NEEDS_HUMAN carrying every reason, because a plan outside what was
+     * authorized is precisely the case a person needs to see.
+     */
+    const envelope = orchestration.approvalEnvelopeId
+      ? getApprovalEnvelope(orchestration.approvalEnvelopeId)
+      : null;
+
+    if (orchestration.approvalEnvelopeId && !envelope) {
+      // The id names nothing this build defines. "No rules matched" must never
+      // be read as "everything is allowed".
+      await updateOrchestration(orchestrationId, {
+        status: 'NEEDS_HUMAN',
+        failureReason:
+          `This packet names approval envelope "${orchestration.approvalEnvelopeId}", which this ` +
+          'build does not define. It cannot be validated, so it waits for a person.',
+      });
+      return {
+        orchestrationId,
+        status: 'NEEDS_HUMAN',
+        enqueued: [],
+        waitingOn: 'a person, because the named approval envelope does not exist',
+      };
+    }
+
+    if (envelope) {
+      const verdict = planFitsEnvelope({ envelope, orchestration, fragments: awaitingApproval });
+      await recordEvent({
+        projectId: orchestration.projectId,
+        layerId: orchestration.layerId,
+        entityType: 'RUN',
+        entityId: orchestration.runId,
+        // The audit row this mode exists to leave. It names the authorization
+        // and the validator version, because "Brain approved this" is only
+        // auditable if you can tell which rules it applied and who authorized
+        // them being applied without asking.
+        eventType: verdict.fits ? 'RESEARCH_PLAN_SYSTEM_APPROVED' : 'RESEARCH_PLAN_OUTSIDE_ENVELOPE',
+        payload: {
+          orchestrationId,
+          envelopeId: verdict.envelopeId,
+          validatorVersion: verdict.validatorVersion,
+          authorizedBy: orchestration.approvalEnvelopeAuthorizedBy,
+          authorizedAt: orchestration.approvalEnvelopeAuthorizedAt,
+          authorization: envelope.authorization,
+          fits: verdict.fits,
+          reasons: verdict.reasons,
+          checked: verdict.checked,
+        },
+      });
+
+      if (!verdict.fits) {
+        await updateOrchestration(orchestrationId, {
+          status: 'NEEDS_HUMAN',
+          failureReason:
+            'The proposed plan falls outside the preauthorized envelope: ' +
+            verdict.reasons.join(' '),
+        });
+        return {
+          orchestrationId,
+          status: 'NEEDS_HUMAN',
+          enqueued: [],
+          waitingOn: `a person, because the plan is outside envelope ${verdict.envelopeId}`,
+        };
+      }
+
+      // Approved by the same function a person's click calls, so the fragments
+      // move exactly as they would have, and everything downstream — the gate,
+      // the verification pass, the synthesis check, all three audit roles — is
+      // untouched. The envelope decides whether research may start, not what it
+      // is allowed to conclude.
+      return await approvePlan({
+        orchestrationId,
+        approvedByUserId: `SYSTEM:${verdict.envelopeId}@${verdict.validatorVersion}`,
+      });
+    }
+
     return {
       orchestrationId,
       status: orchestration.status,

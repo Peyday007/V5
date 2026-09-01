@@ -39,6 +39,7 @@ import { inventoryProject } from '../reconcile/plan.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
 import { workType } from '../queue/workTypes.ts';
 import { advancePacket, type AdvanceResult } from './packetRunner.ts';
+import { getApprovalEnvelope } from './approvalEnvelope.ts';
 
 /**
  * How much research this goal is authorized to consume.
@@ -96,6 +97,13 @@ export interface ResearchBudget {
  */
 export type ApprovalPolicy =
   | { mode: 'PER_PACKET' }
+  /**
+   * A person authorized these limits in advance; Brain checks the plan against
+   * them mechanically. The envelope is named, never supplied — see
+   * `approvalEnvelope.ts` for why that distinction is the whole safety
+   * argument.
+   */
+  | { mode: 'AUTO_WITHIN_ENVELOPE'; envelopeId: string; authorizedBy: string }
   | { mode: 'GOAL_BUDGET'; goalId: string; budget: ResearchBudget };
 
 /**
@@ -111,7 +119,25 @@ export type ApprovalPolicy =
  * The parameter is here now so that the decision has one home when the counter
  * arrives. Until then this refuses, by name, with the reason.
  */
-export const SUPPORTED_APPROVAL_MODES: ApprovalPolicy['mode'][] = ['PER_PACKET'];
+export const SUPPORTED_APPROVAL_MODES: ApprovalPolicy['mode'][] = [
+  'PER_PACKET',
+  // Enforceable because its limits are counted rather than declared: the
+  // validator is a pure function over the planned fragments, and every rule it
+  // applies is checked before anything is queued. That is the difference from
+  // GOAL_BUDGET below, which would still be a ceiling nothing measures.
+  'AUTO_WITHIN_ENVELOPE',
+];
+
+export class NoSuchEnvelope extends Error {
+  constructor(readonly envelopeId: string) {
+    super(
+      `No approval envelope named "${envelopeId}" exists in this build. An envelope is defined ` +
+        'in code and referenced by id, so that the limits a plan is judged against cannot be ' +
+        'supplied by whoever starts the packet.',
+    );
+    this.name = 'NoSuchEnvelope';
+  }
+}
 
 export class ApprovalModeUnavailable extends Error {
   constructor(readonly mode: ApprovalPolicy['mode']) {
@@ -232,6 +258,12 @@ export async function startPacket(input: StartPacketInput): Promise<StartPacketR
   if (!SUPPORTED_APPROVAL_MODES.includes(input.approval.mode)) {
     throw new ApprovalModeUnavailable(input.approval.mode);
   }
+  if (input.approval.mode === 'AUTO_WITHIN_ENVELOPE' && !getApprovalEnvelope(input.approval.envelopeId)) {
+    // Before anything is created. A packet carrying an envelope id nothing
+    // defines would validate against no rules at all, and the safe reading of
+    // "no rules matched" must never be "everything is allowed".
+    throw new NoSuchEnvelope(input.approval.envelopeId);
+  }
 
   const title = input.title.trim();
   const assignment = input.assignment.trim();
@@ -278,12 +310,25 @@ export async function startPacket(input: StartPacketInput): Promise<StartPacketR
     title,
     assignment,
     provider: 'WORKER',
-    // Under PER_PACKET nothing about this packet runs without a person, which
-    // is what the flag means. It is not a preference; it is the §16 gate, and
-    // it is false here because that is what the policy said rather than
-    // because it is the only value the column has ever held.
-    autoApprove: input.approval.mode !== 'PER_PACKET',
+    // False for both supported modes, and the reason differs.
+    //
+    // Under PER_PACKET it is the §16 gate: nothing runs without a person.
+    // Under AUTO_WITHIN_ENVELOPE it is what keeps the envelope honest. That
+    // mode approves a plan; it must never skip producing one. Setting this true
+    // would let the packet queue research before anything had been checked
+    // against the envelope at all, which is the bypass the envelope exists
+    // instead of. The plan is still made, still landed, still validated — the
+    // only thing that changes is who does the approving.
+    autoApprove: input.approval.mode === 'GOAL_BUDGET',
   });
+
+  if (input.approval.mode === 'AUTO_WITHIN_ENVELOPE') {
+    await updateOrchestration(orchestration.id, {
+      approvalEnvelopeId: input.approval.envelopeId,
+      approvalEnvelopeAuthorizedBy: input.approval.authorizedBy,
+      approvalEnvelopeAuthorizedAt: new Date().toISOString(),
+    });
+  }
 
   if (input.unresolvedGap) {
     await updateOrchestration(orchestration.id, {
