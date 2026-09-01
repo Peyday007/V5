@@ -12,11 +12,14 @@ The design is in [`STEP-10-PLAN.md`](STEP-10-PLAN.md). The frozen Step 9
 baseline this step must not disturb is recorded there and re-read at the end of
 this file.
 
-> **Status: the core claim is proven; the capacity work is not.** Brain fires,
-> an unattended worker acts, and Brain validates the result — measured end to
-> end in production. The concurrency ramp has not run, no real research bin has
-> gone through, and the operating standards below are contaminated by the
-> outage that preceded the fix. Nothing here claims otherwise.
+> **Status: Brain's half is proven; the step is not closed.** Brain fires, an
+> unattended worker acts, Brain validates the result, the ramp has run to a
+> measured ceiling, and on a real research packet Brain planned, approved
+> against a preauthorized envelope, queued research and refused evidence it
+> could not ground — all with nobody involved. What is missing is a filed,
+> audited document, and the reason is not Brain: the worker surface has no
+> network egress to the primary sources. That is the operator's half of the
+> same split, and Step 10 stays open until it is met.
 
 ---
 
@@ -467,6 +470,81 @@ second backend has been the only thing that made a concurrency defect visible.
 
 ---
 
+## The real research packet — the machinery ran; the research could not
+
+This is the acceptance item Step 10 was told not to close without, and it needs
+two answers rather than one, because two different things were being tested and
+only one of them is Brain's.
+
+### What Brain did, end to end, with nobody involved
+
+```
+21:31:11  regrant 12→25          the operator restores a budget two defects spent
+21:31:2x  DISPATCH_INTENT        ten-second tick, no person
+21:3x     BIN_ASSIGNED           worker takes the bin
+21:3x     BIN_ITEM_CLAIMED       and the packet's RESEARCH_PLAN with it
+          RESEARCH_PLAN SUCCEEDED
+          → advancePacket → planFitsEnvelope → RESEARCH_PLAN_SYSTEM_APPROVED
+            SYSTEM:STEP10_MICHIGAN_LICENSING_V1@2026-09-01.2
+          → 4 fragments QUEUED, 2 RESEARCH_FRAGMENT items minted
+          RESEARCH_FRAGMENT SUCCEEDED    licence-trigger researched, 2 claims stored
+          RESEARCH_VERIFY   SUCCEEDED    the verification pass ran
+```
+
+Every step of that is the thing Step 10 exists to do, and no person did any of
+it. The packet went from `NEEDS_HUMAN` to `RESEARCHING` on a boot sweep, by
+re-reading rows, and queued its own research.
+
+### What the evidence engine did when the research could not be grounded
+
+```
+claims      2 stored, 0 accepted
+licence-trigger   BLOCKED   attempt 2/2
+  because   This is not a search-strategy failure; it is an access-refused
+            condition in this worker's execution environment…
+real-property-condition   QUEUED   deps [licence-trigger:HARD]
+exemption-inclusion       QUEUED   deps [licence-trigger:HARD, real-property-condition:HARD]
+consequences              QUEUED   deps [licence-trigger:HARD]
+```
+
+**The worker could reach Brain and could not reach the sources.** Eight
+consecutive activations released the bin naming the same cause in their own
+words — `EGRESS_BLOCKED`, with `legislature.mi.gov` named as confirmed
+unreachable. Those are worker-authored strings and are treated as such; what
+makes the diagnosis Brain's rather than the worker's is the row above it. Brain
+stored the two claims the fragment produced, ran its verification pass, and
+**accepted neither**, because a claim with no reachable primary source cannot
+satisfy the seven conditions. It then spent the fragment's whole repair budget —
+`attempt 2/2`, a different strategy each time, per §15 — and blocked it with the
+reason recorded.
+
+So the gate did the one thing it exists for: **faced with research it could not
+ground, it produced nothing rather than something.** No invented citation, no
+lowered bar, no fragment quietly passed. The three dependent fragments are
+`QUEUED` behind a `HARD` dependency and will stay there, which is also correct:
+a packet whose foundational fragment is blocked must not synthesise around it.
+
+### Which half of the split this is
+
+The same split this step already established, at a new boundary:
+
+> **Brain owns dispatch. The surface owns whether a worker may act.**
+
+Step 10's first blocker was the surface's *permission* to call the connector,
+fixed by a checked-in settings file and a routine that checks the repository
+out. This one is the surface's *network reach*, and it is the operator's in
+exactly the same way. No amount of Brain-side code substitutes for it, and the
+two obvious workarounds are both forbidden: relaxing the fragment's source types
+would admit secondary sources the assignment excludes, and relaxing the gate
+would be §12 and §14 abandoned to make a report appear.
+
+**So this acceptance item does not pass, and Step 10 is not closed.** What is
+proven is that the whole chain from "a bin became ready" to "Brain refused
+ungrounded evidence" runs unattended and correctly. What is unproven is a filed,
+audited document — and it will stay unproven until a worker surface that can
+reach published primary sources runs the same packet, which needs no change to
+anything in this repository.
+
 ## What is NOT proven
 
 ### The concurrency ramp
@@ -625,7 +703,10 @@ over-provisions it.
 
 ### Production proofs still outstanding
 
-- one bounded **real research bin** through the full lifecycle
+- a **filed, audited document** from the real research bin. Everything Brain
+  owns ran; the worker surface has no egress to the primary sources, so the
+  evidence gate correctly produced nothing. Needs a worker surface that can
+  reach published sources, and no change to this repository.
 - ~~worker death and takeover in production~~ — **done**, see above: two
   unforced takeovers, and the bin that exposed the dispatch defect finished at
   `attempt 3/3 gen 4`.

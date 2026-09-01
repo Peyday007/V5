@@ -716,8 +716,15 @@ for somebody to say go.
 > evidence only after an unattended run has actually happened, never before.
 
 **Step 10 must implement and prove automatic worker activation or scheduling.**
-It has implemented it. It has not yet proven it, and those are different
-sentences.
+It has implemented it, and it has proven activation, draining, takeover,
+recovery and a measured concurrency ceiling. What it has not produced is a
+filed, audited document from real research — and the reason is the surface, not
+Brain: on the acceptance packet the worker's execution environment had no
+network egress to the primary sources, so the evidence gate refused its
+ungrounded claims, the fragment used its repair budget and was blocked with the
+reason recorded, and everything depending on it stayed queued. **A worker that
+cannot reach the sources is a worker that must produce nothing**, and that is
+what happened.
 
 **Brain now reaches out to Claude.** A bin becoming `READY` writes a durable
 dispatch intent, and a ten-second tick turns intents into a fire against the

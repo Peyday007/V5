@@ -128,6 +128,23 @@ measured, so "Brain runs a worker" and "Brain runs a fleet of ten on one
 routine" may both be said. What a second routine does is Step 11's, and nothing
 here is evidence for it.
 
+**The real research packet is where Step 10 stops, and not because of Brain.**
+On `orc_9b2965e776bb4de7ab9f` Brain dispatched a worker, the worker planned,
+Brain validated the plan against a preauthorized envelope and approved it with
+no person involved, and Brain queued the research. The worker then could not
+reach `legislature.mi.gov` or any other Michigan primary source — its execution
+environment has no egress — so its two claims were refused by the evidence gate,
+the fragment used its full repair budget and was `BLOCKED` with the reason
+recorded, and the three fragments depending on it stayed `QUEUED`. That is §12
+and §15 working: faced with research it could not ground, the engine produced
+nothing rather than something.
+
+So the split holds at a new boundary. **Brain owns dispatch; the surface owns
+whether a worker may act** — first its permission to call the connector, now its
+network reach. **Step 10 is not closed**: it needs a filed, audited document from
+a worker surface that can reach published primary sources, and that needs no
+change to this repository.
+
 ### What Step 12 is actually for
 
 Step 8 built `/operator` because worker administration existed only over HTTP
