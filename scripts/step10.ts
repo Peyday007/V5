@@ -20,10 +20,11 @@
  *   fire-check            whether activation is configured, without the token
  *   research-start        the one real-research acceptance packet, and its bin
  *   research-ready <bin>  make that bin dispatchable again after approval
- *   regrant <bin> <n>     raise a bin's assignment ceiling after a platform fault
+ *   regrant <bin> <n> [why]  raise a bin's assignment ceiling: platform-defect | surface-blocked
  *   probe                 ask a fired worker what its execution surface can reach
  *   probe-read <binId>    the readings that probe recorded
  *   recover <key> <bin> <orc>  requeue a fragment an execution-surface failure blocked
+ *   cf8                   whether a client ever refreshed an expiring access token
  *   cancel-ready <n>      cancel exactly n READY acceptance bins, or refuse
  *   cancel-bin <binId>    cancel one named unleased acceptance bin
  *   prompt                the exact prompt a worker routine must hold
@@ -35,6 +36,7 @@ import { initDatabase, getDb } from '../server/db/database.ts';
 import { initStorage } from '../server/services/storage/index.ts';
 import { createProject, getProjectBySlug } from '../server/repos/projects.ts';
 import { grantMembership, listWorkers } from '../server/repos/identity.ts';
+import { listTokensForWorker } from '../server/repos/oauth.ts';
 import {
   createBin,
   getBin,
@@ -638,13 +640,38 @@ async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    const outcome = await regrantBinAttempts({
-      binId: id,
-      maxAttempts: to,
-      reason:
-        'Attempts spent on a Brain-side confinement defect that left the bin nothing to claim, ' +
-        'not on the packet failing.',
-    });
+    /*
+     * Why the budget went, in the words that are actually true of this bin.
+     *
+     * The first version hardcoded "a Brain-side confinement defect", which was
+     * true of the first two regrants and became false for the third: thirteen
+     * of that bin's assignments went to an execution-surface failure, which is
+     * not a defect in Brain at all. An audit row that records the wrong cause
+     * is worse than one that records none, because it is the row somebody will
+     * believe later. A closed set of codes, because the workflow that calls
+     * this can only pass letters and dashes — and because a free-text reason
+     * here would be a caller writing its own audit trail.
+     */
+    const REASONS: Record<string, string> = {
+      'platform-defect':
+        'Attempts spent on a Brain-side defect that left the bin nothing to claim — the queue ' +
+        'confinement excluded the packet\'s own work, and the plan tool told every worker to ' +
+        'wait for a person. Not spent on the packet failing.',
+      'surface-blocked':
+        'Attempts spent on an execution-surface failure — the worker could reach Brain and not ' +
+        'the sources — which the operator has since corrected and a SURFACE_PROBE_V1 bin has ' +
+        'evidenced. Not spent on the packet failing.',
+    };
+    const code = arg(2) ?? 'platform-defect';
+    const reason = REASONS[code];
+    if (!reason) {
+      console.log(
+        `STEP10 REFUSED: unknown reason code "${code}". One of: ${Object.keys(REASONS).join(', ')}.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const outcome = await regrantBinAttempts({ binId: id, maxAttempts: to, reason });
     console.log(
       `STEP10: OK regrant ${id} raised=${outcome.raised} ` +
         `attempts=${outcome.bin?.attemptCount ?? '—'}/${outcome.bin?.maxAttempts ?? '—'} ` +
@@ -845,6 +872,65 @@ async function main(): Promise<void> {
       }
       throw error;
     }
+    return;
+  }
+
+  if (command === 'cf8') {
+    /*
+     * CF-8, answered from rows rather than from confidence.
+     *
+     * Step 8 issued refresh tokens for thirty days, implemented the rotation
+     * grant and tested it, and recorded that **nothing had exercised it live**.
+     * Step 9 decomposed a packet into items each far shorter than an hour and
+     * assigned the question here. Step 10's own plan lists it as the second
+     * thing a long unattended run could finally observe.
+     *
+     * The observation needs no new instrumentation, because Step 8 already
+     * recorded the thing that settles it: an ACCESS token carries
+     * `parent_token_id` when it was minted by a refresh rather than by an
+     * authorization code. So a chained access token that has been *used* is a
+     * client that refreshed and carried on — which is the whole claim.
+     *
+     * Prints no digest, no prefix, no scope value and no client secret. A
+     * report about credentials must not become a way to read them.
+     */
+    const workers = await listWorkers();
+    let chained = 0;
+    let chainedAndUsed = 0;
+    let roots = 0;
+    console.log('CF-8 — did a client actually refresh an expiring access token?');
+    for (const worker of workers) {
+      const tokens = await listTokensForWorker(worker.id);
+      if (tokens.length === 0) continue;
+      console.log('');
+      console.log(`  worker ${worker.name} (${worker.id})`);
+      for (const token of tokens) {
+        const rotated = token.parentTokenId !== null;
+        if (token.kind === 'ACCESS') {
+          if (rotated) chained += 1;
+          else roots += 1;
+          if (rotated && token.lastUsedAt) chainedAndUsed += 1;
+        }
+        console.log(
+          `    ${token.kind.padEnd(7)} issued ${token.createdAt}  expires ${token.expiresAt}` +
+            `  used ${token.lastUsedAt ?? 'never'}` +
+            `  ${rotated ? `rotated from ${token.parentTokenId}` : 'from an authorization code'}` +
+            (token.revokedAt ? `  revoked ${token.revokedAt}` : ''),
+        );
+      }
+    }
+    console.log('');
+    console.log(`  access tokens from an authorization code : ${roots}`);
+    console.log(`  access tokens minted by a refresh        : ${chained}`);
+    console.log(`  ...of those, actually used               : ${chainedAndUsed}`);
+    console.log('');
+    console.log(
+      chainedAndUsed > 0
+        ? '  VERDICT: a client refreshed an access token and went on using it. CF-8 is observed.'
+        : '  VERDICT: no refreshed access token has been used. CF-8 remains unobserved — which is\n' +
+          '           a finding, not a failure: it means no session has yet outlived its token.',
+    );
+    console.log(`STEP10: OK cf8 rotated=${chained} used=${chainedAndUsed} roots=${roots}`);
     return;
   }
 
