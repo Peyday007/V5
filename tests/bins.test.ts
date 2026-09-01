@@ -37,7 +37,9 @@ import {
   markDispatchSent,
   putBinUnitResult,
   releaseBin,
+  resolveNeedsHumanBin,
   supersedeStaleIntents,
+  terminateUnleasedBin,
   type BinProof,
 } from '../server/repos/bins.ts';
 import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
@@ -938,6 +940,107 @@ describe('one activation drains a bin, then asks for another', () => {
 });
 
 /* ========================================================================= */
+
+/* ========================================================================= */
+
+describe('retiring a bin cannot reach one that is working or finished', () => {
+  /*
+   * Cancelling an abandoned rung means pointing a command at a list of bins,
+   * and that is exactly the shape of operation that goes wrong quietly. The
+   * safety is not in the caller being careful; it is that the statements match
+   * only the states they are allowed to end.
+   */
+
+  it('cancels a READY bin and keeps everything it measured', async () => {
+    const binId = await makeBin(projectA);
+    const before = (await getBin(binId))!;
+    await ensureDispatchIntent(before);
+
+    expect(await terminateUnleasedBin(binId, before.leaseGeneration, 'CANCELLED', 'rung abandoned'))
+      .toBe(true);
+    const after = (await getBin(binId))!;
+    expect(after.state).toBe('CANCELLED');
+
+    // Nothing was deleted: the dispatch row and the event history survive,
+    // which is the point of cancelling a measured rung rather than dropping it.
+    expect(await listDispatchesForBin(binId)).toHaveLength(1);
+    const events = await listBinEvents(binId, 100);
+    expect(events.some((e) => e.eventType === 'DISPATCH_INTENT')).toBe(true);
+    expect(events.some((e) => e.eventType === 'BIN_TERMINAL' && e.outcome === 'CANCELLED')).toBe(true);
+  });
+
+  it('refuses to cancel a bin a worker is holding', async () => {
+    const binId = await makeBin(projectA);
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    expect(
+      await terminateUnleasedBin(binId, assigned.leaseGeneration, 'CANCELLED', 'should not happen'),
+    ).toBe(false);
+    expect((await getBin(binId))!.state).toBe('LEASED');
+  });
+
+  it('refuses to rewrite a bin that already completed', async () => {
+    const binId = await makeBin(projectA, { units: 1 });
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const proof = proofFrom(assigned, workerOne);
+    const unit = assigned.bin.manifest.units[0]!;
+    await submitUnit({
+      workerId: workerOne,
+      proof,
+      unitKey: unit.key,
+      value: UNIT_TRANSFORMS[unit.transform]!(unit.input),
+    });
+    await requestCompletion({ workerId: workerOne, proof });
+
+    const done = (await getBin(binId))!;
+    expect(done.state).toBe('COMPLETE');
+    expect(await terminateUnleasedBin(binId, done.leaseGeneration, 'CANCELLED', 'no')).toBe(false);
+    expect((await getBin(binId))!.state).toBe('COMPLETE');
+  });
+
+  it('refuses a stale generation, so a decision made about an older bin cannot land', async () => {
+    const binId = await makeBin(projectA);
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    await releaseBin(proofFrom(assigned, workerOne), 'back to the queue');
+    const now = (await getBin(binId))!;
+    expect(now.state).toBe('READY');
+
+    // A caller that read the bin before the release still holds generation 1.
+    expect(await terminateUnleasedBin(binId, 1, 'CANCELLED', 'stale')).toBe(false);
+    expect((await getBin(binId))!.state).toBe('READY');
+    expect(await terminateUnleasedBin(binId, now.leaseGeneration, 'CANCELLED', 'fresh')).toBe(true);
+  });
+
+  it('retires a NEEDS_HUMAN bin only through its own path', async () => {
+    const binId = await makeBin(projectA);
+    const bin = (await getBin(binId))!;
+    await terminateUnleasedBin(binId, bin.leaseGeneration, 'NEEDS_HUMAN', 'a person must decide');
+    expect((await getBin(binId))!.state).toBe('NEEDS_HUMAN');
+
+    // The READY/DRAFT command does not reach it — that narrowness is what makes
+    // it safe to point at a list.
+    const escalated = (await getBin(binId))!;
+    expect(
+      await terminateUnleasedBin(binId, escalated.leaseGeneration, 'CANCELLED', 'wrong door'),
+    ).toBe(false);
+    expect((await getBin(binId))!.state).toBe('NEEDS_HUMAN');
+
+    expect(
+      await resolveNeedsHumanBin(binId, escalated.leaseGeneration, 'CANCELLED', 'operator retired it'),
+    ).toBe(true);
+    const retired = (await getBin(binId))!;
+    expect(retired.state).toBe('CANCELLED');
+    // The escalation is answered, not erased.
+    const events = await listBinEvents(binId, 100);
+    expect(events.filter((e) => e.eventType === 'BIN_TERMINAL')).toHaveLength(2);
+  });
+
+  it('will not resolve a bin that never asked for a human', async () => {
+    const binId = await makeBin(projectA);
+    const bin = (await getBin(binId))!;
+    expect(await resolveNeedsHumanBin(binId, bin.leaseGeneration, 'CANCELLED', 'no')).toBe(false);
+    expect((await getBin(binId))!.state).toBe('READY');
+  });
+});
 
 describe('the governing invariant', () => {
   it('leaves a bin alone while it is still assignable', async () => {

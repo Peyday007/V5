@@ -18,6 +18,8 @@
  *   reconcile             run the governing-invariant pass
  *   standards             the measurements Step 11 will start from
  *   fire-check            whether activation is configured, without the token
+ *   cancel-ready <n>      cancel exactly n READY acceptance bins, or refuse
+ *   cancel-bin <binId>    cancel one named unleased acceptance bin
  *   prompt                the exact prompt a worker routine must hold
  *   trace <binId>         one bin's dispatches, events and units, in order
  *   watch [secs] [every]  follow the bins from inside the machine until they settle
@@ -30,6 +32,8 @@ import { grantMembership, listWorkers } from '../server/repos/identity.ts';
 import {
   createBin,
   getBin,
+  resolveNeedsHumanBin,
+  terminateUnleasedBin,
   listBins,
   listBinEvents,
   listBinUnitResults,
@@ -436,6 +440,91 @@ async function main(): Promise<void> {
     console.log(`  completion refusals  ${refusals}`);
     console.log(`  quality signals      ${signals}`);
     console.log(`STEP10: OK standards bins=${bins.length}`);
+    return;
+  }
+
+  if (command === 'cancel-ready') {
+    /*
+     * Cancel the READY bins of an abandoned rung, with an interlock.
+     *
+     * The dangerous version of this command is the one that takes a filter and
+     * trusts it. This one takes the number the caller believes it will cancel
+     * and refuses outright if the project disagrees, so a rung that drained
+     * while the operator was deciding, or a bin somebody added meanwhile,
+     * stops the whole thing instead of being swept up in it.
+     *
+     * Three further limits, none of them optional:
+     *   - it resolves the acceptance project by slug, so Deal Dispatch is not
+     *     addressable from here at all;
+     *   - `terminateUnleasedBin` is CAS-guarded on the generation and matches
+     *     only READY or DRAFT, so a bin a worker holds cannot be cancelled out
+     *     from under it, and a COMPLETE one cannot be rewritten;
+     *   - nothing is deleted. The bin keeps its events, its unit results and
+     *     its dispatch rows, RATE_LIMIT errors included, because the point of
+     *     cancelling a measured rung is to stop it firing, not to lose what it
+     *     measured.
+     */
+    const projectId = (await getProjectBySlug(SLUG))?.id;
+    if (!projectId) {
+      console.log('STEP10: OK cancel-ready cancelled=0 (no acceptance project)');
+      return;
+    }
+    const expected = Number(arg(0) ?? 'NaN');
+    if (!Number.isInteger(expected) || expected < 0) {
+      console.log('STEP10 CANCEL REFUSED: pass the exact number of READY bins you expect.');
+      process.exitCode = 1;
+      return;
+    }
+    const ready = await listBins({ projectId, states: ['READY'], limit: 500 });
+    if (ready.length !== expected) {
+      console.log(
+        `STEP10 CANCEL REFUSED: expected ${expected} READY bins, found ${ready.length}. ` +
+          'Nothing was changed.',
+      );
+      for (const bin of ready) console.log(`  ${bin.id}  ${bin.title}`);
+      process.exitCode = 1;
+      return;
+    }
+    let cancelled = 0;
+    for (const bin of ready) {
+      const ok = await terminateUnleasedBin(
+        bin.id,
+        bin.leaseGeneration,
+        'CANCELLED',
+        'Synthetic ramp bin cancelled by the operator after the provider ceiling was measured. ' +
+          'Telemetry and dispatch history are kept.',
+      );
+      if (ok) cancelled += 1;
+      console.log(`  ${ok ? 'cancelled' : 'skipped  '} ${bin.id}  ${bin.title}`);
+    }
+    console.log(`STEP10: OK cancel-ready cancelled=${cancelled} of ${ready.length}`);
+    return;
+  }
+
+  if (command === 'cancel-bin') {
+    // One named bin, and only inside the acceptance project — a bin id from
+    // anywhere else is refused rather than looked up.
+    const projectId = (await getProjectBySlug(SLUG))?.id;
+    const id = arg(0);
+    if (!id || !projectId) {
+      console.log('STEP10 CANCEL REFUSED: pass a bin id.');
+      process.exitCode = 1;
+      return;
+    }
+    const bin = await getBin(id);
+    if (!bin || bin.projectId !== projectId) {
+      console.log('STEP10 CANCEL REFUSED: that bin is not in the acceptance project.');
+      process.exitCode = 1;
+      return;
+    }
+    const reason =
+      'Acceptance test bin retired by the operator. It was broken deliberately, it did its job, ' +
+      'and its failure history is kept as the evidence for it.';
+    const ok =
+      bin.state === 'NEEDS_HUMAN'
+        ? await resolveNeedsHumanBin(bin.id, bin.leaseGeneration, 'CANCELLED', reason)
+        : await terminateUnleasedBin(bin.id, bin.leaseGeneration, 'CANCELLED', reason);
+    console.log(`STEP10: OK cancel-bin ${bin.id} was=${bin.state} cancelled=${ok}`);
     return;
   }
 

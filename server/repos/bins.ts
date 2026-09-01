@@ -896,6 +896,43 @@ export async function terminateUnleasedBin(
  * deleting this function changes nothing about recovery. It exists so that a
  * report can say how often it happened.
  */
+/**
+ * A person has decided what happens to a bin that asked for one.
+ *
+ * Deliberately not folded into `terminateUnleasedBin`. That function matches
+ * only READY or DRAFT, and that narrowness is what makes it safe to point at a
+ * list — it cannot take a bin a worker is holding, and it cannot rewrite one
+ * that finished. Adding NEEDS_HUMAN to its match would widen every existing
+ * caller to reach a state none of them mean to touch.
+ *
+ * So this is its own statement, guarded the same way and matching exactly the
+ * one state that means "waiting for a human": the bin keeps its events, its
+ * unit results and its whole failure history, and gains a terminal reason
+ * saying who ended it and why. Escalation is not erased by being answered.
+ */
+export async function resolveNeedsHumanBin(
+  binId: string,
+  leaseGeneration: number,
+  state: Extract<BinState, 'CANCELLED' | 'FAILED'>,
+  reason: string,
+): Promise<boolean> {
+  const now = binNow();
+  const result = await getDb().run(
+    `UPDATE bins SET state = ?, terminal_reason = ?, completed_at = ?, updated_at = ?
+      WHERE id = ? AND lease_generation = ? AND state = 'NEEDS_HUMAN'`,
+    [state, bounded(reason, MAX_REASON_CHARS), now, now, binId, leaseGeneration],
+  );
+  if (result.changes !== 1) return false;
+  await recordBinEvent({
+    eventType: 'BIN_TERMINAL',
+    binId,
+    leaseGeneration,
+    outcome: state,
+    reason,
+  });
+  return true;
+}
+
 export async function sweepExpiredBinLeases(): Promise<number> {
   const now = binNow();
   const rows = await getDb().all<BinRow>(
