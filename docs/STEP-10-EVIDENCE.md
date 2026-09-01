@@ -410,6 +410,33 @@ confinement or the approval mode, so the first real packet was the first test of
 either. The ramp measured dispatch, correctly, and proved nothing about the
 thing dispatch exists to start.
 
+## What the two defects cost, in the currency this step found is scarce
+
+A bin's attempt budget is its assignment count, and that accounting is right —
+a worker that died still cost the bin a go. It assumes the attempts were spent
+*on the work*. Both real-packet defects spent them on Brain instead:
+
+```
+19:31 → 19:39   5 attempts   the confinement defect — assigned, nothing to claim, released
+20:22 → 20:28   7 attempts   the approval-status defect — plan filed, told to wait for a person
+                             12 / 12 — spent, and the bin stopped being dispatched at all
+```
+
+That last line is the folded predicate doing its job. `DISPATCHABLE_SQL` now
+carries `attempt_count < max_attempts`, so a bin the assigner would refuse earns
+no activation, and the fleet went quiet rather than spending fires on a bin
+nobody could be given. It also produced an hour of a live packet sitting
+perfectly still, which looked from outside exactly like a dispatcher that had
+stopped — and working out which it was meant counting `BIN_ASSIGNED` events by
+hand, because `trace` printed the lease, the renewals and the refusals and not
+the one number that decides whether a bin will ever be handed out again. It
+prints it now.
+
+`regrantBinAttempts` is the operator's answer, and both uses of it are recorded
+as bin events with their reason. It raises a ceiling and never resets a count,
+so the twelve spent attempts stay in the history where they belong: the packet
+did not fail twelve times, the platform did, and the row says so.
+
 ## The bug that only Postgres could find
 
 `claimDispatchIntent` originally swapped on `attempt_count`:

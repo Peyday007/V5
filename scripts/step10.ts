@@ -782,6 +782,16 @@ async function main(): Promise<void> {
     console.log(`  session    ${bin.leaseSessionRef ?? '—'}`);
     console.log(`  heartbeat  ${bin.heartbeatAt ?? '—'}  expires ${bin.leaseExpiresAt ?? '—'}`);
     console.log(`  renewals   ${bin.leaseRenewals}  refusals ${bin.refusalCount}`);
+    // The number that decides whether this bin will ever be handed out again,
+    // and the one this trace did not print. Working it out meant counting
+    // BIN_ASSIGNED events by hand, which is how an hour of a live packet
+    // sitting still got mistaken for a dispatcher that had stopped.
+    console.log(
+      `  attempts   ${bin.attemptCount}/${bin.maxAttempts}` +
+        (bin.attemptCount >= bin.maxAttempts
+          ? '  — spent, so nothing will be dispatched or assigned until it is regranted'
+          : ''),
+    );
     if (bin.terminalReason) console.log(`  terminal   ${bin.terminalReason}`);
     if (bin.checkpoint) {
       console.log(`  checkpoint ${JSON.stringify(bin.checkpoint).slice(0, 240)}`);

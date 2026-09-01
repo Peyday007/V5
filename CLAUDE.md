@@ -373,6 +373,19 @@ rather than untangled.
   sees the goal as Brain read it, what the archive answers, the genuine gaps and
   the jobs proposed, and approves before anything is spent. Automatic execution
   changes when approval is asked for, never whether the plan can be inspected.
+- **A plan may be approved without a person only inside limits a person set
+  first.** `services/research/approvalEnvelope.ts` is the whole of it, and four
+  properties are what make it safe rather than a loophole: the envelope lives in
+  code and a packet names it by id, so nobody supplies the limits their own plan
+  is judged against; the check is a pure function over rows, so no model is ever
+  asked whether its plan fits; it decides only whether research may *start*, and
+  leaves the evidence gate, the verification pass, the synthesis check and all
+  three audit roles exactly as they are; and anything outside the envelope stops
+  at `NEEDS_HUMAN` with every reason recorded, never narrowed and never retried.
+  An automatic approval records the envelope, the authorization and the
+  validator version, because "Brain approved this" is auditable only if you can
+  tell which rules it applied. This is not a policy engine and must not become
+  one — a second envelope is a code change somebody reviews.
 - Before synthesis the packet is checked against the whole goal — mandatory
   coverage, consistent scope, verified calculation inputs, investigated
   counterarguments, nothing load-bearing on a single source. A failure produces
@@ -838,6 +851,7 @@ server/
       contradictions.ts which kind of disagreement two claims are actually in
       packet.ts         does this answer the goal, and what is missing if not
       review.ts         the plan a person approves before anything is spent
+      approvalEnvelope.ts  limits a person set first, and the check against them
       progress.ts       where the run is, read from persisted state only
       prompts.ts        plan / fragment / bundle / verification / synthesis prompts
       orchestrator.ts   the assignment loop, and the only path to a filed report
