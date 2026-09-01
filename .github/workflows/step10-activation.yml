@@ -1,0 +1,83 @@
+# Giving the Brain its trigger credential, without it passing through a chat.
+#
+# The routine token is generated once in the Claude Code web UI and cannot be
+# read back. It has to reach the deployment somehow, and every obvious route is
+# wrong: pasting it into a conversation puts a live credential in a transcript,
+# and printing it from a workflow puts it in a log.
+#
+# So it travels the way FLY_API_TOKEN already does — a GitHub Actions secret,
+# encrypted at rest, entered once in a UI the operator already uses — and this
+# workflow moves it into Fly's own secret store without ever echoing it. The
+# only thing it prints is whether the names are now set.
+#
+# The routine *id* is not a secret (it grants nothing on its own) so it is a
+# plain input, which means a rotation is one workflow run rather than an edit.
+name: Step 10 activation
+
+on:
+  workflow_dispatch:
+    inputs:
+      routine_id:
+        description: 'The routine id from the API trigger URL (trig_...)'
+        required: true
+      routine_version:
+        description: 'Which revision of the worker prompt the routine holds'
+        required: false
+        default: '2026-09-01.1'
+
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  activation:
+    name: Store the trigger credential
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Refuse rather than store nothing
+        env:
+          TOKEN: ${{ secrets.BRAIN_ROUTINE_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::BRAIN_ROUTINE_TOKEN is not set as a repository secret. Add it under Settings -> Secrets and variables -> Actions, then run this again. Nothing was changed."
+            exit 1
+          fi
+          echo "the token secret is present (its value is never printed)"
+
+      - name: Set the Fly secrets
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          TOKEN: ${{ secrets.BRAIN_ROUTINE_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          # `--stage` on the first two so the machine restarts once, at the end,
+          # rather than three times.
+          flyctl secrets set --app "$app" --stage \
+            "BRAIN_ROUTINE_ID=${{ inputs.routine_id }}" >/dev/null
+          flyctl secrets set --app "$app" --stage \
+            "BRAIN_ROUTINE_VERSION=${{ inputs.routine_version }}" >/dev/null
+          # Passed by name from the environment so the value never appears in
+          # the command line, which would put it in the runner's process list.
+          printf 'BRAIN_ROUTINE_TOKEN=%s' "$TOKEN" | flyctl secrets import --app "$app" >/dev/null
+          echo "secrets set; the machine is restarting with them"
+
+      - name: Say what the Brain now believes, without the credential
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://$app.fly.dev/healthz" || true)
+            [ "$code" = "200" ] && break
+            sleep 10
+          done
+          # `secrets list` prints names and digests, never values.
+          flyctl secrets list --app "$app" | grep -E 'NAME|BRAIN_ROUTINE' || true
+          set +e
+          flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh fire-check" 2>&1 | tee fire.txt
+          set -e
+          grep -q '^STEP10: OK' fire.txt
