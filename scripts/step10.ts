@@ -423,8 +423,6 @@ async function main(): Promise<void> {
     console.log(`  lease renewals       ${renewals}`);
     console.log(`  takeovers            ${takeovers}`);
     console.log(`  completion refusals  ${refusals}`);
-  console.log(`  lease expiries       ${leaseExpiries}`);
-  console.log(`  fenced stale writes  ${staleWrites}  (refused; >0 is correct behaviour, not a fault)`);
     console.log(`  quality signals      ${signals}`);
     console.log(`STEP10: OK standards bins=${bins.length}`);
     return;
