@@ -50,7 +50,7 @@ import { conflictError, invalidInput, notFoundError } from './errors.ts';
 import type { McpTool } from './toolkit.ts';
 import { RESEARCH_TOOLS } from './researchTools.ts';
 import { BIN_TOOLS } from './binTools.ts';
-import { activeBinForWorker } from '../repos/bins.ts';
+import { activeBinForWorker, confinementFor } from '../repos/bins.ts';
 import { RESEARCH_METHOD, RESEARCH_METHOD_VERSION } from '../services/research/method.ts';
 import {
   COMPLETE_NAMESPACE,
@@ -59,6 +59,7 @@ import {
   READ_ONLY,
   RELEASE_NAMESPACE,
   authorize,
+  describeClaimed,
   idempotentQueueMutation,
   optionalIdempotencyKey,
   optionalInteger,
@@ -327,33 +328,6 @@ const getWorkItemTool: McpTool = {
   },
 };
 
-/**
- * What the work type means, handed over with the work.
- *
- * The registry's own header assumes "a worker that receives an item looks up
- * what that type means in its own code". That is right for a worker somebody
- * wrote; it is not right for the workers this Brain actually has, which read
- * the name `RESEARCH_PLAN` and have to infer the rest.
- *
- * So the registered description travels with the claim. It is not a prompt and
- * cannot become one: it is the type's own definition, authored here, from a
- * closed registry a caller cannot add to. The alternative is a capable model
- * guessing which tool a type calls for and finding out by being refused, which
- * costs an allowance to learn something the Brain already knew.
- */
-function describeClaimed(item: ClaimedWork): Record<string, unknown> {
-  let description: string | null = null;
-  try {
-    description = workType(item.workType).description;
-  } catch {
-    // A type that is no longer registered. The item still gets handed over —
-    // refusing it here would strand work nobody can look at — and the worker is
-    // told there is nothing to say about it rather than being told nothing.
-    description = null;
-  }
-  return { ...item, workTypeDescription: description };
-}
-
 const claimWorkTool: McpTool = {
   name: 'brain_claim_work',
   title: 'Claim queued work',
@@ -440,7 +414,7 @@ const claimWorkTool: McpTool = {
       // and scopes, checked per item.
       orchestrationId: optionalString(args, 'orchestration_id'),
       bundleKey: optionalString(args, 'bundle_key'),
-      binId: heldBin?.id ?? null,
+      bin: heldBin ? confinementFor(heldBin) : null,
       limit: optionalInteger(args, 'limit') ?? 1,
       leaseMs: optionalInteger(args, 'lease_ms') ?? undefined,
       requestId,

@@ -257,6 +257,95 @@ places drifts, and the copy that drifts is the one nobody is looking at.**
 
 ---
 
+## The third defect production found — and it was found by the real packet
+
+**A `RESEARCH_PACKET` bin confined its worker to the empty set.**
+
+This is the one the synthetic ramp could never have caught, and it is worth
+being precise about why: every ramp bin was a `DETERMINISTIC_UNITS_V1` bin whose
+work is the `units` array in its own manifest. That work never touches the
+queue. A research bin's work *is* queue rows, so the real packet was the first
+thing to exercise the path at all — 71 bin tests and six clean ramp rungs said
+nothing about it.
+
+The trace of `bin_204f246c43b641afa5a5`, three activations in six minutes:
+
+```
+19:31:24  BIN_READY
+19:31:28  DISPATCH_SENT           session_01PHT6p2nrasDt1kTh1AEhxp
+19:31:47  BIN_ASSIGNED            wkr_1cdd82cfb2a54faf8edd
+19:32:10  BIN_QUALITY_SIGNAL      NO_RECORDED_WORK
+19:32:10  BIN_COMPLETION_REFUSED  The packet is PLANNING, not COMPLETE.
+19:34:02  BIN_RELEASED            "Packet stuck in PLANNING: the one open
+                                   RESEARCH_PLAN work item is QUEUED and
+                                   eligible…"
+19:34:08  DISPATCH_SENT           session_01GhrLF2VzoypGuumHLDbPuj   → same
+19:37:18  DISPATCH_SENT           session_011DwjCy52x8jhFENEBCdaGD   → same
+```
+
+And the packet, after all three:
+
+```
+WORK ITEMS (1)
+  RESEARCH_PLAN QUEUED               1
+      RESEARCH_PLAN wki_5e9cce901e714a80a548 QUEUED attempt 0/3
+```
+
+`attempt 0/3`. Three workers were started, each held the bin, each was told the
+bin had no items and no open work, and the one thing they were dispatched to do
+was never claimed once.
+
+**The cause.** `brain_claim_work` and `brain_bin_next_item` both confine a
+worker holding a bin, and both wrote the confinement as `bin_id = <the bin>`.
+Nothing sets `bin_id` on a research work item, and nothing should:
+`startPacket` enqueues the planning job *before* the bin exists, and
+`advancePacket` — Step 9's runner, correctly ignorant of Step 10 — creates every
+later fragment, verification, synthesis and audit item with no bin at all. So
+the filter matched nothing, twice, and the "is this bin drained" read agreed
+with the claim because it was the same wrong predicate written out a second
+time.
+
+**The correction is to say what the bin actually scopes.** `binScopeSql` is one
+exported predicate used by both the claim and the read:
+
+```sql
+-- a bin naming an orchestration
+(bin_id = ? OR (bin_id IS NULL AND orchestration_id = ?))
+-- a bin naming none
+bin_id = ?
+```
+
+A bin naming a packet is a lease on that packet, so its worker may take the
+packet's work. Nothing widens: an item tagged with another bin is another
+worker's, an untagged item outside this packet is out of bounds, and the
+project's wider queue stays unreachable — which is the property the confinement
+exists for. It is the same lesson as `DISPATCHABLE_SQL` one section up, and the
+same shape of mistake: **a predicate written out twice will eventually disagree
+with itself, and here both copies disagreed with reality at once.**
+
+Five tests cover it. Two fail when the fix is inverted — the item is not handed
+over, and `binHasOpenWork` reads `false` on a packet with queued work, which is
+the half that made three workers conclude the bin was finished. The other three
+are the inversion in the opposite direction, and they pass either way on
+purpose: a worker in a bin still cannot reach another packet, loose project
+work, or anything a bin that names no packet was not tagged with. The
+confinement was never too wide. It was too narrow to be usable.
+
+**Two smaller things the same bin exposed:**
+
+- `brain_bin_next_item` handed over a work item without the work type's own
+  description, while `brain_claim_work` had always included it. That was
+  harmless while a bin's items were deterministic units and is not harmless for
+  `RESEARCH_PLAN` / `RESEARCH_FRAGMENT` / `RESEARCH_VERIFY` /
+  `RESEARCH_SYNTHESIZE` / `RESEARCH_AUDIT`, where a worker that has to guess
+  which tool a type calls for learns by being refused — at the cost of an
+  allowance, to find out something the registry already knew. `describeClaimed`
+  moved to `mcp/toolkit.ts` so both tools use one answer.
+- The bin's assignment budget recorded three failures of Brain as three failures
+  of the packet. `regrantBinAttempts` raises a live bin's ceiling with a reason
+  and an audit row; it never resets the count, never lowers a ceiling, and
+  cannot touch a terminal bin.
+
 ## The bug that only Postgres could find
 
 `claimDispatchIntent` originally swapped on `attempt_count`:

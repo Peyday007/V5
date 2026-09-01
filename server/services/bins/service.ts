@@ -27,6 +27,7 @@ import type { Bin, BinManifest, ClaimedWork, Principal, WorkerScope } from '../.
 import {
   assignNextBin,
   checkpointBin,
+  confinementFor,
   countBinEvents,
   finishBin,
   getBin,
@@ -195,7 +196,7 @@ export async function nextItemInBin(input: {
     credentialId: input.principal.credentialId,
     scopes,
     // The only filter, and it comes from the lease.
-    binId: bin.id,
+    bin: confinementFor(bin),
     limit: 1,
     leaseMs: input.leaseMs,
   });
@@ -217,7 +218,7 @@ export async function nextItemInBin(input: {
     return { held: true, item: first };
   }
 
-  const items = await listWorkItemsForBin(bin.id);
+  const items = await listWorkItemsForBin(confinementFor(bin));
   const open = items.filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
   return { held: true, item: null, binHasOpenWork: open.length > 0 };
 }

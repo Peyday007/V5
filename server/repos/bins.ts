@@ -27,6 +27,7 @@
 import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
+import type { BinConfinement } from './workQueue.ts';
 import type {
   Bin,
   BinDispatch,
@@ -361,6 +362,18 @@ export async function activeBinForWorker(workerId: string): Promise<Bin | null> 
   return row ? mapBin(row) : null;
 }
 
+/**
+ * What a worker holding this bin may claim from the queue.
+ *
+ * A bin naming an orchestration is a lease on that packet, so its worker may
+ * take the packet's queued work — which is where research work actually lives,
+ * because `advancePacket` creates it knowing nothing about bins. A bin naming
+ * none confines to the items tagged with it, exactly as before.
+ */
+export function confinementFor(bin: Bin): BinConfinement {
+  return { id: bin.id, orchestrationId: bin.orchestrationId };
+}
+
 export async function binForOrchestration(orchestrationId: string): Promise<Bin | null> {
   const row = await getDb().get<BinRow>(`SELECT * FROM bins WHERE orchestration_id = ?`, [
     orchestrationId,
@@ -454,6 +467,55 @@ export async function createBin(input: CreateBinInput): Promise<Bin> {
 }
 
 /**
+ * Give a bin more assignments, because a platform fault spent the ones it had.
+ *
+ * An attempt is an assignment (see `assignNextBin`), which is right: a worker
+ * that died still cost the bin a go at it. But that accounting assumes the
+ * attempts were spent *on the work*. When Brain itself handed a worker a bin it
+ * had made undrainable, the budget records a fault in Brain, and letting it
+ * exhaust would retire a live packet for a reason that is not about the packet.
+ *
+ * So this is deliberately narrow, and each restriction is load-bearing:
+ *
+ *   - It **raises the ceiling and never resets the count**. §5: the failed
+ *     attempts stay in the history where a reader can see them.
+ *   - It **only ever raises**. A call that would lower the ceiling changes
+ *     nothing, so it cannot be used to strand a bin.
+ *   - It **refuses a terminal bin**, matching on the states that are still
+ *     live, so a finished bin cannot be quietly reopened by widening a number.
+ *   - It **records why**, as an ordinary bin event. An operator action with no
+ *     audit row is invariant 3 again.
+ */
+export async function regrantBinAttempts(input: {
+  binId: string;
+  maxAttempts: number;
+  reason: string;
+}): Promise<{ bin: Bin | null; raised: boolean }> {
+  const at = binNow();
+  const result = await getDb().run(
+    `UPDATE bins SET max_attempts = ?, updated_at = ?
+      WHERE id = ? AND max_attempts < ?
+        AND state IN ('DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN')`,
+    [input.maxAttempts, at, input.binId, input.maxAttempts],
+  );
+  const bin = await getBin(input.binId);
+  if (result.changes === 1 && bin) {
+    await recordBinEvent({
+      eventType: 'BIN_ATTEMPTS_REGRANTED',
+      binId: bin.id,
+      projectId: bin.projectId,
+      orchestrationId: bin.orchestrationId,
+      leaseGeneration: bin.leaseGeneration,
+      attempt: bin.attemptCount,
+      measures: { maxAttempts: bin.maxAttempts },
+      outcome: 'REGRANTED',
+      reason: input.reason,
+    });
+  }
+  return { bin, raised: result.changes === 1 };
+}
+
+/**
  * Make a drafted bin dispatchable.
  *
  * Guarded on `DRAFT` so two callers cannot both "make it ready" and both
@@ -534,12 +596,29 @@ export interface AssignedBin {
  * depend on one process staying alive. A sweeper that has to run for stranded
  * work to be recovered is that dependency wearing a different hat.
  *
+ * The attempt budget is part of it, and that was the second lesson rather than
+ * the first. `listDispatchableBins` and `assignNextBin` each carried
+ * `attempt_count < max_attempts` as a separate line while the dispatcher's
+ * pre-fire re-read and the supersede pass did not — so an intent created just
+ * before a bin exhausted itself would still be fired, starting a worker the
+ * assigner would then refuse. That spends the routine's limited fire budget to
+ * achieve nothing, which is the one resource this step found is actually
+ * scarce. One predicate, four callers, no copies.
+ *
  * One `?`, bound to now.
  */
-export const DISPATCHABLE_SQL = "(state = 'READY' OR (state = 'LEASED' AND lease_expires_at <= ?))";
+export const DISPATCHABLE_SQL =
+  "((state = 'READY' OR (state = 'LEASED' AND lease_expires_at <= ?))" +
+  ' AND attempt_count < max_attempts)';
 
 /** The same question asked of a row already in memory. */
 export function isDispatchable(bin: Bin, now: string = binNow()): boolean {
+  // Out of attempts is out of work. A bin the assigner will refuse must not
+  // earn an activation: firing at it spends the routine's limited budget to
+  // start a worker that will be handed nothing. `reconcileBins` is what turns
+  // an exhausted bin into a decision, and `regrantBinAttempts` is the answer
+  // it names.
+  if (bin.attemptCount >= bin.maxAttempts) return false;
   if (bin.state === 'READY') return true;
   if (bin.state !== 'LEASED') return false;
   return bin.leaseExpiresAt !== null && bin.leaseExpiresAt <= now;
@@ -553,7 +632,6 @@ export async function listDispatchableBins(limit = 200): Promise<Bin[]> {
   const rows = await getDb().all<BinRow>(
     `SELECT * FROM bins
       WHERE ${DISPATCHABLE_SQL}
-        AND attempt_count < max_attempts
       ORDER BY priority DESC, created_at, rowid
       LIMIT ?`,
     [binNow(), Math.min(500, Math.max(1, limit))],
@@ -577,7 +655,6 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
       `SELECT * FROM bins
         WHERE ${DISPATCHABLE_SQL}
           AND project_id IN (${input.projectIds.map(() => '?').join(', ')})
-          AND attempt_count < max_attempts
         ORDER BY priority DESC, created_at, rowid
         LIMIT 25`,
       params,

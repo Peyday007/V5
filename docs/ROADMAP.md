@@ -63,7 +63,7 @@ order is a dependency order, not a preference.
 | Step | What it contains |
 |---|---|
 | **9** | Manual end-to-end research packet — **complete**; one packet terminal, filed and audited ([evidence](STEP-9-EVIDENCE.md)) |
-| **10** | Scheduled firing and interruption recovery — **activation mechanism unbuilt and undecided** |
+| **10** | Event-driven bin dispatch and unattended activation — see *Where Step 10 actually is* below |
 | **11** | Additional workers and fleet controls |
 | **12** | The control centre — the Brain drives the fleet, not a person |
 
@@ -106,15 +106,27 @@ issued for thirty days and the rotation grant is implemented and tested, but
 nothing has exercised it against a real surface. Harmless for a bounded session;
 decide it before anything runs unattended for long.
 
-**The concurrency ramp has not run**, and no operating standards have been
-derived from clean measurement. There are timings, and they are not standards:
-the medians across the first seven bins measure how long the permission outage
-lasted, not how a working fleet behaves.
+**The concurrency ramp has run**, and this paragraph used to say it had not.
+Six rungs — 1, 2, 5, 10, 20, 30 — measured on an unblocked fleet, with the
+harness only creating and reading so that the dispatcher is what is under test.
+Rungs 1 through 20 completed every bin: 1/1, 2/2, 5/5, 10/10, 20/20. Across all
+of them, **zero duplicate activations, zero fenced stale writes, zero stranded
+bins**, and ten of ten at rung 10 despite three completion refusals, because
+Brain caught the wrong values and the workers corrected them.
 
-An unattended worker has now completed bins end to end, so "Brain runs a worker"
-may be said. **"Brain runs a fleet" may not** — that needs the ramp, a real
-research bin, and numbers taken on an unblocked fleet. The dispatcher working
-was never the same claim as the fleet working, and neither is one worker.
+**The ceiling is a per-routine fire limit, not the subscription.** Rung 20 had
+four dispatches refused `RATE_LIMIT` and still finished all twenty bins from
+thirteen activations — 1.54 bins each, because a worker that finishes one asks
+for another. Rung 30 had all thirty refused, and Brain paused, kept every bin,
+and resumed by itself when the window reopened. So a throttled fleet loses
+throughput rather than work, and the remedy for more capacity is more routines
+rather than more allowance. **The recommended ceiling is 10 concurrent bins on
+one routine**, with the full measurements in [STEP-10-EVIDENCE.md](STEP-10-EVIDENCE.md).
+
+An unattended worker has completed bins end to end and a fleet of ten has been
+measured, so "Brain runs a worker" and "Brain runs a fleet of ten on one
+routine" may both be said. What a second routine does is Step 11's, and nothing
+here is evidence for it.
 
 ### What Step 12 is actually for
 

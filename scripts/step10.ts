@@ -20,6 +20,7 @@
  *   fire-check            whether activation is configured, without the token
  *   research-start        the one real-research acceptance packet, and its bin
  *   research-ready <bin>  make that bin dispatchable again after approval
+ *   regrant <bin> <n>     raise a bin's assignment ceiling after a platform fault
  *   cancel-ready <n>      cancel exactly n READY acceptance bins, or refuse
  *   cancel-bin <binId>    cancel one named unleased acceptance bin
  *   prompt                the exact prompt a worker routine must hold
@@ -41,6 +42,7 @@ import {
   listBinUnitResults,
   listDispatchesForBin,
   markBinReady,
+  regrantBinAttempts,
   sweepExpiredBinLeases,
 } from '../server/repos/bins.ts';
 import { reconcileBins } from '../server/services/bins/service.ts';
@@ -602,6 +604,44 @@ async function main(): Promise<void> {
     }
     const after = await markBinReady(id);
     console.log(`STEP10: OK research-ready ${id} was=${before.state} now=${after?.state ?? '—'}`);
+    return;
+  }
+
+  if (command === 'regrant') {
+    /*
+     * Restore a bin's assignment budget after Brain wasted it.
+     *
+     * The real-research bin was dispatched three times into a confinement bug
+     * that left it nothing to claim. Those three attempts measure a fault in
+     * Brain rather than a fault in the packet, and letting them retire a live
+     * packet would be the platform blaming the work for its own defect. The
+     * ceiling goes up; the count and its history stay exactly where they are.
+     */
+    const id = arg(0);
+    const to = Number(arg(1) ?? '0');
+    if (!id || !Number.isInteger(to) || to < 1 || to > 25) {
+      console.log('STEP10 REFUSED: pass a bin id and a new ceiling between 1 and 25.');
+      process.exitCode = 1;
+      return;
+    }
+    const before = await getBin(id);
+    if (!before) {
+      console.log('STEP10 REFUSED: no such bin.');
+      process.exitCode = 1;
+      return;
+    }
+    const outcome = await regrantBinAttempts({
+      binId: id,
+      maxAttempts: to,
+      reason:
+        'Attempts spent on a Brain-side confinement defect that left the bin nothing to claim, ' +
+        'not on the packet failing.',
+    });
+    console.log(
+      `STEP10: OK regrant ${id} raised=${outcome.raised} ` +
+        `attempts=${outcome.bin?.attemptCount ?? '—'}/${outcome.bin?.maxAttempts ?? '—'} ` +
+        `was=${before.attemptCount}/${before.maxAttempts}`,
+    );
     return;
   }
 

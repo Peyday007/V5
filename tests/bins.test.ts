@@ -39,6 +39,7 @@ import {
   markDispatchFailed,
   markDispatchSent,
   putBinUnitResult,
+  regrantBinAttempts,
   releaseBin,
   resolveNeedsHumanBin,
   supersedeStaleIntents,
@@ -1125,6 +1126,295 @@ describe('a packet waiting for a person is not work a worker can retry', () => {
     const verdict = await evaluateContract((await getBin(binId))!);
     expect(verdict.satisfied).toBe(false);
     expect(verdict.disposition).toBe('RETRY');
+  });
+});
+
+describe("a research bin reaches its packet's work, and nothing else", () => {
+  /*
+   * The defect the first real research packet found, and it stopped Step 10
+   * dead.
+   *
+   * `brain_claim_work` and `brain_bin_next_item` confined a worker holding a
+   * bin with `bin_id = <the bin>`. Nothing sets `bin_id` on a research work
+   * item: `startPacket` enqueues the planning job before the bin exists, and
+   * `advancePacket` creates every later item knowing nothing about bins. So a
+   * RESEARCH_PACKET bin confined its worker to the empty set. In production
+   * three workers were dispatched at a packet with a QUEUED `RESEARCH_PLAN`
+   * item, were told the bin had no items and no open work, and released it —
+   * `attempt 0/3` after all three.
+   *
+   * The confinement now says what the bin actually scopes. These tests are the
+   * fix and its inversion together: the first would fail before it, and the
+   * rest fail if it ever widens into "a worker in a bin can claim anything".
+   */
+  async function packetBin(over: { orchestration?: boolean } = {}): Promise<{
+    binId: string;
+    orchestrationId: string;
+  }> {
+    const layerId = (await listLayers(projectA))[0]!.id;
+    const run = await createRun({
+      projectId: projectA,
+      layerId,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'a bounded licensing question',
+    });
+    const orchestration = await createOrchestration({
+      projectId: projectA,
+      layerId,
+      runId: run.id,
+      title: 'a bounded licensing question',
+      assignment: 'the four things that answer it',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    const bin = await createBin({
+      projectId: projectA,
+      kind: 'RESEARCH_PACKET',
+      title: 'one real research packet',
+      objective: 'drain it',
+      manifest: { ...unitsManifest(projectA, 0), units: [] },
+      completionContract: 'RESEARCH_PACKET_V1',
+      orchestrationId: over.orchestration === false ? null : orchestration.id,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+    });
+    return { binId: bin.id, orchestrationId: orchestration.id };
+  }
+
+  it('hands the worker the packet work item nothing tagged with the bin', async () => {
+    const { binId, orchestrationId } = await packetBin();
+    const item = await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which: 'the packet plan' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    expect(item.binId).toBeNull();
+
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    expect(assigned.bin.id).toBe(binId);
+    const next = await nextItemInBin({
+      principal: principalFor(workerOne, [projectA]),
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+    if (!next.held) throw new Error('the worker should hold its bin');
+    expect(next.item?.workItemId).toBe(item.id);
+  });
+
+  it('reports open work when the packet has some, so nobody concludes it is finished', async () => {
+    const { orchestrationId } = await packetBin();
+    await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which: 'blocked on a dependency' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+      // Not yet claimable, which is the case that must not read as "empty".
+      availableAt: '2999-01-01T00:00:00.000Z',
+    });
+
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const next = await nextItemInBin({
+      principal: principalFor(workerOne, [projectA]),
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+    expect(next).toMatchObject({ held: true, item: null, binHasOpenWork: true });
+  });
+
+  it('cannot reach a different packet in the same project', async () => {
+    const { binId } = await packetBin();
+    const elsewhere = await packetBin();
+    // The other packet's bin must not be the one this worker gets.
+    await getDb().run("UPDATE bins SET state = 'DRAFT' WHERE id = ?", [elsewhere.binId]);
+
+    const strayed = await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which: 'somebody else\'s packet' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: elsewhere.orchestrationId,
+    });
+
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    expect(assigned.bin.id).toBe(binId);
+    const next = await nextItemInBin({
+      principal: principalFor(workerOne, [projectA]),
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+    expect(next).toMatchObject({ held: true, item: null });
+    expect((await getWorkItem(strayed.id))!.state).toBe('QUEUED');
+  });
+
+  it('cannot reach loose project work belonging to no packet at all', async () => {
+    await packetBin();
+    const loose = await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which: 'the wider queue' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+    });
+
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const next = await nextItemInBin({
+      principal: principalFor(workerOne, [projectA]),
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+    expect(next).toMatchObject({ held: true, item: null });
+    expect((await getWorkItem(loose.id))!.state).toBe('QUEUED');
+  });
+
+  it('confines a bin that names no packet to its own tagged items, exactly as before', async () => {
+    const { binId, orchestrationId } = await packetBin({ orchestration: false });
+    const tagged = await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which: 'tagged with the bin' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      binId,
+    });
+    const untagged = await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which: 'a packet this bin does not name' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const first = await nextItemInBin({
+      principal: principalFor(workerOne, [projectA]),
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+    if (!first.held) throw new Error('the worker should hold its bin');
+    expect(first.item?.workItemId).toBe(tagged.id);
+    const second = await nextItemInBin({
+      principal: principalFor(workerOne, [projectA]),
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+    if (!second.held) throw new Error('the worker should hold its bin');
+    expect(second.item).toBeNull();
+    expect((await getWorkItem(untagged.id))!.state).toBe('QUEUED');
+  });
+});
+
+describe('a bin nobody can be given does not earn an activation', () => {
+  /*
+   * "Dispatchable" and "assignable" have to be the same question. They were
+   * not: `listDispatchableBins` and `assignNextBin` each checked the attempt
+   * budget on their own line, while the dispatcher's pre-fire re-read and the
+   * supersede pass used a predicate that did not. An intent created a moment
+   * before a bin exhausted itself was therefore still fired — spending a fire
+   * from a budget capped at roughly thirteen an hour to start a worker who
+   * would be handed nothing.
+   */
+  it('stops being dispatchable the moment its attempts run out', async () => {
+    const binId = await makeBin(projectA, { maxAttempts: 1 });
+    expect((await listDispatchableBins()).map((b) => b.id)).toContain(binId);
+
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    await expireBinLease(binId);
+
+    // Expired, so §19 would ordinarily make it claimable again — but the budget
+    // is spent, so both answers must be no, and they must agree.
+    const bin = (await getBin(binId))!;
+    expect(isDispatchable(bin)).toBe(false);
+    expect((await listDispatchableBins()).map((b) => b.id)).not.toContain(binId);
+    expect(await assignNextBin({ workerId: workerTwo, projectIds: [projectA] })).toBeNull();
+    expect(assigned.bin.id).toBe(binId);
+  });
+
+  it('fires nothing at it, and retires the intent it already had', async () => {
+    const binId = await makeBin(projectA, { maxAttempts: 1 });
+    await ensureDispatchIntent((await getBin(binId))!);
+    await assignNextBin({ workerId: workerOne, projectIds: [projectA] });
+    await expireBinLease(binId);
+
+    expect((await dispatchTick({ burst: 5 })).intentsCreated).toBe(0);
+    const states = (await listDispatchesForBin(binId)).map((d) => d.state);
+    expect(states).not.toContain('SENT');
+  });
+
+  it('becomes dispatchable again once the ceiling is raised', async () => {
+    const binId = await makeBin(projectA, { maxAttempts: 1 });
+    await assignNextBin({ workerId: workerOne, projectIds: [projectA] });
+    await expireBinLease(binId);
+    expect((await listDispatchableBins()).map((b) => b.id)).not.toContain(binId);
+
+    await regrantBinAttempts({ binId, maxAttempts: 4, reason: 'a Brain-side defect spent them' });
+    expect((await listDispatchableBins()).map((b) => b.id)).toContain(binId);
+  });
+});
+
+describe('an assignment budget a platform fault spent', () => {
+  /*
+   * Three activations were dispatched at the real-research bin into a
+   * confinement bug that left it nothing to claim. Its attempt budget recorded
+   * three failures of Brain as three failures of the packet, and one more would
+   * have retired live research for a reason that had nothing to do with it.
+   *
+   * Raising the ceiling is the operator's answer to that, and the tests are
+   * about what it must refuse: it may not lower a ceiling, may not erase the
+   * history, and may not reach a bin that has finished.
+   */
+  it('raises the ceiling, keeps the count, and says why', async () => {
+    const binId = await makeBin(projectA, { maxAttempts: 2 });
+    await assignNextBin({ workerId: workerOne, projectIds: [projectA] });
+    const before = (await getBin(binId))!;
+    expect(before.attemptCount).toBe(1);
+
+    const outcome = await regrantBinAttempts({
+      binId,
+      maxAttempts: 6,
+      reason: 'attempts spent on a Brain-side defect',
+    });
+    expect(outcome.raised).toBe(true);
+    expect(outcome.bin).toMatchObject({ attemptCount: 1, maxAttempts: 6 });
+
+    const events = await listBinEvents(binId, 50);
+    const regrant = events.find((event) => event.eventType === 'BIN_ATTEMPTS_REGRANTED');
+    expect(regrant?.reason).toMatch(/defect/);
+    expect(regrant?.attempt).toBe(1);
+  });
+
+  it('never lowers a ceiling, so it cannot be used to strand a bin', async () => {
+    const binId = await makeBin(projectA, { maxAttempts: 5 });
+    const outcome = await regrantBinAttempts({ binId, maxAttempts: 1, reason: 'no' });
+    expect(outcome.raised).toBe(false);
+    expect(outcome.bin?.maxAttempts).toBe(5);
+  });
+
+  it('cannot reopen a bin that has finished', async () => {
+    const binId = await makeBin(projectA, { units: 1 });
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const proof = proofFrom(assigned, workerOne);
+    await submitUnit({
+      workerId: workerOne,
+      proof,
+      unitKey: 'unit-1',
+      value: UNIT_TRANSFORMS['sha256']!('the quick brown fox number 1'),
+    });
+    const done = await requestCompletion({ workerId: workerOne, proof });
+    expect(done.state).toBe('COMPLETE');
+
+    const outcome = await regrantBinAttempts({ binId, maxAttempts: 25, reason: 'too late' });
+    expect(outcome.raised).toBe(false);
+    expect(outcome.bin?.state).toBe('COMPLETE');
   });
 });
 

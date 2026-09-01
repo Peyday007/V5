@@ -23,6 +23,7 @@ import { invalidInput, notFoundError } from './errors.ts';
 import {
   MUTATING,
   READ_ONLY,
+  describeClaimed,
   optionalInteger,
   optionalString,
   requiredString,
@@ -209,7 +210,19 @@ const nextItemTool: McpTool = {
         projectId: null,
       };
     }
-    return { value: { held: true, item: result.item }, projectId: result.item.projectId };
+    /*
+     * With the work type's own description, exactly as `brain_claim_work`
+     * hands it over.
+     *
+     * It was missing here for as long as a bin's items were only ever the
+     * deterministic units a manifest declared, where the work type says
+     * nothing a worker needs. A research bin hands out `RESEARCH_PLAN`,
+     * `RESEARCH_FRAGMENT`, `RESEARCH_VERIFY`, `RESEARCH_SYNTHESIZE` and
+     * `RESEARCH_AUDIT`, and a worker that has to guess which of those means
+     * which tool learns by being refused — at the cost of an allowance, to
+     * find out something the registry already knew.
+     */
+    return { value: { held: true, item: describeClaimed(result.item) }, projectId: result.item.projectId };
   },
 };
 

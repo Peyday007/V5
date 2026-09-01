@@ -95,6 +95,15 @@ async function main(): Promise<void> {
     (packet.unresolvedGapPolicy
       ? ` — by ${packet.unresolvedGapAuthorizedBy ?? '?'} at ${packet.unresolvedGapAuthorizedAt ?? '?'}`
       : ''));
+  // How this packet's plan is authorized, and by whom. A packet that approves
+  // itself against limits nobody can name would be the worst thing in this
+  // report to have to take on trust.
+  console.log(
+    `  approval    ${packet.approvalEnvelopeId ?? 'a person'}` +
+      (packet.approvalEnvelopeId
+        ? ` — authorized by ${packet.approvalEnvelopeAuthorizedBy ?? '?'} at ${packet.approvalEnvelopeAuthorizedAt ?? '?'}`
+        : ''),
+  );
   console.log(`  document    ${packet.documentId ?? '—'}`);
   console.log(`  audit       ${packet.auditId ?? '—'}   verdict ${packet.verdict ?? '—'}`);
   console.log(`  completed   ${packet.completedAt ?? '—'}`);

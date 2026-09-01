@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'setup | seed | report | tick | reconcile | standards | fire-check | prompt | trace | watch | ramp | cancel-ready | cancel-bin'
+        description: 'setup | seed | report | tick | reconcile | standards | fire-check | prompt | trace | watch | ramp | cancel-ready | cancel-bin | regrant | research-start | research-ready'
         required: true
         default: report
       arg1:

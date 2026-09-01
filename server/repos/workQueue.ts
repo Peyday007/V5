@@ -223,16 +223,40 @@ export async function listWorkItems(
 }
 
 /**
- * Every unit of one bin, whatever state it is in.
+ * What a worker holding this bin may reach, as one SQL predicate.
+ *
+ * Single-sourced for the reason the dispatchable predicate is: the claim and
+ * the "is there anything left" read must agree exactly, and the first version
+ * of this — `bin_id = ?` written out twice — disagreed with reality in both
+ * places at once. A bin whose packet had queued work reported no items and no
+ * open work, so three dispatched workers concluded it was finished and
+ * released it.
+ *
+ * A bin naming an orchestration is a lease on that packet, so it reaches the
+ * packet's untagged work; a bin naming none reaches only what carries its id.
+ * Neither reaches another bin's items or the project's wider queue.
+ */
+export function binScopeSql(bin: BinConfinement): { clause: string; params: SqlParam[] } {
+  return bin.orchestrationId
+    ? {
+        clause: '(bin_id = ? OR (bin_id IS NULL AND orchestration_id = ?))',
+        params: [bin.id, bin.orchestrationId],
+      }
+    : { clause: 'bin_id = ?', params: [bin.id] };
+}
+
+/**
+ * Every unit a bin reaches, whatever state it is in.
  *
  * A bin's units are ordinary queue rows; this is the only thing that gathers
  * them, and it is a read. Nothing here decides ownership.
  */
-export async function listWorkItemsForBin(binId: string): Promise<WorkItem[]> {
+export async function listWorkItemsForBin(bin: BinConfinement): Promise<WorkItem[]> {
+  const scope = binScopeSql(bin);
   const rows = await getDb().all<WorkItemRow>(
-    `SELECT * FROM work_items WHERE bin_id = ?
+    `SELECT * FROM work_items WHERE ${scope.clause}
       ORDER BY priority DESC, available_at, created_at, id LIMIT 500`,
-    [binId],
+    scope.params,
   );
   return rows.map(mapWorkItem);
 }
@@ -347,6 +371,18 @@ export interface ClaimScope {
   scopes: WorkerScope[];
 }
 
+/**
+ * The bin a claiming worker is inside, as the server read it.
+ *
+ * One object rather than two parameters because both halves must come from the
+ * same bin row — `confinementFor` in `repos/bins.ts` is the only thing that
+ * builds one, and it builds it from a bin the server itself looked up.
+ */
+export interface BinConfinement {
+  id: string;
+  orchestrationId: string | null;
+}
+
 export interface ClaimInput {
   workerId: string;
   credentialId?: string | null;
@@ -365,13 +401,15 @@ export interface ClaimInput {
   orchestrationId?: string | null;
   bundleKey?: string | null;
   /**
-   * Narrow a claim to one bin.
+   * Confine a claim to the bin the worker is holding.
    *
    * Step 10's worker never passes this itself: the bin is read from the lease
    * the worker holds, so naming one is not a way to reach another. It is a
    * filter over rows the server already decided the caller may see.
+   *
+   * Both fields come from one bin row — see `BinConfinement`.
    */
-  binId?: string | null;
+  bin?: BinConfinement | null;
   limit?: number;
   leaseMs?: number;
   requestId?: string | null;
@@ -420,9 +458,21 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
       typeClause += ' AND bundle_key = ?';
       params.push(input.bundleKey);
     }
-    if (input.binId) {
-      typeClause += ' AND bin_id = ?';
-      params.push(input.binId);
+    if (input.bin) {
+      /*
+       * The confinement, from `binScopeSql` so that it cannot drift from the
+       * read that answers "is this bin finished".
+       *
+       * The first version was `AND bin_id = ?` inline, and against a research
+       * packet it confined the worker to the empty set. Nothing sets `bin_id`
+       * on a research work item and nothing should: `startPacket` enqueues the
+       * planning job before the bin exists, and `advancePacket` — Step 9's,
+       * correctly ignorant of Step 10 — creates every later fragment,
+       * verification, synthesis and audit item with no bin at all.
+       */
+      const scope = binScopeSql(input.bin);
+      typeClause += ` AND ${scope.clause}`;
+      params.push(...scope.params);
     }
     params.push(input.workerId);
 

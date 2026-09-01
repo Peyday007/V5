@@ -13,7 +13,7 @@
  * tool file that wanted to do any of those differently would have to say so out
  * loud by not importing from here.
  */
-import type { Principal, WorkerScope } from '../domain/types.ts';
+import type { ClaimedWork, Principal, WorkerScope } from '../domain/types.ts';
 import { decideProjectAccess, type AccessLevel } from '../services/identity/policy.ts';
 import {
   getWorkItem,
@@ -30,6 +30,7 @@ import {
 } from '../services/effects/engine.ts';
 import { logicalEffectKey, assertValidKey, InvalidIdempotencyKey } from './../services/effects/fingerprint.ts';
 import { ToolError, conflictError, invalidInput, notFoundError, notPermitted } from './errors.ts';
+import { workType } from '../services/queue/workTypes.ts';
 
 /* ------------------------------------------------------------------------ */
 /* The shape of a tool                                                       */
@@ -74,6 +75,37 @@ export interface McpTool {
 /* ------------------------------------------------------------------------ */
 /* Argument reading                                                          */
 /* ------------------------------------------------------------------------ */
+
+/**
+ * What the work type means, handed over with the work.
+ *
+ * The registry's own header assumes "a worker that receives an item looks up
+ * what that type means in its own code". That is right for a worker somebody
+ * wrote; it is not right for the workers this Brain actually has, which read
+ * the name `RESEARCH_PLAN` and have to infer the rest.
+ *
+ * So the registered description travels with the claim. It is not a prompt and
+ * cannot become one: it is the type's own definition, authored here, from a
+ * closed registry a caller cannot add to. The alternative is a capable model
+ * guessing which tool a type calls for and finding out by being refused, which
+ * costs an allowance to learn something the Brain already knew.
+ *
+ * It lives in the toolkit rather than beside `brain_claim_work` because
+ * `brain_bin_next_item` hands out the same items and needs the same answer,
+ * and the two tool modules must not import each other to share one function.
+ */
+export function describeClaimed(item: ClaimedWork): Record<string, unknown> {
+  let description: string | null = null;
+  try {
+    description = workType(item.workType).description;
+  } catch {
+    // A type that is no longer registered. The item still gets handed over —
+    // refusing it here would strand work nobody can look at — and the worker is
+    // told there is nothing to say about it rather than being told nothing.
+    description = null;
+  }
+  return { ...item, workTypeDescription: description };
+}
 
 export function requiredString(args: Record<string, unknown>, field: string): string {
   const value = args[field];
