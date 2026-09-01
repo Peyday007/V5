@@ -21,6 +21,9 @@
  *   research-start        the one real-research acceptance packet, and its bin
  *   research-ready <bin>  make that bin dispatchable again after approval
  *   regrant <bin> <n>     raise a bin's assignment ceiling after a platform fault
+ *   probe                 ask a fired worker what its execution surface can reach
+ *   probe-read <binId>    the readings that probe recorded
+ *   recover <key> <bin> <orc>  requeue a fragment an execution-surface failure blocked
  *   cancel-ready <n>      cancel exactly n READY acceptance bins, or refuse
  *   cancel-bin <binId>    cancel one named unleased acceptance bin
  *   prompt                the exact prompt a worker routine must hold
@@ -46,6 +49,11 @@ import {
   sweepExpiredBinLeases,
 } from '../server/repos/bins.ts';
 import { reconcileBins } from '../server/services/bins/service.ts';
+import { evaluateContract, readSurfaceProbe } from '../server/services/bins/contracts.ts';
+import {
+  recoverFragmentAfterSurfaceChange,
+  SurfaceRecoveryRefused,
+} from '../server/services/research/surfaceRecovery.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
 import {
   MICHIGAN_LICENSING_ASSIGNMENT,
@@ -642,6 +650,201 @@ async function main(): Promise<void> {
         `attempts=${outcome.bin?.attemptCount ?? '—'}/${outcome.bin?.maxAttempts ?? '—'} ` +
         `was=${before.attemptCount}/${before.maxAttempts}`,
     );
+    return;
+  }
+
+  if (command === 'probe') {
+    /*
+     * Ask a fired worker what its execution surface can actually reach.
+     *
+     * The real research packet died because the worker could not reach the
+     * sources, and every activation reported it as "blocked" — one word for
+     * four different facts with four different remedies. This bin makes the
+     * worker say which, per host, in a vocabulary Brain checks.
+     *
+     * The hosts are the publishers of the source classes the packet's
+     * assignment already authorises — the Compiled Laws, the Administrative
+     * Code, and the regulator's own site. Naming three of them broadens
+     * nothing: they are three doors into the same authorised evidence, and the
+     * point of asking about all three is that a publisher refusing a robot is
+     * a different problem from a surface that cannot reach anything.
+     */
+    const projectId = await scope();
+    const hosts = [
+      {
+        key: 'mcl',
+        host: 'https://www.legislature.mi.gov/Laws/MCL?objectName=mcl-339-2501',
+        establishes:
+          'Whether the Michigan Compiled Laws, as published by the Legislature, can be ' +
+          'retrieved from this worker\'s execution surface.',
+      },
+      {
+        key: 'admin-rules',
+        host: 'https://ars.apps.lara.state.mi.us/AdminCode/DeptBureauAdminCode?Department=Licensing%20and%20Regulatory%20Affairs',
+        establishes:
+          'Whether the Michigan Administrative Code (the R rules), as published by LARA, can ' +
+          'be retrieved from this worker\'s execution surface.',
+      },
+      {
+        key: 'lara',
+        host: 'https://www.michigan.gov/lara',
+        establishes:
+          'Whether the Department of Licensing and Regulatory Affairs\' own publications can ' +
+          'be retrieved from this worker\'s execution surface.',
+      },
+    ];
+
+    const bin = await createBin({
+      projectId,
+      kind: 'SURFACE_PROBE',
+      title: 'What can this worker surface reach?',
+      objective:
+        'Establish, per host, exactly which of five outcomes this worker\'s execution surface ' +
+        'produces when it tries to retrieve a Michigan primary-law source.',
+      rationale:
+        'A research packet was blocked by an execution-surface failure. Whether that is still ' +
+        'true, and if not which hosts are now reachable, is a fact about the surface rather ' +
+        'than about the research, and it has to be established before anything is re-run.',
+      manifest: {
+        objective:
+          'Retrieve each declared host and record which of the five outcomes occurred.',
+        why:
+          'Four different failures were being reported as one. They have different remedies: a ' +
+          'surface that refuses the host is an operator configuration; a host that refuses the ' +
+          'client, or excludes robots, means use another authorised publisher of the same law.',
+        lineage: { projectId, layerId: null, goal: null, orchestrationId: null },
+        units: hosts.map((entry) => ({
+          key: entry.key,
+          establishes: entry.establishes,
+          input: entry.host,
+          transform: 'probe',
+          dependsOn: [],
+        })),
+        acceptableSources: ['The declared URL itself, fetched directly'],
+        excludedSources: [
+          'Any cached, mirrored or third-party copy — the question is what THIS surface reaches',
+          'Search-engine result pages standing in for the document',
+        ],
+        evidence: [
+          'For each unit, submit a value whose FIRST WORD is exactly one of: RETRIEVED, ' +
+            'HOST_NOT_ALLOWED, ORIGIN_REJECTED, ROBOTS_RESTRICTED, OTHER_FAILURE.',
+          'RETRIEVED means the document body came back. Follow it with the final URL, the HTTP ' +
+            'status, the byte count, and a short verbatim phrase from the page proving it is the ' +
+            'real document rather than an error page.',
+          'HOST_NOT_ALLOWED means your own environment refused the request before it left — an ' +
+            'allowlist or policy refusal naming the host. Quote the exact error.',
+          'ORIGIN_REJECTED means the host answered and refused you: 403, a bot wall, a captcha, ' +
+            'a challenge page. Give the status and what it said.',
+          'ROBOTS_RESTRICTED means robots.txt or an equivalent policy excludes automated ' +
+            'retrieval of that path. Quote the directive.',
+          'OTHER_FAILURE is anything else — DNS, TLS, timeout, 5xx. Say which.',
+          'Do not guess and do not infer from a previous session. Actually try each one now.',
+        ],
+        outputs: ['One reading per declared host, in that vocabulary'],
+        authorizedActions: [
+          'Retrieving the declared URLs, read-only',
+          'brain_bin_submit_unit for each declared key',
+        ],
+        prohibitedActions: [
+          'any spend',
+          'any request that is not a read of a declared host',
+          'submitting a reading you did not actually observe this session',
+        ],
+        budgetUnits: 1,
+        retry: { maxAttempts: 3, backoffSeconds: 30 },
+        stoppingConditions: ['every declared host has a reading in the declared vocabulary'],
+      },
+      completionContract: 'SURFACE_PROBE_V1',
+      createdByType: 'SYSTEM',
+      createdById: 'step10-surface-probe',
+      ready: true,
+      priority: 10,
+      maxAttempts: 6,
+    });
+
+    console.log('STEP10 PROBE');
+    console.log(`  project  ${SLUG} ${projectId}`);
+    console.log(`  bin      ${bin.id}  ${bin.state}`);
+    for (const entry of hosts) console.log(`  host     ${entry.key.padEnd(12)} ${entry.host}`);
+    console.log(`STEP10: OK probe bin=${bin.id}`);
+    return;
+  }
+
+  if (command === 'probe-read') {
+    const id = arg(0);
+    const bin = id ? await getBin(id) : null;
+    if (!bin) {
+      console.log('STEP10 REFUSED: pass the probe bin id.');
+      process.exitCode = 1;
+      return;
+    }
+    const verdict = await evaluateContract(bin);
+    console.log(`PROBE ${bin.id}  ${bin.state}  attempts ${bin.attemptCount}/${bin.maxAttempts}`);
+    console.log(`  contract ${bin.completionContract} satisfied=${verdict.satisfied} ${verdict.disposition}`);
+    for (const reason of verdict.reasons) console.log(`    ${reason}`);
+    console.log('');
+    for (const reading of await readSurfaceProbe(bin)) {
+      console.log(`  ${reading.unitKey.padEnd(12)} ${reading.outcome.padEnd(18)} ${reading.host}`);
+      console.log(`      at ${reading.recordedAt}  by ${reading.submittedBy ?? '—'}`);
+      if (reading.detail) console.log(`      ${reading.detail.slice(0, 300)}`);
+    }
+    console.log('');
+    console.log(`STEP10: OK probe-read bin=${bin.id} state=${bin.state}`);
+    return;
+  }
+
+  if (command === 'recover') {
+    /*
+     * The narrowest way back for a fragment the surface broke.
+     *
+     * Everything that decides whether this is allowed is in
+     * `recoverFragmentAfterSurfaceChange`; this only names the fragment and the
+     * probe that evidences the change. A refusal is printed in full, because a
+     * refusal here is the mechanism working and the reasons are the whole
+     * content of it.
+     */
+    const fragmentKey = arg(0);
+    const probeBinId = arg(1);
+    if (!fragmentKey || !probeBinId) {
+      console.log('STEP10 REFUSED: pass a fragment key and the SURFACE_PROBE_V1 bin id.');
+      process.exitCode = 1;
+      return;
+    }
+    const orchestrationId = arg(2);
+    if (!orchestrationId) {
+      console.log('STEP10 REFUSED: pass the orchestration id as the third argument.');
+      process.exitCode = 1;
+      return;
+    }
+    try {
+      const result = await recoverFragmentAfterSurfaceChange({
+        fragmentKey,
+        orchestrationId,
+        probeBinId,
+        reason:
+          'The operator changed the worker Routine environment\'s network access from Trusted ' +
+          'to Full, and a fired worker then reached a Michigan primary-law publisher that the ' +
+          'blocked attempts could not.',
+        actor: { type: 'SYSTEM', id: 'step10-surface-recovery' },
+        grantAttempts: 2,
+      });
+      console.log('STEP10 RECOVER');
+      console.log(`  fragment    ${result.fragmentKey}`);
+      console.log(`  attempts    history ends at ${result.attemptBefore}; new attempt ${result.attemptAfter}`);
+      console.log(`  ceiling     ${result.maxRepairsBefore} -> ${result.maxRepairsAfter}`);
+      console.log(`  probe       ${result.probeBinId}  reached [${result.reachedHosts.join(', ')}]`);
+      console.log(`  unblocked   [${result.unblockedDependents.join(', ')}]`);
+      console.log(`  advanced    ${result.advanced?.status ?? '—'} enqueued ${result.advanced?.enqueued.length ?? 0}`);
+      console.log(`STEP10: OK recover fragment=${result.fragmentKey} attempt=${result.attemptAfter}`);
+    } catch (error) {
+      if (error instanceof SurfaceRecoveryRefused) {
+        console.log('STEP10 RECOVER REFUSED');
+        for (const reason of error.reasons) console.log(`  - ${reason}`);
+        process.exitCode = 1;
+        return;
+      }
+      throw error;
+    }
     return;
   }
 

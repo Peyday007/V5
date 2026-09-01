@@ -540,6 +540,15 @@ export interface UpdateFragmentInput {
    * provable rather than an unreachable branch that merely looks like a rule.
    */
   nextRetryAt?: string | null;
+  /**
+   * The repair ceiling, raised — never the attempt counter, which is history.
+   *
+   * Writable so `surfaceRecovery.ts` can authorise a further attempt at a
+   * fragment whose budget was spent on an execution-surface failure rather than
+   * on the research. §5: the failed attempts stay exactly where they are and the
+   * new one is numbered after them.
+   */
+  maxRepairs?: number;
 }
 
 export async function updateFragment(id: string, patch: UpdateFragmentInput): Promise<ResearchFragment | null> {
@@ -555,6 +564,7 @@ export async function updateFragment(id: string, patch: UpdateFragmentInput): Pr
     accepted_at: patch.acceptedAt,
     cancelled_reason: patch.cancelledReason,
     next_retry_at: patch.nextRetryAt,
+    max_repairs: patch.maxRepairs,
   });
   if (!clause) return getFragment(id);
   await getDb().run(`UPDATE research_fragments SET ${clause}, updated_at = ? WHERE id = ?`, [

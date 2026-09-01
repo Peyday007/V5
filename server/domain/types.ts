@@ -189,6 +189,8 @@ export const EVENT_TYPES = [
   'RESEARCH_PLANNED',
   'RESEARCH_FRAGMENT_ACCEPTED',
   'RESEARCH_FRAGMENT_REJECTED',
+  'RESEARCH_FRAGMENT_UNBLOCKED',
+  'RESEARCH_SURFACE_RECOVERY',
   'RESEARCH_BLOCKED',
   'RESEARCH_PAUSED_QUOTA',
   'RESEARCH_REPLANNED',
@@ -3543,7 +3545,13 @@ export const BIN_STATES = [
 export type BinState = (typeof BIN_STATES)[number];
 
 /** Which server-side predicate decides that a bin is finished. */
-export const COMPLETION_CONTRACTS = ['RESEARCH_PACKET_V1', 'DETERMINISTIC_UNITS_V1'] as const;
+export const COMPLETION_CONTRACTS = [
+  'RESEARCH_PACKET_V1',
+  'DETERMINISTIC_UNITS_V1',
+  // Establishes what a worker's execution surface can and cannot reach, in a
+  // closed vocabulary, so that "blocked" stops being one word for four facts.
+  'SURFACE_PROBE_V1',
+] as const;
 export type CompletionContract = (typeof COMPLETION_CONTRACTS)[number];
 
 export const BIN_DISPATCH_STATES = ['PENDING', 'SENDING', 'SENT', 'ABANDONED', 'SUPERSEDED'] as const;

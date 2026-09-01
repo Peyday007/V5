@@ -325,9 +325,163 @@ async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
 
 type Evaluator = (bin: Bin) => Promise<ContractVerdict>;
 
+/* ------------------------------------------------------------------------- */
+/* SURFACE_PROBE_V1                                                           */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * What a worker may report about one host, and nothing else.
+ *
+ * Step 10's real research packet failed because the worker's execution surface
+ * could not reach the sources. "Blocked" was the only word available for that,
+ * and it is four different facts wearing one label:
+ *
+ *   HOST_NOT_ALLOWED    the worker's own environment refused the host outright
+ *   ORIGIN_REJECTED     the host answered, and refused this client
+ *   ROBOTS_RESTRICTED   the host's robots policy excludes automated retrieval
+ *   OTHER_FAILURE       something else — DNS, TLS, a timeout, a 5xx
+ *   RETRIEVED           the document came back
+ *
+ * They lead to different actions. The first says the surface is still closed
+ * and nothing downstream should be attempted. The middle three say the surface
+ * is open and *this* publisher will not serve a robot, so an equally
+ * authorized publisher of the same primary law should be used instead. Only
+ * the last says research can proceed against that host. Collapsing them is how
+ * a fixable configuration and an unfixable source get the same shrug.
+ */
+export const SURFACE_PROBE_OUTCOMES = [
+  'RETRIEVED',
+  'HOST_NOT_ALLOWED',
+  'ORIGIN_REJECTED',
+  'ROBOTS_RESTRICTED',
+  'OTHER_FAILURE',
+] as const;
+
+export type SurfaceProbeOutcome = (typeof SURFACE_PROBE_OUTCOMES)[number];
+
+export interface SurfaceProbeReading {
+  unitKey: string;
+  host: string;
+  outcome: SurfaceProbeOutcome;
+  detail: string;
+  recordedAt: string;
+  submittedBy: string | null;
+}
+
+/**
+ * The first token of a stored unit value, if it is one of the five.
+ *
+ * A value that does not begin with a known outcome is not a probe reading, and
+ * is reported as unrecognised rather than guessed at. The rest of the line is
+ * free text: the URL, the status code, the byte count, whatever the worker saw.
+ */
+export function parseProbeOutcome(value: string): SurfaceProbeOutcome | null {
+  const first = value.trim().split(/\s+/, 1)[0]?.toUpperCase() ?? '';
+  return (SURFACE_PROBE_OUTCOMES as readonly string[]).includes(first)
+    ? (first as SurfaceProbeOutcome)
+    : null;
+}
+
+/**
+ * Every declared host has a reading, and every reading is one of the five.
+ *
+ * **Brain does not judge whether the probe succeeded, and must not.** Whether a
+ * government website serves a robot today is not something this platform can
+ * establish by asserting it; the only honest thing a contract can require is
+ * that a worker actually looked at every host it was asked about and recorded
+ * what it saw, in a vocabulary that cannot be fudged into meaning something
+ * else later. A probe bin in which every host came back HOST_NOT_ALLOWED is a
+ * *satisfied* bin carrying bad news, and reporting bad news is the job.
+ *
+ * What consumes the readings is `readSurfaceProbe`, and what decides anything
+ * on the strength of them is the operator action that cites the bin.
+ */
+async function evaluateSurfaceProbe(bin: Bin): Promise<ContractVerdict> {
+  const units: BinUnitSpec[] = bin.manifest.units ?? [];
+  const results = await listBinUnitResults(bin.id);
+  const byKey = new Map(results.map((row) => [row.unitKey, row]));
+
+  const missing: string[] = [];
+  const unrecognised: string[] = [];
+  const outcomes: Record<string, string> = {};
+
+  for (const unit of units) {
+    const stored = byKey.get(unit.key);
+    if (!stored) {
+      missing.push(unit.key);
+      continue;
+    }
+    const outcome = parseProbeOutcome(stored.value);
+    if (!outcome) {
+      unrecognised.push(unit.key);
+      continue;
+    }
+    outcomes[unit.key] = outcome;
+  }
+
+  const observed = {
+    hostsDeclared: units.length,
+    readingsStored: results.length,
+    missing,
+    unrecognised,
+    outcomes,
+    vocabulary: [...SURFACE_PROBE_OUTCOMES],
+  };
+
+  if (units.length === 0) {
+    return refuse(
+      'HUMAN',
+      ['The manifest declares no hosts to probe, so there is nothing this contract could verify.'],
+      observed,
+    );
+  }
+  const reasons: string[] = [];
+  if (missing.length > 0) {
+    reasons.push(`${missing.length} declared host(s) have no reading: ${missing.join(', ')}.`);
+  }
+  if (unrecognised.length > 0) {
+    reasons.push(
+      `${unrecognised.length} reading(s) do not begin with one of ` +
+        `${SURFACE_PROBE_OUTCOMES.join(', ')}: ${unrecognised.join(', ')}. A probe result that ` +
+        'cannot be read as one of those is not a result.',
+    );
+  }
+  if (reasons.length > 0) return refuse('RETRY', reasons, observed);
+  return satisfied(observed);
+}
+
+/**
+ * The readings a probe bin holds, for whoever has to act on them.
+ *
+ * Returns them whatever the bin's state: a half-finished probe still tells you
+ * something, and a caller that needs the bin to be COMPLETE can check that
+ * itself rather than being handed nothing.
+ */
+export async function readSurfaceProbe(bin: Bin): Promise<SurfaceProbeReading[]> {
+  const units: BinUnitSpec[] = bin.manifest.units ?? [];
+  const byKey = new Map((await listBinUnitResults(bin.id)).map((row) => [row.unitKey, row]));
+  const readings: SurfaceProbeReading[] = [];
+  for (const unit of units) {
+    const stored = byKey.get(unit.key);
+    if (!stored) continue;
+    const outcome = parseProbeOutcome(stored.value);
+    if (!outcome) continue;
+    readings.push({
+      unitKey: unit.key,
+      host: unit.input,
+      outcome,
+      detail: stored.value.trim().slice(outcome.length).trim(),
+      recordedAt: stored.createdAt,
+      submittedBy: stored.submittedBy,
+    });
+  }
+  return readings;
+}
+
 const EVALUATORS: Record<string, Evaluator> = {
   DETERMINISTIC_UNITS_V1: evaluateDeterministicUnits,
   RESEARCH_PACKET_V1: evaluateResearchPacket,
+  SURFACE_PROBE_V1: evaluateSurfaceProbe,
 };
 
 /**
@@ -384,6 +538,19 @@ export function manifestProblems(
   }
   if (contract === 'RESEARCH_PACKET_V1' && !manifest.lineage?.orchestrationId) {
     problems.push('RESEARCH_PACKET_V1 requires the manifest to name the orchestration it drives.');
+  }
+  if (contract === 'SURFACE_PROBE_V1') {
+    if ((manifest.units ?? []).length === 0) {
+      problems.push('SURFACE_PROBE_V1 requires at least one declared host to probe.');
+    }
+    const hosts = new Set<string>();
+    for (const unit of manifest.units ?? []) {
+      if (hosts.has(unit.key)) problems.push(`Probe key "${unit.key}" is declared twice.`);
+      hosts.add(unit.key);
+      if (!unit.input || unit.input.trim().length === 0) {
+        problems.push(`Probe "${unit.key}" names no host, so there is nothing to reach for.`);
+      }
+    }
   }
   return problems;
 }

@@ -464,6 +464,20 @@ function unmetDependencies(
  * waiting on it — actually available. A cancelled fragment is one nobody may
  * pick back up.
  */
+/**
+ * How a fragment says it was doomed by something else rather than by its own
+ * evidence.
+ *
+ * Exported because a second reader needs it: `surfaceRecovery.ts` restores the
+ * fragments that were stranded behind a blocked ancestor, and it must be able
+ * to tell those apart from fragments that failed their own gate — restoring the
+ * second kind would be re-running research that was correctly refused. Written
+ * once here, beside the only thing that produces it, for the reason
+ * `DISPATCHABLE_SQL` and `binScopeSql` are: a predicate spelled out in two
+ * places is a predicate that will eventually disagree with itself.
+ */
+export const DEPENDENCY_DOOM_PREFIX = 'Not researched: it depends on';
+
 async function blockOnFailedDependency(input: {
   orchestration: ResearchOrchestration;
   stranded: ResearchFragment[];
@@ -483,7 +497,7 @@ async function blockOnFailedDependency(input: {
         ? unmet.map((entry) => `${entry.key} (${entry.became})`).join(', ')
         : dependencyKeys(fragment.dependsOn).join(', ');
     const reason =
-      `Not researched: it depends on ${detail}, and that never arrives. ` +
+      `${DEPENDENCY_DOOM_PREFIX} ${detail}, and that never arrives. ` +
       'Answering it would rest on a foundation nobody established. Repair the dependency ' +
       'and this fragment can be retried.';
     await updateFragment(fragment.id, {
