@@ -423,6 +423,96 @@ describe('the cloud store speaks Supabase Storage', () => {
 // Choosing a provider
 // ---------------------------------------------------------------------------
 
+
+describe('a busy store is not a missing document', () => {
+  /*
+   * A deploy failed on exactly this. The bucket answered 429 to a read issued
+   * 2.2 seconds after the write, and the caller reported the freshly filed
+   * report as having no bytes — the conflation §9 exists to prevent and §20
+   * states outright: a transient refusal is not evidence about the data. A
+   * research packet whose document was perfectly present would have been
+   * refused because its store was briefly busy.
+   */
+
+  /** A store that refuses `refusals` times with `status`, then serves. */
+  function flakyStore(status: number, refusals: number, retryAfter?: string) {
+    const body = Buffer.from('the filed report');
+    let seen = 0;
+    const calls: number[] = [];
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      if ((init?.method ?? 'GET') !== 'GET') {
+        return new Response(JSON.stringify({ Key: 'k' }), { status: 200 });
+      }
+      seen += 1;
+      calls.push(seen);
+      if (seen <= refusals) {
+        return new Response('slow down', {
+          status,
+          headers: retryAfter ? { 'retry-after': retryAfter } : {},
+        });
+      }
+      return new Response(body, { status: 200 });
+    }) as unknown as typeof fetch;
+    return {
+      calls,
+      store: new SupabaseStorageProvider({
+        url: 'https://example.supabase.co',
+        serviceRoleKey: 'service-role-secret-value',
+        bucket: 'brain',
+        fetchImpl,
+      }),
+    };
+  }
+
+  it('asks again when the store says 429, and returns the bytes', async () => {
+    const flaky = flakyStore(429, 1);
+    const bytes = await flaky.store.get('projects/p/documents/l/report.md');
+    expect(bytes.toString()).toBe('the filed report');
+    expect(flaky.calls.length).toBe(2);
+  });
+
+  it('retries the other transient refusals too', async () => {
+    for (const status of [500, 502, 503, 504]) {
+      const flaky = flakyStore(status, 1);
+      const bytes = await flaky.store.get('projects/p/documents/l/report.md');
+      expect(bytes.toString()).toBe('the filed report');
+    }
+  });
+
+  it('gives up after a bounded number of attempts, and says the store declined', async () => {
+    const flaky = flakyStore(429, 99);
+    await expect(flaky.store.get('projects/p/documents/l/report.md')).rejects.toThrow(
+      /declining, not a statement about the document/,
+    );
+    // Bounded: a busy store must not become an unbounded retry loop.
+    expect(flaky.calls.length).toBe(3);
+  });
+
+  it('never retries a 404, because that is an answer', async () => {
+    let seen = 0;
+    const fetchImpl = (async () => {
+      seen += 1;
+      return new Response('no such object', { status: 404 });
+    }) as unknown as typeof fetch;
+    const store = new SupabaseStorageProvider({
+      url: 'https://example.supabase.co',
+      serviceRoleKey: 'service-role-secret-value',
+      bucket: 'brain',
+      fetchImpl,
+    });
+    await expect(store.get('projects/p/documents/l/gone.md')).rejects.toThrow();
+    expect(seen).toBe(1);
+  });
+
+  it('honours Retry-After rather than inventing its own delay', async () => {
+    const flaky = flakyStore(429, 1, '0');
+    const started = Date.now();
+    await flaky.store.get('projects/p/documents/l/report.md');
+    // Retry-After: 0 means immediately; the default backoff would be 250ms.
+    expect(Date.now() - started).toBeLessThan(200);
+  });
+});
+
 describe('choosing where documents are kept', () => {
   it('defaults to the local store', async () => {
     const store = await initStorage({

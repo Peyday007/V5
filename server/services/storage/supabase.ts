@@ -43,6 +43,25 @@ interface SupabaseListEntry {
   updated_at?: string | null;
 }
 
+
+/**
+ * Statuses that mean "ask again", as distinct from an answer.
+ *
+ * A 404 is an answer — the object is not there — and must never be retried.
+ * These are the bucket declining to serve a request it would otherwise serve.
+ */
+const TRANSIENT_READ_STATUSES = new Set([429, 500, 502, 503, 504]);
+
+const READ_ATTEMPTS = 3;
+
+/** `Retry-After` in seconds, when the store says how long to wait. */
+function retryAfterMs(response: Response, attempt: number): number {
+  const header = response.headers.get('retry-after');
+  const seconds = header ? Number(header) : Number.NaN;
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 5_000);
+  return attempt === 1 ? 250 : 750;
+}
+
 export class SupabaseStorageProvider implements StorageProvider {
   readonly kind = 'supabase' as const;
 
@@ -138,16 +157,45 @@ export class SupabaseStorageProvider implements StorageProvider {
     };
   }
 
+  /**
+   * One GET, retried while the store is merely declining to answer.
+   *
+   * A deploy failed on exactly this: the bucket returned 429 to a read issued
+   * 2.2 seconds after the write, and the caller reported the document as having
+   * no bytes. That is the conflation §9 exists to prevent and §20 states
+   * outright — a transient refusal is not evidence about the data. A packet
+   * whose report is perfectly present would have been refused because its
+   * store was briefly busy.
+   *
+   * Reads only. A read is idempotent by definition, so asking again is free of
+   * consequence; an upload is not, and is deliberately left alone.
+   */
+  async #getWithRetry(key: string, purpose: string): Promise<Response> {
+    let last: Response | null = null;
+    for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt += 1) {
+      const response = await this.#request(
+        this.#objectUrl(key),
+        { method: 'GET', headers: this.#headers() },
+        purpose,
+      );
+      if (response.status === 404 || response.ok) return response;
+      if (!TRANSIENT_READ_STATUSES.has(response.status) || attempt === READ_ATTEMPTS) {
+        return response;
+      }
+      last = response;
+      await new Promise((resolve) => setTimeout(resolve, retryAfterMs(response, attempt)));
+    }
+    // Unreachable: the loop returns on its last attempt.
+    return last as Response;
+  }
+
   async get(key: string): Promise<Buffer> {
-    const response = await this.#request(
-      this.#objectUrl(key),
-      { method: 'GET', headers: this.#headers() },
-      'read a document',
-    );
+    const response = await this.#getWithRetry(key, 'read a document');
     if (response.status === 404) throw new ObjectNotFoundError(key);
     if (!response.ok) {
       throw new StorageConfigurationError(
-        `The document store refused a read (HTTP ${response.status}).`,
+        `The document store refused a read (HTTP ${response.status}) after ${READ_ATTEMPTS} ` +
+          'attempts. This is the store declining, not a statement about the document.',
         await safeBody(response),
       );
     }
@@ -161,11 +209,7 @@ export class SupabaseStorageProvider implements StorageProvider {
    * PDF does not have to sit in memory to be served.
    */
   async openRead(key: string): Promise<ObjectStream> {
-    const response = await this.#request(
-      this.#objectUrl(key),
-      { method: 'GET', headers: this.#headers() },
-      'read a document',
-    );
+    const response = await this.#getWithRetry(key, 'read a document');
     if (response.status === 404) throw new ObjectNotFoundError(key);
     if (!response.ok || !response.body) {
       throw new StorageConfigurationError(
