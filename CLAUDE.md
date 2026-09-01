@@ -714,12 +714,23 @@ was unbuilt and undecided. That was true when it was written and is not true
 now; the correction is recorded rather than quietly deleted, the same way §22
 records Step 7's wrong reasoning about OAuth.
 
-**What is unproven is that a fired worker can act.** The activation arrives and
-stops at a permission prompt on its first connector tool call, with nobody
-present to answer. That is **CF-11 confirmed rather than theorised**: a routine
-carries a tool allowlist, attaching a connector does not grant its tools, and
-the setting that would is in the provider's UI and not reachable from Brain.
-The split it establishes is the durable rule:
+**A fired worker acts.** On 2026-09-01 at 07:41:45Z Brain fired three seconds
+after a bin went `READY`; the activation ran 107 seconds and drained seven bins
+end to end — assigned, executed, validated by Brain, terminal — with nobody
+watching. Two of them were takeovers from a dead worker's expired lease. Zero
+completion refusals.
+
+An earlier version of this section said the fired worker stopped at a permission
+prompt and named the routine's tool allowlist as the cause. **The prompt was
+real; the diagnosis was wrong.** Both the blocked routine and the working one
+carry an `allowed_tools` list with no `mcp__*` entry, so the allowlist cannot be
+what separates them. What separates them is that the working routine has the
+repository attached: its worker checks out the branch, reads
+`.claude/settings.json`, and finds `permissions.allow` pre-approving the
+connector's tools. The remedy was the documented project-scope permission rule
+all along, waiting on a precondition nobody had checked.
+
+The split it establishes still holds, and is the durable rule:
 
 > **Brain owns dispatch. The surface owns whether a worker may act.** A worker
 > identity that can authorize non-interactively is granted where the worker
@@ -727,12 +738,15 @@ The split it establishes is the durable rule:
 > for it, and Brain must never mint its own workers or choose their permissions
 > to get around it.
 
+What that grant turned out to be, here, is a checked-in settings file plus a
+routine configured to check the repository out. Both are the operator's to set.
+
 **CF-8 is untouched.** Live token refresh is still unverified.
 
-So: the dispatcher working is not the same claim as the fleet working. Until an
-unattended worker has completed a bin end to end, do not represent scheduling as
-working, and do not describe the platform as running itself. Saying "Brain
-fires" is now accurate; saying "Brain runs workers" is not yet.
+So: one unattended worker has now completed bins end to end, and "Brain runs a
+worker" is accurate. **"Brain runs a fleet" is not yet** — the concurrency ramp
+has not run, no real research bin has gone through, and the timing figures so
+far are contaminated by the outage that preceded the fix.
 
 
 ---

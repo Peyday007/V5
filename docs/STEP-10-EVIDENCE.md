@@ -12,9 +12,11 @@ The design is in [`STEP-10-PLAN.md`](STEP-10-PLAN.md). The frozen Step 9
 baseline this step must not disturb is recorded there and re-read at the end of
 this file.
 
-> **Status: incomplete.** The dispatcher half is proven live. The activation
-> half is blocked on a provider-surface setting, recorded in full below, and the
-> concurrency ramp has not run. Nothing here claims otherwise.
+> **Status: the core claim is proven; the capacity work is not.** Brain fires,
+> an unattended worker acts, and Brain validates the result — measured end to
+> end in production. The concurrency ramp has not run, no real research bin has
+> gone through, and the operating standards below are contaminated by the
+> outage that preceded the fix. Nothing here claims otherwise.
 
 ---
 
@@ -36,6 +38,62 @@ caused them, so attribution is read rather than assumed.
 ---
 
 ## What is proven
+
+### Unattended activation — PROVEN, and my diagnosis of the block was wrong
+
+At 07:41:42Z a bin became `READY`. Brain fired three seconds later. The
+activation ran 07:41:45 → 07:43:32 — **107 seconds** — and in that time one
+worker drained **every bin in the backlog**, with nobody watching:
+
+```
+BIN_ASSIGNED            7        BIN_TAKEOVER             2
+BIN_COMPLETION_ACCEPTED 7        BIN_UNIT_SUBMITTED      23
+BIN_TERMINAL            7        DISPATCH_SENT            7
+```
+
+All seven bins `COMPLETE`, `DETERMINISTIC_UNITS_V1 v1 evaluated true` on each,
+**zero completion refusals**. That is the whole loop: Brain decides there is
+work, Brain starts a worker, the worker executes the manifest, and Brain — not
+the worker — decides the work is done.
+
+**What actually fixed it was the project-scope permission rule, and I argued
+against it.** Two routines, both fired by Brain, both carrying the connector:
+
+| | blocked (`trig_017iVU…`) | works (`trig_01CBLu…`) |
+|---|---|---|
+| `created_via` | `meta_mcp` | `http_api` |
+| `allowed_tools` | 20 entries, **no `mcp__*`** | 8 entries, **no `mcp__*`** |
+| `sources` | absent | `Peyday007/V5` |
+
+**Neither routine has an `mcp__*` entry in `allowed_tools`, so the allowlist
+cannot be the discriminator.** An earlier version of this file named it as the
+cause, twice, and that was wrong. The change that mattered is the repository:
+with it attached the worker checks out the default branch — which is this branch
+— reads `.claude/settings.json`, and finds `permissions.allow` pre-approving the
+connector. `created_via` also differs and cannot be formally excluded, but no
+mechanism connects it to a permission prompt, and the settings-file path
+explains the result exactly.
+
+The clone check was still the thing that made this legible: the earlier routine
+had no `sources` key, so the documented rule had nowhere to be read from. The
+error was concluding the rule was therefore beside the point, when it was the
+answer waiting on a precondition.
+
+### Worker death and takeover — PROVEN in production
+
+Two `BIN_TAKEOVER` events in that run, unforced. `bin_a25fbc6da09445a0ad2c` —
+the bin whose stranding exposed the dispatch defect — finished `COMPLETE` at
+`attempt 3/3 gen 4 intents 3 sent 3`: three separate activations, a generation
+advanced on each takeover, the fence holding throughout, and the work finished
+by a worker that was not the one that started it.
+
+That is the second half of the recovery story the dispatch fix opened, and it
+happened without anybody asking for it.
+
+### One activation drains a whole bin, then asks for another — PROVEN
+
+Five bins went `COMPLETE` inside a single 107-second activation. The permanent
+instructions tell a worker to return to step 1 after finishing, and it did.
 
 ### The dispatcher fires without a person
 
@@ -231,112 +289,33 @@ second backend has been the only thing that made a concurrency defect visible.
 
 ## What is NOT proven
 
-### Unattended activation — blocked at the provider surface
-
-**Brain fires correctly. The fired session then stops and waits for a human.**
-
-Session `cse_019ryoNbatf9g5stX4QczdNE`, fired by Brain at 2026-09-01T05:39:00Z:
-
-```
-session_status : SESSION_STATUS_REQUIRES_ACTION
-status_bucket  : SESSION_STATUS_BUCKET_BLOCKED
-pending_action : mcp__cloud-brain__brain_check_in
-permission_mode: PERMISSION_MODE_AUTO
-```
-
-It is waiting for someone to approve its first tool call. Nobody is there.
-
-The observable difference between a routine whose sessions work and this one:
-
-| | Brain worker (`trig_017iVU…`) | a routine that works (`trig_01HCVV…`) |
-|---|---|---|
-| `created_via` | `meta_mcp` | `http_api` |
-| `session_context.allowed_tools` | 20 entries — `preset:default`, `Task`, `Bash`, … — **no `mcp__*` entry** | absent entirely |
-| `set_permission_mode` control event | absent | present, `mode: auto` |
-
-The routine carries an explicit tool allowlist naming no connector tool. Auto
-permission mode does not rescue a tool that is not on the list, which is why it
-prompts while reporting `auto`. Attaching the connector was necessary and not
-sufficient: the connection and the tool grant are separate settings.
-
-This is **CF-11 made concrete** — *the surface decides whether a worker can
-authorize at all* — and it is not fixable from inside Brain. `update_trigger`
-exposes only name, cron, enabled, model and prompt; `create_trigger`'s
-`connectors` parameter is refused for this organisation. The remedy is one
-operator action in the provider's own UI.
-
-Brain **could** provision its own routines through the routines API with the
-token it already holds. That is deliberately not built: it would mean Brain
-minting workers and choosing their permissions, which is an expansion of what a
-machine here may do and not something to take without being asked. It is also
-unnecessary — §22's shape already says the operator authorizes and the worker is
-authorized. Step 10 requires *activation* to be unattended, not *provisioning*.
-
-### The project-scope permission rule cannot reach a fired worker
-
-The documented remedy for an MCP tool that prompts is a `permissions.allow`
-entry in the project's `.claude/settings.json`. It is committed
-(`mcp__cloud-brain` and `mcp__cloud-brain__*`, with no `ask` or `deny` rule
-anywhere in the repository to override it) and it changes nothing here, for a
-reason worth writing down rather than rediscovering:
-
-**A fired worker session has no repository, so there is no project for project
-settings to belong to.**
-
-The comparison is between two sessions in the same environment
-(`env_01UpEZ7tNouciRZB7PTwo4XS`):
-
-| | `session_context` |
-|---|---|
-| a session with the repo | `sources: [{git_repository: {url: .../Peyday007/V5}}]`, `outcomes: [… branches: ["claude/zealous-hypatia-78a2yp"]]` |
-| a fired Brain worker | `{autofix_on_pr_create: false, permission_mode: "auto"}` — no `sources` key at all |
-
-The routine agrees: its `job_config.ccr` carries an `environment_id` and an
-`allowed_tools` list and no `sources`, and its `derived_state` reads
-`folders_state: "FOLDERS_STATE_NONE"`.
-
-So there are **two independent gates**, and an earlier note here named only the
-first:
-
-1. the routine's `session_context.allowed_tools`, which lists no `mcp__*` tool;
-2. the absence of a checkout, which makes project settings unreadable.
-
-Fixing (2) alone would only help if a settings file may pre-approve a tool the
-session allowlist omits. Fixing (1) needs no checkout at all. That is why the
-remedy is the routine's own tool selection, and attaching the repository is
-worth doing as well rather than instead.
-
-Proven, not inferred: bin `bin_1dfcc6475f7e43e8bd11` went `READY` at
-07:16:26, Brain fired at 07:16:37 into session
-`cse_01AQjdv9F56g2vDkEMeNVksN` — created **after** the rule was committed and
-pushed — and that session sat at `SESSION_STATUS_BUCKET_BLOCKED` on
-`mcp__cloud-brain__brain_check_in`. Brain's own rows show `DISPATCH_SENT` and
-then nothing: no `BIN_ASSIGNED`, no units, the bin still `READY`.
-
-An account-level "Always allow" on the connector was also tried and changed
-nothing; the routine's `updated_at` stayed at 05:10, so that setting writes
-nowhere near the routine.
-
 ### The concurrency ramp — not run
 
-1 → 2 → 5 → 10 → 20 → 30 → 50 has not been executed, because a rung measures
-how many activations drain in parallel and no activation currently drains at
-all. `scripts/step10.ts ramp` is written and deployed, seeds a rung, watches it
-settle from inside the machine, and reports queue wait, drain time and
-ready-to-done with medians. It never fires, assigns or nudges — the dispatcher
-is what is under test, so the harness's only actions are create and read.
+1 → 2 → 5 → 10 → 20 → 30 → 50 has not been executed. Until now a rung would have
+measured nothing, because no activation drained at all; that is no longer true
+and the ramp is the next thing to run. `scripts/step10.ts ramp` is written and
+deployed, seeds a rung, watches it settle from inside the machine, and reports
+queue wait, drain time and ready-to-done with medians. It never fires, assigns
+or nudges — the dispatcher is what is under test, so the harness's only actions
+are create and read.
 
 ### Production proofs still outstanding
 
 - one bounded **real research bin** through the full lifecycle
-- worker death and takeover **in production**. A worker did die in production —
-  that is how the dispatch defect above was found — but the takeover half has
-  only been proven in tests, because taking over requires an activation.
+- ~~worker death and takeover in production~~ — **done**, see above: two
+  unforced takeovers, and the bin that exposed the dispatch defect finished at
+  `attempt 3/3 gen 4`.
 - duplicate-trigger behaviour **in production**
 - restart and redeploy persistence **in production** (`DISPATCH_BOOT_RECOVERY`
   rows exist, but no deliberate mid-flight restart has been performed)
-- operating standards derived from measurement — Step 11's starting numbers
-  cannot be invented, and there is nothing yet to derive them from
+- operating standards derived from *clean* measurement. There are numbers now
+  and they are useless as standards: median queue wait 1,653,165 ms and median
+  ready→done 1,685,311 ms across seven bins. Those measure how long the
+  permission outage lasted, not how a working fleet behaves — five of the seven
+  bins sat `READY` for half an hour because nothing could pick them up. The only
+  honest figures so far are ready→fired (**3.1 s**, **4.7 s**, **8.6 s** on
+  three separate bins) and one activation draining five bins in **107 s**. A
+  standard needs a rung of the ramp measured on an unblocked fleet.
 
 ---
 

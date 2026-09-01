@@ -80,23 +80,25 @@ a crash between the two loses nothing. In production it took a bin from ready to
 a fired activation in **4.7 seconds** with nobody involved, and it redrives what
 a restart interrupted.
 
-**What is not proven is that a fired worker can do anything.** The activation
-arrives and then stops at a permission prompt on its first connector tool call,
-with nobody there to answer it. That is **CF-11 confirmed rather than
-theorised**: the routine carries an explicit tool allowlist naming no connector
-tool, and attaching the connector — which was done — does not grant the tools.
-The remedy is an operator setting in the provider's own UI, and it is not
-reachable from Brain: `update_trigger` exposes only name, cron, enabled, model
-and prompt.
+**A fired worker acts, and the last blocker was not what I said it was.** On
+2026-09-01 an activation Brain started ran 107 seconds and drained seven bins
+end to end — including two takeovers from a dead worker's expired lease — with
+nobody watching and zero completion refusals.
 
-So the honest position is narrower and more specific than "no mechanism has been
-identified", and it splits in two:
+The block before that was real: fired sessions stopped at a permission prompt on
+their first connector tool call. This file, and `CLAUDE.md`, named the routine's
+`allowed_tools` as the cause. That was wrong — the working routine's allowlist
+has no `mcp__*` entry either. What separates them is the repository: the working
+routine checks the branch out, so its worker reads `.claude/settings.json` and
+finds `permissions.allow` pre-approving the connector. The documented
+project-scope rule was the answer, waiting on a precondition.
 
-- **Brain's half is built and proven live.** Dispatch, the outbox, fencing,
-  bin confinement, and Brain-decided completion.
-- **The surface's half is a configuration Brain cannot make.** A worker
-  identity that can authorize non-interactively is granted where the worker
-  runs, not where the work is held.
+So the split still holds, with its terms now known:
+
+- **Brain's half is built and proven live.** Dispatch, the outbox, fencing, bin
+  confinement, takeover, and Brain-decided completion.
+- **The surface's half is a configuration Brain cannot make** — a checked-out
+  repository and a settings file, both the operator's to set.
 
 **CF-8 is untouched and still open.** Live token refresh is unverified; nothing
 has observed a token expiring and being renewed mid-packet. Refresh tokens are
@@ -105,13 +107,14 @@ nothing has exercised it against a real surface. Harmless for a bounded session;
 decide it before anything runs unattended for long.
 
 **The concurrency ramp has not run**, and no operating standards have been
-derived, because a rung measures how many activations drain in parallel and none
-currently drains at all.
+derived from clean measurement. There are timings, and they are not standards:
+the medians across the first seven bins measure how long the permission outage
+lasted, not how a working fleet behaves.
 
-Until an unattended worker has actually completed a bin end to end, **no
-document may describe the Brain as scheduling anything**, and nothing may
-present activation as a matter of wiring up something that already works. The
-dispatcher working is not the same claim as the fleet working.
+An unattended worker has now completed bins end to end, so "Brain runs a worker"
+may be said. **"Brain runs a fleet" may not** — that needs the ramp, a real
+research bin, and numbers taken on an unblocked fleet. The dispatcher working
+was never the same claim as the fleet working, and neither is one worker.
 
 ### What Step 12 is actually for
 
