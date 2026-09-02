@@ -155,8 +155,43 @@ function retryAfterMs(header: string | null): number | null {
  * puts nothing in it — not an instruction, not a bin id, not a hint. The worker
  * learns what to do by authenticating to Brain and asking.
  */
-export async function fireRoutine(options: { timeoutMs?: number } = {}): Promise<FireOutcome> {
-  const config = fireConfig();
+/**
+ * One resolved surface to fire at.
+ *
+ * Step 11's router hands this in; Step 10 read it from the environment. The
+ * token is resolved from its secret *name* at call time — the registry row
+ * holds the name and a digest, never the value — so the credential's lifetime
+ * in memory is still one HTTP call and nothing about §22's secret rule changes.
+ */
+export interface FireTarget {
+  routineId: string;
+  token: string;
+  baseUrl?: string | null;
+  routineVersion?: string | null;
+}
+
+/**
+ * Resolve a registered Routine's credential from the environment.
+ *
+ * Returns null rather than throwing when the named secret is absent, because a
+ * Routine registered against a secret the deployment does not have is an
+ * ordinary configuration state the router should skip, not a crash.
+ */
+export function resolveToken(secretName: string): string | null {
+  return (process.env[secretName] ?? '').trim() || null;
+}
+
+export async function fireRoutine(
+  options: { timeoutMs?: number; target?: FireTarget } = {},
+): Promise<FireOutcome> {
+  const config = options.target
+    ? {
+        baseUrl: options.target.baseUrl?.trim() || DEFAULT_BASE,
+        routineId: options.target.routineId,
+        token: options.target.token,
+        routineVersion: options.target.routineVersion ?? null,
+      }
+    : fireConfig();
   if (!config.routineId || !config.token) {
     return {
       ok: false,
@@ -257,11 +292,18 @@ export async function recordAllowanceObservation(input: {
   kind: FireErrorKind;
   retryAfterMs: number | null;
   message: string;
+  accountId?: string | null;
+  routineId?: string | null;
 }): Promise<void> {
   if (input.kind !== 'RATE_LIMIT') return;
   await recordBinEvent({
     eventType: 'PROVIDER_ALLOWANCE',
     binId: input.binId,
+    accountId: input.accountId ?? null,
+    routineId: input.routineId ?? null,
+    // The provider refused. That is the one capacity fact nothing Brain infers
+    // may overwrite, so it is classified at the moment it is observed.
+    evidenceClass: 'PROVIDER_ENFORCED',
     provider: 'claude-routine',
     outcome: 'RATE_LIMITED',
     reason: input.message,

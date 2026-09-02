@@ -62,7 +62,11 @@ import {
   recordBinEvent,
   supersedeStaleIntents,
 } from '../../repos/bins.ts';
-import { fireConfig, fireRoutine, isFireConfigured, isRetryable, recordAllowanceObservation } from './fire.ts';
+import { fireConfig, fireRoutine, isFireConfigured, isRetryable, recordAllowanceObservation, resolveToken } from './fire.ts';
+import { fleetSnapshot } from './candidates.ts';
+import { routeBin } from './router.ts';
+import { markDispatchRoutine } from '../../repos/bins.ts';
+import { claimRoutineFireSlot, recordAccountRefusal, recordRoutineFire } from '../../repos/fleet.ts';
 
 /**
  * How often the loop wakes.
@@ -90,6 +94,10 @@ export interface TickResult {
   fired: number;
   failed: number;
   skippedNotConfigured: boolean;
+  /** Intents held back because no surface could take them, by refusal. */
+  unrouted: Record<string, number>;
+  /** Registered Routines whose secret this deployment does not hold. */
+  missingSecrets: number;
 }
 
 /**
@@ -105,6 +113,8 @@ export async function dispatchTick(
     fired: 0,
     failed: 0,
     skippedNotConfigured: false,
+    unrouted: {},
+    missingSecrets: 0,
   };
 
   result.superseded = await supersedeStaleIntents();
@@ -127,7 +137,22 @@ export async function dispatchTick(
   // trigger still runs, still accepts workers that arrive by other means, and
   // simply never starts one itself. Saying so once per tick would be noise, so
   // it is reported in the result and left to the caller.
-  if (!isFireConfigured()) {
+  /*
+   * "Configured" now has two answers, and the fleet's is the one that matters.
+   *
+   * Step 10 asked whether two environment variables were set. Step 11 asks
+   * whether any Routine is registered *and* has its secret deployed — and only
+   * falls back to the environment when the registry is empty, which is exactly
+   * the state a Brain is in between deploying this code and registering its
+   * first account. That fallback is what makes this change not a flag day: an
+   * unmigrated deployment keeps firing its one Routine until somebody registers
+   * it properly.
+   */
+  const snapshot = await fleetSnapshot();
+  result.missingSecrets = snapshot.missingSecrets.length;
+  const registryEmpty = snapshot.candidates.length === 0;
+
+  if (registryEmpty && !isFireConfigured()) {
     result.skippedNotConfigured = true;
     return result;
   }
@@ -152,14 +177,131 @@ export async function dispatchTick(
       continue;
     }
 
-    const outcome = await fireRoutine();
+    /*
+     * Route, then fire. The routing decision is recorded either way — a bin
+     * nobody could take is a fact about the fleet worth having, and Step 10
+     * learned the hard way that a dispatcher which silently does nothing is
+     * indistinguishable from one that is broken.
+     */
+    const decision = registryEmpty
+      ? null
+      : routeBin({
+          bin,
+          candidates: snapshot.candidates,
+          fleetPolicy: snapshot.fleetPolicy,
+          fleetInFlight: snapshot.fleetInFlight + result.fired,
+          now: new Date().toISOString(),
+        });
+
+    if (decision && !decision.ok) {
+      // Not a failure of this intent: the work is fine and no surface can take
+      // it right now. Put it back with the provider's own retry time when there
+      // is one, so the fleet resumes by itself rather than needing a nudge.
+      result.unrouted[decision.refusal] = (result.unrouted[decision.refusal] ?? 0) + 1;
+      await recordBinEvent({
+        eventType: 'DISPATCH_UNROUTED',
+        binId: intent.binId,
+        outcome: decision.refusal,
+        reason: decision.reason,
+        evidenceClass: decision.refusal === 'ALL_SURFACES_RATE_LIMITED' ? 'PROVIDER_ENFORCED' : 'OPERATOR_POLICY',
+        measures: { considered: decision.considered },
+      });
+      await markDispatchFailed(intent.id, {
+        kind: 'UNROUTED',
+        message: decision.reason,
+        retryAfterMs: decision.retryAt
+          ? Math.max(0, Date.parse(decision.retryAt) - Date.now())
+          : 60_000,
+      });
+      // Every intent in this burst faces the same fleet, so walking the rest of
+      // them into the same refusal spends nothing but time.
+      break;
+    }
+
+    const target = decision?.ok
+      ? {
+          routineId: decision.routine.routineRef,
+          token: resolveToken(decision.routine.tokenSecretName) ?? '',
+          baseUrl: decision.routine.baseUrl,
+          routineVersion: decision.routine.routineVersion,
+        }
+      : undefined;
+
+    if (decision?.ok) {
+      /*
+       * Routing decided; now take the slot.
+       *
+       * `routeBin` is a pure function over a snapshot read once at the top of
+       * this tick, so on its own it is arithmetic rather than exclusion. Two
+       * dispatchers — two Brain instances, or this burst against another
+       * process — can both compute that this Routine has room. The
+       * compare-and-swap is what makes exactly one of them right: both name the
+       * generation they read, one `UPDATE` matches, the other is refused.
+       *
+       * A lost claim is an ordinary outcome. The intent goes back with a short
+       * backoff and the next tick routes it against a fleet that now includes
+       * whatever the winner did.
+       */
+      const claimed = await claimRoutineFireSlot({
+        routineId: decision.routine.id,
+        expectedGeneration: decision.routine.fireGeneration,
+      });
+      if (!claimed) {
+        result.unrouted['SLOT_LOST'] = (result.unrouted['SLOT_LOST'] ?? 0) + 1;
+        await recordBinEvent({
+          eventType: 'DISPATCH_UNROUTED',
+          binId: intent.binId,
+          accountId: decision.account.id,
+          routineId: decision.routine.id,
+          outcome: 'SLOT_LOST',
+          reason: 'Another dispatcher took this surface\u2019s fire slot first.',
+          evidenceClass: 'MEASURED',
+        });
+        await markDispatchFailed(intent.id, {
+          kind: 'UNROUTED',
+          message: 'Another dispatcher took this surface\u2019s fire slot first.',
+          retryAfterMs: 5_000,
+        });
+        continue;
+      }
+
+      /*
+       * Spend the slot in the local snapshot too. The claim protects against
+       * other processes; this keeps the *rest of this burst* from routing five
+       * activations at a surface whose headroom was measured once before any of
+       * them left.
+       */
+      const spent = snapshot.candidates.find((c) => c.routine.id === decision.routine.id);
+      if (spent) {
+        spent.routineInFlight += 1;
+        spent.routine = { ...spent.routine, fireGeneration: spent.routine.fireGeneration + 1 };
+      }
+      for (const sibling of snapshot.candidates) {
+        if (sibling.account.id === decision.account.id) sibling.accountInFlight += 1;
+      }
+
+      await markDispatchRoutine(intent.id, decision.routine.id);
+      await recordBinEvent({
+        eventType: 'DISPATCH_ROUTED',
+        binId: intent.binId,
+        accountId: decision.account.id,
+        routineId: decision.routine.id,
+        outcome: 'SELECTED',
+        reason: decision.reason,
+        evidenceClass: 'MEASURED',
+        measures: { considered: decision.considered },
+      });
+    }
+
+    const outcome = await fireRoutine(target ? { target } : {});
     if (outcome.ok) {
       await markDispatchSent(intent.id, {
         routineRef: outcome.routineId,
-        routineVersion: config.routineVersion,
+        routineVersion: decision?.ok ? decision.routine.routineVersion : config.routineVersion,
         sessionRef: outcome.sessionRef,
         fireEventId: outcome.fireEventId,
       });
+      if (decision?.ok) await recordRoutineFire({ routineId: decision.routine.id, ok: true });
       result.fired += 1;
       continue;
     }
@@ -169,7 +311,30 @@ export async function dispatchTick(
       kind: outcome.kind,
       retryAfterMs: outcome.retryAfterMs,
       message: outcome.message,
+      accountId: decision?.ok ? decision.account.id : null,
+      routineId: decision?.ok ? decision.routine.id : null,
     });
+
+    if (decision?.ok) {
+      // A refusal is written against the surface that refused, so the next tick
+      // routes around it without anything having to remember this one.
+      const retryAt = outcome.retryAfterMs
+        ? new Date(Date.now() + outcome.retryAfterMs).toISOString()
+        : null;
+      await recordRoutineFire({
+        routineId: decision.routine.id,
+        ok: false,
+        retryAt,
+        rateLimited: outcome.kind === 'RATE_LIMIT',
+      });
+      if (outcome.kind === 'RATE_LIMIT') {
+        await recordAccountRefusal({
+          accountId: decision.account.id,
+          reason: outcome.message,
+          retryAt,
+        });
+      }
+    }
 
     if (!isRetryable(outcome.kind)) {
       // A wrong token, a deleted routine or a paused one will not be fixed by
@@ -192,9 +357,17 @@ export async function dispatchTick(
       retryAfterMs: outcome.retryAfterMs,
     });
     result.failed += 1;
-    // A rate limit is about the account, not this intent. Stop the burst and
-    // let the backoff decide when to try again.
-    if (outcome.kind === 'RATE_LIMIT') break;
+    /*
+     * A rate limit used to end the burst, and with one Routine that was right:
+     * the account was the fleet, so the next intent would hit the same wall.
+     *
+     * With a fleet it is wrong. The refusal has just been written against that
+     * surface, so the next iteration's routing will skip it and may find a
+     * different account with room. The burst only ends when routing itself
+     * refuses — which is the branch above, and which happens on the very next
+     * intent if there genuinely is nowhere to go.
+     */
+    if (outcome.kind === 'RATE_LIMIT' && registryEmpty) break;
   }
 
   return result;

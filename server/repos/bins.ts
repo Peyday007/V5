@@ -31,6 +31,7 @@ import type { BinConfinement } from './workQueue.ts';
 import type {
   Bin,
   BinDispatch,
+  CapacityEvidence,
   BinDispatchRow,
   BinDispatchState,
   BinEvent,
@@ -242,6 +243,14 @@ export interface RecordBinEventInput {
   outcome?: string | null;
   reason?: string | null;
   isProxy?: boolean;
+  /* Step 11 attribution. Which surface the event belongs to, and what kind of
+   * fact it is — see `CAPACITY_EVIDENCE`. All nullable: most Step 10 events
+   * belong to a bin rather than to a surface, and an event with no capacity
+   * meaning has no evidence class rather than a defaulted one. */
+  accountId?: string | null;
+  routineId?: string | null;
+  evidenceClass?: CapacityEvidence | null;
+  workloadClass?: string | null;
 }
 
 /**
@@ -262,8 +271,9 @@ export async function recordBinEvent(input: RecordBinEventInput): Promise<void> 
       `INSERT INTO bin_events (id, event_type, at, bin_id, project_id, layer_id,
          orchestration_id, work_item_id, worker_id, session_ref, routine_ref, routine_version,
          fire_event_id, provider, lease_id, lease_generation, attempt, duration_ms,
-         measures, outcome, reason, is_proxy)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         measures, outcome, reason, is_proxy, account_id, routine_id, evidence_class,
+         workload_class)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         newId('bev'),
         input.eventType,
@@ -287,6 +297,10 @@ export async function recordBinEvent(input: RecordBinEventInput): Promise<void> 
         bounded(input.outcome, 200),
         bounded(input.reason, MAX_REASON_CHARS),
         input.isProxy ? 1 : 0,
+        input.accountId ?? null,
+        input.routineId ?? null,
+        input.evidenceClass ?? null,
+        input.workloadClass ?? null,
       ],
     );
   } catch {
@@ -1411,6 +1425,21 @@ export async function claimDispatchIntent(): Promise<BinDispatch | null> {
     }
   }
   return null;
+}
+
+/**
+ * Record which registered Routine a dispatch is going to.
+ *
+ * Written after routing and before firing, so a dispatch that fails still says
+ * where it was aimed. `routine_ref` already held the provider's trigger id;
+ * this holds the row, so a capacity report joins to the account without parsing
+ * strings out of a text column.
+ */
+export async function markDispatchRoutine(id: string, routineId: string): Promise<void> {
+  await getDb().run(
+    'UPDATE bin_dispatch SET routine_id = ?, updated_at = ? WHERE id = ?',
+    [routineId, binNow(), id],
+  );
 }
 
 export async function markDispatchSent(

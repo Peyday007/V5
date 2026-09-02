@@ -3545,6 +3545,176 @@ export const BIN_STATES = [
 export type BinState = (typeof BIN_STATES)[number];
 
 /** Which server-side predicate decides that a bin is finished. */
+/* ------------------------------------------------------------------------- */
+/* Step 11 — the fleet                                                        */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * What a surface may be.
+ *
+ * One vocabulary for accounts and Routines, because the operator's question is
+ * the same at both levels — may work go here — and two different vocabularies
+ * would mean two different answers to it.
+ *
+ * `DRAINING` is the one worth naming: it finishes what it holds and receives
+ * nothing new, which is how a surface is removed without abandoning the work
+ * already on it. `QUARANTINED` differs from `UNAVAILABLE` in who set it —
+ * health did, rather than a person — and therefore in how it is cleared.
+ */
+export const FLEET_STATES = [
+  'ENABLED',
+  'DRAINING',
+  'UNAVAILABLE',
+  'QUARANTINED',
+  'RETIRED',
+] as const;
+export type FleetState = (typeof FLEET_STATES)[number];
+
+/**
+ * What kind of fact a capacity number is.
+ *
+ * The honesty requirement of the whole step, as an enum. An unknown five-hour
+ * allowance is `UNKNOWN` and stays `UNKNOWN`; it never becomes a percentage
+ * because a percentage renders better. A refusal the provider issued is
+ * `PROVIDER_ENFORCED` and outranks anything Brain inferred — optimism must not
+ * be able to overwrite a wall somebody actually hit.
+ */
+export const CAPACITY_EVIDENCE = [
+  'UNKNOWN',
+  'MEASURED',
+  'INFERRED',
+  'PROVIDER_ENFORCED',
+  'OPERATOR_POLICY',
+] as const;
+export type CapacityEvidence = (typeof CAPACITY_EVIDENCE)[number];
+
+export const POLICY_SCOPES = ['FLEET', 'ACCOUNT', 'ROUTINE'] as const;
+export type PolicyScope = (typeof POLICY_SCOPES)[number];
+
+export interface FleetAccountRow {
+  id: string;
+  provider: string;
+  name: string;
+  plan_label: string | null;
+  declared_plan_power: string | null;
+  state: string;
+  state_reason: string | null;
+  retry_at: string | null;
+  last_refusal_at: string | null;
+  last_refusal_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FleetAccount {
+  id: string;
+  provider: string;
+  name: string;
+  planLabel: string | null;
+  /** What the operator says they bought. A label, never arithmetic. */
+  declaredPlanPower: string | null;
+  state: FleetState;
+  stateReason: string | null;
+  retryAt: string | null;
+  lastRefusalAt: string | null;
+  lastRefusalReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FleetRoutineRow {
+  id: string;
+  account_id: string;
+  routine_ref: string;
+  name: string;
+  routine_version: string | null;
+  base_url: string | null;
+  token_secret_name: string;
+  token_digest: string | null;
+  worker_id: string | null;
+  capabilities: string;
+  state: string;
+  state_reason: string | null;
+  fire_generation: number;
+  consecutive_failures: number;
+  consecutive_no_shows: number;
+  total_fires: number;
+  total_refusals: number;
+  last_fired_at: string | null;
+  last_check_in_at: string | null;
+  retry_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FleetRoutine {
+  id: string;
+  accountId: string;
+  routineRef: string;
+  name: string;
+  routineVersion: string | null;
+  baseUrl: string | null;
+  /** The NAME of the deployment secret. Never the secret. */
+  tokenSecretName: string;
+  tokenDigest: string | null;
+  workerId: string | null;
+  capabilities: string[];
+  state: FleetState;
+  stateReason: string | null;
+  /** The compare-and-swap value a fire slot is claimed against. */
+  fireGeneration: number;
+  consecutiveFailures: number;
+  consecutiveNoShows: number;
+  totalFires: number;
+  totalRefusals: number;
+  lastFiredAt: string | null;
+  lastCheckInAt: string | null;
+  retryAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FleetPolicyRow {
+  id: string;
+  scope: string;
+  scope_id: string | null;
+  version: number;
+  target: number;
+  auto_scale: number;
+  auto_scale_ceiling: number | null;
+  min_reserve: number;
+  boost_target: number | null;
+  boost_until: string | null;
+  boost_reason: string | null;
+  explore_ceiling: number | null;
+  explore_until: string | null;
+  paused: number;
+  actor: string;
+  reason: string;
+  created_at: string;
+}
+
+export interface FleetPolicy {
+  id: string;
+  scope: PolicyScope;
+  scopeId: string | null;
+  version: number;
+  /** Concurrent activations this scope may have in flight. */
+  target: number;
+  autoScale: boolean;
+  autoScaleCeiling: number | null;
+  minReserve: number;
+  boostTarget: number | null;
+  boostUntil: string | null;
+  boostReason: string | null;
+  exploreCeiling: number | null;
+  exploreUntil: string | null;
+  paused: boolean;
+  actor: string;
+  reason: string;
+  createdAt: string;
+}
+
 export const COMPLETION_CONTRACTS = [
   'RESEARCH_PACKET_V1',
   'DETERMINISTIC_UNITS_V1',
