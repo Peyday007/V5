@@ -21,7 +21,7 @@
  * No credential is read, printed or required.
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
-import { getUserByEmail } from '../server/repos/identity.ts';
+import { getUserByEmail, listUsers } from '../server/repos/identity.ts';
 import { getOrchestration } from '../server/repos/research.ts';
 import { authorizeUnresolvedGaps } from '../server/services/research/gapPolicy.ts';
 import { advancePacket } from '../server/services/research/packetRunner.ts';
@@ -49,7 +49,27 @@ async function main(): Promise<void> {
 
   const admin = await getUserByEmail(adminEmail);
   if (!admin) {
+    /*
+     * Name who *could* sign this, rather than only who could not.
+     *
+     * "No account for x@y" is a dead end: the operator now has to find the
+     * address some other way, and the obvious ways are the admin console or a
+     * database console — one of which needs the address to sign in and the
+     * other is the thing §2 exists to avoid. Reaching this shell is already the
+     * authentication, as the header above says, and the console shows an
+     * administrator the list of people anyway, so this discloses nothing the
+     * same caller cannot already read.
+     *
+     * Addresses only. No digest, no verifier, no session — a diagnostic about
+     * accounts must not become a way to read credentials.
+     */
+    const admins = (await listUsers()).filter((user) => user.isBrainAdmin && !user.disabledAt);
     console.error(`No account for ${adminEmail}. The authorization needs a real person on it.`);
+    console.error(
+      admins.length === 0
+        ? '  This Brain has no enabled administrator, so nobody can authorize anything yet.'
+        : `  Administrators of this Brain: ${admins.map((user) => user.email).join(', ')}`,
+    );
     process.exitCode = 1;
     return;
   }

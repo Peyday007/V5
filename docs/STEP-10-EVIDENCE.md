@@ -887,6 +887,29 @@ Brain. Carried forward.
 
 ---
 
+## CF-8, decided rather than deferred
+
+Step 8 raised it and assigned it here: *a one-hour access token versus long
+research jobs.* Its requirement, in Step 8's own words, was that refresh tokens
+are issued for thirty days and the rotation grant is implemented and tested, so
+a client that refreshes never sees a prompt — and that **nothing had exercised
+that path live**, so it should be *decided before anything runs unattended*.
+Step 9 then decomposed a packet into items each far shorter than an hour and
+passed the question forward unchanged; Step 10's own plan lists it as the second
+thing a long unattended run could finally observe.
+
+Things have now run unattended, so the deferral is spent and the question is
+Step 10's to answer. It is answered from rows, and it needed no new
+instrumentation, because Step 8 already recorded the thing that settles it: an
+ACCESS token carries `parent_token_id` when it was minted by a **refresh**
+rather than by an authorization code. A chained access token that has been
+*used* is therefore a client that refreshed and carried on, which is the whole
+of the claim. `npm run step10 -- cf8` reads exactly that, and prints no digest,
+no prefix, no scope and no secret — a report about credentials must not become a
+way to read them.
+
+CF8_READING_PLACEHOLDER
+
 ## The frozen baseline, re-read
 
 `orc_be4ddfe7388b40be9e01` read from authoritative rows at 2026-09-01T06:26Z,
