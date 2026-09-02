@@ -24,6 +24,8 @@
  *   probe                 ask a fired worker what its execution surface can reach
  *   probe-read <binId>    the readings that probe recorded
  *   recover <key> <bin> <orc>  requeue a fragment an execution-surface failure blocked
+ *   admins                who on this Brain can sign an authorization
+ *   gap-policy <orc> <usr>  authorize one packet to record unresolved gaps
  *   cf8                   whether a client ever refreshed an expiring access token
  *   cancel-ready <n>      cancel exactly n READY acceptance bins, or refuse
  *   cancel-bin <binId>    cancel one named unleased acceptance bin
@@ -35,7 +37,7 @@
 import { initDatabase, getDb } from '../server/db/database.ts';
 import { initStorage } from '../server/services/storage/index.ts';
 import { createProject, getProjectBySlug } from '../server/repos/projects.ts';
-import { grantMembership, listWorkers } from '../server/repos/identity.ts';
+import { getUser, grantMembership, listUsers, listWorkers } from '../server/repos/identity.ts';
 import { listTokensForWorker } from '../server/repos/oauth.ts';
 import {
   createBin,
@@ -61,6 +63,8 @@ import {
   MICHIGAN_LICENSING_ASSIGNMENT,
 } from '../server/services/research/approvalEnvelope.ts';
 import { getOrchestration } from '../server/repos/research.ts';
+import { authorizeUnresolvedGaps } from '../server/services/research/gapPolicy.ts';
+import { advancePacket } from '../server/services/research/packetRunner.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import { DEAL_DISPATCH_SLUG } from '../server/seed.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
@@ -885,6 +889,91 @@ async function main(): Promise<void> {
       }
       throw error;
     }
+    return;
+  }
+
+  if (command === 'admins') {
+    /*
+     * Who can sign an authorization, read from the rows.
+     *
+     * Not a convenience. Two of this harness's operator actions — authorizing a
+     * packet to record its gaps, and anything else that must carry a person's
+     * name — resolve an administrator and refuse without one, and the address
+     * they resolve is not written down anywhere in this repository on purpose.
+     * Without this the only ways to learn it are the admin console, which needs
+     * the address to sign in, and a database console, which is the thing §2
+     * exists to avoid.
+     *
+     * Reaching this shell is already the authentication, and the console shows
+     * an administrator the list of people anyway. Addresses and ids only: no
+     * digest, no verifier, no session, no worker credential.
+     */
+    const users = await listUsers();
+    const admins = users.filter((user) => user.isBrainAdmin);
+    for (const user of admins) {
+      console.log(
+        `  ${user.id}  ${user.email}${user.disabledAt ? `  DISABLED ${user.disabledAt}` : ''}`,
+      );
+    }
+    const enabled = admins.filter((user) => !user.disabledAt).length;
+    console.log(`STEP10: OK admins total=${admins.length} enabled=${enabled}`);
+    return;
+  }
+
+  if (command === 'gap-policy') {
+    /*
+     * The same authorization `npm run authorize:gap-policy` performs, addressed
+     * by user id rather than by email.
+     *
+     * Not a second mechanism: it calls `authorizeUnresolvedGaps` and then
+     * `advancePacket`, exactly as the script does, and the audit row it leaves
+     * is identical. What differs is only how the person is named, and the
+     * reason is unglamorous — the workflow that reaches this shell restricts
+     * its arguments to letters, digits, dash and underscore so that an input
+     * can never be interpolated into a command line as anything else, and an
+     * email address does not fit that alphabet. A `usr_` id does.
+     *
+     * The decision is still a person's and still recorded against them: the id
+     * is resolved against the database, a disabled account is refused, and a
+     * non-administrator is refused.
+     */
+    const orchestrationId = arg(0);
+    const adminId = arg(1);
+    if (!orchestrationId || !adminId) {
+      console.log('STEP10 REFUSED: pass the orchestration id and the administrator user id.');
+      process.exitCode = 1;
+      return;
+    }
+    const admin = await getUser(adminId);
+    if (!admin || !admin.isBrainAdmin || admin.disabledAt) {
+      // One message for "no such account", "not an administrator" and
+      // "disabled". Invariant 23 at a smaller boundary: a refusal here must not
+      // tell a caller which user ids exist.
+      console.log(`STEP10 REFUSED: ${adminId} cannot authorize anything on this Brain.`);
+      process.exitCode = 1;
+      return;
+    }
+    const before = await getOrchestration(orchestrationId);
+    if (!before) {
+      console.log('STEP10 REFUSED: no such orchestration.');
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`  packet      ${before.id} — ${before.title}`);
+    console.log(`  status      ${before.status}`);
+    const result = await authorizeUnresolvedGaps({
+      orchestrationId,
+      authorizedBy: { id: admin.id, email: admin.email },
+    });
+    console.log(
+      `  ${result.status === 'AUTHORIZED' ? 'authorized ' : 'already    '} RECORD_GAPS by ` +
+        `${admin.email} at ${result.orchestration.unresolvedGapAuthorizedAt}`,
+    );
+    const advanced = await advancePacket(orchestrationId);
+    console.log(
+      `  advanced    ${advanced.status}${advanced.waitingOn ? ` — ${advanced.waitingOn}` : ''}`,
+    );
+    console.log(`STEP10: OK gap-policy ${result.status} status=${advanced.status}`);
     return;
   }
 
