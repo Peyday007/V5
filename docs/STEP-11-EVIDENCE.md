@@ -232,3 +232,37 @@ the two is the exact confusion the schema was shaped to avoid.
 said so; Step 11 has not measured a subscription allowance either, and
 `declared_plan_power` on the registered account is recorded as `unknown` rather
 than as a number somebody guessed.
+
+**Step 11 did not run a second Brain instance.** It made one Brain able to
+direct many *workers*, which is a fleet of execution surfaces rather than a
+fleet of Brains. The two things `ROADMAP.md` listed as Step 11's to resolve
+before a second machine — the per-instance research and extraction queues, and
+the per-process sign-in throttle — are untouched, still correct at one machine,
+and inherited by whatever runs the second.
+
+**Some live rows are Step 10's, and say so.** `perAccount` reports
+`accountId: null` for 97 activations because they predate the attribution
+columns. Backfilling them would be inventing an attribution for fires nobody
+recorded one for.
+
+---
+
+## 6. What to run next, and in what order
+
+Once a second account and Routine are registered:
+
+1. `fleet show` — two accounts, two routable candidates.
+2. Seed four bins. Both accounts should fire; `fires` moves on both rows. (L3)
+3. `fleet set-state --kind ACCOUNT --ref <name> --to UNAVAILABLE`, seed two more,
+   confirm every one goes to the survivor, then re-enable and confirm the split
+   returns. (L4)
+4. `fleet boost --target 4 --minutes 30 --reason …`, confirm the higher ceiling
+   applies, then confirm it stops applying after expiry with nothing having run
+   to revert it. (L6)
+5. A research packet whose PRIMARY and ADVERSARIAL passes land on different
+   accounts, then a JUDGE on a third lineage — and a deliberate same-session
+   submission, which must be refused. (L9, L10)
+
+Steps 3 and 4 are the ones that decide the step. The rest are already proven in
+tests and are being re-run live for the same reason Step 8 insisted a passing
+suite is not evidence that a real client works.
