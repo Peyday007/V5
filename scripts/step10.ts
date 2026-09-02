@@ -52,7 +52,7 @@ import {
   regrantBinAttempts,
   sweepExpiredBinLeases,
 } from '../server/repos/bins.ts';
-import { reconcileBins } from '../server/services/bins/service.ts';
+import { reconcileBins, reopenParkedBin } from '../server/services/bins/service.ts';
 import { evaluateContract, readSurfaceProbe } from '../server/services/bins/contracts.ts';
 import {
   recoverFragmentAfterSurfaceChange,
@@ -616,8 +616,57 @@ async function main(): Promise<void> {
         return;
       }
     }
+    /*
+     * Two paths, because there are two reasons a bin is not dispatchable, and
+     * printing the resulting state for both is how this command lied.
+     *
+     * It used to call `markBinReady` and then report `was=… now=…`, which is a
+     * *description* rather than an assertion. `markBinReady` matches `DRAFT`
+     * only, so pointed at a `NEEDS_HUMAN` bin it changed nothing and printed
+     * `was=NEEDS_HUMAN now=NEEDS_HUMAN` under a `STEP10: OK` line — and the
+     * workflow's gate greps for exactly that line. A no-op reported as a
+     * success cost a full activation window of waiting on a bin that had never
+     * moved, and it would have gone on costing one every time.
+     *
+     * So: a drafted bin is made ready, an escalated one is *reopened* through
+     * the guarded transition, and either way the exit code follows whether a
+     * row actually changed.
+     */
+    if (before.state === 'NEEDS_HUMAN') {
+      const outcome = await reopenParkedBin({
+        binId: id,
+        operator: `operator:${SLUG}`,
+        reason: arg(1)
+          ? arg(1)!.replace(/_/g, ' ')
+          : 'Reopened by the operator after the condition this bin escalated on was resolved.',
+      });
+      if (!outcome.ok) {
+        console.log(`STEP10 REFUSED: research-ready ${id} ${outcome.refusal} — ${outcome.reason}`);
+        process.exitCode = 1;
+        return;
+      }
+      console.log(
+        `  reopened    ${id} ${outcome.previousState} → ${outcome.bin.state}, ` +
+          `generation ${outcome.previousGeneration} → ${outcome.generation}, ` +
+          `attempts ${outcome.bin.attemptCount}/${outcome.bin.maxAttempts} unchanged`,
+      );
+      console.log(
+        `STEP10: OK research-ready ${id} reopened=true state=${outcome.bin.state} ` +
+          `gen=${outcome.generation}`,
+      );
+      return;
+    }
+
     const after = await markBinReady(id);
-    console.log(`STEP10: OK research-ready ${id} was=${before.state} now=${after?.state ?? '—'}`);
+    if (after?.state !== 'READY') {
+      console.log(
+        `STEP10 REFUSED: research-ready ${id} did not transition. It is ${before.state}; ` +
+          'only a DRAFT bin is made ready here, and only a NEEDS_HUMAN one is reopened.',
+      );
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`STEP10: OK research-ready ${id} was=${before.state} now=${after.state}`);
     return;
   }
 

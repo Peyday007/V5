@@ -39,9 +39,13 @@ import {
   recordBinEvent,
   recordBinRefusal,
   releaseBin,
+  reopenNeedsHumanBin,
   terminateUnleasedBin,
   type BinProof,
+  type ReopenOutcome,
 } from '../../repos/bins.ts';
+import { getOrchestration } from '../../repos/research.ts';
+import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
 import { claimWork, listWorkItemsForBin, type ClaimScope } from '../../repos/workQueue.ts';
 import { evaluateContract, hashUnitValue, type ContractVerdict } from './contracts.ts';
 
@@ -516,6 +520,82 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
 }
 
 /** Read a bin without holding it. For reports and the acceptance harness. */
+/**
+ * Answering a bin's escalation, with the one precondition the bin's own
+ * contract implies.
+ *
+ * `reopenNeedsHumanBin` is the state machine's guard: one source state, a
+ * compare-and-swap, a fence, a budget check, an audit row. This adds the
+ * question that guard cannot ask, because a repository must not know what a
+ * contract means: **a `RESEARCH_PACKET_V1` bin is only worth reopening if its
+ * packet has actually moved.**
+ *
+ * Without it the operator's remedy for "the contract refused because the packet
+ * was not terminal" would be to reopen the bin and let a worker discover the
+ * same thing — spending an activation out of a routine's hourly fire budget to
+ * be told what the row already says. Worse, it would be a loop: refuse, park,
+ * reopen, refuse.
+ *
+ * It reads the packet's status only. It does not re-judge the verdict, the
+ * evidence or the gaps — `RESEARCH_PACKET_V1` does that, at execution time, and
+ * this must not become a second opinion about whether a packet is finished.
+ * The statuses it accepts are exactly the runner's own terminal set, asked of
+ * `TERMINAL_ORCHESTRATION` rather than restated here.
+ */
+export async function reopenParkedBin(input: {
+  binId: string;
+  operator: string;
+  reason: string;
+}): Promise<ReopenOutcome> {
+  const bin = await getBin(input.binId);
+  if (!bin) return { ok: false, refusal: 'NOT_FOUND', reason: `No bin ${input.binId}.` };
+
+  const evidence: Record<string, unknown> = { contract: bin.completionContract };
+  if (bin.completionContract === 'RESEARCH_PACKET_V1') {
+    const orchestrationId = bin.orchestrationId;
+    if (!orchestrationId) {
+      return {
+        ok: false,
+        refusal: 'WRONG_STATE',
+        reason:
+          `Bin ${input.binId} declares RESEARCH_PACKET_V1 and links to no orchestration, so there ` +
+          'is no packet whose state could have changed.',
+      };
+    }
+    const orchestration = await getOrchestration(orchestrationId);
+    if (!orchestration) {
+      return {
+        ok: false,
+        refusal: 'WRONG_STATE',
+        reason: `Orchestration ${orchestrationId} does not exist.`,
+      };
+    }
+    if (!TERMINAL_ORCHESTRATION.has(orchestration.status)) {
+      return {
+        ok: false,
+        refusal: 'WRONG_STATE',
+        reason:
+          `Packet ${orchestrationId} is ${orchestration.status}, which is not terminal. Reopening ` +
+          'this bin would spend an activation to be refused by the same contract for the same ' +
+          'reason. Finish the packet first.',
+      };
+    }
+    evidence['orchestrationId'] = orchestrationId;
+    evidence['orchestrationStatus'] = orchestration.status;
+    evidence['documentId'] = orchestration.documentId;
+    evidence['auditId'] = orchestration.auditId;
+    evidence['verdict'] = orchestration.verdict;
+  }
+
+  return await reopenNeedsHumanBin({
+    binId: bin.id,
+    leaseGeneration: bin.leaseGeneration,
+    operator: input.operator,
+    reason: input.reason,
+    resolutionEvidence: evidence,
+  });
+}
+
 export async function describeBin(binId: string): Promise<Bin | null> {
   return await getBin(binId);
 }

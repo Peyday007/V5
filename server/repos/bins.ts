@@ -515,12 +515,147 @@ export async function regrantBinAttempts(input: {
   return { bin, raised: result.changes === 1 };
 }
 
+/** Why a reopen was refused, or that it happened. */
+export type ReopenOutcome =
+  | { ok: true; bin: Bin; previousState: string; previousGeneration: number; generation: number }
+  | { ok: false; refusal: 'NOT_FOUND' | 'WRONG_STATE' | 'STALE_GENERATION' | 'NO_ATTEMPTS_LEFT'; reason: string };
+
+/**
+ * A person answers the escalation a bin raised, and the bin goes back to work.
+ *
+ * The state machine had no edge here, and the gap was the same shape as the one
+ * `advancePacket` had: a bin escalates to `NEEDS_HUMAN` naming a condition, the
+ * person resolves that condition, and nothing can act on the resolution.
+ * `markBinReady` matches `DRAFT` only, and `resolveNeedsHumanBin` offers
+ * `CANCELLED` or `FAILED` — so the only answers available were to destroy the
+ * work. **A state that says "waiting for a person" which that person cannot
+ * resolve is not waiting; it is stuck.**
+ *
+ * Deliberately its own statement rather than a widening of `markBinReady`.
+ * That function's `DRAFT` guard is what stops two callers both believing they
+ * were the transition that created dispatch intent, and adding a second state
+ * to it would weaken that for every existing caller to serve one new one.
+ *
+ * Four properties make it safe rather than an override:
+ *
+ *   - **It matches exactly one source state.** `DRAFT`, `READY`, `LEASED`,
+ *     `COMPLETE`, `CANCELLED` and `FAILED` all match nothing, so this can
+ *     neither race a live worker nor rewrite a finished bin.
+ *   - **It is a compare-and-swap on the generation**, which is §19's rule and
+ *     not a special case here: a caller reasoning about generation 7 writes
+ *     only if the bin is still at 7.
+ *   - **It advances the generation**, so every worker that held this bin before
+ *     the escalation is fenced — a late completion from one of them matches
+ *     nothing, exactly as cancellation fences one.
+ *   - **It requires budget.** Reopening a bin with no attempt left produces a
+ *     bin nothing can assign, which is the stuck state again wearing `READY`.
+ *     The refusal names the exhausted budget so the operator knows the remedy
+ *     is a regrant rather than another reopen.
+ *
+ * Nothing is reset. `attempt_count`, the completion refusals, the unit results
+ * and every event stay exactly where they are: the escalation is answered, not
+ * erased. The `BIN_REOPENED` row records who answered it, why, what state it
+ * came from, both generations, and the evidence they resolved it on — because
+ * a reopen nobody can later explain is indistinguishable from a bin that
+ * quietly un-parked itself.
+ */
+export async function reopenNeedsHumanBin(input: {
+  binId: string;
+  /** The generation the caller believes it is acting on. */
+  leaseGeneration: number;
+  /** Who is answering the escalation. Recorded, never inferred. */
+  operator: string;
+  reason: string;
+  /** What the operator resolved it on — an id, a status, a run. */
+  resolutionEvidence: Record<string, unknown>;
+}): Promise<ReopenOutcome> {
+  const before = await getBin(input.binId);
+  if (!before) return { ok: false, refusal: 'NOT_FOUND', reason: `No bin ${input.binId}.` };
+  if (before.state !== 'NEEDS_HUMAN') {
+    return {
+      ok: false,
+      refusal: 'WRONG_STATE',
+      reason:
+        `Bin ${input.binId} is ${before.state}, not NEEDS_HUMAN. This answers an escalation and ` +
+        'nothing else: a drafted, ready, leased or finished bin is not one waiting for a person.',
+    };
+  }
+  if (before.attemptCount >= before.maxAttempts) {
+    return {
+      ok: false,
+      refusal: 'NO_ATTEMPTS_LEFT',
+      reason:
+        `Bin ${input.binId} has used ${before.attemptCount} of ${before.maxAttempts} assignment ` +
+        'attempts, so reopening it would produce a bin nothing can assign. Regrant its budget ' +
+        'first, with the reason the budget went.',
+    };
+  }
+
+  const at = binNow();
+  const nextGeneration = input.leaseGeneration + 1;
+  // The whole proof in one statement: the item, the generation the caller
+  // reasoned about, and the one state this may act on. Never read-then-write.
+  const result = await getDb().run(
+    `UPDATE bins
+        SET state = 'READY', ready_at = ?, updated_at = ?,
+            lease_generation = lease_generation + 1,
+            lease_id = NULL, worker_id = NULL, lease_expires_at = NULL,
+            leased_at = NULL, heartbeat_at = NULL,
+            terminal_reason = NULL, completed_at = NULL
+      WHERE id = ? AND state = 'NEEDS_HUMAN' AND lease_generation = ?`,
+    [at, at, input.binId, input.leaseGeneration],
+  );
+  if (result.changes !== 1) {
+    return {
+      ok: false,
+      refusal: 'STALE_GENERATION',
+      reason:
+        `Bin ${input.binId} is not at generation ${input.leaseGeneration} any more, so this ` +
+        'reopen was reasoning about a bin that has since moved. Read it again and decide again.',
+    };
+  }
+
+  await recordBinEvent({
+    eventType: 'BIN_REOPENED',
+    binId: before.id,
+    projectId: before.projectId,
+    orchestrationId: before.orchestrationId,
+    leaseGeneration: nextGeneration,
+    attempt: before.attemptCount,
+    outcome: 'READY',
+    reason: input.reason,
+    measures: {
+      operator: input.operator,
+      previousState: before.state,
+      previousGeneration: input.leaseGeneration,
+      generation: nextGeneration,
+      attemptCount: before.attemptCount,
+      maxAttempts: before.maxAttempts,
+      resolutionEvidence: input.resolutionEvidence,
+    },
+  });
+
+  const bin = (await getBin(input.binId))!;
+  return {
+    ok: true,
+    bin,
+    previousState: before.state,
+    previousGeneration: input.leaseGeneration,
+    generation: nextGeneration,
+  };
+}
+
 /**
  * Make a drafted bin dispatchable.
  *
  * Guarded on `DRAFT` so two callers cannot both "make it ready" and both
  * believe they were the transition that did it — which matters because the
  * transition is what creates dispatch intent.
+ *
+ * Deliberately still `DRAFT` only. Answering a `NEEDS_HUMAN` escalation is
+ * `reopenNeedsHumanBin` above, which fences and audits; widening this one to
+ * reach that state would give every existing caller a power none of them mean
+ * to have.
  */
 export async function markBinReady(id: string): Promise<Bin | null> {
   const at = binNow();
