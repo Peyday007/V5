@@ -105,8 +105,8 @@ them.
 | S17 | PASS | No breaker deletes history or resets attempts downward | inversion |
 | S18 | PASS | Independent work runs in parallel; dependent work waits on prerequisites | packet runner + test |
 | S19 | PASS | Audit independence enforced by lineage; completion refuses a violation | independence policy + inversion |
-| S20 | PASS | Workload profiles attribute cost to idea, class and policy version | profile report |
-| S21 | PASS | Simulation covers 5/10/20/30/50, the live fleet, and larger parameters | deterministic replay |
+| S20 | PASS | Workload profiles attribute cost to idea, class and policy version | profile report; live `medianActivationMs=21487`, `unknowns=[]` |
+| S21 | PASS | Simulation covers 5/10/20/30/50, the live fleet, and larger parameters | deterministic replay; run live, `trace_00135272_1` |
 | S22 | PASS | Simulated output structurally distinct and never production evidence | label + test |
 | S23 | PASS | Operator commands refuse false success and name the actor | dry-run + changed-row reporting |
 | S24 | PASS | SQLite and Postgres suites pass, including inversions | both chains |

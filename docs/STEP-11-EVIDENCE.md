@@ -199,20 +199,64 @@ missing one to a minute: an invented number inside a projection reported as
 resting on observed samples is the exact failure this step's honesty rule
 exists to prevent.
 
-### What the profile does read
+### What the reports read, before and after
 
 `fleet profile` against production, over all recorded history:
 
+| | before the duration fix | after |
+|---|---|---|
+| `binsCompleted` | 81 | 83 |
+| `activations` | 97 | 99 |
+| `routedDecisions` | 4 | 6 |
+| `medianActivationMs` | **null** | **21487** |
+| `unknowns` | *"No activation carried a duration, so timing is unknown rather than zero."* | *(empty)* |
+| `bottleneck` / `evidence` | `PROVIDER_CEILING` / `MEASURED` | unchanged |
+
+`accountId: null` on all 99 activations is correct rather than broken: they are
+Step 10's, and they predate the attribution columns. The `routedDecisions` are
+Step 11's, and those carry an account.
+
+And `fleet simulate --queue 50`, which before the fix could only say "nothing
+can be simulated from an empty trace":
+
 ```
-binsCompleted 81   activations 97   routedDecisions 4
-providerRefusals 34   takeovers 2   unrouted 0
-bottleneck PROVIDER_CEILING   evidence MEASURED
-perAccount: [{ accountId: null, activations: 97, refusals: 34 }]
+trace      1 measured activation(s)
+NOTE       every line below is SIMULATED, never observed throughput.
+SIMULATED   5 workers  completed=50/50 activations=25 wall=163s trace=trace_00135272_1
+SIMULATED  10 workers  completed=50/50 activations=25 wall=82s  trace=trace_00135272_1
+SIMULATED  20 workers  completed=50/50 activations=25 wall=41s  trace=trace_00135272_1
+SIMULATED  30 workers  completed=50/50 activations=25 wall=0s   trace=trace_00135272_1
+SIMULATED  50 workers  completed=50/50 activations=25 wall=0s   trace=trace_00135272_1
+SIMULATED  live fleet  completed=50/50 activations=25           trace=trace_00135272_1
+  unknown: Only 1 measured activation(s) in the trace, so the cost distribution
+           is that many points repeated rather than a distribution.
+  unknown: Account "primary" has no measured concurrency, so its 1 Routine(s)
+           are modelled as one activation each — a floor, not an estimate.
+  unknown: Account "primary" has no observed fire ceiling. The simulation does
+           not invent one, so its refusals are only those explicitly configured.
 ```
 
-`accountId: null` on 97 activations is correct rather than broken: they are
-Step 10's, and they predate the attribution columns. The four `routedDecisions`
-are Step 11's, and those carry an account.
+Every line is labelled `SIMULATED` and carries a content-addressed trace id, and
+the three unknowns are named rather than defaulted — which is the difference
+between a projection and a measurement, and the reason a projection can never be
+read back as one. One sample rather than 83 is also correct: only executions
+that finished *after* the duration fix have one, and the earlier eighty-one are
+honestly unmeasurable rather than retro-fitted.
+
+### One committed fix the running Brain does not have
+
+`activationTrace` filtered on `total > 0`, which drops an execution that
+finished inside the same millisecond it started. It surfaced as a
+one-in-three flake in the very test written to prove durations are recorded —
+a test lease is held for well under a millisecond, which is exactly the case the
+filter discarded. Fixed to `>= 0`, ten consecutive clean runs, committed, and
+**not deployed**: the budget is spent and real activations take tens of seconds,
+so this is a duration production never produces.
+
+The same is true of a `set-state` hardening: `--kind ACCOUNT` fell through to the
+Routine branch and reported "no Routine registered as primary" — true, useless,
+and about the wrong noun. Committed; the running operator script still wants
+lowercase `--kind account`, which is the form this document's runbook names.
 
 ---
 
