@@ -63,7 +63,7 @@ order is a dependency order, not a preference.
 | Step | What it contains |
 |---|---|
 | **9** | Manual end-to-end research packet — **complete**; one packet terminal, filed and audited ([evidence](STEP-9-EVIDENCE.md)) |
-| **10** | Event-driven bin dispatch and unattended activation — see *Where Step 10 actually is* below |
+| **10** | Event-driven bin dispatch and unattended activation — **complete**; fleet measured, real packet filed and audited, bin terminal ([evidence](STEP-10-EVIDENCE.md)) |
 | **11** | Additional workers and fleet controls |
 | **12** | The control centre — the Brain drives the fleet, not a person |
 
@@ -100,14 +100,16 @@ So the split still holds, with its terms now known:
 - **The surface's half is a configuration Brain cannot make** — a checked-out
   repository and a settings file, both the operator's to set.
 
-**CF-8 is answered — see the disposition below.** Its requirement, as Step 8
-wrote it, was to *decide it before anything runs unattended*, and Step 10 owns
-that decision. It is now decided from rows rather than from confidence:
-`npm run step10 -- cf8` reads whether any ACCESS token carries a
-`parent_token_id` — meaning it was minted by a refresh rather than by an
-authorization code — and whether such a token was then *used*. That pair is the
-whole claim, and it needs no new instrumentation because Step 8 already recorded
-it.
+**CF-8 is closed.** Its requirement, as Step 8 wrote it, was to *decide it
+before anything runs unattended*, and Step 10 owned that decision. It is decided
+from rows rather than from confidence: an ACCESS token carries a
+`parent_token_id` when it was minted by a refresh rather than by an
+authorization code, and a chained token that has been *used* is a client that
+refreshed and carried on. Read from production on 2026-09-02:
+**`rotated=85 used=85 roots=0`** — eighty-five refreshed tokens, all of them
+used, and not one call still being served on the credential an authorization
+code produced. No longer-lived token and no permanent one, which is what Step 9
+said the fix must not be.
 
 **The concurrency ramp has run**, and this paragraph used to say it had not.
 Six rungs — 1, 2, 5, 10, 20, 30 — measured on an unblocked fleet, with the
@@ -141,10 +143,23 @@ its judge returned `MORE_RESEARCH` over one targeted question, no fragment was
 repairable, and a named administrator authorized the packet to record what it
 was short of. `COMPLETE` means the judge advanced it, and this judge did not.
 
-An unattended worker has completed bins end to end and a fleet of ten has been
-measured, so "Brain runs a worker" and "Brain runs a fleet of ten on one
-routine" may both be said. What a second routine does is Step 11's, and nothing
-here is evidence for it.
+**The bin is terminal, and closing it needed one thing the state machine did not
+have.** A `HUMAN` refusal parks a bin out of the dispatchable set — correctly —
+but there was no edge back: `markBinReady` matches `DRAFT` only and
+`resolveNeedsHumanBin` offers `CANCELLED` or `FAILED`, so the only answers
+available to the person the bin escalated to were to destroy the work. The
+guarded `NEEDS_HUMAN → READY` transition is the missing edge, and it fences,
+requires budget, preserves every attempt and event, and records who reopened it
+on what evidence. Thirty-six seconds after the operator answered the escalation,
+the dispatcher had fired, a worker had taken the bin, and Brain had accepted the
+completion with `RESEARCH_PACKET_V1 v1 evaluated true`.
+
+An unattended worker has completed bins end to end, a fleet of ten has been
+measured, and one real research packet has been filed and audited, so "Brain
+runs a worker", "Brain runs a fleet of ten on one routine" and "Brain drove a
+real research packet to a filed report" may all be said. **Step 10 is
+complete.** What a second routine does is Step 11's, and nothing here is
+evidence for it.
 
 **The real research packet is where Step 10 stops, and not because of Brain.**
 On `orc_9b2965e776bb4de7ab9f` Brain dispatched a worker, the worker planned,

@@ -781,10 +781,27 @@ The split it establishes still holds, and is the durable rule:
 > for it, and Brain must never mint its own workers or choose their permissions
 > to get around it.
 
+**A state that says "waiting for a person" which that person cannot resolve is
+not waiting; it is stuck.** Step 10 met this three times at three altitudes, and
+it is the same defect each time. A packet stopped at `NEEDS_HUMAN` needing an
+authorization, and granting the authorization did nothing because the outcome
+was derived once and never re-read. A bin parked at `NEEDS_HUMAN` after a
+correct `HUMAN` refusal, and the state machine's only edges out of it were
+`CANCELLED` and `FAILED` — both of which destroy the work rather than finish it.
+So: **every escalation must have an answering transition, and that transition
+must be guarded rather than absent.** The bin's is one source state, a
+compare-and-swap on the generation, a fence, a budget check, and an append-only
+row naming who answered it and on what evidence — never a reset, and never a
+widening of a narrower control that already exists for a different reason.
+
 What that grant turned out to be, here, is a checked-in settings file plus a
 routine configured to check the repository out. Both are the operator's to set.
 
-**CF-8 is untouched.** Live token refresh is still unverified.
+**CF-8 is closed.** Live token refresh was the last thing Step 8 could not say,
+and it is now read from rows: `rotated=85 used=85 roots=0`. Eighty-five access
+tokens were minted by the rotation grant rather than by an authorization code
+and every one of them was then used, so a client refreshed and carried on. It
+took no longer-lived token and no permanent one.
 
 So: one unattended worker has completed bins end to end, and the concurrency
 ramp has since run six rungs — 1, 2, 5, 10, 20, 30 — on an unblocked fleet.

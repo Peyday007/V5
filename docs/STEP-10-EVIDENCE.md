@@ -12,14 +12,26 @@ The design is in [`STEP-10-PLAN.md`](STEP-10-PLAN.md). The frozen Step 9
 baseline this step must not disturb is recorded there and re-read at the end of
 this file.
 
-> **Status: Brain's half is proven; the step is not closed.** Brain fires, an
-> unattended worker acts, Brain validates the result, the ramp has run to a
-> measured ceiling, and on a real research packet Brain planned, approved
-> against a preauthorized envelope, queued research and refused evidence it
-> could not ground — all with nobody involved. What is missing is a filed,
-> audited document, and the reason is not Brain: the worker surface has no
-> network egress to the primary sources. That is the operator's half of the
-> same split, and Step 10 stays open until it is met.
+> **Status: COMPLETE.** Brain fires, an unattended worker acts, Brain validates
+> the result, the ramp has run to a measured ceiling, and the real research
+> packet went the whole way — planned, approved against a preauthorized
+> envelope, researched, verified, synthesized, audited by all three roles, and
+> filed as a document with bytes in the store — with nobody involved at any
+> step Brain owns.
+>
+> An earlier version of this line said the step was not closed because the
+> worker surface had no network egress to the primary sources. That was true
+> when it was written. The operator opened the surface; a probe bin proved from
+> inside a fired session which of four different things "blocked" had meant; a
+> guarded recovery gave the one blocked fragment a further attempt without
+> resetting its counter or erasing its failure history; and the packet filed.
+>
+> Two honest qualifications, both recorded rather than rounded away. The packet
+> is `COMPLETE_WITH_GAPS`, not `COMPLETE`: its judge asked one more question,
+> nothing was repairable, and a named administrator authorized it to record what
+> it was short of. And `legislature.mi.gov` answered 503 to automation on every
+> attempt even after the surface was open, so the statutory text came from
+> mirrors and that provenance limit is on the record.
 
 ---
 
@@ -809,15 +821,9 @@ over-provisions it.
 
 ### Production proofs still outstanding
 
-- **the research bin reaching `COMPLETE`.** `bin_204f246c43b641afa5a5` is
-  `NEEDS_HUMAN`: at 2026-09-02T00:04:35Z `RESEARCH_PACKET_V1` refused it because
-  the packet was `NEEDS_HUMAN`, and a HUMAN refusal parks the bin out of the
-  dispatchable set. The packet has since been authorized and is
-  `COMPLETE_WITH_GAPS`, and the contract now accepts that state, but **nothing
-  has re-evaluated the bin** — a parked bin is not dispatched, so no worker has
-  asked for completion again. Closing it needs one operator action already
-  deployed (`step10 research-ready bin_204f246c43b641afa5a5`) and one
-  activation; it needs no code change.
+- ~~the research bin reaching `COMPLETE`~~ — **done**, and it needed a
+  transition the state machine did not have. See *Answering a bin's escalation*
+  below.
 - ~~a **filed, audited document** from the real research bin~~ — **done.** The
   first attempt produced nothing because the worker surface had no egress to
   the primary sources and the gate correctly refused ungrounded claims. The
@@ -917,13 +923,108 @@ of the claim. `npm run step10 -- cf8` reads exactly that, and prints no digest,
 no prefix, no scope and no secret — a report about credentials must not become a
 way to read them.
 
-**The reading has not been taken.** The mechanism is written, tested and
-deployed, and the question is Step 10's rather than a later step's — that much
-is settled and is the disposition. What is not done is running it against
-production and recording what it says, so CF-8 is **owned and answered-by, but
-not yet observed**. It must not be written up as closed until
-`STEP10: OK cf8 rotated=… used=…` has actually been printed from the deployed
-Brain.
+Read from production at 2026-09-02T03:15:32Z:
+
+```
+  access tokens from an authorization code : 0
+  access tokens minted by a refresh        : 85
+  ...of those, actually used               : 85
+
+  VERDICT: a client refreshed an access token and went on using it. CF-8 is observed.
+STEP10: OK cf8 rotated=85 used=85 roots=0
+```
+
+**CF-8 is closed.** Eighty-five access tokens were minted by the rotation grant
+rather than by an authorization code, and every one of them was subsequently
+used — so the client refreshed and carried on, which is the whole of the claim
+Step 8 could not make. `roots=0` is worth reading too: no access token in this
+Brain is still the one an authorization code produced, so every call now being
+served is being served on a refreshed credential.
+
+It needed no longer-lived token and no permanent one, which is what Step 9 said
+the fix must not be.
+
+## Answering a bin's escalation — the fifth defect, and the last one
+
+The packet was terminal, the contract accepted it, and the bin still could not
+finish. That is worth writing down carefully, because the shape of it is one
+this step has now met three times at three different altitudes.
+
+`bin_204f246c43b641afa5a5` refused completion at 00:04:35Z — correctly, because
+its packet was `NEEDS_HUMAN` at the time — and a `HUMAN` refusal parks a bin out
+of the dispatchable set, which is also correct: a bin no worker can advance
+should not keep earning activations. The packet was then authorized and became
+`COMPLETE_WITH_GAPS`. And nothing could act on that, because **the bin state
+machine had no edge out of `NEEDS_HUMAN` except destruction**: `markBinReady`
+matches `DRAFT` only, and `resolveNeedsHumanBin` offers `CANCELLED` or `FAILED`.
+The only answers available to the person the bin had escalated to were to
+destroy the work.
+
+That is exactly the defect `advancePacket` had, one level up, and the same
+sentence covers both: **a state that says "waiting for a person" which that
+person cannot resolve is not waiting; it is stuck.**
+
+`reopenNeedsHumanBin` is the missing edge. It is its own statement rather than a
+widening of `markBinReady`, whose narrowness is what stops two callers both
+believing they created dispatch intent. Four properties make it a transition
+rather than an override:
+
+- **one source state.** `DRAFT`, `READY`, `LEASED`, `COMPLETE`, `CANCELLED` and
+  `FAILED` all match nothing, so it can neither race a live worker nor rewrite a
+  finished bin;
+- **a compare-and-swap on the generation** — §19's rule, not a special case: a
+  caller reasoning about generation 7 writes only if the bin is still at 7;
+- **it advances the generation**, so every worker that held the bin before the
+  escalation is fenced, exactly as cancellation fences one;
+- **it requires budget.** Reopening a bin with no attempt left produces a bin
+  nothing can assign — the stuck state again, wearing `READY` — so the refusal
+  names the exhausted budget and points at the regrant.
+
+Nothing is reset: the attempt count, the completion refusals, the unit results
+and every event stay where they are. `BIN_REOPENED` is appended naming the
+operator, the reason, the previous state, both generations and the evidence the
+reopen rests on, because a reopen nobody can later explain is indistinguishable
+from a bin that un-parked itself.
+
+`reopenParkedBin` adds the one question a repository must not ask — whether a
+`RESEARCH_PACKET_V1` bin's packet has actually reached a terminal state. Without
+it the remedy for "refused because the packet was not terminal" would be to
+spend an activation being told so again, and it would loop. It reads the status
+and nothing else; the contract still judges the packet at execution time.
+
+### And the command was reporting a no-op as a success
+
+`step10 research-ready` called `markBinReady` and printed `was=… now=…` beneath
+a `STEP10: OK` line — which is a *description* of the resulting state, not an
+assertion that anything transitioned. Pointed at the parked bin it changed
+nothing and printed `was=NEEDS_HUMAN now=NEEDS_HUMAN` under the very line the
+workflow greps for to decide success. It cost a full activation window of
+waiting on a bin that had never moved, and it would have gone on costing one.
+The exit code now follows whether a row actually changed.
+
+### What the rows say
+
+```
+04:32:27.466Z  BIN_REOPENED             READY   The linked packet received named-human
+                                                RECORD GAPS authorization and advanced…
+                                                NEEDS_HUMAN → READY, generation 52 → 53,
+                                                attempts 26/70 unchanged
+04:32:36.623Z  DISPATCH_INTENT          PENDING
+04:32:38.342Z  DISPATCH_SENT            session_01BhiNAahnE58UexJVe2eYtL
+04:32:51.658Z  BIN_ASSIGNED             wkr_1cdd82cfb2a54faf8edd
+04:33:03.319Z  BIN_COMPLETION_ACCEPTED  COMPLETE
+04:33:03.359Z  BIN_TERMINAL             COMPLETE  RESEARCH_PACKET_V1 v1 evaluated true.
+```
+
+Thirty-six seconds from a person answering the escalation to Brain accepting the
+completion, with the dispatcher and the worker doing every step in between and
+nobody watching. `RESEARCH_PACKET_V1 v1 evaluated true` is the line the whole
+step was waiting for: the contract, unchanged in every other clause, accepting a
+packet that filed honestly short after a named human authorized it to.
+
+Both guards are proven load-bearing by inversion rather than by reading:
+removing the state clause from the `UPDATE` fails the six-state test, and
+removing the generation from it fails the stale-generation test.
 
 ## The frozen baseline, re-read
 
