@@ -13,7 +13,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
-import { createBin, getBin } from '../server/repos/bins.ts';
+import { assignNextBin, createBin, getBin } from '../server/repos/bins.ts';
+import { getDb } from '../server/db/database.ts';
+import { createWorker } from '../server/repos/identity.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import {
   bindRoutineWorker,
@@ -784,6 +786,14 @@ describe('a burst spends the headroom it measured, once', () => {
     delete process.env['FLEET_TEST_SECRET_2'];
   });
 
+  /** Force a bin lease into the past without waiting for real time. */
+  async function expireBinLease(binId: string): Promise<void> {
+    await getDb().run(
+      "UPDATE bins SET lease_expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?",
+      [binId],
+    );
+  }
+
   async function readyBin(over: { priority?: number } = {}): Promise<string> {
     const bin = await createBin({
       projectId,
@@ -923,6 +933,88 @@ describe('a burst spends the headroom it measured, once', () => {
     expect(tick.fired).toBe(1);
     expect((await getRoutineByRef('trig_real'))!.totalFires).toBe(1);
     expect((await getRoutineByRef('trig_ghost'))!.totalFires).toBe(0);
+  });
+
+  it('clears the no-show streak when the fired session actually arrives', async () => {
+    /*
+     * The defect this closes: `recordRoutineFire({ok:true})` advances
+     * `consecutive_no_shows`, and until the arrival path existed nothing in
+     * production ever cleared it. Three healthy fires made a healthy Routine a
+     * quarantine candidate — a health signal pointing the opposite way to
+     * reality — while `bindRoutineWorker`'s own comment said "the check-in path
+     * fills it in" about a path that was never wired.
+     */
+    const account = await createAccount({ name: 'personal' });
+    const routine = await createRoutine({
+      accountId: account.id, routineRef: 'trig_one', name: 'one', tokenSecretName: 'FLEET_TEST_SECRET',
+    });
+    const binId = await readyBin();
+    await dispatchTick({ projectIds: [projectId], burst: 1 });
+
+    // Fired, and nothing has arrived: the pessimistic count is the honest one.
+    expect((await getRoutineByRef('trig_one'))!.consecutiveNoShows).toBe(1);
+
+    const worker = await createWorker({ name: 'w1', createdByType: 'SYSTEM', createdById: 'test' });
+    const assigned = await assignNextBin({ workerId: worker.id, projectIds: [projectId] });
+    expect(assigned?.bin.id).toBe(binId);
+
+    const after = (await getRoutineByRef('trig_one'))!;
+    expect(after.consecutiveNoShows).toBe(0);
+    expect(shouldQuarantine(after).quarantine).toBe(false);
+    // And the surface learned which identity its sessions authenticate as,
+    // observed rather than declared.
+    expect(after.workerId).toBe(worker.id);
+    void routine;
+  });
+
+  it('credits the arrival to the surface that was fired, not to the one that asked', async () => {
+    // Attribution comes from the dispatch row, never from the worker. A worker
+    // that belongs to another Routine must not clear this one's streak.
+    const one = await createAccount({ name: 'one' });
+    const two = await createAccount({ name: 'two' });
+    await createRoutine({
+      accountId: one.id, routineRef: 'trig_a', name: 'a', tokenSecretName: 'FLEET_TEST_SECRET',
+    });
+    const rb = await createRoutine({
+      accountId: two.id, routineRef: 'trig_b', name: 'b', tokenSecretName: 'FLEET_TEST_SECRET_2',
+    });
+    // Take b out so the fire can only go to a.
+    await setRoutineState({ routineId: rb.id, from: 'ENABLED', to: 'UNAVAILABLE', reason: 'held' });
+    await readyBin();
+    await dispatchTick({ projectIds: [projectId], burst: 1 });
+    expect((await getRoutineByRef('trig_a'))!.consecutiveNoShows).toBe(1);
+
+    const worker = await createWorker({ name: 'w1', createdByType: 'SYSTEM', createdById: 'test' });
+    await assignNextBin({ workerId: worker.id, projectIds: [projectId] });
+
+    expect((await getRoutineByRef('trig_a'))!.consecutiveNoShows).toBe(0);
+    expect((await getRoutineByRef('trig_a'))!.workerId).toBe(worker.id);
+    // b was never fired, so it has nothing to clear and nothing to bind.
+    expect((await getRoutineByRef('trig_b'))!.workerId).toBeNull();
+  });
+
+  it('credits nothing when a takeover follows a lease that expired', async () => {
+    // The intent at that generation belonged to the previous owner, and its
+    // session genuinely did not finish. Crediting it would erase the one signal
+    // that says so.
+    const account = await createAccount({ name: 'personal' });
+    await createRoutine({
+      accountId: account.id, routineRef: 'trig_one', name: 'one', tokenSecretName: 'FLEET_TEST_SECRET',
+    });
+    const binId = await readyBin();
+    await dispatchTick({ projectIds: [projectId], burst: 1 });
+    const first = await createWorker({ name: 'w1', createdByType: 'SYSTEM', createdById: 'test' });
+    await assignNextBin({ workerId: first.id, projectIds: [projectId] });
+    expect((await getRoutineByRef('trig_one'))!.consecutiveNoShows).toBe(0);
+
+    // The first worker dies. The lease lapses; a second worker takes over at a
+    // generation this Routine was never fired for.
+    await expireBinLease(binId);
+    await recordRoutineFire({ routineId: (await getRoutineByRef('trig_one'))!.id, ok: true });
+    const second = await createWorker({ name: 'w2', createdByType: 'SYSTEM', createdById: 'test' });
+    const takeover = await assignNextBin({ workerId: second.id, projectIds: [projectId] });
+    expect(takeover?.takeover).toBe(true);
+    expect((await getRoutineByRef('trig_one'))!.consecutiveNoShows).toBe(1);
   });
 
   it('still fires through the environment when nothing is registered yet', async () => {

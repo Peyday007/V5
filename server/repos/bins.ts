@@ -27,6 +27,7 @@
 import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
+import { bindRoutineWorker, recordRoutineCheckIn } from './fleet.ts';
 import type { BinConfinement } from './workQueue.ts';
 import type {
   Bin,
@@ -875,10 +876,51 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
         outcome: takeover ? 'TAKEOVER' : 'ASSIGNED',
       });
 
+      await creditDispatchArrival(row.id, row.lease_generation, input.workerId);
+
       return { bin, leaseId, leaseGeneration: nextGeneration, leaseExpiresAt: expires, takeover };
     }
   }
   return null;
+}
+
+/**
+ * The fired session arrived. Credit it to the surface that was fired.
+ *
+ * A no-show streak only means something if something clears it, and until this
+ * existed nothing did. Every successful fire advanced `consecutive_no_shows`
+ * and no production path ever recorded an arrival, so three fires at a
+ * perfectly healthy Routine made it a quarantine candidate — a health signal
+ * pointing the opposite way to reality. `bindRoutineWorker` said "the check-in
+ * path fills it in" about a check-in path that was never wired.
+ *
+ * Attribution is from the dispatch that produced this worker — the SENT intent
+ * at the generation this assignment has just superseded — and never from
+ * anything the worker said about itself. A body field naming a Routine would be
+ * the same mistake §19 already refuses for queue ownership.
+ *
+ * A takeover of an expired lease credits nothing, because the intent at *that*
+ * generation was the previous owner's and its session genuinely did not finish.
+ * The lookup finding no row is the ordinary case for a bin that was never
+ * dispatched at all, and it is silent on purpose.
+ */
+async function creditDispatchArrival(
+  binId: string,
+  leaseGeneration: number,
+  workerId: string,
+): Promise<void> {
+  const row = await getDb().get<{ routine_id: string | null }>(
+    `SELECT routine_id FROM bin_dispatch
+      WHERE bin_id = ? AND lease_generation = ? AND state = 'SENT' AND routine_id IS NOT NULL`,
+    [binId, leaseGeneration],
+  );
+  const routineId = row?.routine_id;
+  if (!routineId) return;
+  await recordRoutineCheckIn(routineId);
+  // Observed, not declared. Refused rather than re-pointed when the row already
+  // names a different identity; the operator's `bind-worker` is for that case
+  // and a silent overwrite here would hide it.
+  await bindRoutineWorker(routineId, workerId);
 }
 
 /* ------------------------------------------------------------------------- */
