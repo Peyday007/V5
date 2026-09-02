@@ -48,6 +48,7 @@ import { currentFragments, getOrchestration, updateFragment } from '../../repos/
 import { DEPENDENCY_DOOM_PREFIX, advancePacket } from './packetRunner.ts';
 import { dependencyKeys } from '../../domain/dependencies.ts';
 import { retryFragment } from './reissue.ts';
+import { TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { recordEvent } from '../../repos/events.ts';
 import type { AdvanceResult } from './packetRunner.ts';
 
@@ -143,8 +144,17 @@ export async function recoverFragmentAfterSurfaceChange(input: {
   const orchestration = await getOrchestration(input.orchestrationId);
   if (!orchestration) throw new SurfaceRecoveryRefused(['No such orchestration.']);
 
-  // (4) A finished packet's fragments are its provenance.
-  if (orchestration.status === 'COMPLETE' || orchestration.status === 'CANCELLED') {
+  /*
+   * (4) A finished packet's fragments are its provenance.
+   *
+   * Asked of `TERMINAL_ORCHESTRATION` rather than of a list written out here.
+   * The first version named COMPLETE and CANCELLED, which was the whole set on
+   * the day it was written and stopped being it the moment a packet could
+   * reach `COMPLETE_WITH_GAPS` — a state that files a report and is every bit
+   * as finished. Two lists of what "terminal" means drift, and the one that
+   * drifts here reopens a filed packet.
+   */
+  if (TERMINAL_ORCHESTRATION.has(orchestration.status)) {
     throw new SurfaceRecoveryRefused([
       `That packet is ${orchestration.status}. A terminal packet's fragments are the record of ` +
         'how it reached its answer, and are not restartable.',

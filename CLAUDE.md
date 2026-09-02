@@ -717,14 +717,37 @@ for somebody to say go.
 
 **Step 10 must implement and prove automatic worker activation or scheduling.**
 It has implemented it, and it has proven activation, draining, takeover,
-recovery and a measured concurrency ceiling. What it has not produced is a
-filed, audited document from real research — and the reason is the surface, not
-Brain: on the acceptance packet the worker's execution environment had no
-network egress to the primary sources, so the evidence gate refused its
-ungrounded claims, the fragment used its repair budget and was blocked with the
-reason recorded, and everything depending on it stayed queued. **A worker that
-cannot reach the sources is a worker that must produce nothing**, and that is
-what happened.
+recovery, a measured concurrency ceiling, and a filed and audited document from
+real research.
+
+That last one took two goes, and both are worth keeping. On the first, the
+worker's execution environment had no network egress to the primary sources, so
+the evidence gate refused its ungrounded claims, the fragment used its repair
+budget and was blocked with the reason recorded, and everything depending on it
+stayed queued. **A worker that cannot reach the sources is a worker that must
+produce nothing**, and that is what happened. The operator then opened the
+surface, and the *same* packet — not a replacement — ran to a filed report.
+
+Three rules came out of the second go, and they are the durable part:
+
+- **"Blocked" is four facts, and they lead to different actions.** The
+  environment refusing a host, the host refusing this client, a robots policy,
+  and a 5xx are not the same event. `SURFACE_PROBE_V1` makes a worker record
+  which one, per host, from a closed vocabulary — and **Brain does not judge
+  whether the probe succeeded**, only that a reading exists, because deciding
+  from a worker's prose whether a network is open would be model output as
+  state.
+- **A fragment blocked by the surface may be recovered; one blocked by its own
+  evidence may not.** `services/research/surfaceRecovery.ts` requires the
+  recorded reason to name a surface condition, refuses ordinary insufficiency by
+  name, requires a `RETRIEVED` probe reading dated *after* the block, raises the
+  attempt ceiling instead of resetting the counter, and refuses a terminal
+  packet outright. Every failed attempt keeps its row and its reason.
+- **The authorized source class is not the same thing as a reachable
+  publisher.** After the surface was open, `legislature.mi.gov` still answered
+  503 to automation on every attempt, so the statutory text came from mirrors of
+  the same MCL sections. The judge saw it and said so; it is recorded as
+  unresolved. Broadening the class was available and was not taken.
 
 **Brain now reaches out to Claude.** A bin becoming `READY` writes a durable
 dispatch intent, and a ten-second tick turns intents into a fire against the

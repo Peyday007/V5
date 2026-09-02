@@ -470,80 +470,186 @@ second backend has been the only thing that made a concurrency defect visible.
 
 ---
 
-## The real research packet — the machinery ran; the research could not
+## The real research packet — filed, audited, and short by one question
 
-This is the acceptance item Step 10 was told not to close without, and it needs
-two answers rather than one, because two different things were being tested and
-only one of them is Brain's.
+This is the acceptance item Step 10 was told not to close without, and the
+first version of this section said it did not pass. That was true when it was
+written and is not true now, so the correction is recorded here rather than
+quietly replacing what it corrects: **the block was the worker's network reach,
+the operator changed it, and the same packet then ran through to a filed,
+audited report.** No packet was recreated, no counter was reset, no evidence
+requirement moved, and every blocked attempt is still in the table.
 
-### What Brain did, end to end, with nobody involved
+### First: prove the surface changed, and say *which of four things* it did
+
+The old section had one word for the failure — "blocked" — and that word is four
+different facts wearing one label:
+
+| | what it means | what to do about it |
+|---|---|---|
+| `HOST_NOT_ALLOWED` | the worker's own environment refused the host outright | the surface is still closed; attempt nothing downstream |
+| `ORIGIN_REJECTED` | the host answered and refused this client | the surface is open; use another authorized publisher |
+| `ROBOTS_RESTRICTED` | the host's robots policy excludes automated retrieval | the surface is open; use another authorized publisher |
+| `OTHER_FAILURE` | DNS, TLS, a timeout, a 5xx | the surface is open; this publisher is not serving |
+| `RETRIEVED` | the document came back | research may proceed against that host |
+
+So `SURFACE_PROBE_V1` exists: a bin whose units are hosts and whose contract
+requires one reading per host from the closed vocabulary above. **Brain does not
+judge whether the probe succeeded** — a Brain that decided from a worker's prose
+whether a network was open would be reading model output as state. It requires
+only that a reading exists for every declared host, and the readings are then
+evidence a later guard can check.
+
+Fired at the same routine, against the same environment the research runs in:
+
+| host | why it is authorized | reading |
+|---|---|---|
+| `legislature.mi.gov` | Michigan Occupational Code (MCL) full text | `OTHER_FAILURE` — HTTP **503**, tunnel established |
+| `ars.apps.lara.state.mi.us` | Michigan Administrative Code / R rules | `RETRIEVED` — 200 |
+| `www.michigan.gov/lara` | published LARA guidance | `RETRIEVED` — 200 |
+
+That is the whole answer, and it is two answers rather than one. The
+environment is open — two Michigan government hosts answered from inside a
+fired Routine session, which is exactly what `HOST_NOT_ALLOWED` would have
+made impossible. And the one publisher that carries MCL full text returns 503
+to automation, which is a fact about that publisher rather than about the
+worker.
+
+### Then: recover the same packet, through the narrowest thing that could work
+
+Nothing in Brain could requeue a fragment blocked by an execution-surface
+failure. `retryFragment` refuses at `attempt > maxRepairs`, correctly — §15 says
+the honest outcome after a spent budget is "unresolved", not another attempt at
+the same question. But that rule is about *research* running out of ideas, and
+this fragment never got to have an idea: it was refused a network.
+
+`services/research/surfaceRecovery.ts` is the whole of the new mechanism, and
+what makes it safe is what it refuses:
+
+- the packet must not be terminal, so a completed one can never be reopened;
+- the fragment must be `BLOCKED`;
+- its **recorded** reason must name a surface condition. Ordinary research
+  insufficiency is refused *by name* — "did not support the claims", "no
+  accepted evidence", "insufficient" — so this cannot become a way to re-run
+  research until it passes;
+- a `SURFACE_PROBE_V1` bin must be `COMPLETE` and carry a `RETRIEVED` reading
+  recorded **after** the fragment was blocked. A probe from before the block
+  proves nothing about the change;
+- the attempt counter is never reset. The **ceiling** is raised, to
+  `attempt + grant`, so the history reads `3/4` rather than `1/2` — the two
+  failed attempts remain in the table with their `EGRESS_BLOCKED` reasons;
+- the new attempt is delegated to `retryFragment`, so it inherits every
+  declaration, requirement and evidence bar verbatim;
+- only the affected fragment is requeued. Dependents are restored only when
+  *every* dependency of theirs is live again — an early version restored a
+  dependent while a `HARD` dependency was still blocked, and its own test
+  caught it;
+- and it records `RESEARCH_SURFACE_RECOVERY` on the append-only event log.
+
+Fifteen tests, most of them attempts to get a recovery that should be refused,
+on both backends.
+
+The bin's attempt budget had been spent by the pre-fix failures — 13 of its 25
+attempts were the egress condition — so the existing guarded regrant was used
+and its reason recorded. The regrant's reason had been a hardcoded string
+naming a Brain-side confinement defect, which was true of an earlier bin and
+false of this one; it is now a closed set of reason codes, because a budget
+restored "because of a defect" that was really "because the network was shut"
+is a false row in the only record of why.
+
+### What Brain then did, with nobody involved
 
 ```
-21:31:11  regrant 12→25          the operator restores a budget two defects spent
-21:31:2x  DISPATCH_INTENT        ten-second tick, no person
-21:3x     BIN_ASSIGNED           worker takes the bin
-21:3x     BIN_ITEM_CLAIMED       and the packet's RESEARCH_PLAN with it
-          RESEARCH_PLAN SUCCEEDED
-          → advancePacket → planFitsEnvelope → RESEARCH_PLAN_SYSTEM_APPROVED
-            SYSTEM:STEP10_MICHIGAN_LICENSING_V1@2026-09-01.2
-          → 4 fragments QUEUED, 2 RESEARCH_FRAGMENT items minted
-          RESEARCH_FRAGMENT SUCCEEDED    licence-trigger researched, 2 claims stored
-          RESEARCH_VERIFY   SUCCEEDED    the verification pass ran
+licence-trigger   attempt 3/4   ACCEPTED   integrity PASS   sufficiency SUFFICIENT
+real-property-condition  1/2    ACCEPTED   PASS   SUFFICIENT
+exemption-inclusion      1/2    ACCEPTED   PASS   SUFFICIENT
+consequences             1/2    ACCEPTED   PASS   SUFFICIENT
+
+claims      10 stored, 8 accepted
+work items  16 — 1 PLAN, 6 FRAGMENT (5 SUCCEEDED, 1 FAILED: the superseded
+            attempt's stale item, third defect below), 5 VERIFY, 1 SYNTHESIZE,
+            3 AUDIT; claimable 0
+audit       aud_0edfb365289248aea8e1
+  role ordinal 5 (PRIMARY)      COMPLETE  2026-09-01T23:59:05.930Z
+  role ordinal 6 (ADVERSARIAL)  COMPLETE  2026-09-02T00:02:04.804Z
+  role ordinal 7 (JUDGE)        COMPLETE  2026-09-02T00:03:45.541Z
+document    Monetization Logic v1C — doc_397f2b87142743b4bb2e
+            20,455 bytes in the bucket, read back; extraction READY, 20,171 chars
 ```
 
-Every step of that is the thing Step 10 exists to do, and no person did any of
-it. The packet went from `NEEDS_HUMAN` to `RESEARCHING` on a boot sweep, by
-re-reading rows, and queued its own research.
+Every declared evidence lane is tagged, no claim is untagged, and the four
+mandatory requirements each have an accepted fragment behind them. Two claims
+of the ten were rejected at the gate and stay rejected with their reasons —
+acceptance is decided once, at the gate, and nothing re-enters through a later
+synthesis.
 
-### What the evidence engine did when the research could not be grounded
+### Two defects the *end* of the packet found
 
-```
-claims      2 stored, 0 accepted
-licence-trigger   BLOCKED   attempt 2/2
-  because   This is not a search-strategy failure; it is an access-refused
-            condition in this worker's execution environment…
-real-property-condition   QUEUED   deps [licence-trigger:HARD]
-exemption-inclusion       QUEUED   deps [licence-trigger:HARD, real-property-condition:HARD]
-consequences              QUEUED   deps [licence-trigger:HARD]
-```
+Both were invisible until a packet got this far, which is the argument for
+running a real one.
 
-**The worker could reach Brain and could not reach the sources.** Eight
-consecutive activations released the bin naming the same cause in their own
-words — `EGRESS_BLOCKED`, with `legislature.mi.gov` named as confirmed
-unreachable. Those are worker-authored strings and are treated as such; what
-makes the diagnosis Brain's rather than the worker's is the row above it. Brain
-stored the two claims the fragment produced, ran its verification pass, and
-**accepted neither**, because a claim with no reachable primary source cannot
-satisfy the seven conditions. It then spent the fragment's whole repair budget —
-`attempt 2/2`, a different strategy each time, per §15 — and blocked it with the
-reason recorded.
+**The verdict's meaning was derived once and never again.** `outcomeFor` is a
+pure function of the verdict, whether any fragment is still repairable, and
+whether a person has authorized this packet to record unresolved gaps — and the
+last of those is, by design, given *afterwards*, by a named administrator, to a
+packet that stopped in order to ask for it. It was evaluated only inside
+`brain_submit_audit`. So the packet sat at `NEEDS_HUMAN` saying it needed an
+authorization, and granting the authorization would have done nothing at all:
+nothing re-read it, and no other branch of the runner can move a packet whose
+fragments are all accepted and whose three audit roles are all in. **A state
+that says "waiting for a person" and cannot be resolved by that person is not
+waiting; it is stuck** — the same failure the empty-queue guard exists to
+prevent one level down. The advance now re-derives it from current rows.
 
-So the gate did the one thing it exists for: **faced with research it could not
-ground, it produced nothing rather than something.** No invented citation, no
-lowered bar, no fragment quietly passed. The three dependent fragments are
-`QUEUED` behind a `HARD` dependency and will stay there, which is also correct:
-a packet whose foundational fragment is blocked must not synthesise around it.
+**`RESEARCH_PACKET_V1` accepted only `COMPLETE`.** `COMPLETE_WITH_GAPS` is a
+terminal state of the same runner, over a packet that filed a real report and
+was audited by all three roles. Refusing it is precisely the failure this step's
+own plan named in advance — *"a bin that drains but cannot terminalize because a
+contract is stricter than the work path can satisfy"* — and an unattended fleet
+would have bounced a worker off that bin on every activation, forever, for a
+packet that was already over. Every other clause of the contract is unchanged
+and still applies: the document must exist, have bytes, be judged by an audit,
+and leave no work item open. `FAILED`, `CANCELLED` and `NEEDS_HUMAN` still
+complete nothing.
 
-### Which half of the split this is
+A third, smaller one, and this packet paid for it directly: `retryFragment`
+superseded the failed attempt's *row* correctly and left its *work item*
+queued, so a worker was dispatched at an attempt that no longer existed and
+failed — one activation out of a routine's hourly fire budget, which this step
+measured as the scarce resource. The superseded item is now cancelled, which
+also advances its lease generation, so a late completion from the old owner
+matches nothing.
 
-The same split this step already established, at a new boundary:
+### Where it stopped, and why that is the honest end
 
-> **Brain owns dispatch. The surface owns whether a worker may act.**
+The judge returned **`MORE_RESEARCH`** with seven gaps: one
+`TARGETED_RESEARCH_GAP` (MCL 339.601's section title includes "Injunctive
+Relief", and only its misdemeanour clauses were quoted and verified), two
+`PATCH` findings about overstated certainty, and four `NO_GAP` observations.
+With every fragment accepted there was nothing repairable, so the packet had
+exactly two readings available to it, and which one applied turned on an
+authorization no machine may grant itself. The operator granted it, and the
+packet is **`COMPLETE_WITH_GAPS`**: filed, audited, terminal, and honestly
+short of one question — with the question itself on the record rather than
+rounded away.
 
-Step 10's first blocker was the surface's *permission* to call the connector,
-fixed by a checked-in settings file and a routine that checks the repository
-out. This one is the surface's *network reach*, and it is the operator's in
-exactly the same way. No amount of Brain-side code substitutes for it, and the
-two obvious workarounds are both forbidden: relaxing the fragment's source types
-would admit secondary sources the assignment excludes, and relaxing the gate
-would be §12 and §14 abandoned to make a report appear.
+It is not `COMPLETE`, and saying so is the point. `COMPLETE` means the judge
+advanced it, and this judge did not.
 
-**So this acceptance item does not pass, and Step 10 is not closed.** What is
-proven is that the whole chain from "a bin became ready" to "Brain refused
-ungrounded evidence" runs unattended and correctly. What is unproven is a filed,
-audited document — and it will stay unproven until a worker surface that can
-reach published primary sources runs the same packet, which needs no change to
-anything in this repository.
+### The source that would not be served
+
+The judge's third gap is worth repeating in full, because it is the one finding
+here that is about the world rather than about Brain: *all statutory text was
+sourced to third-party mirrors after `legislature.mi.gov` failed (503) on every
+attempt across the entire research trail.*
+
+The probe explains it and does not excuse it. Of the Michigan government
+endpoints the assignment authorizes, the two that answer — the Administrative
+Rules service and LARA's publications — do not publish MCL full text, and the
+one that does refuses automation. So the authorized source *class* was honoured
+and the authoritative *publisher* was not reachable, and that gap is recorded
+as unresolved rather than papered over. Broadening the class was available and
+was not taken.
 
 ## What is NOT proven
 
@@ -703,10 +809,15 @@ over-provisions it.
 
 ### Production proofs still outstanding
 
-- a **filed, audited document** from the real research bin. Everything Brain
-  owns ran; the worker surface has no egress to the primary sources, so the
-  evidence gate correctly produced nothing. Needs a worker surface that can
-  reach published sources, and no change to this repository.
+- ~~a **filed, audited document** from the real research bin~~ — **done.** The
+  first attempt produced nothing because the worker surface had no egress to
+  the primary sources and the gate correctly refused ungrounded claims. The
+  operator opened the surface; a probe bin proved it from inside a fired
+  session; a guarded recovery gave the one blocked fragment a further attempt
+  without resetting its counter; and the same packet filed
+  `doc_397f2b87142743b4bb2e` (20,455 bytes, extraction READY) with all three
+  audit roles complete. It ended `COMPLETE_WITH_GAPS`, not `COMPLETE`, because
+  its judge asked for one more thing and no fragment was repairable.
 - ~~worker death and takeover in production~~ — **done**, see above: two
   unforced takeovers, and the bin that exposed the dispatch defect finished at
   `attempt 3/3 gen 4`.

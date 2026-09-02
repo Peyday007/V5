@@ -100,11 +100,14 @@ So the split still holds, with its terms now known:
 - **The surface's half is a configuration Brain cannot make** — a checked-out
   repository and a settings file, both the operator's to set.
 
-**CF-8 is untouched and still open.** Live token refresh is unverified; nothing
-has observed a token expiring and being renewed mid-packet. Refresh tokens are
-issued for thirty days and the rotation grant is implemented and tested, but
-nothing has exercised it against a real surface. Harmless for a bounded session;
-decide it before anything runs unattended for long.
+**CF-8 is answered — see the disposition below.** Its requirement, as Step 8
+wrote it, was to *decide it before anything runs unattended*, and Step 10 owns
+that decision. It is now decided from rows rather than from confidence:
+`npm run step10 -- cf8` reads whether any ACCESS token carries a
+`parent_token_id` — meaning it was minted by a refresh rather than by an
+authorization code — and whether such a token was then *used*. That pair is the
+whole claim, and it needs no new instrumentation because Step 8 already recorded
+it.
 
 **The concurrency ramp has run**, and this paragraph used to say it had not.
 Six rungs — 1, 2, 5, 10, 20, 30 — measured on an unblocked fleet, with the
@@ -122,6 +125,21 @@ and resumed by itself when the window reopened. So a throttled fleet loses
 throughput rather than work, and the remedy for more capacity is more routines
 rather than more allowance. **The recommended ceiling is 10 concurrent bins on
 one routine**, with the full measurements in [STEP-10-EVIDENCE.md](STEP-10-EVIDENCE.md).
+
+**The real research packet is filed and audited.** This section, and the
+evidence file, previously said the acceptance item did not pass because the
+worker's execution surface had no egress to the primary sources. The operator
+opened it; a `SURFACE_PROBE_V1` bin proved from inside a fired Routine session
+which of four different things "blocked" had meant; a guarded recovery gave the
+one fragment a further attempt without resetting its counter or erasing its
+failure history; and the same packet — `orc_9b2965e776bb4de7ab9f`, no
+replacement — ran through research, verification, synthesis, all three audit
+roles and filing.
+
+It ended `COMPLETE_WITH_GAPS` rather than `COMPLETE`, which is the honest word:
+its judge returned `MORE_RESEARCH` over one targeted question, no fragment was
+repairable, and a named administrator authorized the packet to record what it
+was short of. `COMPLETE` means the judge advanced it, and this judge did not.
 
 An unattended worker has completed bins end to end and a fleet of ten has been
 measured, so "Brain runs a worker" and "Brain runs a fleet of ten on one

@@ -43,6 +43,7 @@ import {
   SurfaceRecoveryRefused,
 } from '../server/services/research/surfaceRecovery.ts';
 import { listEvents } from '../server/repos/events.ts';
+import { TERMINAL_ORCHESTRATION } from '../server/services/research/outcome.ts';
 import type { BinManifest } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -447,20 +448,32 @@ describe('recovery requires evidence the surface actually changed', () => {
 /* ========================================================================= */
 
 describe('what recovery refuses on principle', () => {
-  it('refuses a terminal packet', async () => {
-    const orchestrationId = await blockedPacket();
-    const probeBinId = await makeProbe({ 'https://a.example': 'RETRIEVED 200 ok' });
-    await updateOrchestration(orchestrationId, { status: 'COMPLETE' });
+  it('refuses every terminal packet, not the two that were terminal first', async () => {
+    /*
+     * The guard names `TERMINAL_ORCHESTRATION` rather than a list of its own.
+     * The first version listed COMPLETE and CANCELLED, which was the whole set
+     * the day it was written and stopped being it the moment a packet could
+     * reach COMPLETE_WITH_GAPS — a state that files a report and is every bit
+     * as finished. This asserts the whole set so the two cannot drift apart
+     * again.
+     */
+    for (const status of [...TERMINAL_ORCHESTRATION] as const) {
+      const orchestrationId = await blockedPacket();
+      const probeBinId = await makeProbe({ 'https://a.example': 'RETRIEVED 200 ok' });
+      await updateOrchestration(orchestrationId, {
+        status: status as Parameters<typeof updateOrchestration>[1]['status'],
+      });
 
-    await expect(
-      recoverFragmentAfterSurfaceChange({
-        fragmentKey: 'licence-trigger',
-        orchestrationId,
-        probeBinId,
-        reason: 'x',
-        actor: { type: 'SYSTEM', id: 'test' },
-      }),
-    ).rejects.toThrow(/terminal packet/i);
+      await expect(
+        recoverFragmentAfterSurfaceChange({
+          fragmentKey: 'licence-trigger',
+          orchestrationId,
+          probeBinId,
+          reason: 'x',
+          actor: { type: 'SYSTEM', id: 'test' },
+        }),
+      ).rejects.toThrow(/terminal packet/i);
+    }
   });
 
   it('refuses a fragment that is not blocked', async () => {
