@@ -274,7 +274,31 @@ export async function dispatchTick(
       const spent = snapshot.candidates.find((c) => c.routine.id === decision.routine.id);
       if (spent) {
         spent.routineInFlight += 1;
-        spent.routine = { ...spent.routine, fireGeneration: spent.routine.fireGeneration + 1 };
+        /*
+         * The generation *and* the fire time.
+         *
+         * The generation keeps the next iteration's claim honest. `lastFiredAt`
+         * is what keeps the next iteration's *choice* honest, and leaving it
+         * stale was a real gap: `relativeHeadroom` returns the same number for
+         * two surfaces with no configured target, so the whole decision falls to
+         * the least-recently-fired tiebreak — which, read once at the top of the
+         * tick, named the same surface for every iteration. A burst of four
+         * across two idle accounts went four-nil instead of two-two.
+         *
+         * Observed in production before it was reasoned about: with no account
+         * targets set, one batch went entirely to one account and the next
+         * batch entirely to the other, alternating per tick rather than
+         * spreading within one.
+         *
+         * Account targets bound this and were the right fix for the ceiling.
+         * They are not a fix for the fairness, because a fleet may legitimately
+         * run with no targets at all.
+         */
+        spent.routine = {
+          ...spent.routine,
+          fireGeneration: spent.routine.fireGeneration + 1,
+          lastFiredAt: new Date().toISOString(),
+        };
       }
       for (const sibling of snapshot.candidates) {
         if (sibling.account.id === decision.account.id) sibling.accountInFlight += 1;

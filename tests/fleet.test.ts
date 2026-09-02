@@ -883,6 +883,36 @@ describe('a burst spends the headroom it measured, once', () => {
     expect((await getRoutineByRef('trig_b'))!.totalFires).toBe(1);
   });
 
+  it('alternates within one burst instead of piling onto whichever fired first', async () => {
+    /*
+     * Two idle accounts, no targets anywhere, four bins, one burst.
+     *
+     * `relativeHeadroom` returns the same number for two surfaces with no
+     * configured target, so the whole decision falls to the least-recently-fired
+     * tiebreak. Read once at the top of the tick and never advanced, that named
+     * the same surface for every iteration and sent all four to one account.
+     *
+     * Seen in production first: with no account targets set, one batch went
+     * entirely to one account and the next batch entirely to the other. Account
+     * targets bound the ceiling and are the right control for that, but they are
+     * not a fairness fix — a fleet may legitimately run with no targets at all.
+     */
+    const one = await createAccount({ name: 'one' });
+    const two = await createAccount({ name: 'two' });
+    await createRoutine({
+      accountId: one.id, routineRef: 'trig_a', name: 'a', tokenSecretName: 'FLEET_TEST_SECRET',
+    });
+    await createRoutine({
+      accountId: two.id, routineRef: 'trig_b', name: 'b', tokenSecretName: 'FLEET_TEST_SECRET_2',
+    });
+    for (let i = 0; i < 4; i += 1) await readyBin();
+
+    const tick = await dispatchTick({ projectIds: [projectId], burst: 4 });
+    expect(tick.fired).toBe(4);
+    expect((await getRoutineByRef('trig_a'))!.totalFires).toBe(2);
+    expect((await getRoutineByRef('trig_b'))!.totalFires).toBe(2);
+  });
+
   it('routes around an account the operator took out mid-fleet', async () => {
     const one = await createAccount({ name: 'one' });
     const two = await createAccount({ name: 'two' });

@@ -285,7 +285,30 @@ async function main(): Promise<void> {
         (fleetPolicy?.boostUntil && fleetPolicy.boostUntil > now ? ` (boosted until ${fleetPolicy.boostUntil})` : ''),
     );
     console.log(`  in flight   ${snapshot.fleetInFlight}`);
-    console.log(`  candidates  ${snapshot.candidates.length} routable now`);
+    /*
+     * "Considered", not "routable".
+     *
+     * `fleetSnapshot` builds the candidate list from registration and secret
+     * presence; whether a candidate may actually take work is decided inside
+     * `routeBin`, against account state, Routine state and retry_at. This line
+     * used to say "routable now" and printed 2 while an account was
+     * UNAVAILABLE and could take nothing — a report overstating what the fleet
+     * could do, which is the one thing this step is least allowed to do.
+     *
+     * The eligible count is computed the same way the router computes it, by
+     * asking the router.
+     */
+    const eligible = snapshot.candidates.filter((candidate) => {
+      const probe = routeBin({
+        bin: { id: 'probe', requiredCapabilities: [] } as never,
+        candidates: [candidate],
+        fleetPolicy: null,
+        fleetInFlight: 0,
+        now,
+      });
+      return probe.ok;
+    }).length;
+    console.log(`  candidates  ${snapshot.candidates.length} considered, ${eligible} eligible now`);
     if (snapshot.missingSecrets.length > 0) {
       for (const miss of snapshot.missingSecrets) {
         console.log(`  MISSING SECRET  ${miss.routineId} expects ${miss.secretName}`);

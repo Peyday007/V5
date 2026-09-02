@@ -260,7 +260,93 @@ lowercase `--kind account`, which is the form this document's runbook names.
 
 ---
 
+### The second account, and what it proved
+
+`friend-2` / `V2` on `trig_01HR74Tm…`, secret `BRAIN_ROUTINE_TOKEN_2`, digest
+`c5b7f5592cd6…` — **distinct from V1's `dfe19a3cfd02…`**, which is the check
+that makes "two accounts" a fact rather than one credential registered twice.
+
+Registration was refused twice before that, correctly, because the secret was
+not yet in the deployment: a row pointing at an absent secret would be a Routine
+that looks routable and spends a fire discovering it is not.
+
+| | | |
+|---|---|---|
+| **L2** second account fires | `fires=6 refusals=0 no-shows=0` on V2 | PASS |
+| **L3** distribution | four bins split **2/2** — V1 10→12, V2 4→6 — bounded by per-account targets of 2 | PASS |
+| **L4** failover | `primary`→UNAVAILABLE, two bins **both** to V2 (4→6), V1 held at 12; restored to ENABLED | PASS |
+| **L5** target raise, no deploy | FLEET — → 2 → 4, plus ACCOUNT targets, all policy INSERTs | PASS |
+| **L6** boost and expiry | `target=8 until=22:11:59 version=3 base=4` | PASS |
+| **L8** additional Routine | V2 registered into a *running* fleet and took work on the next tick | PASS |
+
+The policy table is the audit trail it was meant to be:
+
+```
+v3  target=4  boost=8 until 2026-09-02T22:11:59.726Z  operator:fleet-cli: Boost to 8 …
+v2  target=4  boost=—                                  operator:fleet-cli: L5 raise ceiling to four …
+v1  target=2  boost=—                                  operator:fleet-cli: Step 11 baseline ceiling …
+```
+
+The base target stays 4 underneath the boost, and the boost lapses by being
+compared to the clock — nothing runs to revert it.
+
+### A fairness gap the two-account run exposed
+
+Before the per-account targets were set, a burst of four across two idle
+accounts went **four-nil**, and the next batch went four-nil the other way.
+Alternating per tick rather than spreading within one.
+
+`relativeHeadroom` returns the same number for two surfaces with no configured
+target, so the whole decision falls to the least-recently-fired tiebreak — and
+that was read once at the top of the tick and never advanced, so it named the
+same surface for every iteration of the burst. The in-burst accounting was
+updating `fireGeneration` and `routineInFlight` but not `lastFiredAt`.
+
+Account targets bound the ceiling and are the right control for *that*. They are
+not a fix for the fairness, because a fleet may legitimately run with no targets
+at all. Fixed by advancing `lastFiredAt` in the local snapshot too, with a test
+that a four-bin burst across two untargeted accounts lands 2/2.
+
+### `fleet show` was overstating the fleet
+
+It printed `candidates 2 routable now` while `primary` was UNAVAILABLE and could
+take nothing. `fleetSnapshot` builds the candidate list from registration and
+secret presence; *routability* is decided inside `routeBin` against account
+state, Routine state and `retry_at`. The line now reports
+`N considered, M eligible now`, with the eligible count obtained by asking the
+router rather than by a second implementation of its rules.
+
+---
+
 ## 5. What is not claimed
+
+### S19 — audit independence is not enforced anywhere
+
+`services/research/independence.ts` is correct, and it is proven on both
+backends: self-audit refused, PRIMARY/ADVERSARIAL session sharing refused,
+SESSION passing where ACCOUNT fails, unrecorded lineage counted as a violation.
+
+**It has no caller.** `grep` across `server/` returns the module and nothing
+else. `startPass` takes no lineage and never writes `executor_worker_id`,
+`executor_routine_id`, `executor_account_id` or `executor_session_ref`, so those
+four columns are empty in every row, and no completion path consults them.
+
+This document previously marked S19 as passed on the strength of its test file.
+That was wrong, and it is the failure mode this whole step is written against: a
+control that exists, is tested, and is not connected is not a control. The
+matrix now reads FAIL.
+
+L9 and L10 are blocked by it rather than by provisioning — with no lineage
+recorded, there is nothing for a judge to be independent *of*.
+
+The remedy is bounded and the capture point already exists:
+`server/mcp/researchTools.ts` `recordPass` is handed the `workerId` of the
+submitting worker, and the worker resolves to a Routine and an account through
+the same `bin_dispatch` row the arrival crediting already uses. What is missing
+is passing that lineage into `startPass`, and calling `checkIndependence` before
+a JUDGE pass is accepted.
+
+
 
 **Cross-account routing on two subscription accounts is not proven.** One
 account is registered. Everything the router does about accounts — failover,

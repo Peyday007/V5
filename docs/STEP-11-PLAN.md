@@ -104,7 +104,7 @@ them.
 | S16 | PASS | Health responses proportional; quarantine and guarded recovery | health + test |
 | S17 | PASS | No breaker deletes history or resets attempts downward | inversion |
 | S18 | PASS | Independent work runs in parallel; dependent work waits on prerequisites | packet runner + test |
-| S19 | PASS | Audit independence enforced by lineage; completion refuses a violation | independence policy + inversion |
+| S19 | **FAIL** | Audit independence enforced by lineage; completion refuses a violation | `services/research/independence.ts` is correct and tested on both backends and **has no caller**. `startPass` never writes the four `executor_*` columns, so the lineage is never recorded and nothing is ever refused on it. Marked PASS earlier on the strength of the tests; that was wrong. |
 | S20 | PASS | Workload profiles attribute cost to idea, class and policy version | profile report; live `medianActivationMs=21487`, `unknowns=[]` |
 | S21 | PASS | Simulation covers 5/10/20/30/50, the live fleet, and larger parameters | deterministic replay; run live, `trace_00135272_1` |
 | S22 | PASS | Simulated output structurally distinct and never production evidence | label + test |
@@ -119,15 +119,15 @@ them.
 | # | Condition | Needs |
 |---|---|---|---|
 | L1 | PASS | Historically working Routine still fires | `fires=4 refusals=0` through the registry; full trace in STEP-11-EVIDENCE.md |
-| L2 | OPEN | A second subscription account with at least one Routine checks in | **human provisioning** |
-| L3 | OPEN | Two bins route without fixed pairing across accounts | L2 |
-| L4 | OPEN | Disabling one surface routes new work to the other; re-enabling restores it | L2 |
-| L5 | PARTIAL | Raising the target through policy increases dispatch with no deploy | target set live from unset to 2 by a policy INSERT, no deploy; the *increase* was not isolated |
-| L6 | NOT RUN | Boost raises then reverts | L1 |
+| L2 | PASS | A second subscription account with at least one Routine checks in | `friend-2` / `V2` on `trig_01HR74Tm…`, digest `c5b7f5592cd6…` distinct from V1's `dfe19a3cfd02…`; fires=6 refusals=0 no-shows=0 |
+| L3 | PASS | Two bins route without fixed pairing across accounts | four bins split 2/2 across `primary` and `friend-2` (V1 10→12, V2 2→4) under per-account targets of 2 |
+| L4 | PASS | Disabling one surface routes new work to the other; re-enabling restores it | `primary`→UNAVAILABLE, two bins both to V2 (4→6) with V1 held at 12; then restored to ENABLED |
+| L5 | PASS | Raising the target through policy increases dispatch with no deploy | FLEET — → 2 → 4 (versions 1, 2) and ACCOUNT targets of 2 each, all policy INSERTs, no deploy; the raise to 4 is what let a burst of four fire at once |
+| L6 | PASS | Boost raises then reverts | `boost target=8 until=22:11:59 version=3 base=4` — the base target is untouched at 4 and the boost lapses by clock comparison, with nothing running to revert it |
 | L7 | PASS (Step 10) | One activation drains a bin and asks for another | Step 10 rung 20: 20 bins from 13 activations. Step 11's four bins each took one activation, so this run does not re-prove it |
-| L8 | NOT RUN | Registering an additional Routine makes it eligible with no code change | one Routine registered into an empty registry; a second was not added |
-| L9 | OPEN | PRIMARY and ADVERSARIAL run concurrently through different accounts | L2 |
-| L10 | OPEN | JUDGE runs after both, on independent lineage; same-session lineage refused | L2 |
+| L8 | PASS | Registering an additional Routine makes it eligible with no code change | V2 registered into a running fleet and took work on the next tick; no deploy, no restart, no code change |
+| L9 | **BLOCKED** | PRIMARY and ADVERSARIAL run concurrently through different accounts | blocked by S19, not by provisioning: there is no lineage recorded to be independent *of* |
+| L10 | **BLOCKED** | JUDGE runs after both, on independent lineage; same-session lineage refused | blocked by S19 |
 
 ### The one design change the tests forced
 
