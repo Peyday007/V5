@@ -202,6 +202,30 @@ async function evaluateDeterministicUnits(bin: Bin): Promise<ContractVerdict> {
  * "the row says COMPLETE" and "the bytes are in the store" is exactly the
  * difference §9 draws between a document existing and having been read.
  */
+/**
+ * The packet states in which a report has actually been filed.
+ *
+ * `COMPLETE` alone was wrong, and it was wrong in the exact way Step 10's own
+ * plan predicted: "a bin that drains but cannot terminalize because a contract
+ * is stricter than the work path can satisfy". `COMPLETE_WITH_GAPS` is a
+ * terminal state of the packet runner — the judge asked for more, the run had
+ * nothing left to attempt, a person had authorized the packet to declare that,
+ * and the report was filed and audited anyway. Every other clause below still
+ * applies to it unchanged: the document must exist, it must have bytes, an
+ * audit must have judged it, and no work item may still be open.
+ *
+ * Refusing it would mean an honestly short packet could never finish its bin,
+ * so an unattended fleet would bounce a worker off that bin on every
+ * activation, forever, for a packet that is already over. The contract's job is
+ * to establish that the packet reached its own terminal state and filed
+ * something readable — not to re-judge the verdict, which §8 gives to the
+ * judge and this module must not take back.
+ *
+ * `FAILED`, `CANCELLED` and `NEEDS_HUMAN` are deliberately absent: none of them
+ * files a report, so none of them may complete a bin.
+ */
+const PACKET_FILED: ReadonlySet<string> = new Set(['COMPLETE', 'COMPLETE_WITH_GAPS']);
+
 async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
   const orchestrationId = bin.orchestrationId;
   if (!orchestrationId) {
@@ -252,10 +276,11 @@ async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
     );
   }
 
-  if (orchestration.status !== 'COMPLETE') {
+  if (!PACKET_FILED.has(orchestration.status)) {
     reasons.push(
-      `The packet is ${orchestration.status}, not COMPLETE. A bin is terminal when its packet is, ` +
-        'and the packet runner decides that from its own fragments, verdicts and audits.',
+      `The packet is ${orchestration.status}, which is not a state it files a report in. A bin is ` +
+        'terminal when its packet is, and the packet runner decides that from its own fragments, ' +
+        'verdicts and audits.',
     );
   }
   if (open.length > 0) {
@@ -310,11 +335,11 @@ async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
 
   if (reasons.length > 0) {
     // A packet that is still running is work in progress; one that has gone
-    // terminal in a state that is not COMPLETE cannot be fixed by this worker.
-    const terminal = ['COMPLETE', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN'].includes(
+    // terminal without filing cannot be fixed by this worker.
+    const terminal = ['COMPLETE', 'COMPLETE_WITH_GAPS', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN'].includes(
       orchestration.status,
     );
-    return refuse(terminal && orchestration.status !== 'COMPLETE' ? 'HUMAN' : 'RETRY', reasons, observed);
+    return refuse(terminal && !PACKET_FILED.has(orchestration.status) ? 'HUMAN' : 'RETRY', reasons, observed);
   }
   return satisfied(observed);
 }

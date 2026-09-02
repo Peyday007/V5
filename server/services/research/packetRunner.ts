@@ -40,8 +40,9 @@
  */
 import { getApprovalEnvelope, planFitsEnvelope } from './approvalEnvelope.ts';
 import { dependencyKeys } from '../../domain/dependencies.ts';
-import { repairable, TERMINAL_ORCHESTRATION } from './outcome.ts';
+import { outcomeFor, repairable, TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { bundleKeyFor } from './bundling.ts';
+import { AUDIT_VERDICTS } from '../../domain/types.ts';
 import type {
   ResearchClaim,
   ResearchFragment,
@@ -68,6 +69,7 @@ import { listCoverage, overrideCoverage, upsertCoverage } from '../../repos/reco
 import { cancelWork, enqueueWork, listWorkItems } from '../../repos/workQueue.ts';
 import { workType, AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { recordEvent } from '../../repos/events.ts';
+import { recomputeProject } from '../stateEngine.ts';
 
 /** A fragment that has finished, whatever its verdict. */
 const TERMINAL_FRAGMENT = new Set(['ACCEPTED', 'BLOCKED', 'REJECTED', 'CANCELLED']);
@@ -1550,14 +1552,85 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     return { orchestrationId, status: 'AUDITING', enqueued, waitingOn: null };
   }
 
-  // All three roles have run. The judge's own submission recorded the audit and
-  // set the orchestration COMPLETE, so reaching here means it did not — which is
-  // a state a person should look at rather than one to advance past.
+  // All three roles have run.
+  //
+  // The column is a plain string, so it is checked against the closed set
+  // rather than asserted into it: a value this build does not define must not
+  // be handed to `outcomeFor`, where anything unrecognised would silently take
+  // the non-advancing branch and read as a decision nobody made.
+  const verdict = AUDIT_VERDICTS.find((value) => value === orchestration.verdict) ?? null;
+  if (!verdict || !orchestration.auditId) {
+    // The judge's own submission records the audit and sets the outcome, so
+    // reaching here without one means it did not — a state a person should look
+    // at rather than one to advance past.
+    return {
+      orchestrationId,
+      status: orchestration.status,
+      enqueued: [],
+      waitingOn: 'the judge to record a verdict',
+    };
+  }
+
+  /**
+   * What the verdict means for the packet, re-derived from the rows as they
+   * are now rather than as they were the instant the judge submitted.
+   *
+   * `outcomeFor` is a pure function of three things: the verdict, whether any
+   * fragment is still repairable, and whether a person has authorized this
+   * packet to record unresolved gaps. Two of those can legitimately change
+   * *after* the verdict — a fragment can become repairable again (a surface
+   * recovery does exactly that), and the authorization is by design given
+   * afterwards, by a named administrator, to a packet that stopped to ask for
+   * it.
+   *
+   * It was evaluated once, at submission, and never again. So the packet this
+   * step was built around stopped at NEEDS_HUMAN saying it needed an
+   * authorization, and granting the authorization did nothing at all: nothing
+   * re-read it, and no other branch of the runner can move a packet whose
+   * fragments are all accepted and whose three audit roles are all in. A state
+   * that says "waiting for a person" and cannot be resolved by that person is
+   * not waiting; it is stuck, which is what the empty-queue guard above exists
+   * to prevent one level down.
+   *
+   * Re-deriving is safe precisely because the function is pure and the runner
+   * is idempotent: the same rows give the same outcome, so an advance that
+   * changes nothing writes nothing. It re-judges no evidence and overrides no
+   * verdict — §8 gives the verdict to the judge and this does not take it back.
+   */
+  const outcome = outcomeFor({ verdict, orchestration, fragments });
+  if (outcome === orchestration.status) {
+    return {
+      orchestrationId,
+      status: orchestration.status,
+      enqueued: [],
+      waitingOn:
+        orchestration.status === 'NEEDS_HUMAN'
+          ? 'a person: the judge asked for more research and this run has nothing left to attempt'
+          : null,
+    };
+  }
+
+  await updateOrchestration(orchestration.id, {
+    status: outcome,
+    // A packet going back for repair has not completed. Stamping it would leave
+    // a completion time on a run that then carries on.
+    completedAt: TERMINAL_ORCHESTRATION.has(outcome) ? new Date().toISOString() : null,
+  });
+  await recomputeProject(orchestration.projectId);
+
+  // A repairable outcome has to be backed by work rather than by a status, and
+  // minting it is the next advance's job. The recursion terminates: the status
+  // now equals the outcome, so the branch above returns instead of recursing.
+  if (outcome === 'AWAITING_REPAIR') return await advancePacket(orchestrationId);
+
   return {
     orchestrationId,
-    status: orchestration.status,
+    status: outcome,
     enqueued: [],
-    waitingOn: 'the judge to record a verdict',
+    waitingOn:
+      outcome === 'NEEDS_HUMAN'
+        ? 'a person: the judge asked for more research and this run has nothing left to attempt'
+        : null,
   };
 }
 
