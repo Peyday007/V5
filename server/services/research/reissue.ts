@@ -46,7 +46,7 @@ import {
   updateFragment,
   updateOrchestration,
 } from '../../repos/research.ts';
-import { enqueueWork, getWorkItem, listWorkItems } from '../../repos/workQueue.ts';
+import { cancelWork, enqueueWork, getWorkItem, listWorkItems } from '../../repos/workQueue.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { workType } from '../queue/workTypes.ts';
 import { runIdempotent, type OperationNamespace } from '../effects/engine.ts';
@@ -663,9 +663,40 @@ export async function retryFragment(input: {
     },
   });
 
-  // The old attempt is left exactly as it is. Its claims, verdicts and
-  // rejection reasons are the failure history, and `currentFragments` reads the
-  // highest attempt per key, so the new row supersedes it without deleting it.
+  /**
+   * The superseded attempt's work, withdrawn — because it is no longer work.
+   *
+   * The fragment *row* is left exactly as it is: its claims, verdicts and
+   * rejection reasons are the failure history, and `currentFragments` reads the
+   * highest attempt per key, so the new row supersedes it without deleting it.
+   * A queued work item pointing at it is a different thing entirely. Nothing
+   * superseded it, so it stayed claimable, and on the Step 10 packet a worker
+   * was duly dispatched at an attempt that no longer existed and failed —
+   * costing one activation out of a routine's hourly fire budget, which this
+   * step measured as the scarce resource.
+   *
+   * `cancelWork` is the right instrument rather than a delete: it advances
+   * `lease_generation`, so a late completion from a worker still holding the
+   * old lease matches nothing, which is §19's rule about cancellation rather
+   * than a special case for this.
+   *
+   * Bounded to items that name this exact fragment id. The new attempt is a
+   * different row, so its own item cannot be caught by this.
+   */
+  const superseded = (await listWorkItems(orchestration.projectId, { limit: 500 })).filter(
+    (item) =>
+      item.orchestrationId === orchestration.id &&
+      item.fragmentId === previous.id &&
+      (item.state === 'QUEUED' || item.state === 'LEASED'),
+  );
+  for (const item of superseded) {
+    await cancelWork(
+      item.id,
+      `Attempt ${previous.attempt} of ${previous.fragmentKey} was superseded by attempt ` +
+        `${attempt}. The work this item described no longer exists.`,
+    );
+  }
+
   if (orchestration.status === 'NEEDS_HUMAN') {
     await updateOrchestration(orchestration.id, {
       status: 'RESEARCHING',

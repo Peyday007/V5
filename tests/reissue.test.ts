@@ -688,6 +688,65 @@ describe('trying a failed fragment again', () => {
     expect(claimed.workItemId).toBeTruthy();
   });
 
+  it('withdraws the superseded attempt\'s work, so nobody is dispatched at it', async () => {
+    /*
+     * The defect the Step 10 packet paid for. The fragment row is superseded
+     * by a higher attempt, but the work item pointing at the old row stayed
+     * QUEUED, so a worker was dispatched at an attempt that no longer existed
+     * and failed — one activation out of a routine's hourly fire budget, which
+     * is the scarce resource this step measured.
+     */
+    const { orchestration, fragment } = await gatedAndBlocked();
+    const stale = await enqueueWork({
+      projectId: project.id,
+      workType: 'RESEARCH_FRAGMENT',
+      payload: { fragmentKey: fragment.fragmentKey },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: orchestration.id,
+      fragmentId: fragment.id,
+    });
+    expect(stale.state).toBe('QUEUED');
+
+    const result = await retryFragment({ fragmentId: fragment.id, reason: 'again', actor: ADMIN });
+    expect(result.status).toBe('RETRIED');
+
+    const after = await getWorkItem(stale.id);
+    expect(after?.state).toBe('CANCELLED');
+    // Cancellation advances the generation, so a late completion from whoever
+    // held the old lease matches nothing — §19, not a special case for this.
+    expect(after!.leaseGeneration).toBeGreaterThan(stale.leaseGeneration);
+    expect(after?.cancelledReason ?? '').toMatch(/superseded/i);
+  });
+
+  it("leaves another fragment's live work alone", async () => {
+    // The inversion. A withdrawal that reached past the superseded row would
+    // be cancelling work somebody is doing.
+    const { orchestration, fragment } = await gatedAndBlocked();
+    const [other] = await createFragments([{
+      orchestrationId: orchestration.id, projectId: project.id, layerId: layer.id,
+      fragmentIndex: 9, fragmentKey: 'a-different-question',
+      question: 'A different bounded question entirely.',
+      requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }],
+      acceptableSourceTypes: ['statute'], excludedSourceTypes: [],
+      completionCriteria: ['a section'], dependsOn: [], minIndependentSources: 1,
+      attempt: 1, maxRepairs: 2, status: 'QUEUED',
+    } as unknown as Parameters<typeof createFragments>[0][number]]);
+    const untouched = await enqueueWork({
+      projectId: project.id,
+      workType: 'RESEARCH_FRAGMENT',
+      payload: { fragmentKey: 'a-different-question' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: orchestration.id,
+      fragmentId: other!.id,
+    });
+
+    await retryFragment({ fragmentId: fragment.id, reason: 'again', actor: ADMIN });
+
+    expect((await getWorkItem(untouched.id))?.state).toBe('QUEUED');
+  });
+
   it('refuses a fragment that has used its repair budget', async () => {
     // `attempt` is immutable per row — a later attempt is a new row — so the
     // exhausted case is built as one, which is also how it arises.
