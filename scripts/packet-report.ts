@@ -25,6 +25,7 @@ import { getDocument } from '../server/repos/documents.ts';
 import { listAuditsByProject } from '../server/repos/audits.ts';
 import {
   acceptedClaims,
+  citableClaims,
   currentFragments,
   getOrchestration,
   listClaims,
@@ -296,6 +297,42 @@ async function main(): Promise<void> {
     }
   }
 
+  /*
+   * Where the report's citations actually land.
+   *
+   * The synthesis already refuses a report citing anything unaccepted — twice,
+   * in `assertCitable`, once for the caller and once for the service. But a
+   * check that ran months ago is a claim about the past, and this file exists
+   * so that a claim about the packet can be re-derived from the rows now. So
+   * the cited ids are read back out of the synthesis pass, resolved against
+   * `citableClaims` exactly as the gate resolves them, and any that do not
+   * land are named rather than counted.
+   *
+   * Read-only, like everything else here: nothing is written, and a citation
+   * that failed to resolve is reported, never repaired.
+   */
+  const citable = new Set((await citableClaims(packet.id)).map((claim) => claim.id));
+  const synthesisPass = passes
+    .filter((entry) => entry.passKey === 'SYNTHESIS' && entry.status === 'COMPLETE')
+    .at(-1);
+  const citedIds = ((): string[] => {
+    const parsed = synthesisPass?.parsed as Record<string, unknown> | null | undefined;
+    const raw = (parsed?.['raw'] ?? parsed) as Record<string, unknown> | undefined;
+    const ids = raw?.['citedClaimIds'];
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
+  })();
+  console.log(`  citable     ${citable.size} claim(s) a report may cite`);
+  if (!synthesisPass) {
+    console.log('  citations   — no completed synthesis pass to read them from');
+  } else {
+    const unresolved = citedIds.filter((id) => !citable.has(id));
+    console.log(
+      `  citations   ${citedIds.length} cited, ${citedIds.length - unresolved.length} resolve ` +
+        `to accepted evidence${unresolved.length === 0 ? '' : `, ${unresolved.length} DO NOT`}`,
+    );
+    for (const id of unresolved) console.log(`      UNRESOLVED  ${id}`);
+  }
+
   // The canonical artifact, proven by reading it back out of the configured
   // store rather than by trusting the row that points at it.
   //
@@ -329,7 +366,27 @@ async function main(): Promise<void> {
       const size = await objectSize(key);
       console.log(`              head size       ${size ?? '—'}`);
       try {
-        documentBytes = (await readObject(key)).length;
+        const bytes = await readObject(key);
+        documentBytes = bytes.length;
+        /*
+         * The ledger, checked against the bytes that are actually stored.
+         *
+         * `fileResearchPacket` appends an evidence ledger so that every
+         * sentence resolves to a claim id, a URL and a passage. Whether it is
+         * still *in the file* is a different fact from whether the synthesis
+         * passed its check, and it is the fact a reader of the archive depends
+         * on. So the cited ids are looked for in the stored text, and the ones
+         * that are missing are named.
+         */
+        if (citedIds.length > 0) {
+          const text = bytes.toString('utf8');
+          const absent = citedIds.filter((id) => !text.includes(id));
+          console.log(
+            `              ledger          ${citedIds.length - absent.length}/${citedIds.length} ` +
+              'cited claim id(s) present in the stored bytes',
+          );
+          for (const id of absent) console.log(`              MISSING FROM FILE ${id}`);
+        }
       } catch (error) {
         console.log(`              READ FAILED     ${(error as Error).message}`);
       }
