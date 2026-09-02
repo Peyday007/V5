@@ -163,16 +163,31 @@ export async function workloadProfile(scope: {
 export async function activationTrace(limit = 200): Promise<
   { durationMs: number; binsDrained: number }[]
 > {
-  const rows = await getDb().all<{ session_ref: string | null; n: number; total: number | null }>(
-    `SELECT session_ref, COUNT(*) AS n, SUM(duration_ms) AS total
+  /*
+   * Grouped by worker, on the terminal event.
+   *
+   * The first version grouped `BIN_COMPLETION_ACCEPTED` by `session_ref`, which
+   * found nothing in production and always would have: the provider's session
+   * id is recorded on `DISPATCH_SENT`, and the worker's own calls do not carry
+   * it. The identity that spans one activation on this side of the boundary is
+   * the worker, so that is what an execution is grouped by.
+   *
+   * `duration_ms IS NOT NULL` rather than a default. An activation with no
+   * recorded duration is one this cannot measure, and inventing a minute for it
+   * would put a made-up number into a simulation that is then reported as
+   * resting on observed samples.
+   */
+  const rows = await getDb().all<{ worker_id: string | null; n: number; total: number | null }>(
+    `SELECT worker_id, COUNT(*) AS n, SUM(duration_ms) AS total
        FROM bin_events
-      WHERE event_type = 'BIN_COMPLETION_ACCEPTED' AND session_ref IS NOT NULL
-      GROUP BY session_ref
-      ORDER BY session_ref
+      WHERE event_type = 'BIN_TERMINAL'
+        AND worker_id IS NOT NULL
+        AND duration_ms IS NOT NULL
+      GROUP BY worker_id
+      ORDER BY worker_id
       LIMIT ${Math.max(1, Math.min(1000, limit))}`,
   );
-  return rows.map((row) => ({
-    durationMs: Number(row.total ?? 0) || 60_000,
-    binsDrained: Number(row.n) || 1,
-  }));
+  return rows
+    .filter((row) => Number(row.total) > 0 && Number(row.n) > 0)
+    .map((row) => ({ durationMs: Number(row.total), binsDrained: Number(row.n) }));
 }

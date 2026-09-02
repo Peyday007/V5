@@ -1077,6 +1077,20 @@ export async function finishBin(
   input: { state: Extract<BinState, 'COMPLETE' | 'FAILED' | 'NEEDS_HUMAN'>; reason: string },
 ): Promise<BinLeaseOutcome> {
   const now = binNow();
+
+  /*
+   * Read `leased_at` before the swap clears it.
+   *
+   * This is a read-then-write and is deliberately not part of any decision:
+   * the UPDATE below still carries the whole ownership proof, so a stale read
+   * here cannot let anyone finish a bin they do not hold. It buys the one
+   * number an activation report cannot reconstruct afterwards — how long the
+   * execution actually took — because the columns it would be derived from are
+   * cleared by this very statement. Without it `medianActivationMs` is null
+   * forever and the simulator has no observed sample to replay, which is
+   * exactly what production showed.
+   */
+  const before = await getBin(proof.binId);
   const result = await getDb().run(
     `UPDATE bins
         SET state = ?, lease_generation = lease_generation + 1,
@@ -1087,12 +1101,17 @@ export async function finishBin(
     [input.state, bounded(input.reason, MAX_REASON_CHARS), now, now, ...ownershipParams(proof, now)],
   );
   if (result.changes !== 1) return 'NOT_OWNER';
+  const durationMs =
+    before?.leasedAt && before.leaseId === proof.leaseId
+      ? Math.max(0, new Date(now).getTime() - new Date(before.leasedAt).getTime())
+      : null;
   await recordBinEvent({
     eventType: 'BIN_TERMINAL',
     binId: proof.binId,
     workerId: proof.workerId,
     leaseId: proof.leaseId,
     leaseGeneration: proof.leaseGeneration,
+    durationMs,
     outcome: input.state,
     reason: input.reason,
   });

@@ -304,3 +304,48 @@ and two things still hold it back:
 
 Both are Step 11's to resolve, at the point a second machine is actually run.
 
+**Step 11 did not run a second Brain instance, and neither of those two is
+therefore resolved.** It made Brain able to direct many *workers* from one
+instance — a fleet of execution surfaces, not a fleet of Brains — so the
+per-instance research queue and the per-process sign-in throttle are untouched
+and still correct at one machine. A second Brain instance remains future work
+and inherits both.
+
+## Where Step 11 is
+
+Software complete on both backends; one account live; cross-account routing
+unproven.
+
+`fleet_accounts`, `fleet_routines` and `fleet_policy` replace Step 10's two
+environment variables, and `services/dispatch/router.ts` chooses among them.
+Registering an account, adding a Routine, raising a target, boosting for an hour
+and pausing the fleet are all rows an operator writes with no deployment.
+
+Live: `primary` / `V1` on the trigger Step 10 used, routed and fired and drained
+through the registry — ready to routed in 5.2 seconds, ready to terminal in
+44.5, zero refusals, nobody involved.
+
+Not live: **a second subscription account.** Everything the router does between
+accounts — failover, per-account targets, spreading by relative headroom,
+`ACCOUNT`-level audit independence — passes on SQLite and Postgres and has never
+run against two real allowances. Two Routines on one account would not close it;
+that proves routing across surfaces and says nothing about routing across
+allowances, which is the distinction the schema exists to keep.
+
+So the honest state is **STEP 11 NOT COMPLETE — CROSS-ACCOUNT ROUTING PROOF
+OPEN**, and what it is waiting on is provisioning rather than code.
+
+Two things Step 11 established that outlive it:
+
+- **A pure routing function is a decision, not an exclusion.** Two dispatchers
+  both computing correctly that a surface has room will both fire it. Selection
+  is therefore a compare-and-swap on `fleet_routines.fire_generation` — the
+  third time this codebase has needed *a compare-and-swap has to be on a value
+  the claimant does not supply*, after `work_items.lease_generation` and
+  `bin_dispatch`'s state swap.
+- **A counter that only goes one way is not a health signal.** Every successful
+  fire advanced `consecutive_no_shows` and nothing ever recorded a session
+  arriving, so a healthy Routine walked toward quarantine while its workers were
+  visibly turning up. Running it in production is what found that; reading it
+  had not.
+

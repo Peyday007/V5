@@ -817,6 +817,81 @@ itself. A throttled fleet therefore loses throughput rather than work, and more
 capacity means more routines rather than more allowance. **The recommended
 operating ceiling is 10 concurrent bins on one routine.**
 
+## 23. The fleet is rows, and a slot is claimed rather than computed.
+
+Step 11 (`server/repos/fleet.ts`, `server/services/dispatch/`,
+`docs/STEP-11-PLAN.md`) turns Step 10's one Routine into a fleet Brain can be
+told about without a deployment. The whole of it rests on one distinction and
+one primitive.
+
+**An account is not a Routine.** An account holds a subscription allowance; a
+Routine is a fire surface. A second Routine under one account doubles how fast
+Brain can *start* sessions and changes nothing about how much that account may
+*do*. Step 10 measured a fire ceiling and was explicit that it had not measured
+an allowance — so `fleet_accounts` and `fleet_routines` are separate tables with
+separate targets, and `declared_plan_power` is a **label** the router never does
+arithmetic on. Sizing a fleet by multiplying "20x" is sizing it on a fiction.
+
+**Routing is a decision; a slot is an exclusion.** `services/dispatch/router.ts`
+is a pure function over a snapshot, kept apart from `candidates.ts` which
+fetches the numbers, so "why did this bin go to that account" is answerable from
+a recorded input rather than from a re-run against a database that has moved.
+Being pure also makes it useless as a safety mechanism: two dispatchers both
+compute correctly that a surface has headroom and both fire it. So selection
+claims the surface with a compare-and-swap on `fleet_routines.fire_generation`,
+guarded on state and `retry_at` as well, and the loser is refused rather than
+retried — the mechanism can under-fire and cannot over-fire. **That is the third
+time this codebase has needed the same sentence: a compare-and-swap has to be on
+a value the claimant does not supply.**
+
+- **Policy is rows.** Raising a target, boosting for an hour, pausing the fleet
+  are all INSERTs into `fleet_policy` carrying an actor and a reason, so they
+  need no deployment and the previous value is still there to revert to. A boost
+  expires by being compared to the clock rather than by anything running.
+- **A row never holds a credential.** `fleet_routines` holds the *name* of the
+  deployment secret and a sha-256 of the value taken once at registration. A
+  Routine whose secret is not present is left out of routing and reported as
+  such, rather than spending a fire discovering it.
+- **The capacity ledger is `bin_events`, not a second table.** It gained
+  `account_id`, `routine_id`, `evidence_class` and `workload_class`. Two tables
+  that must agree about the same fires is a design where the one nobody reads is
+  the one that drifts. `evidence_class` is the honesty requirement of the step:
+  a refusal the provider issued is `PROVIDER_ENFORCED`, a duration Brain timed is
+  `MEASURED`, and a ceiling nobody has observed is `UNKNOWN` and stays `UNKNOWN`.
+- **A refusal is not misconduct.** Rate limits advance the retry point and leave
+  the failure streak alone, so an account at its ceiling is never quarantined for
+  being busy. Only failures and no-shows quarantine, and never a refusal however
+  many arrive.
+- **Audit independence is execution lineage, not a role name.**
+  `research_passes` records which worker, Routine, account and session produced
+  each pass, and `services/research/independence.ts` checks the recorded lineage.
+  Unknown lineage is a violation, never a pass — an audit whose independence
+  cannot be established did not establish it.
+- **Simulated output is structurally labelled and can never be production
+  evidence.** `services/dispatch/simulate.ts` results carry a required literal
+  `simulated: true` and a content-addressed trace id, so a projection cannot be
+  read back as a measurement.
+
+**Never infer fleet capacity from account count.** Throughput is measured per
+account, Routine, workload class and reset period, or it is reported as unknown.
+
+**One account is registered live and cross-account routing is not proven.**
+`primary` / `V1` runs the same trigger Step 10 used, and Brain has routed, fired
+and drained bins through the registry — ready to routed in 5.2s, ready to
+terminal in 44.5s, zero refusals. Everything the router does *between* accounts
+is proven in tests on both backends and nowhere else, because a second
+subscription is not in the registry yet. Two Routines under one account would
+not close that: it proves routing across surfaces and says nothing about routing
+across allowances, which is the distinction this whole step is built on.
+
+Running it found a defect reading alone had not. Every successful fire advanced
+`consecutive_no_shows`, nothing in production ever recorded a session arriving,
+and `bindRoutineWorker` documented a check-in path that did not exist — so a
+healthy Routine walked toward quarantine while its workers were plainly turning
+up. **A counter that only goes one way is not a health signal.** The arrival is
+now credited from the dispatch row that produced the worker, never from anything
+the worker says about itself, and a takeover of an expired lease credits nothing
+because that session genuinely did not finish.
 
 ---
 
@@ -845,6 +920,7 @@ server/
     naming.ts           canonical name / conversation title / filename
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
+    fleet.ts            accounts, Routines, capacity policy, and the fire slot
   services/
     storage.ts          document keys, confinement, and writing through the store
     storage/
@@ -885,6 +961,14 @@ server/
       schema.ts         zero-trust validation of model output
       pipeline.ts       orchestration; the only path to a recorded verdict
       evidence.ts       the citation trail from a verdict back to passages
+    dispatch/
+      fire.ts           one POST to the Routine, and what a refusal means
+      loop.ts           the tick: supersede, ensure, route, claim a slot, send
+      candidates.ts     the fleet as numbers, read once per tick
+      router.ts         a pure decision, and seven named refusals
+      scaler.ts         raise, lower, quarantine — proposals, never actions
+      simulate.ts       a deterministic projection, structurally labelled
+      profiles.ts       workload cost and activation traces, as queries
     research/
       schema.ts         zero-trust validation of every research pass
       sources.ts        what makes a claim sourced; structural URL validation
@@ -896,6 +980,7 @@ server/
       repair.ts         the plan behind a second attempt, never the same search
       replan.ts         new evidence against old, and cancelling needless work
       contradictions.ts which kind of disagreement two claims are actually in
+      independence.ts   audit independence by execution lineage, not role name
       packet.ts         does this answer the goal, and what is missing if not
       review.ts         the plan a person approves before anything is spent
       approvalEnvelope.ts  limits a person set first, and the check against them
@@ -946,6 +1031,7 @@ server/
     files.ts            serving a stored document through the storage layer
 client/                 React UI (three panes: layers / workflow / planner)
 scripts/
+  fleet.ts                  the operator's fleet surface: register, target, explain
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
   migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites

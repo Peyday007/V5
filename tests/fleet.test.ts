@@ -13,7 +13,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
-import { assignNextBin, createBin, getBin } from '../server/repos/bins.ts';
+import { assignNextBin, createBin, finishBin, getBin, listBinEvents } from '../server/repos/bins.ts';
 import { getDb } from '../server/db/database.ts';
 import { createWorker } from '../server/repos/identity.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
@@ -51,6 +51,7 @@ import {
   type AuditLineage,
 } from '../server/services/research/independence.ts';
 import { referenceFleet, simulate, traceId } from '../server/services/dispatch/simulate.ts';
+import { activationTrace } from '../server/services/dispatch/profiles.ts';
 import type { Bin, FleetAccount, FleetRoutine } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -1015,6 +1016,56 @@ describe('a burst spends the headroom it measured, once', () => {
     const takeover = await assignNextBin({ workerId: second.id, projectIds: [projectId] });
     expect(takeover?.takeover).toBe(true);
     expect((await getRoutineByRef('trig_one'))!.consecutiveNoShows).toBe(1);
+  });
+
+  it('measures how long an execution took, so a simulation has something to replay', async () => {
+    /*
+     * `medianActivationMs` was null and `activationTrace` empty against a
+     * production Brain that had drained eighty-one bins. Two causes, one shape:
+     * `BIN_TERMINAL` carried no duration, and the trace grouped an event that
+     * never carries a session by session. So the simulator reported "nothing to
+     * simulate" about a fleet with months of history.
+     */
+    const account = await createAccount({ name: 'personal' });
+    await createRoutine({
+      accountId: account.id, routineRef: 'trig_one', name: 'one', tokenSecretName: 'FLEET_TEST_SECRET',
+    });
+    const binId = await readyBin();
+    await dispatchTick({ projectIds: [projectId], burst: 1 });
+    const worker = await createWorker({ name: 'w1', createdByType: 'SYSTEM', createdById: 'test' });
+    const assigned = (await assignNextBin({ workerId: worker.id, projectIds: [projectId] }))!;
+    expect(
+      await finishBin(
+        {
+          binId,
+          leaseId: assigned.leaseId,
+          leaseGeneration: assigned.leaseGeneration,
+          workerId: worker.id,
+        },
+        { state: 'COMPLETE', reason: 'test' },
+      ),
+    ).toBe('OK');
+
+    const terminal = (await listBinEvents(binId)).find((e) => e.eventType === 'BIN_TERMINAL');
+    expect(terminal?.durationMs).not.toBeNull();
+    expect(terminal!.durationMs!).toBeGreaterThanOrEqual(0);
+
+    const trace = await activationTrace();
+    expect(trace).toHaveLength(1);
+    expect(trace[0]!.binsDrained).toBe(1);
+  });
+
+  it('reports nothing simulated rather than a made-up minute', async () => {
+    // The inversion of the line above. An execution with no recorded duration
+    // is one that cannot be measured, and a default would put an invented
+    // number into a projection reported as resting on observed samples.
+    const samples = await activationTrace();
+    expect(samples).toHaveLength(0);
+    const result = simulate(referenceFleet(3, 10, 60 * 60_000), samples);
+    expect(result.simulated).toBe(true);
+    expect(result.binsCompleted).toBe(0);
+    expect(result.binsRemaining).toBe(10);
+    expect(result.unknowns.join(' ')).toMatch(/empty trace|Nothing can be simulated/i);
   });
 
   it('still fires through the environment when nothing is registered yet', async () => {
