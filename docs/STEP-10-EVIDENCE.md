@@ -809,6 +809,15 @@ over-provisions it.
 
 ### Production proofs still outstanding
 
+- **the research bin reaching `COMPLETE`.** `bin_204f246c43b641afa5a5` is
+  `NEEDS_HUMAN`: at 2026-09-02T00:04:35Z `RESEARCH_PACKET_V1` refused it because
+  the packet was `NEEDS_HUMAN`, and a HUMAN refusal parks the bin out of the
+  dispatchable set. The packet has since been authorized and is
+  `COMPLETE_WITH_GAPS`, and the contract now accepts that state, but **nothing
+  has re-evaluated the bin** — a parked bin is not dispatched, so no worker has
+  asked for completion again. Closing it needs one operator action already
+  deployed (`step10 research-ready bin_204f246c43b641afa5a5`) and one
+  activation; it needs no code change.
 - ~~a **filed, audited document** from the real research bin~~ — **done.** The
   first attempt produced nothing because the worker surface had no egress to
   the primary sources and the gate correctly refused ungrounded claims. The
@@ -908,7 +917,13 @@ of the claim. `npm run step10 -- cf8` reads exactly that, and prints no digest,
 no prefix, no scope and no secret — a report about credentials must not become a
 way to read them.
 
-CF8_READING_PLACEHOLDER
+**The reading has not been taken.** The mechanism is written, tested and
+deployed, and the question is Step 10's rather than a later step's — that much
+is settled and is the disposition. What is not done is running it against
+production and recording what it says, so CF-8 is **owned and answered-by, but
+not yet observed**. It must not be written up as closed until
+`STEP10: OK cf8 rotated=… used=…` has actually been printed from the deployed
+Brain.
 
 ## The frozen baseline, re-read
 
