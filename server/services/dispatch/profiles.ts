@@ -187,7 +187,18 @@ export async function activationTrace(limit = 200): Promise<
       ORDER BY worker_id
       LIMIT ${Math.max(1, Math.min(1000, limit))}`,
   );
+  /*
+   * `>= 0`, not `> 0`.
+   *
+   * An execution that finished inside the same millisecond it started has a
+   * recorded duration of exactly zero, which is a measurement rather than a
+   * missing one — and dropping it here made a real activation invisible. The
+   * SQL's `duration_ms IS NOT NULL` is what separates measured from
+   * unmeasured; anything past that would be this function deciding a number is
+   * too small to be true. `simulate` clamps the slot to at least a millisecond
+   * of its own, so a zero here cannot make a worker infinitely fast.
+   */
   return rows
-    .filter((row) => Number(row.total) > 0 && Number(row.n) > 0)
+    .filter((row) => Number(row.n) > 0 && Number(row.total) >= 0)
     .map((row) => ({ durationMs: Number(row.total), binsDrained: Number(row.n) }));
 }

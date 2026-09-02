@@ -1050,9 +1050,17 @@ describe('a burst spends the headroom it measured, once', () => {
     expect(terminal?.durationMs).not.toBeNull();
     expect(terminal!.durationMs!).toBeGreaterThanOrEqual(0);
 
+    /*
+     * A test lease is held for well under a millisecond, so this duration is
+     * usually exactly zero — and zero is a measurement, not a missing one. The
+     * first version of the filter dropped it with `total > 0` and this line
+     * failed on roughly one run in three, which is the honest way to have found
+     * out that a real activation could go missing for being fast.
+     */
     const trace = await activationTrace();
     expect(trace).toHaveLength(1);
     expect(trace[0]!.binsDrained).toBe(1);
+    expect(trace[0]!.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it('reports nothing simulated rather than a made-up minute', async () => {
