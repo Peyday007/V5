@@ -320,7 +320,9 @@ async function main(): Promise<void> {
   }
 
   if (command === 'explain-route') {
-    const binId = arg(0);
+    // Positionally when typed, `--ref` when driven from the workflow, which
+    // passes every value as a named flag.
+    const binId = option('ref') ?? arg(0);
     if (!binId) return refuse('pass a bin id.');
     const bins = await listBins({ limit: 500 });
     const bin = bins.find((b) => b.id === binId);

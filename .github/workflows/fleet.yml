@@ -1,0 +1,135 @@
+# Operating the fleet, without a terminal.
+#
+# Same reason `step10.yml` exists: registering an account, raising a target or
+# reading where the work went are things done repeatedly, and doing them through
+# the deploy pipeline would cost a build and a restart every time.
+#
+# The inputs are named rather than positional. `step10.yml` takes three opaque
+# arguments and validates them against one character class, which is fine for
+# `report 5 3` and wrong here — fleet commands take `--name personal
+# --ref trig_abc`, and a shared validator over a shared arg list would either
+# reject legitimate values or stop being a validator.
+#
+# Nothing here can reveal a credential. `register-routine` takes the *name* of
+# a deployment secret; the value is read inside the container from the
+# environment Fly already gave it, and only its digest is stored.
+name: Fleet
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'show | register-account | register-routine | bind-worker | set-state | set-target | boost | pause | resume | policy-history | explain-route | scale-advice | profile | simulate'
+        required: true
+        default: show
+      name:
+        description: '--name (an account name, or a Routine name)'
+        required: false
+        default: ''
+      account:
+        description: '--account (the account a Routine belongs to)'
+        required: false
+        default: ''
+      ref:
+        description: '--ref (a trig_… trigger id, an account name, or a bin id)'
+        required: false
+        default: ''
+      secret:
+        description: '--secret (the NAME of the deployment secret holding the bearer, never the bearer)'
+        required: false
+        default: ''
+      scope:
+        description: '--scope (FLEET | ACCOUNT | ROUTINE)'
+        required: false
+        default: ''
+      target:
+        description: '--target (a concurrency target, or a boost target)'
+        required: false
+        default: ''
+      extra:
+        description: 'Any further --flag value pairs, e.g. "--plan Max_20x --kind ROUTINE"'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Report what would change and change nothing'
+        type: boolean
+        required: false
+        default: false
+
+# Never at the same time as a deploy, for `step10.yml`'s reason: the machine is
+# being replaced during one.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  fleet:
+    name: Fleet operator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Run
+        timeout-minutes: 20
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Through the environment, never interpolated into the shell. An
+          # input pasted into a command line is an injection whatever the
+          # dispatcher intended, and "only I can run this workflow" is not a
+          # guard.
+          FLEET_COMMAND: ${{ inputs.command }}
+          FLEET_NAME: ${{ inputs.name }}
+          FLEET_ACCOUNT: ${{ inputs.account }}
+          FLEET_REF: ${{ inputs.ref }}
+          FLEET_SECRET: ${{ inputs.secret }}
+          FLEET_SCOPE: ${{ inputs.scope }}
+          FLEET_TARGET: ${{ inputs.target }}
+          FLEET_EXTRA: ${{ inputs.extra }}
+          FLEET_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+
+          # Values are letters, digits, dot, colon, dash and underscore. A
+          # Routine name with a space is written with an underscore; the command
+          # surface turns those back into spaces where a sentence is wanted.
+          for value in "$FLEET_COMMAND" "$FLEET_NAME" "$FLEET_ACCOUNT" \
+                       "$FLEET_REF" "$FLEET_SECRET" "$FLEET_SCOPE" "$FLEET_TARGET"; do
+            case "$value" in
+              ''|*[!A-Za-z0-9_.:-]*)
+                if [ -n "$value" ]; then
+                  echo "::error::Refusing '$value': values are letters, digits, dot, colon, dash and underscore."
+                  exit 1
+                fi
+                ;;
+            esac
+          done
+          # `extra` additionally allows spaces, because it is a sequence of
+          # flag/value pairs. Everything a shell could act on is still refused.
+          case "$FLEET_EXTRA" in
+            *[!A-Za-z0-9_.:\ -]*)
+              echo "::error::Refusing the extra flags: same character class, plus spaces."
+              exit 1
+              ;;
+          esac
+
+          # `if` rather than `[ ... ] && ...`: this step runs under `bash -e`,
+          # where a trailing short-circuited `&&` is a non-zero exit and would
+          # abort the run every time an optional input was left blank.
+          args="$FLEET_COMMAND"
+          if [ -n "$FLEET_NAME" ];    then args="$args --name $FLEET_NAME"; fi
+          if [ -n "$FLEET_ACCOUNT" ]; then args="$args --account $FLEET_ACCOUNT"; fi
+          if [ -n "$FLEET_REF" ];     then args="$args --ref $FLEET_REF"; fi
+          if [ -n "$FLEET_SECRET" ];  then args="$args --secret $FLEET_SECRET"; fi
+          if [ -n "$FLEET_SCOPE" ];   then args="$args --scope $FLEET_SCOPE"; fi
+          if [ -n "$FLEET_TARGET" ];  then args="$args --target $FLEET_TARGET"; fi
+          if [ -n "$FLEET_EXTRA" ];   then args="$args $FLEET_EXTRA"; fi
+          if [ "$FLEET_DRY_RUN" = "true" ]; then args="$args --dry-run"; fi
+
+          echo "fleet $args"
+          set +e
+          flyctl ssh console --app "$app" -C "sh /app/scripts/fleet.sh $args" 2>&1 | tee fleet.txt
+          set -e
+          # The verdict comes from a line the command printed, not from an exit
+          # code that had to survive an SSH session, a shell and a CLI.
+          grep -q '^FLEET: OK' fleet.txt
