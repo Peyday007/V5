@@ -1109,6 +1109,11 @@ export interface ResearchPassRow {
   started_at: string;
   completed_at: string | null;
   duration_ms: number | null;
+  /** Execution lineage — which worker, Routine, account and session ran this. */
+  executor_worker_id: string | null;
+  executor_routine_id: string | null;
+  executor_account_id: string | null;
+  executor_session_ref: string | null;
 }
 
 export interface ResearchClaimRow {
@@ -2207,6 +2212,10 @@ export interface ResearchPass {
   startedAt: string;
   completedAt: string | null;
   durationMs: number | null;
+  executorWorkerId: string | null;
+  executorRoutineId: string | null;
+  executorAccountId: string | null;
+  executorSessionRef: string | null;
 }
 
 export interface ResearchClaim {

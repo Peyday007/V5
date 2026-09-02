@@ -339,12 +339,48 @@ matrix now reads FAIL.
 L9 and L10 are blocked by it rather than by provisioning — with no lineage
 recorded, there is nothing for a judge to be independent *of*.
 
-The remedy is bounded and the capture point already exists:
-`server/mcp/researchTools.ts` `recordPass` is handed the `workerId` of the
-submitting worker, and the worker resolves to a Routine and an account through
-the same `bin_dispatch` row the arrival crediting already uses. What is missing
-is passing that lineage into `startPass`, and calling `checkIndependence` before
-a JUDGE pass is accepted.
+**The lineage is now recorded.** `startPass` takes the four `executor_*` fields
+and `recordPass` supplies them: the worker from the authenticated principal, and
+the Routine and account resolved from `fleet_routines.worker_id` — which the
+arrival-crediting path binds from the dispatch row that produced the worker, so
+nothing the worker says about itself contributes. When a worker is bound to no
+registered Routine, both are left null rather than invented, because
+`checkIndependence` counts unknown lineage as a violation and a fabricated
+account id would turn a refusal into an approval.
+
+`executor_session_ref` stays null and that is deliberate: a research work item,
+unlike a bin dispatch, records no provider session. Filling it with a lease or
+credential id would look like a session and discriminate nothing.
+
+**Enforcement was then attempted, and reverted.** With the check wired into the
+judge path, the existing suite failed with:
+
+```
+The audit roles are not independent, so the judgement cannot be recorded:
+  PRIMARY and ADVERSARIAL shared the same worker (wkr_716f8eba7456409d84f8).
+  JUDGE and PRIMARY shared the same worker (wkr_716f8eba7456409d84f8).
+  JUDGE and ADVERSARIAL shared the same worker (wkr_716f8eba7456409d84f8).
+```
+
+That is the check working, and it is the real finding of this section: **audit
+independence has never held.** A worker identity is per-Routine rather than
+per-session, and nothing in the claim path stops one worker taking every audit
+item in a packet — so one identity performs all three roles, and turning the
+check on refuses every packet. It would stop all research rather than make any
+of it independent.
+
+The check was therefore reverted rather than weakened, and rather than left in
+as a verdict nobody acts on: §8's rule is that a control which does not bite is
+not a control, so the code does not pretend to be one. `tests/packet.test.ts`
+pins the finding — it asserts that every pass now carries a worker **and** that
+`checkIndependence` refuses the result, so the test fails the day the fix lands,
+which is what makes it a marker for it.
+
+**The fix belongs in the assigner, not here:** refuse handing a `RESEARCH_AUDIT`
+item to a worker that already holds another role in the same orchestration. With
+two accounts now registered, the three roles have somewhere to go. That is one
+bounded change plus a live packet to prove it, and it is the whole of what stands
+between here and S19, L9 and L10.
 
 
 

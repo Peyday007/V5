@@ -104,7 +104,7 @@ them.
 | S16 | PASS | Health responses proportional; quarantine and guarded recovery | health + test |
 | S17 | PASS | No breaker deletes history or resets attempts downward | inversion |
 | S18 | PASS | Independent work runs in parallel; dependent work waits on prerequisites | packet runner + test |
-| S19 | **FAIL** | Audit independence enforced by lineage; completion refuses a violation | `services/research/independence.ts` is correct and tested on both backends and **has no caller**. `startPass` never writes the four `executor_*` columns, so the lineage is never recorded and nothing is ever refused on it. Marked PASS earlier on the strength of the tests; that was wrong. |
+| S19 | **FAIL** | Audit independence enforced by lineage; completion refuses a violation | Lineage is now recorded on every pass. Enforcement was wired, and refused every packet: one worker identity performs all three roles, because a worker is per-Routine rather than per-session. Reverted rather than weakened; the fix is in the assigner. Marked PASS earlier on the strength of the test file, which was wrong. |
 | S20 | PASS | Workload profiles attribute cost to idea, class and policy version | profile report; live `medianActivationMs=21487`, `unknowns=[]` |
 | S21 | PASS | Simulation covers 5/10/20/30/50, the live fleet, and larger parameters | deterministic replay; run live, `trace_00135272_1` |
 | S22 | PASS | Simulated output structurally distinct and never production evidence | label + test |

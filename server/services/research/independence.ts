@@ -177,17 +177,14 @@ export function lineageFromPasses(passes: ResearchPass[]): {
   let synthesis: AuditLineage | null = null;
 
   for (const pass of passes) {
-    const executor = pass as unknown as {
-      executorWorkerId?: string | null;
-      executorRoutineId?: string | null;
-      executorAccountId?: string | null;
-      executorSessionRef?: string | null;
-    };
+    // These were read through a cast while the columns existed and the view
+    // type did not — which is precisely how this module came to look wired
+    // when nothing wrote them. They are real fields now, so read them as such.
     const lineage = {
-      workerId: executor.executorWorkerId ?? null,
-      routineId: executor.executorRoutineId ?? null,
-      accountId: executor.executorAccountId ?? null,
-      sessionRef: executor.executorSessionRef ?? null,
+      workerId: pass.executorWorkerId ?? null,
+      routineId: pass.executorRoutineId ?? null,
+      accountId: pass.executorAccountId ?? null,
+      sessionRef: pass.executorSessionRef ?? null,
     };
     if (pass.passKey === 'SYNTHESIS' && pass.status === 'COMPLETE') {
       synthesis = { role: 'PRIMARY', ...lineage };

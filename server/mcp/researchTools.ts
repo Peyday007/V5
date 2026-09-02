@@ -59,6 +59,7 @@ import {
   type JudgePassOutput,
 } from '../services/audit/schema.ts';
 import { recordAuditPasses } from '../services/audit/pipeline.ts';
+import { listRoutines } from '../repos/fleet.ts';
 import {
   auditBriefFor,
   AuditBriefUnavailable,
@@ -369,6 +370,29 @@ async function resolveResearch(
 }
 
 /**
+ * Which Routine and account this worker ran on.
+ *
+ * Resolved from `fleet_routines.worker_id`, which is observed rather than
+ * declared: the arrival-crediting path in `assignNextBin` binds it from the
+ * dispatch row that produced the worker, so nothing the worker says about
+ * itself contributes. That is the same rule the queue applies to ownership,
+ * applied to attribution.
+ *
+ * Both nulls when the worker is not bound to any registered Routine — a local
+ * worker, a Routine registered after the fact, or a fleet with no registry.
+ * Nothing is invented to fill them, because `checkIndependence` counts unknown
+ * lineage as a violation rather than as a pass, and a fabricated account id
+ * would turn a refusal into an approval.
+ */
+async function executionLineage(
+  workerId: string,
+): Promise<{ routineId: string | null; accountId: string | null }> {
+  const routines = await listRoutines();
+  const mine = routines.find((routine) => routine.workerId === workerId);
+  return { routineId: mine?.id ?? null, accountId: mine?.accountId ?? null };
+}
+
+/**
  * Record the pass this submission was, before it is acted on.
  *
  * §12 requires every pass to be written down with its exact prompt, that
@@ -387,6 +411,7 @@ async function recordPass(input: {
   assignment: string;
   raw: unknown;
 }): Promise<string> {
+  const lineage = await executionLineage(input.workerId);
   const pass = await startPass({
     orchestrationId: input.orchestration.id,
     fragmentId: input.fragmentId,
@@ -399,6 +424,14 @@ async function recordPass(input: {
     model: input.workerId,
     prompt: input.assignment,
     promptSha256: crypto.createHash('sha256').update(input.assignment, 'utf8').digest('hex'),
+    executorWorkerId: input.workerId,
+    executorRoutineId: lineage.routineId,
+    executorAccountId: lineage.accountId,
+    // No session reference exists for a research work item: unlike a bin
+    // dispatch, nothing records the provider session that claimed it. Left
+    // null rather than filled with a lease or credential id that would look
+    // like a session and discriminate nothing.
+    executorSessionRef: null,
   });
   await finishPass(pass.id, {
     status: 'COMPLETE',
@@ -1925,6 +1958,36 @@ const submitAuditTool: McpTool = {
           );
         }
 
+        /*
+         * Independence is RECORDED here and deliberately NOT enforced yet.
+         *
+         * The lineage is now real: `recordPass` writes the worker and the
+         * Routine and account it resolves to, so `checkIndependence` finally
+         * has rows to judge. Turning it into a refusal was tried and reverted,
+         * and what it found is the reason:
+         *
+         *     PRIMARY and ADVERSARIAL shared the same worker (wkr_716f8eba…).
+         *     JUDGE and PRIMARY shared the same worker (wkr_716f8eba…).
+         *     JUDGE and ADVERSARIAL shared the same worker (wkr_716f8eba…).
+         *
+         * All three roles are performed by one worker identity, because a
+         * worker identity is per-Routine rather than per-session and nothing in
+         * the claim path stops one worker taking every audit item in a packet.
+         * So the check is correct and refuses *every* packet, which would stop
+         * all research rather than make any of it independent.
+         *
+         * That is a real finding rather than a reason to weaken the check, and
+         * it is recorded as one: **audit independence has never held**, and the
+         * bounded fix is in the assigner — refuse handing a RESEARCH_AUDIT item
+         * to a worker that already holds another role in the same orchestration
+         * — not here. Writing the verdict without acting on it would be worse
+         * than either: §8's rule is that a control which does not bite is not a
+         * control, so this does not pretend to be one.
+         *
+         * What this leaves behind is the evidence the fix needs: every pass from
+         * here on carries the lineage, so the violation is visible in rows
+         * rather than only in a test.
+         */
         const { context } = await auditBriefFor({ orchestration, role: 'JUDGE' });
 
         // The same recording path `runDynamicAudit` uses. The cross-checked

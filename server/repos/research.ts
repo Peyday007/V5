@@ -162,6 +162,10 @@ function mapPass(row: ResearchPassRow): ResearchPass {
     startedAt: row.started_at,
     completedAt: row.completed_at,
     durationMs: row.duration_ms === null ? null : Number(row.duration_ms),
+    executorWorkerId: row.executor_worker_id ?? null,
+    executorRoutineId: row.executor_routine_id ?? null,
+    executorAccountId: row.executor_account_id ?? null,
+    executorSessionRef: row.executor_session_ref ?? null,
   };
 }
 
@@ -589,6 +593,21 @@ export interface StartPassInput {
   model?: string | null;
   prompt: string;
   promptSha256: string;
+  /**
+   * Which execution produced this pass.
+   *
+   * Recorded so audit independence is a fact about *where a pass ran* rather
+   * than about the role name its submitter claimed. Every field is nullable
+   * because a pass Brain ran against a provider itself has no worker, Routine
+   * or account — and because a worker whose Routine is not yet bound has an
+   * unknown lineage. `checkIndependence` treats unknown as a violation rather
+   * than as a pass, which is the safe direction and the reason nothing here
+   * invents a value to fill the column.
+   */
+  executorWorkerId?: string | null;
+  executorRoutineId?: string | null;
+  executorAccountId?: string | null;
+  executorSessionRef?: string | null;
 }
 
 /** Written before the provider is called: an unanswered pass is still a fact. */
@@ -596,11 +615,14 @@ export async function startPass(input: StartPassInput): Promise<ResearchPass> {
   const id = newId('rps');
   await getDb().run(
     `INSERT INTO research_passes (id, orchestration_id, fragment_id, pass_key, ordinal, attempt,
-       status, provider, model, prompt, prompt_sha256, started_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?, ?, ?)`,
+       status, provider, model, prompt, prompt_sha256, started_at,
+       executor_worker_id, executor_routine_id, executor_account_id, executor_session_ref)
+     VALUES (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, input.orchestrationId, input.fragmentId ?? null, input.passKey, input.ordinal,
       input.attempt ?? 1, input.provider, input.model ?? null, input.prompt, input.promptSha256,
-      nowIso()],
+      nowIso(),
+      input.executorWorkerId ?? null, input.executorRoutineId ?? null,
+      input.executorAccountId ?? null, input.executorSessionRef ?? null],
   );
   return (await getPass(id))!;
 }

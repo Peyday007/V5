@@ -28,7 +28,12 @@ import {
   getOrchestration,
   listClaims,
   listClaimsForFragment,
+  listPasses,
 } from '../server/repos/research.ts';
+import {
+  checkIndependence,
+  lineageFromPasses,
+} from '../server/services/research/independence.ts';
 import {
   claimWork,
   completeWork,
@@ -2787,6 +2792,46 @@ describe('the audit passes', () => {
     expect(audits[0]!.verdict).toBe('MORE_RESEARCH');
     // The structured record, not prose. Invariant 11.
     expect(audits[0]!.gaps.length).toBeGreaterThan(0);
+  });
+
+  it('records the execution lineage, and it shows one worker doing all three roles', async () => {
+    /*
+     * The Step 11 finding, pinned so it cannot quietly stop being true.
+     *
+     * `services/research/independence.ts` was written, tested on both backends,
+     * and never called — the four `executor_*` columns were empty in every row,
+     * so "independent audit" was a naming convention. The lineage is now
+     * recorded, which is what makes the next assertion possible at all.
+     *
+     * And what it shows is that independence has never held: one worker
+     * identity performs PRIMARY, ADVERSARIAL and JUDGE, because a worker is
+     * per-Routine rather than per-session and nothing in the claim path stops
+     * one worker taking every audit item in a packet.
+     *
+     * Enforcing the check here was tried and reverted: it is correct, and it
+     * refuses every packet, which would stop all research rather than make any
+     * of it independent. The fix belongs in the assigner. This test fails the
+     * day that fix lands, which is the point — it is the marker for it.
+     */
+    const orchestration = await filedPacket();
+    const primary = await claimNext('RESEARCH_AUDIT');
+    await call('brain_submit_audit', { ...proof(primary), primary: PRIMARY });
+    await call('brain_complete_work', { ...proof(primary), summary: 'primary in' });
+    const adversarial = await claimNext('RESEARCH_AUDIT');
+    await call('brain_submit_audit', { ...proof(adversarial), adversarial: ADVERSARIAL });
+    await call('brain_complete_work', { ...proof(adversarial), summary: 'adversarial in' });
+    const judgeItem = await claimNext('RESEARCH_AUDIT');
+    await call('brain_submit_audit', { ...proof(judgeItem), judge: judge() });
+
+    const passes = (await listPasses(orchestration.id)).filter((p) => p.passKey === 'AUDIT');
+    expect(passes.length).toBeGreaterThanOrEqual(3);
+    // Every pass carries a worker. Before this, all four columns were null.
+    for (const pass of passes) expect(pass.executorWorkerId).not.toBeNull();
+
+    const { audits } = lineageFromPasses(passes);
+    const verdict = checkIndependence({ level: 'WORKER', synthesis: null, audits });
+    expect(verdict.ok).toBe(false);
+    expect(verdict.violations.join(' ')).toMatch(/shared the same worker/);
   });
 
   it('refuses an advancing verdict while a foundational gap is open', async () => {
