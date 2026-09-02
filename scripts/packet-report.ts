@@ -274,7 +274,27 @@ async function main(): Promise<void> {
     console.log(`      audit role ordinal ${pass.ordinal} ${pass.status} ${pass.completedAt ?? ''}`);
   }
   console.log(`  audits      ${audits.length}`);
-  for (const audit of audits) console.log(`      ${audit.id} ${audit.verdict} ${audit.gaps.length} gap(s)`);
+  for (const audit of audits) {
+    console.log(`      ${audit.id} ${audit.verdict} ${audit.gaps.length} gap(s)`);
+    /*
+     * The gaps themselves, not just how many.
+     *
+     * A judge's verdict is the one thing in this report that decides whether a
+     * packet is finished, and "MORE_RESEARCH 7 gap(s)" is exactly as actionable
+     * as "outside the envelope" was before the refusal reason was printed in
+     * full: it names a decision without naming what to decide. Whether those
+     * seven are "the statute could not be reached" or "these four questions
+     * were never asked" changes what happens next completely.
+     */
+    for (const gap of audit.gaps) {
+      console.log(`        ${gap.ordinal}. [${gap.classification}] ${trim(gap.title, 140)}`);
+      console.log(`           ${trim(gap.detail, 150)}`);
+      if (gap.researchQuestion) {
+        console.log(`           asks: ${trim(gap.researchQuestion, 150)}`);
+      }
+      if (gap.owningLayerName) console.log(`           owned by ${gap.owningLayerName}`);
+    }
+  }
 
   // The canonical artifact, proven by reading it back out of the configured
   // store rather than by trusting the row that points at it.
