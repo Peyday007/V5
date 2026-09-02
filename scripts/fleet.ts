@@ -36,6 +36,7 @@ import { proposeScale, shouldQuarantine } from '../server/services/dispatch/scal
 import { referenceFleet, REFERENCE_SIZES, simulate } from '../server/services/dispatch/simulate.ts';
 import { activationTrace, workloadProfile } from '../server/services/dispatch/profiles.ts';
 import { listBins } from '../server/repos/bins.ts';
+import { FLEET_STATES } from '../server/domain/types.ts';
 import type { FleetState } from '../server/domain/types.ts';
 
 const argv = process.argv.slice(2);
@@ -149,12 +150,24 @@ async function main(): Promise<void> {
   /* ---------------------------------------------------------------------- */
 
   if (command === 'set-state') {
-    const kind = option('kind');
+    // Case-insensitive, and an unrecognised kind is refused by name.
+    //
+    // It used to compare `kind === 'account'` and let everything else fall
+    // through to the Routine branch, so `--kind ACCOUNT personal` reported
+    // "no Routine registered as personal" — an answer that is true, unhelpful,
+    // and points at the wrong half of the command.
+    const kind = (option('kind') ?? '').toLowerCase();
     const ref = option('ref');
-    const to = option('to') as FleetState | null;
+    const to = option('to')?.toUpperCase() as FleetState | null;
     const reason = (option('reason') ?? '').replace(/_/g, ' ');
     if (!kind || !ref || !to || !reason) {
       return refuse('pass --kind account|routine --ref <name|trig_…> --to <STATE> --reason <text>.');
+    }
+    if (kind !== 'account' && kind !== 'routine') {
+      return refuse(`--kind must be account or routine, not "${kind}".`);
+    }
+    if (!FLEET_STATES.includes(to as FleetState)) {
+      return refuse(`--to must be one of ${FLEET_STATES.join(', ')}.`);
     }
     if (kind === 'account') {
       const account = await getAccountByName(ref);

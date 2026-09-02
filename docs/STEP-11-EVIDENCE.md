@@ -253,7 +253,7 @@ Once a second account and Routine are registered:
 
 1. `fleet show` — two accounts, two routable candidates.
 2. Seed four bins. Both accounts should fire; `fires` moves on both rows. (L3)
-3. `fleet set-state --kind ACCOUNT --ref <name> --to UNAVAILABLE`, seed two more,
+3. `fleet set-state --kind account --ref <name> --to UNAVAILABLE`, seed two more,
    confirm every one goes to the survivor, then re-enable and confirm the split
    returns. (L4)
 4. `fleet boost --target 4 --minutes 30 --reason …`, confirm the higher ceiling
