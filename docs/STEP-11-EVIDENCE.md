@@ -320,7 +320,84 @@ router rather than by a second implementation of its rules.
 
 ## 5. What is not claimed
 
-### S19 — audit independence is not enforced anywhere
+### S19 — the signed matrix, enforced before the lease
+
+**The contradiction, resolved in five lines.** The signed contract is two
+dimensions, not one. L9 asks PRIMARY and ADVERSARIAL to run "through different
+accounts" — ACCOUNT. L10 asks the JUDGE for independent lineage with
+"same-session lineage refused" — SESSION. Applying one uniform level to all
+three pairs demands three pairwise-distinct accounts (impossible on two) or
+three worker identities (impossible on two Routines); neither was ever asked
+for. **Two accounts and three sessions satisfy the signed matrix exactly**, so
+the earlier report was right that two accounts give the roles somewhere to go
+and wrong about the level it read them at.
+
+| pair | dimension | why |
+|---|---|---|
+| `PRIMARY_ADVERSARIAL` | **ACCOUNT** | L9, verbatim |
+| `JUDGE_PRIMARY` | **SESSION** | L10, verbatim |
+| `JUDGE_ADVERSARIAL` | **SESSION** | L10, verbatim |
+
+It is a constant in `services/research/auditEligibility.ts`, per pair, because a
+caller that could choose the level is a caller that could lower it. **No count
+appears in it**: adding or removing accounts widens or narrows the eligible set
+and changes no rule.
+
+### Brain owns the operation
+
+| # | Requirement | Where |
+|---|---|---|
+| 1 | eligibility decided before lease *or* execution | `claimWork`'s `admit` hook, ahead of the compare-and-swap |
+| 2 | PRIMARY/ADVERSARIAL on different accounts | `SIGNED_AUDIT_MATRIX.PRIMARY_ADVERSARIAL` |
+| 3 | JUDGE on the exact required lineage | `JUDGE_PRIMARY` / `JUDGE_ADVERSARIAL` at SESSION |
+| 4 | account, Routine, worker and session recorded | four `executor_*` columns, written by `recordPass` |
+| 5 | one activation cannot drain conflicting roles | a second role in the same session is refused at claim |
+| 6 | refusal consumes nothing | the hook runs *before* the swap that increments `attempt_count` |
+| 7 | route the waiting role at an eligible surface | `accountsEligibleFor` |
+| 8 | refuse the verdict before storage | `auditMatrixVerdict` at the judge, before `recordAuditPasses` |
+| 9 | non-audit work unchanged | the rule returns ok for every other work type |
+| 10 | elastic in account count | no count in the matrix or the checker |
+
+Every input is server-derived: the worker from the authenticated principal, the
+Routine and account from `fleet_routines.worker_id` (bound by the
+arrival-crediting path from the dispatch row that produced the worker), and the
+session from the credential the request authenticated with — per-activation, and
+the thing CF-8 measured rotating 85 times. **Nothing asks a Routine to police
+itself**, and no body field contributes.
+
+All three claim entrances use the same rule — the MCP tool, the bin service and
+the HTTP route — because a guard on one entrance is not a guard. A refused
+worker is told `not_eligible` rather than "no work", which is true and useless.
+
+### Why the check runs twice
+
+`admit` arranges independence; `auditMatrixVerdict` proves it. Both are needed: a
+lease can expire and be retaken, so the surface that was eligible when it claimed
+is not necessarily the one that submitted. The second check reads the recorded
+lineage of the passes that actually ran, never the role name the submitter
+claimed — a submitter claiming a role is the thing being checked.
+
+### The guards are load-bearing
+
+Proven by inversion rather than asserted:
+
+- relaxing `PRIMARY_ADVERSARIAL` from ACCOUNT to SESSION fails **8** tests
+- deleting the pre-swap `admit` hook fails **4** tests
+
+`tests/auditIndependence.test.ts` is 15 tests on both backends: same executor
+refused before lease, each pair refused at its own dimension, refusal consuming
+no attempt, the eligible surface claiming immediately afterwards, two claimants
+racing without defeating the rule, missing lineage failing closed, a refused
+surface still draining unrelated work, and the matrix itself pinned so a change
+to it is a policy decision rather than a refactor.
+
+**1295/1295 on Postgres, 1270 passing / 25 skipped on SQLite.**
+
+---
+
+### The finding this replaced
+
+#### (superseded) S19 — audit independence is not enforced anywhere
 
 `services/research/independence.ts` is correct, and it is proven on both
 backends: self-audit refused, PRIMARY/ADVERSARIAL session sharing refused,

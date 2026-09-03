@@ -332,8 +332,10 @@ run against two real allowances. Two Routines on one account would not close it;
 that proves routing across surfaces and says nothing about routing across
 allowances, which is the distinction the schema exists to keep.
 
-So the honest state is **STEP 11 NOT COMPLETE — CROSS-ACCOUNT ROUTING PROOF
-OPEN**, and what it is waiting on is provisioning rather than code.
+Both are now closed. `friend-2` / `V2` is registered on its own subscription
+with its own credential, four bins split 2/2 across the accounts, failover moved
+every bin to the survivor and back, and the audit roles are separated by a rule
+Brain enforces before it hands work out.
 
 Two things Step 11 established that outlive it:
 
@@ -348,4 +350,15 @@ Two things Step 11 established that outlive it:
   arriving, so a healthy Routine walked toward quarantine while its workers were
   visibly turning up. Running it in production is what found that; reading it
   had not.
+- **A contract written at two levels cannot be enforced at one.** Audit
+  independence asks for account separation between the two arguers and session
+  separation for the judge. Read as one uniform level it demands three
+  pairwise-distinct accounts, which two accounts cannot supply — so the rule
+  looked unsatisfiable and was nearly weakened to fit. It was the reading that
+  was wrong, not the contract: two accounts and three sessions meet it exactly.
+- **A guard after the claim is a guard that spends the thing it protects.**
+  Eligibility is decided inside the claim loop *before* the compare-and-swap, so
+  a refused worker consumes no lease, no attempt and no generation. Checked
+  after, every ineligible glance would have burned one of an audit item's two
+  attempts against the very rule meant to protect it.
 

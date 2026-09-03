@@ -872,6 +872,35 @@ a value the claimant does not supply.**
   `simulated: true` and a content-addressed trace id, so a projection cannot be
   read back as a measurement.
 
+**Audit independence is a rule Brain applies before it hands work out.** The
+signed contract is two dimensions, not one: PRIMARY and ADVERSARIAL are
+separated by **account**, the JUDGE from both by **session**. Read as one
+uniform level it demands three pairwise-distinct accounts, which a two-account
+fleet cannot supply — so the rule looks unsatisfiable and invites being
+weakened. The reading was wrong, not the contract; two accounts and three
+sessions meet it exactly. `services/research/auditEligibility.ts` holds the
+matrix per pair as a constant, because a caller that could choose the level is a
+caller that could lower it, and no account count appears anywhere in it.
+
+- **The decision happens before the lease.** `claimWork` takes an injected
+  `admit` hook and asks it *inside* the claim loop, ahead of the
+  compare-and-swap. A refused worker consumes no lease, no attempt, no
+  generation and no history — indistinguishable from losing the race. Checked
+  after the claim instead, every ineligible glance would burn one of an audit
+  item's two attempts against the rule meant to protect it.
+- **It is asked at every entrance** — the MCP tool, the bin service and the HTTP
+  route — because a guard on one entrance is not a guard. And again at the
+  judge before storage, because a lease can expire and be retaken, so eligible
+  at claim time is not eligible at submit time.
+- **Nothing asks a Routine to police itself.** The worker comes from the
+  authenticated principal, the Routine and account from
+  `fleet_routines.worker_id`, and the session from the credential the request
+  authenticated with. No body field contributes, so a Routine cannot declare
+  itself independent.
+- **Unknown lineage fails closed.** A worker bound to no registered Routine has
+  no resolvable account and is refused, because "we could not tell" must never
+  read the same as "we checked".
+
 **Never infer fleet capacity from account count.** Throughput is measured per
 account, Routine, workload class and reset period, or it is reported as unknown.
 
