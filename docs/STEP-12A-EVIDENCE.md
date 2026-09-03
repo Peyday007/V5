@@ -94,27 +94,56 @@ read projection unions legacy `messages` with `russell_messages` by
 useful; it is not cognition, and it stays behind Legacy rather than being
 dressed up as Russell.
 
-### Production reads still outstanding
+### The production read (run 33818496163, 2026-09-03T23:39Z)
 
-`step12a-inspect.yml` reads the deployed release, the configured secret **names
-and digests** (never values), and the schema version and per-table baselines
-through the container's own credential. It declares `environment: production`
-and is therefore queued behind that environment's reviewer rule. It is a read
-and it changes nothing; the deployed commit, provider configuration and Step
-9/10/11 baselines are recorded here when it runs, and no mutation happens before
-they are.
+`step12a-inspect.yml` reads the deployed release and the configured secret
+**names and digests** — never values — and writes nothing.
 
-### One question this raises for the build
+| | |
+|---|---|
+| Image | `northline-brain:deployment-01M1JW5B0BZ75DVH24NHA6F6DS` |
+| Release | **v98**, complete, deployed 2026-09-03T05:38:59Z |
+| Machine | `811d651c26d948`, iad, started, 1/1 checks passing |
+| Secrets configured | 11: the six database/storage ones, plus `BRAIN_ROUTINE_ID`, `BRAIN_ROUTINE_VERSION`, `BRAIN_ROUTINE_TOKEN`, `BRAIN_ROUTINE_TOKEN_2` and **`BRAIN_ROUTINE_TOKEN_3`** |
 
-`BRAIN_PROVIDER` is absent from `fly.toml`, so production falls back to the
-**mock** provider unless a Fly secret says otherwise, and the Claude provider
-reads `ANTHROPIC_API_KEY`. Russell's conversation must be model-backed, and
-deterministic canned prose dressed as an answer is explicitly forbidden. The
-default acceptance authority also forbids paid overages and new spending while
-permitting already-connected fixed-subscription Routines. Which of those two
-facts holds in production decides how Russell's turn is served, and it is read
-before the seam is chosen rather than guessed at. Recorded here when the
-inspection completes.
+The schema/baseline step was skipped: `BRAIN_DATABASE_URL` is a Fly secret but
+not a GitHub one, so the runner had nothing to connect with. The container has
+it, and the baseline is read from inside the container before the first
+mutation rather than from the runner.
+
+**`BRAIN_ROUTINE_TOKEN_3` is deployed**, which was not known when Step 11's
+blocker was written up. It is the credential a third Routine needs, so the
+second friend-2 trigger can be registered as a real, fireable surface on that
+account without asking for anything further. That does not by itself close
+`A11` — the second Claude account must still authenticate as its own Brain
+worker identity — but it removes the missing-secret half of the fallback.
+
+### The inference seam — decided from what is actually deployed
+
+**There is no `ANTHROPIC_API_KEY` and no `BRAIN_PROVIDER` in production.**
+`providers/index.ts:60` falls back to the mock when `BRAIN_PROVIDER` is unset,
+and `providers/claude.ts:106` needs `ANTHROPIC_API_KEY` to reach the Anthropic
+API at all. So the deployed Brain has exactly two candidate inference paths, and
+only one of them is permitted:
+
+| Path | Status |
+|---|---|
+| Mock provider | **Refused.** Deterministic canned prose presented as a grounded answer is the one thing Russell's conversation may never be. |
+| Anthropic API | **Refused by authority, not by capability.** The key is absent, and setting it creates paid API usage the user has not authorized. `GOAL_BUDGET`'s default prohibits new spending, and a build that quietly bought its way past that would be the exact failure the rule exists for. |
+| The fixed-subscription Cowork fleet | **Permitted, and already connected.** Three Routine credentials are deployed, the dispatcher fires them, and the default acceptance authority explicitly allows "use of already-connected fixed-subscription Routines". |
+
+So **Russell's turn is served by the fleet, not by a paid API.** The turn
+persists as pending with its retryable reason, a bin carries it to a worker, the
+worker returns a structured response, the server validates every reference,
+enum, transition, authority and side effect before anything is stored, and the
+conversation shows the answer when it lands. That is genuinely model-backed, it
+spends nothing new, and it reuses the dispatch, lease, fencing and recovery
+machinery Steps 10 and 11 already proved.
+
+It also costs latency, and the honest consequence is that a Russell reply is not
+instant. The pending-turn contract the assignment already requires — persist,
+show that Russell has not finished, never manufacture an answer, resume exactly
+once — is what makes that truthful rather than broken.
 
 ---
 
