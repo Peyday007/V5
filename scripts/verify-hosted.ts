@@ -54,6 +54,14 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ModernMcpClient } from './mcpModernClient.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import {
+  bindRoutineWorker,
+  createAccount,
+  createRoutine,
+  getAccountByName,
+  getRoutineByRef,
+} from '../server/repos/fleet.ts';
+import { auditAdmission, lineageForWorker } from '../server/services/research/auditAdmission.ts';
 import { initStorage } from '../server/services/storage/index.ts';
 import {
   createUser,
@@ -261,6 +269,109 @@ interface Fixtures {
    */
   adminCookie: string;
   adminId: string;
+  /**
+   * Three authentic audit surfaces across two account lineages.
+   *
+   * The signed matrix separates PRIMARY from ADVERSARIAL by **account** and the
+   * JUDGE from both by **session**, so one worker holding one credential cannot
+   * run all three — the live Brain refuses the second claim, which is exactly
+   * what it should do and exactly what broke this harness the first time it met
+   * the rule.
+   *
+   * Two Brain workers, each bound to a Routine on its own registered account,
+   * and three credentials: one each for the arguers and a second on account A
+   * for the judge. Registering a Routine row and binding a worker makes no HTTP
+   * call to any provider, so none of this spends Routine fire allowance — the
+   * surfaces are real to Brain and cost nothing outside it.
+   */
+  audit: {
+    primary: { workerId: string; credential: string; credentialId: string; accountId: string };
+    adversarial: { workerId: string; credential: string; credentialId: string; accountId: string };
+    judge: { workerId: string; credential: string; credentialId: string; accountId: string };
+  };
+}
+
+/**
+ * Two accounts, two bound workers, three sessions.
+ *
+ * Idempotent like every other fixture here: names are fixed, rows are reused,
+ * and a second run neither duplicates an account nor re-points a Routine.
+ */
+async function setUpAuditSurfaces(projectId: string): Promise<Fixtures['audit']> {
+  async function account(name: string): Promise<string> {
+    const existing = await getAccountByName(name);
+    if (existing) return existing.id;
+    return (await createAccount({ name, planLabel: 'verification', declaredPlanPower: 'unknown' })).id;
+  }
+  async function surface(
+    accountName: string,
+    routineRef: string,
+    workerName: string,
+  ): Promise<{ workerId: string; accountId: string }> {
+    const accountId = await account(accountName);
+    const worker =
+      (await getWorkerByName(workerName)) ??
+      (await createWorker({
+        name: workerName,
+        displayName: `Hosted verification audit worker (${workerName})`,
+        workerType: 'GENERIC',
+        description: 'Created by scripts/verify-hosted.ts. One audit lineage.',
+        createdByType: 'SYSTEM',
+        createdById: 'verify-hosted',
+      }));
+    await setWorkerStatus(worker.id, 'ACTIVE');
+    await grantMembership({
+      projectId,
+      principalType: 'WORKER',
+      principalId: worker.id,
+      role: null,
+      scopes: RESEARCH_SCOPES,
+      grantedByType: 'SYSTEM',
+      grantedById: 'verify-hosted',
+    });
+    const routine =
+      (await getRoutineByRef(routineRef)) ??
+      (await createRoutine({
+        accountId,
+        routineRef,
+        name: routineRef,
+        // A name, not a value, and one no deployment defines: this Routine
+        // exists to give the worker an account lineage and must never be
+        // routable, so the dispatcher skips it for a missing secret.
+        tokenSecretName: 'VERIFY_HOSTED_NEVER_SET',
+      }));
+    await bindRoutineWorker(routine.id, worker.id);
+    return { workerId: worker.id, accountId };
+  }
+
+  const a = await surface('verify-hosted-account-a', 'trig_verify_hosted_a', `${RESEARCH_WORKER_NAME}-audit-a`);
+  const b = await surface('verify-hosted-account-b', 'trig_verify_hosted_b', `${RESEARCH_WORKER_NAME}-audit-b`);
+
+  const issue = async (workerId: string) =>
+    issueWorkerCredential({ workerId, issuedByType: 'SYSTEM', issuedById: 'verify-hosted' });
+
+  const primary = await issue(a.workerId);
+  const adversarial = await issue(b.workerId);
+  // A *second* credential on account A. The judge pairs are separated on
+  // session, not account, so this is the cheapest lineage that satisfies the
+  // matrix — and proving it with two accounts rather than three is the whole
+  // point of the contract being per-pair.
+  const judge = await issue(a.workerId);
+
+  return {
+    primary: {
+      workerId: a.workerId, accountId: a.accountId,
+      credential: primary.plaintext, credentialId: primary.credential.id,
+    },
+    adversarial: {
+      workerId: b.workerId, accountId: b.accountId,
+      credential: adversarial.plaintext, credentialId: adversarial.credential.id,
+    },
+    judge: {
+      workerId: a.workerId, accountId: a.accountId,
+      credential: judge.plaintext, credentialId: judge.credential.id,
+    },
+  };
 }
 
 async function setUp(): Promise<Fixtures> {
@@ -457,7 +568,18 @@ async function setUp(): Promise<Fixtures> {
     ownerCookie.length > 0 ? 'signed in' : `login returned ${ownerLogin.status}: ${ownerLogin.body.slice(0, 120)}`,
   );
 
+  /*
+   * The three audit surfaces.
+   *
+   * Two workers, two accounts, three credentials. `createRoutine` writes a row
+   * and `bindRoutineWorker` observes an identity; neither talks to a provider,
+   * so this costs no fire allowance. The Routine refs are namespaced to this
+   * harness so they can never collide with a real registered surface.
+   */
+  const auditSurfaces = await setUpAuditSurfaces(scope.id);
+
   return {
+    audit: auditSurfaces,
     adminCookie: ownerCookie,
     adminId: ownerId,
     rivalCredential: rivalIssued.plaintext,
@@ -1122,9 +1244,40 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
     research_question: 'What would a real packet on this subject have to establish?',
   };
 
+  /*
+   * One surface per role, because Brain now requires it.
+   *
+   * PRIMARY on account A, ADVERSARIAL on account B, JUDGE on account A in a
+   * different session. Reusing one client for all three — which this harness
+   * did until the matrix was enforced — is refused at the claim, and correctly:
+   * three roles from one lineage is not an audit.
+   */
+  const auditSurface = {
+    PRIMARY: fixtures.audit.primary,
+    ADVERSARIAL: fixtures.audit.adversarial,
+    JUDGE: fixtures.audit.judge,
+  } as const;
+  const auditClient = (credential: string) =>
+    new ModernMcpClient({
+      url: `${base}/mcp`,
+      credential,
+      clientName: 'brain-hosted-verification-audit',
+    });
+
+  record(
+    'the three audit roles have three sessions across two accounts',
+    fixtures.audit.primary.accountId !== fixtures.audit.adversarial.accountId &&
+      fixtures.audit.judge.credentialId !== fixtures.audit.primary.credentialId &&
+      fixtures.audit.judge.credentialId !== fixtures.audit.adversarial.credentialId,
+    `accounts ${fixtures.audit.primary.accountId === fixtures.audit.adversarial.accountId ? 'SHARED' : 'distinct'}, ` +
+      'judge session distinct from both',
+  );
+
   let auditRolesRun = 0;
   for (const role of ['PRIMARY', 'ADVERSARIAL', 'JUDGE'] as const) {
-    const auditClaim = await claimResearch(fixtures, 'RESEARCH_AUDIT', orchestrationId);
+    const surface = auditSurface[role];
+    const roleWorker = auditClient(surface.credential);
+    const auditClaim = await claimResearch(fixtures, 'RESEARCH_AUDIT', orchestrationId, surface);
     if (!auditClaim) break;
     const body =
       role === 'PRIMARY'
@@ -1155,7 +1308,7 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
                 confidence: 0.5,
               },
             };
-    const result = await worker.call('brain_submit_audit', { ...proofOf(auditClaim), ...body });
+    const result = await roleWorker.call('brain_submit_audit', { ...proofOf(auditClaim), ...body });
     if (result['role'] === role) auditRolesRun += 1;
     if (role !== 'JUDGE') {
       record(
@@ -1170,7 +1323,7 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
         `verdict ${String(result['verdict'])}`,
       );
     }
-    await worker.call('brain_complete_work', { ...proofOf(auditClaim), summary: `${role} in` });
+    await roleWorker.call('brain_complete_work', { ...proofOf(auditClaim), summary: `${role} in` });
   }
   record(
     'all three audit roles ran, strictly in order',
@@ -1283,9 +1436,23 @@ async function claimResearch(
   fixtures: Fixtures,
   workType: string,
   orchestrationId?: string,
+  /**
+   * The surface claiming, when the role matters.
+   *
+   * Audit items are admitted against the independence matrix before the lease,
+   * so an audit claim has to come from the lineage that will submit it — the
+   * same worker and the same credential. Passing the admission rule here rather
+   * than bypassing it is the point: the harness must be refused by the same
+   * code the live queue uses, or it is testing a path nothing takes.
+   */
+  surface?: { workerId: string; credentialId: string },
 ): Promise<{ workItemId: string; leaseId: string; leaseGeneration: number } | null> {
+  const workerId = surface?.workerId ?? fixtures.researchWorkerId;
+  const credentialId = surface?.credentialId ?? fixtures.researchCredentialId;
   const [claimed] = await claimWork({
-    workerId: fixtures.researchWorkerId,
+    admit: auditAdmission(await lineageForWorker({ workerId, credentialId })),
+    workerId,
+    credentialId,
     scopes: [{ projectId: fixtures.scope.id, scopes: RESEARCH_SCOPES }],
     workTypes: [workType],
   });

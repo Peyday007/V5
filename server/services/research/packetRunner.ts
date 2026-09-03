@@ -38,7 +38,8 @@
  * approval is a separate entry point a person calls, and the ordinary advance
  * refuses to queue a PLANNED fragment.
  */
-import { getApprovalEnvelope, planFitsEnvelope } from './approvalEnvelope.ts';
+import { envelopeAvailable, getApprovalEnvelope, planFitsEnvelope } from './approvalEnvelope.ts';
+import { getProject } from '../../repos/projects.ts';
 import { dependencyKeys } from '../../domain/dependencies.ts';
 import { outcomeFor, repairable, TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { bundleKeyFor } from './bundling.ts';
@@ -1209,6 +1210,37 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     }
 
     if (envelope) {
+      /*
+       * Two questions before the plan is even read: is this envelope for this
+       * project, and has this authorization already been spent?
+       *
+       * Asked first because a one-use authorization that has been used is not a
+       * narrower rule — it is no authorization at all, and letting the plan be
+       * measured against it would produce a "fits" verdict for a decision
+       * nobody made.
+       */
+      const project = await getProject(orchestration.projectId);
+      const availability = await envelopeAvailable({
+        envelope,
+        projectId: orchestration.projectId,
+        projectSlug: project?.slug ?? '',
+        orchestrationId,
+      });
+      if (!availability.available) {
+        await updateOrchestration(orchestrationId, {
+          status: 'NEEDS_HUMAN',
+          failureReason:
+            'The named approval envelope cannot be applied to this packet: ' +
+            availability.reasons.join(' '),
+        });
+        return {
+          orchestrationId,
+          status: 'NEEDS_HUMAN',
+          enqueued: [],
+          waitingOn: 'a person, because the named approval envelope is not available to this packet',
+        };
+      }
+
       const verdict = planFitsEnvelope({ envelope, orchestration, fragments: awaitingApproval });
       await recordEvent({
         projectId: orchestration.projectId,

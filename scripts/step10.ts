@@ -37,6 +37,7 @@
 import { initDatabase, getDb } from '../server/db/database.ts';
 import { listPasses } from '../server/repos/research.ts';
 import { auditMatrixVerdict } from '../server/services/research/auditEligibility.ts';
+import { STEP11_AUDIT_INDEPENDENCE_ASSIGNMENT } from '../server/services/research/approvalEnvelope.ts';
 import { initStorage } from '../server/services/storage/index.ts';
 import { createProject, getProjectBySlug } from '../server/repos/projects.ts';
 import { getUser, grantMembership, listUsers, listWorkers } from '../server/repos/identity.ts';
@@ -67,7 +68,7 @@ import {
 import { getOrchestration } from '../server/repos/research.ts';
 import { authorizeUnresolvedGaps } from '../server/services/research/gapPolicy.ts';
 import { advancePacket } from '../server/services/research/packetRunner.ts';
-import { listLayers } from '../server/repos/layers.ts';
+import { createLayer, listLayers } from '../server/repos/layers.ts';
 import { DEAL_DISPATCH_SLUG } from '../server/seed.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import { describeFireTarget } from '../server/services/dispatch/fire.ts';
@@ -79,6 +80,8 @@ import {
 import type { BinManifest, WorkerScope } from '../server/domain/types.ts';
 
 const SLUG = 'step-10-acceptance';
+const STEP11_SLUG = 'step-11-acceptance';
+const STEP11_LAYER_SLUG = 'delaware-entity-obligations';
 const NAME = 'Step 10 acceptance';
 
 const SCOPES: WorkerScope[] = [
@@ -601,42 +604,43 @@ async function main(): Promise<void> {
 
   if (command === 'audit-packet') {
     /*
-     * The smallest packet that genuinely reaches all three audit roles.
+     * The Step 11 acceptance packet. One question, one fragment, one use.
      *
-     * Step 11's remaining question is not whether research works — Step 10
-     * answered that with the Michigan packet, and re-running something that
-     * size to test a lease guard would spend hours of allowance to observe
-     * three claims. This asks one bounded question with one obvious primary
-     * source, so the packet is small enough to finish and real enough that the
-     * audit roles have something to argue about. It is a *research* packet like
-     * any other: same `startPacket`, same envelope discipline, same contract.
-     *
-     * Deliberately not Michigan, and deliberately not a fixture: a synthetic
-     * packet would prove the guard against work nothing else takes.
+     * Its own project, so an acceptance run never files into one holding real
+     * research, and its own frozen envelope, which pins this exact assignment
+     * by digest and is spent by its first approval. The human authorization is
+     * the instruction that defined the envelope; the planner is not approving
+     * itself, because the limits were fixed in code before any plan existed.
      */
-    const project = await getProjectBySlug(DEAL_DISPATCH_SLUG);
-    if (!project) return refuseStep10('the Deal Dispatch project does not exist.');
-    const layer = (await listLayers(project.id)).find((l) => l.name === 'Monetization Logic');
-    if (!layer) return refuseStep10('no Monetization Logic layer.');
+    const project =
+      (await getProjectBySlug(STEP11_SLUG)) ??
+      (await createProject({
+        name: 'Step 11 acceptance',
+        slug: STEP11_SLUG,
+        description:
+          'Created by scripts/step10.ts for the Step 11 audit-independence acceptance. Holds one ' +
+          'packet so that proving a lease guard never puts an acceptance document into a project ' +
+          'with real research in it.',
+      }));
+    const layers = await listLayers(project.id);
+    const layer =
+      layers.find((candidate) => candidate.slug === STEP11_LAYER_SLUG) ??
+      (await createLayer({
+        projectId: project.id,
+        name: 'Delaware entity obligations',
+        slug: STEP11_LAYER_SLUG,
+        orderIndex: layers.length,
+      }));
 
     const started = await startPacket({
       projectId: project.id,
       layerId: layer.id,
-      title: 'Delaware business-broker licensing: is there a licence at all',
-      assignment:
-        'Answer one question about Delaware, and nothing else: does Delaware license or register ' +
-        'business brokers or business-opportunity intermediaries who arrange the sale of a ' +
-        'privately held business where no real property changes hands? Answer YES or NO and cite ' +
-        'the primary authority that settles it — the Delaware Code title that would contain such ' +
-        'a licence if it existed, or the Division of Professional Regulation\u2019s own list of ' +
-        'regulated professions. A documented search of the places the licence would be, returning ' +
-        'nothing, is the accepted way to establish that it does not exist; say so explicitly with ' +
-        'what was searched. Do not research any other state, real-estate brokerage, federal ' +
-        'securities registration, or tax. One question, one answer, one citation.',
+      title: 'Delaware LLC annual tax under 6 Del. C. §18-1107',
+      assignment: STEP11_AUDIT_INDEPENDENCE_ASSIGNMENT,
       approval: {
         mode: 'AUTO_WITHIN_ENVELOPE',
-        envelopeId: 'STEP10_MICHIGAN_LICENSING_V1',
-        authorizedBy: 'operator:step-11-audit-independence',
+        envelopeId: 'STEP11_AUDIT_INDEPENDENCE_V1',
+        authorizedBy: 'operator:step-11-audit-independence-instruction',
       },
       startedBy: { kind: 'PERSON', id: 'step11-audit-independence' },
     });
@@ -651,30 +655,24 @@ async function main(): Promise<void> {
         'Carry one small real research packet to a verdict whose three audit roles ran on ' +
         'independent execution lineages that Brain enforced before each lease.',
       rationale:
-        'Step 11 proved routing. This proves that the roles Brain hands out cannot be taken by ' +
-        'the same surface, on work that is real rather than synthetic.',
+        'Step 11 proved routing. This proves the roles Brain hands out cannot be taken by one ' +
+        'surface, on work that is real rather than synthetic.',
       manifest: {
         objective: 'Drain this research packet to its own terminal state.',
         why: 'The audit roles must land on separate accounts and separate sessions.',
         lineage: {
           projectId: project.id,
           layerId: layer.id,
-          goal: 'Whether Delaware licenses business brokers at all.',
+          goal: 'The Delaware LLC annual tax and its due date, from the statute.',
           orchestrationId: orchestration.id,
         },
         units: [],
-        acceptableSources: [
-          'The Delaware Code',
-          'Delaware Division of Professional Regulation published lists and guidance',
-        ],
+        acceptableSources: ['The Delaware Code, title 6', "Delaware's own published state guidance"],
         excludedSources: [
-          'Law-firm articles and broker association pages as support for a claim',
-          'Any other state, real-estate brokerage, federal securities registration, and tax',
+          'Law-firm articles, registered-agent pages and any secondary summary as support for a claim',
+          'Any other state, and anything federal',
         ],
-        evidence: [
-          'A quoted primary provision with its citation, or an explicit documented negative ' +
-            'search naming what was looked at',
-        ],
+        evidence: ['The exact section and the relied-upon passage, quoted'],
         outputs: ['One filed, audited document with a claim ledger inside it'],
         authorizedActions: [
           'brain_claim_work and the research tools, for work items belonging to this packet',
@@ -683,6 +681,7 @@ async function main(): Promise<void> {
           'any spend beyond this packet',
           'any work item outside this orchestration',
           'enabling paid overage',
+          'any purchase, contact, filing or other irreversible external action',
         ],
         budgetUnits: 1,
         retry: { maxAttempts: 3, backoffSeconds: 60 },
@@ -700,6 +699,8 @@ async function main(): Promise<void> {
     });
 
     console.log('STEP11 AUDIT PACKET');
+    console.log(`  project        ${project.slug} ${project.id}`);
+    console.log(`  layer          ${layer.name} ${layer.id}`);
     console.log(`  orchestration  ${orchestration.id}  ${orchestration.status}`);
     console.log(`  bin            ${bin.id}  ${bin.state}`);
     console.log(`STEP10: OK audit-packet orchestration=${orchestration.id} bin=${bin.id}`);

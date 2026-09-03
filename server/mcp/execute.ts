@@ -8,7 +8,8 @@
  */
 import { recordIdentityEvent } from '../repos/identity.ts';
 import type { Principal } from '../domain/types.ts';
-import { ToolError } from './errors.ts';
+import { ToolError, type ToolErrorCategory } from './errors.ts';
+import { TerminalEffectFailure } from '../services/effects/engine.ts';
 import { assertResultWithinBounds, takeRateSlot } from './limits.ts';
 import { findTool, type ToolContext } from './tools.ts';
 
@@ -93,6 +94,46 @@ function errorResult(error: ToolError): CallToolBody {
  * category was internal. The real error is left to the process log, which is
  * Brain's to read.
  */
+/**
+ * An effect that refused for a policy reason, translated into a tool result.
+ *
+ * `TerminalEffectFailure` is Step 6's vocabulary and is not a `ToolError`, so
+ * until now every one of them fell through to `internalResult()` and reached
+ * the caller as `UNAVAILABLE: "That call could not be completed."` — a policy
+ * refusal disguised as a Brain fault, with the reason redacted. §21 is explicit
+ * that a tool's own failure is a *result*, not a protocol error, precisely so
+ * the consumer can see it and self-correct; the audit-independence refusal was
+ * the case that made the gap visible, because a worker told "unavailable" would
+ * retry forever against a rule that will never let it through.
+ *
+ * The two vocabularies are deliberately not merged. `NOT_AUTHORIZED` is an
+ * effect category and `TOOL_ERROR_CATEGORIES` is the protocol's closed set,
+ * which §21 fixes; widening it to add a synonym for `NOT_PERMITTED` would
+ * change what every MCP client must understand in order to add nothing. So the
+ * effect category is *mapped* to the protocol category, and carried verbatim in
+ * the detail under `policy`, where a caller that wants the exact word can read
+ * it without the protocol growing one.
+ */
+const EFFECT_TO_TOOL: Record<string, ToolErrorCategory> = {
+  NOT_AUTHORIZED: 'NOT_PERMITTED',
+  INVALID_INPUT: 'INVALID_INPUT',
+  DEPENDENCY_UNAVAILABLE: 'UNAVAILABLE',
+  PROVIDER_REJECTED: 'CONFLICT',
+  TIMEOUT: 'UNAVAILABLE',
+  ABANDONED: 'CONFLICT',
+  // An internal error stays opaque. Its message may carry a path or a SQL
+  // fragment, and none of that is the caller's.
+  INTERNAL_ERROR: 'UNAVAILABLE',
+};
+
+export function toolResultFor(error: TerminalEffectFailure): CallToolBody | null {
+  const category = EFFECT_TO_TOOL[error.category];
+  if (!category || error.category === 'INTERNAL_ERROR') return null;
+  return errorResult(
+    new ToolError(category, error.message, { policy: error.category }),
+  );
+}
+
 function internalResult(): CallToolBody {
   return {
     content: [{ type: 'text', text: 'That call could not be completed.' }],
@@ -187,6 +228,18 @@ export async function callTool(input: CallInput): Promise<CallOutput> {
       },
     };
   } catch (error) {
+    if (error instanceof TerminalEffectFailure) {
+      const translated = toolResultFor(error);
+      if (translated) {
+        await audit({
+          call: input,
+          projectId: null,
+          result: error.category === 'NOT_AUTHORIZED' ? 'DENIED' : 'FAILED',
+          metadata: { category: error.category },
+        });
+        return { result: translated };
+      }
+    }
     if (error instanceof ToolError) {
       await audit({
         call: input,

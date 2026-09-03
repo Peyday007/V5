@@ -70,10 +70,17 @@ export interface ExecutorLineage {
 export interface EligibilityVerdict {
   eligible: boolean;
   policyVersion: string;
-  /** Why not, in the words a refusal is recorded with. */
+  /**
+   * Why not, safe to return to the caller.
+   *
+   * Names the pair and the dimension and never the value, because the session
+   * dimension is a credential identifier.
+   */
   reasons: string[];
   /** The pairs that were compared and the dimension each used. */
   applied: { pair: string; level: IndependenceLevel; against: AuditRole }[];
+  /** The offending values, for Brain's own log. Never returned to a caller. */
+  conflicts: { pair: string; level: IndependenceLevel; dimension: string; value: string }[];
 }
 
 function dimensionOf(level: IndependenceLevel): (l: AuditLineage | ExecutorLineage) => string | null {
@@ -124,6 +131,7 @@ export function auditEligibility(input: {
   const { audits } = lineageFromPasses(passes);
   const reasons: string[] = [];
   const applied: EligibilityVerdict['applied'] = [];
+  const conflicts: EligibilityVerdict['conflicts'] = [];
 
   for (const recorded of audits) {
     if (recorded.role === role) continue;
@@ -144,10 +152,21 @@ export function auditEligibility(input: {
       continue;
     }
     if (mine === theirs) {
+      /*
+       * No identifier in the sentence.
+       *
+       * The session dimension *is* the credential the request authenticated
+       * with, so printing "shared the same session (cred_…)" would put a
+       * credential identifier into a refusal an untrusted caller reads. The
+       * reason says which pair and which dimension, which is everything the
+       * caller needs to act; the value stays in `conflicts`, which Brain logs
+       * and never returns.
+       */
       reasons.push(
-        `${role} would share the same ${noun(level)} (${mine}) as ${recorded.role}, ` +
+        `${role} would share the same ${noun(level)} as ${recorded.role}, ` +
           `which ${key} requires to differ.`,
       );
+      conflicts.push({ pair: key, level, dimension: noun(level), value: mine });
     }
   }
 
@@ -156,6 +175,7 @@ export function auditEligibility(input: {
     policyVersion: INDEPENDENCE_POLICY_VERSION,
     reasons,
     applied,
+    conflicts,
   };
 }
 
@@ -173,6 +193,7 @@ export function auditMatrixVerdict(passes: ResearchPass[]): EligibilityVerdict {
   const { audits } = lineageFromPasses(passes);
   const reasons: string[] = [];
   const applied: EligibilityVerdict['applied'] = [];
+  const conflicts: EligibilityVerdict['conflicts'] = [];
   const byRole = new Map<AuditRole, AuditLineage>();
   for (const lineage of audits) byRole.set(lineage.role, lineage);
 
@@ -191,7 +212,10 @@ export function auditMatrixVerdict(passes: ResearchPass[]): EligibilityVerdict {
       );
       continue;
     }
-    if (ka === kb) reasons.push(`${left} and ${right} shared the same ${noun(level)} (${ka}).`);
+    if (ka === kb) {
+      reasons.push(`${left} and ${right} shared the same ${noun(level)}.`);
+      conflicts.push({ pair: key, level, dimension: noun(level), value: ka });
+    }
   }
 
   return {
@@ -199,5 +223,6 @@ export function auditMatrixVerdict(passes: ResearchPass[]): EligibilityVerdict {
     policyVersion: INDEPENDENCE_POLICY_VERSION,
     reasons,
     applied,
+    conflicts,
   };
 }

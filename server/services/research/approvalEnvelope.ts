@@ -43,6 +43,7 @@
  * over-generalisation this file exists instead of.
  */
 import crypto from 'node:crypto';
+import { listEvents } from '../../repos/events.ts';
 import type { ResearchFragment, ResearchOrchestration } from '../../domain/types.ts';
 
 /**
@@ -113,6 +114,23 @@ export interface ApprovalEnvelope {
   forbiddenActions: RegExp;
   /** The evidence floor the envelope refuses to see lowered. */
   minIndependentSourcesFloor: number;
+  /**
+   * The project slug this envelope may approve inside, when it is scoped to one.
+   *
+   * An envelope authorized for an acceptance run must not be usable to approve
+   * a plan in a project holding real research, however exactly the assignment
+   * matches.
+   */
+  projectSlug?: string;
+  /**
+   * Whether this authorization is spent by its first approval.
+   *
+   * A standing envelope is a rule; a one-use envelope is a *decision about one
+   * packet*, and re-using it would silently turn the second into the first.
+   * Consumption is read from `project_events` rather than from a flag somebody
+   * has to remember to set, so a restart cannot un-spend it.
+   */
+  oneUse?: boolean;
 }
 
 function sha256(text: string): string {
@@ -124,7 +142,47 @@ function sha256(text: string): string {
  *
  * Frozen, and keyed by an id a caller can name but not define.
  */
+export const STEP11_AUDIT_INDEPENDENCE_ASSIGNMENT =
+  'In Delaware, under 6 Del. C. \u00a718-1107 as in force during 2026, what annual tax must a ' +
+  'domestic limited liability company pay, and when is that tax due?';
+
 export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Object.freeze({
+  /**
+   * The Step 11 audit-independence acceptance. One packet, once.
+   *
+   * The human authorization is the instruction that created it, quoted in
+   * `authorization` and recorded on every approval event. The planner is not
+   * approving itself: the limits below were fixed in code before any plan
+   * existed, and nothing in the packet can widen them.
+   *
+   * Narrower than Step 10's in every dimension that matters — one fragment, one
+   * state, statutory sources only, and a project that holds no real research —
+   * because it exists to observe three lease decisions rather than to answer a
+   * hard question.
+   */
+  STEP11_AUDIT_INDEPENDENCE_V1: Object.freeze({
+    id: 'STEP11_AUDIT_INDEPENDENCE_V1',
+    authorization:
+      'The operator authorized exactly one Step 11 acceptance packet on this assignment, in the ' +
+      'Step 11 acceptance project, as one-use, in the instruction that defined this envelope. ' +
+      'The planner is not approving itself.',
+    assignmentSha256: sha256(STEP11_AUDIT_INDEPENDENCE_ASSIGNMENT),
+    projectSlug: 'step-11-acceptance',
+    oneUse: true,
+    maxFragments: 1,
+    geography: /delaware|\bde\b/i,
+    // Every other state, and the federal layer. Delaware only means Delaware.
+    forbiddenScope:
+      /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|ohio|oklahoma|oregon|pennsylvania|tennessee|texas|utah|vermont|virginia|washington|wisconsin|wyoming|new york|new jersey|north carolina|south carolina|west virginia|rhode island|new hampshire|new mexico|north dakota|south dakota|federal|irs|internal revenue)\b/i,
+    // State statutory material and the state's own published guidance. No
+    // secondary source may support a claim, so nothing else is admissible.
+    allowedSourceTypes:
+      /(statut|delaware code|del\. c\.|title 6|state code|administrative code|regulation|division of corporations|department of state|secretary of state|official|primary|government)/i,
+    forbiddenActions:
+      /\b(purchase|pay|payment|subscribe|subscription|invoice|paywall bypass|contact|telephone|phone call|email the|write to|submit a request to|file a|register with|apply for)\b/i,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
   STEP10_MICHIGAN_LICENSING_V1: Object.freeze({
     id: 'STEP10_MICHIGAN_LICENSING_V1',
     authorization:
@@ -168,6 +226,55 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
     minIndependentSourcesFloor: 1,
   } satisfies ApprovalEnvelope),
 });
+
+/**
+ * May this envelope be applied to this packet at all?
+ *
+ * Asked before `planFitsEnvelope`, and kept separate from it on purpose: that
+ * function is deterministic over its arguments and must stay that way, while
+ * these two questions are facts about the world — which project this is, and
+ * whether the authorization has already been spent.
+ *
+ * Consumption is counted from `project_events`, the append-only log, rather
+ * than from a column somebody has to remember to set. A restart cannot un-spend
+ * it, and a second packet naming the same envelope is refused with the
+ * orchestration that used it named, so the refusal is actionable.
+ */
+export async function envelopeAvailable(input: {
+  envelope: ApprovalEnvelope;
+  projectId: string;
+  projectSlug: string;
+  orchestrationId: string;
+}): Promise<{ available: boolean; reasons: string[] }> {
+  const reasons: string[] = [];
+
+  if (input.envelope.projectSlug && input.envelope.projectSlug !== input.projectSlug) {
+    reasons.push(
+      `This envelope authorizes work in "${input.envelope.projectSlug}" and this packet is in ` +
+        `"${input.projectSlug}". An acceptance authorization must not approve a plan in a ` +
+        'project holding real research, however exactly the assignment matches.',
+    );
+  }
+
+  if (input.envelope.oneUse) {
+    const events = await listEvents(input.projectId, 500);
+    const spent = events.find(
+      (event) =>
+        event.eventType === 'RESEARCH_PLAN_SYSTEM_APPROVED' &&
+        (event.payload as { envelopeId?: string })['envelopeId'] === input.envelope.id &&
+        (event.payload as { orchestrationId?: string })['orchestrationId'] !== input.orchestrationId,
+    );
+    if (spent) {
+      reasons.push(
+        `This is a one-use authorization and it was already spent by orchestration ` +
+          `${String((spent.payload as { orchestrationId?: string })['orchestrationId'])}. A second ` +
+          'packet needs its own decision from a person.',
+      );
+    }
+  }
+
+  return { available: reasons.length === 0, reasons };
+}
 
 export function getApprovalEnvelope(id: string): ApprovalEnvelope | null {
   return Object.prototype.hasOwnProperty.call(APPROVAL_ENVELOPES, id)

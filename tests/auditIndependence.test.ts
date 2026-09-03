@@ -36,6 +36,16 @@ import {
   SIGNED_AUDIT_MATRIX,
 } from '../server/services/research/auditEligibility.ts';
 import type { AuditRole } from '../server/services/queue/workTypes.ts';
+import { createHash } from 'node:crypto';
+import { TerminalEffectFailure } from '../server/services/effects/engine.ts';
+import { toolResultFor } from '../server/mcp/execute.ts';
+import {
+  envelopeAvailable,
+  getApprovalEnvelope,
+  STEP11_AUDIT_INDEPENDENCE_ASSIGNMENT,
+} from '../server/services/research/approvalEnvelope.ts';
+import { createProject } from '../server/repos/projects.ts';
+import { recordEvent } from '../server/repos/events.ts';
 
 let projectId = '';
 let orchestrationId = '';
@@ -180,7 +190,8 @@ describe('the signed matrix', () => {
     // Exactly one violation: the arguers. The judge pairs are session-separated
     // and legitimately pass.
     expect(verdict.reasons).toHaveLength(1);
-    expect(verdict.reasons[0]).toMatch(/PRIMARY and ADVERSARIAL shared the same account/);
+    expect(verdict.reasons[0]).toMatch(/PRIMARY and ADVERSARIAL shared the same account\./);
+    expect(verdict.reasons[0]).not.toContain(f.a.accountId);
   });
 
   it('refuses the judge in a session that already argued', async () => {
@@ -199,7 +210,11 @@ describe('the signed matrix', () => {
     });
     const verdict = auditMatrixVerdict(await passes());
     expect(verdict.eligible).toBe(false);
-    expect(verdict.reasons.join(' ')).toMatch(/JUDGE and PRIMARY shared the same session \(shared\)/);
+    // The pair and the dimension, never the value — a session ref is a
+    // credential id, and this reason is read by an untrusted caller.
+    expect(verdict.reasons.join(' ')).toMatch(/JUDGE and PRIMARY shared the same session\./);
+    expect(verdict.reasons.join(' ')).not.toContain('shared)');
+    expect(verdict.conflicts.some((c) => c.value === 'shared')).toBe(true);
   });
 
   it('fails closed on missing lineage rather than passing it', async () => {
@@ -349,6 +364,135 @@ describe('eligibility is decided before the lease', () => {
 });
 
 /* ========================================================================= */
+
+describe('a refusal is a result, not an opaque failure', () => {
+  it('never puts an identifier in a caller-facing reason', async () => {
+    /*
+     * The session dimension *is* the credential the request authenticated with,
+     * so a reason reading "shared the same session (cred_…)" would hand a
+     * credential identifier to an untrusted caller inside a refusal. The pair
+     * and the dimension are everything the caller needs to act; the value stays
+     * in `conflicts`, which Brain logs and never returns.
+     */
+    const f = await fleet();
+    await recordAuditPass({
+      role: 'PRIMARY', workerId: f.a.workerId, routineId: null,
+      accountId: f.a.accountId, sessionRef: 'cred_secret_value',
+    });
+    await recordAuditPass({
+      role: 'ADVERSARIAL', workerId: f.b.workerId, routineId: null,
+      accountId: f.b.accountId, sessionRef: 'cred_other',
+    });
+    await recordAuditPass({
+      role: 'JUDGE', workerId: f.a.workerId, routineId: null,
+      accountId: f.a.accountId, sessionRef: 'cred_secret_value',
+    });
+    const verdict = auditMatrixVerdict(await passes());
+    expect(verdict.eligible).toBe(false);
+    const text = verdict.reasons.join(' ');
+    expect(text).toMatch(/shared the same session/);
+    expect(text).not.toContain('cred_secret_value');
+    expect(text).not.toContain(f.a.accountId);
+    // Brain still knows, for its own log.
+    expect(verdict.conflicts.some((c) => c.value === 'cred_secret_value')).toBe(true);
+  });
+
+  it('maps an effect refusal onto the protocol category rather than UNAVAILABLE', () => {
+    /*
+     * `TerminalEffectFailure` is Step 6's vocabulary and is not a `ToolError`,
+     * so every one of them used to fall through to the internal-error blanket
+     * and reach the caller as `UNAVAILABLE: "That call could not be
+     * completed."` — a policy refusal disguised as a Brain fault, which a
+     * worker would retry forever against a rule that will never let it through.
+     *
+     * The two vocabularies stay separate: `NOT_AUTHORIZED` is an effect
+     * category and `TOOL_ERROR_CATEGORIES` is the protocol's closed set, so the
+     * effect category is mapped to `NOT_PERMITTED` and carried verbatim in the
+     * detail under `policy`.
+     */
+    const body = toolResultFor(
+      new TerminalEffectFailure('NOT_AUTHORIZED', 'The audit lineage does not satisfy the matrix.'),
+    );
+    expect(body).not.toBeNull();
+    const error = (body!.structuredContent as { error: Record<string, unknown> }).error;
+    expect(error['category']).toBe('NOT_PERMITTED');
+    expect(error['policy']).toBe('NOT_AUTHORIZED');
+    expect(error['message']).toMatch(/does not satisfy the matrix/);
+    expect(body!.isError).toBe(true);
+  });
+
+  it('keeps an internal error opaque', () => {
+    // The blanket still exists and still catches the case it was written for:
+    // an internal message may carry a path or a SQL fragment, and none of that
+    // is the caller's.
+    expect(
+      toolResultFor(new TerminalEffectFailure('INTERNAL_ERROR', 'sqlite: /data/brain.db is locked')),
+    ).toBeNull();
+  });
+});
+
+describe('the one-use envelope', () => {
+  it('authorizes exactly the assignment it pins, and nothing else', () => {
+    const envelope = getApprovalEnvelope('STEP11_AUDIT_INDEPENDENCE_V1');
+    expect(envelope).not.toBeNull();
+    expect(envelope!.oneUse).toBe(true);
+    expect(envelope!.projectSlug).toBe('step-11-acceptance');
+    expect(envelope!.maxFragments).toBe(1);
+    // The exact text, by digest. A packet whose question drifted by one word is
+    // not the packet that was authorized.
+    expect(envelope!.assignmentSha256).toBe(
+      createHash('sha256').update(STEP11_AUDIT_INDEPENDENCE_ASSIGNMENT, 'utf8').digest('hex'),
+    );
+    // Delaware only, and every other state refused by construction.
+    expect(envelope!.geography.test('delaware')).toBe(true);
+    expect(envelope!.forbiddenScope.test('michigan')).toBe(true);
+    expect(envelope!.forbiddenScope.test('federal')).toBe(true);
+    // No secondary source may support a claim.
+    expect(envelope!.allowedSourceTypes.test('law firm article')).toBe(false);
+    expect(envelope!.allowedSourceTypes.test('Delaware Code')).toBe(true);
+  });
+
+  it('refuses a second packet once the authorization is spent', async () => {
+    const project = await createProject({ name: 'S11 acceptance', slug: 'step-11-acceptance' });
+    const envelope = getApprovalEnvelope('STEP11_AUDIT_INDEPENDENCE_V1')!;
+
+    const first = await envelopeAvailable({
+      envelope, projectId: project.id, projectSlug: project.slug, orchestrationId: 'orc_first',
+    });
+    expect(first.available).toBe(true);
+
+    // The approval that spends it, written the way the runner writes it.
+    await recordEvent({
+      projectId: project.id,
+      layerId: null,
+      entityType: 'RUN',
+      entityId: 'run_x',
+      eventType: 'RESEARCH_PLAN_SYSTEM_APPROVED',
+      payload: { orchestrationId: 'orc_first', envelopeId: 'STEP11_AUDIT_INDEPENDENCE_V1' },
+    });
+
+    const second = await envelopeAvailable({
+      envelope, projectId: project.id, projectSlug: project.slug, orchestrationId: 'orc_second',
+    });
+    expect(second.available).toBe(false);
+    expect(second.reasons.join(' ')).toMatch(/one-use authorization and it was already spent/);
+    // And the same packet is still allowed to be re-advanced.
+    const again = await envelopeAvailable({
+      envelope, projectId: project.id, projectSlug: project.slug, orchestrationId: 'orc_first',
+    });
+    expect(again.available).toBe(true);
+  });
+
+  it('refuses to approve inside a project it was not scoped to', async () => {
+    const elsewhere = await createProject({ name: 'Real research', slug: 'deal-dispatch-x' });
+    const envelope = getApprovalEnvelope('STEP11_AUDIT_INDEPENDENCE_V1')!;
+    const verdict = await envelopeAvailable({
+      envelope, projectId: elsewhere.id, projectSlug: elsewhere.slug, orchestrationId: 'orc_a',
+    });
+    expect(verdict.available).toBe(false);
+    expect(verdict.reasons.join(' ')).toMatch(/must not approve a plan in a project holding real research/);
+  });
+});
 
 describe('the guards are load-bearing', () => {
   it('would admit the conflicting claim if the account rule were dropped', async () => {
