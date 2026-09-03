@@ -35,6 +35,8 @@
  *   ramp <n> [units] [secs]  one rung of the concurrency ramp: seed, watch, measure
  */
 import { initDatabase, getDb } from '../server/db/database.ts';
+import { listPasses } from '../server/repos/research.ts';
+import { auditMatrixVerdict } from '../server/services/research/auditEligibility.ts';
 import { initStorage } from '../server/services/storage/index.ts';
 import { createProject, getProjectBySlug } from '../server/repos/projects.ts';
 import { getUser, grantMembership, listUsers, listWorkers } from '../server/repos/identity.ts';
@@ -95,6 +97,12 @@ const SCOPES: WorkerScope[] = [
 
 function arg(index: number): string | undefined {
   return process.argv[3 + index];
+}
+
+/** Refuse, in the shape the workflow greps for. */
+function refuseStep10(why: string): void {
+  console.log(`STEP10 REFUSED: ${why}`);
+  process.exitCode = 1;
 }
 
 async function scope(): Promise<string> {
@@ -588,6 +596,145 @@ async function main(): Promise<void> {
     console.log(`  bin            ${bin.id}  ${bin.state}`);
     console.log(`  archive census ${JSON.stringify(started.archive)}`);
     console.log(`STEP10: OK research-start orchestration=${orchestration.id} bin=${bin.id}`);
+    return;
+  }
+
+  if (command === 'audit-packet') {
+    /*
+     * The smallest packet that genuinely reaches all three audit roles.
+     *
+     * Step 11's remaining question is not whether research works — Step 10
+     * answered that with the Michigan packet, and re-running something that
+     * size to test a lease guard would spend hours of allowance to observe
+     * three claims. This asks one bounded question with one obvious primary
+     * source, so the packet is small enough to finish and real enough that the
+     * audit roles have something to argue about. It is a *research* packet like
+     * any other: same `startPacket`, same envelope discipline, same contract.
+     *
+     * Deliberately not Michigan, and deliberately not a fixture: a synthetic
+     * packet would prove the guard against work nothing else takes.
+     */
+    const project = await getProjectBySlug(DEAL_DISPATCH_SLUG);
+    if (!project) return refuseStep10('the Deal Dispatch project does not exist.');
+    const layer = (await listLayers(project.id)).find((l) => l.name === 'Monetization Logic');
+    if (!layer) return refuseStep10('no Monetization Logic layer.');
+
+    const started = await startPacket({
+      projectId: project.id,
+      layerId: layer.id,
+      title: 'Delaware business-broker licensing: is there a licence at all',
+      assignment:
+        'Answer one question about Delaware, and nothing else: does Delaware license or register ' +
+        'business brokers or business-opportunity intermediaries who arrange the sale of a ' +
+        'privately held business where no real property changes hands? Answer YES or NO and cite ' +
+        'the primary authority that settles it — the Delaware Code title that would contain such ' +
+        'a licence if it existed, or the Division of Professional Regulation\u2019s own list of ' +
+        'regulated professions. A documented search of the places the licence would be, returning ' +
+        'nothing, is the accepted way to establish that it does not exist; say so explicitly with ' +
+        'what was searched. Do not research any other state, real-estate brokerage, federal ' +
+        'securities registration, or tax. One question, one answer, one citation.',
+      approval: {
+        mode: 'AUTO_WITHIN_ENVELOPE',
+        envelopeId: 'STEP10_MICHIGAN_LICENSING_V1',
+        authorizedBy: 'operator:step-11-audit-independence',
+      },
+      startedBy: { kind: 'PERSON', id: 'step11-audit-independence' },
+    });
+
+    const orchestration = started.orchestration;
+    const bin = await createBin({
+      projectId: project.id,
+      layerId: layer.id,
+      kind: 'RESEARCH_PACKET',
+      title: 'Step 11 acceptance — audit independence on a real packet',
+      objective:
+        'Carry one small real research packet to a verdict whose three audit roles ran on ' +
+        'independent execution lineages that Brain enforced before each lease.',
+      rationale:
+        'Step 11 proved routing. This proves that the roles Brain hands out cannot be taken by ' +
+        'the same surface, on work that is real rather than synthetic.',
+      manifest: {
+        objective: 'Drain this research packet to its own terminal state.',
+        why: 'The audit roles must land on separate accounts and separate sessions.',
+        lineage: {
+          projectId: project.id,
+          layerId: layer.id,
+          goal: 'Whether Delaware licenses business brokers at all.',
+          orchestrationId: orchestration.id,
+        },
+        units: [],
+        acceptableSources: [
+          'The Delaware Code',
+          'Delaware Division of Professional Regulation published lists and guidance',
+        ],
+        excludedSources: [
+          'Law-firm articles and broker association pages as support for a claim',
+          'Any other state, real-estate brokerage, federal securities registration, and tax',
+        ],
+        evidence: [
+          'A quoted primary provision with its citation, or an explicit documented negative ' +
+            'search naming what was looked at',
+        ],
+        outputs: ['One filed, audited document with a claim ledger inside it'],
+        authorizedActions: [
+          'brain_claim_work and the research tools, for work items belonging to this packet',
+        ],
+        prohibitedActions: [
+          'any spend beyond this packet',
+          'any work item outside this orchestration',
+          'enabling paid overage',
+        ],
+        budgetUnits: 1,
+        retry: { maxAttempts: 3, backoffSeconds: 60 },
+        stoppingConditions: [
+          'The packet reaches its own terminal state and the filed document has bytes in the store',
+        ],
+      },
+      completionContract: 'RESEARCH_PACKET_V1',
+      orchestrationId: orchestration.id,
+      createdByType: 'SYSTEM',
+      createdById: 'step11-audit-independence',
+      ready: true,
+      priority: 9,
+      maxAttempts: 5,
+    });
+
+    console.log('STEP11 AUDIT PACKET');
+    console.log(`  orchestration  ${orchestration.id}  ${orchestration.status}`);
+    console.log(`  bin            ${bin.id}  ${bin.state}`);
+    console.log(`STEP10: OK audit-packet orchestration=${orchestration.id} bin=${bin.id}`);
+    return;
+  }
+
+  if (command === 'audit-lineage') {
+    /*
+     * What the audit roles actually ran on, read from rows.
+     *
+     * The point of the whole exercise is that this is answerable without
+     * trusting anybody's account of it: the lineage is on the pass, and the
+     * matrix is applied to what is there.
+     */
+    const orchestrationId = arg(0);
+    if (!orchestrationId) return refuseStep10('pass an orchestration id.');
+    const passes = (await listPasses(orchestrationId)).filter((pass) => pass.passKey === 'AUDIT');
+    const roleOf: Record<number, string> = { 5: 'PRIMARY', 6: 'ADVERSARIAL', 7: 'JUDGE' };
+    console.log('STEP11 AUDIT LINEAGE');
+    for (const pass of passes) {
+      console.log(
+        `  ${roleOf[pass.ordinal] ?? `ordinal ${pass.ordinal}`}  ${pass.status}` +
+          `  worker=${pass.executorWorkerId ?? '—'}` +
+          `  routine=${pass.executorRoutineId ?? '—'}` +
+          `  account=${pass.executorAccountId ?? '—'}` +
+          `  session=${pass.executorSessionRef ?? '—'}`,
+      );
+    }
+    const verdict = auditMatrixVerdict(passes);
+    for (const applied of verdict.applied) {
+      console.log(`  applied    ${applied.pair} at ${applied.level}`);
+    }
+    for (const reason of verdict.reasons) console.log(`  VIOLATION  ${reason}`);
+    console.log(`STEP10: OK audit-lineage compliant=${verdict.eligible} passes=${passes.length}`);
+    if (!verdict.eligible) process.exitCode = 1;
     return;
   }
 
