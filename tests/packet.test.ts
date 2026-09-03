@@ -18,6 +18,8 @@ import { freshProject } from './helpers.ts';
 import { findTool } from '../server/mcp/tools.ts';
 import { getDb } from '../server/db/database.ts';
 import { createWorker, grantMembership } from '../server/repos/identity.ts';
+import { bindRoutineWorker, createAccount, createRoutine } from '../server/repos/fleet.ts';
+import { auditAdmission, lineageForWorker } from '../server/services/research/auditAdmission.ts';
 import { createRun } from '../server/repos/runs.ts';
 import {
   acceptedClaims,
@@ -96,22 +98,33 @@ let layer: Layer;
 let workerId = '';
 let run = '';
 
+/**
+ * Who the next call authenticates as.
+ *
+ * The audit independence matrix compares the account behind a worker and the
+ * session behind a credential, so a suite with one identity can only ever prove
+ * the refusal. This lets a test speak as a particular surface, which is what
+ * a compliant packet actually looks like.
+ */
+let asIdentity: { workerId: string; credentialId: string } | null = null;
+
 async function principalFor(scopes: WorkerScope[]): Promise<Principal> {
+  const identity = asIdentity ?? { workerId, credentialId: 'cred_test' };
   return {
     type: 'WORKER',
-    id: workerId,
+    id: identity.workerId,
     handle: 'test-worker',
     displayName: 'Test Worker',
     isBrainAdmin: false,
     mustChangePassword: false,
-    credentialId: 'cred_test',
+    credentialId: identity.credentialId,
     authMethod: 'WORKER_BEARER',
     memberships: [
       {
         id: 'mem_test',
         projectId: project.id,
         principalType: 'WORKER',
-        principalId: workerId,
+        principalId: identity.workerId,
         role: 'MEMBER',
         scopes,
         active: true,
@@ -123,6 +136,70 @@ async function principalFor(scopes: WorkerScope[]): Promise<Principal> {
     ],
     requestId: 'req_test',
   };
+}
+
+/**
+ * A fleet the audit matrix can actually be satisfied on.
+ *
+ * Two accounts, one Routine each, each Routine bound to its own worker — which
+ * is the live shape: `primary`/`V1` and `friend-2`/`V2`. The signed matrix
+ * separates PRIMARY from ADVERSARIAL by account and the JUDGE from both by
+ * session, so two accounts and three sessions is exactly enough and no test
+ * here needs a third account to prove it.
+ */
+async function auditFleet(): Promise<{
+  primary: { workerId: string; credentialId: string };
+  adversarial: { workerId: string; credentialId: string };
+  judge: { workerId: string; credentialId: string };
+  sameAccountAsPrimary: { workerId: string; credentialId: string };
+}> {
+  const one = await createAccount({ name: `acct-one-${Math.random().toString(36).slice(2, 8)}` });
+  const two = await createAccount({ name: `acct-two-${Math.random().toString(36).slice(2, 8)}` });
+  const wa = await createWorker({ name: `w-a-${Math.random().toString(36).slice(2, 8)}`, createdByType: 'SYSTEM', createdById: 't' });
+  const wb = await createWorker({ name: `w-b-${Math.random().toString(36).slice(2, 8)}`, createdByType: 'SYSTEM', createdById: 't' });
+  const ra = await createRoutine({
+    accountId: one.id, routineRef: `trig-a-${one.id}`, name: 'V1', tokenSecretName: 'S1',
+  });
+  const rb = await createRoutine({
+    accountId: two.id, routineRef: `trig-b-${two.id}`, name: 'V2', tokenSecretName: 'S2',
+  });
+  await bindRoutineWorker(ra.id, wa.id);
+  await bindRoutineWorker(rb.id, wb.id);
+  for (const worker of [wa.id, wb.id]) {
+    await grantMembership({
+      projectId: project.id,
+      principalType: 'WORKER',
+      principalId: worker,
+      role: 'MEMBER',
+      scopes: FULL,
+      grantedByType: 'SYSTEM',
+      grantedById: 'seed',
+    });
+  }
+  return {
+    primary: { workerId: wa.id, credentialId: 'cred_a1' },
+    adversarial: { workerId: wb.id, credentialId: 'cred_b1' },
+    // Account A again, in a *different* session. Permitted: the judge pairs are
+    // separated on session, not account, which is what makes two accounts
+    // sufficient.
+    judge: { workerId: wa.id, credentialId: 'cred_a2' },
+    // The same session as the primary — the thing the matrix must refuse.
+    sameAccountAsPrimary: { workerId: wa.id, credentialId: 'cred_a1' },
+  };
+}
+
+/** Run one call as a named surface. */
+async function as<T>(
+  identity: { workerId: string; credentialId: string },
+  body: () => Promise<T>,
+): Promise<T> {
+  const previous = asIdentity;
+  asIdentity = identity;
+  try {
+    return await body();
+  } finally {
+    asIdentity = previous;
+  }
 }
 
 async function call(
@@ -2680,8 +2757,19 @@ describe('the audit passes', () => {
 
   /** Claim whatever the runner queued next, rather than queueing it ourselves. */
   async function claimNext(type: string): Promise<ClaimedWork> {
+    const identity = asIdentity ?? { workerId, credentialId: 'cred_test' };
     const [claimed] = await claimWork({
-      workerId,
+      // The production rule, in the tests. Claiming without it would let a test
+      // lease an audit item the live queue would have refused, and the suite
+      // would prove a path nothing takes.
+      admit: auditAdmission(
+        await lineageForWorker({
+          workerId: identity.workerId,
+          credentialId: identity.credentialId,
+        }),
+      ),
+      workerId: identity.workerId,
+      credentialId: identity.credentialId,
       scopes: [{ projectId: project.id, scopes: FULL }],
       workTypes: [type],
     });
@@ -2742,14 +2830,18 @@ describe('the audit passes', () => {
   it('records the primary and adversarial passes without moving anything', async () => {
     const orchestration = await filedPacket();
 
-    const primary = await claimNext('RESEARCH_AUDIT');
-    const first = await call('brain_submit_audit', { ...proof(primary), primary: PRIMARY });
-    expect(first['role']).toBe('PRIMARY');
-    await call('brain_complete_work', { ...proof(primary), summary: 'primary in' });
-
-    const adversarial = await claimNext('RESEARCH_AUDIT');
-    await call('brain_submit_audit', { ...proof(adversarial), adversarial: ADVERSARIAL });
-    await call('brain_complete_work', { ...proof(adversarial), summary: 'adversarial in' });
+    const fleet = await auditFleet();
+    await as(fleet.primary, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      const first = await call('brain_submit_audit', { ...proof(item), primary: PRIMARY });
+      expect(first['role']).toBe('PRIMARY');
+      await call('brain_complete_work', { ...proof(item), summary: 'primary in' });
+    });
+    await as(fleet.adversarial, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), adversarial: ADVERSARIAL });
+      await call('brain_complete_work', { ...proof(item), summary: 'adversarial in' });
+    });
 
     // Two of the three roles have run and nothing has been decided. That is
     // the whole point of the separation: an opinion is not a verdict.
@@ -2774,15 +2866,24 @@ describe('the audit passes', () => {
   it('records the judge\'s verdict, and only the judge\'s', async () => {
     const orchestration = await filedPacket();
 
-    const primary = await claimNext('RESEARCH_AUDIT');
-    await call('brain_submit_audit', { ...proof(primary), primary: PRIMARY });
-    await call('brain_complete_work', { ...proof(primary), summary: 'primary in' });
-    const adversarial = await claimNext('RESEARCH_AUDIT');
-    await call('brain_submit_audit', { ...proof(adversarial), adversarial: ADVERSARIAL });
-    await call('brain_complete_work', { ...proof(adversarial), summary: 'adversarial in' });
+    const fleet = await auditFleet();
+    const primary = await as(fleet.primary, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), primary: PRIMARY });
+      await call('brain_complete_work', { ...proof(item), summary: 'primary in' });
+      return item;
+    });
+    const adversarial = await as(fleet.adversarial, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), adversarial: ADVERSARIAL });
+      await call('brain_complete_work', { ...proof(item), summary: 'adversarial in' });
+      return item;
+    });
+    void primary; void adversarial;
 
-    const judgeItem = await claimNext('RESEARCH_AUDIT');
-    const value = await call('brain_submit_audit', { ...proof(judgeItem), judge: judge() });
+    const judgeItem = await as(fleet.judge, () => claimNext('RESEARCH_AUDIT'));
+    const value = await as(fleet.judge, () =>
+      call('brain_submit_audit', { ...proof(judgeItem), judge: judge() }));
 
     expect(value['role']).toBe('JUDGE');
     expect(value['verdict']).toBe('MORE_RESEARCH');
@@ -2814,14 +2915,23 @@ describe('the audit passes', () => {
      * day that fix lands, which is the point — it is the marker for it.
      */
     const orchestration = await filedPacket();
-    const primary = await claimNext('RESEARCH_AUDIT');
-    await call('brain_submit_audit', { ...proof(primary), primary: PRIMARY });
-    await call('brain_complete_work', { ...proof(primary), summary: 'primary in' });
-    const adversarial = await claimNext('RESEARCH_AUDIT');
-    await call('brain_submit_audit', { ...proof(adversarial), adversarial: ADVERSARIAL });
-    await call('brain_complete_work', { ...proof(adversarial), summary: 'adversarial in' });
-    const judgeItem = await claimNext('RESEARCH_AUDIT');
-    await call('brain_submit_audit', { ...proof(judgeItem), judge: judge() });
+    const fleet = await auditFleet();
+    const primary = await as(fleet.primary, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), primary: PRIMARY });
+      await call('brain_complete_work', { ...proof(item), summary: 'primary in' });
+      return item;
+    });
+    const adversarial = await as(fleet.adversarial, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), adversarial: ADVERSARIAL });
+      await call('brain_complete_work', { ...proof(item), summary: 'adversarial in' });
+      return item;
+    });
+    void primary; void adversarial;
+    const judgeItem = await as(fleet.judge, () => claimNext('RESEARCH_AUDIT'));
+    await as(fleet.judge, () =>
+      call('brain_submit_audit', { ...proof(judgeItem), judge: judge() }));
 
     const passes = (await listPasses(orchestration.id)).filter((p) => p.passKey === 'AUDIT');
     expect(passes.length).toBeGreaterThanOrEqual(3);
@@ -2836,15 +2946,23 @@ describe('the audit passes', () => {
 
   it('refuses an advancing verdict while a foundational gap is open', async () => {
     const orchestration = await filedPacket();
-    const primary = await claimNext('RESEARCH_AUDIT');
-    await call('brain_submit_audit', { ...proof(primary), primary: PRIMARY });
-    await call('brain_complete_work', { ...proof(primary), summary: 'primary in' });
-    const adversarial = await claimNext('RESEARCH_AUDIT');
-    await call('brain_submit_audit', { ...proof(adversarial), adversarial: ADVERSARIAL });
-    await call('brain_complete_work', { ...proof(adversarial), summary: 'adversarial in' });
+    const fleet = await auditFleet();
+    const primary = await as(fleet.primary, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), primary: PRIMARY });
+      await call('brain_complete_work', { ...proof(item), summary: 'primary in' });
+      return item;
+    });
+    const adversarial = await as(fleet.adversarial, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), adversarial: ADVERSARIAL });
+      await call('brain_complete_work', { ...proof(item), summary: 'adversarial in' });
+      return item;
+    });
+    void primary; void adversarial;
 
-    const judgeItem = await claimNext('RESEARCH_AUDIT');
-    const refused = await refusal('brain_submit_audit', {
+    const judgeItem = await as(fleet.judge, () => claimNext('RESEARCH_AUDIT'));
+    const refused = await as(fleet.judge, () => refusal('brain_submit_audit', {
       ...proof(judgeItem),
       judge: judge({
         verdict: 'READY_FOR_SYNTHESIS',
@@ -2858,7 +2976,7 @@ describe('the audit passes', () => {
         foundational_gap_count: 1,
         synthesis_ready: true,
       }),
-    });
+    }));
 
     // The one thing a judge must never be able to do: advance a layer over a
     // gap it has itself called foundational.
@@ -2868,15 +2986,23 @@ describe('the audit passes', () => {
 
   it('refuses a judgement whose counts disagree with the gaps it classified', async () => {
     const orchestration = await filedPacket();
-    const primary = await claimNext('RESEARCH_AUDIT');
-    await call('brain_submit_audit', { ...proof(primary), primary: PRIMARY });
-    await call('brain_complete_work', { ...proof(primary), summary: 'primary in' });
-    const adversarial = await claimNext('RESEARCH_AUDIT');
-    await call('brain_submit_audit', { ...proof(adversarial), adversarial: ADVERSARIAL });
-    await call('brain_complete_work', { ...proof(adversarial), summary: 'adversarial in' });
+    const fleet = await auditFleet();
+    const primary = await as(fleet.primary, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), primary: PRIMARY });
+      await call('brain_complete_work', { ...proof(item), summary: 'primary in' });
+      return item;
+    });
+    const adversarial = await as(fleet.adversarial, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), adversarial: ADVERSARIAL });
+      await call('brain_complete_work', { ...proof(item), summary: 'adversarial in' });
+      return item;
+    });
+    void primary; void adversarial;
 
-    const judgeItem = await claimNext('RESEARCH_AUDIT');
-    const refused = await refusal('brain_submit_audit', {
+    const judgeItem = await as(fleet.judge, () => claimNext('RESEARCH_AUDIT'));
+    const refused = await as(fleet.judge, () => refusal('brain_submit_audit', {
       ...proof(judgeItem),
       // Says zero foundational gaps while classifying one. The counts are
       // recomputed rather than believed.
@@ -2890,7 +3016,7 @@ describe('the audit passes', () => {
         ],
         foundational_gap_count: 0,
       }),
-    });
+    }));
     expect(refused.category).toBe('INVALID_INPUT');
     expect(await listAuditsByProject(orchestration.projectId)).toHaveLength(0);
   });
@@ -3254,8 +3380,16 @@ describe('the packet check before synthesis', () => {
 
 /** Claim whatever the runner queued next, rather than queueing it ourselves. */
 async function claimNextOf(type: string): Promise<ClaimedWork> {
+  const identity = asIdentity ?? { workerId, credentialId: 'cred_test' };
   const [claimed] = await claimWork({
-    workerId,
+    admit: auditAdmission(
+      await lineageForWorker({
+        workerId: identity.workerId,
+        credentialId: identity.credentialId,
+      }),
+    ),
+    workerId: identity.workerId,
+    credentialId: identity.credentialId,
     scopes: [{ projectId: project.id, scopes: FULL }],
     workTypes: [type],
   });
@@ -3307,8 +3441,16 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
   async function claimQueued(type: string, fragmentId?: string): Promise<ClaimedWork> {
     const held: ClaimedWork[] = [];
     for (let round = 0; round < 8; round += 1) {
+      const identity = asIdentity ?? { workerId, credentialId: 'cred_test' };
       const [claimed] = await claimWork({
-        workerId,
+        admit: auditAdmission(
+          await lineageForWorker({
+            workerId: identity.workerId,
+            credentialId: identity.credentialId,
+          }),
+        ),
+        workerId: identity.workerId,
+        credentialId: identity.credentialId,
         scopes: [{ projectId: project.id, scopes: FULL }],
         workTypes: [type],
       });
@@ -3613,7 +3755,19 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
     const bytes = await readObject(document!.storageKey!);
     expect(bytes.toString('utf8')).toContain('section 10131');
 
-    // ---- The three roles, strictly in order -------------------------------
+    // ---- The three roles, strictly in order, on independent surfaces ------
+    //
+    // Each role runs as a different surface, because the signed matrix now
+    // requires it: PRIMARY and ADVERSARIAL on different accounts, the JUDGE in
+    // a session that is neither of theirs. Brain refuses the claim otherwise,
+    // so this loop is the shape a compliant packet has — not a convention the
+    // test chose.
+    const fleet = await auditFleet();
+    const surfaceFor: Record<string, { workerId: string; credentialId: string }> = {
+      PRIMARY: fleet.primary,
+      ADVERSARIAL: fleet.adversarial,
+      JUDGE: fleet.judge,
+    };
     const roles: string[] = [];
     for (const expected of ['PRIMARY', 'ADVERSARIAL', 'JUDGE']) {
       const queued = (await itemsByType(orchestration.id)).get('RESEARCH_AUDIT') ?? [];
@@ -3623,13 +3777,15 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
       expect(open).toHaveLength(1);
       expect(open[0]!.payload['role']).toBe(expected);
 
-      const claimed = await claimQueued('RESEARCH_AUDIT');
-      const field = expected === 'PRIMARY' ? 'primary' : expected === 'ADVERSARIAL' ? 'adversarial' : 'judge';
-      const body = expected === 'PRIMARY' ? PRIMARY : expected === 'ADVERSARIAL' ? ADVERSARIAL : JUDGE;
-      const value = await call('brain_submit_audit', { ...proof(claimed), [field]: body });
-      roles.push(value['role'] as string);
-      expect(value['advancesState']).toBe(expected === 'JUDGE');
-      await call('brain_complete_work', { ...proof(claimed), summary: `${expected} in` });
+      await as(surfaceFor[expected]!, async () => {
+        const claimed = await claimQueued('RESEARCH_AUDIT');
+        const field = expected === 'PRIMARY' ? 'primary' : expected === 'ADVERSARIAL' ? 'adversarial' : 'judge';
+        const body = expected === 'PRIMARY' ? PRIMARY : expected === 'ADVERSARIAL' ? ADVERSARIAL : JUDGE;
+        const value = await call('brain_submit_audit', { ...proof(claimed), [field]: body });
+        roles.push(value['role'] as string);
+        expect(value['advancesState']).toBe(expected === 'JUDGE');
+        await call('brain_complete_work', { ...proof(claimed), summary: `${expected} in` });
+      });
     }
     expect(roles).toEqual(['PRIMARY', 'ADVERSARIAL', 'JUDGE']);
 
@@ -3736,14 +3892,19 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
     await call('brain_complete_work', { ...proof(synth), summary: 'filed' });
     await churn();
 
-    for (const [field, body] of [
-      ['primary', PRIMARY],
-      ['adversarial', ADVERSARIAL],
-      ['judge', JUDGE],
-    ] as [string, Record<string, unknown>][]) {
-      const claimed = await claimQueued('RESEARCH_AUDIT');
-      await call('brain_submit_audit', { ...proof(claimed), [field]: body });
-      await call('brain_complete_work', { ...proof(claimed), summary: `${field} in` });
+    // Each role on its own surface: Brain refuses the claim otherwise, so this
+    // is the only shape the three roles can run in.
+    const fleet = await auditFleet();
+    for (const [field, body, surface] of [
+      ['primary', PRIMARY, fleet.primary],
+      ['adversarial', ADVERSARIAL, fleet.adversarial],
+      ['judge', JUDGE, fleet.judge],
+    ] as [string, Record<string, unknown>, { workerId: string; credentialId: string }][]) {
+      await as(surface, async () => {
+        const claimed = await claimQueued('RESEARCH_AUDIT');
+        await call('brain_submit_audit', { ...proof(claimed), [field]: body });
+        await call('brain_complete_work', { ...proof(claimed), summary: `${field} in` });
+      });
       await churn();
     }
 

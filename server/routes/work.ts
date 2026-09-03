@@ -27,6 +27,7 @@ import type {
 } from '../domain/types.ts';
 import { WORK_FAILURE_CATEGORIES, WORK_ITEM_STATES } from '../domain/types.ts';
 import { currentContext, currentPrincipal } from '../services/identity/context.ts';
+import { auditAdmission, lineageForWorker } from '../services/research/auditAdmission.ts';
 import { recordIdentityEvent } from '../repos/identity.ts';
 import {
   PayloadTooLarge,
@@ -408,6 +409,13 @@ workRouter.post(
     }
 
     const claimed = await claimWork({
+      // The HTTP entrance to the same queue, and therefore the same rule.
+      admit: auditAdmission(
+        await lineageForWorker({
+          workerId: principal.id,
+          credentialId: principal.credentialId,
+        }),
+      ),
       workerId: principal.id,
       credentialId: principal.credentialId,
       scopes: eligible,

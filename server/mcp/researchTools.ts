@@ -59,7 +59,9 @@ import {
   type JudgePassOutput,
 } from '../services/audit/schema.ts';
 import { recordAuditPasses } from '../services/audit/pipeline.ts';
-import { listRoutines } from '../repos/fleet.ts';
+import { lineageForWorker } from '../services/research/auditAdmission.ts';
+import { auditMatrixVerdict } from '../services/research/auditEligibility.ts';
+import { listPasses } from '../repos/research.ts';
 import {
   auditBriefFor,
   AuditBriefUnavailable,
@@ -386,10 +388,9 @@ async function resolveResearch(
  */
 async function executionLineage(
   workerId: string,
-): Promise<{ routineId: string | null; accountId: string | null }> {
-  const routines = await listRoutines();
-  const mine = routines.find((routine) => routine.workerId === workerId);
-  return { routineId: mine?.id ?? null, accountId: mine?.accountId ?? null };
+  credentialId: string | null,
+): Promise<{ routineId: string | null; accountId: string | null; sessionRef: string }> {
+  return lineageForWorker({ workerId, credentialId });
 }
 
 /**
@@ -408,10 +409,18 @@ async function recordPass(input: {
   ordinal: number;
   attempt: number;
   workerId: string;
+  /**
+   * The credential this submission authenticated with.
+   *
+   * Server-derived and per-activation, so it is the session dimension the
+   * signed matrix compares the judge on. Never a body field: a Routine that
+   * could name its own session could name somebody else's.
+   */
+  credentialId: string | null;
   assignment: string;
   raw: unknown;
 }): Promise<string> {
-  const lineage = await executionLineage(input.workerId);
+  const lineage = await executionLineage(input.workerId, input.credentialId);
   const pass = await startPass({
     orchestrationId: input.orchestration.id,
     fragmentId: input.fragmentId,
@@ -427,11 +436,7 @@ async function recordPass(input: {
     executorWorkerId: input.workerId,
     executorRoutineId: lineage.routineId,
     executorAccountId: lineage.accountId,
-    // No session reference exists for a research work item: unlike a bin
-    // dispatch, nothing records the provider session that claimed it. Left
-    // null rather than filled with a lease or credential id that would look
-    // like a session and discriminate nothing.
-    executorSessionRef: null,
+    executorSessionRef: lineage.sessionRef || null,
   });
   await finishPass(pass.id, {
     status: 'COMPLETE',
@@ -815,6 +820,7 @@ const proposeFragmentsTool: McpTool = {
           ordinal: 1,
           attempt: orchestration.attempt,
           workerId,
+          credentialId: principal.credentialId,
           assignment: orchestration.assignment,
           raw: { rationale, fragments: proposed },
         });
@@ -1181,6 +1187,7 @@ const submitClaimsTool: McpTool = {
           ordinal: 2,
           attempt: fragment.attempt,
           workerId,
+          credentialId: principal.credentialId,
           assignment: fragment.question,
           raw: {
             claims,
@@ -1362,6 +1369,7 @@ const submitVerificationTool: McpTool = {
           ordinal: 3,
           attempt: fragment.attempt,
           workerId,
+          credentialId: principal.credentialId,
           assignment: fragment.question,
           raw: { verdicts: verifications, sufficiency, missingLanes, unresolvedGaps },
         });
@@ -1681,6 +1689,7 @@ const submitSynthesisTool: McpTool = {
           ordinal: 4,
           attempt: orchestration.attempt,
           workerId,
+          credentialId: principal.credentialId,
           assignment: orchestration.assignment,
           raw: { citedClaimIds: cited, stillMissing, reportChars: report.length },
         });
@@ -1927,6 +1936,7 @@ const submitAuditTool: McpTool = {
           ordinal: ROLE_PASS_ORDINAL[role],
           attempt: orchestration.attempt,
           workerId,
+          credentialId: principal.credentialId,
           assignment: orchestration.assignment,
           raw: payload,
         });
@@ -1959,35 +1969,28 @@ const submitAuditTool: McpTool = {
         }
 
         /*
-         * Independence is RECORDED here and deliberately NOT enforced yet.
+         * The signed matrix, applied where state moves.
          *
-         * The lineage is now real: `recordPass` writes the worker and the
-         * Routine and account it resolves to, so `checkIndependence` finally
-         * has rows to judge. Turning it into a refusal was tried and reverted,
-         * and what it found is the reason:
+         * The admission rule already refused an ineligible executor before the
+         * lease, which is where independence is *arranged*. This is where it is
+         * *proved*, and both are needed: a lease can expire and be retaken, so
+         * the surface that was eligible when it claimed is not necessarily the
+         * one that submitted.
          *
-         *     PRIMARY and ADVERSARIAL shared the same worker (wkr_716f8eba…).
-         *     JUDGE and PRIMARY shared the same worker (wkr_716f8eba…).
-         *     JUDGE and ADVERSARIAL shared the same worker (wkr_716f8eba…).
-         *
-         * All three roles are performed by one worker identity, because a
-         * worker identity is per-Routine rather than per-session and nothing in
-         * the claim path stops one worker taking every audit item in a packet.
-         * So the check is correct and refuses *every* packet, which would stop
-         * all research rather than make any of it independent.
-         *
-         * That is a real finding rather than a reason to weaken the check, and
-         * it is recorded as one: **audit independence has never held**, and the
-         * bounded fix is in the assigner — refuse handing a RESEARCH_AUDIT item
-         * to a worker that already holds another role in the same orchestration
-         * — not here. Writing the verdict without acting on it would be worse
-         * than either: §8's rule is that a control which does not bite is not a
-         * control, so this does not pretend to be one.
-         *
-         * What this leaves behind is the evidence the fix needs: every pass from
-         * here on carries the lineage, so the violation is visible in rows
-         * rather than only in a test.
+         * Checked against the recorded lineage of the passes that actually ran,
+         * never against the role name the submitter claimed — a submitter
+         * claiming a role is the thing being checked. Missing lineage fails
+         * closed: "we could not tell" must not read the same as "we checked".
          */
+        const matrix = auditMatrixVerdict(await listPasses(orchestration.id));
+        if (!matrix.eligible) {
+          throw new TerminalEffectFailure(
+            'NOT_AUTHORIZED',
+            `The audit lineage does not satisfy the independence matrix, so the judgement is ` +
+              `not stored: ${matrix.reasons.join(' ')} (policy ${matrix.policyVersion})`,
+          );
+        }
+
         const { context } = await auditBriefFor({ orchestration, role: 'JUDGE' });
 
         // The same recording path `runDynamicAudit` uses. The cross-checked

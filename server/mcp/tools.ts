@@ -328,6 +328,8 @@ const getWorkItemTool: McpTool = {
   },
 };
 
+import { auditAdmission, lineageForWorker } from '../services/research/auditAdmission.ts';
+
 const claimWorkTool: McpTool = {
   name: 'brain_claim_work',
   title: 'Claim queued work',
@@ -404,7 +406,22 @@ const claimWorkTool: McpTool = {
     // built it, which is what keeps every pre-Step-10 caller working.
     const heldBin = await activeBinForWorker(workerId);
 
+    /*
+     * Independence is decided here, before the lease.
+     *
+     * `admit` runs inside the claim loop ahead of the compare-and-swap, so a
+     * worker that may not take a waiting audit role is simply not given it —
+     * no lease, no attempt, no generation, no history. It is the same outcome
+     * as losing the race to another worker, which is an ordinary event.
+     */
+    const executorLineage = await lineageForWorker({
+      workerId,
+      credentialId: principal.credentialId,
+    });
+    const refusals: string[] = [];
     const claimed = await claimWork({
+      admit: auditAdmission(executorLineage),
+      onSkip: (item, reason) => refusals.push(`${item.id}: ${reason}`),
       workerId,
       credentialId: principal.credentialId,
       scopes: eligible,
@@ -424,7 +441,15 @@ const claimWorkTool: McpTool = {
       // One claim may span projects, so the audit row records the project only
       // when the answer is unambiguous.
       projectId: claimed.length === 1 ? (claimed[0]?.projectId ?? null) : null,
-      value: { claimed: claimed.map(describeClaimed) },
+      value: {
+        claimed: claimed.map(describeClaimed),
+        // Named rather than swallowed. A worker answered "no work" cannot tell
+        // an empty queue from a role that is waiting for a surface which is not
+        // it, and neither can an operator reading the transcript.
+        ...(refusals.length > 0 && claimed.length === 0
+          ? { not_eligible: refusals }
+          : {}),
+      },
     };
   },
 };

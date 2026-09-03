@@ -46,6 +46,7 @@ import {
 } from '../../repos/bins.ts';
 import { getOrchestration } from '../../repos/research.ts';
 import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
+import { auditAdmission, lineageForWorker } from '../research/auditAdmission.ts';
 import { claimWork, listWorkItemsForBin, type ClaimScope } from '../../repos/workQueue.ts';
 import { evaluateContract, hashUnitValue, type ContractVerdict } from './contracts.ts';
 
@@ -195,7 +196,16 @@ export async function nextItemInBin(input: {
   );
   if (scopes.length === 0) return { held: true, item: null, binHasOpenWork: false };
 
+  // Same admission rule as the MCP claim path. A worker draining a bin is
+  // still a worker, and an audit item inside that bin is still an audit item —
+  // a guard on one entrance only is not a guard.
   const claimed = await claimWork({
+    admit: auditAdmission(
+      await lineageForWorker({
+        workerId: input.workerId,
+        credentialId: input.principal.credentialId,
+      }),
+    ),
     workerId: input.workerId,
     credentialId: input.principal.credentialId,
     scopes,

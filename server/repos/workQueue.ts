@@ -413,6 +413,30 @@ export interface ClaimInput {
   limit?: number;
   leaseMs?: number;
   requestId?: string | null;
+  /**
+   * An extra, asynchronous eligibility question asked *before* the swap.
+   *
+   * Injected rather than imported so this repository keeps knowing nothing
+   * about research, audits or fleets — the caller supplies the rule and this
+   * supplies the only place it can be applied without cost.
+   *
+   * "Before the swap" is the whole point. The compare-and-swap below is what
+   * increments `attempt_count`, so a candidate rejected here consumes no
+   * attempt, no lease, no generation and no history: it is simply not this
+   * worker's to take, and the next candidate is considered. A guard applied
+   * after the claim would burn one of an item's two attempts every time an
+   * ineligible worker looked at it, and an audit item would exhaust itself
+   * against the very rule meant to protect it.
+   */
+  admit?: (item: WorkItemRow) => Promise<{ ok: boolean; reason?: string }>;
+  /**
+   * Told about each candidate the admission rule turned away.
+   *
+   * Without it a refused worker is answered "no work", which is true and
+   * useless: it cannot tell "the queue is empty" from "this role is waiting for
+   * a surface that is not you", and neither can an operator reading the logs.
+   */
+  onSkip?: (item: WorkItemRow, reason: string) => void;
 }
 
 function eligibleFor(item: WorkItemRow, held: Set<string>): boolean {
@@ -504,6 +528,18 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
       if (claimed.length >= limit) break;
       const held = heldByProject.get(candidate.project_id);
       if (!held || !eligibleFor(candidate, held)) continue;
+
+      // The caller's rule, asked before anything is spent. A refusal here is
+      // indistinguishable from "somebody else won it": the item stays QUEUED at
+      // the same generation with the same attempt count, and another worker may
+      // take it a moment later.
+      if (input.admit) {
+        const admitted = await input.admit(candidate);
+        if (!admitted.ok) {
+          input.onSkip?.(candidate, admitted.reason ?? 'not admitted');
+          continue;
+        }
+      }
 
       const swapAt = queueNow();
       const leaseId = newId('wls');
