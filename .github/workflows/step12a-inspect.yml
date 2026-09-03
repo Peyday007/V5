@@ -1,0 +1,65 @@
+# Read the production Brain. Change nothing.
+#
+# Phase 0 of Step 12A has to pin the deployed commit, the configured
+# inference/provider seam, and the Step 9/10/11 row baselines *before* any
+# mutation, and it must do that without spending one of the three delivery
+# mutations the step is allowed. So this workflow only reads:
+#
+#   - `flyctl status` for the running release and image;
+#   - `flyctl secrets list`, which prints secret **names and digests** and never
+#     values — the same rule every diagnostic in this repository follows;
+#   - `npm run preflight`, which reports the schema version and per-table counts
+#     against the cloud database and writes nothing to it.
+#
+# Nothing here promotes an image, sets a secret, or touches a row.
+name: Step 12A inspect
+
+on:
+  workflow_dispatch:
+
+# Never while a deploy is replacing the machine.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    name: Read production
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      HAS_DATABASE_URL: ${{ secrets.BRAIN_DATABASE_URL != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Release and image
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          flyctl status --app "$app" || true
+          echo "--- releases ---"
+          flyctl releases --app "$app" | head -5 || true
+
+      # Names and digests only. A digest proves which value is deployed without
+      # being the value; printing the value would put a credential in a CI log.
+      - name: Configured secrets, by name
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          flyctl secrets list --app "$app" || true
+
+      - name: Schema version and row baselines
+        if: env.HAS_DATABASE_URL == 'true'
+        env:
+          BRAIN_DATABASE_PROVIDER: postgres
+          BRAIN_DATABASE_URL: ${{ secrets.BRAIN_DATABASE_URL }}
+        run: |
+          npm ci
+          npm run preflight
