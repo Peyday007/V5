@@ -313,8 +313,8 @@ and inherits both.
 
 ## Where Step 11 is
 
-Software complete on both backends; one account live; cross-account routing
-unproven.
+Software complete on both backends; two accounts live; cross-account routing
+proven; audit independence enforced but not yet demonstrated live.
 
 `fleet_accounts`, `fleet_routines` and `fleet_policy` replace Step 10's two
 environment variables, and `services/dispatch/router.ts` chooses among them.
@@ -361,4 +361,20 @@ Two things Step 11 established that outlive it:
   a refused worker consumes no lease, no attempt and no generation. Checked
   after, every ineligible glance would have burned one of an audit item's two
   attempts against the very rule meant to protect it.
+
+**What is left is provisioning, not code.** L9 and L10 are open because both
+accounts' Cowork sessions authenticate as one Brain worker, so every audit role
+resolves to one account and the `ACCOUNT` dimension refuses — the check working,
+on a fleet that cannot yet satisfy it. The remedy is one Brain worker identity
+per external Claude account, created and connected by the operator; Brain must
+not mint workers or pick their permissions to get around it, and inferring an
+account from which Routine Brain *attempted* to fire is rejected permanently.
+
+Three operator-surface gaps were found while preparing that, all recorded in
+STEP-11-EVIDENCE.md and none of them a defect in the matrix: a Routine's worker
+binding cannot be corrected once set, `fleet show` does not print the binding
+that every independence decision now reads, and `lineageForWorker` silently
+takes the first of several Routines bound to one worker. The first is the one
+that matters — an escalation with no answering transition is Step 10's lesson at
+a new altitude.
 

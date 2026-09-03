@@ -34,6 +34,7 @@ import { createHash } from 'node:crypto';
 import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
+import { recordIdentityEvent } from './identity.ts';
 import type {
   CapacityEvidence,
   FleetAccount,
@@ -295,6 +296,64 @@ export async function bindRoutineWorker(routineId: string, workerId: string): Pr
     [workerId, nowIso(), routineId, workerId],
   );
   return result.changes === 1;
+}
+
+/**
+ * Correct a Routine's worker binding, deliberately.
+ *
+ * `bindRoutineWorker` above refuses a re-point, and that is right: the caller
+ * there is the arrival path, which *observes* an identity, and an observation
+ * that silently overwrote the row would hide exactly the mix-up this exists to
+ * repair. But refusing an observation is not the same as having no remedy, and
+ * for a while this codebase had none — no unbind, no re-point, no delete, in the
+ * repository, the script or the console, while `bindRoutineWorker`'s own message
+ * said to "retire it and register the new surface" and `UNIQUE (routine_ref)`
+ * made re-registering that ref impossible.
+ *
+ * That is Step 10's lesson at a new altitude. **A state that says "an operator
+ * must fix this" which the operator has no action to fix is not waiting, it is
+ * stuck**, and every escalation needs an answering transition that is guarded
+ * rather than absent.
+ *
+ * So this is guarded the way every other correction in this codebase is: a
+ * compare-and-swap on the value the claimant does not supply — here the binding
+ * the operator believes is there. Naming the wrong current worker changes
+ * nothing and reports it, so a re-point can never be a blind overwrite of a
+ * binding that moved while somebody was reading it.
+ *
+ * It is an identity attribution change, so it is audited to the append-only
+ * `identity_events` with both ends of the move and the operator's reason. It
+ * cannot bind a Routine that has none — that is `bindRoutineWorker`'s job, from
+ * evidence — and it never touches the health counters, because re-pointing a
+ * row is not a session arriving.
+ */
+export async function repointRoutineWorker(input: {
+  routineId: string;
+  expectedWorkerId: string;
+  workerId: string;
+  actor: string;
+  reason: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE fleet_routines SET worker_id = ?, updated_at = ?
+      WHERE id = ? AND worker_id = ?`,
+    [input.workerId, nowIso(), input.routineId, input.expectedWorkerId],
+  );
+  if (result.changes !== 1) return false;
+  await recordIdentityEvent({
+    actorType: 'SYSTEM',
+    actorId: input.actor,
+    action: 'REPOINT_ROUTINE_WORKER',
+    targetType: 'FLEET_ROUTINE',
+    targetId: input.routineId,
+    result: 'SUCCESS',
+    metadata: {
+      from: input.expectedWorkerId,
+      to: input.workerId,
+      reason: input.reason,
+    },
+  });
+  return true;
 }
 
 /** A Routine's session arrived. Health counters reset on evidence, not on hope. */

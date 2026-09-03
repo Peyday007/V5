@@ -395,6 +395,92 @@ to it is a policy decision rather than a refactor.
 
 ---
 
+### Two accounts, one worker identity
+
+S19 is enforced and L9/L10 are still not passed, and the reason is no longer
+S19. The matrix is wired into the claim path and into the judge, both guards are
+proven load-bearing by inversion, and the software would refuse a dependent
+audit today. What it refuses is the fleet as currently *provisioned*.
+
+Two production traces show it. The Cowork sessions started by `V1` (account
+`primary`) and by `V2` (account `friend-2`) both authenticated to Brain as the
+same worker — `wkr_1cdd82cfb2a54faf8edd`. One Claude account was connected
+through the connector once, and the second account was then pointed at the same
+connection, so both surfaces present one Brain identity.
+
+`lineageForWorker` resolves a Routine from `fleet_routines.worker_id` and the
+account from that Routine. With one worker id arriving from both surfaces, every
+audit role resolves to one account, and `PRIMARY_ADVERSARIAL` at `ACCOUNT` is
+unsatisfiable. **That is the check working.** An audit whose independence cannot
+be established did not establish it, and the refusal is the correct outcome for
+this fleet rather than a defect in the rule.
+
+The remedy is provisioning, and it is the operator's rather than Brain's:
+**each external Claude account authenticates through its own Brain worker
+identity**, created by the console and connected by its own single-use
+invitation. Brain must not mint workers or choose their permissions to get
+around it — §22's split again, at the identity boundary rather than the
+dispatch one.
+
+The alternative — inferring an account from which Routine Brain *attempted* to
+fire — is rejected permanently. It would derive the executor's identity from
+Brain's own intent rather than from what authenticated, which is the same defect
+as a worker declaring its own Routine, and it would let one identity satisfy a
+rule about two.
+
+### Three gaps this found in the operator surface
+
+None of them is a defect in the matrix, and all three were things an operator
+needed and did not have. All three are now fixed in code, and **none of the
+fixes is deployed** — this acceptance runs against the image already released,
+so what follows describes both what was wrong and what the running Brain still
+does.
+
+**1. A Routine's worker binding could not be corrected.** `bindRoutineWorker`
+refuses a re-point — `WHERE id = ? AND (worker_id IS NULL OR worker_id = ?)` —
+which is right, because a silent overwrite from the arrival path would hide
+exactly the mix-up above. But there was no unbind, no re-point and no delete
+anywhere in the repository, the script or the console, and its own refusal
+message says to "retire it and register the new surface" when `UNIQUE
+(routine_ref)` makes re-registering that ref impossible.
+
+So a Routine bound to the wrong identity stayed bound to it. That is §22's rule
+about escalations, at a new altitude: **a state that says "an operator must fix
+this" which the operator has no action to fix is not waiting, it is stuck.**
+
+`repointRoutineWorker` is the answering transition, and it is guarded the way
+every correction in this codebase is: a compare-and-swap on a value the caller
+does not supply — the binding the operator says is currently there. Naming the
+wrong one changes nothing and reports it, so a re-point can never overwrite a
+binding that moved while somebody was reading it. It refuses a Routine with no
+binding at all, because a first binding is observed rather than decided, and it
+writes both ends of the move and the operator's reason to the append-only
+`identity_events` as `REPOINT_ROUTINE_WORKER`. `fleet repoint-worker --ref …
+--expect … --worker … --reason …` is the operator surface for it.
+
+**2. `fleet show` did not print the binding.** It printed state, ref, secret
+name, fires, refusals, no-shows and in-flight — and not `worker_id`, which is
+now the input to every audit-independence decision. The one field that decides
+whether an audit may run was the one field the operator surface would not show.
+It now prints `worker=…` per Routine.
+
+**3. `lineageForWorker` took the first match, silently.** `routines.find(r =>
+r.workerId === workerId)` over `ORDER BY created_at, rowid`. With one worker
+bound to two Routines the answer was deterministic and arbitrary: whichever was
+registered first. Here that happens to be right — the shared identity's own
+account is `primary`, and `V1` is the older row — but being right by
+registration order is not the same as being right.
+
+It now names the ambiguity instead of picking from it. Several Routines on one
+account still resolve that account, because the allowance is not in doubt and
+only the surface is; Routines spanning accounts resolve neither, and the matrix
+refuses on unrecorded lineage. Note what that means for the deployed image: the
+running Brain would resolve the shared identity to `primary` by row order, and
+the fixed one refuses it outright — which is why the binding has to be corrected
+rather than worked around.
+
+---
+
 ### The finding this replaced
 
 #### (superseded) S19 — audit independence is not enforced anywhere
@@ -461,15 +547,19 @@ between here and S19, L9 and L10.
 
 
 
-**Cross-account routing on two subscription accounts is not proven.** One
-account is registered. Everything the router does about accounts — failover,
-per-account targets, spreading by relative headroom, audit lineage at `ACCOUNT`
-level — is proven in tests against both backends and is **not** proven live,
-because a second real subscription does not yet exist in the registry.
+**Cross-account *routing* is now proven live; cross-account *audit lineage* is
+not.** This paragraph previously said no second subscription existed. One does —
+`friend-2` — and L3 and L4 above are live rows: four bins split 2/2, and failover
+sending both bins to the survivor. Dispatch across two allowances is established.
 
-Two Routines under one account would not close it. That proves routing across
-*surfaces* and says nothing about routing across *allowances*, and conflating
-the two is the exact confusion the schema was shaped to avoid.
+What is still only proven in tests is the `ACCOUNT` dimension of the audit
+matrix, and for a reason that has nothing to do with the router. See *Two
+accounts, one worker identity* above.
+
+Two Routines under one account would not have closed the routing half either.
+That proves routing across *surfaces* and says nothing about routing across
+*allowances*, and conflating the two is the exact confusion the schema was
+shaped to avoid.
 
 **No allowance was measured.** Step 10 measured a per-routine fire ceiling and
 said so; Step 11 has not measured a subscription allowance either, and
@@ -492,20 +582,51 @@ recorded one for.
 
 ## 6. What to run next, and in what order
 
-Once a second account and Routine are registered:
+L1 to L8 are done. What remains is L9 and L10, and every step below is an
+operator action or a read — no deployment, no code change.
 
-1. `fleet show` — two accounts, two routable candidates.
-2. Seed four bins. Both accounts should fire; `fires` moves on both rows. (L3)
-3. `fleet set-state --kind account --ref <name> --to UNAVAILABLE`, seed two more,
-   confirm every one goes to the survivor, then re-enable and confirm the split
-   returns. (L4)
-4. `fleet boost --target 4 --minutes 30 --reason …`, confirm the higher ceiling
-   applies, then confirm it stops applying after expiry with nothing having run
-   to revert it. (L6)
-5. A research packet whose PRIMARY and ADVERSARIAL passes land on different
-   accounts, then a JUDGE on a third lineage — and a deliberate same-session
-   submission, which must be refused. (L9, L10)
+**Provision the second identity** (console, in this order; the invite refuses a
+worker with no project, so the order is not cosmetic):
 
-Steps 3 and 4 are the ones that decide the step. The rest are already proven in
-tests and are being re-run live for the same reason Step 8 insisted a passing
-suite is not evidence that a real client works.
+1. Create the project **`Step 11 acceptance`**. The console slugifies it to
+   `step-11-acceptance`, which is the slug `STEP11_AUDIT_INDEPENDENCE_V1` is
+   scoped to and the slug `step10 audit-packet` looks up.
+2. Create the worker `friend-2-worker`.
+3. Grant that project to `friend-2-worker` **and** to the existing
+   `wkr_1cdd82cfb2a54faf8edd`. One runs PRIMARY, the other ADVERSARIAL.
+4. Mint the invitation for `friend-2-worker`. The URL is shown once and lives
+   seven days; the browser cookie it sets lives one hour, so the connector must
+   be added in the same browser inside that hour.
+5. From the **friend-2** Claude account: remove the existing Brain connector,
+   open the invitation, then add a connector at `<issuer>/mcp` and connect. The
+   invitee needs no Brain password — that is what the invitation is for.
+
+**Bind it** (`fleet`):
+
+6. `bind-worker --ref trig_01HR74TmLtm8L21sh2Xryqhq --worker <new wkr_…>`.
+   This is also the read: if `V2` is already bound to the shared identity the
+   command refuses and names what it is bound to, changing nothing.
+
+   On a deployed Brain, `repoint-worker --ref … --expect <the wkr_… it names>
+   --worker <new wkr_…> --reason …` is the answer to that refusal. It is **not
+   in the running image**, so for this acceptance the fallback is to register
+   the second friend-2 trigger as a Routine of its own. That needs its own
+   bearer in the deployment first: a trigger token is scoped to one trigger, so
+   registering it against another Routine's secret name would store a digest
+   that cannot fire it — a row that looks routable and spends a fire finding
+   out.
+
+**Run the acceptance:**
+
+7. `step10 audit-packet` — creates the layer and starts the authorized
+   assignment under the one-use envelope.
+8. Drive it: PRIMARY on one account, ADVERSARIAL on the other, JUDGE in a third
+   session.
+9. `step10 audit-lineage <orchestration>` — the four `executor_*` fields per
+   pass, the pairs applied at their own dimension, and the verdict. (L9, L10)
+10. Then a deliberate same-session submission, which must be refused.
+
+Item 5 is the one that decides this step: until the friend-2 account presents
+its own identity, item 9 cannot come out any way but refused. Everything after
+it is already proven in tests and is being re-run live for the reason Step 8
+gave — a passing suite is not evidence that a real client works.

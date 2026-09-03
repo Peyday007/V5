@@ -20,7 +20,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createWorker } from '../server/repos/identity.ts';
-import { bindRoutineWorker, createAccount, createRoutine } from '../server/repos/fleet.ts';
+import {
+  bindRoutineWorker,
+  createAccount,
+  createRoutine,
+  getRoutineByRef,
+  repointRoutineWorker,
+} from '../server/repos/fleet.ts';
 import { claimWork, enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { createOrchestration } from '../server/repos/research.ts';
 import { createRun } from '../server/repos/runs.ts';
@@ -545,5 +551,122 @@ describe('the guards are load-bearing', () => {
     expect(pass!.executorAccountId).toBe(f.a.accountId);
     expect(pass!.executorSessionRef).toBe('sess-1');
     void getDb;
+  });
+});
+
+/**
+ * One identity on two surfaces, and the operator action that repairs it.
+ *
+ * This is not a hypothetical: the live fleet reached exactly this state, with
+ * two Claude accounts connected through one connector, so both Routines'
+ * sessions authenticated as one worker. The matrix refused every audit — which
+ * is the check working — and the operator had no action to fix it.
+ */
+describe('a worker bound to more than one Routine', () => {
+  it('resolves no account when the Routines span accounts, so the matrix fails closed', async () => {
+    const one = await createAccount({ name: `span-a-${Math.random().toString(36).slice(2, 8)}` });
+    const two = await createAccount({ name: `span-b-${Math.random().toString(36).slice(2, 8)}` });
+    const shared = await createWorker({
+      name: `shared-${Math.random().toString(36).slice(2, 8)}`,
+      createdByType: 'SYSTEM',
+      createdById: 't',
+    });
+    const ra = await createRoutine({ accountId: one.id, routineRef: `t-s1-${one.id}`, name: 'V1', tokenSecretName: 'S1' });
+    const rb = await createRoutine({ accountId: two.id, routineRef: `t-s2-${two.id}`, name: 'V2', tokenSecretName: 'S2' });
+    await bindRoutineWorker(ra.id, shared.id);
+    await bindRoutineWorker(rb.id, shared.id);
+
+    const lineage = await lineageForWorker({ workerId: shared.id, credentialId: 'cred_x' });
+    // Not "whichever was registered first". The question has two answers, so
+    // the resolver gives none rather than one chosen by row order.
+    expect(lineage.accountId).toBeNull();
+    expect(lineage.routineId).toBeNull();
+
+    // The first role has nothing to be independent of, so the refusal lands
+    // where the constraint binds: on the second argument.
+    await recordAuditPass({
+      role: 'PRIMARY', workerId: 'wkr_other', routineId: null,
+      accountId: one.id, sessionRef: 'sess-1',
+    });
+    const verdict = auditEligibility({
+      role: 'ADVERSARIAL',
+      executor: lineage,
+      passes: await passes(),
+    });
+    expect(verdict.eligible).toBe(false);
+    expect(verdict.reasons.join(' ')).toContain('unrecorded lineage');
+  });
+
+  it('still resolves the account when both Routines are on it', async () => {
+    const one = await createAccount({ name: `same-${Math.random().toString(36).slice(2, 8)}` });
+    const shared = await createWorker({
+      name: `same-w-${Math.random().toString(36).slice(2, 8)}`,
+      createdByType: 'SYSTEM',
+      createdById: 't',
+    });
+    const ra = await createRoutine({ accountId: one.id, routineRef: `t-m1-${one.id}`, name: 'V1', tokenSecretName: 'S1' });
+    const rb = await createRoutine({ accountId: one.id, routineRef: `t-m2-${one.id}`, name: 'V2', tokenSecretName: 'S2' });
+    await bindRoutineWorker(ra.id, shared.id);
+    await bindRoutineWorker(rb.id, shared.id);
+
+    const lineage = await lineageForWorker({ workerId: shared.id, credentialId: 'cred_y' });
+    // The allowance is not in doubt; only which surface it came through.
+    expect(lineage.accountId).toBe(one.id);
+    expect(lineage.routineId).toBeNull();
+  });
+
+  it('re-points only when the operator names the binding that is actually there', async () => {
+    const one = await createAccount({ name: `rp-${Math.random().toString(36).slice(2, 8)}` });
+    const was = await createWorker({
+      name: `rp-old-${Math.random().toString(36).slice(2, 8)}`,
+      createdByType: 'SYSTEM',
+      createdById: 't',
+    });
+    const now = await createWorker({
+      name: `rp-new-${Math.random().toString(36).slice(2, 8)}`,
+      createdByType: 'SYSTEM',
+      createdById: 't',
+    });
+    const ref = `t-rp-${one.id}`;
+    const routine = await createRoutine({ accountId: one.id, routineRef: ref, name: 'V1', tokenSecretName: 'S1' });
+    await bindRoutineWorker(routine.id, was.id);
+
+    // The observation path still refuses, which is what makes the deliberate
+    // action necessary rather than redundant.
+    expect(await bindRoutineWorker(routine.id, now.id)).toBe(false);
+
+    // A guard on a value the caller does not supply: naming the wrong current
+    // binding changes nothing.
+    expect(
+      await repointRoutineWorker({
+        routineId: routine.id,
+        expectedWorkerId: now.id,
+        workerId: now.id,
+        actor: 'test',
+        reason: 'wrong expectation',
+      }),
+    ).toBe(false);
+    expect((await getRoutineByRef(ref))!.workerId).toBe(was.id);
+
+    expect(
+      await repointRoutineWorker({
+        routineId: routine.id,
+        expectedWorkerId: was.id,
+        workerId: now.id,
+        actor: 'operator:test',
+        reason: 'second account got its own identity',
+      }),
+    ).toBe(true);
+    expect((await getRoutineByRef(ref))!.workerId).toBe(now.id);
+
+    // Both ends of the move, in the append-only identity audit.
+    const row = await getDb().get<{ metadata: string }>(
+      `SELECT metadata FROM identity_events
+        WHERE action = 'REPOINT_ROUTINE_WORKER' AND target_id = ?`,
+      [routine.id],
+    );
+    expect(row).toBeTruthy();
+    expect(row!.metadata).toContain(was.id);
+    expect(row!.metadata).toContain(now.id);
   });
 });

@@ -126,8 +126,8 @@ them.
 | L6 | PASS | Boost raises then reverts | `boost target=8 until=22:11:59 version=3 base=4` — the base target is untouched at 4 and the boost lapses by clock comparison, with nothing running to revert it |
 | L7 | PASS (Step 10) | One activation drains a bin and asks for another | Step 10 rung 20: 20 bins from 13 activations. Step 11's four bins each took one activation, so this run does not re-prove it |
 | L8 | PASS | Registering an additional Routine makes it eligible with no code change | V2 registered into a running fleet and took work on the next tick; no deploy, no restart, no code change |
-| L9 | **BLOCKED** | PRIMARY and ADVERSARIAL run concurrently through different accounts | blocked by S19, not by provisioning: there is no lineage recorded to be independent *of* |
-| L10 | **BLOCKED** | JUDGE runs after both, on independent lineage; same-session lineage refused | blocked by S19 |
+| L9 | **BLOCKED** | PRIMARY and ADVERSARIAL run concurrently through different accounts | blocked by provisioning, not by S19: the lineage is recorded and the matrix is enforced, but both accounts' Cowork sessions authenticate as one worker (`wkr_1cdd82cf…`), so every role resolves to one account. Remedy is one Brain worker identity per external account — STEP-11-EVIDENCE.md, *Two accounts, one worker identity* |
+| L10 | **BLOCKED** | JUDGE runs after both, on independent lineage; same-session lineage refused | blocked behind L9, for the same provisioning reason |
 
 ### The one design change the tests forced
 

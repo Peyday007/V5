@@ -24,17 +24,34 @@ import { AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { auditEligibility, type ExecutorLineage } from './auditEligibility.ts';
 import type { WorkItemRow } from '../../domain/types.ts';
 
-/** Resolve which Routine and account a worker runs on. Nulls stay null. */
+/**
+ * Resolve which Routine and account a worker runs on. Nulls stay null.
+ *
+ * One worker may be bound to more than one Routine — it is what happens when
+ * two Claude accounts are connected through one connector, and it is exactly
+ * the state the `ACCOUNT` dimension exists to refuse. This used to take the
+ * first match, which over `ORDER BY created_at, rowid` is deterministic and
+ * arbitrary: the answer was whichever surface was registered first, and nothing
+ * said the question had two answers.
+ *
+ * So the ambiguity is named rather than picked from. Several Routines on one
+ * account still resolve that account — the allowance is not in doubt, only the
+ * surface — and Routines spanning accounts resolve neither, because
+ * `auditEligibility` counts unknown lineage as a violation and an account id
+ * chosen by registration order would turn a refusal into an approval.
+ */
 export async function lineageForWorker(input: {
   workerId: string;
   credentialId: string | null;
 }): Promise<ExecutorLineage> {
   const routines = await listRoutines();
-  const mine = routines.find((routine) => routine.workerId === input.workerId);
+  const mine = routines.filter((routine) => routine.workerId === input.workerId);
+  const accounts = new Set(mine.map((routine) => routine.accountId));
+  const oneAccount = accounts.size === 1;
   return {
     workerId: input.workerId,
-    routineId: mine?.id ?? null,
-    accountId: mine?.accountId ?? null,
+    routineId: mine.length === 1 ? mine[0]!.id : null,
+    accountId: oneAccount ? mine[0]!.accountId : null,
     // Empty string rather than null would compare equal between two sessions
     // that both lacked one, so an absent credential stays absent and the
     // matrix fails it closed.

@@ -852,6 +852,15 @@ a value the claimant does not supply.**
   deployment secret and a sha-256 of the value taken once at registration. A
   Routine whose secret is not present is left out of routing and reported as
   such, rather than spending a fire discovering it.
+- **A worker binding is observed, and correcting it is a separate decision.**
+  `bindRoutineWorker` fills `fleet_routines.worker_id` from the dispatch row
+  that produced an arriving session and refuses to overwrite one that is set,
+  because an observation that silently re-pointed a row would hide a surface
+  wearing someone else's identity. Repairing a wrong binding is
+  `repointRoutineWorker`: guarded on the binding the operator names, refusing a
+  Routine that has none, and audited to `identity_events` with both ends of the
+  move. Every escalation needs an answering transition — a refusal with no
+  remedy is not waiting, it is stuck.
 - **The capacity ledger is `bin_events`, not a second table.** It gained
   `account_id`, `routine_id`, `evidence_class` and `workload_class`. Two tables
   that must agree about the same fires is a design where the one nobody reads is

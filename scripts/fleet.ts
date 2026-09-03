@@ -25,6 +25,7 @@ import {
   listAccounts,
   listRoutines,
   policyHistory,
+  repointRoutineWorker,
   setAccountState,
   setPolicy,
   setRoutineState,
@@ -143,6 +144,51 @@ async function main(): Promise<void> {
       );
     }
     return ok(`bind-worker ${ref} -> ${workerId}`);
+  }
+
+  /*
+   * The answering transition for the state `bind-worker` refuses.
+   *
+   * `bind-worker` is an observation and must not overwrite; this is a decision
+   * and must, or a Routine bound to the wrong identity stays bound to it
+   * forever. It is guarded on the binding the operator says is there, so it
+   * cannot be a blind overwrite of one that moved while somebody was reading
+   * it, and it is audited with both ends of the move.
+   */
+  if (command === 'repoint-worker') {
+    const ref = option('ref');
+    const workerId = option('worker');
+    const expected = option('expect');
+    const reason = (option('reason') ?? '').replace(/_/g, ' ');
+    if (!ref || !workerId || !expected) {
+      return refuse('pass --ref <trig_…> --expect <the wkr_… it is bound to now> --worker <wkr_…>.');
+    }
+    if (!reason) return refuse('pass --reason; a corrected binding with no reason answers nothing later.');
+    const routine = await getRoutineByRef(ref);
+    if (!routine) return refuse(`no Routine registered as ${ref}.`);
+    if (!routine.workerId) {
+      return refuse(
+        `${ref} is not bound to anything, so there is nothing to correct. A first binding is ` +
+          'observed from an arriving session, or set with bind-worker.',
+      );
+    }
+    if (flag('dry-run')) {
+      return ok(`dry-run repoint-worker ${ref} ${routine.workerId} -> ${workerId} (nothing written)`);
+    }
+    const changed = await repointRoutineWorker({
+      routineId: routine.id,
+      expectedWorkerId: expected,
+      workerId,
+      actor: ACTOR,
+      reason,
+    });
+    if (!changed) {
+      return refuse(
+        `${ref} is not bound to ${expected}. Nothing changed. Read the current binding and pass it ` +
+          'as --expect rather than widening the guard.',
+      );
+    }
+    return ok(`repoint-worker ${ref} ${expected} -> ${workerId} actor=${ACTOR}`);
   }
 
   /* ---------------------------------------------------------------------- */
@@ -327,6 +373,11 @@ async function main(): Promise<void> {
         const inFlight = snapshot.candidates.find((c) => c.routine.id === routine.id);
         console.log(
           `      ${routine.name}  ${routine.state}  ref=${routine.routineRef}  ` +
+            // The binding is what `lineageForWorker` reads, so it is what
+            // decides whether an audit role may run here. Printing everything
+            // except the field the decision turns on is how an operator ends up
+            // guessing at a refusal.
+            `worker=${routine.workerId ?? '—'}  ` +
             `secret=${routine.tokenSecretName}  fires=${routine.totalFires} ` +
             `refusals=${routine.totalRefusals} no-shows=${routine.consecutiveNoShows}` +
             (inFlight ? `  in-flight=${inFlight.routineInFlight}` : '  (not routable)') +
@@ -457,6 +508,7 @@ async function main(): Promise<void> {
 
   refuse(
     `unknown command "${command}". Try: show, register-account, register-routine, bind-worker, ` +
+      'repoint-worker, ' +
       'set-state, set-target, boost, pause, resume, policy-history, explain-route, scale-advice, ' +
       'profile, simulate.',
   );
