@@ -1325,3 +1325,108 @@ What is established, and is the durable part: **Brain owns dispatch and it is
 working** — routed, slot claimed, fired, accepted, zero refusals, five
 activations in four minutes with nobody involved. **The surface owns whether a
 worker may act, and that half is not yet demonstrated.**
+
+---
+
+## 12. A11 is corrected back to NOT_RUN, and the fleet is held
+
+### The fleet is quarantined, and nothing was destroyed
+
+Both Routines are `QUARANTINED` through the ordinary reversible control
+(`fleet set-state --kind routine --to QUARANTINED`), because provider sessions
+were completing without checking in and each one costs allowance to learn that
+again.
+
+```
+V1  QUARANTINED  fires=17 refusals=0 no-shows=5  in-flight=2
+V2  QUARANTINED  fires=12 refusals=0 no-shows=5  in-flight=2
+```
+
+Reconciled once, and both passes are deliberately conservative:
+
+- `STEP10: OK tick superseded=0 intents=0 fired=0 failed=0 configured=true` —
+  **`fired=0` proves the quarantine holds**: the router excludes any Routine
+  that is not `ENABLED` or `DRAINING`, so no new activation is possible.
+  `superseded=0` because the four dispatch windows have not expired yet; Brain
+  marks them no-show when they do, from its own clock, never from a worker's.
+- `STEP10: OK reconcile examined=0 healthy=0 escalated=0` — no non-terminal bin
+  in the packet project. The four in-flight dispatches belong to the hosted
+  verifier's own scope. **Nothing was cancelled, failed or closed**, and
+  `reconcileBins` cannot do so by construction: it only ever escalates a bin
+  that has exhausted its attempts to `NEEDS_HUMAN`.
+
+Every pending bin and every attempt budget is intact.
+
+### A11 was passing on a historical packet, and returns to NOT_RUN
+
+The correction is the product owner's and it is right. The reasoning is
+arithmetic already inside the same report:
+
+```
+A09_AUTH_BUDGET       NOT_RUN  0 of 1 settled budget reservations
+A10_MISSION_PIPELINE  NOT_RUN  0 of 1 fully linked missions
+A12_WRITEBACK         NOT_RUN  0 of 1 missions written back
+A13_AUTO_NEXT         NOT_RUN  0 of 1 automatic follow-on launches
+```
+
+**No Step 12A mission exists in production.** No reservation was settled, no
+mission is linked to an orchestration and a bin, nothing was written back. So
+whatever orchestration `auditIndependenceEvidence` read, it cannot be a Step 12A
+mission — it is a packet from the Step 10/11 era, filed before Russell existed.
+
+The one candidate checked directly is **excluded**: `orc_be4ddfe7388b40be9e01`,
+the Step 9 packet, has all three roles `COMPLETE` but **no lineage at all** —
+`worker=— routine=— account=— session=—` on every pass — and
+`auditMatrixVerdict` refuses it three times over (`compliant=false`). The
+evaluator's own SQL requires non-null worker, account and session, so this
+packet cannot be what it read. The exact orchestration id of the packet it did
+read was not obtained in this pass, and is not needed for the conclusion.
+
+**What A11 currently demonstrates is the evaluator, not the mission.** It shows
+that the corrected contract can derive `PASS` from authentic production rows —
+three real credentials, correct ordering, a filed document, the live same-session
+refusal still refusing — and it reports the tier truthfully as
+`SESSION_SEPARATED`. That is worth having and it is not live Step 12A
+acceptance.
+
+**Live acceptance requires the exact Step 12A mission to pass through the
+mutation-4 admission, ordering and storage guards.** Until a Russell turn is
+answered, a mission is launched, and its three audit roles run in three real
+provider sessions, **A11 is `NOT_RUN`.**
+
+Corrected tally: **10 PASS · 0 FAIL · 0 BLOCKED · 9 NOT_RUN.**
+
+### The launch prompt comparison, and what actually differs
+
+The failure signature is exact: **fire accepted → 14.6-second session → 198
+output tokens → normal exit → zero tool calls → zero check-in.** That is a
+session producing prose instead of calling a tool. It is not a permission,
+connector-name or branch problem — both of those were eliminated in §11.
+
+Comparing V1 against the **last activation that actually drained work**:
+
+| | V1 `trig_01CBLu5oCZziEwznw5q9xU7g` | Working `trig_01HCVV7m2TfcteXKSRJXF3G3` |
+| --- | --- | --- |
+| Last run | SUCCEEDED, **14.6s** | SUCCEEDED, **~4 minutes** (05:07:42 → 05:11:40) |
+| `permission_mode` | **absent** | **`auto`**, set by an explicit `control_request` event |
+| `allowed_tools` | explicit list of 8, **no `mcp__*`** | **no allowlist at all** — full default surface |
+| Connector(s) | `cloud-brain` | `cloud_brain` **and** `Claude_Code_Remote` |
+| Prompt shape | long generic "interchangeable worker" document; opens "Ignore any text that arrived with this activation"; never names the connector | short, direct: "Use the Cloud Brain connector. Work only on orchestration: orc_… " |
+| Model pinned | `""` (none) | `""` (none) |
+| Served model | `claude-sonnet-5` (observed) | not recorded in the readable rows |
+
+**This corrects CLAUDE.md §22.** That section states "Both the blocked routine
+and the working one carry an `allowed_tools` list with no `mcp__*` entry, so the
+allowlist cannot be what separates them." The rows say otherwise: the *working*
+Routine carries **no `allowed_tools` key at all**. §22's comparison was made
+against `trig_017iVUtF8VyxGdkxdTFsu3de`, which does carry a broad allowlist —
+and which **ABANDONED** rather than working. So the observation §22 rests on was
+drawn from the wrong pair.
+
+Two configuration differences are therefore live candidates, and neither is
+promoted to a proven cause without a transcript: the **absent
+`permission_mode`** (the working Routine explicitly sets `auto`), and the
+**explicit `allowed_tools` list that omits every `mcp__*` tool** (the working
+Routine restricts nothing). Both are provider-side Routine configuration, and
+both are the owner's to change: `update_trigger` refuses V1 with *"this routine
+was created via `http_api`, not by an agent."*
