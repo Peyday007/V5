@@ -59,7 +59,7 @@ import {
   type JudgePassOutput,
 } from '../services/audit/schema.ts';
 import { recordAuditPasses } from '../services/audit/pipeline.ts';
-import { lineageForWorker } from '../services/research/auditAdmission.ts';
+import { lineageForWorker, missionRequiredTier } from '../services/research/auditAdmission.ts';
 import { auditMatrixVerdict } from '../services/research/auditEligibility.ts';
 import { listPasses } from '../repos/research.ts';
 import {
@@ -1982,7 +1982,14 @@ const submitAuditTool: McpTool = {
          * claiming a role is the thing being checked. Missing lineage fails
          * closed: "we could not tell" must not read the same as "we checked".
          */
-        const matrix = auditMatrixVerdict(await listPasses(orchestration.id));
+        const matrix = auditMatrixVerdict(
+          await listPasses(orchestration.id),
+          // The mission's own declared tier, read from a server row. Enforced
+          // here as well as at admission, because a lease can expire and be
+          // retaken — a packet must not be stored under a weaker separation
+          // than the one it asked to be judged by.
+          (await missionRequiredTier(orchestration.id)) ?? undefined,
+        );
         if (!matrix.eligible) {
           throw new TerminalEffectFailure(
             'NOT_AUTHORIZED',

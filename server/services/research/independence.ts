@@ -29,10 +29,32 @@ import type { ResearchPass } from '../../domain/types.ts';
  * that costs nothing to meet with one account; `ACCOUNT` is the level a real
  * fleet can meet and the one Step 11 is asked to prove.
  */
-export const INDEPENDENCE_LEVELS = ['NONE', 'SESSION', 'WORKER', 'ACCOUNT'] as const;
+export const INDEPENDENCE_LEVELS = ['NONE', 'SESSION', 'ROUTINE', 'WORKER', 'ACCOUNT'] as const;
 export type IndependenceLevel = (typeof INDEPENDENCE_LEVELS)[number];
 
-export const INDEPENDENCE_POLICY_VERSION = 'INDEPENDENCE_V1';
+/**
+ * The tiers, weakest first.
+ *
+ * `ROUTINE` is a first-class tier and is deliberately not a synonym for
+ * `WORKER`. One worker identity can be bound to several Routines — production
+ * has exactly that today — so two passes on different Routines may share a
+ * worker, and two passes on different workers are by construction on different
+ * Routines. The ladder is therefore strictly ordered rather than a set of
+ * interchangeable labels, and `strongestSeparation` walks it downwards so a
+ * result is never described as stronger than the rows prove.
+ */
+export const SEPARATION_LADDER = ['ACCOUNT', 'WORKER', 'ROUTINE', 'SESSION'] as const;
+export type SeparationTier = (typeof SEPARATION_LADDER)[number];
+
+/** How an achieved tier is written down. Never a bare level name. */
+export const SEPARATION_LABELS: Record<SeparationTier, string> = {
+  ACCOUNT: 'ACCOUNT_SEPARATED',
+  WORKER: 'WORKER_SEPARATED',
+  ROUTINE: 'ROUTINE_SEPARATED',
+  SESSION: 'SESSION_SEPARATED',
+};
+
+export const INDEPENDENCE_POLICY_VERSION = 'INDEPENDENCE_V2';
 
 export interface AuditLineage {
   role: 'PRIMARY' | 'ADVERSARIAL' | 'JUDGE';
@@ -66,6 +88,8 @@ function dimension(level: IndependenceLevel): {
       return { key: (l) => l.accountId, noun: 'account' };
     case 'WORKER':
       return { key: (l) => l.workerId, noun: 'worker' };
+    case 'ROUTINE':
+      return { key: (l) => l.routineId, noun: 'Routine' };
     case 'SESSION':
     default:
       return { key: (l) => l.sessionRef, noun: 'session' };
@@ -138,8 +162,12 @@ export function checkIndependence(input: {
 
   for (const [a, b, label] of mustDiffer) {
     if (!a || !b) continue;
-    const ka = key(a);
-    const kb = key(b);
+    // Empty is absent, not distinct — the same rule `auditEligibility`
+    // applies, and for the same reason: a missing credential recorded as ''
+    // would otherwise compare unequal to every real one and look separated.
+    const blank = (value: string | null): string | null => (value === '' ? null : value);
+    const ka = blank(key(a));
+    const kb = blank(key(b));
     if (ka === null || kb === null) {
       violations.push(
         `${label} cannot be compared: one of them recorded no ${noun}. Unrecorded lineage is ` +
@@ -159,6 +187,40 @@ export function checkIndependence(input: {
     violations,
     observed,
   };
+}
+
+/**
+ * The strongest tier this set of lineages actually achieved.
+ *
+ * Walks the ladder downwards and returns the first tier every governed pair
+ * satisfies, or `null` when even the session floor is not met. It reports what
+ * the rows show and nothing more — **a same-account result is never labelled
+ * cross-account independent**, which is the one way a truthful tier could
+ * become a lie.
+ *
+ * A missing value at a tier disqualifies that tier rather than being skipped
+ * past: unrecorded lineage is not evidence of separation, here as everywhere.
+ */
+export function strongestSeparation(audits: AuditLineage[]): SeparationTier | null {
+  const byRole = new Map<string, AuditLineage>();
+  for (const lineage of audits) byRole.set(lineage.role, lineage);
+  const roles = ['PRIMARY', 'ADVERSARIAL', 'JUDGE'] as const;
+  const present = roles.map((role) => byRole.get(role)).filter((l): l is AuditLineage => Boolean(l));
+  if (present.length < roles.length) return null;
+
+  for (const tier of SEPARATION_LADDER) {
+    const { key } = dimension(tier);
+    const values = present.map(key);
+    if (values.some((value) => value === null || value === '')) continue;
+    if (new Set(values).size === present.length) return tier;
+  }
+  return null;
+}
+
+/** Is `have` at least as strong as `want`? Used to honour a required tier. */
+export function meetsTier(have: SeparationTier | null, want: SeparationTier): boolean {
+  if (!have) return false;
+  return SEPARATION_LADDER.indexOf(have) <= SEPARATION_LADDER.indexOf(want);
 }
 
 /** The pass ordinals the audit roles occupy, mirroring `auditBrief.ts`. */

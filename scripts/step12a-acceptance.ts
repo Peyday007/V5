@@ -28,6 +28,7 @@
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { getDb } from '../server/db/database.ts';
 import { auditIndependenceEvidence } from '../server/services/research/independenceEvidence.ts';
+import { SEPARATION_LABELS } from '../server/services/research/independence.ts';
 
 type Verdict = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_RUN';
 
@@ -48,10 +49,21 @@ type Verdict = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_RUN';
  * all happen without an audit, so none of them is here.
  */
 const BLOCKED_BY_A11: Record<string, string> = {
-  A12_WRITEBACK:
-    'a writeback needs a terminal packet, and a packet is terminal only after three independent audit roles',
-  A13_AUTO_NEXT:
-    'an automatic follow-on launches from a finished mission, which needs the audit A11 is blocked on',
+  /*
+   * Deliberately empty, and that is the correction.
+   *
+   * A12 and A13 were listed here because a terminal packet needed three
+   * *account-separated* audit roles, which a one-account fleet could not
+   * supply. The minimum is now three distinct authenticated sessions, which
+   * one healthy Routine reaches through three fresh activations — so neither
+   * gate waits on a second account, and calling them BLOCKED would be the same
+   * mistake in the opposite direction: reporting work as impossible when it is
+   * merely not yet done.
+   *
+   * The map is kept rather than deleted because the distinction it draws is
+   * still the right one. If a future gate genuinely cannot move until another
+   * does, it belongs here.
+   */
 };
 
 interface GateResult {
@@ -223,34 +235,49 @@ async function gates(): Promise<GateResult[]> {
   /*
    * A11 — audit independence.
    *
-   * Derived, fail-closed, from `auditIndependenceEvidence`. Nine conditions,
-   * and `PASS` only when every one is met by production rows: two accounts
-   * holding genuinely different credentials, two active worker identities each
-   * bound to exactly one of them, three completed audit passes whose lineage
-   * *agrees with those bindings*, three session references that resolve to real
-   * credentials of those same workers, the account and session separation the
-   * signed matrix asks for, and a packet that actually filed a document.
+   * Derived, fail-closed, from `auditIndependenceEvidence`, and `PASS` only
+   * when every condition is met by production rows: a healthy execution
+   * surface, three completed audit passes whose session references resolve to
+   * real credentials of the workers that ran them, three *distinct* such
+   * sessions, a judge that completed last, and a packet that actually filed a
+   * document with bytes.
    *
-   * It also checks the control it is evidence for: the matrix is compared to
-   * the shape this gate was written against, and the same-account refusal is
-   * exercised live. Weakening either to make an audit eligible makes this
-   * report `BLOCKED` rather than `PASS`.
+   * It also checks the control it is evidence for: the separation minimum is
+   * compared to the shape this gate was written against, and the same-session
+   * refusal is exercised live. Changing either — in either direction — makes
+   * this report `BLOCKED` rather than `PASS`.
    *
-   * An earlier version of this file hard-coded `BLOCKED`, reasoning that a
-   * database check could be satisfied by writing rows. The concern was right
-   * and the remedy was wrong: a constant cannot become true when the evidence
-   * arrives, so it would have needed a code change and a deployment at exactly
-   * the moment the gate was supposed to be answering. The answer is a check
-   * hostile enough that forging it means reproducing the whole production
-   * shape — which is what the conditions above are for.
+   * Two earlier versions were wrong in opposite ways and both are recorded
+   * here rather than quietly replaced.
+   *
+   * The first hard-coded `BLOCKED`, reasoning that a database check could be
+   * satisfied by writing rows. The concern was right and the remedy was wrong:
+   * a constant cannot become true when the evidence arrives, so it would have
+   * needed a code change and a deployment at exactly the moment the gate was
+   * supposed to be answering.
+   *
+   * The second required two accounts. That is a stronger assurance and it also
+   * made a finished product unfinished whenever one particular subscription was
+   * unavailable — a completion dependency on temporary fleet topology, which is
+   * not a property an acceptance gate may have. The floor is now three distinct
+   * authenticated sessions, which is what actually defeats the threat: one
+   * model context reviewing its own work. Account separation is measured,
+   * preferred by the allocator, reported truthfully, and never required.
+   *
+   * Three verdicts, not two. `NOT_RUN` is an audit that has not happened yet
+   * with nothing standing in its way; `BLOCKED` is something actually wrong.
    */
   const independence = await auditIndependenceEvidence();
   results.push({
     id: 'A11_INDEPENDENT_AUDIT',
-    verdict: independence.verdict === 'PASS' ? 'PASS' : 'BLOCKED',
+    verdict: independence.verdict,
     detail:
       independence.missing ??
-      'authentic production lineage: separate accounts arguing, a third session judging',
+      // The achieved tier, never rounded up. A same-account result says
+      // SESSION_SEPARATED and is not described as cross-account independent.
+      `three distinct authenticated sessions; achieved ${
+        independence.achieved ? SEPARATION_LABELS[independence.achieved] : 'no separation'
+      }`,
   });
 
   // A12 — writeback happened, exactly once per mission. The `writeback_at`

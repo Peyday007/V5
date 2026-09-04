@@ -49,6 +49,11 @@ import {
   settleReservation,
 } from '../../repos/russellAuthority.ts';
 import { startPacket } from '../research/startPacket.ts';
+import {
+  separationCapacity,
+  separationShortfall,
+} from '../research/auditAdmission.ts';
+import type { SeparationTier } from '../research/independence.ts';
 import { getDb } from '../../db/database.ts';
 import type { RussellMission, RussellVisibility } from '../../domain/types.ts';
 
@@ -68,6 +73,15 @@ export interface LaunchInput {
   whyNow: string;
   /** Capability tags the surface must have. Persisted to the bin and routed on. */
   requiredCapabilities?: string[];
+  /**
+   * A stronger audit separation than the contract's floor, for this mission only.
+   *
+   * Absent means the floor, which is `SESSION` and which every healthy fleet can
+   * supply. Present and unavailable parks *this* mission and nothing else: no
+   * other mission is affected, no global state is degraded, and the park lifts by
+   * itself on the tick after the missing capability is registered.
+   */
+  requiredSeparation?: SeparationTier;
   workloadClass?: string | null;
   acceptableSources: string[];
   excludedSources: string[];
@@ -119,6 +133,19 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
   });
   if (!authority.ok || !authority.goal) {
     return refuse(authority.reason);
+  }
+
+  /*
+   * A stronger tier is checked before anything is reserved or created.
+   *
+   * Parking costs nothing and holds nothing — the candidate stays queued and
+   * the next tick asks again — so the honest order is to find out first. The
+   * reason is the exact missing capability rather than a status, because
+   * "blocked" that names no remedy is the defect §22 recorded three times.
+   */
+  if (input.requiredSeparation) {
+    const shortfall = separationShortfall(input.requiredSeparation, await separationCapacity());
+    if (shortfall) return refuse(shortfall);
   }
 
   /*

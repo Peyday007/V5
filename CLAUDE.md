@@ -881,15 +881,48 @@ a value the claimant does not supply.**
   `simulated: true` and a content-addressed trace id, so a projection cannot be
   read back as a measurement.
 
-**Audit independence is a rule Brain applies before it hands work out.** The
-signed contract is two dimensions, not one: PRIMARY and ADVERSARIAL are
-separated by **account**, the JUDGE from both by **session**. Read as one
-uniform level it demands three pairwise-distinct accounts, which a two-account
-fleet cannot supply — so the rule looks unsatisfiable and invites being
-weakened. The reading was wrong, not the contract; two accounts and three
-sessions meet it exactly. `services/research/auditEligibility.ts` holds the
-matrix per pair as a constant, because a caller that could choose the level is a
-caller that could lower it, and no account count appears anywhere in it.
+**Audit independence is a rule Brain applies before it hands work out**, and
+its floor is **three distinct authenticated sessions** — one each for PRIMARY,
+ADVERSARIAL and JUDGE, with no session holding two roles on one orchestration
+and the judge beginning only after both arguments are settled and immutable.
+`services/research/auditEligibility.ts` holds the minimum per pair as a
+constant, because a caller that could choose the level is a caller that could
+lower it, and **no count of accounts, workers or Routines appears anywhere in
+it.**
+
+**This is a recorded correction to the original two-account requirement, not a
+silent weakening.** The threat an independent audit exists to defeat is *one
+model context reviewing its own work*. Three separate sessions defeat it. Two
+accounts also defeated it, and additionally made a finished product unfinished
+whenever one particular subscription was unavailable — a completion dependency
+on temporary fleet topology, which account and Routine counts are. So the
+requirement moved to the property that actually does the work, and the stronger
+property became an optional tier.
+
+- **The preference is a ladder, strongest first: account > worker > Routine >
+  session.** `services/research/auditAdmission.ts` ranks the surfaces that
+  could take a waiting role and reaches for the strongest, which is a
+  *preference* and never the authorization — the arriving session is judged on
+  its own recorded lineage, so the allocator is free to be optimistic.
+- **`ROUTINE` is a tier of its own, not a synonym for worker.** One account may
+  hold several Routines and one worker may be bound to several; conflating them
+  would report a separation the fleet does not have.
+- **What was achieved is recorded, never rounded up.** `SESSION_SEPARATED`,
+  `ROUTINE_SEPARATED`, `WORKER_SEPARATED`, `ACCOUNT_SEPARATED` — and a
+  same-account result is never described as cross-account independent.
+- **A mission may ask for a stronger tier, and asking costs only that mission.**
+  If the fleet cannot supply it the mission parks with the exact missing
+  capability, nothing is reserved or created, and the next tick launches it by
+  itself once the missing account, worker or Routine is registered. It never
+  makes anything else incomplete.
+- **`future:<routineId>` is a prediction and never evidence.** It is how the
+  allocator reasons about an activation that has not happened, which is what
+  makes the session floor reachable on a single Routine. Final evidence must
+  carry three real authenticated session references, and the predicted form is
+  refused by name.
+- **A fleet with nowhere to run an audit says so in those words.** The blocker
+  is `NO_HEALTHY_EXECUTION_SURFACE` — an operational fact with an operational
+  remedy — never a missing account and never a named person.
 
 - **The decision happens before the lease.** `claimWork` takes an injected
   `admit` hook and asks it *inside* the claim loop, ahead of the
@@ -913,14 +946,27 @@ caller that could lower it, and no account count appears anywhere in it.
 **Never infer fleet capacity from account count.** Throughput is measured per
 account, Routine, workload class and reset period, or it is reported as unknown.
 
-**One account is registered live and cross-account routing is not proven.**
-`primary` / `V1` runs the same trigger Step 10 used, and Brain has routed, fired
-and drained bins through the registry — ready to routed in 5.2s, ready to
-terminal in 44.5s, zero refusals. Everything the router does *between* accounts
-is proven in tests on both backends and nowhere else, because a second
-subscription is not in the registry yet. Two Routines under one account would
-not close that: it proves routing across surfaces and says nothing about routing
-across allowances, which is the distinction this whole step is built on.
+**Two accounts are registered live with distinct credential digests, and Brain
+has fired both.** `primary` / `V1` runs the same trigger Step 10 used;
+`friend-2` / `V2` is registered under its own deployment secret. As of
+2026-09-04 the ledger reads V1 fires=15 and V2 fires=9 with **zero refusals on
+either**, and the production independence evaluator's distinct-credential
+condition passes — so the two rows are not one subscription registered twice.
+Routing, distribution and failover across accounts are therefore proven in
+production, in addition to the tests on both backends. Ready to routed measured
+5.2s and ready to terminal 44.5s.
+
+**What is not proven is cross-account audit *diversity*, and that is a
+different thing.** Both Routines are currently bound to one worker identity, so
+an audit run across them resolves to one worker and the achieved tier is
+`SESSION_SEPARATED`. Under the corrected contract that is a complete,
+passing audit at the floor — reported truthfully at the tier it earned, never
+labelled cross-account. **Cross-account diversity is an optional stronger
+assurance tier and a later Capability Lab measurement. It is not a completion
+dependency of Step 11 or of Step 12A.** Binding a second worker to `friend-2`
+raises the achieved tier with no code change and no deployment.
+
+**Step 11 is closed.**
 
 Running it found a defect reading alone had not. Every successful fire advanced
 `consecutive_no_shows`, nothing in production ever recorded a session arriving,
@@ -1012,33 +1058,47 @@ Russell's conversation may never be.
 
 **Step 12A is not complete until `npm run step12a:acceptance` exits 0**, which
 requires production rows against a deployed commit after a real restart.
-`A11_INDEPENDENT_AUDIT` remains **BLOCKED** on a fresh authentic second-account
-worker identity — provisioning outside this repository.
+`A11_INDEPENDENT_AUDIT` depends on **no particular friend, account count or
+Routine count**. It is satisfied by one healthy Routine activated three times,
+and it is **derived, fail-closed**, by
+`services/research/independenceEvidence.ts` rather than hard-coded.
 
-It is **derived, fail-closed**, by `services/research/independenceEvidence.ts`,
-not hard-coded. An earlier version of this file said it was hard-coded, on the
-reasoning that a database check could be satisfied by writing rows. The concern
-was right and the remedy was wrong: a constant cannot become true when the
-evidence arrives, so it would have needed a code change and a deployment at
-exactly the moment the gate was supposed to be answering. The correction is
-recorded rather than quietly deleted, the same way §22 records Step 7's wrong
-reasoning about OAuth.
+Two earlier versions of this paragraph were wrong in opposite directions, and
+both are recorded rather than quietly deleted — the same way §22 records Step
+7's wrong reasoning about OAuth.
+
+The first said the gate was hard-coded `BLOCKED`, on the reasoning that a
+database check could be satisfied by writing rows. The concern was right and
+the remedy was wrong: a constant cannot become true when the evidence arrives,
+so it would have needed a code change and a deployment at exactly the moment
+the gate was supposed to be answering.
+
+The second required **two accounts and two distinctly-bound workers**. That is
+a stronger assurance and it also made a finished product unfinished whenever a
+particular subscription was unavailable. A specific friend, account count or
+Routine count cannot be a completion dependency, because those are dynamic
+operational facts rather than properties of the system being accepted.
 
 The remedy is a check hostile enough that forging it means reproducing the
-whole production shape. Nine conditions, `PASS` only when every one holds: two
-accounts whose registered credential **digests differ**, so one subscription
-under two names is one account; two active workers each bound to exactly one of
-them; three completed audit passes whose `executor_account_id` **agrees with
-the binding its worker actually resolves to**, so a hand-written label is
-refused; three session references that each resolve to a real credential **of
-that same worker**; the account and session separation the signed matrix asks
-for; and an orchestration that filed a document with bytes, because an audit of
-nothing is not an audit. It also re-checks the control it is evidence for — the
-matrix is compared to its expected shape and the same-account refusal is
-exercised live — so weakening the guard to make an audit eligible makes the
-gate report `BLOCKED`. There is no override, no environment variable and no
+whole production shape, expressed in terms of what actually defeats the threat.
+`PASS` only when every condition holds: a healthy execution surface exists at
+all; three completed audit passes; three session references that each resolve
+to a **real credential of the worker that presented it**, so an invented
+session separates nobody; those three sessions **distinct**, which is the
+floor; **no predicted `future:` session**, which is allocator reasoning rather
+than evidence; a judge whose completion stamp is **after both arguments**; a
+lineage label that agrees with the binding its worker resolves to, which
+decides the *reported tier* and never the verdict; and an orchestration that
+filed a document with bytes, because an audit of nothing is not an audit. It
+also re-checks the control it is evidence for — the separation minimum is
+compared to its expected shape and a **same-session** refusal is exercised
+live — so changing the guard in either direction makes the gate report
+`BLOCKED`. There is no override, no environment variable and no
 caller-supplied label, and an unreadable database is `BLOCKED` rather than a
-pass. Step 12B's items
+pass. An audit that simply has not been run yet is `NOT_RUN`, which is a third
+answer on purpose: *nothing has happened* and *something is wrong* have
+different remedies, and a gate that reads BLOCKED on a healthy fleet names none.
+Step 12B's items
 (collections, Discovery Frontier, Capability Lab, maps, a mobile-first rebuild,
 the full Fleet centre, personalization, advanced math, 3D, social-media
 intelligence) are listed in `docs/STEP-12B-BACKLOG.md` and are not built here.

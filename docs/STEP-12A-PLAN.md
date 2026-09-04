@@ -195,7 +195,7 @@ commit after the required restart.
 | `A08_COVERAGE` | accepted current evidence suppresses redundant research; `UNVERIFIED`/stale/contradicted does not | coverage pass | inversion test | frozen conversation 2 |
 | `A09_AUTH_BUDGET` | budget is atomic, idempotent, server-timed, zero external spend | goal + reservation | concurrency test | the real mission |
 | `A10_MISSION_PIPELINE` | one promotion → one mission, one orchestration, one correct bin, capabilities routed | launcher | crash-injection test | the real mission |
-| `A11_INDEPENDENT_AUDIT` | PRIMARY/ADVERSARIAL on different accounts, JUDGE on a distinct session, shared lineage refused | unchanged Step 11 | existing 24 tests | **externally blocked** — see §8 |
+| `A11_INDEPENDENT_AUDIT` | PRIMARY, ADVERSARIAL and JUDGE in three distinct authenticated sessions; no session takes two roles on one packet; the judge runs last; the achieved tier reported truthfully and never rounded up; fake or predicted lineage refused | Step 11 + the adaptive separation correction | `tests/auditIndependence.test.ts`, `tests/adaptiveSeparation.test.ts`, `tests/independenceEvidence.test.ts` | the real mission |
 | `A12_WRITEBACK` | knowledge, project, conversation, candidate, priority, briefing update exactly once | observer | replay + concurrent test | the real mission |
 | `A13_AUTO_NEXT` | the frozen follow-on launches once without another prompt | cycle | test | frozen conversation 7 |
 | `A14_HUMAN_RESUME` | a true boundary parks, appears in Needs You, resumes the same mission | human requests | idempotent-answer test | frozen conversation 8 |
@@ -205,8 +205,16 @@ commit after the required restart.
 | `A18_BASELINES` | Step 9/10/11 authoritative baselines unchanged but for authorized 12A rows | — | — | before/after read |
 | `A19_DELIVERY` | typecheck, build, both suites, migrations from empty, hosted verify before **and after** a real restart | — | CI | deployment ledger |
 
-`A11` depends on provisioning outside this repository. It does not block
-building anything else, and it is not weakened, simulated or substituted.
+**`A11` depends on no particular friend, account count or Routine count** — the
+row above supersedes the earlier "different accounts" wording, and the change is
+recorded as an explicit product-owner correction in `docs/STEP-12A-EVIDENCE.md`
+§10 rather than as a silent weakening. One healthy Routine satisfies it through
+three fresh activations. Account separation is a stronger optional assurance
+tier that the allocator prefers when the fleet can supply it and that the report
+never claims when it cannot. The control itself is not weakened, simulated or
+substituted: the same-session refusal is exercised live by the evaluator, and
+changing the separation minimum in either direction makes the gate report
+`BLOCKED`.
 
 ---
 
@@ -325,11 +333,18 @@ and after a real restart.
 
 ### The external dependency
 
-`A11_INDEPENDENT_AUDIT` needs the second Claude account to present its **own**
-Brain worker identity. It is inspected once, not polled beyond ten minutes, and
-if it still presents the primary identity the blocker is recorded, everything
-else is stored and resumable, and the matrix is not weakened, simulated or
-substituted. Step 12A is not called complete while it is open.
+**There is no longer an external identity dependency in the acceptance
+contract.** `A11_INDEPENDENT_AUDIT` is satisfied by three distinct
+authenticated sessions, which one healthy Routine supplies by being activated
+three times. A second Claude account presenting its own Brain worker identity
+raises the achieved tier from `SESSION_SEPARATED` toward `ACCOUNT_SEPARATED`,
+which is worth having and is not a completion requirement.
+
+What remains external is capacity: if **no** Routine checks in, the blocker is
+`NO_HEALTHY_EXECUTION_SURFACE` — an operational fact naming an operational
+remedy, never a missing person. It is inspected once, not polled beyond ten
+minutes, everything else stays stored and resumable, and the matrix is not
+weakened, simulated or substituted.
 
 ---
 

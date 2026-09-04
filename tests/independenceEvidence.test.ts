@@ -9,6 +9,15 @@
  * one part of it. Building the whole shape is not a way around the gate — it is
  * the only way through it, and it is what production has to produce. Removing
  * one part is the shortcut somebody would actually try.
+ *
+ * Several of them changed direction under the product-owner correction, and
+ * they are rewritten rather than deleted so the change stays legible. The
+ * requirement used to be two accounts; it is now three distinct authenticated
+ * sessions, with stronger tiers preferred, measured and reported truthfully.
+ * What used to be a refusal for sharing an account is now a *pass with a
+ * weaker reported tier* — and the tests below say so explicitly, because
+ * "never label a same-account result as cross-account independent" is the part
+ * of the correction that can quietly rot.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { addDocument, freshProject } from './helpers.ts';
@@ -51,6 +60,11 @@ function unique(prefix: string): string {
  * Two accounts holding different credentials, two workers each bound to exactly
  * one of them, three real credentials, three completed audit passes whose
  * lineage agrees with those bindings, and a filed document with bytes.
+ *
+ * It is deliberately richer than the floor requires. The floor needs three
+ * sessions and nothing else, so building more here means the removal tests
+ * below are removing something real rather than something the gate never
+ * wanted.
  */
 async function authenticShape(): Promise<Shape> {
   const workerA = (await createWorker({ name: unique('primary'), createdByType: 'SYSTEM', createdById: 't' })).id;
@@ -146,10 +160,14 @@ async function authenticShape(): Promise<Shape> {
 }
 
 describe('A11 passes only on authentic production lineage', () => {
-  it('is BLOCKED in an empty Brain, naming the first thing that is missing', async () => {
+  it('is BLOCKED in an empty Brain, naming the operational fact and not a person', async () => {
     const evidence = await auditIndependenceEvidence();
     expect(evidence.verdict).toBe('BLOCKED');
-    expect(evidence.missing).toMatch(/DISTINCT_ACCOUNT_CREDENTIALS/);
+    // The correction's exact wording. A Brain with nowhere to run an audit has
+    // a capacity problem, not an independence problem, and the two have
+    // completely different remedies.
+    expect(evidence.missing).toMatch(/NO_HEALTHY_EXECUTION_SURFACE/);
+    expect(evidence.missing).not.toMatch(/MISSING_FRIEND|DISTINCT_ACCOUNT_CREDENTIALS/);
   });
 
   it('reaches PASS when every condition is genuinely met', async () => {
@@ -164,7 +182,7 @@ describe('A11 passes only on authentic production lineage', () => {
 });
 
 describe('A11 refuses every shortcut, and names which one', () => {
-  it('refuses two account names sharing one credential', async () => {
+  it('passes two account names sharing one credential — and never calls it cross-account', async () => {
     const shape = await authenticShape();
     const digest = await getDb().all<{ token_digest: string }>(
       `SELECT token_digest FROM fleet_routines WHERE account_id = ?`,
@@ -177,30 +195,47 @@ describe('A11 refuses every shortcut, and names which one', () => {
       shape.accountB,
     ]);
 
+    /*
+     * The correction, at its sharpest. Two names on one subscription used to
+     * fail the gate; now it passes, because three real sessions ran the three
+     * roles and that is what defeats one context reviewing itself. What must
+     * never happen is the *report* claiming an account separation the fleet
+     * does not have.
+     */
     const evidence = await auditIndependenceEvidence();
-    expect(evidence.verdict).toBe('BLOCKED');
-    expect(evidence.missing).toMatch(/DISTINCT_ACCOUNT_CREDENTIALS/);
-    expect(evidence.missing).toMatch(/share one credential/);
+    expect(evidence.verdict).toBe('PASS');
+    expect(evidence.achieved).toBe('SESSION');
+    expect(evidence.achieved).not.toBe('ACCOUNT');
   });
 
-  it('refuses one worker wearing both accounts', async () => {
+  it('passes one worker wearing both accounts, at the weaker tier it earned', async () => {
     const shape = await authenticShape();
     await getDb().run(`UPDATE fleet_routines SET worker_id = ? WHERE account_id = ?`, [
       shape.workerA,
       shape.accountB,
     ]);
 
+    // This is the live fleet's actual shape — one worker bound to two Routines
+    // on two accounts. It used to be a hard refusal, which meant the real
+    // deployment could never satisfy its own acceptance gate.
     const evidence = await auditIndependenceEvidence();
-    expect(evidence.verdict).toBe('BLOCKED');
-    expect(evidence.missing).toMatch(/DISTINCT_BOUND_WORKERS/);
+    expect(evidence.verdict).toBe('PASS');
+    expect(evidence.achieved).toBe('SESSION');
+    expect(evidence.achieved).not.toBe('WORKER');
   });
 
-  it('refuses a disabled worker identity', async () => {
+  it('does not unmake a finished audit when a worker is disabled afterwards', async () => {
     const shape = await authenticShape();
     await setWorkerStatus(shape.workerB, 'DISABLED');
+    /*
+     * Revocation takes effect on the next request — §17's rule — and it is not
+     * a rewrite of history. Three sessions authenticated and three roles ran;
+     * disabling an identity today does not make yesterday's audit not have
+     * happened, and reporting otherwise would be the opposite lie to the one
+     * this gate exists to prevent.
+     */
     const evidence = await auditIndependenceEvidence();
-    expect(evidence.verdict).toBe('BLOCKED');
-    expect(evidence.missing).toMatch(/DISTINCT_BOUND_WORKERS/);
+    expect(evidence.verdict).toBe('PASS');
   });
 
   it('refuses an account label written onto a pass that its worker is not bound to', async () => {
@@ -243,7 +278,7 @@ describe('A11 refuses every shortcut, and names which one', () => {
     expect(evidence.missing).toMatch(/SESSIONS_ARE_REAL_CREDENTIALS/);
   });
 
-  it('refuses both arguments on one account', async () => {
+  it('passes both arguments on one account in two sessions', async () => {
     const shape = await authenticShape();
     // Re-point the adversary's whole binding to the primary's account, so the
     // lineage is internally consistent and simply not independent.
@@ -256,11 +291,15 @@ describe('A11 refuses every shortcut, and names which one', () => {
       [shape.accountA, shape.orchestrationId],
     );
 
+    /*
+     * Both arguers on one account, in two different sessions. Under the
+     * correction this is exactly the one-account topology that must pass — a
+     * single healthy Routine reaching the floor through separate activations —
+     * and the reported tier is the honest `SESSION`, never `ACCOUNT`.
+     */
     const evidence = await auditIndependenceEvidence();
-    expect(evidence.verdict).toBe('BLOCKED');
-    // It fails at the earlier condition, which is the honest one: with both
-    // Routines on one account there are no longer two accounts to argue.
-    expect(evidence.missing).toMatch(/DISTINCT_ACCOUNT_CREDENTIALS|DISTINCT_BOUND_WORKERS|INDEPENDENT_LINEAGE/);
+    expect(evidence.verdict).toBe('PASS');
+    expect(evidence.achieved).toBe('SESSION');
   });
 
   it('refuses a judge that argued', async () => {
@@ -270,10 +309,13 @@ describe('A11 refuses every shortcut, and names which one', () => {
       [shape.credentialA, shape.orchestrationId],
     );
 
+    // The threat itself, and the one thing the correction did not relax: a
+    // judge sitting in the session that made one of the arguments is one
+    // context reviewing its own work.
     const evidence = await auditIndependenceEvidence();
     expect(evidence.verdict).toBe('BLOCKED');
-    expect(evidence.missing).toMatch(/INDEPENDENT_LINEAGE/);
-    expect(evidence.missing).toMatch(/also argued/);
+    expect(evidence.missing).toMatch(/THREE_DISTINCT_SESSIONS/);
+    expect(evidence.missing).toMatch(/same session/);
   });
 
   it('refuses an audit of a packet that filed nothing', async () => {
@@ -307,21 +349,112 @@ describe('A11 refuses every shortcut, and names which one', () => {
       [shape.orchestrationId],
     );
 
+    /*
+     * NOT_RUN rather than BLOCKED, and the distinction is the point: the
+     * control is intact and a surface exists, so nothing is stopping this —
+     * the audit has simply not produced three completed roles. A gate that
+     * said BLOCKED here would name no remedy and would invite being weakened
+     * to move it.
+     */
+    const evidence = await auditIndependenceEvidence();
+    expect(evidence.verdict).toBe('NOT_RUN');
+    expect(evidence.missing).toMatch(/AUDIT_PASSES_RECORDED/);
+  });
+
+  it('refuses a predicted session, which is the allocator reasoning and not evidence', async () => {
+    const shape = await authenticShape();
+    // `future:<routineId>` is how `rankSurfacesFor` reasons about an activation
+    // that has not happened. Three of them would look perfectly distinct while
+    // nothing had ever authenticated, so final evidence must contain three real
+    // session references and this one is refused by name.
+    await getDb().run(
+      `UPDATE research_passes SET executor_session_ref = ? WHERE orchestration_id = ? AND ordinal = 7`,
+      ['future:rtn_not_yet', shape.orchestrationId],
+    );
+
     const evidence = await auditIndependenceEvidence();
     expect(evidence.verdict).toBe('BLOCKED');
-    expect(evidence.missing).toMatch(/AUDIT_PASSES_RECORDED/);
+    // It fails at the credential check first, which is the stronger statement:
+    // a predicted session is not a credential either.
+    expect(evidence.missing).toMatch(/SESSIONS_ARE_REAL_CREDENTIALS|SESSIONS_ARE_REAL_ACTIVATIONS/);
+  });
+
+  it('refuses a judge that completed before the arguments it was meant to judge', async () => {
+    const shape = await authenticShape();
+    await getDb().run(
+      `UPDATE research_passes SET completed_at = ? WHERE orchestration_id = ? AND ordinal = 7`,
+      ['2000-01-01T00:00:00.000Z', shape.orchestrationId],
+    );
+
+    // Ordering is part of the contract: the judge may begin only after both
+    // arguments are settled and immutable.
+    const evidence = await auditIndependenceEvidence();
+    expect(evidence.verdict).toBe('BLOCKED');
+    expect(evidence.missing).toMatch(/JUDGE_RAN_LAST/);
   });
 });
 
 describe('the gate is evidence for a control that must still exist', () => {
-  it('is the signed matrix, not a weaker one', () => {
-    // If somebody lowers PRIMARY_ADVERSARIAL to SESSION to make an audit
-    // eligible, the evaluator's first condition fails and A11 reports BLOCKED
-    // rather than PASS. This asserts the shape it compares against.
-    expect(SIGNED_AUDIT_MATRIX['PRIMARY_ADVERSARIAL']).toBe('ACCOUNT');
+  it('is the corrected minimum, and contains no topology at all', () => {
+    /*
+     * The floor is session on all three pairs. If somebody *raises* one of
+     * these back to ACCOUNT to make the gate stricter, the evaluator's first
+     * condition fails and A11 reports BLOCKED rather than PASS — the same
+     * protection as before, now pointing the other way. That is deliberate:
+     * the minimum is a signed contract in both directions, and a mission that
+     * wants more asks for it per mission through `requiredTier`.
+     */
+    expect(SIGNED_AUDIT_MATRIX['PRIMARY_ADVERSARIAL']).toBe('SESSION');
     expect(SIGNED_AUDIT_MATRIX['JUDGE_PRIMARY']).toBe('SESSION');
     expect(SIGNED_AUDIT_MATRIX['JUDGE_ADVERSARIAL']).toBe('SESSION');
     expect(Object.keys(SIGNED_AUDIT_MATRIX).length).toBe(3);
+    // No count of accounts, workers or Routines appears in the minimum.
+    expect(Object.values(SIGNED_AUDIT_MATRIX)).not.toContain('ACCOUNT');
+  });
+
+  it('reports ROUTINE_SEPARATED rather than collapsing it into SESSION', async () => {
+    const shape = await authenticShape();
+    /*
+     * Three roles, one account, one worker, three Routines. Worker and Routine
+     * are not the same tier and must not be treated as equivalent: reporting
+     * SESSION here would understate what the fleet achieved, and reporting
+     * WORKER would overstate it.
+     */
+    const routines = await getDb().all<{ id: string }>(
+      `SELECT id FROM fleet_routines ORDER BY created_at, rowid`,
+    );
+    const ordinals = [5, 6, 7];
+    for (let index = 0; index < ordinals.length; index += 1) {
+      await getDb().run(
+        `UPDATE research_passes SET executor_routine_id = ?, executor_account_id = ?
+          WHERE orchestration_id = ? AND ordinal = ?`,
+        [routines[index]?.id ?? `rtn_extra_${index}`, shape.accountA, shape.orchestrationId, ordinals[index]!],
+      );
+    }
+    // The account column now agrees for all three, so account separation is
+    // genuinely absent and only the Routine distinguishes them.
+    await getDb().run(`UPDATE fleet_routines SET account_id = ?, worker_id = ?`, [
+      shape.accountA,
+      shape.workerA,
+    ]);
+    await getDb().run(`UPDATE research_passes SET executor_worker_id = ? WHERE orchestration_id = ?`, [
+      shape.workerA,
+      shape.orchestrationId,
+    ]);
+    // The adversary's session belonged to the other worker, and a session is a
+    // credential *of the worker that presented it* — so it gets one of its own
+    // rather than borrowing one, which the gate would rightly refuse.
+    const thirdSession = (
+      await issueWorkerCredential({ workerId: shape.workerA, issuedByType: 'SYSTEM', issuedById: 't' })
+    ).credential.id;
+    await getDb().run(
+      `UPDATE research_passes SET executor_session_ref = ? WHERE orchestration_id = ? AND ordinal = 6`,
+      [thirdSession, shape.orchestrationId],
+    );
+
+    const evidence = await auditIndependenceEvidence();
+    expect(evidence.verdict).toBe('PASS');
+    expect(evidence.achieved).toBe('ROUTINE');
   });
 
   it('exercises the live refusal rather than assuming it', async () => {

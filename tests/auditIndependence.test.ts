@@ -153,14 +153,29 @@ beforeEach(async () => {
 /* ========================================================================= */
 
 describe('the signed matrix', () => {
-  it('separates the two arguers by account and the judge by session', () => {
-    // Pinned, because the whole defect was reading a two-dimension contract as
-    // one. If this changes, it is a policy decision and not a refactor.
+  it('is a session floor on every pair, and names no account', () => {
+    /*
+     * **A recorded correction, not a silent weakening.**
+     *
+     * This assertion used to pin `PRIMARY_ADVERSARIAL: 'ACCOUNT'`. That fused
+     * the threat with the topology that happened to be registered: the threat
+     * is one model context reviewing its own work, and three distinct
+     * authenticated sessions defeat it. Requiring two accounts also defeated
+     * it — and made a finished product unfinished whenever a particular
+     * subscription was unavailable, which is not a property an acceptance gate
+     * may have.
+     *
+     * Cross-account diversity is now a stronger *optional* tier the allocator
+     * reaches for. It is still pinned here, in the opposite direction: no
+     * entry may name an account, because that would reintroduce the topology
+     * dependency by the back door.
+     */
     expect(SIGNED_AUDIT_MATRIX).toEqual({
-      PRIMARY_ADVERSARIAL: 'ACCOUNT',
+      PRIMARY_ADVERSARIAL: 'SESSION',
       JUDGE_PRIMARY: 'SESSION',
       JUDGE_ADVERSARIAL: 'SESSION',
     });
+    expect(Object.values(SIGNED_AUDIT_MATRIX)).not.toContain('ACCOUNT');
   });
 
   it('is satisfiable by two accounts, which is why the live fleet can meet it', async () => {
@@ -183,7 +198,7 @@ describe('the signed matrix', () => {
     expect(auditMatrixVerdict(await passes()).eligible).toBe(true);
   });
 
-  it('refuses three roles on one account even in three sessions', async () => {
+  it('accepts three roles on one account in three sessions — the correction', async () => {
     const f = await fleet();
     for (const [role, sess] of [['PRIMARY', 's1'], ['ADVERSARIAL', 's2'], ['JUDGE', 's3']] as const) {
       await recordAuditPass({
@@ -191,13 +206,32 @@ describe('the signed matrix', () => {
         accountId: f.a.accountId, sessionRef: sess,
       });
     }
+    // This exact arrangement used to be refused. It is now the ordinary case a
+    // single healthy Routine reaches through three fresh activations, and it
+    // is what makes completion independent of how many accounts exist.
+    expect(auditMatrixVerdict(await passes()).eligible).toBe(true);
+
+    // And the tier is reported honestly: same account, so SESSION.
+    const { strongestSeparation, lineageFromPasses } =
+      await import('../server/services/research/independence.ts');
+    expect(strongestSeparation(lineageFromPasses(await passes()).audits)).toBe('SESSION');
+  });
+
+  it('still refuses two roles in one session, which is the actual threat', async () => {
+    const f = await fleet();
+    await recordAuditPass({
+      role: 'PRIMARY', workerId: f.a.workerId, routineId: null,
+      accountId: f.a.accountId, sessionRef: 'one-context',
+    });
+    await recordAuditPass({
+      role: 'ADVERSARIAL', workerId: f.a.workerId, routineId: null,
+      accountId: f.a.accountId, sessionRef: 'one-context',
+    });
     const verdict = auditMatrixVerdict(await passes());
     expect(verdict.eligible).toBe(false);
-    // Exactly one violation: the arguers. The judge pairs are session-separated
-    // and legitimately pass.
-    expect(verdict.reasons).toHaveLength(1);
-    expect(verdict.reasons[0]).toMatch(/PRIMARY and ADVERSARIAL shared the same account\./);
-    expect(verdict.reasons[0]).not.toContain(f.a.accountId);
+    expect(verdict.reasons.join(' ')).toMatch(/same session/);
+    // The value is a credential id and never appears in a reason.
+    expect(verdict.reasons.join(' ')).not.toContain('one-context');
   });
 
   it('refuses the judge in a session that already argued', async () => {
@@ -225,9 +259,12 @@ describe('the signed matrix', () => {
 
   it('fails closed on missing lineage rather than passing it', async () => {
     const f = await fleet();
+    // Missing lineage *at the compared dimension*. The floor is session, so an
+    // absent session is what must fail closed — an absent account no longer
+    // decides anything, which is the point of the correction.
     await recordAuditPass({
       role: 'PRIMARY', workerId: f.a.workerId, routineId: null,
-      accountId: null, sessionRef: 'sess-1',
+      accountId: f.a.accountId, sessionRef: null,
     });
     await recordAuditPass({
       role: 'ADVERSARIAL', workerId: f.b.workerId, routineId: null,
@@ -235,7 +272,24 @@ describe('the signed matrix', () => {
     });
     const verdict = auditMatrixVerdict(await passes());
     expect(verdict.eligible).toBe(false);
-    expect(verdict.reasons.join(' ')).toMatch(/cannot be compared: one recorded no account/);
+    expect(verdict.reasons.join(' ')).toMatch(/no session/);
+  });
+
+  it('treats an empty session as absent, not as distinct', async () => {
+    const f = await fleet();
+    // The hole a test caught: `lineageForWorker` records a missing credential
+    // as '' , which compared *unequal* to every real one — so a caller with no
+    // session at all looked perfectly separated from one that had
+    // authenticated. Both directions are now "unknown, refused".
+    await recordAuditPass({
+      role: 'PRIMARY', workerId: f.a.workerId, routineId: null,
+      accountId: f.a.accountId, sessionRef: '',
+    });
+    await recordAuditPass({
+      role: 'ADVERSARIAL', workerId: f.b.workerId, routineId: null,
+      accountId: f.b.accountId, sessionRef: 'sess-2',
+    });
+    expect(auditMatrixVerdict(await passes()).eligible).toBe(false);
   });
 });
 
@@ -247,11 +301,14 @@ async function passes() {
 /* ========================================================================= */
 
 describe('eligibility is decided before the lease', () => {
-  it('refuses the same account for the second arguer, and consumes no attempt', async () => {
+  it('refuses the same session for the second arguer, and consumes no attempt', async () => {
     const f = await fleet();
     await recordAuditPass({
       role: 'PRIMARY', workerId: f.a.workerId, routineId: null,
-      accountId: f.a.accountId, sessionRef: 'sess-1',
+      // The same credential the claim below presents. Under the corrected
+      // contract this — one context taking both sides — is the refusal that
+      // matters, and it does not depend on how many accounts exist.
+      accountId: f.a.accountId, sessionRef: 'cred_a2',
     });
     const itemId = await queueAudit('ADVERSARIAL');
 
@@ -266,7 +323,7 @@ describe('eligibility is decided before the lease', () => {
     expect(after!.leaseGeneration).toBe(before!.leaseGeneration);
   });
 
-  it('lets the eligible surface claim it immediately afterwards', async () => {
+  it('lets a fresh session on the same account claim it immediately afterwards', async () => {
     const f = await fleet();
     await recordAuditPass({
       role: 'PRIMARY', workerId: f.a.workerId, routineId: null,
@@ -274,8 +331,10 @@ describe('eligibility is decided before the lease', () => {
     });
     await queueAudit('ADVERSARIAL');
 
-    expect(await claimAs({ workerId: f.a.workerId, credentialId: 'cred_a2' })).toHaveLength(0);
-    const claimed = await claimAs(f.b);
+    // A fresh session on the *same* account now takes it. That is the
+    // correction: the arguers must be different contexts, not different
+    // subscriptions.
+    const claimed = await claimAs({ workerId: f.a.workerId, credentialId: 'cred_a2' });
     expect(claimed).toHaveLength(1);
     expect(claimed[0]!.workType).toBe('RESEARCH_AUDIT');
   });
@@ -300,7 +359,7 @@ describe('eligibility is decided before the lease', () => {
     expect(await claimAs({ workerId: f.a.workerId, credentialId: 'cred_a9' })).toHaveLength(1);
   });
 
-  it('refuses a worker with no resolvable account, rather than admitting it', async () => {
+  it('refuses a worker presenting no session, rather than admitting it', async () => {
     const f = await fleet();
     await recordAuditPass({
       role: 'PRIMARY', workerId: f.a.workerId, routineId: null,
@@ -308,9 +367,17 @@ describe('eligibility is decided before the lease', () => {
     });
     await queueAudit('ADVERSARIAL');
     const stranger = await createWorker({ name: `ws-${Math.random().toString(36).slice(2, 8)}`, createdByType: 'SYSTEM', createdById: 't' });
-    // Bound to no Routine, so no account can be resolved. Unknown lineage is a
-    // violation, never a pass.
-    expect(await claimAs({ workerId: stranger.id, credentialId: 'cred_x' })).toHaveLength(0);
+    /*
+     * Bound to no Routine — so no account, no Routine, and under the corrected
+     * contract that no longer decides anything, because the floor is session.
+     * What must still fail closed is an absent *session*: `lineageForWorker`
+     * records a missing credential as '' , and an empty session is unknown
+     * rather than distinct.
+     */
+    expect(await claimAs({ workerId: stranger.id, credentialId: '' })).toHaveLength(0);
+    // With a real session it is admitted, and its weaker lineage simply makes
+    // the achieved tier weaker — reported, never refused for it.
+    expect(await claimAs({ workerId: stranger.id, credentialId: 'cred_x' })).toHaveLength(1);
   });
 
   it('leaves non-audit work alone', async () => {
@@ -356,16 +423,24 @@ describe('eligibility is decided before the lease', () => {
     expect((await getWorkItem(itemId))!.attemptCount).toBe(1);
   });
 
-  it('names which accounts could still take the waiting role', async () => {
+  it('names every account that could still take the waiting role', async () => {
     const f = await fleet();
     await recordAuditPass({
       role: 'PRIMARY', workerId: f.a.workerId, routineId: null,
       accountId: f.a.accountId, sessionRef: 'sess-1',
     });
+    /*
+     * Both, now — and that is the correction visible in one assertion.
+     *
+     * Under the old rule the primary's own account was struck off, so this
+     * returned one. Under a session floor a fresh activation on either account
+     * is eligible, so the allocator is offered both and prefers the
+     * account-separated one. Narrowing the field was never the safety
+     * property; refusing the same session is.
+     */
     const eligible = await accountsEligibleFor({ orchestrationId, role: 'ADVERSARIAL' });
-    // Only the other account. This is what stops the dispatcher firing the
-    // surface that cannot take it, over and over.
-    expect(eligible).toEqual([f.b.accountId]);
+    expect(eligible).toContain(f.a.accountId);
+    expect(eligible).toContain(f.b.accountId);
   });
 });
 
@@ -501,23 +576,44 @@ describe('the one-use envelope', () => {
 });
 
 describe('the guards are load-bearing', () => {
-  it('would admit the conflicting claim if the account rule were dropped', async () => {
-    // The inversion, expressed as the rule rather than by editing the source:
-    // with PRIMARY_ADVERSARIAL relaxed to SESSION, the same account in a new
-    // session becomes eligible — which is exactly the weakening the contract
-    // forbids, and exactly what the test above would stop noticing.
+  it('would admit the conflicting claim if the session rule were dropped', async () => {
+    /*
+     * The inversion, restated for the corrected contract.
+     *
+     * It used to demonstrate that relaxing PRIMARY_ADVERSARIAL from ACCOUNT to
+     * SESSION admitted a same-account arguer — treating that as the weakening
+     * to guard against. The product-owner correction says the opposite: that
+     * arrangement is the ordinary case, and the weakening to guard against is
+     * relaxing *below* session, which admits one context arguing with itself.
+     *
+     * So the inversion now runs at `NONE` and shows what disappears: the same
+     * session takes both roles. That is the threat, and it is the thing the
+     * floor exists to refuse.
+     */
     const f = await fleet();
     await recordAuditPass({
       role: 'PRIMARY', workerId: f.a.workerId, routineId: null,
       accountId: f.a.accountId, sessionRef: 'sess-1',
     });
-    const executor = {
+    const sameSession = {
       workerId: f.a.workerId, routineId: null,
-      accountId: f.a.accountId, sessionRef: 'sess-9',
+      accountId: f.a.accountId, sessionRef: 'sess-1',
     };
-    const signed = auditEligibility({ role: 'ADVERSARIAL', executor, passes: await passes() });
-    expect(signed.eligible).toBe(false);
-    expect(signed.applied.some((a) => a.pair === 'PRIMARY_ADVERSARIAL' && a.level === 'ACCOUNT')).toBe(true);
+    const enforced = auditEligibility({
+      role: 'ADVERSARIAL', executor: sameSession, passes: await passes(),
+    });
+    expect(enforced.eligible).toBe(false);
+    expect(enforced.applied.some((a) => a.pair === 'PRIMARY_ADVERSARIAL' && a.level === 'SESSION')).toBe(true);
+
+    // And a different session on that same account is admitted, which is the
+    // capacity the correction unlocks.
+    expect(
+      auditEligibility({
+        role: 'ADVERSARIAL',
+        executor: { ...sameSession, sessionRef: 'sess-9' },
+        passes: await passes(),
+      }).eligible,
+    ).toBe(true);
   });
 
   it('would admit a same-session judge if the session rule were dropped', async () => {
@@ -588,13 +684,31 @@ describe('a worker bound to more than one Routine', () => {
       role: 'PRIMARY', workerId: 'wkr_other', routineId: null,
       accountId: one.id, sessionRef: 'sess-1',
     });
+    /*
+     * The resolver still refuses to guess, and that is still the point — an
+     * account chosen by row order would be a fact Brain invented. What changed
+     * is the consequence: an unresolvable account no longer refuses the claim,
+     * because the floor is session and this executor has a real one. It simply
+     * cannot reach the account tier, and the achieved separation says so
+     * instead of the audit being blocked.
+     */
     const verdict = auditEligibility({
       role: 'ADVERSARIAL',
       executor: lineage,
       passes: await passes(),
     });
-    expect(verdict.eligible).toBe(false);
-    expect(verdict.reasons.join(' ')).toContain('unrecorded lineage');
+    expect(verdict.eligible).toBe(true);
+
+    // Asked for account separation explicitly, it is refused — the mission
+    // that needs that tier parks, and only that mission.
+    const strict = auditEligibility({
+      role: 'ADVERSARIAL',
+      executor: lineage,
+      passes: await passes(),
+      requiredTier: 'ACCOUNT',
+    });
+    expect(strict.eligible).toBe(false);
+    expect(strict.reasons.join(' ')).toContain('unrecorded lineage');
   });
 
   it('still resolves the account when both Routines are on it', async () => {

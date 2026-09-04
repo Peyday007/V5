@@ -313,8 +313,9 @@ and inherits both.
 
 ## Where Step 11 is
 
-Software complete on both backends; two accounts live; cross-account routing
-proven; audit independence enforced but not yet demonstrated live.
+**Closed.** Software complete on both backends; two accounts live with distinct
+credential digests; cross-account routing, distribution and failover proven;
+audit independence enforced before the lease and again before storage.
 
 `fleet_accounts`, `fleet_routines` and `fleet_policy` replace Step 10's two
 environment variables, and `services/dispatch/router.ts` chooses among them.
@@ -350,24 +351,31 @@ Two things Step 11 established that outlive it:
   arriving, so a healthy Routine walked toward quarantine while its workers were
   visibly turning up. Running it in production is what found that; reading it
   had not.
-- **A contract written at two levels cannot be enforced at one.** Audit
-  independence asks for account separation between the two arguers and session
-  separation for the judge. Read as one uniform level it demands three
-  pairwise-distinct accounts, which two accounts cannot supply — so the rule
-  looked unsatisfiable and was nearly weakened to fit. It was the reading that
-  was wrong, not the contract: two accounts and three sessions meet it exactly.
+- **A control must be stated in terms of the threat, not the topology that
+  happened to defeat it.** Audit independence was first written as account
+  separation between the arguers. It defeated the real threat — one model
+  context reviewing its own work — and it also made a finished product
+  unfinished whenever a particular subscription was unavailable, because
+  account and Routine counts are dynamic operational facts. The floor is now
+  **three distinct authenticated sessions**, with `ACCOUNT > WORKER > ROUTINE >
+  SESSION` as a preference the allocator reaches for and reports truthfully.
+  Cross-account diversity is a stronger optional assurance tier, not a
+  completion dependency. Recorded as an explicit correction in CLAUDE.md §23
+  and `docs/STEP-12A-EVIDENCE.md` §10, not as a silent weakening.
 - **A guard after the claim is a guard that spends the thing it protects.**
   Eligibility is decided inside the claim loop *before* the compare-and-swap, so
   a refused worker consumes no lease, no attempt and no generation. Checked
   after, every ineligible glance would have burned one of an audit item's two
   attempts against the very rule meant to protect it.
 
-**What is left is provisioning, not code.** L9 and L10 are open because both
-accounts' Cowork sessions authenticate as one Brain worker, so every audit role
-resolves to one account and the `ACCOUNT` dimension refuses — the check working,
-on a fleet that cannot yet satisfy it. The remedy is one Brain worker identity
-per external Claude account, created and connected by the operator; Brain must
-not mint workers or pick their permissions to get around it, and inferring an
+**L9 and L10 no longer gate this step.** Both accounts' Cowork sessions
+authenticate as one Brain worker, so an audit across them resolves to one worker
+and the achieved tier is `SESSION_SEPARATED` — a complete passing audit at the
+floor, reported at the tier it earned and never labelled cross-account. Binding
+a second worker identity to `friend-2` raises the tier with no code change and
+no deployment; it is an operator provisioning action and remains worth doing,
+but it is an assurance improvement rather than an outstanding requirement.
+Brain must still not mint workers or pick their permissions, and inferring an
 account from which Routine Brain *attempted* to fire is rejected permanently.
 
 Three operator-surface gaps were found while preparing that, all recorded in

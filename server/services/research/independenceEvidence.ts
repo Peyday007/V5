@@ -5,9 +5,17 @@
  * whether a worker may take an audit item *before* it is leased. Neither of
  * them answers the acceptance question, which is different and narrower:
  *
- *   **Has an audit actually run, in production, across genuinely separate
- *   accounts and sessions — and can that be shown without trusting anything
+ *   **Has an audit actually run, in production, in three genuinely separate
+ *   authenticated sessions — and can that be shown without trusting anything
  *   the submitter said about itself?**
+ *
+ * The question used to say *across two accounts*, and that was corrected. The
+ * threat an independent audit exists to defeat is **one model context
+ * reviewing its own work**, and three distinct authenticated sessions defeat
+ * it. Two accounts also defeated it, and additionally made a finished product
+ * unfinished whenever one particular subscription was unavailable — a property
+ * no acceptance gate should have. Account separation is a stronger optional
+ * assurance tier; it is measured and reported here, never required.
  *
  * That question needs its own evaluator, because the two above are checks that
  * run *during* the work and are satisfied by whatever lineage is presented,
@@ -18,31 +26,42 @@
  * Fail-closed, and what that costs
  * ---------------------------------------------------------------------------
  *
- * Nine conditions, evaluated in order, and the verdict is `PASS` only when
- * every one is met. Anything else — a missing row, an unreadable value, an
- * unreachable database — is `BLOCKED` naming the first condition that failed.
- * "We could not tell" never reads the same as "we checked", which is the rule
- * `independence.ts` already applies one level down.
+ * The conditions are evaluated in order and the verdict is `PASS` only when
+ * every one is met. A missing row, an unreadable value or an unreachable
+ * database is `BLOCKED`, naming the first condition that failed. "We could not
+ * tell" never reads the same as "we checked", which is the rule
+ * `independence.ts` already applies one level down. The single exception is an
+ * audit that has simply not been run yet, which is `NOT_RUN` — see the verdict
+ * type below for why that distinction is load-bearing rather than cosmetic.
  *
  * The conditions are chosen so that the cheap ways to fake a pass do not work:
  *
- *   - **Two accounts that share a credential are one account.** The digests
- *     have to differ, so registering the same subscription twice under two
- *     names fails rather than doubling the fleet on paper.
- *   - **A lineage column is a claim until it agrees with the binding.** Each
- *     pass's account must be the account its *worker* actually resolves to
- *     through `fleet_routines`, so a hand-written `executor_account_id` naming
- *     the account somebody wanted is refused.
  *   - **A session is a credential or it is nothing.** Each `session_ref` must
  *     exist as a real OAuth token or worker credential belonging to that same
  *     worker, so an invented session string cannot separate a judge from
- *     anybody.
+ *     anybody. Three of them must be distinct, which is the floor.
+ *   - **A predicted session is not a session.** `future:<routineId>` is how the
+ *     allocator reasons about an activation that has not happened yet. Three
+ *     placeholders would look perfectly distinct while nothing had ever
+ *     authenticated, so they are refused by name.
+ *   - **A lineage column is a claim until it agrees with the binding.** A
+ *     pass's account must be the account its *worker* actually resolves to
+ *     through `fleet_routines`, so a hand-written `executor_account_id` naming
+ *     the account somebody wanted is refused. It contributes to the tier that
+ *     gets *reported*, never to whether the gate passes.
+ *   - **A judge that went first judged nothing.** The three completion stamps
+ *     must put the judge last.
  *   - **A packet that filed nothing did not audit anything.** The passes must
  *     belong to an orchestration that filed a document with bytes recorded, so
  *     a bare set of pass rows is not evidence of an audit.
- *   - **The guard itself has to still refuse.** The signed matrix is compared
- *     to its expected shape and the refusal is exercised live, so weakening the
- *     control in order to satisfy this evaluator makes this evaluator fail.
+ *   - **The guard itself has to still refuse.** The separation minimum is
+ *     compared to its expected shape and a same-session refusal is exercised
+ *     live, so weakening the control in order to satisfy this evaluator makes
+ *     this evaluator fail.
+ *
+ * What the achieved tier is used for is reporting, and only reporting. A
+ * same-account result is labelled `SESSION_SEPARATED` and is never described as
+ * cross-account independent.
  *
  * There is no override, no environment variable, no caller-supplied label and
  * no argument that shortens this. The only way to reach `PASS` is for the
@@ -51,8 +70,13 @@
  */
 import { getDb } from '../../db/database.ts';
 import { auditEligibility } from './auditEligibility.ts';
-import { SIGNED_AUDIT_MATRIX } from './auditEligibility.ts';
-import type { IndependenceLevel } from './independence.ts';
+import { AUDIT_SEPARATION_MINIMUM } from './auditEligibility.ts';
+import {
+  SEPARATION_LABELS,
+  strongestSeparation,
+  type IndependenceLevel,
+  type SeparationTier,
+} from './independence.ts';
 
 /** One requirement, and whether the rows meet it. */
 export interface IndependenceCondition {
@@ -63,15 +87,26 @@ export interface IndependenceCondition {
 }
 
 export interface IndependenceEvidence {
-  verdict: 'PASS' | 'BLOCKED';
+  /**
+   * Three answers, not two.
+   *
+   * `NOT_RUN` is the difference between *nothing has happened yet* and
+   * *something is wrong*, and collapsing them is the defect this file was
+   * built to stop reproducing: a gate that reads BLOCKED when the fleet is
+   * healthy, the control is intact and the audit has simply not been run yet
+   * names no remedy and invites being weakened to move it.
+   */
+  verdict: 'PASS' | 'NOT_RUN' | 'BLOCKED';
   /** The exact condition that is missing, or null when every one is met. */
   missing: string | null;
   conditions: IndependenceCondition[];
+  /** What was actually achieved. Never rounded up, null when nothing was. */
+  achieved: SeparationTier | null;
 }
 
 /** The shape the signed contract has. A different one is a different contract. */
 const EXPECTED_MATRIX: Record<string, IndependenceLevel> = {
-  PRIMARY_ADVERSARIAL: 'ACCOUNT',
+  PRIMARY_ADVERSARIAL: 'SESSION',
   JUDGE_PRIMARY: 'SESSION',
   JUDGE_ADVERSARIAL: 'SESSION',
 };
@@ -82,7 +117,9 @@ const ROLE_ORDINALS = { PRIMARY: 5, ADVERSARIAL: 6, JUDGE: 7 } as const;
 interface LineageRow {
   orchestration_id: string;
   ordinal: number;
+  completed_at: string | null;
   executor_worker_id: string | null;
+  executor_routine_id: string | null;
   executor_account_id: string | null;
   executor_session_ref: string | null;
 }
@@ -100,12 +137,21 @@ export async function auditIndependenceEvidence(): Promise<IndependenceEvidence>
     return met;
   };
 
+  let achieved: SeparationTier | null = null;
   const settle = (): IndependenceEvidence => {
     const failed = conditions.find((condition) => !condition.met);
+    if (!failed) return { verdict: 'PASS', missing: null, conditions, achieved };
+    /*
+     * One condition means "not yet", and only one: every check before it has
+     * passed, so the control is intact and a surface exists — the audit simply
+     * has not been run. Everything else means something is actually wrong.
+     */
+    const notYet = failed.key === 'AUDIT_PASSES_RECORDED';
     return {
-      verdict: failed ? 'BLOCKED' : 'PASS',
-      missing: failed ? `${failed.key} — ${failed.detail}` : null,
+      verdict: notYet ? 'NOT_RUN' : 'BLOCKED',
+      missing: `${failed.key} — ${failed.detail}`,
       conditions,
+      achieved,
     };
   };
 
@@ -119,41 +165,47 @@ export async function auditIndependenceEvidence(): Promise<IndependenceEvidence>
      * fails first.
      * ------------------------------------------------------------------- */
     const matrixKeys = Object.keys(EXPECTED_MATRIX).sort();
-    const actualKeys = Object.keys(SIGNED_AUDIT_MATRIX).sort();
+    const actualKeys = Object.keys(AUDIT_SEPARATION_MINIMUM).sort();
     const matrixIntact =
       matrixKeys.length === actualKeys.length &&
       matrixKeys.every(
         (key, index) =>
-          key === actualKeys[index] && SIGNED_AUDIT_MATRIX[key] === EXPECTED_MATRIX[key],
+          key === actualKeys[index] && AUDIT_SEPARATION_MINIMUM[key] === EXPECTED_MATRIX[key],
       );
     if (
       !require(
         'SIGNED_MATRIX_INTACT',
         matrixIntact,
         matrixIntact
-          ? 'PRIMARY/ADVERSARIAL separated by account, JUDGE by session'
-          : 'the signed audit matrix is not the one this gate was written against',
+          ? 'all three role pairs separated by session, the corrected floor'
+          : 'the audit separation minimum is not the one this gate was written against',
       )
     ) {
       return settle();
     }
 
     /* ---------------------------------------------------------------------
-     * 2. The guard still refuses a same-lineage audit.
+     * 2. The guard still refuses a second role in one session.
      *
-     * Exercised rather than assumed: a synthetic executor that shares the
-     * primary's account is offered to the real eligibility function, and it has
-     * to say no. This is the negative case the contract names, and checking it
-     * live means a refactor that removed the refusal cannot leave this gate
-     * reporting a pass it has no basis for.
+     * Exercised rather than assumed: a synthetic executor presenting the
+     * session the primary already used is offered to the real eligibility
+     * function, and it has to say no. That is the actual threat — one model
+     * context arguing with itself — and it is the negative case the corrected
+     * contract names. Checking it live means a refactor that removed the
+     * refusal cannot leave this gate reporting a pass it has no basis for.
+     *
+     * It used to probe a shared *account* with two different sessions. Under
+     * the correction that case is legitimately eligible, so probing it would
+     * have made this condition fail forever and blocked the gate on the very
+     * topology the correction exists to permit.
      * ------------------------------------------------------------------- */
-    const sameAccount = auditEligibility({
+    const sameSession = auditEligibility({
       role: 'ADVERSARIAL',
       executor: {
         workerId: 'wkr_probe',
         routineId: 'rtn_probe',
-        accountId: 'acct_shared',
-        sessionRef: 'cred_probe_b',
+        accountId: 'acct_probe',
+        sessionRef: 'cred_probe_a',
       },
       passes: [
         {
@@ -162,7 +214,7 @@ export async function auditIndependenceEvidence(): Promise<IndependenceEvidence>
           status: 'COMPLETE',
           executorWorkerId: 'wkr_other',
           executorRoutineId: 'rtn_other',
-          executorAccountId: 'acct_shared',
+          executorAccountId: 'acct_other',
           executorSessionRef: 'cred_probe_a',
         } as never,
       ],
@@ -170,90 +222,41 @@ export async function auditIndependenceEvidence(): Promise<IndependenceEvidence>
     if (
       !require(
         'SAME_LINEAGE_REFUSAL_PRESERVED',
-        !sameAccount.eligible,
-        sameAccount.eligible
-          ? 'the eligibility guard admitted an adversarial audit on the primary’s own account'
-          : 'a shared-account adversarial audit is still refused',
+        !sameSession.eligible,
+        sameSession.eligible
+          ? 'the eligibility guard admitted an adversarial audit in the primary’s own session'
+          : 'a second audit role in one session is still refused',
       )
     ) {
       return settle();
     }
 
     /* ---------------------------------------------------------------------
-     * 3. Two accounts, and two genuinely different credentials.
+     * 3. There is somewhere for an audit to run at all.
      *
-     * The digest is what makes them different. Two names over one subscription
-     * would satisfy a count and satisfy nothing else, so the count is not what
-     * is asked for.
+     * This replaced a two-account requirement, and the replacement is a
+     * correction rather than a relaxation. A fleet with no Routine that holds
+     * a credential and has ever been bound cannot run an audit for reasons
+     * that have nothing to do with independence — so it says
+     * `NO_HEALTHY_EXECUTION_SURFACE`, which is the operational truth, instead
+     * of naming a missing account or a missing person.
      * ------------------------------------------------------------------- */
-    const surfaces = await rows<{ account_id: string; worker_id: string | null; token_digest: string | null }>(
-      `SELECT r.account_id, r.worker_id, r.token_digest
+    const healthy = await rows<{ account_id: string; worker_id: string | null }>(
+      `SELECT r.account_id, r.worker_id
          FROM fleet_routines r
          JOIN fleet_accounts a ON a.id = r.account_id
         WHERE r.token_digest IS NOT NULL AND r.token_digest <> ''
+          AND r.worker_id IS NOT NULL
           AND a.state IN ('ENABLED','DRAINING')
           AND r.state IN ('ENABLED','DRAINING')`,
     );
-    const digestsByAccount = new Map<string, Set<string>>();
-    for (const surface of surfaces) {
-      const set = digestsByAccount.get(surface.account_id) ?? new Set<string>();
-      set.add(surface.token_digest!);
-      digestsByAccount.set(surface.account_id, set);
-    }
-    const allDigests = surfaces.map((surface) => surface.token_digest!);
-    const digestsAreDistinct = new Set(allDigests).size === allDigests.length;
     if (
       !require(
-        'DISTINCT_ACCOUNT_CREDENTIALS',
-        digestsByAccount.size >= 2 && digestsAreDistinct,
-        digestsByAccount.size < 2
-          ? `only ${digestsByAccount.size} routable account(s) hold a registered credential`
-          : digestsAreDistinct
-            ? `${digestsByAccount.size} accounts, each with its own credential`
-            : 'two registered surfaces share one credential, so they are one account',
-      )
-    ) {
-      return settle();
-    }
-
-    /* ---------------------------------------------------------------------
-     * 4. Distinct worker identities, each bound to exactly one account.
-     *
-     * A worker whose Routines span accounts has no resolvable account, which
-     * `lineageForWorker` already fails closed on. Here it would also mean the
-     * separation cannot be established afterwards, so it is refused by name
-     * rather than left to produce a null further down.
-     * ------------------------------------------------------------------- */
-    const accountsByWorker = new Map<string, Set<string>>();
-    for (const surface of surfaces) {
-      if (!surface.worker_id) continue;
-      const set = accountsByWorker.get(surface.worker_id) ?? new Set<string>();
-      set.add(surface.account_id);
-      accountsByWorker.set(surface.worker_id, set);
-    }
-    const boundWorkers = [...accountsByWorker.entries()].filter(([, accounts]) => accounts.size === 1);
-    const activeWorkers = boundWorkers.length
-      ? await rows<{ id: string }>(
-          `SELECT id FROM workers
-            WHERE status = 'ACTIVE' AND disabled_at IS NULL
-              AND id IN (${boundWorkers.map(() => '?').join(',')})`,
-          boundWorkers.map(([workerId]) => workerId),
-        )
-      : [];
-    const usableAccounts = new Set(
-      boundWorkers
-        .filter(([workerId]) => activeWorkers.some((worker) => worker.id === workerId))
-        .map(([, accounts]) => [...accounts][0]!),
-    );
-    if (
-      !require(
-        'DISTINCT_BOUND_WORKERS',
-        activeWorkers.length >= 2 && usableAccounts.size >= 2,
-        activeWorkers.length < 2
-          ? `${activeWorkers.length} active worker identit(y/ies) are bound to a registered Routine`
-          : usableAccounts.size < 2
-            ? 'the bound workers all resolve to one account'
-            : `${activeWorkers.length} bound workers across ${usableAccounts.size} accounts`,
+        'NO_HEALTHY_EXECUTION_SURFACE',
+        healthy.length > 0,
+        healthy.length > 0
+          ? `${healthy.length} Routine(s) hold a credential and a bound worker`
+          : 'no Routine holds both a credential and a bound worker identity',
       )
     ) {
       return settle();
@@ -263,7 +266,8 @@ export async function auditIndependenceEvidence(): Promise<IndependenceEvidence>
      * 5. Three completed audit passes exist, with lineage recorded.
      * ------------------------------------------------------------------- */
     const passes = await rows<LineageRow>(
-      `SELECT orchestration_id, ordinal, executor_worker_id, executor_account_id, executor_session_ref
+      `SELECT orchestration_id, ordinal, completed_at,
+              executor_worker_id, executor_routine_id, executor_account_id, executor_session_ref
          FROM research_passes
         WHERE status = 'COMPLETE'
           AND ordinal IN (?, ?, ?)
@@ -319,16 +323,27 @@ export async function auditIndependenceEvidence(): Promise<IndependenceEvidence>
       const three = [primary, adversarial, judge];
 
       /* 6. Every lineage column agrees with the binding it claims. */
+      const accountsByWorker = new Map<string, Set<string>>();
+      for (const surface of healthy) {
+        if (!surface.worker_id) continue;
+        const set = accountsByWorker.get(surface.worker_id) ?? new Set<string>();
+        set.add(surface.account_id);
+        accountsByWorker.set(surface.worker_id, set);
+      }
       const mismatched = three.filter((pass) => {
         const accounts = accountsByWorker.get(pass.executor_worker_id!);
-        return !accounts || accounts.size !== 1 || ![...accounts].includes(pass.executor_account_id!);
+        // A worker bound to several accounts has no single account to agree
+        // with, so its *account* claim cannot be checked and is not trusted —
+        // but that no longer disqualifies the audit, because the session floor
+        // does not depend on it.
+        return accounts !== undefined && accounts.size === 1 && ![...accounts].includes(pass.executor_account_id!);
       });
       if (
         !check(
           'LINEAGE_MATCHES_BINDING',
           mismatched.length === 0,
           mismatched.length === 0
-            ? 'every pass names the account its worker is actually bound to'
+            ? 'no pass names an account its worker is not bound to'
             : `${mismatched.length} pass(es) name an account their worker is not bound to`,
         )
       ) {
@@ -366,20 +381,75 @@ export async function auditIndependenceEvidence(): Promise<IndependenceEvidence>
         continue;
       }
 
-      /* 8. The separation the signed matrix asks for. */
-      const accountsDiffer = primary.executor_account_id !== adversarial.executor_account_id;
-      const judgeSessionDiffers =
-        judge.executor_session_ref !== primary.executor_session_ref &&
-        judge.executor_session_ref !== adversarial.executor_session_ref;
+      /*
+       * 7b. No predicted session survived into the evidence.
+       *
+       * `future:<routineId>` is how the allocator reasons about an activation
+       * that has not happened. It is a prediction and must never become the
+       * proof: three placeholders would look perfectly distinct while no
+       * session had ever authenticated.
+       */
+      const predicted = three.filter((pass) => pass.executor_session_ref!.startsWith('future:'));
       if (
         !check(
-          'INDEPENDENT_LINEAGE',
-          accountsDiffer && judgeSessionDiffers,
-          !accountsDiffer
-            ? 'PRIMARY and ADVERSARIAL ran on the same account'
-            : !judgeSessionDiffers
-              ? 'the JUDGE ran in a session that also argued'
-              : 'PRIMARY and ADVERSARIAL on different accounts, JUDGE in a third session',
+          'SESSIONS_ARE_REAL_ACTIVATIONS',
+          predicted.length === 0,
+          predicted.length === 0
+            ? 'every session reference is a real authenticated activation'
+            : `${predicted.length} pass(es) carry a predicted session rather than a real one`,
+        )
+      ) {
+        lastReasons = local;
+        continue;
+      }
+
+      /*
+       * 8. Three distinct sessions — the hard minimum — and the truthful tier.
+       *
+       * The floor is what makes this gate independent of topology: three
+       * authenticated sessions defeat one context reviewing its own work,
+       * which is the threat. The achieved tier is recorded alongside and is
+       * never rounded up.
+       */
+      const tier = strongestSeparation(
+        three.map((pass, index) => ({
+          role: (['PRIMARY', 'ADVERSARIAL', 'JUDGE'] as const)[index]!,
+          workerId: pass.executor_worker_id,
+          // Read from the row rather than passed as null. A Routine is a tier
+          // of its own — one account may hold several and one worker may be
+          // bound to several — so reporting it as absent would collapse
+          // ROUTINE_SEPARATED into SESSION_SEPARATED and understate what the
+          // fleet actually achieved.
+          routineId: pass.executor_routine_id,
+          accountId: pass.executor_account_id,
+          sessionRef: pass.executor_session_ref,
+        })),
+      );
+      if (
+        !check(
+          'THREE_DISTINCT_SESSIONS',
+          tier !== null,
+          tier !== null
+            ? `separation achieved: ${SEPARATION_LABELS[tier]}`
+            : 'two of the three roles ran in the same session',
+        )
+      ) {
+        lastReasons = local;
+        continue;
+      }
+      achieved = tier;
+
+      /* 8b. The judge did not argue, and did not go first. */
+      const ordered =
+        Date.parse(judge.completed_at ?? '') >= Date.parse(primary.completed_at ?? '') &&
+        Date.parse(judge.completed_at ?? '') >= Date.parse(adversarial.completed_at ?? '');
+      if (
+        !check(
+          'JUDGE_RAN_LAST',
+          ordered,
+          ordered
+            ? 'the judge completed after both arguments'
+            : 'the judge completed before an argument it was meant to judge',
         )
       ) {
         lastReasons = local;

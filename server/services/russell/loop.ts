@@ -80,6 +80,14 @@ export interface TickReport {
   answered: string[];
   launched: string[];
   /**
+   * Candidates left queued because they asked for a stronger audit separation
+   * than the fleet can currently supply, each with the exact missing
+   * capability. A park, not a failure: nothing is spent, nothing else is
+   * affected, and the next tick asks again — so registering the missing
+   * account, worker or Routine resumes it with nobody involved.
+   */
+  parked: { candidateId: string; reason: string }[];
+  /**
    * Missions whose packet is terminal but whose filed document is not linked
    * yet, so the writeback is deliberately left for a later tick rather than
    * spent on a sentence assembled from the row.
@@ -99,6 +107,7 @@ const EMPTY: TickReport = {
   probed: [],
   answered: [],
   launched: [],
+  parked: [],
   awaitingFiling: [],
   bounded: false,
 };
@@ -127,6 +136,7 @@ export async function tick(owner: string): Promise<TickReport> {
     probed: [],
     answered: [],
     launched: [],
+    parked: [],
     awaitingFiling: [],
   };
 
@@ -257,6 +267,13 @@ export async function tick(owner: string): Promise<TickReport> {
       if (outcome.ok && !outcome.replayed) {
         report.launched.push(outcome.mission!.id);
         started += 1;
+      } else if (!outcome.ok && outcome.reason.startsWith('INSUFFICIENT_')) {
+        // Reported rather than counted against the launch bound: a parked
+        // mission consumed no slot, and a fleet short of a capability must not
+        // starve the missions that never asked for it.
+        report.parked.push({ candidateId: entry.candidateId, reason: outcome.reason });
+      } else if (!outcome.ok && outcome.reason.startsWith('NO_HEALTHY_EXECUTION_SURFACE')) {
+        report.parked.push({ candidateId: entry.candidateId, reason: outcome.reason });
       }
     }
 

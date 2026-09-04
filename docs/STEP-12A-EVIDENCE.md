@@ -1027,3 +1027,121 @@ mission's audit is reported as blocked rather than folded into a headline.
 
 Every other gate reads `NOT_RUN` above, and will read a verdict here only when a
 row supports it.
+
+---
+
+## 10. The acceptance contract was corrected — 2026-09-04
+
+This section replaces §9's `A11_INDEPENDENT_AUDIT` entry above. The earlier
+text is left in place rather than edited, because the change is a **product-owner
+correction to the acceptance contract, not a silent weakening**, and a
+correction you cannot see is indistinguishable from a gate that was quietly
+lowered when it became inconvenient.
+
+### What was wrong with the old definition
+
+The old A11 fused two different things: **audit separation**, which is a
+property of the system being accepted, and **fleet topology**, which is a
+dynamic operational fact. Account and Routine counts change with subscriptions,
+outages and provisioning. Making a specific friend, a specific account count or
+a specific Routine count a *completion* dependency meant a finished product
+became unfinished whenever somebody's subscription lapsed — and gave anyone
+looking at a blocked board an incentive to weaken the real control to move it.
+
+The original threat is worth restating exactly, because it is what the
+replacement has to keep defeating: **one model context reviewing its own work.**
+
+### The corrected contract
+
+**Hard minimum, and it is topology-free.** PRIMARY, ADVERSARIAL and JUDGE run
+in three distinct authenticated provider sessions. No session may hold two
+audit roles for the same orchestration. The JUDGE may begin only after PRIMARY
+and ADVERSARIAL are accepted and immutable. Lineage comes from real
+authentication rows and check-in rows, never from caller-supplied labels.
+
+**Dynamic preference, strongest first: `ACCOUNT > WORKER > ROUTINE > SESSION`.**
+No number of accounts, workers or Routines appears anywhere in the minimum. One
+healthy Routine satisfies the floor through three fresh activations; a
+persistent activation attempting a second audit role on the same packet is
+refused.
+
+**Truthful result.** The achieved tier is recorded as `SESSION_SEPARATED`,
+`ROUTINE_SEPARATED`, `WORKER_SEPARATED` or `ACCOUNT_SEPARATED`, and is never
+rounded up. **A same-account result is never labelled cross-account
+independent.**
+
+**A mission may require a stronger tier, and asking costs only that mission.**
+If the fleet cannot supply it, that one mission parks with the exact missing
+capability, nothing is reserved or created, and the next tick launches it by
+itself once the missing surface is registered. It never makes Step 12A
+incomplete.
+
+**Cross-account diversity is a stronger optional assurance tier and a later
+Capability Lab measurement.** It is not a completion dependency of Step 11 or
+of Step 12A.
+
+### Where each part lives
+
+| Requirement | Code |
+| --- | --- |
+| The floor, per role pair | `services/research/auditEligibility.ts` — `AUDIT_SEPARATION_MINIMUM`, all three pairs `SESSION` |
+| The ladder and the truthful label | `services/research/independence.ts` — `SEPARATION_LADDER`, `strongestSeparation`, `SEPARATION_LABELS` |
+| The adaptive allocator | `services/research/auditAdmission.ts` — `rankSurfacesFor`, strongest-first, a preference and never the authorization |
+| Judge ordering | `auditEligibility.ts` — a JUDGE is refused while an argument is unsettled |
+| Per-mission stronger tier, and the park | `services/russell/launch.ts` + `auditAdmission.separationCapacity` / `separationShortfall` |
+| The acceptance evidence | `services/research/independenceEvidence.ts` |
+
+### Two things that must not drift
+
+**`future:<routineId>` is a prediction, never evidence.** It is how the
+allocator reasons about an activation that has not happened, and it is what
+makes the session floor reachable on a single Routine. Three placeholders would
+look perfectly distinct while nothing had ever authenticated, so
+`SESSIONS_ARE_REAL_ACTIVATIONS` refuses the prefix by name and
+`SESSIONS_ARE_REAL_CREDENTIALS` refuses it again by requiring a credential row.
+Final evidence contains three actual distinct authenticated session references.
+
+**`ROUTINE` is a first-class tier, not a synonym for `WORKER`.** One account may
+hold several Routines and one worker may be bound to several. Treating them as
+equivalent would report a separation the fleet does not have — which is the one
+failure mode the truthful-result rule exists to prevent.
+
+### What the reporter now says, and the third verdict
+
+`NO_HEALTHY_EXECUTION_SURFACE` is the blocker when no Routine holds both a
+credential and a bound worker. It is an operational fact with an operational
+remedy. It replaces `MISSING_FRIEND` and `DISTINCT_BOUND_WORKERS`, neither of
+which named anything a person could act on without a second subscription.
+
+A11 now has **three** verdicts rather than two. `NOT_RUN` means the control is
+intact, a surface exists, and the audit has simply not run yet. `BLOCKED` means
+something is actually wrong. Collapsing them is the same defect §22 records
+three times: *a state that says "waiting for a person" which that person cannot
+resolve is not waiting, it is stuck.*
+
+### Step 11, corrected
+
+**Cross-account routing, distribution and failover are proven in production,
+with distinct credential digests.** Two accounts are registered live —
+`primary` / `V1` and `friend-2` / `V2` — under separate deployment secrets, and
+the production independence evaluator's distinct-credential condition passed on
+2026-09-04, so the two rows are not one subscription registered twice. The fire
+ledger read V1 fires=15, V2 fires=9, **zero refusals on either**.
+
+What is not proven is cross-account audit *diversity*: both Routines are bound
+to one worker identity, so an audit across them resolves to one worker and the
+achieved tier is `SESSION_SEPARATED`. Under the corrected contract that is a
+complete passing audit at the floor, reported at the tier it earned. Binding a
+second worker to `friend-2` raises the tier with no code change and no
+deployment.
+
+**Step 11 is closed.**
+
+### What this correction did *not* touch
+
+The evidence gate's seven conditions, the verification pass, the synthesis
+check and all three audit roles are exactly as they were. Nothing about
+authorization, fencing, idempotency or the approval envelope changed. The
+correction moved one acceptance requirement from a topology count to the
+property that actually defeats the threat, and made the result it reports
+honest about which tier was reached.
