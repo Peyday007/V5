@@ -1867,6 +1867,12 @@ legend {
 .rs-shell {
   display: grid;
   min-height: 100vh;
+  /* A grid item's default `min-width: auto` refuses to shrink below its
+     content's minimum, so one long briefing sentence widened the whole shell
+     past a phone viewport and the page scrolled sideways on every screen. The
+     children are told they may shrink; the ones with content that genuinely
+     cannot are given their own scroller. */
+  max-width: 100%;
   background: var(--bg-0);
   color: var(--fg);
   font: 15px/1.6 var(--sans);
@@ -1888,11 +1894,16 @@ legend {
   grid-template-rows: auto 1fr auto;
 }
 
+.rs-shell > * {
+  min-width: 0;
+}
+
 .rs-header {
   grid-area: header;
   display: flex;
   align-items: flex-start;
   gap: 16px;
+  min-width: 0;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-1);
@@ -2256,6 +2267,18 @@ legend {
   .rs-header {
     flex-wrap: wrap;
   }
+
+  /* In a row the rail's `width: 100%` made every section as wide as the bar,
+     so six of them were six screens across. */
+  .rs-shell .rs-nav button {
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .rs-shell .rs-nav ul {
+    justify-content: flex-start;
+    gap: 4px;
+  }
 }
 
 /* ------------------------------------------------- progress and grouping
@@ -2560,7 +2583,7 @@ legend {
   }
 
   .lim-canvas {
-    height: 650px;
+    height: 470px;
   }
 
   .lim-halo {
@@ -2569,7 +2592,11 @@ legend {
   }
 
   .lim-node {
-    max-width: 60%;
+    /* Narrow enough that an outer node and the nucleus cannot meet, and small
+       enough that eight of them are still readable. */
+    max-width: 40%;
+    padding: 5px 8px;
+    font-size: 13px;
   }
 
   .lim-detail {
@@ -2581,4 +2608,14 @@ legend {
     margin-left: 0;
     white-space: normal;
   }
+}
+
+.rs-briefing-more > summary {
+  color: var(--fg-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rs-briefing-more[open] > summary {
+  margin-bottom: 4px;
 }

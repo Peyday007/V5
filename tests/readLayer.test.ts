@@ -545,3 +545,24 @@ describe('progress is milestone-backed everywhere or it is not a number', () => 
     expect(progress.headline).toMatch(/^Blocked: /);
   });
 });
+
+describe('the person reading is always on the Who list', () => {
+  it('shows a Brain administrator who reaches the project without a membership row', async () => {
+    // Their access is real; it comes from `isBrainAdmin` rather than from a
+    // membership. The first version of this screen told the only person
+    // looking at it that nobody was on the project.
+    const admin = personPrincipal({ id: 'usr_admin', isBrainAdmin: true, memberships: [] });
+    const view = await whoForProject({ principal: admin, projectId: project.id });
+    expect(view!.depth).toBe('OPERATOR');
+    const you = view!.people.find((person) => person.isYou);
+    expect(you).toBeDefined();
+    expect(you!.roleLabel).toBe('Brain administrator');
+  });
+
+  it('does not list them twice when they do have a membership', async () => {
+    const owner = personPrincipal({ id: ownerId, memberships: await membershipsFor(ownerId) });
+    const view = await whoForProject({ principal: owner, projectId: project.id });
+    expect(view!.people.filter((person) => person.id === ownerId)).toHaveLength(1);
+    expect(view!.people.find((person) => person.id === ownerId)!.roleLabel).toBe('Owner');
+  });
+});

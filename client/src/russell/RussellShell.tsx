@@ -248,19 +248,31 @@ function Briefing({
     <div className="rs-briefing">
       <p className="rs-briefing-focus">{briefing.focus}</p>
       <ProgressLine progress={briefing.progress} />
-      {briefing.latest ? <p className="rs-briefing-latest">{briefing.latest}</p> : null}
-      <p>{briefing.next}</p>
-      {/* Gaps somebody wrote down, never gaps inferred from an absence. An
-          empty list means none were recorded, which is not the same as none
-          existing — so nothing is said at all rather than "no gaps". */}
-      {briefing.openGaps && briefing.openGaps.length > 0 ? (
-        <ul className="rs-briefing-gaps">
-          {briefing.openGaps.map((gap) => (
-            <li key={gap}>{gap}</li>
-          ))}
-        </ul>
-      ) : null}
       <p className="rs-briefing-needs">{briefing.needsYou}</p>
+      {/*
+        The rest folds away.
+        
+        On a phone the four sentences plus a milestone list filled a third of
+        the screen before anything a person navigated to appeared. `details` is
+        native, so it is keyboard-reachable and screen-reader-announced without
+        any state of ours, and the text stays in the document either way —
+        collapsed is not hidden.
+      */}
+      <details className="rs-briefing-more">
+        <summary>What changed, and what is next</summary>
+        {briefing.latest ? <p className="rs-briefing-latest">{briefing.latest}</p> : null}
+        <p>{briefing.next}</p>
+        {/* Gaps somebody wrote down, never gaps inferred from an absence. An
+            empty list means none were recorded, which is not the same as none
+            existing — so nothing is said at all rather than "no gaps". */}
+        {briefing.openGaps && briefing.openGaps.length > 0 ? (
+          <ul className="rs-briefing-gaps">
+            {briefing.openGaps.map((gap) => (
+              <li key={gap}>{gap}</li>
+            ))}
+          </ul>
+        ) : null}
+      </details>
       {cycle && cycle.state !== 'RUNNING' ? (
         <p className="rs-state rs-state-stale">
           {cycle.state === 'PAUSED' ? 'Russell is paused' : 'Russell is stopped'}

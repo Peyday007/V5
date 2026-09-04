@@ -53,9 +53,33 @@ export function ringPositions(count: number, width: number): [number, number][] 
   if (count === 0) return [];
   const [cx, cy] = centreOf(width);
   const [rx, ry] = radiiOf(width);
+  /*
+   * Above six, neighbours are staggered onto two radii.
+   *
+   * Found by looking rather than by reasoning: eight nodes on one ellipse at a
+   * 390-wide viewport overlapped each other into an unreadable pile, which no
+   * assertion in this file would have caught. Alternating the radius separates
+   * adjacent nodes radially instead of relying on an arc length the label
+   * widths do not respect, and it still reads as one constellation.
+   */
+  const stagger = count > 6;
+  /*
+   * An even count is rotated by half a step so that no node sits on the
+   * horizontal through the nucleus.
+   *
+   * Also found by looking. With eight children, two of them landed exactly
+   * beside the centre node and overlapped it — on a phone the ring simply is
+   * not wider than a label plus the nucleus. Half a step costs nothing and
+   * guarantees a vertical gap of at least `ry · sin(π/count)`.
+   */
+  const offset = count % 2 === 0 ? Math.PI / count : 0;
   return Array.from({ length: count }, (_, index) => {
-    const angle = -Math.PI / 2 + (index * 2 * Math.PI) / count;
-    return [cx + rx * Math.cos(angle), cy + ry * Math.sin(angle)] as [number, number];
+    const angle = -Math.PI / 2 + offset + (index * 2 * Math.PI) / count;
+    const scale = stagger && index % 2 === 1 ? 0.62 : 1;
+    return [cx + rx * scale * Math.cos(angle), cy + ry * scale * Math.sin(angle)] as [
+      number,
+      number,
+    ];
   });
 }
 

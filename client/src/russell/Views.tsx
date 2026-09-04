@@ -267,7 +267,6 @@ export function IdeasView({
   const focus = focusId ?? localFocus ?? map?.rootId ?? null;
 
   const children = map && focus ? map.nodes.filter((node) => node.parentId === focus) : [];
-  const current = map && focus ? map.nodes.find((node) => node.id === focus) : undefined;
   const state = listState<IdeaNode>({
     loading: query.loading,
     error: query.error,
@@ -283,17 +282,6 @@ export function IdeasView({
     onFocus?.(nodeId);
   }
 
-  const trail: IdeaNode[] = [];
-  if (map && current) {
-    const byId = new Map(map.nodes.map((node) => [node.id, node]));
-    let walk: IdeaNode | undefined = current;
-    let guard = map.nodes.length + 1;
-    while (walk && guard-- > 0) {
-      trail.unshift(walk);
-      walk = walk.parentId ? byId.get(walk.parentId) : undefined;
-    }
-  }
-
   return (
     <Panel title="Ideas" state={state} onRetry={query.reload}>
       {/*
@@ -305,32 +293,11 @@ export function IdeasView({
       {map && focus ? (
         <Constellation map={map} focusId={focus} onFocus={select} />
       ) : null}
-      {trail.length > 0 ? (
-        <nav className="rs-crumbs" aria-label="Where you are">
-          {trail.map((node, index) => (
-            <button
-              key={node.id}
-              type="button"
-              className="rs-crumb"
-              disabled={index === trail.length - 1}
-              onClick={() => select(node.id)}
-            >
-              {node.title}
-            </button>
-          ))}
-        </nav>
-      ) : null}
-      {current ? (
-        <div className="rs-node-detail">
-          {current.purpose ? <p>{current.purpose}</p> : null}
-          {current.why ? <p className="rs-item-meta">{current.why}</p> : null}
-          <ProgressLine progress={current.progress} />
-          <p className="rs-item-meta">
-            {current.counts.knowledge} known · {current.counts.unknowns} still open ·{' '}
-            {current.counts.work} {current.counts.work === 1 ? 'piece' : 'pieces'} of work
-          </p>
-        </div>
-      ) : null}
+      {/*
+        No second breadcrumb and no second detail card. The constellation
+        carries both, and two navigations describing the same position is the
+        kind of duplication that later disagrees with itself.
+      */}
       <ul className="rs-list">
         {state.items.map((node) => (
           <li key={node.id}>
@@ -389,7 +356,7 @@ export function WhoView({ projectId }: { projectId: string | null }): JSX.Elemen
               </li>
             ))}
           </ul>
-          {view.people.length === 0 ? (
+          {view.people.length <= 1 ? (
             <p className="rs-state rs-state-empty">Nobody else is on this project yet.</p>
           ) : null}
           <h3 className="rs-group-title">What can run</h3>

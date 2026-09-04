@@ -178,6 +178,27 @@ export async function whoForProject(input: {
     });
   }
 
+  /*
+   * The person reading is on the list, always.
+   *
+   * A Brain administrator reaches a project through `isBrainAdmin` rather than
+   * through a membership row, so the first version of this screen told the one
+   * person looking at it that nobody was on the project — while they were on
+   * it. Their access is real; it simply comes from somewhere else, and the
+   * label says which.
+   */
+  if (input.principal && !people.some((person) => person.id === input.principal!.id)) {
+    people.unshift({
+      id: input.principal.id,
+      name: input.principal.displayName || input.principal.handle,
+      email: depth === 'OPERATOR' ? input.principal.handle : null,
+      role: null,
+      roleLabel: input.principal.isBrainAdmin ? 'Brain administrator' : 'Has access',
+      isYou: true,
+      active: true,
+    });
+  }
+
   if (depth !== 'OPERATOR') {
     // A coarse answer, built from a query that returns no topology. The
     // collaborator learns whether work can run, which is what they need to
