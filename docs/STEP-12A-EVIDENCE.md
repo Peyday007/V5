@@ -25,41 +25,50 @@ Read `step12a acceptance` for the machine verdict; this table is its narrative
 companion and must agree with it. Any disagreement means this document is
 stale — re-run the reporter, do not edit the table.
 
-| Gate | Verdict | Proof so far | Evidence |
+| Gate | Verdict | Proof | Evidence |
 |---|---|---|---|
-| `A01_SHELL_IDENTITY` | NOT_RUN | CODE, TEST | default route is Russell; Legacy behind a secondary menu, Admin only for an administrator; 23 behaviour tests |
-| `A02_CONVERSATION_ROUTE` | NOT_RUN | CODE, TEST | `routing.ts`; attaches on a named project, asks otherwise |
-| `A03_ROUTE_CORRECTION` | NOT_RUN | CODE, TEST | append-only context history; a correction outweighs a name match |
-| `A04_IRRELEVANT` | NOT_RUN | CODE, TEST | `shouldCapture`; social and short remarks stay conversation |
-| `A05_DEDUPE` | NOT_RUN | CODE, TEST | insertion-order dedupe, concurrent captures, guarded split |
-| `A06_JUDGMENT_OVERRIDE` | NOT_RUN | CODE, TEST | stored priority and reason; override supersedes without erasing |
-| `A07_PROBE_BOUNDS` | NOT_RUN | CODE, TEST | envelope in code, destinations chosen by Brain; lookups counted from observations; a redirect off the allowlist refused |
-| `A08_COVERAGE` | NOT_RUN | CODE, TEST | only `SATISFIED` closes a requirement; the constant is pinned |
-| `A09_AUTH_BUDGET` | NOT_RUN | CODE, TEST | atomic reservation, idempotent replay, server-clock expiry |
-| `A10_MISSION_PIPELINE` | NOT_RUN | CODE, TEST | one mission, orchestration and bin under retries; capabilities routed; crash injection at each step |
-| `A11_INDEPENDENT_AUDIT` | BLOCKED | — | provisioning, outside this repository — §5 |
-| `A12_WRITEBACK` | NOT_RUN | CODE, TEST | exactly-once under three concurrent observers and a replay |
-| `A13_AUTO_NEXT` | NOT_RUN | CODE, TEST | one launch per cycle, the rest preserved for the next |
-| `A14_HUMAN_RESUME` | NOT_RUN | CODE, TEST | the exact parked mission resumes, once |
-| `A15_RECOVERY` | NOT_RUN | CODE, TEST | boot repair re-enters the launcher; fenced late writer; expired probe ended honestly; an unrebuildable mission reported, not marked done |
-| `A16_DD_FRESHNESS` | NOT_RUN | CODE, TEST | `CURRENT` / `STALE` / `UNAVAILABLE`; memory never returned as live |
-| `A17_PRIVACY_AUTH` | NOT_RUN | CODE, TEST | scope-first routing and dedupe; a model's reference re-resolved against the principal; HTTP IDOR against a booted server; four injection shapes refused |
-| `A18_BASELINES` | NOT_RUN | — | nothing deployed, so nothing to compare |
-| `A19_DELIVERY` | NOT_RUN | TEST | typecheck clean, client builds; **SQLite 1449 passed / 25 skipped, exit 0**; upgrade path proven on both chains. No deploy, no hosted verification. |
+| `A01_SHELL_IDENTITY` | **PASS** | PRODUCTION | 2 Russell conversations on the deployed Brain, created through the live API |
+| `A02_CONVERSATION_ROUTE` | NOT_RUN | CODE, TEST | 0 conversations Russell attached itself; needs a worker-answered turn |
+| `A03_ROUTE_CORRECTION` | NOT_RUN | CODE, TEST | 0 recorded corrections |
+| `A04_IRRELEVANT` | **PASS** | PRODUCTION | 2 turns produced 0 ideas — the live gate captured nothing from casual text |
+| `A05_DEDUPE` | NOT_RUN | CODE, TEST | 0 merges onto a canonical idea |
+| `A06_JUDGMENT_OVERRIDE` | NOT_RUN | CODE, TEST | 0 ideas carrying a stated judgment |
+| `A07_PROBE_BOUNDS` | NOT_RUN | CODE, TEST | 0 probes completed; the envelope and runner are built and tested |
+| `A08_COVERAGE` | **PASS** | PRODUCTION | 146 recorded coverage verdicts |
+| `A09_AUTH_BUDGET` | NOT_RUN | CODE, TEST | 0 settled budget reservations |
+| `A10_MISSION_PIPELINE` | NOT_RUN | CODE, TEST | 0 fully linked missions; 0 half-built, so nothing is stranded |
+| `A11_INDEPENDENT_AUDIT` | **BLOCKED** | — | `DISTINCT_BOUND_WORKERS` — 0 active worker identities are bound to a registered Routine |
+| `A12_WRITEBACK` | NOT_RUN | CODE, TEST | 0 missions written back |
+| `A13_AUTO_NEXT` | NOT_RUN | CODE, TEST | 0 automatic follow-on launches |
+| `A14_HUMAN_RESUME` | NOT_RUN | CODE, TEST | 0 human decisions answered and resumed |
+| `A15_RECOVERY` | **PASS** | PRODUCTION | 1 cycle has claimed and released; nothing stranded past a deadline |
+| `A16_DD_FRESHNESS` | **PASS** | PRODUCTION | the Deal Dispatch project the adapter reads is present |
+| `A17_PRIVACY_AUTH` | **PASS** | PRODUCTION | 6600 recorded authorization denials; 0 ideas less private than their thread |
+| `A18_BASELINES` | **PASS** | PRODUCTION | 10 layers intact; no frozen layer lost its artifact |
+| `A19_DELIVERY` | NOT_RUN | HOSTED | typecheck, build and both suites green; hosted verification **PASS 156/156 before and PASS 162/162 after a real restart**. `NOT_RUN` by construction — see §8 |
 
-**No gate is `PASS`, and none can be**: every one requires production-row proof
-against a deployed commit after a real restart, and **zero of the three delivery
-mutations have been spent**. The middle column says what is true today, which is
-that the mechanisms exist and are proven by tests on both backends.
+Read from the deployed Brain's own rows at **2026-09-04T04:20:13Z**, run
+33836408837: **7 PASS · 0 FAIL · 1 BLOCKED · 11 NOT_RUN**, exit non-zero.
 
-`npm run step12a:acceptance` is now the machine verdict, and against the local
-database it reports **2 PASS · 0 FAIL · 1 BLOCKED · 16 NOT_RUN** and exits 1.
-Two rules shape it and are worth stating because they are what stop it becoming
-a rubber stamp. **"Implemented" is never a production verdict** — a gate whose
-condition is about a real run reports `NOT_RUN` until that run's rows exist,
-however complete the code is, and there is no flag that turns a test into
-evidence. And **`A11` is derived fail-closed from lineage rows**, by a check
-built to be hostile to forgery rather than by a constant — see §7.
+**Zero gates read `FAIL`.** Seven are `PASS` from production rows, one is
+`BLOCKED` on provisioning, and eleven are `NOT_RUN` — which is what an unrun
+condition reads as, not a failure. **One of the three delivery mutations has
+been spent** (§8).
+
+Two rules shape the reporter and are worth stating, because they are what stop
+it becoming a rubber stamp. **"Implemented" is never a production verdict** — a
+gate whose condition is about a real run reports `NOT_RUN` until that run's
+rows exist, however complete the code is, and there is no flag that turns a
+test into evidence. And **`A11` is derived fail-closed from lineage rows**, by
+a check built to be hostile to forgery rather than by a constant — see §7.
+
+The eleven `NOT_RUN` gates share one cause, and it is the same one `A11` names:
+**no worker identity is bound to a registered Routine in production**, so no
+Cowork session can answer a `RUSSELL_TURN` bin, so no turn produces a routing
+decision, a captured idea, a probe, a mission or a writeback. The mechanisms
+for all of them are built and green on both backends; what is missing is the
+surface that carries them out. That is a provisioning condition, and it is
+reported rather than simulated.
 
 ---
 
@@ -662,7 +671,116 @@ derives `PASS` from rows with no further deployment.**
 
 ---
 
-## 8. What is not claimed
+## 8. Phase 5 — the deployment, and what production actually says
+
+### The delivery ledger
+
+**One of three mutations spent.**
+
+| # | Intent | Status |
+|---|---|---|
+| 1 | Integrated foundation: schema, canonical services, Russell loop, API, shell | **spent** — run 33835314104, commit `10658fd`, image `deployment-01M1N9H57EWJRWWFC2BFXTT681`, released 2026-09-04T04:09:17Z |
+| 2 | Acceptance correction | not yet spent |
+| 3 | Final verification, only if the correction batch requires it | not yet spent |
+
+`step12a-acceptance.yml` is **not** a mutation. The reporter opens the
+database, counts, prints and closes; it creates nothing, advances nothing and
+takes no decision, so nothing about what is running changes. Same standing as
+`step12a-inspect.yml` in Phase 0.
+
+### A released image is not a passing deploy
+
+The contract asks for hosted verification before **and** after a real restart,
+and that is what the run did:
+
+| | |
+|---|---|
+| Gate job | typecheck, 1449 SQLite tests, build — all green on the runner |
+| Deploy | success, 04:09:17Z |
+| `/healthz` | 200; anonymous `/api/projects` → 401 |
+| Hosted verification, before the restart | **PASS 156/156** |
+| Real machine restart | success, 04:13:18Z |
+| Hosted verification, after the restart | **PASS 162/162** |
+
+The Russell checks passed inside both. The ones worth naming are the boundary
+ones, because they are the easiest to lose in a refactor and the hardest to
+notice — an administrator testing the feature would never see them fail:
+
+```
+PASS  a Brain administrator is refused somebody else's thread, identically to
+      one that does not exist — both 404, identical body
+PASS  the reply is a pending turn with a stated reason, not a manufactured
+      answer — PENDING
+PASS  no internal bin id reaches the person — checked the response body
+PASS  the briefing carries no percentage — checked every sentence
+PASS  a project the member cannot open has no Russell view either — 404
+```
+
+### What the deployed Brain proves on its own
+
+Four of the seven passing gates are not restatements of the suite. They are
+facts about the running program:
+
+- **`A01` — two Russell conversations exist**, created through the live API by
+  the two hosted-verification passes. The shell's own surface works on the
+  deployment, not only in jsdom.
+- **`A04` — two turns produced zero ideas.** The deployed capture gate ran and
+  correctly declined; a build where everything became a candidate would show
+  here as a `FAIL` rather than as a silence.
+- **`A15` — one cycle has claimed and released.** The Russell loop is running
+  beside the dispatcher on the deployed machine, and nothing is stranded past a
+  deadline.
+- **`A18` — ten layers intact.** Step 9's, Step 10's and Step 11's work is
+  untouched by the mutation; no frozen layer lost its artifact.
+
+### The one blocker, stated exactly
+
+`A11` reports `DISTINCT_BOUND_WORKERS — 0 active worker identities are bound to
+a registered Routine`, and reading the fleet says exactly why (run 33836654702,
+04:24:12Z):
+
+```
+primary   ENABLED target=2
+    V1  ENABLED  worker=wkr_1cdd82cfb2a54faf8edd  secret=BRAIN_ROUTINE_TOKEN
+friend-2  ENABLED target=2
+    V2  ENABLED  worker=wkr_1cdd82cfb2a54faf8edd  secret=BRAIN_ROUTINE_TOKEN_2
+verify-hosted-account-a  trig_verify_hosted_a  (not routable — MISSING SECRET)
+verify-hosted-account-b  trig_verify_hosted_b  (not routable — MISSING SECRET)
+```
+
+**Both routable Routines are bound to one worker identity.** So that worker's
+Routines span two accounts, its account is unresolvable — which
+`lineageForWorker` already fails closed on — and the evaluator counts zero
+workers bound to exactly one account. The two verification accounts *do* have
+one distinct worker each, and are correctly excluded because their Routines
+hold no credential: a Routine with no secret is not a surface.
+
+That is Step 11's recorded blocker, arrived at independently from rows rather
+than from the earlier write-up: **both Claude accounts' Cowork sessions
+authenticate as the same Brain worker.** The evaluator was written without
+reference to that finding and reproduced it, which is the strongest thing that
+can be said for a check of this kind.
+
+The same condition is why the other eleven gates read `NOT_RUN`. Without a
+distinctly bound worker identity no Cowork session authenticates as a principal
+the fleet can route audit work to, so no `RUSSELL_TURN` bin is answered — and a
+routing decision, a captured idea, a probe, a mission, a writeback and an
+automatic follow-on are each downstream of a turn being answered.
+
+That is a **provisioning** condition and it is the operator's: each external
+Claude account authenticates through its own Brain worker identity, created in
+the console and connected by its own single-use invitation. Brain must not mint
+workers or choose their permissions to get around it, and inferring an account
+from which Routine Brain *attempted* to fire is rejected permanently.
+
+Nothing here was polled, waited on, weakened or simulated. When the binding
+exists, **the same deployed code derives the remaining verdicts from rows with
+no further deployment** — which is the property the A11 evaluator was rewritten
+to have.
+
+---
+
+## 9. What is not claimed
 
 ### `A11_INDEPENDENT_AUDIT` — blocked on provisioning, not on code
 
