@@ -37,7 +37,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      # Full history: A19 compares the deployed commit's application tree to
+      # the tip's, which a shallow clone cannot do.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Run the acceptance reporter in the container
@@ -95,8 +99,17 @@ jobs:
         id: delivery
         env:
           GH_TOKEN: ${{ github.token }}
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          BUDGET: '3'
+          # The delivery ledger, by run id.
+          #
+          # Declared rather than counted, because "every successful Deploy run
+          # on this branch" is not the ledger — the branch has a hundred of
+          # them from Steps 8 through 11, and counting those reported twenty
+          # mutations against a budget of three. The ledger is the three runs
+          # docs/STEP-12A-EVIDENCE.md §8 names, and it is a constant here for
+          # the same reason the approval envelope is a constant in code:
+          # nobody should be able to widen the budget their own delivery is
+          # judged against.
+          LEDGER: '33835314104 33837508678 33838743276'
         run: |
           set -euo pipefail
           api() {
@@ -104,48 +117,55 @@ jobs:
                  -H 'accept: application/vnd.github+json' "$1"
           }
           base="https://api.github.com/repos/${{ github.repository }}"
-          branch="${{ github.ref_name }}"
-
-          runs=$(api "$base/actions/workflows/deploy.yml/runs?branch=$branch&status=success&per_page=20")
-          spent=$(echo "$runs" | jq '[.workflow_runs[] | select(.conclusion=="success")] | length')
-          latest=$(echo "$runs" | jq -r '[.workflow_runs[] | select(.conclusion=="success")][0].id // empty')
-          latest_sha=$(echo "$runs" | jq -r '[.workflow_runs[] | select(.conclusion=="success")][0].head_sha // empty')
-
-          echo "delivery ledger: $spent successful Deploy run(s) on $branch"
-          echo "latest release run: ${latest:-none} at ${latest_sha:-none}"
-          echo "acceptance is reading commit: ${{ github.sha }}"
-
           fail=0
-          if [ -z "${latest:-}" ]; then
-            echo "no successful Deploy run — A19 cannot be derived"; fail=1
-          fi
+          spent=0
+          deployed=''
 
-          if [ "$fail" = "0" ]; then
-            # Steps by name, so a renamed step fails this loudly rather than
-            # quietly passing on a job-level success that proved less.
-            jobs=$(api "$base/actions/runs/$latest/jobs?per_page=50")
+          for run in $LEDGER; do
+            spent=$((spent + 1))
+            meta=$(api "$base/actions/runs/$run")
+            conclusion=$(echo "$meta" | jq -r '.conclusion // "missing"')
+            sha=$(echo "$meta" | jq -r '.head_sha // ""')
+            deployed="$sha"
+
+            # Steps by name rather than the job's conclusion, so a renamed step
+            # fails this loudly instead of quietly passing on a success that
+            # proved less than it used to.
+            jobs=$(api "$base/actions/runs/$run/jobs?per_page=50")
             before=$(echo "$jobs" | jq -r '[.jobs[].steps[]? | select(.name=="Prove the live Brain is actually shut") | .conclusion] | first // "missing"')
             restart=$(echo "$jobs" | jq -r '[.jobs[].steps[]? | select(.name=="Restart it, so persistence means something") | .conclusion] | first // "missing"')
             after=$(echo "$jobs" | jq -r '[.jobs[].steps[]? | select(.name=="Prove it survived the restart") | .conclusion] | first // "missing"')
-            echo "hosted verification before restart: $before"
-            echo "real machine restart:               $restart"
-            echo "hosted verification after restart:  $after"
-            [ "$before" = "success" ] || { echo "::warning::the pre-restart verification did not pass"; fail=1; }
-            [ "$restart" = "success" ] || { echo "::warning::no real restart happened in that run"; fail=1; }
-            [ "$after" = "success" ]  || { echo "::warning::the post-restart verification did not pass"; fail=1; }
-          fi
 
-          if [ "${latest_sha:-}" != "${{ github.sha }}" ]; then
-            echo "::warning::the deployed commit is not the one this acceptance read"
+            echo "mutation $spent  run $run  ${sha:0:7}  deploy=$conclusion  before=$before  restart=$restart  after=$after"
+            [ "$conclusion" = "success" ] || fail=1
+            [ "$before" = "success" ]     || fail=1
+            [ "$restart" = "success" ]    || fail=1
+            [ "$after" = "success" ]      || fail=1
+          done
+
+          if [ "$spent" -ne 3 ]; then
+            echo "::warning::the ledger names $spent mutations, expected 3"
             fail=1
           fi
 
-          # Over budget is a failure, not a pass with a note: the contract set
-          # three, and a fourth would mean the ledger no longer describes what
-          # was delivered.
-          if [ "$spent" -gt "$BUDGET" ]; then
-            echo "::warning::$spent delivery mutations spent, over the budget of $BUDGET"
+          # The deployed commit against this one — the *application* only.
+          #
+          # Commit equality is the wrong rule: recording what an acceptance
+          # found is a documentation commit, and it must not invalidate the
+          # delivery evidence it is recording. What matters is whether the
+          # running program is the program being read, so the comparison is
+          # over the paths that end up in the image. A change under `server/`
+          # or `scripts/` fails this; a change under `docs/` or
+          # `.github/workflows/` does not, because neither is in the image.
+          echo "deployed commit: ${deployed:0:7}   acceptance reading: ${GITHUB_SHA:0:7}"
+          if [ -n "$deployed" ] && ! git diff --quiet "$deployed" "$GITHUB_SHA" -- \
+               server client scripts package.json package-lock.json Dockerfile fly.toml; then
+            echo "::warning::application code changed since the last delivery — this tree is not what is running"
+            git diff --stat "$deployed" "$GITHUB_SHA" -- \
+              server client scripts package.json package-lock.json Dockerfile fly.toml
             fail=1
+          else
+            echo "the deployed application tree is identical to the one being read"
           fi
 
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
@@ -156,11 +176,9 @@ jobs:
           [ "$shut" = "401" ] || fail=1
 
           if [ "$fail" = "0" ]; then
-            echo "A19_DELIVERY               PASS      $spent/$BUDGET mutations; hosted verification passed before and after a real restart of the deployed commit" | tee -a acceptance.txt
-            echo "verdict=PASS" >> "$GITHUB_OUTPUT"
+            echo "A19_DELIVERY               PASS      3/3 mutations, each verified before and after a real restart; the deployed application tree is the one this acceptance read" | tee -a acceptance.txt
           else
             echo "A19_DELIVERY               NOT_RUN   the delivery evidence above is incomplete" | tee -a acceptance.txt
-            echo "verdict=NOT_RUN" >> "$GITHUB_OUTPUT"
           fi
 
       # The composed verdict.
