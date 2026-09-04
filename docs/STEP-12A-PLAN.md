@@ -330,3 +330,49 @@ Brain worker identity. It is inspected once, not polled beyond ten minutes, and
 if it still presents the primary identity the blocker is recorded, everything
 else is stored and resumable, and the matrix is not weakened, simulated or
 substituted. Step 12A is not called complete while it is open.
+
+---
+
+## 9. Where this invocation stopped, and how to resume
+
+Phase 0 is frozen, Phase 1 is complete, and Phase 2 is the server half of the
+loop. Nothing here is deployed: the running image is v98, and the first delivery
+mutation has not been spent.
+
+### Built and proved
+
+| | Proof |
+|---|---|
+| Schema 027 / 018, thirteen tables | applies from empty on both backends |
+| `russellConversations`, `russellCandidates`, `russellAuthority`, `russellProbes`, `russellMissions`, `russellCycle` | `tests/russellState.test.ts`, 46 tests, both backends |
+| `routing`, `judgment`, `coverage`, `launch`, `writeback`, `loop` | `tests/russellNervousSystem.test.ts`, 33 tests |
+| The capability field, end to end | `tests/fleet.test.ts`, through storage |
+| Russell's loop starting with the server | wired in `server/index.ts` beside the dispatcher |
+
+### Not built yet
+
+- **The turn.** The model-backed conversation carried by the fleet: persist a
+  pending turn, dispatch it, validate the structured reply against authority,
+  scope, enums and references, resolve exactly once. `russell_messages` already
+  has the pending contract and `resolveMessage` is the once-only edge.
+- **The probe runner.** The envelope is enforced (`permitLookup`,
+  `destinationAllowed`, `recordObservation`); what is missing is the caller that
+  performs the three allowed lookups and calls `completeProbe`.
+- **Launch selection in the loop.** Step 4 of `tick` counts the bound but does
+  not yet read the ranked queue and launch. `listCandidates` orders by priority
+  already.
+- **The Deal Dispatch adapter, the projections, the HTTP API and the whole
+  Russell shell.** Phase 3 in full.
+- **Every production gate.** No deploy, no acceptance run.
+
+### Resume
+
+```
+npm run typecheck && npm test
+BRAIN_TEST_DATABASE_URL=postgresql://… npm test
+```
+
+Then continue at Phase 2's remaining pieces in the order above — the turn first,
+because the shell has nothing to render until a conversation can answer. The
+frozen acceptance idea, its bounds and the follow-on are in §7 and unchanged;
+`RUSSELL_STATE_LICENSING_V1` is the envelope both missions name.
