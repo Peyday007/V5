@@ -1560,3 +1560,49 @@ owned dispatch and dispatched; the surface owned whether the worker acted, and
 once its instructions were unambiguous it acted.
 
 The bin's downstream progress is left to Brain. It is running independently.
+
+---
+
+## 15. Post-canary reading — 2026-09-04 07:51Z
+
+Two read-only passes: the acceptance reporter (run `33850578259`) and a bin
+watch over the packet project (run `33850580581`). Nothing was fired, changed or
+deployed.
+
+### What moved
+
+| | 07:02Z | 07:51Z |
+| --- | --- | --- |
+| `A01` Russell conversations | 14 | **15** |
+| `A04` turns / captured ideas | 20 turns / 0 ideas | **21 turns / 0 ideas** |
+| V1 | `fires=17 no-shows=5` | **`fires=18 no-shows=0`** |
+
+**Exactly one conversation and exactly one turn were added** — the Florida
+canary and nothing else. No duplicate turn, no duplicate bin.
+
+### What did not move
+
+`A05` merges, `A06` ideas carrying a judgment, `A07` probes, `A09` settled
+reservations, `A10` linked missions, `A12` writebacks, `A13` follow-ons and
+`A14` human decisions all still read **0 of 1**. So the check-in did not, by
+07:51Z, produce a captured idea or anything downstream of one.
+
+### The trace, and the gap in it, stated plainly
+
+- **Conversation → turn: confirmed.** One new conversation, one new user
+  message, from the row counts above.
+- **Turn → worker: confirmed, Brain-side.** `no-shows` 5 → 0 and `fires` 17 → 18
+  on V1. That counter is reset by `recordRoutineCheckIn` and credited from the
+  dispatch row that produced the worker, never from the worker's own account of
+  itself.
+- **Bin state: not determinable from the read-only surfaces available.**
+  `step10 watch` is scoped to the packet project by slug and returned
+  `settled=true bins=97` — unchanged from the pre-canary reading, with
+  `assignments 101` also unchanged. The Florida `RUSSELL_TURN` bin is therefore
+  in a different project scope, and no read-only command takes an arbitrary
+  project id. Whether it is `ASSIGNED`, `COMPLETE`, escalated or still `PENDING`
+  is **unknown**, and is recorded as unknown rather than inferred from the
+  worker's 53-second session.
+
+The honest summary is that the first two links of the chain are proven and the
+third is unread. Brain is left running; nothing is waiting on a person.
