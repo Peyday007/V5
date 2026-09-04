@@ -1486,3 +1486,77 @@ tested, because no session has run since the change.
 is unchanged at **10 PASS · 0 FAIL · 0 BLOCKED · 9 NOT_RUN**, and the single
 remaining condition is unchanged: a fired Cowork session must reach
 `brain_check_in`, on a bin that exists.
+
+---
+
+## 14. The V1 canary checked in — the prompt was the problem
+
+The first activation since the owner hardened V1's stored prompt, with **no
+other change**: `allowed_tools`, the connector's `permitted_tools` and the
+absent `permission_mode` were all left exactly as they were, deliberately, so
+that the prompt could be tested in isolation.
+
+### The Brain-side proof
+
+```
+V1  ENABLED  fires=18  refusals=0  no-shows=0  in-flight=0
+V2  QUARANTINED  fires=12  refusals=0  no-shows=5  in-flight=0
+```
+
+**`no-shows` went 5 → 0.** That is the decisive fact and it is not a
+provider-reported one: the consecutive-no-show counter is reset by
+`recordRoutineCheckIn`, and §23's rule is that the arrival is credited **from
+the dispatch row that produced the worker**, never from anything the worker says
+about itself. Brain therefore observed an authenticated worker arriving on this
+Routine's own dispatch. `fires` advanced by exactly one, and `in-flight` is 0,
+so the dispatch settled rather than remaining outstanding.
+
+V2 is untouched at `no-shows=5`, which is the control: the counter did not move
+for a surface that was not activated.
+
+### The provider side, for corroboration only
+
+| | previous run | canary run |
+| --- | --- | --- |
+| Session | `cse_01KTng2dz9VLmJp7kBqsq2bX` | `cse_01LCjqK2PKSLsuVQteAiyipH` |
+| Fired | 06:54:58.29Z | **07:42:39.59Z** |
+| Finished | 06:55:12.93Z | **07:43:33.07Z** |
+| Duration | 14.6s | **53.5s** |
+| Output tokens | 198 | **3,541** |
+| Cache reads | 192,847 | **638,470** |
+| Connection | `disconnected` | **`connected`** |
+| Served model | claude-sonnet-5 | claude-sonnet-5 |
+
+Provider `SUCCEEDED` was never the criterion — the failing run was `SUCCEEDED`
+too. The numbers are recorded because they corroborate the Brain-side reading:
+eighteen times the output and three and a half times the context reads is a
+session that made tool calls, not one that produced prose and stopped.
+
+### What this settles, and what it retires
+
+**The prompt was the problem. The tool surface was not.** The connector's tools
+were reachable the whole time — `allowed_tools` still carries no `mcp__*` entry,
+`permitted_tools` is still `[]`, and there is still no `permission_mode`. The
+Routine editor's own statement that the attached `cloud-brain` connector can
+operate without asking is correct, and testing the prompt in isolation is what
+proved it.
+
+Three hypotheses are now retired, all of them mine:
+
+1. **Connector name spelling** — refuted in §11 by inspection.
+2. **The settings file not reaching the worker** — eliminated in §11; the
+   repository's default branch carries it.
+3. **The `mcp__*` tool surface** — retired here, by a session that called the
+   tools with that surface unchanged.
+
+What actually separated a working activation from a failing one was the
+**instruction**: a long generic document whose first concrete direction was
+buried, against one that opens by naming `brain_check_in` as the mandatory first
+action and states that a text-only response is a failed activation. A model that
+is told to reason before acting will reason and then stop.
+
+**§22's split holds and now has both halves demonstrated in one cycle.** Brain
+owned dispatch and dispatched; the surface owned whether the worker acted, and
+once its instructions were unambiguous it acted.
+
+The bin's downstream progress is left to Brain. It is running independently.
