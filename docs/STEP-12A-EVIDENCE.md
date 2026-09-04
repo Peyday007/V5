@@ -58,9 +58,8 @@ Two rules shape it and are worth stating because they are what stop it becoming
 a rubber stamp. **"Implemented" is never a production verdict** — a gate whose
 condition is about a real run reports `NOT_RUN` until that run's rows exist,
 however complete the code is, and there is no flag that turns a test into
-evidence. And **`A11` is hard-coded `BLOCKED` rather than derived from rows**,
-because a check that read the database could be made to pass by writing rows,
-and a gate satisfiable by the thing it constrains is not a gate.
+evidence. And **`A11` is derived fail-closed from lineage rows**, by a check
+built to be hostile to forgery rather than by a constant — see §7.
 
 ---
 
@@ -622,6 +621,39 @@ its thread, a frozen layer that lost its artifact — so the reporter is capable
 of saying no, which a reporter that only counted upwards would not be. `A19` is
 `NOT_RUN` always: no row in this database proves a hosted verification passed
 after a real restart, and inventing one would be the worst thing in the file.
+
+### A11 is derived, and the first version of it was wrong
+
+The reporter originally hard-coded `A11` to `BLOCKED`, on the reasoning that a
+database check could be satisfied by writing rows. **The concern was right and
+the remedy was wrong.** A constant cannot become true when the evidence
+arrives, so closing the gate would have required a code change and a deployment
+at precisely the moment the gate was supposed to be answering — and a gate that
+needs a deployment to say yes is not reporting, it is being told.
+
+`services/research/independenceEvidence.ts` replaces it with a fail-closed
+evaluator whose nine conditions are chosen against the shortcuts somebody would
+actually take:
+
+| Condition | The shortcut it refuses |
+|---|---|
+| `SIGNED_MATRIX_INTACT` | lowering `PRIMARY_ADVERSARIAL` from `ACCOUNT` to make an audit eligible |
+| `SAME_LINEAGE_REFUSAL_PRESERVED` | removing the guard and leaving the gate reporting on a control that no longer exists |
+| `DISTINCT_ACCOUNT_CREDENTIALS` | registering one subscription twice under two names — the **digests** must differ, not the labels |
+| `DISTINCT_BOUND_WORKERS` | one worker wearing both accounts, or a disabled identity |
+| `LINEAGE_MATCHES_BINDING` | writing the wanted account onto a pass; the binding its worker resolves to is what is believed |
+| `SESSIONS_ARE_REAL_CREDENTIALS` | an invented session string, or borrowing another worker's real one |
+| `INDEPENDENT_LINEAGE` | both arguments on one account, or a judge that also argued |
+| `AUDITED_PACKET_WAS_FILED` | a bare set of pass rows with no filed document behind them |
+| `EVIDENCE_READABLE` | an unreachable database reading as a pass |
+
+`tests/independenceEvidence.test.ts` — **15 tests** — builds the complete
+authentic shape and then removes exactly one part of it per test, asserting
+both the `BLOCKED` verdict and *which* condition named it. Building the whole
+shape is not a way around the gate; it is the only way through, and it is what
+production has to produce. What that buys is the property the gate needs: when
+friend-2 reconnects correctly and the live audit runs, **the same deployed code
+derives `PASS` from rows with no further deployment.**
 
 ---
 

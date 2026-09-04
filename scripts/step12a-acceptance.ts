@@ -27,6 +27,7 @@
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { getDb } from '../server/db/database.ts';
+import { auditIndependenceEvidence } from '../server/services/research/independenceEvidence.ts';
 
 type Verdict = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_RUN';
 
@@ -182,16 +183,34 @@ async function gates(): Promise<GateResult[]> {
   /*
    * A11 — audit independence.
    *
-   * Hard-coded `BLOCKED`, and deliberately not derived from rows. The rows that
-   * would make it pass require a second authentic external worker identity,
-   * which is provisioning outside this repository. A check that read the
-   * database could be made to pass by writing rows, and a gate that can be
-   * satisfied by the thing it is meant to constrain is not a gate.
+   * Derived, fail-closed, from `auditIndependenceEvidence`. Nine conditions,
+   * and `PASS` only when every one is met by production rows: two accounts
+   * holding genuinely different credentials, two active worker identities each
+   * bound to exactly one of them, three completed audit passes whose lineage
+   * *agrees with those bindings*, three session references that resolve to real
+   * credentials of those same workers, the account and session separation the
+   * signed matrix asks for, and a packet that actually filed a document.
+   *
+   * It also checks the control it is evidence for: the matrix is compared to
+   * the shape this gate was written against, and the same-account refusal is
+   * exercised live. Weakening either to make an audit eligible makes this
+   * report `BLOCKED` rather than `PASS`.
+   *
+   * An earlier version of this file hard-coded `BLOCKED`, reasoning that a
+   * database check could be satisfied by writing rows. The concern was right
+   * and the remedy was wrong: a constant cannot become true when the evidence
+   * arrives, so it would have needed a code change and a deployment at exactly
+   * the moment the gate was supposed to be answering. The answer is a check
+   * hostile enough that forging it means reproducing the whole production
+   * shape — which is what the conditions above are for.
    */
+  const independence = await auditIndependenceEvidence();
   results.push({
     id: 'A11_INDEPENDENT_AUDIT',
-    verdict: 'BLOCKED',
-    detail: 'awaiting a fresh authentic second-account worker identity — provisioning, outside this repository',
+    verdict: independence.verdict === 'PASS' ? 'PASS' : 'BLOCKED',
+    detail:
+      independence.missing ??
+      'authentic production lineage: separate accounts arguing, a third session judging',
   });
 
   // A12 — writeback happened, exactly once per mission. The `writeback_at`

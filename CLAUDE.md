@@ -1013,9 +1013,32 @@ Russell's conversation may never be.
 **Step 12A is not complete until `npm run step12a:acceptance` exits 0**, which
 requires production rows against a deployed commit after a real restart.
 `A11_INDEPENDENT_AUDIT` remains **BLOCKED** on a fresh authentic second-account
-worker identity — provisioning outside this repository — and is hard-coded
-blocked in the reporter rather than derived from rows, because a gate
-satisfiable by the thing it constrains is not a gate. Step 12B's items
+worker identity — provisioning outside this repository.
+
+It is **derived, fail-closed**, by `services/research/independenceEvidence.ts`,
+not hard-coded. An earlier version of this file said it was hard-coded, on the
+reasoning that a database check could be satisfied by writing rows. The concern
+was right and the remedy was wrong: a constant cannot become true when the
+evidence arrives, so it would have needed a code change and a deployment at
+exactly the moment the gate was supposed to be answering. The correction is
+recorded rather than quietly deleted, the same way §22 records Step 7's wrong
+reasoning about OAuth.
+
+The remedy is a check hostile enough that forging it means reproducing the
+whole production shape. Nine conditions, `PASS` only when every one holds: two
+accounts whose registered credential **digests differ**, so one subscription
+under two names is one account; two active workers each bound to exactly one of
+them; three completed audit passes whose `executor_account_id` **agrees with
+the binding its worker actually resolves to**, so a hand-written label is
+refused; three session references that each resolve to a real credential **of
+that same worker**; the account and session separation the signed matrix asks
+for; and an orchestration that filed a document with bytes, because an audit of
+nothing is not an audit. It also re-checks the control it is evidence for — the
+matrix is compared to its expected shape and the same-account refusal is
+exercised live — so weakening the guard to make an audit eligible makes the
+gate report `BLOCKED`. There is no override, no environment variable and no
+caller-supplied label, and an unreadable database is `BLOCKED` rather than a
+pass. Step 12B's items
 (collections, Discovery Frontier, Capability Lab, maps, a mobile-first rebuild,
 the full Fleet centre, personalization, advanced math, 3D, social-media
 intelligence) are listed in `docs/STEP-12B-BACKLOG.md` and are not built here.
