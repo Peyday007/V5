@@ -507,7 +507,50 @@ const EVALUATORS: Record<string, Evaluator> = {
   DETERMINISTIC_UNITS_V1: evaluateDeterministicUnits,
   RESEARCH_PACKET_V1: evaluateResearchPacket,
   SURFACE_PROBE_V1: evaluateSurfaceProbe,
+  RUSSELL_TURN_V1: evaluateRussellTurn,
 };
+
+/**
+ * One conversation turn: is there a proposal, and is it structurally a proposal?
+ *
+ * Structure only, deliberately. Whether the proposal may *do* what it names is
+ * decided later by `validateProposal`, against the conversation owner's
+ * authority — and the contract evaluator has no principal, so a check here
+ * would either be authorization without an authorizer or a second, weaker copy
+ * of the real one. Both are worse than a narrow check that says what it checks.
+ *
+ * What it does refuse is an empty or unparseable submission, because a bin that
+ * passed with nothing in it would resolve a person's question with silence.
+ */
+async function evaluateRussellTurn(bin: Bin): Promise<ContractVerdict> {
+  const results = await listBinUnitResults(bin.id);
+  const submitted = results.find((row) => row.unitKey === 'proposal');
+  const observed = { unitsSubmitted: results.length, hasProposal: Boolean(submitted) };
+
+  if (!submitted) {
+    // RETRY, not HUMAN: the worker can still submit one, and a bin refused to a
+    // person for a missing submission would put a queue in front of a question
+    // that only needed asking again.
+    return refuse(
+      'RETRY',
+      ['No proposal was submitted, so there is nothing to answer the person with.'],
+      observed,
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(submitted.value);
+  } catch {
+    return refuse('RETRY', ['The proposal was not valid JSON.'], observed);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return refuse('RETRY', ['The proposal was not a structured object.'], observed);
+  }
+  if (typeof (parsed as Record<string, unknown>)['action'] !== 'string') {
+    return refuse('RETRY', ['The proposal named no action.'], observed);
+  }
+  return satisfied(observed);
+}
 
 /**
  * Evaluate a bin's contract.

@@ -12,14 +12,24 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
-import { createUser } from '../server/repos/identity.ts';
+import { createUser, createWorker } from '../server/repos/identity.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import { getCandidate, recordJudgment } from '../server/repos/russellCandidates.ts';
 import { createGoal, listReservations } from '../server/repos/russellAuthority.ts';
 import { getMission, listMissions } from '../server/repos/russellMissions.ts';
 import { getDb } from '../server/db/database.ts';
-import { createProbe, getProbe, startProbe } from '../server/repos/russellProbes.ts';
+import {
+  createProbe,
+  getProbe,
+  listObservations,
+  listProbesForCandidate,
+  permitLookup,
+  recordObservation,
+  startProbe,
+} from '../server/repos/russellProbes.ts';
+import { openProbe, runProbe, type ProbeFetch } from '../server/services/russell/probe.ts';
+import { destinationFor, GENERAL_LIGHT_PROBE_V1 } from '../server/services/russell/probeEnvelope.ts';
 import {
   candidateProjects,
   proposalIsAuthorized,
@@ -54,7 +64,11 @@ import { tick } from '../server/services/russell/loop.ts';
 import { claimCycle, completeCycle, pauseCycle, resumeCycle } from '../server/repos/russellCycle.ts';
 import { askHuman, answerHumanRequest, getHumanRequest, transitionMission } from '../server/repos/russellMissions.ts';
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
-import { listTurns, createConversation } from '../server/repos/russellConversations.ts';
+import { listTurns, createConversation, getConversation } from '../server/repos/russellConversations.ts';
+import { applyTurn, beginTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
+import { assignNextBin, getBin, putBinUnitResult, terminateUnleasedBin } from '../server/repos/bins.ts';
+import { hashUnitValue } from '../server/services/bins/contracts.ts';
+import { requestCompletion } from '../server/services/bins/service.ts';
 import { listEvents } from '../server/repos/events.ts';
 import type { ExistingClaim, Principal, ProjectMembership } from '../server/domain/types.ts';
 
@@ -1152,5 +1166,480 @@ describe('a briefing says what changed, why, what next, and whether you are need
   it('reports what it is watching rather than promising to continue', async () => {
     const view = await briefing({ projectId, projectName: 'Deal Dispatch' });
     expect(view.next).toMatch(/watching for something worth starting|Next, Russell is|waiting on|cheap look/);
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * The turn — a person says something, the fleet answers, the server decides
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Play the worker.
+ *
+ * A real Cowork session leases the bin, submits its unit and asks to finish.
+ * The test does exactly that rather than writing the result row directly,
+ * because the thing under test is the whole seam — contract evaluation
+ * included — and a fixture that skipped the lease would be proving a path
+ * production never takes.
+ */
+async function answerTurnBin(binId: string, proposal: unknown): Promise<string> {
+  const workerId = (
+    await createWorker({
+      name: `turn-worker-${Math.random().toString(36).slice(2, 8)}`,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    })
+  ).id;
+  const assigned = await assignNextBin({ workerId, projectIds: [projectId] });
+  if (!assigned || assigned.bin.id !== binId) throw new Error('the turn bin was not the one offered');
+  const value = JSON.stringify(proposal);
+  await putBinUnitResult({
+    binId,
+    unitKey: TURN_UNIT_KEY,
+    value,
+    contentHash: hashUnitValue(value),
+    leaseId: assigned.leaseId,
+    leaseGeneration: assigned.leaseGeneration,
+    submittedBy: workerId,
+  });
+  const finished = await requestCompletion({
+    workerId,
+    proof: {
+      binId,
+      leaseId: assigned.leaseId,
+      leaseGeneration: assigned.leaseGeneration,
+      workerId,
+    },
+  });
+  return finished.state ?? 'UNKNOWN';
+}
+
+/** A thread already grounded in the fixture project. */
+async function ownedConversation(title = 'A thread') {
+  return createConversation({ ownerUserId: userId, title, projectId, visibility: 'PRIVATE' });
+}
+
+/** A thread with nothing to ground it, so routing has to decide. */
+async function looseConversation(title = 'A loose thread') {
+  return createConversation({ ownerUserId: userId, title, visibility: 'PRIVATE' });
+}
+
+describe('a turn goes out to the fleet and comes back as a decision', () => {
+  it('dispatches a bin the fleet can actually pick up', async () => {
+    const conversation = await ownedConversation();
+    const started = await beginTurn({
+      principal: principal([membership(projectId)]),
+      conversationId: conversation.id,
+      content: 'What is the state of the monetization work?',
+    });
+
+    expect(started.ok).toBe(true);
+    expect(started.binId).not.toBeNull();
+    const bin = (await getBin(started.binId!))!;
+    expect(bin.state).toBe('READY');
+    expect(bin.completionContract).toBe('RUSSELL_TURN_V1');
+    // The pending message is the bin's identity, which is what lets the loop
+    // find the turn again after a restart without an event surviving.
+    expect(bin.createdById).toBe(`russell:turn:${started.pendingMessage!.id}`);
+
+    const turns = await listTurns(conversation.id, 10);
+    const pending = turns.find((turn) => turn.role === 'RUSSELL')!;
+    expect(pending.status).toBe('PENDING');
+    expect(pending.pendingReason).toBeTruthy();
+  });
+
+  it('asks which project instead of dispatching, when it cannot tell', async () => {
+    const conversation = await looseConversation();
+    const started = await beginTurn({
+      // No membership: nothing to route to, so nothing to ground an answer in.
+      principal: principal([]),
+      conversationId: conversation.id,
+      content: 'Some thought with no project in it.',
+    });
+
+    expect(started.ok).toBe(true);
+    expect(started.binId).toBeNull();
+    expect(started.attachedProjectId).toBeNull();
+    const turns = await listTurns(conversation.id, 10);
+    const answer = turns.find((turn) => turn.role === 'RUSSELL')!;
+    expect(answer.status).toBe('COMPLETE');
+    expect(answer.content).toMatch(/which project/i);
+  });
+
+  it('refuses a conversation that is not the asker\'s, the same way it refuses one that is gone', async () => {
+    const other = await createUser({
+      email: `other-${Math.random().toString(36).slice(2, 10)}@example.test`,
+      displayName: 'Somebody else',
+      password: 'correct horse battery staple',
+    });
+    const theirs = await createConversation({
+      ownerUserId: other.id,
+      title: 'Not yours',
+      visibility: 'PRIVATE',
+    });
+
+    const trespass = await beginTurn({
+      principal: principal([membership(projectId, 'ADMIN')], true),
+      conversationId: theirs.id,
+      content: 'Let me read that.',
+    });
+    const missing = await beginTurn({
+      principal: principal([membership(projectId, 'ADMIN')], true),
+      conversationId: 'rcv_does_not_exist',
+      content: 'Let me read that.',
+    });
+
+    // Identical refusals. A Brain admin learns nothing about whether somebody
+    // else's private thread exists — invariant 23 at a new boundary.
+    expect(trespass.ok).toBe(false);
+    expect(trespass.reason).toBe(missing.reason);
+    expect((await listTurns(theirs.id, 10)).length).toBe(0);
+  });
+
+  it('applies a valid proposal once and resolves the pending turn', async () => {
+    const conversation = await ownedConversation();
+    const started = await beginTurn({
+      principal: principal([membership(projectId)]),
+      conversationId: conversation.id,
+      content: 'We should look at whether the pricing tiers are still right.',
+    });
+    expect(await answerTurnBin(started.binId!, {
+      action: 'CAPTURE_CANDIDATE',
+      answer: 'Noted — I have written that down as something to look at.',
+      confidence: 70,
+      candidate: {
+        title: 'Revisit pricing tiers',
+        statement: 'We should look at whether the pricing tiers are still right.',
+      },
+    })).toBe('COMPLETE');
+
+    const applied = await applyTurn(started.binId!);
+    expect(applied.ok).toBe(true);
+    expect(applied.action).toBe('CAPTURE_CANDIDATE');
+    expect(applied.candidateId).not.toBeNull();
+    expect(applied.alreadyAnswered).toBe(false);
+
+    const answered = (await listTurns(conversation.id, 10)).find((turn) => turn.role === 'RUSSELL')!;
+    expect(answered.status).toBe('COMPLETE');
+    expect(answered.content).toBe('Noted — I have written that down as something to look at.');
+
+    // Applying twice is what a redelivered bin does. The second call finds the
+    // turn already answered and creates nothing.
+    const again = await applyTurn(started.binId!);
+    expect(again.alreadyAnswered).toBe(true);
+    const candidates = await getDb().all<{ count: number }>(
+      `SELECT COUNT(*) AS count FROM russell_candidates WHERE project_id = ?`,
+      [projectId],
+    );
+    expect(Number(candidates[0]!.count)).toBe(1);
+  });
+
+  it('resolves a proposal it will not act on as failed, rather than leaving it pending', async () => {
+    const conversation = await ownedConversation();
+    const started = await beginTurn({
+      principal: principal([membership(projectId)]),
+      conversationId: conversation.id,
+      content: 'Anything new?',
+    });
+    // A structurally valid submission — the contract passes it — carrying an
+    // action outside the closed set. The contract cannot judge that; the server
+    // must.
+    expect(await answerTurnBin(started.binId!, {
+      action: 'DELETE_EVERYTHING',
+      answer: 'Done.',
+    })).toBe('COMPLETE');
+
+    const applied = await applyTurn(started.binId!);
+    expect(applied.ok).toBe(false);
+    expect(applied.action).toBeNull();
+
+    const answered = (await listTurns(conversation.id, 10)).find((turn) => turn.role === 'RUSSELL')!;
+    expect(answered.status).toBe('FAILED');
+    expect(answered.content).toMatch(/could not answer/i);
+  });
+
+  it('judges the proposal by the owner\'s reach, never the worker\'s', async () => {
+    const elsewhere = await createProject({
+      name: 'Somewhere the owner cannot go',
+      slug: `elsewhere-${Math.random().toString(36).slice(2, 8)}`,
+    });
+    const conversation = await ownedConversation();
+    const started = await beginTurn({
+      principal: principal([membership(projectId)]),
+      conversationId: conversation.id,
+      content: 'Which project is this about?',
+    });
+
+    expect(await answerTurnBin(started.binId!, {
+      action: 'ATTACH_PROJECT',
+      answer: 'This is about the other one.',
+      projectId: elsewhere.id,
+      confidence: 90,
+    })).toBe('COMPLETE');
+
+    const applied = await applyTurn(started.binId!);
+    expect(applied.ok).toBe(false);
+
+    // The attachment did not happen. A worker cannot widen a conversation's
+    // reach by answering in it.
+    const after = (await getConversation(conversation.id))!;
+    expect(after.projectId).not.toBe(elsewhere.id);
+  });
+
+  it('closes a turn whose bin died, because a spinner that never ends is not waiting', async () => {
+    const conversation = await ownedConversation();
+    const started = await beginTurn({
+      principal: principal([membership(projectId)]),
+      conversationId: conversation.id,
+      content: 'Anything new?',
+    });
+    const dying = (await getBin(started.binId!))!;
+    expect(await terminateUnleasedBin(dying.id, dying.leaseGeneration, 'CANCELLED', 'test')).toBe(true);
+
+    const applied = await applyTurn(started.binId!);
+    expect(applied.ok).toBe(false);
+    expect(applied.reason).toMatch(/without a reply/);
+    const answered = (await listTurns(conversation.id, 10)).find((turn) => turn.role === 'RUSSELL')!;
+    expect(answered.status).toBe('FAILED');
+  });
+
+  it('the loop picks up answered turns without anybody asking it to', async () => {
+    const conversation = await ownedConversation();
+    const started = await beginTurn({
+      principal: principal([membership(projectId)]),
+      conversationId: conversation.id,
+      content: 'Anything new?',
+    });
+    await answerTurnBin(started.binId!, {
+      action: 'ANSWER_ONLY',
+      answer: 'Nothing has changed since yesterday.',
+    });
+
+    const report = await tick('test-owner');
+    expect(report.answered).toContain(started.binId);
+    const answered = (await listTurns(conversation.id, 10)).find((turn) => turn.role === 'RUSSELL')!;
+    expect(answered.content).toBe('Nothing has changed since yesterday.');
+
+    // And a second tick does not find it again: the join is on the pending
+    // message, so an applied turn drops out of the query rather than being
+    // re-applied and re-answered.
+    expect((await tick('test-owner')).answered).not.toContain(started.binId);
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * The bounded light probe
+ * ------------------------------------------------------------------------- */
+
+/** A fetcher that answers from a script, and records what it was asked. */
+function scriptedFetch(
+  script: Record<string, { status: number; body?: string; location?: string }>,
+): { fetcher: ProbeFetch; asked: string[] } {
+  const asked: string[] = [];
+  const fetcher: ProbeFetch = async (url) => {
+    asked.push(url);
+    const answer = script[url] ?? script['*'] ?? { status: 200, body: '' };
+    return {
+      status: answer.status,
+      headers: { get: (name: string) => (name.toLowerCase() === 'location' ? answer.location ?? null : null) },
+      text: async () => answer.body ?? '',
+    };
+  };
+  return { fetcher, asked };
+}
+
+async function exploringCandidate(statement: string) {
+  const captured = await capture({
+    title: statement.slice(0, 60),
+    statement,
+    projectId,
+    visibility: 'PRIVATE',
+    conversationId: null,
+  });
+  return captured.candidate!;
+}
+
+describe('a light probe looks where Brain says, and stops when Brain says', () => {
+  it('carries the question as an encoded value into a URL Brain wrote', () => {
+    const source = GENERAL_LIGHT_PROBE_V1.sources[0]!;
+    const hostile = destinationFor(source, 'x&search=y#/../../etc/passwd https://evil.test');
+    const parsed = new URL(hostile);
+
+    // The host and path are Brain's; the whole hostile string is one parameter
+    // value. A model cannot reach a second host by writing one into a question.
+    expect(parsed.origin).toBe(new URL(source.url).origin);
+    expect(parsed.pathname).toBe(new URL(source.url).pathname);
+    expect(parsed.searchParams.get(source.queryParam)).toContain('evil.test');
+    expect(parsed.searchParams.get('search=y')).toBeNull();
+  });
+
+  it('narrows a proposed bound and never widens it', async () => {
+    const candidate = await exploringCandidate('Whether escrow interest accrues to the buyer');
+    const wide = await openProbe({
+      candidateId: candidate.id,
+      question: 'wide',
+      maxLookups: 99,
+    });
+    expect(wide.probe!.maxLookups).toBe(GENERAL_LIGHT_PROBE_V1.maxLookups);
+
+    const narrow = await openProbe({
+      candidateId: candidate.id,
+      question: 'narrow',
+      maxLookups: 1,
+    });
+    expect(narrow.probe!.maxLookups).toBe(1);
+  });
+
+  it('is one probe however many times the same question is asked', async () => {
+    const candidate = await exploringCandidate('Whether escrow interest accrues to the buyer');
+    const first = await openProbe({ candidateId: candidate.id, question: 'Does it accrue?', maxLookups: 2 });
+    const again = await openProbe({ candidateId: candidate.id, question: 'does  it   accrue ?', maxLookups: 2 });
+    expect(again.probe!.id).toBe(first.probe!.id);
+    expect((await listProbesForCandidate(candidate.id)).length).toBe(1);
+  });
+
+  it('says SUPPORTED only when an approved source discusses the subject', async () => {
+    const candidate = await exploringCandidate('escrow interest accrual rules');
+    const opened = await openProbe({
+      candidateId: candidate.id,
+      question: 'escrow interest accrual rules',
+      maxLookups: 2,
+    });
+    const { fetcher } = scriptedFetch({
+      '*': { status: 200, body: 'Escrow interest accrual rules vary by state.' },
+    });
+    const ran = await runProbe({ probeId: opened.probe!.id, fetcher });
+    expect(ran.outcome).toBe('SUPPORTED');
+    expect((await getProbe(opened.probe!.id))!.state).toBe('COMPLETE');
+  });
+
+  it('says WEAKENED when it read pages that do not mention the subject', async () => {
+    const candidate = await exploringCandidate('escrow interest accrual rules');
+    const opened = await openProbe({
+      candidateId: candidate.id,
+      question: 'escrow interest accrual rules',
+      maxLookups: 2,
+    });
+    const { fetcher } = scriptedFetch({ '*': { status: 200, body: 'An article about bicycles.' } });
+    expect((await runProbe({ probeId: opened.probe!.id, fetcher })).outcome).toBe('WEAKENED');
+  });
+
+  it('says UNKNOWN when it could not read anything, because that is about the network', async () => {
+    const candidate = await exploringCandidate('escrow interest accrual rules');
+    const opened = await openProbe({
+      candidateId: candidate.id,
+      question: 'escrow interest accrual rules',
+      maxLookups: 2,
+    });
+    const { fetcher } = scriptedFetch({ '*': { status: 503 } });
+    const ran = await runProbe({ probeId: opened.probe!.id, fetcher });
+
+    // Not WEAKENED. A host that would not answer is not evidence that the
+    // subject is absent from it.
+    expect(ran.outcome).toBe('UNKNOWN');
+    expect(ran.lookups.every((lookup) => lookup.retrieval === 'UNREACHABLE')).toBe(true);
+  });
+
+  it('classifies a refusal by the host apart from an unreachable one', async () => {
+    const candidate = await exploringCandidate('escrow interest accrual rules');
+    const opened = await openProbe({
+      candidateId: candidate.id,
+      question: 'escrow interest accrual rules',
+      maxLookups: 2,
+    });
+    const { fetcher } = scriptedFetch({ '*': { status: 429 } });
+    const ran = await runProbe({ probeId: opened.probe!.id, fetcher });
+    // Step 10's rule: "blocked" is four facts and they lead to different
+    // actions. A 429 is the host refusing this client, not a dead host.
+    expect(ran.lookups[0]!.retrieval).toBe('BLOCKED');
+  });
+
+  it('will not follow a redirect out of its allowlist', async () => {
+    const candidate = await exploringCandidate('escrow interest accrual rules');
+    const opened = await openProbe({
+      candidateId: candidate.id,
+      question: 'escrow interest accrual rules',
+      maxLookups: 3,
+    });
+    const first = destinationFor(GENERAL_LIGHT_PROBE_V1.sources[0]!, 'escrow interest accrual rules');
+    const { fetcher, asked } = scriptedFetch({
+      [first]: { status: 302, location: 'https://evil.test/collect' },
+      '*': { status: 200, body: 'escrow interest accrual rules' },
+    });
+    const ran = await runProbe({ probeId: opened.probe!.id, fetcher });
+
+    expect(asked).toEqual([first]);
+    expect(asked.some((url) => url.includes('evil.test'))).toBe(false);
+    expect(ran.lookups.some((lookup) => lookup.note.includes('allowlist'))).toBe(true);
+  });
+
+  it('counts its budget from the observations, not from a counter it keeps', async () => {
+    const candidate = await exploringCandidate('escrow interest accrual rules');
+    const opened = await openProbe({
+      candidateId: candidate.id,
+      question: 'escrow interest accrual rules',
+      maxLookups: 1,
+    });
+    const probeId = opened.probe!.id;
+    await startProbe(probeId);
+    const destination = destinationFor(GENERAL_LIGHT_PROBE_V1.sources[0]!, 'escrow interest accrual rules');
+
+    const permitted = await permitLookup({ probeId, url: destination });
+    expect(permitted.ok).toBe(true);
+    await recordObservation({
+      probeId,
+      ordinal: (permitted as { ordinal: number }).ordinal,
+      sourceUrl: destination,
+      retrieval: 'RETRIEVED',
+    });
+
+    const second = await permitLookup({ probeId, url: destination });
+    expect(second.ok).toBe(false);
+    expect((second as { reason: string }).reason).toBe('OUT_OF_LOOKUPS');
+
+    // And the runner, arriving at an already-spent probe, spends nothing more.
+    const { fetcher, asked } = scriptedFetch({ '*': { status: 200, body: 'anything' } });
+    await runProbe({ probeId, fetcher });
+    expect(asked).toEqual([]);
+  });
+
+  it('refuses a destination that is not on the allowlist, before asking for it', async () => {
+    const candidate = await exploringCandidate('escrow interest accrual rules');
+    const opened = await openProbe({
+      candidateId: candidate.id,
+      question: 'escrow interest accrual rules',
+      maxLookups: 2,
+    });
+    await startProbe(opened.probe!.id);
+    const refused = await permitLookup({
+      probeId: opened.probe!.id,
+      url: 'https://en.wikipedia.org.evil.test/w/index.php',
+    });
+    expect(refused.ok).toBe(false);
+    expect((refused as { reason: string }).reason).toBe('DESTINATION_NOT_ALLOWED');
+    // Nothing was recorded, so nothing was spent finding that out.
+    expect((await listObservations(opened.probe!.id)).length).toBe(0);
+  });
+
+  it('the loop takes the cheap look before committing capacity, once per idea', async () => {
+    const candidate = await exploringCandidate('escrow interest accrual rules');
+    await recordJudgment({
+      candidateId: candidate.id,
+      priority: 'EXPLORE',
+      state: 'CAPTURED',
+      reason: 'the uncertainty here is cheap to reduce',
+      judgment: { reason: 'cheap to reduce' },
+    });
+
+    const report = await tick('test-owner');
+    expect(report.probed.length).toBe(1);
+    const probes = await listProbesForCandidate(candidate.id);
+    expect(probes.length).toBe(1);
+    expect(probes[0]!.state).toBe('COMPLETE');
+
+    // A second tick does not probe it again. Re-probing is a decision, not
+    // something a timer does.
+    expect((await tick('test-owner')).probed).toEqual([]);
+    expect((await listProbesForCandidate(candidate.id)).length).toBe(1);
   });
 });

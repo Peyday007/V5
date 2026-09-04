@@ -343,6 +343,26 @@ export async function resolveMessage(input: {
   return result.changes === 1;
 }
 
+/**
+ * Attach what a resolved turn produced.
+ *
+ * Separate from `resolveMessage` because the claim has to happen *before* the
+ * effect — the resolve is the once-only guard — so what the effect produced is
+ * only known afterwards. Guarded on the turn being settled, so this can never
+ * be the thing that ends a turn.
+ */
+export async function recordProduced(
+  messageId: string,
+  produced: Record<string, unknown>,
+): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE russell_messages SET produced = ?, updated_at = ?
+      WHERE id = ? AND status <> 'PENDING'`,
+    [toJson(produced), nowIso(), messageId],
+  );
+  return result.changes === 1;
+}
+
 export async function getMessage(id: string): Promise<RussellMessage | null> {
   const rows = await getDb().all<RussellMessageRow>('SELECT * FROM russell_messages WHERE id = ?', [
     id,

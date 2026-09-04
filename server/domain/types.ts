@@ -3736,6 +3736,9 @@ export const COMPLETION_CONTRACTS = [
   // Establishes what a worker's execution surface can and cannot reach, in a
   // closed vocabulary, so that "blocked" stops being one word for four facts.
   'SURFACE_PROBE_V1',
+  // One conversation turn. The worker submits a structured proposal and Brain
+  // decides what, if anything, it causes — see `services/russell/turn.ts`.
+  'RUSSELL_TURN_V1',
 ] as const;
 export type CompletionContract = (typeof COMPLETION_CONTRACTS)[number];
 

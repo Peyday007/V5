@@ -55,8 +55,11 @@ import {
 } from '../../repos/russellMissions.ts';
 import { getDb } from '../../db/database.ts';
 import { completeProbe, listExpiredProbes } from '../../repos/russellProbes.ts';
+import { openProbe, runProbe } from './probe.ts';
+import { GENERAL_LIGHT_PROBE_V1 } from './probeEnvelope.ts';
 import { outcomeOf, writeBack } from './writeback.ts';
 import { launch, repairLaunches, type LaunchInput } from './launch.ts';
+import { applyTurn } from './turn.ts';
 import { parseJson } from '../../repos/util.ts';
 import type { RussellMission } from '../../domain/types.ts';
 
@@ -71,6 +74,10 @@ export interface TickReport {
   wroteBack: string[];
   resumed: string[];
   expiredProbes: string[];
+  /** Probes opened and run to a verdict this tick. */
+  probed: string[];
+  /** Turn bins whose proposal was applied and whose pending turn now reads. */
+  answered: string[];
   launched: string[];
   /**
    * Missions whose packet is terminal but whose filed document is not linked
@@ -89,6 +96,8 @@ const EMPTY: TickReport = {
   wroteBack: [],
   resumed: [],
   expiredProbes: [],
+  probed: [],
+  answered: [],
   launched: [],
   awaitingFiling: [],
   bounded: false,
@@ -115,6 +124,8 @@ export async function tick(owner: string): Promise<TickReport> {
     wroteBack: [],
     resumed: [],
     expiredProbes: [],
+    probed: [],
+    answered: [],
     launched: [],
     awaitingFiling: [],
   };
@@ -160,6 +171,15 @@ export async function tick(owner: string): Promise<TickReport> {
       if (result.ok && !result.alreadyDone) report.wroteBack.push(mission.id);
     }
 
+    // 1b. Apply the answers workers have sent back.
+    //
+    // Before resuming and before launching, because a turn that has landed may
+    // be the very thing that produced the candidate the launch step then reads.
+    for (const binId of await answeredTurnBins(cycle.maxEventsPerCycle)) {
+      const applied = await applyTurn(binId);
+      if (applied.ok && !applied.alreadyAnswered) report.answered.push(binId);
+    }
+
     // 2. Resume what a person answered.
     for (const request of await listAnsweredRequests(cycle.maxEventsPerCycle)) {
       if (!request.missionId) {
@@ -192,6 +212,30 @@ export async function tick(owner: string): Promise<TickReport> {
         explanation: 'the probe reached its deadline before it could settle the question',
       });
       if (ended) report.expiredProbes.push(probe.id);
+    }
+
+    /*
+     * 3b. Take the cheap look before committing capacity.
+     *
+     * A candidate Russell judged `EXPLORE` is one where a bounded look is worth
+     * more than a packet, so it gets one — at most one per tick, so a backlog of
+     * them cannot turn a tick into a crawl. The probe spends nothing and calls
+     * no model; what it buys is the right to *not* spend the allowance a full
+     * mission would.
+     */
+    for (const candidate of await exploring(1)) {
+      const opened = await openProbe({
+        candidateId: candidate.id,
+        question: candidate.statement,
+        maxLookups: GENERAL_LIGHT_PROBE_V1.maxLookups,
+      });
+      if (!opened.ok || !opened.probe) continue;
+      // A probe already settled is not run again; `runProbe` is re-entrant and
+      // `completeProbe` is guarded, so this is belt and braces rather than the
+      // guarantee.
+      if (opened.probe.state === 'COMPLETE' || opened.probe.state === 'FAILED') continue;
+      const ran = await runProbe({ probeId: opened.probe.id });
+      if (ran.ok) report.probed.push(opened.probe.id);
     }
 
     // A launch that crashed between its steps is finished here rather than at
@@ -292,6 +336,49 @@ async function nextLaunchable(
     out.push({ candidateId: row.id, spec: spec as Omit<LaunchInput, 'candidateId'> });
   }
   return out;
+}
+
+/**
+ * Candidates worth a cheap look, that have not had one.
+ *
+ * The `NOT EXISTS` is what stops the loop probing the same idea every thirty
+ * seconds: a candidate with any probe against it — settled, running or failed —
+ * is not offered again. Re-probing is a decision somebody makes, not something
+ * a timer does.
+ */
+async function exploring(limit: number): Promise<{ id: string; statement: string }[]> {
+  return getDb().all<{ id: string; statement: string }>(
+    `SELECT c.id, c.statement FROM russell_candidates c
+      WHERE c.priority = 'EXPLORE'
+        AND c.state = 'CAPTURED'
+        AND NOT EXISTS (SELECT 1 FROM russell_probes p WHERE p.candidate_id = c.id)
+      ORDER BY COALESCE(c.ordinal, 999), c.created_at, c.rowid
+      LIMIT ?`,
+    [Math.max(1, limit)],
+  );
+}
+
+/**
+ * Turn bins a worker has finished, whose person is still waiting.
+ *
+ * Joined on the pending message rather than on the bin alone, so a turn already
+ * applied is not looked at again — and read from rows rather than from an event,
+ * because a bin event is best-effort by design and a person waiting for an
+ * answer is not something to lose to a swallowed write.
+ */
+async function answeredTurnBins(limit: number): Promise<string[]> {
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT b.id FROM bins b
+       JOIN russell_messages m
+         ON b.created_by_id = 'russell:turn:' || m.id
+      WHERE b.completion_contract = 'RUSSELL_TURN_V1'
+        AND b.state IN ('COMPLETE','FAILED','CANCELLED')
+        AND m.status = 'PENDING'
+      ORDER BY b.updated_at, b.rowid
+      LIMIT ?`,
+    [Math.max(1, limit)],
+  );
+  return rows.map((row) => row.id);
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
