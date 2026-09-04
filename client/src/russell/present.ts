@@ -84,6 +84,21 @@ export function listState<T>(input: AsyncInput<T>): ViewState<T> {
 }
 
 /**
+ * The state of a view that reads one thing rather than a list.
+ *
+ * Separate from `listState` because "empty" is not a state it has: a reading
+ * always exists, even when what it says is that nothing could be read. Forcing
+ * it through the list machine meant handing that machine a fake one-element
+ * array, which is the kind of small lie that later reads as a real one.
+ */
+export function readingState<T>(input: Omit<AsyncInput<T>, 'items'> & { value: T | null }): ViewState<T> {
+  const asList = listState<T>({ ...input, items: input.value === null ? null : [input.value] });
+  return asList.phase === 'EMPTY'
+    ? { phase: 'READY', items: [], message: '', retryable: false }
+    : asList;
+}
+
+/**
  * How a reading should be labelled, given when it was taken.
  *
  * A stale reading is shown with its age rather than hidden, because hiding it

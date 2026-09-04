@@ -10,7 +10,7 @@
  * and error are decided in one tested place rather than five untested ones.
  */
 import type { ReactNode } from 'react';
-import { listState, freshnessLabel } from './present.ts';
+import { freshnessLabel, listState, readingState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { RussellApi } from '../lib/russellApi.ts';
 import type {
@@ -153,13 +153,12 @@ export function KnowledgeView({ projectId }: { projectId: string | null }): JSX.
 export function FleetView(): JSX.Element {
   const query = useAsync(() => RussellApi.dealDispatch(), []);
   const view = query.data;
-  const state = listState<never>({
+  // A reading, not a list: `readingState` owns loading, forbidden and error and
+  // has no empty case, because "nothing could be read" is itself a reading.
+  const state = readingState({
     loading: query.loading,
     error: query.error,
-    // A reading always exists, even when it says nothing is readable — so the
-    // list-empty case does not apply and `READY` is asserted once the read
-    // returned. The state machine still owns loading, forbidden and error.
-    items: view ? ([null] as unknown as never[]) : null,
+    value: view,
     noun: 'fleet',
   });
   return (
