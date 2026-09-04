@@ -2192,3 +2192,76 @@ catastrophe and is a one-line harness fix.
 - **Hosted verification.** Requires production. It is step 1 and step 3 of
   mutation 5 in §19.
 - **Anything requiring a real provider call.** `A22` stays `NOT_RUN`.
+
+---
+
+## 23. The populated-data upgrade path, proved on both chains — 2026-09-04
+
+Asked for as a precondition of the activation sequence, and it is the right
+precondition: "from empty" is the easier half, and production is at the
+previous version with real rows in it.
+
+Proved **twice, two different ways**, because they answer different questions.
+
+### Form A — put a populated database back and re-migrate
+
+`scripts/upgrade-check.ts`, the repository's own tool, which was pinned to the
+Russell migration and therefore two versions stale. Extended to undo the last
+**three** migrations by name and re-boot, because production is behind by three
+and "the newest migration applies" is not the question a person about to deploy
+is asking.
+
+| Chain | Was at | Now at | Result |
+| --- | --- | --- | --- |
+| SQLite | 26 | **29** | `UPGRADE: OK` |
+| Postgres | 17 | **20** | `UPGRADE: OK` |
+
+In both: messages 1 before and 1 after, both projects intact, the Russell cycle
+row restored, `purpose` **ordinary=PROJECT scope=TECHNICAL**, and all three
+sampled new tables **empty**.
+
+Undoing is by **name**, never by number, and the indexes come off before the
+columns they cover — SQLite refuses to drop a column an index still references,
+which is a better error than a silent cascade.
+
+### Form B — the actual old code, then the actual new code
+
+Stronger, because Form A re-migrates using the *new* tree's own runner. This
+one checks out `cd30154` — the last commit at SQLite 027 / Postgres 018 — into
+a separate worktree, populates a database through the **old code**, and then
+boots the **new** tree against that same database.
+
+Populated with the shape a real Brain holds: two projects (one of them a
+`verification-scope` created before the column existed), eight layers, a user
+and membership, a research run, an orchestration, five claims with mixed
+acceptance, a bin, a conversation with four messages, a judged candidate, a
+mission, a knowledge row, and a fleet account with a Routine.
+
+Both chains, single clean pass:
+
+- exactly the two expected migrations applied — **28,29** on SQLite, **19,20**
+  on Postgres — and nothing else;
+- the already-applied chain still checksums, with no warnings;
+- **all sixteen table counts identical** before and after;
+- a sampled claim kept its exact text *and* its acceptance flag;
+- an ordinary project defaulted to `PROJECT`; `verification-scope` was
+  reclassified `TECHNICAL`;
+- all six new tables exist and are **empty**, and `liveAuthorization` returns
+  null — no authorization, no ceiling, no possible paid call;
+- and the surfaces read an *upgraded* database rather than only a freshly
+  seeded one: Work projected the historic packet, Ideas built a ten-node tree
+  over pre-existing rows, Knows projected the historic claims, progress
+  returned a milestone-backed ratio, Who read the fleet registered before the
+  upgrade, and the briefing composed.
+
+### A mistake worth recording
+
+My first Postgres verification reported two failures. Neither was a defect:
+I had hard-coded `schemaVersion === 29`, and the Postgres chain terminates at
+**20**. The two chains are numbered independently and their versions do not
+mean the same thing — the exact confusion CLAUDE.md §3 warns about, and which
+`upgrade-check.ts`'s own comment records somebody making before. I made it
+again. The assertion is now backend-aware, and the run above is a clean single
+pass rather than a re-run over an already-migrated database.
+
+**Precondition satisfied. Both chains pass. Proceeding to step 1.**
