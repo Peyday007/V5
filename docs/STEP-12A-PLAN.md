@@ -359,6 +359,14 @@ mutation has not been spent.
 - **The probe runner.** The envelope is enforced (`permitLookup`,
   `destinationAllowed`, `recordObservation`); what is missing is the caller that
   performs the three allowed lookups and calls `completeProbe`.
+- **The filing → mission link.** `linkMission` takes a `documentId` and nothing
+  calls it with one yet, so an accepted packet's filed document never reaches
+  its mission. The loop handles that correctly — it reports the mission as
+  awaiting its filing rather than spending the once-only writeback on a
+  placeholder — but **it is a wait with no answering transition until the link
+  exists**, which is the one shape this project refuses. It must be wired in the
+  same batch as the turn, and until it is, an accepted mission's writeback is
+  only reachable by a caller that supplies the conclusion itself.
 - **The Deal Dispatch adapter, the projections, the HTTP API and the whole
   Russell shell.** Phase 3 in full.
 - **Every production gate.** No deploy, no acceptance run.
