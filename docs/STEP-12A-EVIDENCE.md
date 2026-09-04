@@ -45,7 +45,7 @@ stale — re-run the reporter, do not edit the table.
 | `A16_DD_FRESHNESS` | **PASS** | PRODUCTION | the Deal Dispatch project the adapter reads is present |
 | `A17_PRIVACY_AUTH` | **PASS** | PRODUCTION | 6600 recorded authorization denials; 0 ideas less private than their thread |
 | `A18_BASELINES` | **PASS** | PRODUCTION | 10 layers intact; no frozen layer lost its artifact |
-| `A19_DELIVERY` | NOT_RUN | HOSTED | typecheck, build and both suites green; hosted verification **PASS 156/156 before and PASS 162/162 after a real restart**. `NOT_RUN` by construction — see §8 |
+| `A19_DELIVERY` | NOT_RUN | HOSTED | typecheck, build and both suites green (SQLite 1465, Postgres 1489); hosted verification **PASS 156/156 before and PASS 162/162 after a real restart**. `NOT_RUN` by construction — see §8 |
 
 Read from the deployed Brain's own rows at **2026-09-04T04:20:13Z**, run
 33836408837: **7 PASS · 0 FAIL · 1 BLOCKED · 11 NOT_RUN**, exit non-zero.
@@ -395,7 +395,7 @@ every old conversation would have been much harder to undo than to do.
 |---|---|
 | `npm run typecheck` | clean |
 | `npm run build` | clean; 57 modules, 315 kB JS / 30 kB CSS |
-| SQLite | **1449 passed / 25 skipped, exit 0** |
+| SQLite | **1465 passed / 25 skipped, exit 0** |
 | Postgres | **56/56 files, 1489 passed, 0 failed, exit 0** |
 | Migrations from empty | both chains |
 | Migration over existing data | both chains, `scripts/upgrade-check.ts` |
