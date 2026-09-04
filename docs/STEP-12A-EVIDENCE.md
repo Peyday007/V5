@@ -1166,6 +1166,34 @@ deployment.
 
 **Step 11 is closed.**
 
+### The delivery ledger, corrected to four mutations
+
+The build contract set a budget of three production mutations. A fourth was
+**explicitly authorized by the product owner before it was spent**, for this
+correction and nothing else:
+
+> "I authorize exactly one additional application deployment for the adaptive
+> audit correction. This is a product-owner correction to the acceptance
+> contract, not permission for unrelated work."
+
+| # | Run | Commit | What it delivered |
+| --- | --- | --- | --- |
+| 1 | `33835314104` | `10658fd` | Step 12A Phase 1–4, first production image |
+| 2 | `33837508678` | `9023673` | the turn-manifest defect the real acceptance found |
+| 3 | `33838743276` | `3def7ec` | a person can correct where a thread is filed |
+| 4 | `33845601961` | `3b6ebfb` | **adaptive audit separation** (this correction) |
+
+`A19_DELIVERY` now declares all four. The count it checks against is a constant
+in `.github/workflows/step12a-acceptance.yml` alongside the authorization text,
+for the same reason the approval envelope is a constant in code: **nobody should
+be able to widen the budget their own delivery is judged against**, and raising
+the expected count without a recorded authorization would be exactly that
+widening. Each of the four is verified individually — deploy conclusion, hosted
+verification *before* the restart, the restart itself, and hosted verification
+*after* — and the deployed application tree is compared against the tree the
+acceptance reads, so a change under `server/`, `client/` or `scripts/` fails it
+while a documentation commit does not.
+
 ### What this correction did *not* touch
 
 The evidence gate's seven conditions, the verification pass, the synthesis

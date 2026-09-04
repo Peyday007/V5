@@ -90,8 +90,10 @@ jobs:
       #   1. the branch tip was deployed by a successful Deploy run;
       #   2. that run proved the Brain *before* the restart;
       #   3. it restarted the machine and proved it *after*;
-      #   4. the delivery ledger holds exactly three spent mutations, which is
-      #      the budget the build contract set.
+      #   4. the delivery ledger holds exactly four spent mutations — the
+      #      build contract's three, plus the fourth the product owner
+      #      explicitly authorized for the adaptive audit separation
+      #      correction.
       #
       # And then the live liveness check, because a green run in the past says
       # nothing about the Brain answering now.
@@ -104,12 +106,23 @@ jobs:
           # Declared rather than counted, because "every successful Deploy run
           # on this branch" is not the ledger — the branch has a hundred of
           # them from Steps 8 through 11, and counting those reported twenty
-          # mutations against a budget of three. The ledger is the three runs
-          # docs/STEP-12A-EVIDENCE.md §8 names, and it is a constant here for
-          # the same reason the approval envelope is a constant in code:
-          # nobody should be able to widen the budget their own delivery is
-          # judged against.
-          LEDGER: '33835314104 33837508678 33838743276'
+          # mutations against a budget of three. The ledger is the runs
+          # docs/STEP-12A-EVIDENCE.md §8 and §10 name, and it is a constant
+          # here for the same reason the approval envelope is a constant in
+          # code: nobody should be able to widen the budget their own delivery
+          # is judged against.
+          #
+          # The fourth entry is the deployment of the adaptive audit separation
+          # correction. It exceeds the build contract's three-mutation budget
+          # and is here **only** because the product owner authorized exactly
+          # one additional deployment for that correction, in writing, before it
+          # was spent. That authorization is what `EXPECTED` below is raised
+          # against; raising it without one would be exactly the widening this
+          # constant exists to prevent. The full text is recorded in
+          # docs/STEP-12A-EVIDENCE.md §10.
+          LEDGER: '33835314104 33837508678 33838743276 33845601961'
+          EXPECTED: '4'
+          AUTHORIZATION: 'product owner, 2026-09-04: "I authorize exactly one additional application deployment for the adaptive audit correction."'
         run: |
           set -euo pipefail
           api() {
@@ -143,8 +156,9 @@ jobs:
             [ "$after" = "success" ]      || fail=1
           done
 
-          if [ "$spent" -ne 3 ]; then
-            echo "::warning::the ledger names $spent mutations, expected 3"
+          echo "authorization for mutation 4: $AUTHORIZATION"
+          if [ "$spent" -ne "$EXPECTED" ]; then
+            echo "::warning::the ledger names $spent mutations, expected $EXPECTED"
             fail=1
           fi
 
@@ -176,7 +190,7 @@ jobs:
           [ "$shut" = "401" ] || fail=1
 
           if [ "$fail" = "0" ]; then
-            echo "A19_DELIVERY               PASS      3/3 mutations, each verified before and after a real restart; the deployed application tree is the one this acceptance read" | tee -a acceptance.txt
+            echo "A19_DELIVERY               PASS      $spent/$EXPECTED mutations, each verified before and after a real restart; the deployed application tree is the one this acceptance read" | tee -a acceptance.txt
           else
             echo "A19_DELIVERY               NOT_RUN   the delivery evidence above is incomplete" | tee -a acceptance.txt
           fi
