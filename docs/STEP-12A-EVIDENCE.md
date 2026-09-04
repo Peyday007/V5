@@ -1430,3 +1430,59 @@ promoted to a proven cause without a transcript: the **absent
 Routine restricts nothing). Both are provider-side Routine configuration, and
 both are the owner's to change: `update_trigger` refuses V1 with *"this routine
 was created via `http_api`, not by an agent."*
+
+---
+
+## 13. The V1 canary did not fire — no queued work remained
+
+V1 was re-enabled at 07:27:20Z with a Routine-scoped concurrency target of 1;
+V2 was left `QUARANTINED`. Two reads were taken, at +3 minutes and at the
+ten-minute bound. Nothing else was fired.
+
+| | 07:30:15Z (+3 min) | 07:37:14Z (+10 min, bound) |
+| --- | --- | --- |
+| V1 | `ENABLED  fires=17 refusals=0 no-shows=5  in-flight=0` | `ENABLED  fires=17 refusals=0 no-shows=5  in-flight=0` |
+| V2 | `QUARANTINED  fires=12  in-flight=0` | `QUARANTINED  fires=12  in-flight=0` |
+| Routing | — | `candidates 2 considered, 1 eligible now` |
+| V1 `last_run` | `cse_01KTng2dz9VLmJp7kBqsq2bX`, 06:54:58Z | unchanged |
+
+**`fires` did not move. There was no activation at all**, so this is not another
+no-show — the chain stopped before its first link.
+
+The reason is visible in the same rows: `in-flight` fell from 2 to 0 on both
+surfaces during the quarantine, and V1 then sat **eligible** for ten minutes
+with the dispatcher free and fired nothing. A dispatcher with a free slot and an
+eligible surface that dispatches nothing has **no `READY` bin to dispatch**. The
+Russell turn bins created by the mutation-4 hosted verification spent their
+dispatch attempts on the five activations that preceded the quarantine.
+
+So the canary is **inconclusive about the check-in question**, and it must not be
+read either way:
+
+- It is **not** evidence that the owner-side prompt hardening worked — no
+  session ran under it.
+- It is **not** another no-show — nothing was fired to no-show.
+
+### What the owner changed, and what remains unchanged
+
+The Routine's stored prompt was updated at 07:25:06Z and now opens with a
+`# Mandatory startup` block requiring `brain_check_in` as the first action. Two
+fields from the handover are **still as they were**:
+
+```
+allowed_tools               ["Bash","Read","Write","Edit","Glob","Grep","WebFetch","WebSearch"]   (no mcp__*)
+mcp_connections[cloud-brain].permitted_tools   []
+```
+
+and the Routine still carries no `permission_mode`, where the last activation
+that actually drained work carried `auto`. A prompt cannot add a tool to a
+session's surface, so if the tool surface is what stopped the previous run, the
+prompt change alone will not move it. That remains a hypothesis: it has not been
+tested, because no session has run since the change.
+
+### Where this leaves the acceptance
+
+`A11_INDEPENDENT_AUDIT` stays `NOT_RUN` per §12. The corrected canonical tally
+is unchanged at **10 PASS · 0 FAIL · 0 BLOCKED · 9 NOT_RUN**, and the single
+remaining condition is unchanged: a fired Cowork session must reach
+`brain_check_in`, on a bin that exists.
