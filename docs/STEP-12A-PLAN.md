@@ -349,13 +349,17 @@ mutation has not been spent.
 | The capability field, end to end | `tests/fleet.test.ts`, through storage |
 | Russell's loop starting with the server | wired in `server/index.ts` beside the dispatcher |
 | Launch selection inside the tick | one mission per cycle, the rest preserved; only candidates carrying a complete mission specification are eligible |
+| `services/russell/dealDispatch.ts` | the read-only connected system, `CURRENT` / `STALE` / `UNAVAILABLE` |
+| `services/russell/proposal.ts` | zero-trust validation of a model's structured reply |
+| `scripts/upgrade-check.ts` | the migration over existing data, on both chains |
 
 ### Not built yet
 
 - **The turn.** The model-backed conversation carried by the fleet: persist a
-  pending turn, dispatch it, validate the structured reply against authority,
-  scope, enums and references, resolve exactly once. `russell_messages` already
-  has the pending contract and `resolveMessage` is the once-only edge.
+  pending turn, dispatch a bin for it, resolve exactly once. Both ends now
+  exist — `russell_messages` has the pending contract, `resolveMessage` is the
+  once-only edge, and `validateProposal` is the zero-trust check the reply must
+  pass. What is missing is the dispatch between them.
 - **The probe runner.** The envelope is enforced (`permitLookup`,
   `destinationAllowed`, `recordObservation`); what is missing is the caller that
   performs the three allowed lookups and calls `completeProbe`.
@@ -367,8 +371,9 @@ mutation has not been spent.
   exists**, which is the one shape this project refuses. It must be wired in the
   same batch as the turn, and until it is, an accepted mission's writeback is
   only reachable by a caller that supplies the conclusion itself.
-- **The Deal Dispatch adapter, the projections, the HTTP API and the whole
-  Russell shell.** Phase 3 in full.
+- **The projections, the HTTP API and the whole Russell shell.** Phase 3 in
+  full. The adapter the shell's Fleet and Projects views need is built; nothing
+  renders it yet.
 - **Every production gate.** No deploy, no acceptance run.
 
 ### Resume
