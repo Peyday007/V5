@@ -348,6 +348,7 @@ mutation has not been spent.
 | `routing`, `judgment`, `coverage`, `launch`, `writeback`, `loop` | `tests/russellNervousSystem.test.ts`, 33 tests |
 | The capability field, end to end | `tests/fleet.test.ts`, through storage |
 | Russell's loop starting with the server | wired in `server/index.ts` beside the dispatcher |
+| Launch selection inside the tick | one mission per cycle, the rest preserved; only candidates carrying a complete mission specification are eligible |
 
 ### Not built yet
 
@@ -358,9 +359,6 @@ mutation has not been spent.
 - **The probe runner.** The envelope is enforced (`permitLookup`,
   `destinationAllowed`, `recordObservation`); what is missing is the caller that
   performs the three allowed lookups and calls `completeProbe`.
-- **Launch selection in the loop.** Step 4 of `tick` counts the bound but does
-  not yet read the ranked queue and launch. `listCandidates` orders by priority
-  already.
 - **The Deal Dispatch adapter, the projections, the HTTP API and the whole
   Russell shell.** Phase 3 in full.
 - **Every production gate.** No deploy, no acceptance run.
@@ -372,7 +370,21 @@ npm run typecheck && npm test
 BRAIN_TEST_DATABASE_URL=postgresql://… npm test
 ```
 
-Then continue at Phase 2's remaining pieces in the order above — the turn first,
-because the shell has nothing to render until a conversation can answer. The
-frozen acceptance idea, its bounds and the follow-on are in §7 and unchanged;
-`RUSSELL_STATE_LICENSING_V1` is the envelope both missions name.
+Then continue at Phase 2's remaining pieces in the order above — **the turn
+first**, because the shell has nothing to render until a conversation can
+answer, and because everything downstream of it already exists: routing decides
+the project, judgment decides whether to capture, coverage decides whether to
+research, the launcher creates the work and the loop finishes it. The turn is
+the one seam between a person's sentence and that chain.
+
+Its shape is already fixed by two things in the tree. `russell_messages` has the
+pending contract — a turn that cannot be answered yet persists with its reason
+and resolves exactly once through `resolveMessage` — and the inference decision
+in the evidence document says what carries it: the fixed-subscription fleet, not
+a paid API. So the turn writes a `PENDING` row, dispatches a bin for it, and the
+worker's structured reply is validated against authority, scope, enums,
+references and transitions before any of it is stored. The model never writes
+state and never self-authorizes.
+
+The frozen acceptance idea, its bounds and the follow-on are in §7 and
+unchanged; `RUSSELL_STATE_LICENSING_V1` is the envelope both missions name.
