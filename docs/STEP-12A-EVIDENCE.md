@@ -45,21 +45,30 @@ stale — re-run the reporter, do not edit the table.
 | `A16_DD_FRESHNESS` | **PASS** | PRODUCTION | the Deal Dispatch project the adapter reads is present |
 | `A17_PRIVACY_AUTH` | **PASS** | PRODUCTION | 6760 recorded authorization denials; 0 ideas less private than their thread |
 | `A18_BASELINES` | **PASS** | PRODUCTION | 10 layers intact; no frozen layer lost its artifact |
-| `A19_DELIVERY` | NOT_RUN | HOSTED | typecheck, build and both suites green (SQLite 1465, Postgres 1489); hosted verification **PASS 156/156 before and PASS 162/162 after a real restart**. `NOT_RUN` by construction — see §8 |
+| `A19_DELIVERY` | **PASS** | HOSTED | 3/3 ledger mutations, each verified before and after a real restart; the deployed application tree is the one the acceptance read. Derived in the workflow — see §8 |
 
 Read from the deployed Brain's own rows at **2026-09-04T05:13:08Z**, run
 33839659971, after all three delivery mutations:
 
 ```
-9 PASS · 0 FAIL · 3 BLOCKED · 7 NOT_RUN
+10 PASS · 0 FAIL · 3 BLOCKED · 6 NOT_RUN
 ```
 
 Two of the three `BLOCKED` gates wait on `A11` rather than on anything in this
-repository, and say so by name. The seven `NOT_RUN` gates each need one thing:
-a Cowork session answering a `RUSSELL_TURN` bin. **One worker is enough for
-that** — the audit matrix does not apply to a turn — so they are genuinely
-not-yet-run rather than blocked, and an operator can move them by starting a
-session against the deployed Brain.
+repository, and say so by name.
+
+The six `NOT_RUN` gates are **not** one undifferentiated pile waiting on one
+thing, and an earlier version of this file said they were. They are two:
+
+- **`A05`, `A06`, `A07`, `A09`, `A10` are one chain, not five needs.** A
+  captured idea comes only from a turn a worker answered; a judgment is
+  recorded on a captured idea; a probe runs from a candidate the loop judged
+  `EXPLORE`; a reservation is settled by a launch; a launch produces the
+  mission. Answer one turn and the chain starts; none of them can start
+  without that first link.
+- **`A14` is not on that chain.** It needs a mission to reach a genuine
+  authority boundary and a person to answer it. Manufacturing one would defeat
+  the gate, so it waits for a real decision rather than for throughput.
 
 **Zero gates read `FAIL`.** Seven are `PASS` from production rows, one is
 `BLOCKED` on provisioning, and eleven are `NOT_RUN` — which is what an unrun
@@ -866,6 +875,85 @@ To move `A11` and the two gates behind it, the provisioning in the next
 section. To re-read at any time: **run the `Step 12A acceptance` workflow.** It
 is read-only, runs the reporter inside the container against production rows,
 and keeps the reading as an artifact.
+
+### The reconciliation read (2026-09-04T05:22-05:38Z)
+
+Three read-only readings, taken to resolve what looked like a contradiction
+between the acceptance verdict and the fleet summary.
+
+**They were never in conflict.** `fleet show`:
+
+```
+primary   ENABLED  target=2
+    V1  ENABLED  ref=trig_01CBLu5oCZziEwznw5q9xU7g  worker=wkr_1cdd82cfb2a54faf8edd
+                 secret=BRAIN_ROUTINE_TOKEN    fires=15 refusals=0 no-shows=3 in-flight=0
+friend-2  ENABLED  target=2
+    V2  ENABLED  ref=trig_01HR74TmLtm8L21sh2Xryqhq  worker=wkr_1cdd82cfb2a54faf8edd
+                 secret=BRAIN_ROUTINE_TOKEN_2  fires=9  refusals=0 no-shows=3 in-flight=0
+verify-hosted-account-a  trig_verify_hosted_a  worker=wkr_f316703921d14060ae2c  (not routable)
+verify-hosted-account-b  trig_verify_hosted_b  worker=wkr_a1b5b1d1cd4c472e8632  (not routable)
+```
+
+One worker **is** bound, to both Routines. The evaluator counts workers bound to
+**exactly one** account, because a worker whose Routines span two accounts has
+no resolvable account — `lineageForWorker` already fails closed on precisely
+that. The filter is one line:
+
+```ts
+const boundWorkers = [...accountsByWorker.entries()]
+  .filter(([, accounts]) => accounts.size === 1);
+```
+
+`wkr_1cdd82cfb2a54faf8edd` maps to `{primary, friend-2}`, size 2, so it is
+dropped and the count is zero. The two verification workers *are* one-to-one but
+their Routines hold no credential, so they never enter the set.
+
+**The condition is right; the sentence is wrong.** "0 active worker identities
+are bound" reads as *none are bound*, when the truth is *one is bound
+ambiguously*. That wording is a defect in `independenceEvidence.ts` and it is
+the only thing that made these two readings look like they disagreed.
+
+### Why no turn has been answered
+
+`fleet scale-advice`, in Brain's own words:
+
+```
+QUARANTINE CANDIDATE trig_01CBLu5oCZziEwznw5q9xU7g:
+  3 consecutive fired sessions never checked in. That is a surface that cannot
+  authorize, and every further fire costs an activation to learn it again.
+QUARANTINE CANDIDATE trig_01HR74TmLtm8L21sh2Xryqhq: (the same)
+```
+
+So the dispatch state is **SENT, then no-show** — not `READY` with no intent,
+and not rate-limited: `refusals=0` on both surfaces, and `fires` rose 13→15 and
+7→9 across the reconciliation window. Brain routed, claimed a slot, fired, and
+the fire was accepted. No Cowork session ever checked in.
+
+That is §22's split doing its job: **Brain owns dispatch; the surface owns
+whether a worker may act.** The scaler proposes quarantine and does not apply it
+(`automatic=false`), which is correct — quarantining would remove capacity
+rather than repair the surface. No guarded enable or binding action is
+available or appropriate: both accounts and both Routines are `ENABLED`, targets
+are set, two candidates are eligible, and nothing is paused.
+
+### A fourth defect, of a family this project has met before
+
+`fleet profile --class RUSSELL_TURN` reports `binsPlanned: 0, activations: 0,
+bottleneck: NO_WORK`. That is **not** evidence that no turn bins exist.
+`binsPlanned` counts `bin_events` rows of type `BIN_READY` carrying that
+`workload_class` — and `createBin` records its `BIN_READY` event **without
+passing `workloadClass`**, even though `recordBinEvent` accepts the field and
+migration 026 added the column.
+
+So every workload-class-filtered profile reads zero, for every class, whatever
+the fleet actually did. It is the same shape as the capability field Phase 0
+found: a column a migration added, a write path that never populates it, and a
+reader that then reports a confident wrong number.
+
+**The consequence for this acceptance is that no existing read-only path can
+say what state the pending turn bins are in.** `explain-route` needs a bin id;
+nothing lists bins; `scale-advice` gives a queue signal but no class. That is
+recorded as the limit it is rather than guessed around.
 
 ### The one blocker, stated exactly
 
