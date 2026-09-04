@@ -936,6 +936,35 @@ rather than repair the surface. No guarded enable or binding action is
 available or appropriate: both accounts and both Routines are `ENABLED`, targets
 are set, two candidates are eligible, and nothing is paused.
 
+#### The cause of the no-shows is still unresolved — 2026-09-04
+
+Recorded plainly because a wrong repair recorded as a repair is worse than an
+open question.
+
+**The leading hypothesis was refuted.** I proposed that
+`.claude/settings.json` granted `mcp__cloud-brain__*` (hyphen) while the live
+connector namespace is `mcp__cloud_brain__*` (underscore), so the grant would
+not match. Inspecting the trigger showed its connector is declared as
+`cloud-brain` — the hyphen spelling the file already allowed — and the worker
+checks out the repository at the branch that carries it. **The grant and the
+connector name already matched.** Commit `1111b3e` adds the underscore spellings
+anyway; that is harmless compatibility coverage and **is not credited as the
+repair.**
+
+**The ten-minute observation window did not retest the surface.** It elapsed
+with `fires` unchanged at V1=15 and V2=9, and a subsequent read
+(`STEP10: OK watch settled=true bins=97`) showed every bin in the project
+terminal. There was no `READY` bin, so the dispatcher had nothing to fire and no
+activation occurred. **The window was vacuous, not negative** — it is evidence
+about the queue, not about the Routine.
+
+So: the no-show cause is **unresolved**. What is known is what §22 already
+splits: Brain routed, claimed a slot, fired, and the fire was accepted
+(`refusals=0`, `fires` advanced); no Cowork session then checked in. Whether
+that is the surface's authorization, the session's own execution, or something
+else has not been established, and nothing in this step should be read as
+having fixed it. The next fresh `READY` bin is the first real retest.
+
 ### A fourth defect, of a family this project has met before
 
 `fleet profile --class RUSSELL_TURN` reports `binsPlanned: 0, activations: 0,
