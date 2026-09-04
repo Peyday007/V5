@@ -1,0 +1,74 @@
+# The Step 12A acceptance verdict, read from production.
+#
+# `npm run step12a:acceptance` counts authoritative rows and prints the
+# nineteen gates. It is read-only by construction — it opens the configured
+# database, counts, prints and closes — so this workflow creates nothing,
+# advances nothing and takes no decision. It is not a delivery mutation, for the
+# same reason `step12a-inspect.yml` is not: nothing about what is running
+# changes.
+#
+# It has to run *inside* the container because that is the only place with the
+# cloud database credential. `BRAIN_DATABASE_URL` is a Fly secret and
+# deliberately not a GitHub one; putting it in a second system to save an SSH
+# hop would be a worse trade than the hop.
+#
+# `npm --prefix` rather than the bare script path: `flyctl ssh console -C` opens
+# a session in `/`, and `node --import tsx` resolves `tsx` relative to the
+# working directory. npm runs a lifecycle script with the prefix as its working
+# directory, which is exactly what is needed and takes no nested quoting.
+
+name: Step 12A acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why this reading is being taken, for the run log'
+        required: false
+        default: 'acceptance verdict'
+
+concurrency:
+  group: step12a-acceptance
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Read the gates from production rows
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Run the acceptance reporter in the container
+        id: report
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "npm --prefix /app run --silent step12a:acceptance" \
+            2>&1 | tee acceptance.txt
+          set -e
+          # The verdict comes from the reporter's own summary line rather than
+          # from an exit code that had to survive an SSH session, a shell and a
+          # CLI — the same reason the hosted verification prints a marker.
+          if ! grep -q 'STEP 12A ACCEPTANCE' acceptance.txt; then
+            echo "::error::The reporter never ran. Read the output above."
+            exit 1
+          fi
+          grep -E 'PASS ·|A[0-9]{2}_' acceptance.txt || true
+          if grep -q 'STEP 12A IS NOT COMPLETE' acceptance.txt; then
+            echo "::warning::Step 12A is not complete. The unmet gates are listed above."
+            exit 0
+          fi
+          echo "Every gate is PASS."
+
+      - name: Keep the reading
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step12a-acceptance
+          path: acceptance.txt
+          if-no-files-found: warn
