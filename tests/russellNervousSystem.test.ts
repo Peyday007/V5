@@ -51,7 +51,7 @@ import {
   readDealDispatch,
 } from '../server/services/russell/dealDispatch.ts';
 import { tick } from '../server/services/russell/loop.ts';
-import { pauseCycle, resumeCycle } from '../server/repos/russellCycle.ts';
+import { claimCycle, completeCycle, pauseCycle, resumeCycle } from '../server/repos/russellCycle.ts';
 import { askHuman, answerHumanRequest, getHumanRequest, transitionMission } from '../server/repos/russellMissions.ts';
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
 import { listTurns, createConversation } from '../server/repos/russellConversations.ts';
@@ -621,11 +621,33 @@ describe('completion writeback happens exactly once', () => {
 });
 
 describe('the loop keeps going without anybody watching', () => {
-  it('hands one tick to one instance and refuses the other', async () => {
-    const [a, b] = await Promise.all([tick('instance-a'), tick('instance-b')]);
-    expect([a.ran, b.ran].filter(Boolean)).toHaveLength(1);
-    const loser = a.ran ? b : a;
-    expect(loser.skipped).toBeTruthy();
+  it('refuses a second instance while the cycle is held', async () => {
+    /*
+     * What the design promises, stated precisely.
+     *
+     * This test first asserted that two concurrent `tick()` calls produce
+     * exactly one run, and Postgres disagreed: both ran. That was the test
+     * being wrong rather than the code. A tick claims, works and *releases*,
+     * so two ticks that do not overlap in time may both legitimately run —
+     * which is the behaviour you want, since the alternative is a Brain that
+     * ticks once and then never again. On SQLite the writers serialise tightly
+     * enough that the second was always still inside the first; on Postgres it
+     * was not.
+     *
+     * The guarantee is that two instances cannot hold the cycle *at the same
+     * time*. So the lease is taken and held here, and the tick that arrives
+     * while it is held is the one that must be refused.
+     */
+    const held = await claimCycle({ owner: 'instance-a', leaseMs: 60_000 });
+    expect(held.ok).toBe(true);
+
+    const refused = await tick('instance-b');
+    expect(refused.ran).toBe(false);
+    expect(refused.skipped).toMatch(/another instance holds the cycle/);
+
+    // And once it is released, the next instance gets it.
+    await completeCycle({ owner: 'instance-a', generation: held.generation! });
+    expect((await tick('instance-b')).ran).toBe(true);
   });
 
   it('starts nothing while paused, and resumes cleanly', async () => {

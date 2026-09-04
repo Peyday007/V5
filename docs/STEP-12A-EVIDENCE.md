@@ -27,7 +27,7 @@ stale — re-run the reporter, do not edit the table.
 
 | Gate | Verdict | Proof so far | Evidence |
 |---|---|---|---|
-| `A01_SHELL_IDENTITY` | NOT_RUN | — | the shell is Phase 3 |
+| `A01_SHELL_IDENTITY` | NOT_RUN | CODE, TEST (data half) | `projections.ts` — milestone-backed progress or non-numeric, never a percentage; **nothing renders it** |
 | `A02_CONVERSATION_ROUTE` | NOT_RUN | CODE, TEST | `routing.ts`; attaches on a named project, asks otherwise |
 | `A03_ROUTE_CORRECTION` | NOT_RUN | CODE, TEST | append-only context history; a correction outweighs a name match |
 | `A04_IRRELEVANT` | NOT_RUN | CODE, TEST | `shouldCapture`; social and short remarks stay conversation |
@@ -303,6 +303,16 @@ test used a message naming only a layer, which scores below the attach floor, so
 the "before" case it needed never attached. Fixed by naming the project too,
 which is the case the test is actually about.
 
+**Postgres disagreed with a test, and the test was wrong.** The loop suite
+asserted that two concurrent `tick()` calls produce exactly one run. Both ran on
+Postgres. That is correct behaviour: a tick claims, works and *releases*, so two
+ticks that do not overlap in time may both legitimately run — the alternative is
+a Brain that ticks once and never again. SQLite's writers serialise tightly
+enough that the second call was always still inside the first, which made a
+false assertion look true for as long as only one backend ran it. The guarantee
+is that two instances cannot hold the cycle *simultaneously*, and the test now
+holds the lease and proves the arriving tick is refused.
+
 ### Two failure classes that are not product defects
 
 **Runner contention.** One Postgres run showed five failures, all in
@@ -352,9 +362,9 @@ every old conversation would have been much harder to undo than to do.
 | | |
 |---|---|
 | `npm run typecheck` | clean |
-| SQLite | **1367 passed / 25 skipped, exit 0** |
+| SQLite | **1384 passed / 25 skipped, exit 0** |
 | Postgres | **52/52 files, 1387 passed, exit 0** |
-| Both Russell suites on Postgres | 97 / 97 |
+| Both Russell suites on Postgres | 104 / 104 |
 | Migrations from empty | both chains |
 | Migration over existing data | both chains, `scripts/upgrade-check.ts` |
 

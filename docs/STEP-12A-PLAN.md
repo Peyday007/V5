@@ -352,6 +352,7 @@ mutation has not been spent.
 | `services/russell/dealDispatch.ts` | the read-only connected system, `CURRENT` / `STALE` / `UNAVAILABLE` |
 | `services/russell/proposal.ts` | zero-trust validation of a model's structured reply |
 | `scripts/upgrade-check.ts` | the migration over existing data, on both chains |
+| `services/russell/projections.ts` | the briefing's data half: what changed, why, next, whether you are needed |
 
 ### Not built yet
 
@@ -371,9 +372,9 @@ mutation has not been spent.
   exists**, which is the one shape this project refuses. It must be wired in the
   same batch as the turn, and until it is, an accepted mission's writeback is
   only reachable by a caller that supplies the conclusion itself.
-- **The projections, the HTTP API and the whole Russell shell.** Phase 3 in
-  full. The adapter the shell's Fleet and Projects views need is built; nothing
-  renders it yet.
+- **The HTTP API and the whole Russell shell.** Phase 3 in full. The adapter
+  and the projections the shell would render are built and tested; nothing
+  renders them, and there is no route to reach them.
 - **Every production gate.** No deploy, no acceptance run.
 
 ### Resume
