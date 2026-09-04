@@ -289,6 +289,27 @@ where a research job's progress callback reaches `cancelResearch` →
 predates Step 12A, it surfaces in whichever file happens to be running when it
 lands, and it is recorded here rather than chased.
 
+### The upgrade path, not only the from-empty path
+
+`scripts/upgrade-check.ts` builds a populated database, drops what 027 added,
+deletes its `schema_migrations` row, and boots again exactly as production
+would:
+
+```
+  was at        26
+  now at        27
+  messages      1 before, 1 after
+  cycle rows    1
+  russell convs 0
+UPGRADE: OK
+```
+
+The last line is the one worth reading. Adopting legacy conversations is a
+deliberate call, not a migration side effect — so a pre-12A `Project Chat` keeps
+its row, its messages and its ids, and becomes visible through Russell only when
+somebody asks for it. A migration that had quietly created Russell threads for
+every old conversation would have been much harder to undo than to do.
+
 ### Where the suite stands
 
 **SQLite: 1361 passed / 25 skipped, exit 0**, running alone.
