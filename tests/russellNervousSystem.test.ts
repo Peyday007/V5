@@ -15,9 +15,9 @@ import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { listLayers } from '../server/repos/layers.ts';
-import { getCandidate } from '../server/repos/russellCandidates.ts';
+import { getCandidate, recordJudgment } from '../server/repos/russellCandidates.ts';
 import { createGoal, listReservations } from '../server/repos/russellAuthority.ts';
-import { getMission } from '../server/repos/russellMissions.ts';
+import { getMission, listMissions } from '../server/repos/russellMissions.ts';
 import { getDb } from '../server/db/database.ts';
 import { createProbe, getProbe, startProbe } from '../server/repos/russellProbes.ts';
 import {
@@ -726,5 +726,102 @@ describe('the loop keeps going without anybody watching', () => {
     const ended = await getProbe(probe.id);
     expect(ended!.state).toBe('COMPLETE');
     expect(ended!.outcome).toBe('UNKNOWN');
+  });
+});
+
+describe('the loop starts work, bounded', () => {
+  async function queuedWithSpec(statement: string) {
+    const captured = await capture({
+      title: 'Licensing',
+      statement,
+      projectId,
+      visibility: 'SHARED',
+    });
+    await recordJudgment({
+      candidateId: captured.candidate!.id,
+      state: 'QUEUED',
+      priority: 'MUST_DO',
+      reason: 'the layer names this state as open',
+      judgment: {
+        missionSpec: {
+          projectId,
+          layerId,
+          visibility: 'SHARED',
+          title: 'State broker licensing',
+          assignment: `Under that state's law as in force in 2026, is a broker licence required?`,
+          objective: 'Settle the position from the current statutory text.',
+          whyNow: 'The layer names it as open.',
+          acceptableSources: ['State statutes'],
+          excludedSources: ['secondary summaries'],
+          evidence: ['the exact section'],
+          startedBy: { kind: 'PERSON', id: userId },
+          envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+          authorizedBy: userId,
+        },
+      },
+    });
+    return captured.candidate!.id;
+  }
+
+  it('launches nothing for a candidate that carries no mission specification', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'acceptance',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 2,
+      maxFragments: 2,
+      maxConcurrent: 2,
+      maxProbes: 1,
+    });
+    const captured = await capture({
+      title: 'Vague',
+      statement: 'we should look into the whole licensing area at some point',
+      projectId,
+      visibility: 'SHARED',
+    });
+    await recordJudgment({
+      candidateId: captured.candidate!.id,
+      state: 'QUEUED',
+      priority: 'MUST_DO',
+      reason: 'queued but unspecified',
+    });
+    const report = await tick('instance-a');
+    // Russell does not compose an assignment, a source list and an evidence bar
+    // for work nobody specified.
+    expect(report.launched).toHaveLength(0);
+    expect((await getCandidate(captured.candidate!.id))!.state).toBe('QUEUED');
+  });
+
+  it('starts one, and leaves the rest queued rather than dropping them', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'acceptance',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 5,
+      maxFragments: 5,
+      maxConcurrent: 5,
+      maxProbes: 1,
+    });
+    const first = await queuedWithSpec('establish the Florida broker licence position');
+    const second = await queuedWithSpec('establish the California broker licence position');
+
+    const report = await tick('instance-a');
+    expect(report.launched).toHaveLength(1);
+    expect(report.bounded).toBe(true);
+
+    // The one that did not go is preserved rather than decided against, so the
+    // next tick starts it — which is the property that makes a bound a pacing
+    // mechanism instead of a way to lose work.
+    const next = await tick('instance-a');
+    expect(next.launched).toHaveLength(1);
+    expect(next.launched[0]).not.toBe(report.launched[0]);
+
+    const missions = await listMissions({ projectId });
+    expect(missions).toHaveLength(2);
+    expect(new Set(missions.map((m) => m.candidateId))).toEqual(new Set([first, second]));
   });
 });

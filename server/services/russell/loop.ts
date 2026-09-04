@@ -56,7 +56,8 @@ import {
 import { getDb } from '../../db/database.ts';
 import { completeProbe, listExpiredProbes } from '../../repos/russellProbes.ts';
 import { outcomeOf, writeBack } from './writeback.ts';
-import { repairLaunches } from './launch.ts';
+import { launch, repairLaunches, type LaunchInput } from './launch.ts';
+import { parseJson } from '../../repos/util.ts';
 import type { RussellMission } from '../../domain/types.ts';
 
 /** How often the loop wakes when nothing else has woken it. */
@@ -170,10 +171,23 @@ export async function tick(owner: string): Promise<TickReport> {
     // boot only, so a mission half-built at 3am does not wait for a restart.
     await repairLaunches();
 
-    // 4. Starting new work is Phase 2's remaining piece: the ranked queue is
-    //    read and one eligible mission is launched. The bound is enforced here
-    //    so that it is enforced whatever eventually does the launching.
-    if (cycle.maxLaunchesPerCycle === 0) report.bounded = true;
+    // 4. Start at most one thing.
+    const launchable = await nextLaunchable(cycle.maxEventsPerCycle);
+    let started = 0;
+    for (const entry of launchable) {
+      if (started >= cycle.maxLaunchesPerCycle) {
+        // The bound stopped the tick, and the rest stay queued for the next
+        // one. Preserved rather than dropped: a candidate that lost a race for
+        // a slot has not been decided against.
+        report.bounded = true;
+        break;
+      }
+      const outcome = await launch({ ...entry.spec, candidateId: entry.candidateId });
+      if (outcome.ok && !outcome.replayed) {
+        report.launched.push(outcome.mission!.id);
+        started += 1;
+      }
+    }
 
     await completeCycle({ owner, generation: claim.generation, cursorAt: cycleNow() });
     return report;
@@ -212,6 +226,45 @@ async function missionsAwaitingWriteback(limit: number): Promise<RussellMission[
     if (mission) missions.push(mission);
   }
   return missions;
+}
+
+/**
+ * The next candidates that could become missions, best first.
+ *
+ * A candidate is launchable only if it already carries a complete mission
+ * specification, put there by whatever authorized path promoted it. The loop
+ * does not compose one: inventing an assignment, a source list and an evidence
+ * bar for work nobody specified is exactly the kind of autonomy that has no
+ * accountable author, and a mission whose scope Russell wrote for itself is a
+ * mission nobody approved the shape of.
+ *
+ * So an unspecified candidate simply is not eligible here, and stays queued
+ * until a turn or an operator gives it one.
+ */
+async function nextLaunchable(
+  limit: number,
+): Promise<{ candidateId: string; spec: Omit<LaunchInput, 'candidateId'> }[]> {
+  const rows = await getDb().all<{ id: string; judgment: string; project_id: string | null }>(
+    `SELECT id, judgment, project_id FROM russell_candidates
+      WHERE state = 'QUEUED' AND project_id IS NOT NULL
+      ORDER BY
+        CASE priority
+          WHEN 'MUST_DO' THEN 0 WHEN 'BIG_MOVE' THEN 1 WHEN 'WORTH_DOING' THEN 2
+          WHEN 'EXPLORE' THEN 3 ELSE 4 END,
+        COALESCE(ordinal, 999),
+        created_at, rowid
+      LIMIT ?`,
+    [Math.max(1, limit)],
+  );
+
+  const out: { candidateId: string; spec: Omit<LaunchInput, 'candidateId'> }[] = [];
+  for (const row of rows) {
+    const judgment = parseJson<Record<string, unknown>>(row.judgment, {});
+    const spec = judgment['missionSpec'];
+    if (!spec || typeof spec !== 'object') continue;
+    out.push({ candidateId: row.id, spec: spec as Omit<LaunchInput, 'candidateId'> });
+  }
+  return out;
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;

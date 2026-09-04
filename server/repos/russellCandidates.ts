@@ -133,26 +133,34 @@ export async function findByFingerprint(input: {
   projectId: string | null;
   fingerprint: string;
   visibility: RussellVisibility;
-  /** Ignore this row when looking — used to ask "is there an *earlier* one?" */
-  excludeId?: string;
 }): Promise<RussellCandidate | null> {
-  const exclude = input.excludeId ? ' AND id <> ?' : '';
+  /*
+   * `rowid`, not `id`, as the tiebreak.
+   *
+   * Two candidates written in the same millisecond have equal `created_at`, and
+   * ids are random — so ordering by `(created_at, id)` picks an arbitrary
+   * winner, and a test caught what that costs: the row that genuinely arrived
+   * first can sort second, decline to merge into a row it believes is later,
+   * and leave two canonical candidates for one idea.
+   *
+   * `rowid` is insertion order and the dialect layer rewrites it to `seq` on
+   * Postgres, so this is the same question on both backends: **which row was
+   * actually written first.** Every caller asks it, every caller gets the same
+   * answer, and exactly one of them is that row.
+   */
   const rows = await getDb().all<RussellCandidateRow>(
     input.projectId === null
       ? `SELECT * FROM russell_candidates
           WHERE project_id IS NULL AND fingerprint = ? AND visibility = ?
-            AND state <> 'MERGED'${exclude}
-          ORDER BY created_at, id LIMIT 1`
+            AND state <> 'MERGED'
+          ORDER BY created_at, rowid LIMIT 1`
       : `SELECT * FROM russell_candidates
           WHERE project_id = ? AND fingerprint = ? AND visibility = ?
-            AND state <> 'MERGED'${exclude}
-          ORDER BY created_at, id LIMIT 1`,
-    [
-      ...(input.projectId === null ? [] : [input.projectId]),
-      input.fingerprint,
-      input.visibility,
-      ...(input.excludeId ? [input.excludeId] : []),
-    ],
+            AND state <> 'MERGED'
+          ORDER BY created_at, rowid LIMIT 1`,
+    input.projectId === null
+      ? [input.fingerprint, input.visibility]
+      : [input.projectId, input.fingerprint, input.visibility],
   );
   return rows[0] ? mapCandidate(rows[0]) : null;
 }

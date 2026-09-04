@@ -127,35 +127,39 @@ export async function capture(input: {
   const candidate = await createCandidate(input);
 
   /*
-   * Look *after* creating, not before.
+   * Look *after* creating, not before, and ask which row was written first.
    *
    * Checking first and inserting second leaves a window, and a test found it
    * immediately: two equivalent messages arriving together both looked, both
-   * saw nothing, and both created a candidate. Creating first and then asking
-   * "is there an earlier row with this meaning?" has no window — both racers
-   * exist by the time either asks, both see the same earliest row under a
-   * stable `(created_at, id)` order, and the later one folds into it.
+   * saw nothing, and both created a candidate.
    *
-   * The loser of that comparison is whichever sorts second, which is a decision
-   * the database makes rather than one either caller supplies.
+   * The obvious repair — create, then ask whether an *earlier* row exists —
+   * has its own flaw, which a second test found: with equal timestamps the
+   * tiebreak fell to a random id, so the row that truly arrived first could
+   * sort second, decline to merge, and leave two canonical candidates for one
+   * idea.
+   *
+   * So the question is not "is there an earlier one?" but "which one is the
+   * earliest?" — asked by every caller, including about itself. All of them get
+   * the same answer because it is insertion order, exactly one of them *is*
+   * that row, and every other folds into it.
    */
-  const existing = await findByFingerprint({
+  const earliest = await findByFingerprint({
     projectId: input.projectId,
     fingerprint: candidate.fingerprint,
     visibility: input.visibility,
-    excludeId: candidate.id,
   });
 
-  if (existing && isEarlier(existing, candidate)) {
+  if (earliest && earliest.id !== candidate.id) {
     const ok = await mergeCandidate({
       candidateId: candidate.id,
-      canonicalId: existing.id,
+      canonicalId: earliest.id,
       method: 'FINGERPRINT',
       reason: 'the same idea, worded the same way',
     });
     if (ok) {
       return {
-        candidate: await getCandidate(existing.id),
+        candidate: await getCandidate(earliest.id),
         merged: true,
         reason: 'this is already on the list',
       };
@@ -165,11 +169,6 @@ export async function capture(input: {
   return { candidate, merged: false, reason: 'captured' };
 }
 
-/** Stable ordering, matching the one the lookup uses. */
-function isEarlier(a: RussellCandidate, b: RussellCandidate): boolean {
-  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt;
-  return a.id < b.id;
-}
 
 export interface JudgmentInputs {
   /** Does something else have to happen before this can work? */
