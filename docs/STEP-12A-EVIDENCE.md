@@ -321,6 +321,15 @@ ran concurrently — that file renders images and shells out to Tesseract, so it
 is the first to starve. The Phase 1 Postgres run with nothing competing passed
 the same file. Rerun serially rather than rewritten, as the anti-drag rule says.
 
+**A boot race under load.** One full run failed `tests/oauth.test.ts` at the
+file level: it starts a real server and polls `/healthz` for 45 seconds. The
+server's own banner is in the log — schema 27, all 27 migrations applied, OCR
+detected — so it booted; the poll did not get an answer in time on a loaded
+machine. It passes alone (83/83) and passes in a clean full run. Boot itself is
+not meaningfully slower for Russell's sake: `repairLaunches` is one query over
+an empty table and `startRussell` sets an interval, and both run before `listen`,
+which is what printed the banner.
+
 **Test teardown ordering.** An unhandled rejection from `tests/research.test.ts`,
 where a research job's progress callback reaches `cancelResearch` →
 `abandonRunningPasses` → `getDb()` *after* its file closed the database. It
