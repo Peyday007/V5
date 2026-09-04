@@ -226,6 +226,12 @@ export const EVENT_TYPES = [
   // having to know there is a second log.
   'ACCESS_GRANTED',
   'ACCESS_REVOKED',
+
+  // Step 12A. A mission's completion writeback is a project-history fact:
+  // it is the moment what the project believes actually changed, and the
+  // append-only ledger is where that belongs rather than in a bin event,
+  // which is best-effort by design and may be swallowed.
+  'RUSSELL_MISSION_WRITEBACK',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

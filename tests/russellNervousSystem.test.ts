@@ -35,6 +35,10 @@ import {
   explainCoverage,
 } from '../server/services/russell/coverage.ts';
 import { launch, repairLaunches } from '../server/services/russell/launch.ts';
+import { writeBack } from '../server/services/russell/writeback.ts';
+import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
+import { listTurns, createConversation } from '../server/repos/russellConversations.ts';
+import { listEvents } from '../server/repos/events.ts';
 import type { ExistingClaim, Principal, ProjectMembership } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -476,5 +480,125 @@ describe('the mission launcher', () => {
     void merged;
     const layers = await listLayers(projectId);
     expect(layers.length).toBeGreaterThan(0);
+  });
+});
+
+describe('completion writeback happens exactly once', () => {
+  async function finishedMission(conversationId?: string) {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'acceptance',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 1,
+      maxFragments: 1,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+    const captured = await capture({
+      title: 'Florida licensing',
+      statement: 'establish the Florida broker licence position from the 2026 statute',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const outcome = await launch({
+      projectId,
+      layerId,
+      candidateId: captured.candidate!.id,
+      conversationId: conversationId ?? null,
+      visibility: 'SHARED',
+      title: 'Florida broker licensing',
+      assignment: 'Under Florida law as in force in 2026, is a broker licence required?',
+      objective: 'Settle the Florida position from the current statutory text.',
+      whyNow: 'The layer names Florida as open.',
+      acceptableSources: ['Florida Statutes'],
+      excludedSources: ['secondary summaries'],
+      evidence: ['the exact section'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    return outcome.mission!;
+  }
+
+  it('promotes knowledge, finishes the mission and the candidate, and records history', async () => {
+    const mission = await finishedMission();
+    const result = await writeBack({
+      missionId: mission.id,
+      outcome: 'ACCEPTED',
+      conclusion: 'Florida does require a broker licence for a business-only success-fee deal.',
+      provenance: { claimIds: ['clm_1'], documentId: 'doc_1' },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.knowledgeIds).toHaveLength(1);
+
+    expect((await getMission(mission.id))!.state).toBe('DONE');
+    expect((await getCandidate(mission.candidateId!))!.state).toBe('DONE');
+
+    const knowledge = await listCurrentKnowledge({ projectId });
+    expect(knowledge.some((row) => row.kind === 'CONCLUSION')).toBe(true);
+
+    const events = await listEvents(projectId);
+    expect(events.some((e) => e.eventType === 'RUSSELL_MISSION_WRITEBACK')).toBe(true);
+  });
+
+  it('does it once, however many observers notice', async () => {
+    const mission = await finishedMission();
+    const results = await Promise.all([
+      writeBack({ missionId: mission.id, outcome: 'ACCEPTED', conclusion: 'x', provenance: {} }),
+      writeBack({ missionId: mission.id, outcome: 'ACCEPTED', conclusion: 'x', provenance: {} }),
+      writeBack({ missionId: mission.id, outcome: 'ACCEPTED', conclusion: 'x', provenance: {} }),
+    ]);
+    expect(results.filter((r) => !r.alreadyDone)).toHaveLength(1);
+    // One conclusion, not three.
+    expect((await listCurrentKnowledge({ projectId })).filter((k) => k.kind === 'CONCLUSION')).toHaveLength(1);
+  });
+
+  it('records an unresolved gap as an open unknown rather than smoothing it over', async () => {
+    const mission = await finishedMission();
+    const result = await writeBack({
+      missionId: mission.id,
+      outcome: 'WITH_GAPS',
+      conclusion: 'The Florida statute brings business opportunities inside the definition.',
+      gaps: ['The 2026 edition date could not be confirmed from an official publisher.'],
+      provenance: {},
+    });
+    const knowledge = await listCurrentKnowledge({ projectId });
+    expect(knowledge.some((row) => row.kind === 'GAP')).toBe(true);
+    // And it is not relabelled complete.
+    expect(result.briefing).toMatch(/could not be settled/);
+    expect((await getMission(mission.id))!.terminalReason).toMatch(/unresolved gaps/);
+  });
+
+  it('promotes nothing from a run that did not finish', async () => {
+    const mission = await finishedMission();
+    await writeBack({ missionId: mission.id, outcome: 'FAILED', conclusion: '', provenance: {} });
+    expect(await listCurrentKnowledge({ projectId })).toHaveLength(0);
+    expect((await getMission(mission.id))!.state).toBe('FAILED');
+    expect((await getCandidate(mission.candidateId!))!.state).toBe('PARKED');
+  });
+
+  it('tells the person in the conversation, in plain words and with no percentage', async () => {
+    const thread = await createConversation({
+      ownerUserId: userId,
+      title: 'Money model',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const mission = await finishedMission(thread.id);
+    await writeBack({
+      missionId: mission.id,
+      outcome: 'ACCEPTED',
+      conclusion: 'Florida does require a licence here.',
+      provenance: {},
+    });
+    const turns = await listTurns(thread.id);
+    const last = turns[turns.length - 1]!;
+    expect(last.role).toBe('RUSSELL');
+    expect(last.content).toMatch(/Florida does require a licence here/);
+    expect(last.content).toMatch(/You are not needed/);
+    // No invented progress anywhere in it.
+    expect(last.content).not.toMatch(/\d+%/);
   });
 });
