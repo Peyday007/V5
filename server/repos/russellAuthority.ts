@@ -378,10 +378,24 @@ function ceilingFor(goal: RussellGoal, kind: ReservationKind): number {
  * overshot, and both release. The ceiling is respected and nobody gets the
  * slot — an outcome strictly worse than either one winning.
  *
- * So the total is taken through this row's own position in a stable order,
- * `(created_at, id)`. The first inserter ranks 1 and keeps the slot; the second
- * ranks 2, sees it is over, and is the only one that stands down. Deterministic,
- * no mutual abort, and it generalises to amounts rather than counts.
+ * So the total is taken through this row's own position in insertion order.
+ * The first inserter ranks first and keeps the slot; the second ranks second,
+ * sees it is over, and is the only one that stands down. Deterministic, no
+ * mutual abort, and it generalises to amounts rather than counts.
+ *
+ * **The rank is `rowid`, and that is a correction.** It used to be
+ * `(created_at, id)`, which is not an order at all when two reservations land
+ * in the same millisecond: `id` is a random UUID, so the tie-break was a coin
+ * toss, and roughly half the time the *second* caller ranked first and was
+ * handed a slot the ceiling had already spent. The full suite found it under
+ * load; three isolated runs of the same file did not, which is exactly how a
+ * fifty-per-cent race hides.
+ *
+ * `rowid` — `seq` on Postgres, through the dialect — is insertion order,
+ * strictly increasing, and supplied by the database rather than by the
+ * claimant. That is the same property every other compare-and-swap in this
+ * codebase depends on, and it is the third time the fix has been "rank by
+ * something the caller cannot choose".
  *
  * `HELD` and unexpired, or already `SETTLED`. An expired hold counts for
  * nothing — that is what makes a crashed launch's reservation recoverable
@@ -398,8 +412,8 @@ async function totalThroughMine(
     `SELECT COALESCE(SUM(amount), 0) AS total FROM russell_budget_reservations
       WHERE goal_id = ? AND kind = ?
         AND (state = 'SETTLED' OR (state = 'HELD' AND expires_at > ?))
-        AND (created_at < ? OR (created_at = ? AND id <= ?))`,
-    [goalId, kind, now, mine.created_at, mine.created_at, mine.id],
+        AND rowid <= (SELECT rowid FROM russell_budget_reservations WHERE id = ?)`,
+    [goalId, kind, now, mine.id],
   );
   return Number(rows[0]?.total ?? 0);
 }

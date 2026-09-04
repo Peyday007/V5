@@ -417,3 +417,55 @@ state and never self-authorizes.
 
 The frozen acceptance idea, its bounds and the follow-on are in §7 and
 unchanged; `RUSSELL_STATE_LICENSING_V1` is the envelope both missions name.
+
+---
+
+## 10. The usability floor was raised — 2026-09-04
+
+The v3 addendum moved three things from Step 12B into Step 12A, because a
+system that runs but cannot show what it knows has not finished Brain
+Ignition. This section records what that changed in the plan; the evidence for
+each is in `docs/STEP-12A-EVIDENCE.md` §18.
+
+### 10.1 The read layer is a completion condition
+
+`Russell`, `Work`, `Ideas`, `Knows`, `Who` and `Needs You` may be thin. They
+may not be **hollow** while authoritative data exists. Every one of them now
+projects from authoritative rows rather than from the one table Russell had
+started filling, and an empty surface names which of six kinds of empty it is —
+with `FORBIDDEN` and `UNAVAILABLE` word-for-word identical, because the server
+cannot distinguish them and the interface must not invent an answer.
+
+New services: `work.ts`, `ideas.ts`, `who.ts`, `progress.ts`, beside the
+existing `knows.ts`. New schema: migration **028**, `projects.purpose`.
+
+### 10.2 Progress has one implementation
+
+`services/russell/progress.ts`, used by the briefing, Work, Ideas, the map and
+the build report. A fraction only over a declared closed set; a stage and a
+milestone list otherwise; blocking outranks every band. There is no code path
+that turns a feeling into a percentage, and there is now only one place such a
+path could be added.
+
+### 10.3 A basic living constellation is in Step 12A
+
+Real React over the same projection the Ideas list renders, with site → major
+idea → ordinary idea drill-down, a breadcrumb, an announced detail card, and no
+demo node anywhere. Step 12B still owns richer animation, user-arranged
+layouts, cross-site constellations, simulation and final mobile refinement.
+
+### 10.4 Fast conversation is in Step 12A
+
+Three lanes, a provider-independent streamed seam, a retrieval-based context
+hat, an asynchronous teacher loop, and a spending boundary that refuses by
+default. Migration **029**. Nothing is switched on: there is no key, no
+authorization and no enabled model, so every turn still goes to the fleet.
+
+### 10.5 What this does not change
+
+The acceptance chain, the audit separation contract, the fleet, the queue and
+the effect mechanism are all untouched. The three new gates —
+`A20_USABLE_READ_SURFACES`, `A21_LIVING_PROJECT_MAP`, `A22_FAST_CHAT_ROUTING` —
+are additions to the 19, giving a corrected baseline of **10 PASS · 0 FAIL ·
+0 BLOCKED · 12 NOT_RUN**. The earlier 19-gate tally is history and is not
+rewritten to pretend these existed.

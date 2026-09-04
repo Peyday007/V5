@@ -424,6 +424,40 @@ describe('budget reservations are atomic', () => {
     expect((await reserve({ goalId: created.id, kind: 'MISSION', idempotencyKey: 'b' })).ok).toBe(true);
   });
 
+  it('ranks by insertion order, not by a random id, when two land in the same instant', async () => {
+    /*
+     * The defect this pins, which the full suite found under load and three
+     * isolated runs of this file did not.
+     *
+     * The rank used to be `(created_at, id)`. Two reservations in the same
+     * millisecond have the same `created_at`, so the tie-break was `id` — a
+     * random UUID — and roughly half the time the *second* caller ranked first
+     * and was handed a slot the ceiling had already spent.
+     *
+     * Repeated, because a fifty-per-cent race passes a single run half the
+     * time. Twenty rounds makes a regression a one-in-a-million escape rather
+     * than a coin toss.
+     */
+    for (let round = 0; round < 20; round += 1) {
+      const created = await goal({ maxMissions: 1, maxConcurrent: 1 });
+      const at = '2026-09-04T12:00:00.000Z';
+      const first = await reserve({
+        goalId: created.id,
+        kind: 'MISSION',
+        idempotencyKey: `same-instant-${round}-a`,
+        at,
+      });
+      expect(first.ok, `round ${round}`).toBe(true);
+      const second = await reserve({
+        goalId: created.id,
+        kind: 'MISSION',
+        idempotencyKey: `same-instant-${round}-b`,
+        at,
+      });
+      expect(second.ok, `round ${round}`).toBe(false);
+    }
+  });
+
   it('keeps a settled reservation counted, so finished work still occupies its ceiling', async () => {
     const created = await goal({ maxMissions: 1, maxConcurrent: 1 });
     const first = await reserve({ goalId: created.id, kind: 'MISSION', idempotencyKey: 'a' });

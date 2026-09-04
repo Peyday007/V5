@@ -144,3 +144,35 @@ exciting.
   folds them in; if that ordering ever changes, they must not be lost.
 - **`A11` / L9 / L10 remain open on provisioning**, not on code. The signed
   matrix is enforced and is not to be weakened to close them.
+
+---
+
+## Moved out of Step 12B by the v3 addendum — 2026-09-04
+
+Four items that were listed here are now Step 12A completion conditions,
+because a Brain that runs and cannot show what it holds has not finished
+Brain Ignition. They are struck from this backlog rather than deleted, so a
+reader can see the boundary moved and when.
+
+- **A usable data-backed read layer** — Work, Ideas, Knows, Who and Needs You
+  projecting real authorized state, with honest empty, stale, unavailable and
+  forbidden distinctions. → Step 12A, §10.1 of the plan.
+- **Visible project, site and major-idea progress** — milestone-backed, never
+  invented. → Step 12A, §10.2.
+- **A basic read-only living constellation** — real data, site → major idea →
+  ordinary idea, desktop and phone. → Step 12A, §10.3.
+- **Provider-independent streamed conversation**, with model comparison,
+  configurable routing, a retrieval-based context hat and asynchronous strong
+  review. → Step 12A, §10.4.
+
+**What Step 12B still owns from those areas**, and is not started here: richer
+animation and visual identity; user-arranged layouts; broad cross-site
+constellations; multiple specialised maps; simulation, alternative-comparison
+and "what breaks if removed"; advanced search, filtering and collaboration;
+polished conversation collections and tailored starters; richer fleet
+controls; preference foundations; and final mobile-first refinement.
+
+**"Step 12B refinement" is not available as a way to defer a missing Step 12A
+usability requirement again.** That is the addendum's rule and it is recorded
+here, in the backlog, because this file is where such a deferral would be
+written.

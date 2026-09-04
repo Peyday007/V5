@@ -1944,3 +1944,146 @@ Unchanged at **10 PASS · 0 FAIL · 0 BLOCKED · 12 NOT_RUN** across 22 gates.
 Nothing in this section moves a gate, and that is correct: every remaining gate
 needs production rows from a real chain, which needs a mutation nobody has
 authorized. Code that is finished and unproven is exactly what `NOT_RUN` means.
+
+---
+
+## 19. The request for the fifth production mutation — 2026-09-04
+
+Everything Workstreams 1 to 4 could prove without touching production is
+proved and pushed. What remains needs production, and this is the request for
+it.
+
+**Four mutations are already spent.** This asks for three more, in this exact
+order, and counts them separately because they are separate decisions.
+
+### The mutations, enumerated
+
+| # | Mutation | What changes | Why it is separate |
+| --- | --- | --- | --- |
+| **5** | **Image deployment** of `HEAD` of `claude/zealous-hypatia-78a2yp` | A new image, a restart, and migrations **028** (`projects.purpose`) and **029** (the conversation-lane and spend tables) applied on boot | It replaces what is running. Nothing else here does. |
+| **6** | **One Russell turn**, sent by the operator in the deployed interface | Production **data**: one conversation, one message, and whatever the pipeline creates from it | It is not a deployment. What is running does not change; what the Brain holds does. |
+| **7** | **Image deployment** of a one-line commit setting `ACCEPTANCE_SCOPE.conversationId` | A new image and a restart, carrying nothing else | The acceptance reporter runs **inside the container**, so the frozen scope has to be in the image. It is a second deployment and is counted as one. |
+
+Mutation 7 is unavoidable rather than an oversight. The reporter deliberately
+reads its scope from a **declared constant** so nobody can widen the evidence
+their own work is judged against by writing rows or passing an input — and the
+conversation id is a production fact that cannot exist until mutation 6 has
+happened. Making it an input would remove the property the constant exists for.
+
+### What runs after, and what it costs
+
+The acceptance chain itself is not a fourth mutation: it is Brain's existing
+dispatcher firing an already-registered Routine against already-queued,
+already-authorized work. It is bounded by the frozen scenario in
+`docs/STEP-12A-ACCEPTANCE-SCENARIO.md`:
+
+- **one** research fragment, **at most one** repair;
+- **one** probe, under `GENERAL_LIGHT_PROBE_V1` — at most 3 lookups, 5 minutes,
+  one allowlisted host, zero external effects;
+- **one** mission, orchestration and bin, plus **one** authorized follow-on;
+- separation required: `SESSION`, which is three authenticated sessions;
+- expected worker activations: **six to nine** on V1 at target 1 (research,
+  verification, synthesis, three audit roles, the follow-on, and at most one
+  repair).
+
+### The spending ceiling
+
+**Zero paid spend is requested, and none is possible.**
+
+- No `ANTHROPIC_API_KEY` and no `BRAIN_PROVIDER` are being added. This request
+  does not ask for a secret.
+- Migration 029 creates the spend tables with **no rows**. There is no
+  `spend_authorizations` row, so the ceiling is zero and disabled, and
+  `liveAuthorization` returns null on every path.
+- The fast lane therefore refuses with `NOT_AUTHORIZED_TO_SPEND` and every turn
+  goes to the Routines, exactly as today.
+- The only allowance consumed is the existing fixed-subscription Cowork
+  allowance on V1, which is what has carried every activation since Step 10.
+- **`A22_FAST_CHAT_ROUTING` stays `NOT_RUN`** and must. Enabling paid inference
+  is a separate request I am not making.
+
+### The canary
+
+Mutation 5 is itself the canary, and the order is the safety:
+
+1. Hosted verification **before** the deployment (`npm run verify:hosted`).
+2. Deploy. Watch migrations 028 and 029 apply in the boot log.
+3. Hosted verification **after** a real restart — the same run that mutation 4
+   used, which is the only thing that proves a restart against an existing
+   database.
+4. `step12a-inspect` for one read of fleet and bin state.
+5. Only then mutation 6, and only then a single Routine fire at target 1.
+
+If anything in 1–4 fails, mutation 6 is not attempted and the rollback below
+runs instead. **V2 stays `QUARANTINED` throughout.** No Routine prompt, model,
+target, connector or state is edited — the working V1 mandatory-first-action
+prompt is preserved.
+
+### The rollback
+
+- **Mutation 5 or 7 fails to boot:** `flyctl deploy --image <previous>` back to
+  the image these replaced, which is `3b6ebfb` for mutation 5. The two
+  migrations are additive — one new column with a default, six new tables — so
+  the previous image runs unchanged against the migrated schema. Nothing is
+  dropped and no rollback migration is needed or wanted.
+- **Mutation 5 boots and the read layer misbehaves:** the same image rollback.
+  Production data is untouched by it.
+- **Mutation 6 produces the wrong chain:** the conversation and its rows are
+  *kept*, `conversationId` is not set, the scenario is recorded as failed with
+  its evidence, and a new one is frozen. Nothing is deleted — a failed attempt
+  is the provenance, which is invariant 5.
+- **A worker activation exposes another surface defect:** quarantine only the
+  failing surface, preserve the bin and its attempt budget, record the exact
+  evidence, and do not burn repeated fires.
+
+### What I am not asking for
+
+A fifth or later delivery mutation beyond these three; any production secret;
+paid API inference; a paid account or credits; any change to V2's quarantine;
+any credential exposure; any destructive production data change; and anything
+belonging to Step 12B.
+
+### The state this request is made from
+
+**LOCAL / CODE PROOF.** Branch `claude/zealous-hypatia-78a2yp`, pushed, clean.
+Typecheck clean, client build clean, full SQLite suite green, migrations from
+empty and restart against existing both verified on the SQLite chain, and
+desktop and phone visual QA recorded at 12 of 12 rendering and fitting.
+
+**LIVE PRODUCTION.** Unchanged. Image `3b6ebfb` from mutation 4. V1 `ENABLED`
+at target 1; V2 `QUARANTINED`. Tally **10 PASS · 0 FAIL · 0 BLOCKED · 12
+NOT_RUN** across 22 gates.
+
+---
+
+## 20. A race the suite found and three isolated runs did not — 2026-09-04
+
+`russell_budget_reservations` ranked reservations by `(created_at, id)` to
+decide which of two racing callers keeps a slot. Two reservations taken in the
+same millisecond have the same `created_at`, so the tie-break was `id` — a
+random UUID — and roughly **half the time the second caller ranked first and
+was handed a slot the ceiling had already spent**.
+
+The comment above that function claimed the ordering was deterministic. It was
+not, and the claim is the reason nobody looked again.
+
+**How it surfaced.** A full-suite run failed on
+`keeps a settled reservation counted, so finished work still occupies its
+ceiling`. Three consecutive isolated runs of that file passed, which is exactly
+how a fifty-per-cent race hides: the assertion is a coin toss, and a small
+sample of green runs is not evidence of anything.
+
+**The fix.** Rank by `rowid` — `seq` on Postgres, through the dialect — which
+is insertion order, strictly increasing, and **supplied by the database rather
+than by the claimant**. That is the same property every compare-and-swap in
+this codebase depends on, and it is now the third place the answer has been
+"rank by something the caller cannot choose".
+
+**The regression test** repeats the race twenty times with an explicit,
+identical timestamp, so a reintroduction is a one-in-a-million escape rather
+than a coin toss. It was checked against the old implementation and fails there
+on the first round.
+
+This was not caused by anything in Workstreams 1 to 4. It was reachable from
+the day the reservation ranking was written and had simply never lost the toss
+in a watched run.
