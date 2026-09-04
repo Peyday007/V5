@@ -100,11 +100,21 @@ export interface KnowsEntry {
   provenance: KnowsProvenance;
   /** What the entry is true *as of*, when the rows say. Never row age. */
   asOf: string | null;
+  /**
+   * Which major idea this belongs under, when the rows say.
+   *
+   * Read from the knowledge row's own column, or from the orchestration that
+   * produced the claim. Null is a real answer — a project-wide conclusion
+   * genuinely belongs to no one layer, and filing it under an arbitrary one to
+   * make a map tidier would be §11's mistake at a different altitude.
+   */
+  layerId: string | null;
 }
 
 interface ClaimRow {
   id: string;
   orchestration_id: string;
+  layer_id: string;
   fragment_id: string | null;
   claim: string;
   source_url: string | null;
@@ -121,6 +131,7 @@ interface ClaimRow {
 
 interface KnowledgeRow {
   id: string;
+  layer_id: string | null;
   kind: string;
   statement: string;
   detail: string | null;
@@ -219,7 +230,7 @@ export async function knowsForProject(input: {
    * 1. Russell's own knowledge.
    * ----------------------------------------------------------------------- */
   const knowledge = await getDb().all<KnowledgeRow>(
-    `SELECT id, kind, statement, detail, provenance, confidence, as_of,
+    `SELECT id, layer_id, kind, statement, detail, provenance, confidence, as_of,
             superseded_by_id, mission_id, conversation_id
        FROM russell_knowledge
       WHERE project_id = ?
@@ -245,6 +256,7 @@ export async function knowsForProject(input: {
         ...(row.conversation_id ? { conversationId: row.conversation_id } : {}),
       },
       asOf: row.as_of,
+      layerId: row.layer_id,
     });
   }
 
@@ -258,7 +270,7 @@ export async function knowsForProject(input: {
   const remaining = Math.max(0, limit - entries.length);
   if (remaining > 0) {
     const claims = await getDb().all<ClaimRow>(
-      `SELECT c.id, c.orchestration_id, c.fragment_id, c.claim, c.source_url,
+      `SELECT c.id, c.orchestration_id, o.layer_id, c.fragment_id, c.claim, c.source_url,
               c.source_title, c.source_date, c.evidence_excerpt, c.evidence_locator,
               c.retrieved_at, c.confidence, c.contradiction_state, c.validation_state,
               c.accepted
@@ -289,6 +301,7 @@ export async function knowsForProject(input: {
           ...(row.retrieved_at ? { retrievedAt: row.retrieved_at } : {}),
         },
         asOf: row.source_date ?? row.retrieved_at,
+        layerId: row.layer_id,
       });
     }
   }

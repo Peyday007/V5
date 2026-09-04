@@ -23,7 +23,15 @@ import { RussellApi } from '../lib/russellApi.ts';
 import { navigationMode } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { Conversation } from './Conversation.tsx';
-import { FleetView, KnowledgeView, NeedsYouView, ProjectsView, WorkView } from './Views.tsx';
+import {
+  FleetView,
+  IdeasView,
+  KnowledgeView,
+  NeedsYouView,
+  ProgressLine,
+  WhoView,
+  WorkView,
+} from './Views.tsx';
 import type { Navigation, Route } from '../lib/router.ts';
 
 const SECTIONS = [
@@ -181,9 +189,18 @@ export function RussellShell({
           )
         ) : null}
         {route.name === 'WORK' ? <WorkView projectId={projectId} /> : null}
-        {route.name === 'PROJECTS' ? <ProjectsView projectId={projectId} /> : null}
+        {route.name === 'PROJECTS' ? <IdeasView projectId={projectId} /> : null}
         {route.name === 'KNOWLEDGE' ? <KnowledgeView projectId={projectId} /> : null}
-        {route.name === 'FLEET' ? <FleetView /> : null}
+        {route.name === 'FLEET' ? (
+          <>
+            {/* Who is people first, machinery second. The older fleet reading
+                stays underneath because it is the one thing that carries its
+                own freshness, which the role-gated view deliberately does
+                not. */}
+            <WhoView projectId={projectId} />
+            <FleetView />
+          </>
+        ) : null}
         {route.name === 'NEEDS_YOU' ? (
           <NeedsYouView projectId={projectId} onAnswered={needsYou.reload} />
         ) : null}
@@ -230,9 +247,19 @@ function Briefing({
   return (
     <div className="rs-briefing">
       <p className="rs-briefing-focus">{briefing.focus}</p>
-      <p>{briefing.progress}</p>
+      <ProgressLine progress={briefing.progress} />
       {briefing.latest ? <p className="rs-briefing-latest">{briefing.latest}</p> : null}
       <p>{briefing.next}</p>
+      {/* Gaps somebody wrote down, never gaps inferred from an absence. An
+          empty list means none were recorded, which is not the same as none
+          existing — so nothing is said at all rather than "no gaps". */}
+      {briefing.openGaps && briefing.openGaps.length > 0 ? (
+        <ul className="rs-briefing-gaps">
+          {briefing.openGaps.map((gap) => (
+            <li key={gap}>{gap}</li>
+          ))}
+        </ul>
+      ) : null}
       <p className="rs-briefing-needs">{briefing.needsYou}</p>
       {cycle && cycle.state !== 'RUNNING' ? (
         <p className="rs-state rs-state-stale">

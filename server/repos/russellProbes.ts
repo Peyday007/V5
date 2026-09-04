@@ -317,3 +317,20 @@ export async function listExpiredProbes(at?: string): Promise<RussellProbe[]> {
   );
   return rows.map(mapProbe);
 }
+
+/**
+ * Every probe in one project.
+ *
+ * Exists because the Ideas projection needs to know, for each candidate,
+ * whether anything has actually looked at it — and asking per candidate is a
+ * fan-out nobody notices until there are a hundred ideas. The project boundary
+ * is the probe's own column, which is the same one `listProbesForCandidate`
+ * relies on through the candidate.
+ */
+export async function listProbesForProject(projectId: string): Promise<RussellProbe[]> {
+  const rows = await getDb().all<RussellProbeRow>(
+    'SELECT * FROM russell_probes WHERE project_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 500',
+    [projectId],
+  );
+  return rows.map(mapProbe);
+}

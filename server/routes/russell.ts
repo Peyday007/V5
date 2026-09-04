@@ -42,6 +42,14 @@ import { currentPrincipal } from '../services/identity/context.ts';
 import { beginTurn, conversationIsReadable } from '../services/russell/turn.ts';
 import { briefing, focusLayer } from '../services/russell/projections.ts';
 import { knowsForProject, surfaceState } from '../services/russell/knows.ts';
+import { groupWork, workForProject } from '../services/russell/work.ts';
+import { ideaMapForProject } from '../services/russell/ideas.ts';
+import { whoForProject } from '../services/russell/who.ts';
+import {
+  activeWorkProgress,
+  buildProgress,
+  projectProgress,
+} from '../services/russell/progress.ts';
 import { DEAL_DISPATCH_SLUG, readDealDispatch } from '../services/russell/dealDispatch.ts';
 import { coverBeforeWork, explainCoverage } from '../services/russell/coverage.ts';
 import {
@@ -236,18 +244,105 @@ russellRouter.get(
   }),
 );
 
+/**
+ * Everything being worked on, grouped, and labelled by where it came from.
+ *
+ * `missions` is still returned, unchanged, because callers already read it and
+ * removing a field is a change nobody asked for. `work` is what a surface
+ * should render: it also carries the research packets and bins that existed
+ * before Russell did, which is the whole reason Work could show nothing while
+ * the Brain was plainly busy.
+ *
+ * `technical=1` opens the verifier's scopes, the fixtures and the conversation
+ * machinery. It is a query parameter rather than a separate route so that the
+ * technical view is the same projection deliberately opened — and it widens
+ * nothing, because everything it reveals is inside a project this caller has
+ * already been authorized for.
+ */
 russellRouter.get(
   '/projects/:projectId/work',
   handler(async (req) => {
     const project = await requireProject(pathId(req, 'projectId'));
     const query = queryOf(req);
-    return {
-      missions: await listMissions({
+    const limit = optionalInteger(query['limit'], 'limit', { min: 1, max: 200 }) ?? 100;
+    const includeTechnical = query['technical'] === '1' || query['technical'] === 'true';
+    const [missions, work] = await Promise.all([
+      listMissions({
         projectId: project.id,
         states: enumList(query['state'], MISSION_STATES) as MissionState[],
-        limit: optionalInteger(query['limit'], 'limit', { min: 1, max: 200 }) ?? 100,
+        limit,
       }),
+      workForProject({ projectId: project.id, includeTechnical, limit }),
+    ]);
+    return {
+      missions,
+      work: {
+        ...surfaceState({ items: work.entries }),
+        groups: groupWork(work.entries),
+        includesTechnical: includeTechnical,
+        // Named rather than silently dropped: "nothing here" reads very
+        // differently once you know four rows were held back on purpose.
+        technicalHidden: work.technicalHidden,
+      },
     };
+  }),
+);
+
+/**
+ * The shape of the project: site, major ideas, ordinary ideas, and their edges.
+ *
+ * One projection, read by the Ideas list and by the constellation, so the map
+ * cannot show something the list denies — and so the map's accessible fallback
+ * is not a second description of the same thing.
+ */
+russellRouter.get(
+  '/projects/:projectId/ideas',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const map = await ideaMapForProject({
+      projectId: project.id,
+      viewerUserId: principal.id,
+      includePrivate: false,
+    });
+    if (!map) throw notFound('No project with that id.');
+    return { map: { ...map, nodes: map.nodes }, state: surfaceState({ items: map.nodes }) };
+  }),
+);
+
+/**
+ * Who is here, and what can run.
+ *
+ * The depth is decided inside the service from the same policy every other
+ * route uses. A caller who may not read the project gets the same 404 a missing
+ * one gives, in the same words.
+ */
+russellRouter.get(
+  '/projects/:projectId/who',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const who = await whoForProject({ principal, projectId: project.id });
+    if (!who) throw notFound('No project with that id.');
+    return who;
+  }),
+);
+
+/**
+ * How far along things are — the project, the work in flight, and the Brain.
+ *
+ * All three from one shared projection, so the number on this screen is the
+ * number on every other one.
+ */
+russellRouter.get(
+  '/projects/:projectId/progress',
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    const [project_, work] = await Promise.all([
+      projectProgress({ projectId: project.id, projectName: project.name }),
+      activeWorkProgress(project.id),
+    ]);
+    return { project: project_, work, build: buildProgress() };
   }),
 );
 

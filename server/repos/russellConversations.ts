@@ -159,6 +159,28 @@ export async function listSharedConversations(
 }
 
 /**
+ * How many threads about this project a given person may see.
+ *
+ * A count, and counts leak. The site card in the Ideas map shows this, so it is
+ * scoped exactly the way a listing would be: every shared thread on the
+ * project, plus the viewer's own private ones, and nobody else's. A total that
+ * included other people's private threads would disclose that they exist, which
+ * is the same disclosure §24 refuses to make one thread at a time.
+ */
+export async function countVisibleConversationsForProject(
+  projectId: string,
+  viewerUserId: string,
+): Promise<number> {
+  const row = await getDb().get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM russell_conversations
+      WHERE project_id = ?
+        AND (visibility = 'SHARED' OR owner_user_id = ?)`,
+    [projectId, viewerUserId],
+  );
+  return Number(row?.n ?? 0);
+}
+
+/**
  * Attach, re-attach or detach a thread — and record why.
  *
  * Two writes, always both: the current attachment on the conversation, and an

@@ -2257,3 +2257,328 @@ legend {
     flex-wrap: wrap;
   }
 }
+
+/* ------------------------------------------------- progress and grouping
+ *
+ * The bar is drawn only when the server sent a ratio, so there is no CSS here
+ * for a "percentage" that has no denominator behind it. Everything else is a
+ * stage word, a milestone list, or a group heading.
+ */
+
+.rs-progress {
+  margin: 0 0 10px;
+}
+
+.rs-progress-headline {
+  margin: 0 0 4px;
+  color: var(--fg-dim);
+}
+
+.rs-stage-blocked {
+  color: var(--red);
+}
+
+.rs-stage-settled {
+  color: var(--green);
+}
+
+.rs-progress-bar {
+  height: 4px;
+  background: var(--bg-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.rs-progress-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent, var(--green));
+}
+
+.rs-progress-blocked {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--red);
+  font-size: 13px;
+}
+
+.rs-milestones {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.rs-milestone-done {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+}
+
+.rs-milestone-open {
+  color: var(--fg-dim);
+}
+
+.rs-group {
+  margin-bottom: 14px;
+}
+
+.rs-group-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+}
+
+/* --------------------------------------------------------- the idea tree */
+
+.rs-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.rs-crumb {
+  padding: 2px 6px;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rs-crumb:not(:last-child)::after {
+  content: ' ›';
+  color: var(--border-strong);
+}
+
+.rs-crumb:disabled {
+  color: var(--fg);
+  cursor: default;
+}
+
+.rs-node-detail {
+  margin-bottom: 12px;
+  color: var(--fg-dim);
+}
+
+.rs-node {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rs-node:hover .rs-item-title {
+  text-decoration: underline;
+}
+
+.rs-briefing-gaps {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+/* ------------------------------------------------- the living constellation
+ *
+ * A nucleus with its ideas in orbit. The geometry is computed in
+ * `Constellation.tsx` from the canvas size, so nothing here places a node —
+ * these rules are appearance and motion only.
+ *
+ * The whole map is decoration over a list that says the same thing. If a rule
+ * here ever becomes load-bearing for understanding the structure, the list has
+ * stopped being an equal path and that is a defect rather than a trade-off.
+ */
+
+.lim {
+  margin-bottom: 20px;
+}
+
+.lim-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.lim-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.lim-depth {
+  color: var(--fg-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.lim-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.lim-crumb {
+  padding: 2px 6px;
+  background: none;
+  border: 0;
+  color: var(--fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.lim-crumb:not(:last-child)::after {
+  content: ' ›';
+  color: var(--border-strong);
+}
+
+.lim-crumb:disabled {
+  color: var(--fg);
+  cursor: default;
+}
+
+.lim-canvas {
+  position: relative;
+  width: 100%;
+  height: 520px;
+  overflow: hidden;
+}
+
+.lim-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.lim-line {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 2;
+}
+
+.lim-line.is-active {
+  stroke: var(--green);
+  stroke-width: 3;
+}
+
+.lim-halo {
+  position: absolute;
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: color-mix(in srgb, var(--green) 9%, transparent);
+  pointer-events: none;
+  transition: left 280ms ease, top 280ms ease;
+}
+
+.lim-node {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  max-width: 44%;
+  min-height: 40px;
+  padding: 6px 12px;
+  overflow: hidden;
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--fg);
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: left 280ms ease, top 280ms ease, opacity 180ms ease;
+}
+
+.lim-node.is-centre {
+  z-index: 3;
+  border-color: var(--green);
+}
+
+.lim-node.is-selected {
+  border-color: var(--green);
+  color: var(--fg);
+}
+
+.lim-node:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.lim-detail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+}
+
+.lim-detail-text {
+  min-width: 0;
+  color: var(--fg-muted);
+}
+
+.lim-connections {
+  margin-left: auto;
+  color: var(--fg-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lim-node,
+  .lim-halo {
+    transition: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .lim-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .lim-canvas {
+    height: 650px;
+  }
+
+  .lim-halo {
+    width: 150px;
+    height: 150px;
+  }
+
+  .lim-node {
+    max-width: 60%;
+  }
+
+  .lim-detail {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .lim-connections {
+    margin-left: 0;
+    white-space: normal;
+  }
+}

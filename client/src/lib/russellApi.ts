@@ -24,10 +24,21 @@ import type {
 } from '../../../server/domain/types.ts';
 import type { Briefing } from '../../../server/services/russell/projections.ts';
 import type { ConnectedSystemView } from '../../../server/services/russell/dealDispatch.ts';
+import type { Progress } from '../../../server/services/russell/progress.ts';
+import type { GroupedWork, WorkEntry } from '../../../server/services/russell/work.ts';
+import type { IdeaEdge, IdeaMap, IdeaNode } from '../../../server/services/russell/ideas.ts';
+import type { WhoView } from '../../../server/services/russell/who.ts';
 
 export type {
   Briefing,
   ConnectedSystemView,
+  GroupedWork,
+  IdeaEdge,
+  IdeaMap,
+  IdeaNode,
+  Progress,
+  WhoView,
+  WorkEntry,
   RussellCandidate,
   RussellConversation,
   RussellHumanRequest,
@@ -74,12 +85,24 @@ export interface KnowsEntry {
   asOf: string | null;
 }
 
-/** A surface plus the honest reason it is empty, when it is. */
-export interface KnowsSurface {
-  items: KnowsEntry[];
-  emptyReason: 'EMPTY' | 'NOTHING_ACTIVE' | 'NOT_CONNECTED' | 'STALE' | 'UNAVAILABLE' | 'FORBIDDEN' | null;
+/** The six honest empties, matching the server's vocabulary exactly. */
+export type EmptyReason =
+  | 'EMPTY'
+  | 'NOTHING_ACTIVE'
+  | 'NOT_CONNECTED'
+  | 'STALE'
+  | 'UNAVAILABLE'
+  | 'FORBIDDEN';
+
+/** Any list the server wrapped with the reason it might be empty. */
+export interface SurfaceEnvelope<T> {
+  items: T[];
+  emptyReason: EmptyReason | null;
   explanation: string | null;
 }
+
+/** A surface plus the honest reason it is empty, when it is. */
+export type KnowsSurface = SurfaceEnvelope<KnowsEntry>;
 
 export const RussellApi = {
   conversations: (): Promise<{ conversations: RussellConversation[] }> =>
@@ -103,8 +126,42 @@ export const RussellApi = {
   briefing: (projectId: string): Promise<BriefingResponse> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/briefing`),
 
-  work: (projectId: string): Promise<{ missions: RussellMission[] }> =>
-    api(`/api/russell/projects/${encodeURIComponent(projectId)}/work`),
+  /**
+   * Work, grouped and provenance-labelled.
+   *
+   * `technical` opens the verifier's scopes, fixtures and conversation
+   * machinery. It defaults off, because those are real rows that are not
+   * anybody's project work, and counting them inflates every number a person
+   * reads.
+   */
+  work: (
+    projectId: string,
+    options: { technical?: boolean } = {},
+  ): Promise<{
+    missions: RussellMission[];
+    work: {
+      items: WorkEntry[];
+      emptyReason: EmptyReason | null;
+      explanation: string | null;
+      groups: GroupedWork[];
+      includesTechnical: boolean;
+      technicalHidden: number;
+    };
+  }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/work${options.technical ? '?technical=1' : ''}`,
+    ),
+
+  ideas: (projectId: string): Promise<{ map: IdeaMap; state: SurfaceEnvelope<IdeaNode> }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/ideas`),
+
+  who: (projectId: string): Promise<WhoView> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/who`),
+
+  progress: (
+    projectId: string,
+  ): Promise<{ project: Progress; work: Progress; build: Progress }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/progress`),
 
   candidates: (projectId: string): Promise<{ candidates: RussellCandidate[] }> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/candidates`),

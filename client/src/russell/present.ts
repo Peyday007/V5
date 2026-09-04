@@ -35,6 +35,49 @@ export interface AsyncInput<T> {
   items: T[] | null;
   /** What this screen is about, for the empty sentence. E.g. "work". */
   noun: string;
+  /**
+   * The server's own reason a list is empty, when it gave one.
+   *
+   * Six reasons, not one, because the remedies differ completely: wait, look
+   * somewhere else, reconnect something, refresh, report an outage, ask for
+   * access. Collapsing them into "nothing yet" is the defect this whole file
+   * exists to prevent, and the interface must never guess which one applies.
+   */
+  emptyReason?: EmptyReason | null;
+}
+
+/** The six honest empties, matching the server's own vocabulary exactly. */
+export type EmptyReason =
+  | 'EMPTY'
+  | 'NOTHING_ACTIVE'
+  | 'NOT_CONNECTED'
+  | 'STALE'
+  | 'UNAVAILABLE'
+  | 'FORBIDDEN';
+
+/**
+ * The sentence for each empty reason.
+ *
+ * `FORBIDDEN` and `UNAVAILABLE` are word-for-word identical, and that is the
+ * §23 invariant at the last hop: the server cannot distinguish "you may not"
+ * from "it is not there", and an interface that used two different sentences
+ * would rebuild the oracle the server refused to be.
+ */
+export function emptyMessage(reason: EmptyReason, noun: string): string {
+  switch (reason) {
+    case 'NOTHING_ACTIVE':
+      return `There is ${noun} here, but none of it is active right now.`;
+    case 'NOT_CONNECTED':
+      return `This view is not reading the ${noun} yet. The records exist; nothing is showing them.`;
+    case 'STALE':
+      return `The ${noun} could not be refreshed, so nothing current is being shown.`;
+    case 'UNAVAILABLE':
+    case 'FORBIDDEN':
+      return `The ${noun} could not be read.`;
+    case 'EMPTY':
+    default:
+      return `There is no ${noun} yet.`;
+  }
 }
 
 /**
@@ -78,7 +121,12 @@ export function listState<T>(input: AsyncInput<T>): ViewState<T> {
   }
   const items = input.items ?? [];
   if (items.length === 0) {
-    return { phase: 'EMPTY', items: [], message: `There is no ${input.noun} yet.`, retryable: false };
+    return {
+      phase: 'EMPTY',
+      items: [],
+      message: emptyMessage(input.emptyReason ?? 'EMPTY', input.noun),
+      retryable: false,
+    };
   }
   return { phase: 'READY', items, message: '', retryable: false };
 }

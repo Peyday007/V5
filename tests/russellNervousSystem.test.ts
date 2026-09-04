@@ -48,7 +48,8 @@ import {
 } from '../server/services/russell/coverage.ts';
 import { launch, repairLaunches } from '../server/services/russell/launch.ts';
 import { writeBack } from '../server/services/russell/writeback.ts';
-import { briefing, focusLayer, roughProgress } from '../server/services/russell/projections.ts';
+import { briefing, focusLayer } from '../server/services/russell/projections.ts';
+import { describe as describeProgress, progressOf, stageFor } from '../server/services/russell/progress.ts';
 import {
   looksLikeInjection,
   MAX_PROPOSED_LOOKUPS,
@@ -1108,32 +1109,59 @@ describe('a model proposes; the server decides', () => {
 
 describe('a briefing says what changed, why, what next, and whether you are needed', () => {
   it('never turns a feeling into a percentage', () => {
-    // Every phrase is a range over a counted milestone ratio, and none of them
+    // Every phrase is a stage over a counted milestone ratio, and none of them
     // contains a number a reader could mistake for precision.
-    for (const input of [
-      { settled: 0, underWay: 0, total: 8 },
-      { settled: 0, underWay: 2, total: 8 },
-      { settled: 1, underWay: 2, total: 8 },
-      { settled: 3, underWay: 1, total: 8 },
-      { settled: 4, underWay: 1, total: 8 },
-      { settled: 7, underWay: 1, total: 8 },
-      { settled: 8, underWay: 0, total: 8 },
-    ]) {
-      const phrase = roughProgress(input);
-      expect(phrase).not.toMatch(/%/);
-      expect(phrase).not.toMatch(/\b0\.\d+\b/);
+    for (const done of [0, 1, 3, 4, 7, 8]) {
+      const progress = progressOf({
+        milestones: Array.from({ length: 8 }, (_, index) => ({
+          key: `m${index}`,
+          title: `part ${index}`,
+          done: index < done,
+          detail: null,
+        })),
+        closed: true,
+        started: true,
+        blockedBy: [],
+        noun: 'this',
+      });
+      expect(progress.headline).not.toMatch(/%/);
+      expect(progress.headline).not.toMatch(/\b0\.\d+\b/);
     }
   });
 
-  it('says "about halfway" only when the milestones support it', () => {
-    expect(roughProgress({ settled: 4, underWay: 1, total: 8 })).toMatch(/About halfway/);
-    expect(roughProgress({ settled: 1, underWay: 1, total: 8 })).not.toMatch(/About halfway/);
-    expect(roughProgress({ settled: 8, underWay: 0, total: 8 })).toMatch(/Every part/);
+  it('reports a fraction only over a closed milestone set', () => {
+    const milestones = [
+      { key: 'a', title: 'a', done: true, detail: null },
+      { key: 'b', title: 'b', done: false, detail: null },
+    ];
+    const closed = progressOf({ milestones, closed: true, started: true, blockedBy: [], noun: 'x' });
+    const open = progressOf({ milestones, closed: false, started: true, blockedBy: [], noun: 'x' });
+    expect(closed.ratio).toEqual({ done: 1, total: 2 });
+    // An open set has no denominator, so it gets no fraction — and its sentence
+    // must not imply one either.
+    expect(open.ratio).toBeNull();
+    expect(open.headline).not.toMatch(/ of /);
+  });
+
+  it('gives each band its own stage, and blocking outranks all of them', () => {
+    expect(stageFor({ done: 0, total: 8, started: true, blocked: false })).toBe('FOUNDATION');
+    expect(stageFor({ done: 2, total: 8, started: true, blocked: false })).toBe('FORMING');
+    expect(stageFor({ done: 4, total: 8, started: true, blocked: false })).toBe('OPERATIONAL');
+    expect(stageFor({ done: 7, total: 8, started: true, blocked: false })).toBe('STRENGTHENING');
+    expect(stageFor({ done: 8, total: 8, started: true, blocked: false })).toBe('SETTLED');
+    // Three-quarters settled with something unreadable is not three-quarters of
+    // the way anywhere.
+    expect(stageFor({ done: 7, total: 8, started: true, blocked: true })).toBe('BLOCKED');
   });
 
   it('refuses to describe work it cannot see', () => {
-    expect(roughProgress({ settled: 0, underWay: 0, total: 0 })).toMatch(/Nothing is mapped out/);
-    expect(roughProgress({ settled: 0, underWay: 0, total: 8 })).toMatch(/Nothing has been started/);
+    expect(stageFor({ done: 0, total: 0, started: false, blocked: false })).toBe('NOT_STARTED');
+    expect(
+      describeProgress(
+        { stage: 'NOT_STARTED', completed: [], missing: [], ratio: null, blockedBy: [] },
+        'this project',
+      ),
+    ).toMatch(/Nothing has been started/);
   });
 
   it('leads with the focus and ends with whether a person is needed', async () => {

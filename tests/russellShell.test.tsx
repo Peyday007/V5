@@ -21,7 +21,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { act } from 'react';
-import { listState, freshnessLabel, navigationMode, turnLabel } from '../client/src/russell/present.ts';
+import {
+  emptyMessage,
+  listState,
+  freshnessLabel,
+  navigationMode,
+  turnLabel,
+} from '../client/src/russell/present.ts';
 import { parseRoute, pathFor } from '../client/src/lib/router.ts';
 
 // React 18 wants to be told this is an act-capable environment; without it
@@ -53,6 +59,49 @@ describe('a view state is decided in one place', () => {
     // the interface must not invent an answer either.
     expect(forbidden.message).not.toMatch(/no work|none|does not exist/i);
     expect(forbidden.message).toMatch(/access/i);
+  });
+
+  it('distinguishes the six kinds of empty rather than collapsing them', () => {
+    /*
+     * The addendum's requirement, and the reason it is a requirement: the
+     * remedies are completely different. Wait; look somewhere else; connect
+     * something; refresh; report an outage; ask for access. "Nothing yet"
+     * points at none of them, and a person who reads it over real data
+     * concludes the Brain is broken or empty when it is neither.
+     */
+    const reasons = [
+      'EMPTY',
+      'NOTHING_ACTIVE',
+      'NOT_CONNECTED',
+      'STALE',
+      'UNAVAILABLE',
+      'FORBIDDEN',
+    ] as const;
+    const sentences = reasons.map((reason) => emptyMessage(reason, 'work'));
+    // Five distinct sentences from six reasons: exactly one pair coincides, and
+    // which pair is the point of the next test.
+    expect(new Set(sentences).size).toBe(5);
+    expect(emptyMessage('NOTHING_ACTIVE', 'work')).toMatch(/none of it is active/);
+    expect(emptyMessage('NOT_CONNECTED', 'work')).toMatch(/records exist/);
+  });
+
+  it('gives forbidden and unavailable word-for-word the same sentence', () => {
+    // §23 at the last hop. The server cannot distinguish "you may not" from
+    // "it is not there", and two different sentences here would rebuild the
+    // oracle the server refused to be.
+    expect(emptyMessage('FORBIDDEN', 'work')).toBe(emptyMessage('UNAVAILABLE', 'work'));
+  });
+
+  it('uses the server’s own empty reason when it gave one', () => {
+    const nothingActive = listState({
+      loading: false,
+      error: null,
+      items: [],
+      noun: 'work',
+      emptyReason: 'NOTHING_ACTIVE' as const,
+    });
+    const genuinelyEmpty = listState({ loading: false, error: null, items: [], noun: 'work' });
+    expect(nothingActive.message).not.toBe(genuinelyEmpty.message);
   });
 
   it('offers a retry only where retrying could help', () => {
@@ -188,7 +237,14 @@ function baseRoutes(overrides: Record<string, Reply | (() => Reply)> = {}): void
       body: {
         briefing: {
           focus: 'Russell is watching Deal Dispatch.',
-          progress: 'Some of this is settled.',
+          progress: {
+            stage: 'OPERATIONAL',
+            headline: 'Operational — 3 of 8 settled.',
+            completed: [],
+            missing: [],
+            ratio: { done: 3, total: 8 },
+            blockedBy: [],
+          },
           latest: null,
           next: 'Russell has nothing queued.',
           needsYou: 'You are not needed.',
@@ -223,9 +279,37 @@ describe('opening Brain', () => {
     baseRoutes();
     await mount();
     await waitFor(() => expect(screen.getByText(/Russell is watching Deal Dispatch/)).toBeTruthy());
-    expect(screen.getByText('Some of this is settled.')).toBeTruthy();
+    expect(screen.getByText('Operational — 3 of 8 settled.')).toBeTruthy();
     expect(screen.getByText('You are not needed.')).toBeTruthy();
+    // A counted fraction is fine; a percentage is not, because nothing behind
+    // it has that resolution.
     expect(document.body.textContent ?? '').not.toMatch(/\d+\s?%/);
+  });
+
+  it('still renders a briefing from an older server rather than blanking', async () => {
+    /*
+     * A cached bundle against a restarted Brain. The field used to be one
+     * sentence; a component that threw on it would show a person nothing at
+     * all, which is worse than showing them the older sentence.
+     */
+    baseRoutes({
+      'GET /api/russell/projects/prj_1/briefing': {
+        body: {
+          briefing: {
+            focus: 'Russell is watching Deal Dispatch.',
+            progress: 'Some of this is settled.',
+            latest: null,
+            next: 'Russell has nothing queued.',
+            needsYou: 'You are not needed.',
+            openRequests: 0,
+          },
+          focusLayer: null,
+          cycle: null,
+        },
+      },
+    });
+    await mount();
+    await waitFor(() => expect(screen.getByText('Some of this is settled.')).toBeTruthy());
   });
 
   it('keeps the old console one click away behind a secondary menu', async () => {

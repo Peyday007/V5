@@ -279,6 +279,9 @@ describe('a project view is behind the project gate', () => {
       `/api/russell/projects/${projectId}/candidates`,
       `/api/russell/projects/${projectId}/knowledge`,
       `/api/russell/projects/${projectId}/needs-you`,
+      `/api/russell/projects/${projectId}/ideas`,
+      `/api/russell/projects/${projectId}/who`,
+      `/api/russell/projects/${projectId}/progress`,
     ]) {
       const asBob = await call('GET', route, { cookie: bobCookie });
       expect(asBob.status, route).toBe(404);
@@ -294,12 +297,61 @@ describe('a project view is behind the project gate', () => {
       { cookie: aliceCookie },
     );
     expect(result.status).toBe(200);
-    const brief = result.body.briefing;
-    for (const field of ['focus', 'progress', 'next', 'needsYou'] as const) {
+    const brief = result.body.briefing as unknown as Record<string, unknown>;
+    for (const field of ['focus', 'next', 'needsYou'] as const) {
       expect(typeof brief[field]).toBe('string');
-      // Progress is milestone-backed or deliberately non-numeric. A percentage
-      // would be precision the milestones do not have.
-      expect(brief[field]).not.toMatch(/\d+\s*%/);
+    }
+    // Progress is milestone-backed or deliberately non-numeric. A percentage
+    // would be precision the milestones do not have.
+    expect(JSON.stringify(brief)).not.toMatch(/\d+\s*%/);
+    const progress = brief['progress'] as { stage: string; headline: string; ratio: unknown };
+    expect(typeof progress.stage).toBe('string');
+    expect(typeof progress.headline).toBe('string');
+  });
+
+  it('refuses every conversation-shaped Russell view to a worker, by principal type', async () => {
+    // A machine reading a person's threads, ideas or the fleet screen is the
+    // boundary §24 draws, and no membership configuration crosses it.
+    for (const route of [
+      '/api/russell/conversations',
+      `/api/russell/projects/${projectId}/ideas`,
+      `/api/russell/projects/${projectId}/who`,
+    ]) {
+      const asWorker = await call('GET', route, { bearer: workerBearer });
+      expect(asWorker.status, route).toBe(404);
+    }
+  });
+
+  it('groups work and holds technical rows back until asked', async () => {
+    const closed = await call<{
+      work: { groups: { group: string }[]; includesTechnical: boolean; technicalHidden: number };
+    }>('GET', `/api/russell/projects/${projectId}/work`, { cookie: aliceCookie });
+    expect(closed.status).toBe(200);
+    expect(closed.body.work.groups.map((group) => group.group)).toEqual([
+      'WORKING_NOW',
+      'UP_NEXT',
+      'EXPLORING',
+      'WAITING',
+      'FINISHED',
+    ]);
+    expect(closed.body.work.includesTechnical).toBe(false);
+
+    const opened = await call<{ work: { includesTechnical: boolean } }>(
+      'GET',
+      `/api/russell/projects/${projectId}/work?technical=1`,
+      { cookie: aliceCookie },
+    );
+    expect(opened.body.work.includesTechnical).toBe(true);
+  });
+
+  it('never puts a credential, a digest or a secret name on the Who screen', async () => {
+    const result = await call('GET', `/api/russell/projects/${projectId}/who`, {
+      cookie: adminCookie,
+    });
+    expect(result.status).toBe(200);
+    const serialized = JSON.stringify(result.body);
+    for (const forbidden of ['tokenDigest', 'tokenSecretName', 'brnw_', 'verifier']) {
+      expect(serialized).not.toContain(forbidden);
     }
   });
 

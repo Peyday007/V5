@@ -167,6 +167,16 @@ export type MessageRole = (typeof MESSAGE_ROLES)[number];
 export const PROJECT_STATUSES = ['ACTIVE', 'PAUSED', 'COMPLETE', 'ARCHIVED'] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
+/**
+ * What a project is for.
+ *
+ * `TECHNICAL` is the verifier's scope, the fault harness, the queue proof — the
+ * machinery exercising itself. Those rows are real and are kept, and they are
+ * deliberately not counted as somebody's work. See migration 028.
+ */
+export const PROJECT_PURPOSES = ['PROJECT', 'TECHNICAL'] as const;
+export type ProjectPurpose = (typeof PROJECT_PURPOSES)[number];
+
 export const EVENT_TYPES = [
   'PROJECT_CREATED',
   'DOCUMENT_CREATED',
@@ -1234,6 +1244,8 @@ export interface ProjectRow {
   status: string;
   version_policy: string;
   settings: string;
+  /** 'PROJECT' | 'TECHNICAL' — see migration 028. */
+  purpose: string;
   created_at: string;
   updated_at: string;
 }
@@ -1557,6 +1569,13 @@ export interface Project {
   status: ProjectStatus;
   versionPolicy: VersionPolicy;
   settings: Record<string, unknown>;
+  /**
+   * Whether this project is somebody's work or the machinery proving itself.
+   *
+   * A `TECHNICAL` scope is as real as any other and is deliberately kept out of
+   * the ordinary counts a person reads — see migration 028.
+   */
+  purpose: ProjectPurpose;
   createdAt: string;
   updatedAt: string;
 }

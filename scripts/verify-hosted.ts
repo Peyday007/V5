@@ -385,6 +385,10 @@ async function setUp(): Promise<Fixtures> {
       description:
         'Created by scripts/verify-hosted.ts. It exists so hosted authorization can be ' +
         'proven against a project that is not a real one. Safe to ignore.',
+      // Declared, not inferred. Everything this run creates is the machinery
+      // proving itself, and it must never be counted as somebody's work on a
+      // screen a person reads. See migration 028.
+      purpose: 'TECHNICAL',
     }));
 
   // The project this run must be *refused*. Whichever real project exists —

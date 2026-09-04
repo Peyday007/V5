@@ -9,9 +9,13 @@
  * That rules out the most tempting sentence in the product. "About halfway
  * through figuring out how the money works" is only sayable when a defined
  * milestone ratio supports it — a layer with three of six versions accepted is
- * halfway; a layer with an unknown amount of work left is not. So
- * `roughProgress` returns a milestone-backed phrase or a **non-numeric** one,
- * and there is no code path that turns a feeling into a percentage.
+ * halfway; a layer with an unknown amount of work left is not.
+ *
+ * The arithmetic behind that used to live here, and it does not any more.
+ * `progress.ts` owns it, for every surface, because the moment Work and Ideas
+ * and the map each needed a version of it there were four implementations and
+ * three of them were untested. A person reading two screens must not see two
+ * different answers about the same project.
  *
  * The other rule is order. Every ordinary update answers, in this sequence:
  * what changed, why it matters, what Russell is doing next, and whether the
@@ -22,26 +26,10 @@ import { listLayers } from '../../repos/layers.ts';
 import { groupOf, listMissions, listCurrentKnowledge } from '../../repos/russellMissions.ts';
 import { listOpenRequests } from '../../repos/russellMissions.ts';
 import { plainLayerName } from './dealDispatch.ts';
+import { projectProgress, type Progress } from './progress.ts';
 import type { LayerStatus, RussellMission } from '../../domain/types.ts';
 
-export interface Briefing {
-  /** One line: what Russell is on. */
-  focus: string;
-  /** Meaningful progress, milestone-backed or deliberately non-numeric. */
-  progress: string;
-  /** The most recent thing worth telling somebody. Null when there is none. */
-  latest: string | null;
-  /** What Russell intends to do next, or what it is watching. */
-  next: string;
-  /** Whether a person is actually needed, and for what. */
-  needsYou: string;
-  /** How many open human decisions there are, for a badge. */
-  openRequests: number;
-}
-
-/** Layer states that count as settled, for a milestone ratio. */
-const SETTLED: readonly LayerStatus[] = ['FROZEN'];
-/** Layer states that count as genuinely under way. */
+/** Layer states that mean work is genuinely under way. */
 const UNDER_WAY: readonly LayerStatus[] = [
   'RESEARCHING',
   'AUDITING',
@@ -53,42 +41,35 @@ const UNDER_WAY: readonly LayerStatus[] = [
   'REOPENED',
 ];
 
-/**
- * Meaningful progress, or an honest refusal to quantify it.
- *
- * The ratio is over *defined milestones* — the project's own layers, which are
- * a fixed and declared set — so "three of eight settled" is a fact rather than
- * an impression. Anything less structured gets words instead, and the words are
- * chosen so that none of them implies a fraction.
- */
-export function roughProgress(input: {
-  settled: number;
-  underWay: number;
-  total: number;
-}): string {
-  const { settled, underWay, total } = input;
-  if (total === 0) return 'Nothing is mapped out yet.';
-  if (settled === 0 && underWay === 0) return 'Nothing has been started yet.';
-  if (settled === total) return 'Every part of this is settled.';
-
-  const ratio = settled / total;
-  // Only these five phrases, and each one is a range over a counted ratio. A
-  // sixth that said "about 62%" would be inventing precision the milestones do
-  // not have.
-  const shape =
-    ratio === 0
-      ? 'The early parts are still forming'
-      : ratio < 0.25
-        ? 'A small part of this is settled'
-        : ratio < 0.45
-          ? 'Some of this is settled'
-          : ratio < 0.7
-            ? 'About halfway through'
-            : 'Most of this is settled';
-
-  return underWay > 0
-    ? `${shape}, and ${underWay} ${underWay === 1 ? 'part is' : 'parts are'} being worked on.`
-    : `${shape}.`;
+export interface Briefing {
+  /** One line: what Russell is on. */
+  focus: string;
+  /**
+   * Meaningful progress, from the one shared projection.
+   *
+   * The whole object rather than its sentence, because a briefing card shows
+   * the sentence and a person who opens it wants the milestones behind it —
+   * and a second call to work them out could disagree with this one.
+   */
+  progress: Progress;
+  /** The most recent thing worth telling somebody. Null when there is none. */
+  latest: string | null;
+  /** What Russell intends to do next, or what it is watching. */
+  next: string;
+  /**
+   * The open gaps worth a person knowing about.
+   *
+   * From the knowledge rows that record them — `GAP`, `UNKNOWN`,
+   * `CONTRADICTION` — rather than derived from what is missing, because a gap
+   * somebody wrote down is a fact and a gap inferred from an absence is a
+   * guess. Empty when the project has recorded none, which is different from
+   * having none.
+   */
+  openGaps: string[];
+  /** Whether a person is actually needed, and for what. */
+  needsYou: string;
+  /** How many open human decisions there are, for a badge. */
+  openRequests: number;
 }
 
 /** What Russell is on, from the missions actually running. */
@@ -135,8 +116,8 @@ export async function briefing(input: {
   projectName: string;
   includePrivate?: boolean;
 }): Promise<Briefing> {
-  const [layers, missions, knowledge, requests] = await Promise.all([
-    listLayers(input.projectId),
+  const [progress, missions, knowledge, requests, gaps] = await Promise.all([
+    projectProgress({ projectId: input.projectId, projectName: input.projectName }),
     listMissions({ projectId: input.projectId }),
     listCurrentKnowledge({
       projectId: input.projectId,
@@ -145,18 +126,22 @@ export async function briefing(input: {
       limit: 5,
     }),
     listOpenRequests(input.projectId),
+    listCurrentKnowledge({
+      projectId: input.projectId,
+      kinds: ['GAP', 'UNKNOWN', 'CONTRADICTION'],
+      includePrivate: input.includePrivate ?? false,
+      limit: 5,
+    }),
   ]);
-
-  const settled = layers.filter((layer) => SETTLED.includes(layer.status)).length;
-  const underWay = layers.filter((layer) => UNDER_WAY.includes(layer.status)).length;
 
   const blocking = requests.filter((request) => request.urgency !== 'WHENEVER');
 
   return {
     focus: focusOf(input.projectName, missions),
-    progress: roughProgress({ settled, underWay, total: layers.length }),
+    progress,
     latest: knowledge[0]?.statement ?? null,
     next: nextOf(missions),
+    openGaps: gaps.map((gap) => gap.statement),
     // The honest default is that a person is *not* needed. Saying otherwise
     // when nothing is blocked trains people to ignore the one time it matters.
     needsYou:

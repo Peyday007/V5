@@ -9,16 +9,102 @@
  * Every one of them renders through `listState`, so loading, empty, forbidden
  * and error are decided in one tested place rather than five untested ones.
  */
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Constellation } from './Constellation.tsx';
 import { freshnessLabel, listState, readingState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { RussellApi } from '../lib/russellApi.ts';
 import type {
-  RussellCandidate,
-  RussellHumanRequest,
+  IdeaNode,
   KnowsEntry,
-  RussellMission,
+  Progress,
+  RussellHumanRequest,
+  WhoView as WhoData,
+  WorkEntry,
 } from '../lib/russellApi.ts';
+
+/**
+ * Progress, shown as what it actually is.
+ *
+ * A stage word and a fraction *only when the server gave one* — `ratio` is null
+ * whenever the milestone set is open, and rendering a bar over an unknown
+ * denominator is exactly the invented precision the projection refuses to
+ * produce. The milestones are listed underneath because "Forming" on its own
+ * tells nobody what is left.
+ */
+export function ProgressLine({
+  progress,
+}: {
+  /*
+   * Deliberately wider than the current shape.
+   *
+   * A cached bundle against a restarted server sees the older briefing, where
+   * progress was one sentence, and a component that threw on it would turn a
+   * smaller answer into a blank screen — the same failure as printing "nothing
+   * yet" over real data, reached from the other side. So a string renders as
+   * the sentence it is, and a missing value renders nothing at all.
+   */
+  progress: Progress | string | null | undefined;
+}): JSX.Element | null {
+  const [open, setOpen] = useState(false);
+  if (progress === null || progress === undefined) return null;
+  if (typeof progress === 'string') {
+    return <p className="rs-progress-headline">{progress}</p>;
+  }
+  if (typeof progress.stage !== 'string') {
+    // A shape neither this version nor the last one produces. Rendering the
+    // headline if there is one beats rendering an exception.
+    return <p className="rs-progress-headline">{String(progress.headline ?? '')}</p>;
+  }
+  return (
+    <div className="rs-progress">
+      <p className={`rs-progress-headline rs-stage-${progress.stage.toLowerCase()}`}>
+        {progress.headline}
+      </p>
+      {progress.ratio ? (
+        <div
+          className="rs-progress-bar"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={progress.ratio.total}
+          aria-valuenow={progress.ratio.done}
+          aria-label={progress.headline}
+        >
+          <span style={{ width: `${(progress.ratio.done / progress.ratio.total) * 100}%` }} />
+        </div>
+      ) : null}
+      {progress.blockedBy.length > 0 ? (
+        <ul className="rs-progress-blocked">
+          {progress.blockedBy.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      ) : null}
+      {progress.completed.length + progress.missing.length > 0 ? (
+        <>
+          <button type="button" className="rs-more" onClick={() => setOpen(!open)}>
+            {open ? 'Hide the details' : 'What is done, and what is left'}
+          </button>
+          {open ? (
+            <ul className="rs-milestones">
+              {progress.completed.map((milestone) => (
+                <li key={milestone.key} className="rs-milestone-done">
+                  {milestone.title}
+                </li>
+              ))}
+              {progress.missing.map((milestone) => (
+                <li key={milestone.key} className="rs-milestone-open">
+                  {milestone.title}
+                  {milestone.detail ? <span className="rs-item-meta"> — {milestone.detail}</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 /** The shared frame: a heading, a state sentence, and whatever is ready. */
 function Panel(props: {
@@ -46,24 +132,216 @@ function Panel(props: {
   );
 }
 
+/**
+ * Everything being worked on, in the five groups a person reads.
+ *
+ * Reads the server's whole-project projection rather than the mission table
+ * alone. That is the fix for the defect that mattered most here: the Brain was
+ * running a real research packet and this screen said there was no work,
+ * because every packet predated Russell and lived in a different table.
+ *
+ * The technical toggle is off by default and says how much it is holding back.
+ * "Nothing here" and "nothing here, and four harness rows hidden" are different
+ * facts, and a person who cannot see the second one will eventually conclude
+ * the first is a bug.
+ */
 export function WorkView({ projectId }: { projectId: string | null }): JSX.Element {
+  const [technical, setTechnical] = useState(false);
   const query = useAsync(
-    () => (projectId ? RussellApi.work(projectId) : Promise.resolve({ missions: [] })),
-    [projectId],
+    () =>
+      projectId
+        ? RussellApi.work(projectId, { technical })
+        : Promise.resolve(null),
+    [projectId, technical],
   );
-  const state = listState<RussellMission>({
+  const work = query.data?.work;
+  const state = listState<WorkEntry>({
     loading: query.loading,
     error: query.error,
-    items: query.data?.missions ?? null,
+    items: work?.items ?? null,
     noun: 'work',
+    emptyReason: work?.emptyReason ?? null,
   });
+  const groups = (work?.groups ?? []).filter((group) => group.entries.length > 0);
   return (
     <Panel title="Work" state={state} onRetry={query.reload}>
+      {groups.map((group) => (
+        <div key={group.group} className="rs-group">
+          <h3 className="rs-group-title">{GROUP_TITLES[group.group] ?? group.group}</h3>
+          <ul className="rs-list">
+            {group.entries.map((entry) => (
+              <li key={entry.id}>
+                <span className="rs-item-title">{entry.title}</span>
+                <span className="rs-item-meta">
+                  {plainWorkState(entry)}
+                  {entry.provenance !== 'PROJECT' ? ` · ${PROVENANCE_WORDS[entry.provenance]}` : ''}
+                </span>
+                {entry.why ? <span className="rs-item-meta">{entry.why}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {work && !technical && work.technicalHidden > 0 ? (
+        <button type="button" className="rs-more" onClick={() => setTechnical(true)}>
+          Also show {work.technicalHidden} technical{' '}
+          {work.technicalHidden === 1 ? 'item' : 'items'} — fixtures, harness runs and
+          conversation machinery
+        </button>
+      ) : null}
+      {technical ? (
+        <button type="button" className="rs-more" onClick={() => setTechnical(false)}>
+          Hide technical items
+        </button>
+      ) : null}
+    </Panel>
+  );
+}
+
+/** The five headings. One mapping, so two screens cannot disagree. */
+const GROUP_TITLES: Record<string, string> = {
+  WORKING_NOW: 'Working now',
+  UP_NEXT: 'Up next',
+  EXPLORING: 'Exploring',
+  WAITING: 'Waiting',
+  FINISHED: 'Finished',
+};
+
+/** Plain words for where work came from, when it did not come from the project. */
+const PROVENANCE_WORDS: Record<string, string> = {
+  PROJECT: 'project work',
+  FIXTURE: 'a written-in fixture',
+  HARNESS: 'the machinery proving itself',
+  CONVERSATION: 'answering you',
+  TECHNICAL_SCOPE: 'a technical scope',
+};
+
+/** A state name a person would use, never the enum. */
+function plainWorkState(entry: WorkEntry): string {
+  switch (entry.group) {
+    case 'WORKING_NOW':
+      return 'being worked on now';
+    case 'UP_NEXT':
+      return 'about to start';
+    case 'EXPLORING':
+      return 'being decided about';
+    case 'WAITING':
+      return `waiting on ${entry.waitingOn ?? 'something outside Russell'}`;
+    case 'FINISHED':
+    default:
+      return entry.state === 'DONE' || entry.state === 'COMPLETE'
+        ? 'finished'
+        : entry.state === 'CANCELLED'
+          ? 'stopped'
+          : 'did not work out';
+  }
+}
+
+/**
+ * Ideas — the site, its major ideas, and the ordinary ideas inside them.
+ *
+ * A drill-down over the same projection the constellation lays out, which is
+ * why it is also the map's accessible fallback: not a second description of the
+ * shape, the *same* one rendered as a list. A person on a screen reader and a
+ * person dragging a map are looking at identical facts.
+ *
+ * Selecting a node moves focus into it and the breadcrumb keeps orientation.
+ * There is no "back" that loses where you were, because the path is derived
+ * from the node rather than from a history stack.
+ */
+export function IdeasView({
+  projectId,
+  focusId,
+  onFocus,
+}: {
+  projectId: string | null;
+  focusId?: string | null;
+  onFocus?: (nodeId: string) => void;
+}): JSX.Element {
+  const query = useAsync(
+    () => (projectId ? RussellApi.ideas(projectId) : Promise.resolve(null)),
+    [projectId],
+  );
+  const [localFocus, setLocalFocus] = useState<string | null>(null);
+  const map = query.data?.map ?? null;
+  const focus = focusId ?? localFocus ?? map?.rootId ?? null;
+
+  const children = map && focus ? map.nodes.filter((node) => node.parentId === focus) : [];
+  const current = map && focus ? map.nodes.find((node) => node.id === focus) : undefined;
+  const state = listState<IdeaNode>({
+    loading: query.loading,
+    error: query.error,
+    // The children of whatever is in focus. A leaf with none is genuinely
+    // empty, and says so rather than showing the whole map again.
+    items: map ? children : null,
+    noun: 'ideas',
+    emptyReason: query.data?.state.emptyReason ?? null,
+  });
+
+  function select(nodeId: string): void {
+    setLocalFocus(nodeId);
+    onFocus?.(nodeId);
+  }
+
+  const trail: IdeaNode[] = [];
+  if (map && current) {
+    const byId = new Map(map.nodes.map((node) => [node.id, node]));
+    let walk: IdeaNode | undefined = current;
+    let guard = map.nodes.length + 1;
+    while (walk && guard-- > 0) {
+      trail.unshift(walk);
+      walk = walk.parentId ? byId.get(walk.parentId) : undefined;
+    }
+  }
+
+  return (
+    <Panel title="Ideas" state={state} onRetry={query.reload}>
+      {/*
+        The map and the list are the same projection at two resolutions. The
+        map is the shape; the list is the same facts in reading order, which is
+        what a screen reader gets and what a person gets when the shape is not
+        what they need. Neither is a summary of the other.
+      */}
+      {map && focus ? (
+        <Constellation map={map} focusId={focus} onFocus={select} />
+      ) : null}
+      {trail.length > 0 ? (
+        <nav className="rs-crumbs" aria-label="Where you are">
+          {trail.map((node, index) => (
+            <button
+              key={node.id}
+              type="button"
+              className="rs-crumb"
+              disabled={index === trail.length - 1}
+              onClick={() => select(node.id)}
+            >
+              {node.title}
+            </button>
+          ))}
+        </nav>
+      ) : null}
+      {current ? (
+        <div className="rs-node-detail">
+          {current.purpose ? <p>{current.purpose}</p> : null}
+          {current.why ? <p className="rs-item-meta">{current.why}</p> : null}
+          <ProgressLine progress={current.progress} />
+          <p className="rs-item-meta">
+            {current.counts.knowledge} known · {current.counts.unknowns} still open ·{' '}
+            {current.counts.work} {current.counts.work === 1 ? 'piece' : 'pieces'} of work
+          </p>
+        </div>
+      ) : null}
       <ul className="rs-list">
-        {state.items.map((mission) => (
-          <li key={mission.id}>
-            <span className="rs-item-title">{mission.objective}</span>
-            <span className="rs-item-meta">{plainMissionState(mission)}</span>
+        {state.items.map((node) => (
+          <li key={node.id}>
+            <button type="button" className="rs-node" onClick={() => select(node.id)}>
+              <span className="rs-item-title">{node.title}</span>
+              <span className="rs-item-meta">
+                {node.stateLabel}
+                {node.priorityLabel ? ` · ${node.priorityLabel}` : ''}
+              </span>
+              {node.why ? <span className="rs-item-meta">{node.why}</span> : null}
+            </button>
           </li>
         ))}
       </ul>
@@ -71,48 +349,75 @@ export function WorkView({ projectId }: { projectId: string | null }): JSX.Eleme
   );
 }
 
-/** A state name a person would use, never the enum. */
-function plainMissionState(mission: RussellMission): string {
-  switch (mission.state) {
-    case 'RUNNING':
-      return 'being worked on now';
-    case 'PLANNED':
-    case 'LAUNCHING':
-      return 'about to start';
-    case 'WAITING':
-      return `waiting on ${mission.waitingOn ?? 'something outside Russell'}`;
-    case 'NEEDS_HUMAN':
-      return 'waiting for you';
-    case 'DONE':
-      return 'finished';
-    case 'FAILED':
-      return 'did not work out';
-    case 'CANCELLED':
-      return 'stopped';
-  }
-}
-
-export function ProjectsView({ projectId }: { projectId: string | null }): JSX.Element {
+/**
+ * Who is here, and what can run.
+ *
+ * Two lists with different rules. People are collaborators; surfaces are
+ * machinery. A caller who does not administer the project never receives the
+ * second one from the server at all — this component cannot show it, because
+ * there is nothing in the response to show, which is the point of doing the
+ * gating on the server rather than in a conditional here.
+ */
+export function WhoView({ projectId }: { projectId: string | null }): JSX.Element {
   const query = useAsync(
-    () => (projectId ? RussellApi.candidates(projectId) : Promise.resolve({ candidates: [] })),
+    () => (projectId ? RussellApi.who(projectId) : Promise.resolve(null)),
     [projectId],
   );
-  const state = listState<RussellCandidate>({
+  const view: WhoData | null = query.data ?? null;
+  const state = readingState({
     loading: query.loading,
     error: query.error,
-    items: query.data?.candidates ?? null,
-    noun: 'ideas',
+    value: view,
+    noun: 'people',
   });
   return (
-    <Panel title="Ideas" state={state} onRetry={query.reload}>
-      <ul className="rs-list">
-        {state.items.map((candidate) => (
-          <li key={candidate.id}>
-            <span className="rs-item-title">{candidate.title}</span>
-            <span className="rs-item-meta">{candidate.reason ?? ''}</span>
-          </li>
-        ))}
-      </ul>
+    <Panel title="Who" state={state} onRetry={query.reload}>
+      {view ? (
+        <>
+          <ul className="rs-list">
+            {view.people.map((person) => (
+              <li key={person.id}>
+                <span className="rs-item-title">
+                  {person.name}
+                  {person.isYou ? ' (you)' : ''}
+                </span>
+                <span className="rs-item-meta">
+                  {person.roleLabel}
+                  {person.email ? ` · ${person.email}` : ''}
+                  {person.active ? '' : ' · no longer active'}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {view.people.length === 0 ? (
+            <p className="rs-state rs-state-empty">Nobody else is on this project yet.</p>
+          ) : null}
+          <h3 className="rs-group-title">What can run</h3>
+          <p className="rs-fleet-line">{view.capacityExplanation}</p>
+          {view.surfaces ? (
+            <ul className="rs-list">
+              {view.surfaces.map((surface) => (
+                <li key={surface.id}>
+                  <span className="rs-item-title">
+                    {surface.name} · {surface.accountName}
+                  </span>
+                  <span className="rs-item-meta">
+                    {surface.health}
+                    {surface.target !== null ? ` · carrying up to ${surface.target}` : ''}
+                    {surface.boundWorker ? ` · ${surface.boundWorker}` : ''}
+                    {surface.configured ? '' : ' · not configured'}
+                  </span>
+                  {surface.reason ? <span className="rs-item-meta">{surface.reason}</span> : null}
+                  <span className="rs-item-meta">
+                    {surface.fires} {surface.fires === 1 ? 'run' : 'runs'} · {surface.refusals}{' '}
+                    turned away · {surface.noShows} did not turn up
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      ) : null}
     </Panel>
   );
 }

@@ -117,6 +117,9 @@ async function scope(): Promise<string> {
     description:
       'Created by scripts/step10.ts. Holds the Step 10 dispatch acceptance bins so that ' +
       'measuring the dispatcher never puts test items into a project with real research in it.',
+    // The same separation the description already describes, made a fact about
+    // the row so a person's Work screen can act on it. See migration 028.
+    purpose: 'TECHNICAL',
   });
   return created.id;
 }
@@ -621,6 +624,7 @@ async function main(): Promise<void> {
           'Created by scripts/step10.ts for the Step 11 audit-independence acceptance. Holds one ' +
           'packet so that proving a lease guard never puts an acceptance document into a project ' +
           'with real research in it.',
+        purpose: 'TECHNICAL',
       }));
     const layers = await listLayers(project.id);
     const layer =

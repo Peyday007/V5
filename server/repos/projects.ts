@@ -2,6 +2,7 @@ import { getDb } from '../db/database.ts';
 import {
   DEFAULT_VERSION_POLICY,
   type Project,
+  type ProjectPurpose,
   type ProjectRow,
   type ProjectStatus,
   type VersionPolicy,
@@ -19,6 +20,7 @@ export function mapProject(row: ProjectRow): Project {
     status: row.status as ProjectStatus,
     versionPolicy: { ...DEFAULT_VERSION_POLICY, ...parseJson<Partial<VersionPolicy>>(row.version_policy, {}) },
     settings: parseJson<Record<string, unknown>>(row.settings, {}),
+    purpose: (row.purpose === 'TECHNICAL' ? 'TECHNICAL' : 'PROJECT') as ProjectPurpose,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -32,6 +34,12 @@ export interface CreateProjectInput {
   currentWave?: number;
   versionPolicy?: Partial<VersionPolicy>;
   settings?: Record<string, unknown>;
+  /**
+   * Declared at creation, because the thing creating the project is the only
+   * thing that knows. The verifier and the fault harness say `TECHNICAL`; an
+   * ordinary path says nothing and gets the ordinary answer.
+   */
+  purpose?: ProjectPurpose;
 }
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {
@@ -47,15 +55,16 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     status: 'ACTIVE',
     version_policy: toJson({ ...DEFAULT_VERSION_POLICY, ...(input.versionPolicy ?? {}) }),
     settings: toJson(input.settings ?? {}),
+    purpose: input.purpose ?? 'PROJECT',
     created_at: ts,
     updated_at: ts,
   };
   await db.run(
     `INSERT INTO projects (id, slug, name, description, north_star, current_wave, status,
-       version_policy, settings, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       version_policy, settings, purpose, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [row.id, row.slug, row.name, row.description, row.north_star, row.current_wave, row.status,
-      row.version_policy, row.settings, row.created_at, row.updated_at],
+      row.version_policy, row.settings, row.purpose, row.created_at, row.updated_at],
   );
   return mapProject(row);
 }
