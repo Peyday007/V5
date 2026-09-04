@@ -2265,3 +2265,73 @@ again. The assertion is now backend-aware, and the run above is a clean single
 pass rather than a re-run over an already-migrated database.
 
 **Precondition satisfied. Both chains pass. Proceeding to step 1.**
+
+---
+
+## 24. Mutation 5 delivered — 2026-09-04
+
+**LIVE PRODUCTION.** Deploy run
+[33921379946](https://github.com/Peyday007/V5/actions/runs/33921379946), commit
+`c87d857`, authorized by the product owner conditional on the populated-data
+upgrade proof in §23 passing on both chains. It did, twice, and only then was
+this dispatched.
+
+### Which commit, and why not the one named
+
+The authorization named the application tree at `1e10076`. The run deployed
+`c87d857`, and `git diff 1e10076 c87d857 -- server client` is **empty** — the
+server and client are byte-identical. The differences are `docs/` and the
+extension to `scripts/upgrade-check.ts` that the authorization's own
+precondition required.
+
+Deploying `1e10076` would have been the more literal reading and the wrong
+action: A19's tree comparison covers `server client scripts package.json
+package-lock.json Dockerfile fly.toml`, so a deployed `1e10076` against a tip
+of `c87d857` would report *"application code changed since the last delivery —
+this tree is not what is running"*. Deploying the tip is the only way both
+halves of the instruction hold, and the running program is the program the
+acceptance reads.
+
+### Every gate, in order
+
+| # | Gate | Result | At |
+| --- | --- | --- | --- |
+| 1 | Typecheck | success | 21:30:43 |
+| 2 | Full SQLite suite, in CI, with the runtime image's OCR tooling installed | success | 21:32:57 |
+| 3 | Production build | success | 21:33:09 |
+| 4 | `flyctl deploy` — new image, migrations 028/029 on boot | success | 21:34:52 |
+| 5 | Boot banner captured | success | 21:35:02 |
+| 6 | `/healthz` → 200, and anonymous `/api/projects` → 401 | success | 21:35:02 |
+| 7 | **Hosted verification, before the restart** (leaves a beacon) | success | 21:37:28 |
+| 8 | Bootstrap secrets spent | success | 21:37:29 |
+| 9 | **Explicit restart of the production machine** | success | 21:38:06 |
+| 10 | `/healthz` → 200 again | success | 21:38:07 |
+| 11 | **Hosted verification, after the restart** (beacon checked) | success | 21:40:30 |
+| 12 | The verdict | success | 21:40:30 |
+
+No gate failed, so no rollback was performed. The rollback remains
+`flyctl deploy --image <3b6ebfb's image>`; the two migrations are additive, so
+the previous image runs unchanged against the migrated schema.
+
+The pre-flight step was **skipped**, correctly: it runs only when
+`BRAIN_DATABASE_URL` is also a GitHub secret, and it is deliberately not one —
+the database credential lives in exactly one place.
+
+### The spending boundary, after the deploy
+
+Unchanged and unchangeable by this deployment. Migration 029 created the spend
+tables **empty**; there is no `spend_authorizations` row, so `liveAuthorization`
+returns null, the ceiling is **$0**, no model is enabled, no API key was added
+and none exists. Every Russell turn still goes to the Routine fleet, exactly as
+before. `A22_FAST_CHAT_ROUTING` stays `NOT_RUN`.
+
+### The ledger
+
+`LEDGER` now names five runs and `EXPECTED` is `5`, with both authorizations
+quoted in the workflow beside them. Raising that number without a written
+authorization is the widening the constant exists to prevent, so the text is
+stored next to the count rather than in a commit message somebody would have to
+go and find.
+
+**V2 remains `QUARANTINED`. No Routine prompt, model, target, connector or
+state was touched. No turn, bin, fire or fixture was created.**
