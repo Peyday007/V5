@@ -2087,3 +2087,53 @@ on the first round.
 This was not caused by anything in Workstreams 1 to 4. It was reachable from
 the day the reservation ranking was written and had simply never lost the toss
 in a watched run.
+
+---
+
+## 21. Checkpoint and resume path — 2026-09-04
+
+**Branch** `claude/zealous-hypatia-78a2yp`, pushed, worktree clean.
+**Production** unchanged at image `3b6ebfb`; four delivery mutations spent.
+**Tally** 10 PASS · 0 FAIL · 0 BLOCKED · 12 NOT_RUN across 22 gates.
+
+### Done in this batch
+
+- **WS1** — the acceptance reporter scoped to the frozen mission; A20–A22
+  added. (Earlier commit `3c67f4d`.)
+- **WS2** — Work, Ideas, Who, one progress projection, honest empty states,
+  migration 028.
+- **WS3** — the living constellation over that same projection, and four
+  layout and shell defects found by rendering it and looking.
+- **WS4** — the conversation lane, the spending boundary, the context hat and
+  the teacher loop, migration 029, all switched off.
+- **WS5** — the acceptance scenario frozen as `S12A-ACC-1`, and the request for
+  the fifth mutation.
+- One unrelated race, found by the suite: reservation ranking by a random id.
+
+### Not done, and why
+
+- **The production acceptance chain.** It needs mutations 5 to 7, which need
+  one explicit authorization. §19 is the request.
+- **`A22_FAST_CHAT_ROUTING`.** It needs a real provider call, which needs a
+  key, an authorization and a ceiling. Not requested here.
+- **`ACCEPTANCE_SCOPE.conversationId`.** It cannot be set before the frozen
+  message exists in production.
+
+None of these is incomplete work presented as complete. Each is code that is
+finished and unproven, which is exactly what `NOT_RUN` means.
+
+### One resume path
+
+1. Grant or refuse the three mutations in §19. If granted, run them **in
+   order**, with hosted verification before and after the restart of each
+   deployment.
+2. Send the frozen message from
+   `docs/STEP-12A-ACCEPTANCE-SCENARIO.md` §2, and read the coverage result
+   first. If the archive already settles it, **abandon the scenario** and
+   freeze another; do not proceed.
+3. Set `ACCEPTANCE_SCOPE.conversationId`, deploy, and re-run the reporter.
+4. Let Brain's own dispatcher fire V1 at target 1. Do not fire by hand and do
+   not use an interactive session as the worker.
+5. Walk the seventeen conditions against the falsification table in the
+   scenario document, and record each outcome with its evidence — including
+   the ones that fail.
