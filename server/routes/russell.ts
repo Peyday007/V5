@@ -41,6 +41,7 @@ import { getCycle } from '../repos/russellCycle.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
 import { beginTurn, conversationIsReadable } from '../services/russell/turn.ts';
 import { briefing, focusLayer } from '../services/russell/projections.ts';
+import { knowsForProject, surfaceState } from '../services/russell/knows.ts';
 import { DEAL_DISPATCH_SLUG, readDealDispatch } from '../services/russell/dealDispatch.ts';
 import { coverBeforeWork, explainCoverage } from '../services/russell/coverage.ts';
 import {
@@ -288,16 +289,34 @@ russellRouter.get(
   '/projects/:projectId/knowledge',
   handler(async (req) => {
     const project = await requireProject(pathId(req, 'projectId'));
-    return {
-      knowledge: await listCurrentKnowledge({
+    const limit = optionalInteger(queryOf(req)['limit'], 'limit', { min: 1, max: 200 }) ?? 100;
+    /*
+     * Two readings of the same question, and the second one is the reason this
+     * route changed.
+     *
+     * `knowledge` is what Russell has captured since Step 12A. `knows` is that
+     * *plus* the research the Brain already did — every claim Steps 9 to 11
+     * filed, projected rather than copied, carrying its own evidence chain and
+     * its own epistemic status. Without it a person opened Knows, saw almost
+     * nothing, and concluded the Brain knew nothing while the archive held the
+     * material that had already answered their question.
+     *
+     * Both are returned. The first is kept because callers already read it and
+     * removing a field is a change nobody asked for; the second is what a
+     * surface should render.
+     */
+    const [knowledge, knows] = await Promise.all([
+      listCurrentKnowledge({
         projectId: project.id,
         // Private knowledge never leaves through this route. It is scoped to
         // the person who made it and there is no query parameter that widens
         // it — a flag a caller could set is not a boundary.
         includePrivate: false,
-        limit: optionalInteger(queryOf(req)['limit'], 'limit', { min: 1, max: 200 }) ?? 100,
+        limit,
       }),
-    };
+      knowsForProject({ projectId: project.id, includePrivate: false, limit }),
+    ]);
+    return { knowledge, knows: surfaceState({ items: knows }) };
   }),
 );
 

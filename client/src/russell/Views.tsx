@@ -16,7 +16,7 @@ import { RussellApi } from '../lib/russellApi.ts';
 import type {
   RussellCandidate,
   RussellHumanRequest,
-  RussellKnowledge,
+  KnowsEntry,
   RussellMission,
 } from '../lib/russellApi.ts';
 
@@ -117,16 +117,42 @@ export function ProjectsView({ projectId }: { projectId: string | null }): JSX.E
   );
 }
 
+/**
+ * What the Brain knows — its own captures *and* the research archive.
+ *
+ * The archive half is the point. Before it, this panel read one table Russell
+ * had barely started filling and told a person there was nothing here, while
+ * every claim Steps 9 to 11 filed sat one join away. A missing projection and
+ * an empty Brain look identical from a screen, which is why the server now
+ * returns the reason a list is empty rather than leaving the interface to
+ * guess.
+ */
 export function KnowledgeView({ projectId }: { projectId: string | null }): JSX.Element {
   const query = useAsync(
-    () => (projectId ? RussellApi.knowledge(projectId) : Promise.resolve({ knowledge: [] })),
+    () =>
+      projectId
+        ? RussellApi.knowledge(projectId)
+        : Promise.resolve({
+            knowledge: [],
+            knows: { items: [], emptyReason: 'EMPTY' as const, explanation: null },
+          }),
     [projectId],
   );
-  const state = listState<RussellKnowledge>({
+  const state = listState<KnowsEntry>({
     loading: query.loading,
     error: query.error,
-    items: query.data?.knowledge ?? null,
-    noun: 'findings',
+    /*
+     * Optional all the way down, deliberately.
+     *
+     * A Brain serving the older shape has no `knows` field at all, and a view
+     * that throws on a missing field turns a smaller answer into a blank
+     * screen — which is the same failure as printing "nothing yet" over real
+     * data, arrived at from the other direction.
+     */
+    items: query.data?.knows?.items ?? null,
+    // The server's own sentence when it gave one, so "nothing active" is never
+    // rendered as "nothing yet".
+    noun: query.data?.knows?.explanation ?? 'findings',
   });
   return (
     <Panel title="What Russell knows" state={state} onRetry={query.reload}>
@@ -134,7 +160,20 @@ export function KnowledgeView({ projectId }: { projectId: string | null }): JSX.
         {state.items.map((entry) => (
           <li key={entry.id}>
             <span className="rs-item-title">{entry.statement}</span>
-            <span className="rs-item-meta">{entry.confidence.toLowerCase().replace(/_/g, ' ')}</span>
+            <span className="rs-item-meta">
+              {entry.status.toLowerCase()} · {entry.confidence.toLowerCase()}
+              {entry.provenance.sourceUrl ? ' · cited' : ''}
+            </span>
+            {/*
+              A provisional entry says what it is short of. Hiding that would
+              make it read like an accepted one, which is the single thing this
+              surface must never do.
+            */}
+            {entry.missingEvidence.length > 0 && (
+              <span className="rs-item-meta">
+                still missing: {entry.missingEvidence.join('; ')}
+              </span>
+            )}
           </li>
         ))}
       </ul>

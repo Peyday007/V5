@@ -54,6 +54,33 @@ export interface TurnResponse {
   dispatched: boolean;
 }
 
+/**
+ * One entry in Knows.
+ *
+ * Mirrors the server projection exactly, including `missingEvidence`: a
+ * provisional claim's shortfalls are part of what a reader is owed, not an
+ * internal detail to hide behind a confidence word.
+ */
+export interface KnowsEntry {
+  id: string;
+  origin: 'RUSSELL_KNOWLEDGE' | 'RESEARCH_CLAIM';
+  kind: string;
+  statement: string;
+  detail: string | null;
+  confidence: string;
+  status: 'ACCEPTED' | 'PROVISIONAL' | 'UNDER_REVIEW' | 'CONTRADICTED' | 'STALE' | 'SUPERSEDED';
+  missingEvidence: string[];
+  provenance: Record<string, string>;
+  asOf: string | null;
+}
+
+/** A surface plus the honest reason it is empty, when it is. */
+export interface KnowsSurface {
+  items: KnowsEntry[];
+  emptyReason: 'EMPTY' | 'NOTHING_ACTIVE' | 'NOT_CONNECTED' | 'STALE' | 'UNAVAILABLE' | 'FORBIDDEN' | null;
+  explanation: string | null;
+}
+
 export const RussellApi = {
   conversations: (): Promise<{ conversations: RussellConversation[] }> =>
     api('/api/russell/conversations'),
@@ -82,7 +109,9 @@ export const RussellApi = {
   candidates: (projectId: string): Promise<{ candidates: RussellCandidate[] }> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/candidates`),
 
-  knowledge: (projectId: string): Promise<{ knowledge: RussellKnowledge[] }> =>
+  knowledge: (
+    projectId: string,
+  ): Promise<{ knowledge: RussellKnowledge[]; knows: KnowsSurface }> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/knowledge`),
 
   needsYou: (projectId: string): Promise<{ requests: RussellHumanRequest[] }> =>
