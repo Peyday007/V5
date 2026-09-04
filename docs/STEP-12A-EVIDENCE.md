@@ -25,27 +25,32 @@ Read `step12a acceptance` for the machine verdict; this table is its narrative
 companion and must agree with it. Any disagreement means this document is
 stale — re-run the reporter, do not edit the table.
 
-| Gate | Verdict | Proof kind | Evidence |
+| Gate | Verdict | Proof so far | Evidence |
 |---|---|---|---|
-| `A01_SHELL_IDENTITY` | NOT_RUN | | |
-| `A02_CONVERSATION_ROUTE` | NOT_RUN | | |
-| `A03_ROUTE_CORRECTION` | NOT_RUN | | |
-| `A04_IRRELEVANT` | NOT_RUN | | |
-| `A05_DEDUPE` | NOT_RUN | | |
-| `A06_JUDGMENT_OVERRIDE` | NOT_RUN | | |
-| `A07_PROBE_BOUNDS` | NOT_RUN | | |
-| `A08_COVERAGE` | NOT_RUN | | |
-| `A09_AUTH_BUDGET` | NOT_RUN | | |
-| `A10_MISSION_PIPELINE` | NOT_RUN | | |
-| `A11_INDEPENDENT_AUDIT` | BLOCKED | — | provisioning, outside this repository — §4 |
-| `A12_WRITEBACK` | NOT_RUN | | |
-| `A13_AUTO_NEXT` | NOT_RUN | | |
-| `A14_HUMAN_RESUME` | NOT_RUN | | |
-| `A15_RECOVERY` | NOT_RUN | | |
-| `A16_DD_FRESHNESS` | NOT_RUN | | |
-| `A17_PRIVACY_AUTH` | NOT_RUN | | |
-| `A18_BASELINES` | NOT_RUN | | |
-| `A19_DELIVERY` | NOT_RUN | | |
+| `A01_SHELL_IDENTITY` | NOT_RUN | — | the shell is Phase 3 |
+| `A02_CONVERSATION_ROUTE` | NOT_RUN | CODE, TEST | `routing.ts`; attaches on a named project, asks otherwise |
+| `A03_ROUTE_CORRECTION` | NOT_RUN | CODE, TEST | append-only context history; a correction outweighs a name match |
+| `A04_IRRELEVANT` | NOT_RUN | CODE, TEST | `shouldCapture`; social and short remarks stay conversation |
+| `A05_DEDUPE` | NOT_RUN | CODE, TEST | insertion-order dedupe, concurrent captures, guarded split |
+| `A06_JUDGMENT_OVERRIDE` | NOT_RUN | CODE, TEST | stored priority and reason; override supersedes without erasing |
+| `A07_PROBE_BOUNDS` | NOT_RUN | CODE, TEST | envelope enforced server-side; **the runner that performs lookups is not built** |
+| `A08_COVERAGE` | NOT_RUN | CODE, TEST | only `SATISFIED` closes a requirement; the constant is pinned |
+| `A09_AUTH_BUDGET` | NOT_RUN | CODE, TEST | atomic reservation, idempotent replay, server-clock expiry |
+| `A10_MISSION_PIPELINE` | NOT_RUN | CODE, TEST | one mission, orchestration and bin under retries; capabilities routed |
+| `A11_INDEPENDENT_AUDIT` | BLOCKED | — | provisioning, outside this repository — §5 |
+| `A12_WRITEBACK` | NOT_RUN | CODE, TEST | exactly-once under three concurrent observers and a replay |
+| `A13_AUTO_NEXT` | NOT_RUN | CODE, TEST | one launch per cycle, the rest preserved for the next |
+| `A14_HUMAN_RESUME` | NOT_RUN | CODE, TEST | the exact parked mission resumes, once |
+| `A15_RECOVERY` | NOT_RUN | CODE, TEST | boot repair, fenced late writer, expired probe ended honestly |
+| `A16_DD_FRESHNESS` | NOT_RUN | CODE, TEST | `CURRENT` / `STALE` / `UNAVAILABLE`; memory never returned as live |
+| `A17_PRIVACY_AUTH` | NOT_RUN | CODE, TEST (partial) | routing and dedupe are scope-first; **IDOR and injection suites are not written** |
+| `A18_BASELINES` | NOT_RUN | — | nothing deployed, so nothing to compare |
+| `A19_DELIVERY` | NOT_RUN | TEST | typecheck clean; **SQLite 1367 passed / 25 skipped, Postgres 1387 passed, both exit 0**; upgrade path proven on both chains. No deploy, no hosted verification. |
+
+**No gate is `PASS`, and none can be**: every one requires production-row proof
+against a deployed commit after a real restart, and **zero of the three delivery
+mutations have been spent**. The middle column says what is true today, which is
+that most of the mechanisms exist and are proven by tests on both backends.
 
 ---
 
@@ -321,7 +326,19 @@ every old conversation would have been much harder to undo than to do.
 
 ### Where the suite stands
 
-**SQLite: 1361 passed / 25 skipped, exit 0**, running alone.
+| | |
+|---|---|
+| `npm run typecheck` | clean |
+| SQLite | **1367 passed / 25 skipped, exit 0** |
+| Postgres | **52/52 files, 1387 passed, exit 0** |
+| The three changed suites on Postgres | 153 / 153 |
+| Migrations from empty | both chains |
+| Migration over existing data | both chains, `scripts/upgrade-check.ts` |
+
+Both full runs were taken with nothing else competing for the machine. That is
+not a detail: the one run that showed failures had a full SQLite suite running
+beside it, and every failure was a timeout in the file that renders images and
+shells out to Tesseract.
 
 ---
 
