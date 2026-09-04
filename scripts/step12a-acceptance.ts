@@ -31,6 +31,29 @@ import { auditIndependenceEvidence } from '../server/services/research/independe
 
 type Verdict = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_RUN';
 
+/**
+ * Gates whose evidence cannot exist while `A11` is open, and why.
+ *
+ * The distinction matters and is not cosmetic. `NOT_RUN` says "nobody has done
+ * this yet", which invites somebody to go and do it. `BLOCKED` says "this
+ * cannot be done until something else is", which is the truth for anything
+ * downstream of a terminal research packet: a packet reaches terminal only
+ * after three audit roles, and `auditAdmission` refuses every audit item while
+ * the fleet cannot supply independent lineage. Reporting those as `NOT_RUN`
+ * would send a person to work on a gate that is not theirs to move.
+ *
+ * The set is deliberately small. A gate is listed here only when *no* action
+ * short of resolving `A11` can produce its rows — a conversation attaching
+ * itself, an idea being captured, a probe running or a mission being created
+ * all happen without an audit, so none of them is here.
+ */
+const BLOCKED_BY_A11: Record<string, string> = {
+  A12_WRITEBACK:
+    'a writeback needs a terminal packet, and a packet is terminal only after three independent audit roles',
+  A13_AUTO_NEXT:
+    'an automatic follow-on launches from a finished mission, which needs the audit A11 is blocked on',
+};
+
 interface GateResult {
   id: string;
   verdict: Verdict;
@@ -56,8 +79,12 @@ async function count(sql: string, params: unknown[] = []): Promise<number> {
  * make a green board the only way to tell the two apart.
  */
 function fromRows(id: string, found: number, needed: number, what: string): GateResult {
-  return found >= needed
-    ? { id, verdict: 'PASS', detail: `${found} ${what}` }
+  if (found >= needed) return { id, verdict: 'PASS', detail: `${found} ${what}` };
+  const blocker = BLOCKED_BY_A11[id];
+  // A gate that cannot move until A11 does is BLOCKED and names the
+  // dependency, rather than reading as work somebody could pick up.
+  return blocker
+    ? { id, verdict: 'BLOCKED', detail: `blocked by A11_INDEPENDENT_AUDIT — ${blocker}` }
     : { id, verdict: 'NOT_RUN', detail: `${found} of ${needed} ${what}` };
 }
 
@@ -350,6 +377,12 @@ async function main(): Promise<void> {
   console.log(
     `${passed} PASS · ${failed.length} FAIL · ${blocked.length} BLOCKED · ${notRun.length} NOT_RUN`,
   );
+  const transitive = blocked.filter((result) => BLOCKED_BY_A11[result.id]);
+  if (transitive.length > 0) {
+    console.log(
+      `${transitive.length} of the blocked gates wait on A11 rather than on anything in this repository.`,
+    );
+  }
   if (failed.length + blocked.length + notRun.length > 0) {
     console.log('');
     console.log('STEP 12A IS NOT COMPLETE.');

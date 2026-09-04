@@ -1564,6 +1564,65 @@ async function russellChecks(fixtures: Fixtures, cookie: string): Promise<void> 
     expectStatus('an empty message is refused rather than dispatched', empty.status, 400);
   }
 
+  /*
+   * The frozen ordinary conversation, through the real interface.
+   *
+   * A thread opened with no project, and a first message that names one. The
+   * attachment is decided by `routeMessage` on the server *before* any worker
+   * is involved, so this is a complete acceptance case that does not wait on
+   * the fleet — and it is the one that writes the `AUTOMATIC` attachment row
+   * `A02` reads.
+   *
+   * Deliberately scoped to the verification project rather than to real work:
+   * a conversation is a durable row, and an acceptance run should not leave
+   * threads in a project somebody depends on.
+   */
+  const loose = await call('/api/russell/conversations', {
+    cookie,
+    method: 'POST',
+    body: { title: 'hosted verification — routing' },
+  });
+  expectStatus('a conversation may be opened with no project', loose.status, 200);
+  const looseId = (loose.json as { id?: string })?.id ?? '';
+
+  if (looseId) {
+    const named = await call(`/api/russell/conversations/${looseId}/turns`, {
+      cookie,
+      method: 'POST',
+      body: { content: `What is the state of ${fixtures.scope.name}?` },
+    });
+    expectStatus('naming a project in an unattached thread is accepted', named.status, 202);
+    record(
+      'Russell attached the thread to the project the message named',
+      (named.json as { attachedProjectId?: string | null })?.attachedProjectId === fixtures.scope.id,
+      `${(named.json as { attachedProjectId?: string | null })?.attachedProjectId ?? 'not attached'}`,
+    );
+
+    const reread = await call(`/api/russell/conversations/${looseId}`, { cookie });
+    const attached = (reread.json as { conversation?: { projectId?: string | null; attachmentSource?: string } })
+      ?.conversation;
+    record(
+      'the attachment is stored, and recorded as Russell’s own decision',
+      attached?.projectId === fixtures.scope.id && attached?.attachmentSource === 'AUTOMATIC',
+      `${attached?.attachmentSource ?? 'no source'}`,
+    );
+
+    // A thread already attached is left alone: re-deciding on every message
+    // would make a person's correction last exactly one turn.
+    const again = await call(`/api/russell/conversations/${looseId}/turns`, {
+      cookie,
+      method: 'POST',
+      body: { content: 'and what about something else entirely' },
+    });
+    const stillThere = await call(`/api/russell/conversations/${looseId}`, { cookie });
+    const kept = (stillThere.json as { conversation?: { projectId?: string | null } })?.conversation;
+    record(
+      'a second message does not re-route a thread that is already attached',
+      again.status === 202 && kept?.projectId === fixtures.scope.id,
+      `${kept?.projectId ?? 'lost its project'}`,
+    );
+  }
+
   const briefing = await call(`/api/russell/projects/${fixtures.scope.id}/briefing`, { cookie });
   expectStatus('the briefing is served to a member', briefing.status, 200);
   record(
