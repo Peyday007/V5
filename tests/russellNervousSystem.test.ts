@@ -18,6 +18,8 @@ import { listLayers } from '../server/repos/layers.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
 import { createGoal, listReservations } from '../server/repos/russellAuthority.ts';
 import { getMission } from '../server/repos/russellMissions.ts';
+import { getDb } from '../server/db/database.ts';
+import { createProbe, getProbe, startProbe } from '../server/repos/russellProbes.ts';
 import {
   candidateProjects,
   proposalIsAuthorized,
@@ -36,6 +38,9 @@ import {
 } from '../server/services/russell/coverage.ts';
 import { launch, repairLaunches } from '../server/services/russell/launch.ts';
 import { writeBack } from '../server/services/russell/writeback.ts';
+import { tick } from '../server/services/russell/loop.ts';
+import { pauseCycle, resumeCycle } from '../server/repos/russellCycle.ts';
+import { askHuman, answerHumanRequest, getHumanRequest, transitionMission } from '../server/repos/russellMissions.ts';
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
 import { listTurns, createConversation } from '../server/repos/russellConversations.ts';
 import { listEvents } from '../server/repos/events.ts';
@@ -600,5 +605,126 @@ describe('completion writeback happens exactly once', () => {
     expect(last.content).toMatch(/You are not needed/);
     // No invented progress anywhere in it.
     expect(last.content).not.toMatch(/\d+%/);
+  });
+});
+
+describe('the loop keeps going without anybody watching', () => {
+  it('hands one tick to one instance and refuses the other', async () => {
+    const [a, b] = await Promise.all([tick('instance-a'), tick('instance-b')]);
+    expect([a.ran, b.ran].filter(Boolean)).toHaveLength(1);
+    const loser = a.ran ? b : a;
+    expect(loser.skipped).toBeTruthy();
+  });
+
+  it('starts nothing while paused, and resumes cleanly', async () => {
+    expect(await pauseCycle({ reason: 'operator stopped it' })).toBe(true);
+    const paused = await tick('instance-a');
+    expect(paused.ran).toBe(false);
+    expect(paused.skipped).toMatch(/paused/);
+
+    expect(await resumeCycle()).toBe(true);
+    expect((await tick('instance-a')).ran).toBe(true);
+  });
+
+  it('resumes the exact parked mission when a person answers, once', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'acceptance',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 1,
+      maxFragments: 1,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+    const captured = await capture({
+      title: 'Florida licensing',
+      statement: 'establish the Florida broker licence position from the 2026 statute',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const launched = await launch({
+      projectId,
+      layerId,
+      candidateId: captured.candidate!.id,
+      visibility: 'SHARED',
+      title: 'Florida broker licensing',
+      assignment: 'Under Florida law as in force in 2026, is a broker licence required?',
+      objective: 'Settle the Florida position.',
+      whyNow: 'The layer names Florida as open.',
+      acceptableSources: ['Florida Statutes'],
+      excludedSources: [],
+      evidence: ['the exact section'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    const mission = launched.mission!;
+
+    await transitionMission({
+      missionId: mission.id,
+      from: 'RUNNING',
+      to: 'NEEDS_HUMAN',
+      waitingOn: 'a person: paying for a statutory database is outside standing authority',
+    });
+
+    const { request } = await askHuman({
+      projectId,
+      missionId: mission.id,
+      authorityNeeded: 'permission to pay for one statutory lookup',
+      whyNotRussell: 'the standing authority prohibits new spending',
+      choices: [
+        { key: 'approve', label: 'Approve', consequence: 'Russell buys one lookup and continues' },
+        { key: 'decline', label: 'Decline', consequence: 'Russell records the gap and stops' },
+      ],
+      resumeKey: `resume:${mission.id}`,
+    });
+
+    // Nothing moves while it is unanswered.
+    await tick('instance-a');
+    expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
+
+    await answerHumanRequest({ requestId: request.id, actorUserId: userId, choice: 'approve' });
+
+    const first = await tick('instance-a');
+    expect(first.resumed).toContain(request.id);
+    // The same mission, not a new one.
+    expect((await getMission(mission.id))!.state).toBe('RUNNING');
+    expect((await getHumanRequest(request.id))!.state).toBe('RESUMED');
+
+    // And a second tick does not resume it again.
+    const second = await tick('instance-a');
+    expect(second.resumed).not.toContain(request.id);
+  });
+
+  it('ends a probe whose deadline passed, honestly, rather than leaving it running', async () => {
+    const captured = await capture({
+      title: 'Florida',
+      statement: 'is the 2026 Florida statutory text retrievable',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const probe = await createProbe({
+      candidateId: captured.candidate!.id,
+      projectId,
+      visibility: 'SHARED',
+      question: 'is the 2026 text retrievable?',
+      allowedSources: ['https://www.flsenate.gov/Laws/Statutes'],
+      maxLookups: 3,
+      deadlineMinutes: 1,
+      idempotencyKey: `probe-loop-${captured.candidate!.id}`,
+    });
+    await startProbe(probe.id);
+    await getDb().run('UPDATE russell_probes SET deadline_at = ? WHERE id = ?', [
+      '2020-01-01T00:00:00.000Z',
+      probe.id,
+    ]);
+
+    const report = await tick('instance-a');
+    expect(report.expiredProbes).toContain(probe.id);
+    const ended = await getProbe(probe.id);
+    expect(ended!.state).toBe('COMPLETE');
+    expect(ended!.outcome).toBe('UNKNOWN');
   });
 });

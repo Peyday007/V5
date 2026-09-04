@@ -49,6 +49,8 @@ import { ocrStatus } from './services/documents/ocr.ts';
 import { queueUnreadDocuments } from './services/documents/queue.ts';
 import { recoverInterruptedResearch } from './services/research/queue.ts';
 import { recoverDispatchAtBoot, startDispatcher } from './services/dispatch/loop.ts';
+import { startRussell } from './services/russell/loop.ts';
+import { repairLaunches } from './services/russell/launch.ts';
 import { describeFireTarget } from './services/dispatch/fire.ts';
 import { resumePulledPackets } from './services/research/packetRunner.ts';
 import { recoverInterruptedImports } from './services/archive/import.ts';
@@ -542,6 +544,28 @@ async function main(): Promise<void> {
   // socket: it reads two indexed tables and occasionally makes one HTTP call.
   // An idle Brain spends essentially nothing here.
   startDispatcher();
+
+  /*
+   * Russell's loop, beside the dispatcher and after recovery.
+   *
+   * Here rather than anywhere else because the requirement is that Russell
+   * keeps working while nobody is on the site and the laptop is closed — so it
+   * has to belong to the server process, not to a browser tab, a coding
+   * session or a cron on somebody's machine.
+   *
+   * A half-built launch is finished before it starts ticking. `repairLaunches`
+   * is the same function the launcher uses, re-entered: whichever step a crash
+   * left missing is the step that runs, and a second implementation of a
+   * recovery path is the one nobody tests.
+   */
+  const repaired = await repairLaunches();
+  if (repaired.completed.length > 0 || repaired.orphaned.length > 0) {
+    console.log(
+      `  Russell: ${repaired.completed.length} mission(s) finished launching, ` +
+        `${repaired.orphaned.length} orphaned`,
+    );
+  }
+  startRussell(`brain:${process.pid}`);
 
   // A folder import interrupted by the shutdown is paused rather than left
   // looking live. Nothing already imported is re-read when it resumes.
