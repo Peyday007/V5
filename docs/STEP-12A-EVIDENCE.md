@@ -149,11 +149,106 @@ once — is what makes that truthful rather than broken.
 
 ## 3. Phase 1 — canonical state and authority
 
-Not yet started.
+**CODE and TEST.** Thirteen tables on both chains (SQLite `027_russell.sql`,
+Postgres `018_russell.sql`), applying from empty on both, all additive: no
+existing table rebuilt, no column dropped, no row rewritten.
+
+`tests/russellState.test.ts` — **46 tests, passing on SQLite and Postgres.**
+Every one is about a rule it would be tempting to relax, and the schema-level
+ones are enforced by CHECK constraints as well as by code: a merged candidate
+must point somewhere, a waiting mission must say what for, a pending turn must
+carry its reason.
+
+### Three defects the tests found
+
+**The reservation guard aborted mutually.** Two callers raced for the last
+mission slot, both inserted, both then counted two, both concluded they had
+overshot, and both released — the ceiling respected and nobody getting the slot,
+which is strictly worse than either winning. It now totals *through its own
+row's position* in a stable `(created_at, id)` order, so the first inserter
+ranks 1 and keeps it and only the second stands down. Deterministic, no mutual
+abort, and it generalises to amounts rather than counts.
+
+**`capture` had the same shape of race.** It looked for a duplicate and then
+inserted, so two equivalent messages arriving together both saw nothing and both
+created a candidate. It now creates first and asks whether an *earlier* row with
+that meaning exists — no window, and the database decides the loser.
+
+**The capability field migration 026 added had never been mapped.**
+`bins.required_capabilities` and `bins.workload_class` existed in both chains;
+`requiredCapabilities` appeared in no type, the create path took neither, and
+`router.ts:102` read one through `(bin as unknown as { … })`. A cast asserts a
+shape rather than reading one, so every real bin routed as if it required
+nothing — while the router's own capability test went on passing, because it
+built its bin with a hand-made object that always had the field. Row type,
+mapper, create path and router are wired now, and the new test goes through
+storage, which is the difference between proving a pure function and proving the
+field arrives.
 
 ---
 
-## 4. What is not claimed
+## 4. Phase 2 — the nervous system
+
+**CODE and TEST**, partial. `tests/russellNervousSystem.test.ts` — **29 tests,
+passing on SQLite.**
+
+| Built | What it does |
+|---|---|
+| `services/russell/routing.ts` | attaches a conversation to a project, asks when ambiguous, and lets a person's earlier correction outweigh a name match |
+| `services/russell/judgment.ts` | decides what is worth capturing, dedupes, and forms Russell's own priority with a stated reason |
+| `services/russell/coverage.ts` | the archive check that runs before any work is created |
+| `services/russell/launch.ts` | the one way a mission comes into existence |
+| `services/russell/writeback.ts` | what happens when one finishes, exactly once |
+
+**Routing considers only what the asker may see.** `candidateProjects` asks
+`decideProjectAccess` before it scores anything, so an unauthorized project is
+absent rather than refused — the option list, the ranking and the count are all
+information, and a router that scored everything and filtered afterwards leaks
+through all three. The inversion is in the suite: grant membership and the same
+message routes to the previously hidden project.
+
+**The launcher replaced a test CLI.** Packet and bin creation were stitched
+together in `scripts/step10.ts`, which is fine for a harness that knows its own
+arguments and is not a production seam. `launch()` validates authority, reserves
+budget, creates both, links them by id, and is safe to re-enter at any point —
+so boot repair is the same function rather than a second implementation of a
+recovery path, which is the one nobody tests.
+
+**It uses `AUTO_WITHIN_ENVELOPE`, not `GOAL_BUDGET`, and that is deliberate.**
+`startPacket` refuses `GOAL_BUDGET` because nothing counted packets or
+fragments, so the budget half of that authorization would be decorative while
+the approval half took effect. Step 12A does now supply the counter — but the
+counter belongs *in front of* the envelope rather than instead of it, because
+`GOAL_BUDGET` also sets `autoApprove` and skips producing a plan at all. Two
+controls in series: the reservation decides whether Russell may start, the
+envelope decides whether the plan it produced is inside limits fixed in code
+beforehand. `RUSSELL_STATE_LICENSING_V1` is that envelope, and unlike Step 11's
+it is not one-use — the acceptance has to prove a *second* authorized mission
+launching without another prompt, and one-use would have made the thing being
+proved impossible.
+
+**Coverage reuses the classifier rather than forming a second opinion.**
+`assessRequirement` already decides SATISFIED / PARTIALLY_SATISFIED /
+PRESENT_BUT_UNVERIFIED / STALE / CONTRADICTED / MISSING and is a pure function.
+The one rule Russell adds is that **only `SATISFIED` closes a requirement** —
+`PRESENT_BUT_UNVERIFIED` is somebody having written the answer down with nothing
+behind it, which reads like coverage and is precisely where research is most
+needed.
+
+### One intermittent failure, classified rather than dismissed
+
+Two full SQLite runs each showed one failure; a third and fourth were clean at
+**1350 passed / 25 skipped, exit 0**. The Postgres log names the mechanism: an
+unhandled rejection from `tests/research.test.ts`, where a research job's
+progress callback calls `cancelResearch` → `recordEvent` → `getDb()` *after* its
+file closed the database. That is test-file teardown ordering, it predates
+Step 12A, and it can surface as a failure in whichever file happens to be
+running when it lands. Recorded here rather than rewritten, and it is not a
+product defect.
+
+---
+
+## 5. What is not claimed
 
 ### `A11_INDEPENDENT_AUDIT` — blocked on provisioning, not on code
 
