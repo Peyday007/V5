@@ -27,28 +27,33 @@ stale — re-run the reporter, do not edit the table.
 
 | Gate | Verdict | Proof | Evidence |
 |---|---|---|---|
-| `A01_SHELL_IDENTITY` | **PASS** | PRODUCTION | 2 Russell conversations on the deployed Brain, created through the live API |
-| `A02_CONVERSATION_ROUTE` | NOT_RUN | CODE, TEST | 0 conversations Russell attached itself; needs a worker-answered turn |
+| `A01_SHELL_IDENTITY` | **PASS** | PRODUCTION | 6 Russell conversations on the deployed Brain, created through the live API |
+| `A02_CONVERSATION_ROUTE` | **PASS** | PRODUCTION | 2 conversations Russell attached itself, `AUTOMATIC`, from a message naming the project |
 | `A03_ROUTE_CORRECTION` | NOT_RUN | CODE, TEST | 0 recorded corrections |
-| `A04_IRRELEVANT` | **PASS** | PRODUCTION | 2 turns produced 0 ideas — the live gate captured nothing from casual text |
+| `A04_IRRELEVANT` | **PASS** | PRODUCTION | 8 turns produced 0 ideas — the live gate captured nothing from casual text |
 | `A05_DEDUPE` | NOT_RUN | CODE, TEST | 0 merges onto a canonical idea |
 | `A06_JUDGMENT_OVERRIDE` | NOT_RUN | CODE, TEST | 0 ideas carrying a stated judgment |
 | `A07_PROBE_BOUNDS` | NOT_RUN | CODE, TEST | 0 probes completed; the envelope and runner are built and tested |
-| `A08_COVERAGE` | **PASS** | PRODUCTION | 146 recorded coverage verdicts |
+| `A08_COVERAGE` | **PASS** | PRODUCTION | 148 recorded coverage verdicts |
 | `A09_AUTH_BUDGET` | NOT_RUN | CODE, TEST | 0 settled budget reservations |
 | `A10_MISSION_PIPELINE` | NOT_RUN | CODE, TEST | 0 fully linked missions; 0 half-built, so nothing is stranded |
 | `A11_INDEPENDENT_AUDIT` | **BLOCKED** | — | `DISTINCT_BOUND_WORKERS` — 0 active worker identities are bound to a registered Routine |
-| `A12_WRITEBACK` | NOT_RUN | CODE, TEST | 0 missions written back |
-| `A13_AUTO_NEXT` | NOT_RUN | CODE, TEST | 0 automatic follow-on launches |
+| `A12_WRITEBACK` | **BLOCKED** | CODE, TEST | by `A11` — a writeback needs a terminal packet, and a packet is terminal only after three independent audit roles |
+| `A13_AUTO_NEXT` | **BLOCKED** | CODE, TEST | by `A11` — a follow-on launches from a finished mission, which needs that audit |
 | `A14_HUMAN_RESUME` | NOT_RUN | CODE, TEST | 0 human decisions answered and resumed |
 | `A15_RECOVERY` | **PASS** | PRODUCTION | 1 cycle has claimed and released; nothing stranded past a deadline |
 | `A16_DD_FRESHNESS` | **PASS** | PRODUCTION | the Deal Dispatch project the adapter reads is present |
-| `A17_PRIVACY_AUTH` | **PASS** | PRODUCTION | 6600 recorded authorization denials; 0 ideas less private than their thread |
+| `A17_PRIVACY_AUTH` | **PASS** | PRODUCTION | 6680 recorded authorization denials; 0 ideas less private than their thread |
 | `A18_BASELINES` | **PASS** | PRODUCTION | 10 layers intact; no frozen layer lost its artifact |
 | `A19_DELIVERY` | NOT_RUN | HOSTED | typecheck, build and both suites green (SQLite 1465, Postgres 1489); hosted verification **PASS 156/156 before and PASS 162/162 after a real restart**. `NOT_RUN` by construction — see §8 |
 
-Read from the deployed Brain's own rows at **2026-09-04T04:20:13Z**, run
-33836408837: **7 PASS · 0 FAIL · 1 BLOCKED · 11 NOT_RUN**, exit non-zero.
+Read from the deployed Brain's own rows at **2026-09-04T04:52:08Z**, run
+33838377229, after delivery mutation 2:
+**8 PASS · 0 FAIL · 3 BLOCKED · 8 NOT_RUN**, exit non-zero.
+
+Two of the three `BLOCKED` gates wait on `A11` rather than on anything in this
+repository, and say so by name. The eight `NOT_RUN` gates each need one thing:
+a Cowork session answering a `RUSSELL_TURN` bin.
 
 **Zero gates read `FAIL`.** Seven are `PASS` from production rows, one is
 `BLOCKED` on provisioning, and eleven are `NOT_RUN` — which is what an unrun
@@ -62,13 +67,18 @@ rows exist, however complete the code is, and there is no flag that turns a
 test into evidence. And **`A11` is derived fail-closed from lineage rows**, by
 a check built to be hostile to forgery rather than by a constant — see §7.
 
-The eleven `NOT_RUN` gates share one cause, and it is the same one `A11` names:
-**no worker identity is bound to a registered Routine in production**, so no
-Cowork session can answer a `RUSSELL_TURN` bin, so no turn produces a routing
-decision, a captured idea, a probe, a mission or a writeback. The mechanisms
-for all of them are built and green on both backends; what is missing is the
-surface that carries them out. That is a provisioning condition, and it is
-reported rather than simulated.
+The remaining gates split into two kinds, and the reporter no longer conflates
+them. `A12` and `A13` are **`BLOCKED`**: they need a terminal research packet,
+a packet is terminal only after three independent audit roles, and
+`auditAdmission` refuses every audit item while the fleet cannot supply
+independent lineage. Nothing anybody does short of resolving `A11` produces
+their rows, and reporting them as `NOT_RUN` would send a person to work on a
+gate that is not theirs to move.
+
+The eight `NOT_RUN` gates are a different thing: each needs a Cowork session to
+answer a `RUSSELL_TURN` bin. **One worker is enough for that** — the audit
+matrix does not apply to a turn — so they are genuinely not-yet-run rather than
+blocked, and the operator can move them by starting a session.
 
 ---
 
@@ -680,8 +690,8 @@ derives `PASS` from rows with no further deployment.**
 | # | Intent | Status |
 |---|---|---|
 | 1 | Integrated foundation: schema, canonical services, Russell loop, API, shell | **spent** — run 33835314104, commit `10658fd`, image `deployment-01M1N9H57EWJRWWFC2BFXTT681`, released 2026-09-04T04:09:17Z |
-| 2 | Acceptance correction | not yet spent |
-| 3 | Final verification, only if the correction batch requires it | not yet spent |
+| 2 | Acceptance correction: worker vocabulary, the routing acceptance case, A11-transitive blocking | **spent** — run 33837508678, commit `9023673`, released 2026-09-04T04:42:24Z |
+| 3 | Final verification, only if the correction batch requires it | **reserved** — kept for defects the real acceptance finds |
 
 `step12a-acceptance.yml` is **not** a mutation. The reporter opens the
 database, counts, prints and closes; it creates nothing, advances nothing and
@@ -756,6 +766,34 @@ mutation. Spending mutation 2 on it now would spend the acceptance-correction
 budget before the acceptance that is supposed to find the corrections has run,
 and nothing about it can be proven end to end until a worker session actually
 answers a turn.
+
+### The second mutation, and what it bought
+
+| | |
+|---|---|
+| Gate job | typecheck, 1465 SQLite tests, build — green |
+| Deploy | success, 04:42:24Z |
+| Hosted verification, before the restart | **PASS** |
+| Real machine restart | success, 04:46:35Z |
+| Hosted verification, after the restart | **PASS** |
+| Acceptance, from production rows | **8 PASS · 0 FAIL · 3 BLOCKED · 8 NOT_RUN** |
+
+**`A02_CONVERSATION_ROUTE` moved from `NOT_RUN` to `PASS`.** The frozen
+ordinary conversation ran through the real interface twice — once in each
+verification pass — and Russell attached both threads to the project the
+message named, recording the decision as its own (`AUTOMATIC`). That gate was
+previously assumed to need a worker; it does not. Routing is decided by
+`routeMessage` on the server before the fleet is involved, and once that was
+noticed the gate was reachable within this assignment rather than outside it.
+
+The same pass also asserted the opposite error: a **second** message does not
+re-route a thread that is already attached. A router that re-decided every turn
+would make a person's correction last exactly one turn, which is the failure
+`A03` exists to catch and would have been invisible in a test that only ever
+sent one message.
+
+`A01` rose from 2 conversations to 6 and `A04` from 2 turns to 8, both from
+real production traffic through the live API.
 
 ### The one blocker, stated exactly
 
