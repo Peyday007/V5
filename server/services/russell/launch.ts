@@ -323,8 +323,12 @@ export async function repairLaunches(): Promise<RepairReport> {
       report.orphaned.push(row.id);
       continue;
     }
-    // The bin may exist without the link having been written — the crash window
-    // between `createBin` and `linkMission`. Look for it before making another.
+
+    /*
+     * The bin may exist without the link having been written — the crash
+     * window between `createBin` and `linkMission`. Look for it before making
+     * another, or the repair is the thing that creates the duplicate.
+     */
     if (!mission.binId && mission.orchestrationId) {
       const existing = await getDb().all<{ id: string }>(
         `SELECT id FROM bins WHERE orchestration_id = ? AND created_by_id = ?
@@ -337,9 +341,67 @@ export async function repairLaunches(): Promise<RepairReport> {
         continue;
       }
     }
-    report.completed.push(mission.id);
+
+    /*
+     * Re-enter the same function that built it.
+     *
+     * The specification is not on the mission row and does not need to be: it
+     * is the candidate's own recorded judgment, which is the identical source
+     * the loop launches from. So repair asks the same question the launch
+     * asked, gets the same answer, and `completeLaunch` supplies exactly the
+     * steps that are missing — a re-entry rather than a second implementation,
+     * and a second implementation of a recovery path is the one nobody tests.
+     *
+     * A mission whose candidate or specification has gone is genuinely
+     * unrepairable, and is reported as orphaned rather than marked finished.
+     * Calling it complete because there was nothing to do would be the
+     * "waiting for a person who cannot resolve it" defect again: a stranded
+     * mission that every future repair pass reports as healthy.
+     */
+    const spec = await specFor(mission);
+    if (!spec) {
+      report.orphaned.push(mission.id);
+      continue;
+    }
+    const finished = await completeLaunch(mission, { ...spec, candidateId: mission.candidateId ?? '' });
+    if (finished.ok) report.completed.push(mission.id);
+    else report.orphaned.push(mission.id);
   }
   return report;
+}
+
+/**
+ * The launch specification behind a mission, from the candidate's judgment.
+ *
+ * Read rather than remembered, and validated for the parts `completeLaunch`
+ * cannot do without. A partial specification is refused outright: repairing a
+ * packet with an invented assignment or an absent envelope would produce work
+ * nobody authorized, which is worse than leaving it visibly stuck.
+ */
+async function specFor(mission: RussellMission): Promise<Omit<LaunchInput, 'candidateId'> | null> {
+  if (!mission.candidateId) return null;
+  const candidate = await getCandidate(mission.candidateId);
+  if (!candidate) return null;
+  const spec = (candidate.judgment as Record<string, unknown>)['missionSpec'];
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return null;
+  const typed = spec as Partial<LaunchInput>;
+  if (
+    typeof typed.projectId !== 'string' ||
+    typeof typed.layerId !== 'string' ||
+    typeof typed.title !== 'string' ||
+    typeof typed.assignment !== 'string' ||
+    typeof typed.envelopeId !== 'string'
+  ) {
+    return null;
+  }
+  // The mission's own project and layer win over the specification's, because
+  // the row is what everything else already links to. A specification that
+  // disagrees is a specification for a different mission.
+  return {
+    ...(typed as Omit<LaunchInput, 'candidateId'>),
+    projectId: mission.projectId,
+    layerId: mission.layerId ?? typed.layerId,
+  };
 }
 
 /** Read the bin behind a mission, for a projection that wants its state. */
