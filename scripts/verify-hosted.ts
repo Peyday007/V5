@@ -1621,6 +1621,26 @@ async function russellChecks(fixtures: Fixtures, cookie: string): Promise<void> 
       again.status === 202 && kept?.projectId === fixtures.scope.id,
       `${kept?.projectId ?? 'lost its project'}`,
     );
+    /*
+     * The correction, and the thing it is for.
+     *
+     * A person says the thread is not about that project. It is recorded as
+     * their own decision, which is what makes `routeMessage` weigh it above a
+     * name match on a later message of the same shape. Nothing could write one
+     * of these before, so the whole mechanism was reachable only from a test.
+     */
+    const corrected = await call(`/api/russell/conversations/${looseId}/project`, {
+      cookie,
+      method: 'POST',
+      body: { projectId: null, reason: 'this thread is not about that project' },
+    });
+    expectStatus('a person may correct where a thread is filed', corrected.status, 200);
+    const afterCorrection = (corrected.json as { projectId?: string | null; attachmentSource?: string });
+    record(
+      'the correction detached it and is recorded as a person’s decision',
+      afterCorrection?.projectId === null && afterCorrection?.attachmentSource === 'USER',
+      `${afterCorrection?.attachmentSource ?? 'no source'}`,
+    );
   }
 
   const briefing = await call(`/api/russell/projects/${fixtures.scope.id}/briefing`, { cookie });

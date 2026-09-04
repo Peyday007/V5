@@ -30,6 +30,7 @@ import {
 } from '../repos/russellMissions.ts';
 import { listCandidates } from '../repos/russellCandidates.ts';
 import {
+  attachConversation,
   createConversation,
   getConversation,
   listConversationsForOwner,
@@ -47,6 +48,7 @@ import {
   bodyOf,
   handler,
   notFound,
+  nullableString,
   optionalInteger,
   optionalString,
   pathId,
@@ -161,6 +163,49 @@ russellRouter.post(
       // internal resource they may not address.
       dispatched: started.binId !== null,
     };
+  }),
+);
+
+/**
+ * Correct where a thread is filed.
+ *
+ * The acceptance asks that a person be able to say "this is not about that
+ * project", that the correction be recorded, and that it inform a later
+ * equivalent routing decision. `routeMessage` already reads corrections and
+ * weighs them above a name match — but nothing could *write* one, so the whole
+ * mechanism was reachable only from a test. A rule the interface cannot express
+ * is a rule the product does not have.
+ *
+ * Owner-only, because a thread is one person's workspace, and the project is
+ * re-authorized against that person: a correction must not become a way to
+ * attach a conversation to something the corrector cannot read. `null` detaches,
+ * which is the honest option when somebody knows it is filed wrongly and not
+ * where it belongs.
+ */
+russellRouter.post(
+  '/conversations/:conversationId/project',
+  handler(async (req) => {
+    const { conversation, principal } = await requireConversation(pathId(req, 'conversationId'));
+    if (conversation.ownerUserId !== principal.id) {
+      throw notFound('No conversation with that id.');
+    }
+    const body = bodyOf(req);
+    const projectId = nullableString(body['projectId'], 'projectId') ?? null;
+    if (projectId) await requireProject(projectId);
+
+    await attachConversation({
+      conversationId: conversation.id,
+      projectId,
+      // `USER`, which is the vocabulary `listCorrections` reads: an automatic
+      // attachment agreeing with itself is not evidence of anything, so only a
+      // person's own decision counts as a correction. Set here and never taken
+      // from the body.
+      source: 'USER',
+      confidence: null,
+      reason: optionalString(body['reason'], 'reason') ?? 'a person filed this somewhere else',
+      actorUserId: principal.id,
+    });
+    return (await getConversation(conversation.id))!;
   }),
 );
 

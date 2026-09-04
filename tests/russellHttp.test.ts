@@ -329,6 +329,47 @@ describe('a project view is behind the project gate', () => {
   });
 });
 
+describe('correcting where a thread is filed', () => {
+  it('records a person’s decision, and only the owner may make it', async () => {
+    const thread = await openThread(aliceCookie, 'to be corrected');
+    const attach = await call<{ projectId: string | null; attachmentSource: string }>(
+      'POST',
+      `/api/russell/conversations/${thread}/project`,
+      { cookie: aliceCookie, body: { projectId, reason: 'it is about this one' } },
+    );
+    expect(attach.status).toBe(200);
+    expect(attach.body.projectId).toBe(projectId);
+    // `USER`, which is the vocabulary the router reads when deciding whether a
+    // person's earlier decision outweighs a name match.
+    expect(attach.body.attachmentSource).toBe('USER');
+
+    const detach = await call<{ projectId: string | null }>(
+      'POST',
+      `/api/russell/conversations/${thread}/project`,
+      { cookie: aliceCookie, body: { projectId: null, reason: 'not this one after all' } },
+    );
+    expect(detach.status).toBe(200);
+    expect(detach.body.projectId).toBeNull();
+
+    // Somebody else's thread is refused the same way a missing one is.
+    const trespass = await call('POST', `/api/russell/conversations/${thread}/project`, {
+      cookie: bobCookie,
+      body: { projectId: null },
+    });
+    expect(trespass.status).toBe(404);
+  });
+
+  it('will not let a correction attach a project the corrector cannot read', async () => {
+    const thread = await openThread(bobCookie, 'bob has no memberships');
+    const result = await call('POST', `/api/russell/conversations/${thread}/project`, {
+      cookie: bobCookie,
+      body: { projectId, reason: 'file it there' },
+    });
+    // A correction must not become a way to reach a project you may not open.
+    expect(result.status).toBe(404);
+  });
+});
+
 describe('saying something', () => {
   it('answers with the pending turn rather than an answer it does not have', async () => {
     const result = await call<{

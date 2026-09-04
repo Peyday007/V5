@@ -118,7 +118,20 @@ async function gates(): Promise<GateResult[]> {
     fromRows(
       'A03_ROUTE_CORRECTION',
       await count(
-        `SELECT COUNT(*) AS total FROM russell_conversation_context WHERE source = 'CORRECTION'`,
+        /*
+         * `USER`, not `CORRECTION`.
+         *
+         * The first version of this query counted `source = 'CORRECTION'`,
+         * which is not a member of `ATTACHMENT_SOURCES` — so `A03` could never
+         * have passed however many corrections a person made. A gate that
+         * cannot be satisfied is not a strict gate, it is a broken one, and it
+         * would have read as an unrun condition for ever.
+         *
+         * `USER` is the vocabulary `listCorrections` reads when it decides
+         * whether a person's earlier decision outweighs a name match, so
+         * counting it here asks the same question the router asks.
+         */
+        `SELECT COUNT(*) AS total FROM russell_conversation_context WHERE source = 'USER'`,
       ),
       1,
       'recorded corrections',
