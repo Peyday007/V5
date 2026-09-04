@@ -52,6 +52,7 @@ import { briefing, focusLayer, roughProgress } from '../server/services/russell/
 import {
   looksLikeInjection,
   MAX_PROPOSED_LOOKUPS,
+  PROPOSAL_ACTIONS,
   validateProposal,
 } from '../server/services/russell/proposal.ts';
 import {
@@ -1246,6 +1247,33 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
     const pending = turns.find((turn) => turn.role === 'RUSSELL')!;
     expect(pending.status).toBe('PENDING');
     expect(pending.pendingReason).toBeTruthy();
+  });
+
+  it('tells the worker the closed set it has to answer from', async () => {
+    const conversation = await ownedConversation();
+    const started = await beginTurn({
+      principal: principal([membership(projectId)]),
+      conversationId: conversation.id,
+      content: 'Anything new?',
+    });
+    const manifest = (await getBin(started.binId!))!.manifest;
+    const written = JSON.stringify(manifest);
+
+    /*
+     * Every action, by name, on the bin the worker actually reads.
+     *
+     * `validateProposal` refuses anything outside the set, which is right — but
+     * a worker never told the vocabulary cannot produce a valid answer, so
+     * every turn would fail and the refusal would look like the worker's fault.
+     * A rule enforced against somebody who was never told it is a trap rather
+     * than a rule, and this is the assertion that keeps the two in step: adding
+     * an action without telling the worker fails here.
+     */
+    for (const action of PROPOSAL_ACTIONS) {
+      expect(written, `the manifest never names ${action}`).toContain(action);
+    }
+    expect(written).toContain(TURN_UNIT_KEY);
+    expect(written).toContain(String(MAX_PROPOSED_LOOKUPS));
   });
 
   it('asks which project instead of dispatching, when it cannot tell', async () => {

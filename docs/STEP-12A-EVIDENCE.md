@@ -733,6 +733,30 @@ facts about the running program:
 - **`A18` — ten layers intact.** Step 9's, Step 10's and Step 11's work is
   untouched by the mutation; no frozen layer lost its artifact.
 
+### A defect found by reasoning about production, not by a test
+
+The turn manifest never named the closed action set. `validateProposal` matches
+the action exactly and refuses anything else, which is right — but the manifest
+is the only thing a worker sees, so a real Cowork session would have had to
+*guess* the vocabulary, and every guess would have resolved its turn as
+`FAILED`. The refusal would have looked like the worker's fault.
+
+**A rule enforced against somebody who was never told it is not a rule, it is a
+trap.** The manifest now writes out all eight actions, the required and
+optional fields, the probe ceiling and the unit key, and a test asserts that
+every member of `PROPOSAL_ACTIONS` appears in the manifest a turn actually
+builds — so adding an action without telling the worker fails the suite.
+
+It was found by asking what a worker receives rather than by a test failing,
+which is the class of defect the local suites structurally cannot catch: every
+one of them plays the worker with a proposal it already knows is valid.
+
+**This fix is not deployed.** It is on the branch and ships with the next
+mutation. Spending mutation 2 on it now would spend the acceptance-correction
+budget before the acceptance that is supposed to find the corrections has run,
+and nothing about it can be proven end to end until a worker session actually
+answers a turn.
+
 ### The one blocker, stated exactly
 
 `A11` reports `DISTINCT_BOUND_WORKERS — 0 active worker identities are bound to

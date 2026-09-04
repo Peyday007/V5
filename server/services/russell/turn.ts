@@ -48,7 +48,12 @@ import { decideProjectAccess } from '../identity/policy.ts';
 import { getProject } from '../../repos/projects.ts';
 import { capture, shouldCapture } from './judgment.ts';
 import { routeMessage } from './routing.ts';
-import { validateProposal, type ValidatedProposal } from './proposal.ts';
+import {
+  MAX_PROPOSED_LOOKUPS,
+  PROPOSAL_ACTIONS,
+  validateProposal,
+  type ValidatedProposal,
+} from './proposal.ts';
 import { parseJson } from '../../repos/util.ts';
 import type { BinState, Principal, RussellMessage } from '../../domain/types.ts';
 
@@ -174,8 +179,30 @@ export async function beginTurn(input: {
       ],
       acceptableSources: ['the conversation itself', "the project's accepted knowledge"],
       excludedSources: ['anything outside this project'],
-      evidence: ['a structured proposal naming one action from the closed set'],
-      outputs: ['one proposal submitted as the unit result'],
+      /*
+       * The closed set, written out on the bin a worker reads.
+       *
+       * `validateProposal` matches the action exactly and refuses anything
+       * else, which is right — but a worker that is never told the vocabulary
+       * cannot produce a valid answer, so every turn would resolve as FAILED
+       * and the refusal would look like the worker's fault. A rule enforced
+       * against somebody who was never told it is not a rule, it is a trap.
+       *
+       * Restated here rather than referenced, because the manifest is the only
+       * thing the worker sees, and a schema it has to go and look up is one it
+       * will guess at instead.
+       */
+      evidence: [
+        `one JSON object with an "action" from exactly this set: ${PROPOSAL_ACTIONS.join(', ')}`,
+        'an "answer" field: what to say to the person, in plain words',
+        'optional "projectId", "confidence" (0-100), "reason", "priority"',
+        'for CAPTURE_CANDIDATE: a "candidate" object with "title" and "statement"',
+        `for RUN_PROBE: a "probe" object with "question" and "maxLookups" (at most ${MAX_PROPOSED_LOOKUPS})`,
+        'no other field — an unrecognised one refuses the whole proposal',
+      ],
+      outputs: [
+        `one proposal submitted as the unit result under the key "${TURN_UNIT_KEY}"`,
+      ],
       authorizedActions: ['reading this project', 'submitting one unit result'],
       /*
        * Restated on the bin a worker actually reads. The standing authority is
