@@ -65,6 +65,143 @@ jobs:
           fi
           echo "Every gate is PASS."
 
+      # -------------------------------------------------------------------
+      # A19, which is not a database fact and never will be
+      # -------------------------------------------------------------------
+      #
+      # The reporter runs inside the container and reads rows. No row in that
+      # database can say "hosted verification passed before and after a real
+      # restart" — that is a fact about *deliveries*, and it lives in the
+      # workflow runs that performed them. So the reporter reports `NOT_RUN`
+      # for A19 truthfully and permanently, and the verdict is derived here,
+      # where the evidence actually is.
+      #
+      # This is the one gate whose authority is the workflow rather than the
+      # reporter, and saying so is the point: a gate that could never pass
+      # would be a broken gate, and one the reporter faked from a row it
+      # invented would be worse.
+      #
+      # Four conditions, all read-only, none of them assertable by this file:
+      #
+      #   1. the branch tip was deployed by a successful Deploy run;
+      #   2. that run proved the Brain *before* the restart;
+      #   3. it restarted the machine and proved it *after*;
+      #   4. the delivery ledger holds exactly three spent mutations, which is
+      #      the budget the build contract set.
+      #
+      # And then the live liveness check, because a green run in the past says
+      # nothing about the Brain answering now.
+      - name: Derive A19 from the delivery ledger
+        id: delivery
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          BUDGET: '3'
+        run: |
+          set -euo pipefail
+          api() {
+            curl -sS -H "authorization: Bearer $GH_TOKEN" \
+                 -H 'accept: application/vnd.github+json' "$1"
+          }
+          base="https://api.github.com/repos/${{ github.repository }}"
+          branch="${{ github.ref_name }}"
+
+          runs=$(api "$base/actions/workflows/deploy.yml/runs?branch=$branch&status=success&per_page=20")
+          spent=$(echo "$runs" | jq '[.workflow_runs[] | select(.conclusion=="success")] | length')
+          latest=$(echo "$runs" | jq -r '[.workflow_runs[] | select(.conclusion=="success")][0].id // empty')
+          latest_sha=$(echo "$runs" | jq -r '[.workflow_runs[] | select(.conclusion=="success")][0].head_sha // empty')
+
+          echo "delivery ledger: $spent successful Deploy run(s) on $branch"
+          echo "latest release run: ${latest:-none} at ${latest_sha:-none}"
+          echo "acceptance is reading commit: ${{ github.sha }}"
+
+          fail=0
+          if [ -z "${latest:-}" ]; then
+            echo "no successful Deploy run — A19 cannot be derived"; fail=1
+          fi
+
+          if [ "$fail" = "0" ]; then
+            # Steps by name, so a renamed step fails this loudly rather than
+            # quietly passing on a job-level success that proved less.
+            jobs=$(api "$base/actions/runs/$latest/jobs?per_page=50")
+            before=$(echo "$jobs" | jq -r '[.jobs[].steps[]? | select(.name=="Prove the live Brain is actually shut") | .conclusion] | first // "missing"')
+            restart=$(echo "$jobs" | jq -r '[.jobs[].steps[]? | select(.name=="Restart it, so persistence means something") | .conclusion] | first // "missing"')
+            after=$(echo "$jobs" | jq -r '[.jobs[].steps[]? | select(.name=="Prove it survived the restart") | .conclusion] | first // "missing"')
+            echo "hosted verification before restart: $before"
+            echo "real machine restart:               $restart"
+            echo "hosted verification after restart:  $after"
+            [ "$before" = "success" ] || { echo "::warning::the pre-restart verification did not pass"; fail=1; }
+            [ "$restart" = "success" ] || { echo "::warning::no real restart happened in that run"; fail=1; }
+            [ "$after" = "success" ]  || { echo "::warning::the post-restart verification did not pass"; fail=1; }
+          fi
+
+          if [ "${latest_sha:-}" != "${{ github.sha }}" ]; then
+            echo "::warning::the deployed commit is not the one this acceptance read"
+            fail=1
+          fi
+
+          # Over budget is a failure, not a pass with a note: the contract set
+          # three, and a fourth would mean the ledger no longer describes what
+          # was delivered.
+          if [ "$spent" -gt "$BUDGET" ]; then
+            echo "::warning::$spent delivery mutations spent, over the budget of $BUDGET"
+            fail=1
+          fi
+
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          live=$(curl -s -o /dev/null -w '%{http_code}' "https://$app.fly.dev/healthz" || true)
+          shut=$(curl -s -o /dev/null -w '%{http_code}' "https://$app.fly.dev/api/projects" || true)
+          echo "live /healthz: $live   anonymous /api/projects: $shut"
+          [ "$live" = "200" ] || fail=1
+          [ "$shut" = "401" ] || fail=1
+
+          if [ "$fail" = "0" ]; then
+            echo "A19_DELIVERY               PASS      $spent/$BUDGET mutations; hosted verification passed before and after a real restart of the deployed commit" | tee -a acceptance.txt
+            echo "verdict=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "A19_DELIVERY               NOT_RUN   the delivery evidence above is incomplete" | tee -a acceptance.txt
+            echo "verdict=NOT_RUN" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The composed verdict.
+      #
+      # The reporter is the authority on the eighteen gates it can read from
+      # rows, and this file is the authority on the one it cannot. Neither is
+      # allowed to speak for the other, so both are printed and the total is
+      # arithmetic rather than a judgement.
+      - name: The verdict
+        run: |
+          set -euo pipefail
+          # One verdict per gate id, last line wins.
+          #
+          # The captured output can carry the table more than once — an SSH
+          # session replays what it streamed — and A19 legitimately appears
+          # twice, once from the container and once from the step above. A
+          # straight `grep -c` would report twenty-odd gates out of nineteen,
+          # which is the kind of arithmetic that makes a summary worthless.
+          # Taking the last verdict per id is also what makes the derived A19
+          # override the reporter's, without either of them knowing about the
+          # other.
+          awk '/^A[0-9][0-9]_[A-Z_]+[ ]+(PASS|FAIL|BLOCKED|NOT_RUN)/ { seen[$1] = $2 }
+               END { for (g in seen) print g, seen[g] }' acceptance.txt | sort > gates.txt
+          echo "--- nineteen gates, one verdict each ---"
+          cat gates.txt
+          total=$(wc -l < gates.txt)
+          pass=$(awk '$2=="PASS"' gates.txt | wc -l)
+          fail=$(awk '$2=="FAIL"' gates.txt | wc -l)
+          blocked=$(awk '$2=="BLOCKED"' gates.txt | wc -l)
+          notrun=$(awk '$2=="NOT_RUN"' gates.txt | wc -l)
+          if [ "$total" -ne 19 ]; then
+            echo "::error::read $total gates, expected 19 — the reporter's output was not fully captured"
+            exit 1
+          fi
+          echo "STEP 12A — composed: $pass PASS · $fail FAIL · $blocked BLOCKED · $notrun NOT_RUN"
+          if [ "$fail" -gt 0 ] || [ "$blocked" -gt 0 ] || [ "$notrun" -gt 0 ]; then
+            echo "STEP 12A IS NOT COMPLETE."
+            exit 0
+          fi
+          echo "Every gate is PASS."
+
       - name: Keep the reading
         if: always()
         uses: actions/upload-artifact@v4
