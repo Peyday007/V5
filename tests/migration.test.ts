@@ -306,9 +306,21 @@ onPostgres('migrating a Brain into the cloud', () => {
     const firstInserted = first.tables.reduce((n, t) => n + t.inserted, 0);
     expect(firstInserted).toBeGreaterThan(0);
 
+    const firstSkipped = first.tables.reduce((n, t) => n + t.skipped, 0);
+
     const second = await migrate();
     expect(second.tables.reduce((n, t) => n + t.inserted, 0)).toBe(0);
-    expect(second.tables.reduce((n, t) => n + t.skipped, 0)).toBe(firstInserted);
+    /*
+     * Everything the first run wrote **plus everything it already found**.
+     *
+     * This used to compare against `firstInserted` alone, which held only while
+     * no table arrived pre-seeded. Migration 027 seeds one row — the Russell
+     * cycle singleton — into both source and target, so the first run correctly
+     * skips it rather than inserting it, and the second run skips it again. The
+     * property being tested is unchanged and is the one that matters: the
+     * second run inserts nothing, so resuming cannot duplicate.
+     */
+    expect(second.tables.reduce((n, t) => n + t.skipped, 0)).toBe(firstInserted + firstSkipped);
     expect(second.files.every((f) => f.status === 'ALREADY_PRESENT')).toBe(true);
     expect(second.ok).toBe(true);
 

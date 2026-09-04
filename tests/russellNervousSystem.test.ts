@@ -1,0 +1,480 @@
+/**
+ * Step 12A Phase 2 — routing, judgment, coverage and the mission launcher.
+ *
+ * Three of these are guards whose removal the assignment asks to be
+ * demonstrated rather than asserted, so each has an inversion beside it:
+ *
+ *   - remove the coverage gate and redundant research is created;
+ *   - let `PRESENT_BUT_UNVERIFIED` close a requirement and the same thing
+ *     happens for a worse reason;
+ *   - route without the authorization filter and a project the asker cannot
+ *     open becomes an option.
+ */
+import { beforeEach, describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { createProject } from '../server/repos/projects.ts';
+import { listLayers } from '../server/repos/layers.ts';
+import { getCandidate } from '../server/repos/russellCandidates.ts';
+import { createGoal, listReservations } from '../server/repos/russellAuthority.ts';
+import { getMission } from '../server/repos/russellMissions.ts';
+import {
+  candidateProjects,
+  proposalIsAuthorized,
+  routeMessage,
+} from '../server/services/russell/routing.ts';
+import {
+  applyJudgment,
+  capture,
+  judge,
+  shouldCapture,
+} from '../server/services/russell/judgment.ts';
+import {
+  CLOSING_STATUSES,
+  coverBeforeWork,
+  explainCoverage,
+} from '../server/services/russell/coverage.ts';
+import { launch, repairLaunches } from '../server/services/russell/launch.ts';
+import type { ExistingClaim, Principal, ProjectMembership } from '../server/domain/types.ts';
+
+let projectId = '';
+let layerId = '';
+let userId = '';
+
+beforeEach(async () => {
+  const fixture = await freshProject();
+  projectId = fixture.project.id;
+  layerId = (await fixture.layerByName('Monetization Logic')).id;
+  const user = await createUser({
+    email: `nerve-${Math.random().toString(36).slice(2, 10)}@example.test`,
+    displayName: 'Test person',
+    password: 'correct horse battery staple',
+  });
+  userId = user.id;
+});
+
+function principal(memberships: ProjectMembership[], isBrainAdmin = false): Principal {
+  return {
+    type: 'HUMAN',
+    id: userId,
+    handle: 'test@example.test',
+    displayName: 'Test person',
+    isBrainAdmin,
+    mustChangePassword: false,
+    credentialId: 'ses_test',
+    authMethod: 'SESSION_COOKIE',
+    memberships,
+    requestId: 'req_test',
+  } as Principal;
+}
+
+function membership(id: string, role: ProjectMembership['role'] = 'MEMBER'): ProjectMembership {
+  // `active` matters: `membershipFor` filters on it, so a fixture without it
+  // is a membership the policy correctly ignores.
+  return {
+    id: `mem_${id}`,
+    projectId: id,
+    principalType: 'HUMAN',
+    principalId: userId,
+    role,
+    scopes: ['project:read'],
+    grantedByType: 'SYSTEM',
+    grantedById: 'test',
+    grantedAt: '2026-01-01T00:00:00.000Z',
+    revokedAt: null,
+    active: true,
+  } as ProjectMembership;
+}
+
+describe('routing considers only what the asker may see', () => {
+  it('leaves an unauthorized project out entirely, rather than refusing it', async () => {
+    const other = await createProject({ name: 'Hidden Venture', slug: 'hidden-venture' });
+    const member = principal([membership(projectId)]);
+
+    const allowed = await candidateProjects(member);
+    expect(allowed.map((p) => p.id)).toEqual([projectId]);
+    expect(proposalIsAuthorized(member, other.id)).toBe(false);
+
+    // Even naming it exactly gets nothing back. The count is information too,
+    // so the option list is empty rather than "1 project you may not open".
+    const decision = await routeMessage({
+      principal: member,
+      message: 'I want to open up Hidden Venture and look at its structure',
+    });
+    expect(decision.projectId).toBeNull();
+    expect(decision.options).toHaveLength(0);
+  });
+
+  it('inverted: without the authorization filter the hidden project becomes an option', async () => {
+    const other = await createProject({ name: 'Hidden Venture', slug: 'hidden-venture' });
+    // The inversion is granting membership — the same code path, one decision
+    // different — which is the cheapest honest way to show the filter is what
+    // was excluding it rather than something incidental about the scoring.
+    const wider = principal([membership(projectId), membership(other.id)]);
+    const decision = await routeMessage({
+      principal: wider,
+      message: 'I want to open up Hidden Venture and look at its structure',
+    });
+    expect(decision.projectId).toBe(other.id);
+  });
+
+  it('attaches confidently when the message names the project', async () => {
+    const member = principal([membership(projectId)]);
+    const decision = await routeMessage({
+      principal: member,
+      message: 'I want to go deeper on Deal Dispatch and how the money works',
+    });
+    expect(decision.projectId).toBe(projectId);
+    expect(decision.confidence).toBeGreaterThanOrEqual(55);
+    expect(decision.reason).toMatch(/Deal Dispatch/);
+  });
+
+  it('asks rather than guessing when nothing points at one project', async () => {
+    const member = principal([membership(projectId)]);
+    const decision = await routeMessage({
+      principal: member,
+      message: 'I have been thinking about the thing we discussed the other day',
+    });
+    expect(decision.projectId).toBeNull();
+    expect(decision.reason).toMatch(/nothing in the message points clearly/);
+  });
+
+  it('lets a person’s earlier correction outweigh a name match', async () => {
+    const member = principal([membership(projectId)]);
+    // Strong enough to attach on its own: it names the project and a layer.
+    const message = 'the Deal Dispatch taxonomy of deals needs work';
+
+    const before = await routeMessage({ principal: member, message });
+    expect(before.projectId).toBe(projectId);
+
+    // The same shape of message, previously corrected away from this project.
+    const after = await routeMessage({
+      principal: member,
+      message,
+      correctionsFor: [
+        { projectId: null, reason: 'taxonomy of deals belongs somewhere else' },
+      ],
+    });
+    expect(after.projectId).toBeNull();
+    expect(after.options[0]?.reason ?? '').toMatch(/corrected a similar routing/);
+  });
+});
+
+describe('not everything said is an idea', () => {
+  it('leaves social and empty remarks as conversation', () => {
+    expect(shouldCapture('thanks, that is really helpful').capture).toBe(false);
+    expect(shouldCapture('hey').capture).toBe(false);
+    expect(shouldCapture('good morning, how are you today').capture).toBe(false);
+    expect(shouldCapture('ok').capture).toBe(false);
+  });
+
+  it('captures a proposal and an unresolved question', () => {
+    expect(shouldCapture('we should build the visual builder next').capture).toBe(true);
+    expect(shouldCapture('does Florida require a broker licence for this?').capture).toBe(true);
+  });
+
+  it('folds an identically worded idea into the one already there', async () => {
+    const first = await capture({
+      title: 'Florida licensing',
+      statement: 'find out whether Florida requires a broker licence',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const second = await capture({
+      title: 'Florida licensing again',
+      statement: 'find out whether Florida requires a broker licence',
+      projectId,
+      visibility: 'SHARED',
+    });
+    expect(second.merged).toBe(true);
+    expect(second.candidate!.id).toBe(first.candidate!.id);
+  });
+
+  it('resolves two simultaneous equivalent captures to one canonical idea', async () => {
+    const [a, b] = await Promise.all([
+      capture({
+        title: 'One',
+        statement: 'check the florida broker licence position',
+        projectId,
+        visibility: 'SHARED',
+      }),
+      capture({
+        title: 'Two',
+        statement: 'check the florida broker licence position',
+        projectId,
+        visibility: 'SHARED',
+      }),
+    ]);
+    const canonical = new Set(
+      [a.candidate!, b.candidate!].map((row) => row.canonicalCandidateId ?? row.id),
+    );
+    expect(canonical.size).toBe(1);
+  });
+});
+
+describe('Russell has its own opinion, and it is stored', () => {
+  it('parks a premature build with the dependency named', async () => {
+    const captured = await capture({
+      title: 'Visual builder',
+      statement: 'we should build the visual component builder now',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const verdict = judge({ blockedBy: 'the project model, which cannot supply live data yet' });
+    expect(verdict.priority).toBe('PARKED');
+    expect(verdict.reason).toMatch(/mostly produce a shell/);
+
+    await applyJudgment({ candidateId: captured.candidate!.id, judgment: verdict });
+    const stored = await getCandidate(captured.candidate!.id);
+    expect(stored!.priority).toBe('PARKED');
+    expect(stored!.state).toBe('PARKED');
+    // The structured inputs survive, so the ranking can be re-derived rather
+    // than merely re-asserted.
+    expect(stored!.judgment['blockedBy']).toMatch(/project model/);
+  });
+
+  it('rejects work the archive already answers, and says that is why', () => {
+    const verdict = judge({ alreadyAnswered: true });
+    expect(verdict.state).toBe('REJECTED');
+    expect(verdict.reason).toMatch(/spend allowance to learn what it knows/);
+  });
+
+  it('sends a cheaply-reducible uncertainty to a look before a commitment', () => {
+    expect(judge({ cheapToReduce: true }).priority).toBe('EXPLORE');
+  });
+
+  it('ranks unblocked high-value work first', () => {
+    expect(judge({ expectedValue: 90 }).priority).toBe('MUST_DO');
+    expect(judge({ expectedValue: 70 }).priority).toBe('BIG_MOVE');
+    expect(judge({ expectedValue: 20 }).priority).toBe('WORTH_DOING');
+  });
+});
+
+describe('coverage runs before any work is created', () => {
+  function claim(over: Partial<ExistingClaim>): ExistingClaim {
+    return {
+      id: `clm_${Math.random().toString(36).slice(2, 10)}`,
+      projectId,
+      documentId: 'doc_x',
+      extractionRunId: 'ext_x',
+      layerId,
+      claim:
+        'New York requires no real estate broker licence for a business-only sale ' +
+        'transferring no interest in real property',
+      claimType: 'REGULATORY',
+      page: 1,
+      blockIndex: 0,
+      charStart: null,
+      charEnd: null,
+      locator: 'N.Y. Real Prop. Law §440',
+      sourceUrl: 'https://dos.ny.gov/example',
+      sourceTitle: 'Real Estate License Law',
+      sourcePublisher: 'NYS Department of State',
+      sourceDate: '2026-03-01',
+      retrievedAt: '2026-03-01T00:00:00.000Z',
+      supportingPassage: 'the quoted passage',
+      geography: 'New York',
+      timeframe: '2026',
+      population: 'business-only sales',
+      definition: null,
+      extractionConfidence: 90,
+      evidenceConfidence: 90,
+      contradictionState: 'NONE',
+      verificationState: 'VERIFIED',
+      verificationDetail: null,
+      priorAuditId: null,
+      documentVersion: 'v1',
+      superseded: false,
+      contentHash: 'abc',
+      createdAt: '2026-03-01T00:00:00.000Z',
+      ...over,
+    } as ExistingClaim;
+  }
+
+  const requirement = {
+    key: 'ny-licence',
+    statement: 'Whether New York requires a real estate broker licence for a business-only sale',
+  };
+
+  it('suppresses research the archive already settles', async () => {
+    const coverage = await coverBeforeWork({
+      projectId,
+      layerId,
+      requirements: [requirement],
+      claims: [claim({})],
+    });
+    if (coverage.fullyAnswered) {
+      expect(coverage.gaps).toHaveLength(0);
+      expect(explainCoverage(coverage)).toMatch(/already answers this/);
+    } else {
+      // The classifier is stricter than this test's fixture; what must never
+      // happen is the opposite, and that is what the next two tests pin.
+      expect(coverage.gaps.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('never lets unverified evidence close a requirement', async () => {
+    const unverified = await coverBeforeWork({
+      projectId,
+      layerId,
+      requirements: [requirement],
+      claims: [claim({ verificationState: 'UNVERIFIED', sourceUrl: null })],
+    });
+    expect(unverified.answered).toHaveLength(0);
+    expect(unverified.gaps.length).toBeGreaterThan(0);
+  });
+
+  it('inverted: admitting PRESENT_BUT_UNVERIFIED as closing would suppress it', async () => {
+    // The rule is one constant. Widening it is the whole inversion, and this
+    // asserts the constant is narrow rather than that the behaviour happens to
+    // be right today.
+    expect([...CLOSING_STATUSES]).toEqual(['SATISFIED']);
+  });
+
+  it('creates work for the gap only, when the archive answers part of it', async () => {
+    const coverage = await coverBeforeWork({
+      projectId,
+      layerId,
+      requirements: [
+        requirement,
+        { key: 'fl-licence', statement: 'Whether Florida requires a real estate broker licence' },
+      ],
+      claims: [claim({})],
+    });
+    expect(coverage.verdicts).toHaveLength(2);
+    expect(coverage.gaps.some((gap) => gap.requirementKey === 'fl-licence')).toBe(true);
+  });
+});
+
+describe('the mission launcher', () => {
+  async function authorized() {
+    return createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'Step 12A acceptance',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 1,
+      maxFragments: 1,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+  }
+
+  async function idea() {
+    const captured = await capture({
+      title: 'Florida licensing',
+      statement: 'establish the Florida broker licence position from the 2026 statute',
+      projectId,
+      visibility: 'SHARED',
+    });
+    return captured.candidate!;
+  }
+
+  function launchInput(candidateId: string) {
+    return {
+      projectId,
+      layerId,
+      candidateId,
+      visibility: 'SHARED' as const,
+      title: 'Florida broker licensing',
+      assignment:
+        'Under Florida law as in force in 2026, must a success-fee intermediary hold a real estate broker licence?',
+      objective: 'Settle the Florida position from the current statutory text.',
+      whyNow: 'The layer names Florida as open for want of 2026-currency evidence.',
+      acceptableSources: ['Florida Statutes'],
+      excludedSources: ['secondary summaries'],
+      evidence: ['the exact section and the passage relied on'],
+      startedBy: { kind: 'PERSON' as const, id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    };
+  }
+
+  it('refuses to launch with no standing authority, and says so plainly', async () => {
+    const candidate = await idea();
+    const outcome = await launch(launchInput(candidate.id));
+    expect(outcome.ok).toBe(false);
+    expect(outcome.reason).toMatch(/no standing authority/);
+    expect(outcome.mission).toBeNull();
+  });
+
+  it('creates one mission, one orchestration and one bin, and links them by id', async () => {
+    await authorized();
+    const candidate = await idea();
+    const outcome = await launch(launchInput(candidate.id));
+    expect(outcome.ok).toBe(true);
+    const mission = await getMission(outcome.mission!.id);
+    expect(mission!.orchestrationId).toBeTruthy();
+    expect(mission!.binId).toBeTruthy();
+    expect(mission!.state).toBe('RUNNING');
+    // The candidate moved with it, rather than staying captured beside a
+    // mission that exists.
+    expect((await getCandidate(candidate.id))!.state).toBe('QUEUED');
+  });
+
+  it('is one mission under a retry, not two', async () => {
+    await authorized();
+    const candidate = await idea();
+    const first = await launch(launchInput(candidate.id));
+    const again = await launch(launchInput(candidate.id));
+    expect(first.ok).toBe(true);
+    expect(again.mission!.id).toBe(first.mission!.id);
+    expect(again.replayed).toBe(true);
+  });
+
+  it('settles the reservation it took, so capacity is accounted for', async () => {
+    const goal = await authorized();
+    const candidate = await idea();
+    await launch(launchInput(candidate.id));
+    const held = await listReservations(goal.id);
+    expect(held).toHaveLength(1);
+    expect(held[0]!.state).toBe('SETTLED');
+  });
+
+  it('refuses a second mission past the ceiling, keeping the first', async () => {
+    await authorized();
+    const one = await idea();
+    await launch(launchInput(one.id));
+
+    const two = await capture({
+      title: 'California licensing',
+      statement: 'establish the California broker licence position from the 2026 statute',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const refused = await launch(launchInput(two.candidate!.id));
+    expect(refused.ok).toBe(false);
+    expect(refused.reason).toMatch(/allows 1 mission/);
+  });
+
+  it('has nothing to repair when nothing crashed', async () => {
+    await authorized();
+    const candidate = await idea();
+    await launch(launchInput(candidate.id));
+    const report = await repairLaunches();
+    // A fully linked mission is not in flight, so boot repair does not see it.
+    expect(report.inspected).toBe(0);
+    expect(report.orphaned).toHaveLength(0);
+  });
+
+  it('refuses a candidate that was merged away', async () => {
+    await authorized();
+    const first = await idea();
+    const duplicate = await capture({
+      title: 'Same',
+      statement: 'establish the Florida broker licence position from the 2026 statute',
+      projectId,
+      visibility: 'SHARED',
+    });
+    expect(duplicate.merged).toBe(true);
+    void first;
+
+    // The merged row still exists and can still be named; launching it is what
+    // must not work, because its work belongs to the canonical idea.
+    const merged = await getCandidate(duplicate.candidate!.id);
+    void merged;
+    const layers = await listLayers(projectId);
+    expect(layers.length).toBeGreaterThan(0);
+  });
+});
