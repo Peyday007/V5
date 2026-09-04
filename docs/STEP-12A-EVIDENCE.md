@@ -691,7 +691,7 @@ derives `PASS` from rows with no further deployment.**
 |---|---|---|
 | 1 | Integrated foundation: schema, canonical services, Russell loop, API, shell | **spent** — run 33835314104, commit `10658fd`, image `deployment-01M1N9H57EWJRWWFC2BFXTT681`, released 2026-09-04T04:09:17Z |
 | 2 | Acceptance correction: worker vocabulary, the routing acceptance case, A11-transitive blocking | **spent** — run 33837508678, commit `9023673`, released 2026-09-04T04:42:24Z |
-| 3 | Final verification, only if the correction batch requires it | **reserved** — kept for defects the real acceptance finds |
+| 3 | The correction route, and the A03 query that could never match — both found by the real acceptance | **spent** — run in progress at the cap; outcome recorded in §8 |
 
 `step12a-acceptance.yml` is **not** a mutation. The reporter opens the
 database, counts, prints and closes; it creates nothing, advances nothing and
@@ -794,6 +794,36 @@ sent one message.
 
 `A01` rose from 2 conversations to 6 and `A04` from 2 turns to 8, both from
 real production traffic through the live API.
+
+### The third mutation: two defects the real acceptance found
+
+Neither was visible from the suites, and both are the same shape — a rule that
+existed in one half of the system and nowhere else.
+
+**`A03` was unsatisfiable by construction.** The reporter counted
+`russell_conversation_context.source = 'CORRECTION'`, and `CORRECTION` is not a
+member of `ATTACHMENT_SOURCES`. The gate could never have passed however many
+corrections a person made, and would have read as an unrun condition for ever.
+**A gate that cannot be satisfied is not a strict gate, it is a broken one** —
+and it is the failure mode a reporter is most likely to have, because a query
+that returns zero looks exactly like a condition nobody has met yet. It counts
+`USER` now, which is the vocabulary `listCorrections` actually reads.
+
+**Nothing could write a correction.** `routeMessage` has always read them and
+weighed them above a name match — the logic, the scoring and the tests were all
+there — but no route recorded one, so the entire mechanism was reachable only
+from a test. **A rule the interface cannot express is a rule the product does
+not have.**
+
+`POST /conversations/:id/project` is that route: owner-only, with the project
+re-authorized against that person so a correction cannot become a way to attach
+a thread to something the corrector may not read. That last one is asserted
+directly, because it is the mistake this shape invites. A `null` project
+detaches, which is the honest option when somebody knows a thread is filed
+wrongly and not where it belongs.
+
+Finding these is what the instruction to actually run the acceptance bought.
+Both would have survived indefinitely behind a green suite.
 
 ### The one blocker, stated exactly
 
