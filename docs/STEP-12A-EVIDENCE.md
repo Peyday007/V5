@@ -1714,3 +1714,74 @@ One correction to the previous checkpoint: V1 reads **19** fires, not 18. An
 additional activation occurred unattended in the intervening hours and it
 checked in too — `no-shows` is still 0. The hardened Routine prompt is holding
 across more than the one canary.
+
+---
+
+## 17. Continuation delta map and checkpoint — 2026-09-04
+
+### Two required inputs were not supplied
+
+The continuation assignment names three attachments. The upload carried the
+build prompt and, inside `RUSSELLSTEP12ABUILDPACKAGE.zip`,
+`STEP-12-MEMORY-PROMPT-v2.md`. **Missing: `STEP-12-MEMORY-PROMPT-v3-ADDENDUM.md`
+and `living-idea-map.html`.**
+
+The addendum matters because the assignment says it *overrides v2 on conflicts*.
+Work proceeded because the continuation prompt's own SETTLED FACTS list carries
+the overrides that actually bear on this batch — notably that a basic living
+constellation and fast direct-API conversation are now Step 12A, which reverses
+v2 §17 and §18. What remains genuinely unavailable is the approved *interaction*
+reference for the constellation, so Workstream 3 has a written specification and
+no visual one.
+
+### The delta map
+
+| Capability that exists | Missing connection | Change | Proof | Deploy needed |
+| --- | --- | --- | --- | --- |
+| Nineteen-gate reporter | nine gates counted whole tables, so any historical row satisfied them | declared `ACCEPTANCE_SCOPE`, all nine derived from it | 22 evaluator tests | no — read-only reporter |
+| `auditIndependenceEvidence` | answered "has *an* audit run", not "did *this* mission's" | optional orchestration scope; empty ≠ absent | 4 new inversion tests | no |
+| `russell_knowledge` reader | never read `research_claims`, so Knows was hollow | zero-copy projection preserving epistemic status and provenance | 12 tests | **yes**, to be visible |
+| Empty views | one "nothing yet" for six different situations | `surfaceState` with six reasons; forbidden ≡ unavailable | 4 tests | **yes** |
+| `KnowledgeView` | threw on a response lacking the new field | optional all the way down | shell suite | **yes** |
+
+### What is done, and what is not
+
+**Complete — Workstream 1.** The reporter is scoped, `A20`–`A22` exist, the
+historical-packet defect is closed and inverted in tests, the workflow guard
+moves to 22 gates, and the evidence document records it.
+
+**Partial — Workstream 2.** Knows is built, tested, routed and rendered. The
+other read surfaces are **not** done: Work still lacks provenance filtering
+(verification fixtures and synthetic harness packets can still inflate ordinary
+counts), Ideas, Who and the shared progress projection are untouched.
+
+**Not started — Workstreams 3, 4, 5.** The constellation, the fast conversation
+lane and the scoped production acceptance.
+
+### Status of every claim above
+
+**LOCAL / CODE PROOF only.** Nothing in this section is live. The deployed image
+is still `3b6ebfb` from mutation 4; none of this batch has been deployed, and no
+fifth mutation is authorized or requested yet. `A20`–`A22` are `NOT_RUN` in
+production and remain so until an authorized deployment and a production read.
+
+### Resume path
+
+One path, in order:
+
+1. Finish Workstream 2 — Work provenance filtering and grouping, Ideas, Who, and
+   one shared progress projection.
+2. Workstream 3, against the written requirements; ask for `living-idea-map.html`
+   first if the approved interaction matters more than the written spec.
+3. Workstream 4 — the conversation lane, adapter contract tests and spend
+   ceiling, with no paid key and `A22` left `NOT_RUN`.
+4. Freeze the Workstream 5 scenario, set `ACCEPTANCE_SCOPE.conversationId`, and
+   request the fifth mutation with its enumerated order, ceiling, canary and
+   rollback.
+
+### Fleet, unchanged and untouched by this batch
+
+```
+V1  ENABLED      target 1  fires=19  refusals=0  no-shows=0
+V2  QUARANTINED            fires=12  refusals=0  no-shows=5
+```
