@@ -232,6 +232,21 @@ const OVERRIDES: Override[] = [
   { pattern: /^\/api\/operations\/[^/]+\/resolve$/, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/operations\/[^/]+$/, method: 'GET', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/operations$/, method: 'GET', level: 'ADMIN' },
+
+  // ---------------------------------------------------------------------
+  // Step 12A — Russell
+  // ---------------------------------------------------------------------
+  //
+  // Two POSTs here are reads that need a body, and the default method rule
+  // would make them writes. Asking a person for write access to find out
+  // whether Russell would need to research something is backwards: the whole
+  // point of the coverage answer is to be consulted *before* anything is
+  // spent, and opening a conversation about a project changes nothing in it.
+  //
+  // Answering an open decision is genuinely a write and is deliberately left
+  // to the default, because it moves work.
+  { pattern: /^\/api\/russell\/projects\/[^/]+\/coverage$/, method: 'POST', level: 'READ' },
+  { pattern: /^\/api\/russell\/conversations$/, method: 'POST', level: 'READ' },
 ];
 
 export interface Requirement {

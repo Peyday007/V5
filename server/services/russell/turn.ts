@@ -39,6 +39,7 @@ import {
   addMessage,
   attachConversation,
   getConversation,
+  getMessage,
   listTurns,
   recordProduced,
   resolveMessage,
@@ -142,7 +143,11 @@ export async function beginTurn(input: {
       ok: true,
       reason: 'asked which project',
       userMessage,
-      pendingMessage,
+      // Re-read, not the row as it was written. Returning the pre-resolution
+      // object would tell the caller a settled turn is still pending, and an
+      // interface that showed a spinner over an answer it already had would be
+      // wrong in exactly the way this design exists to avoid.
+      pendingMessage: (await getMessage(pendingMessage.id)) ?? pendingMessage,
       binId: null,
       attachedProjectId,
     };
@@ -450,7 +455,6 @@ async function applyValidated(input: {
 }
 
 async function conversationForMessage(messageId: string) {
-  const { getMessage } = await import('../../repos/russellConversations.ts');
   const message = await getMessage(messageId);
   return message ? getConversation(message.conversationId) : null;
 }

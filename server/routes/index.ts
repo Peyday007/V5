@@ -18,6 +18,7 @@ import { projectsRouter } from './projects.ts';
 import { providersRouter } from './providers.ts';
 import { researchRouter } from './research.ts';
 import { runsRouter } from './runs.ts';
+import { russellRouter } from './russell.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
@@ -47,6 +48,11 @@ export function createApiRouter(): Router {
   router.use('/runs', runsRouter);
   router.use('/documents', documentsRouter);
   router.use('/chat', chatRouter);
+  // Russell's own surface. Mounted under its own prefix rather than at the root:
+  // its routes address conversations, candidates and human requests, and the
+  // `/projects/:id/...` ones inside it are Russell's views of a project rather
+  // than the project router's.
+  router.use('/russell', russellRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);
