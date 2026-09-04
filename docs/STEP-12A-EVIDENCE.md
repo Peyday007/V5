@@ -291,18 +291,27 @@ lands, and it is recorded here rather than chased.
 
 ### The upgrade path, not only the from-empty path
 
-`scripts/upgrade-check.ts` builds a populated database, drops what 027 added,
-deletes its `schema_migrations` row, and boots again exactly as production
-would:
+`scripts/upgrade-check.ts` builds a populated database, drops what the Russell
+migration added, deletes its `schema_migrations` row, and boots again exactly as
+production would. Both chains:
 
 ```
-  was at        26
-  now at        27
-  messages      1 before, 1 after
-  cycle rows    1
-  russell convs 0
-UPGRADE: OK
+SQLite                        Postgres
+  was at        26              was at        17
+  now at        27              now at        18
+  messages      1 before, 1     messages      1 before, 1
+  cycle rows    1               cycle rows    1
+  russell convs 0               russell convs 0
+UPGRADE: OK                   UPGRADE: OK
 ```
+
+Writing it reproduced the confusion CLAUDE.md §3 warns about, by somebody who
+had just read the warning: the first version deleted `WHERE version >= 27`,
+which matches nothing on Postgres — where the same migration is **018** — so the
+runner believed it was already applied and the tables stayed dropped. It selects
+by migration *name* now. The two chains are numbered independently and their
+versions do not mean the same thing, and a script that assumes otherwise fails
+silently in the direction of "looks fine".
 
 The last line is the one worth reading. Adopting legacy conversations is a
 deliberate call, not a migration side effect — so a pre-12A `Project Chat` keeps

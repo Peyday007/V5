@@ -41,16 +41,38 @@ await getDb().run(
 const before = await getDb().all<{ n: number }>('SELECT COUNT(*) AS n FROM messages');
 
 // Put it back to 026: drop what 027 added and forget it ever ran.
+// Reverse dependency order. SQLite tolerates any order; Postgres refuses to
+// drop a table another one still references, which is a better error than
+// SQLite's silence and is the reason this list is ordered rather than
+// alphabetical.
 for (const table of [
-  'russell_probe_observations', 'russell_probes', 'russell_candidate_merges',
-  'russell_candidates', 'russell_budget_reservations', 'russell_goals',
-  'russell_knowledge', 'russell_human_requests', 'russell_missions',
-  'russell_messages', 'russell_conversation_context', 'russell_conversations',
+  'russell_probe_observations',
+  'russell_candidate_merges',
+  'russell_knowledge',
+  'russell_human_requests',
+  'russell_missions',
+  'russell_probes',
+  'russell_budget_reservations',
+  'russell_goals',
+  'russell_candidates',
+  'russell_messages',
+  'russell_conversation_context',
+  'russell_conversations',
   'russell_cycle',
 ]) {
   await getDb().run(`DROP TABLE IF EXISTS ${table}`);
 }
-await getDb().run(`DELETE FROM schema_migrations WHERE version >= 27`);
+/*
+ * By name, not by number.
+ *
+ * The two chains are numbered independently and their versions do not mean the
+ * same thing: the Russell migration is 027 on SQLite and 018 on Postgres. A
+ * hard-coded `version >= 27` therefore deleted nothing on Postgres, the runner
+ * believed the migration was already applied, and the tables stayed dropped —
+ * which is exactly the confusion CLAUDE.md §3 warns about, reproduced by
+ * somebody who had read the warning.
+ */
+await getDb().run(`DELETE FROM schema_migrations WHERE name = ?`, ['russell']);
 const at026 = await getDb().all<{ v: number }>('SELECT MAX(version) AS v FROM schema_migrations');
 await closeDatabase();
 
