@@ -825,3 +825,68 @@ describe('the loop starts work, bounded', () => {
     expect(new Set(missions.map((m) => m.candidateId))).toEqual(new Set([first, second]));
   });
 });
+
+describe('the loop does not spend the writeback on a placeholder', () => {
+  it('leaves an accepted packet alone until its document is linked', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'acceptance',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 1,
+      maxFragments: 1,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+    const captured = await capture({
+      title: 'Florida licensing',
+      statement: 'establish the Florida broker licence position from the 2026 statute',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const launched = await launch({
+      projectId,
+      layerId,
+      candidateId: captured.candidate!.id,
+      visibility: 'SHARED',
+      title: 'Florida broker licensing',
+      assignment: 'Under Florida law as in force in 2026, is a broker licence required?',
+      objective: 'Settle the Florida position.',
+      whyNow: 'The layer names Florida as open.',
+      acceptableSources: ['Florida Statutes'],
+      excludedSources: [],
+      evidence: ['the exact section'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    const mission = launched.mission!;
+
+    // The packet finishes, but nothing has linked the filed document yet.
+    await getDb().run('UPDATE research_orchestrations SET status = ? WHERE id = ?', [
+      'COMPLETE',
+      mission.orchestrationId,
+    ]);
+
+    const report = await tick('instance-a');
+    expect(report.awaitingFiling).toContain(mission.id);
+    expect(report.wroteBack).not.toContain(mission.id);
+
+    // Nothing was promoted, and crucially the writeback is still available —
+    // so the real conclusion can still land when the filing arrives.
+    expect(await listCurrentKnowledge({ projectId })).toHaveLength(0);
+    expect((await getMission(mission.id))!.writebackAt).toBeNull();
+
+    const written = await writeBack({
+      missionId: mission.id,
+      outcome: 'ACCEPTED',
+      conclusion: 'Florida does require a broker licence for a business-only success-fee deal.',
+      provenance: { documentId: 'doc_real' },
+    });
+    expect(written.ok).toBe(true);
+    expect(written.alreadyDone).toBe(false);
+    const knowledge = await listCurrentKnowledge({ projectId });
+    expect(knowledge[0]!.statement).toMatch(/Florida does require a broker licence/);
+  });
+});

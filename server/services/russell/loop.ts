@@ -72,6 +72,12 @@ export interface TickReport {
   resumed: string[];
   expiredProbes: string[];
   launched: string[];
+  /**
+   * Missions whose packet is terminal but whose filed document is not linked
+   * yet, so the writeback is deliberately left for a later tick rather than
+   * spent on a sentence assembled from the row.
+   */
+  awaitingFiling: string[];
   /** True when a bound stopped the tick short, with work preserved. */
   bounded: boolean;
 }
@@ -84,6 +90,7 @@ const EMPTY: TickReport = {
   resumed: [],
   expiredProbes: [],
   launched: [],
+  awaitingFiling: [],
   bounded: false,
 };
 
@@ -109,21 +116,41 @@ export async function tick(owner: string): Promise<TickReport> {
     resumed: [],
     expiredProbes: [],
     launched: [],
+    awaitingFiling: [],
   };
 
   try {
-    // 1. Finish what ended.
+    // 1. Finish what ended — but only where the loop can say something true.
     for (const mission of await missionsAwaitingWriteback(cycle.maxEventsPerCycle)) {
       const outcome = await outcomeOf(mission);
       if (!outcome) continue;
+
+      /*
+       * The loop must not spend the writeback on a placeholder.
+       *
+       * `claimWriteback` is once-only, which is what makes the effects
+       * exactly-once — and it means whoever writes back *first* decides what
+       * the project ends up believing. A tick that fired before the filed
+       * document was linked would therefore promote a sentence assembled from
+       * the mission row, permanently, and the real conclusion could never land.
+       *
+       * So an accepted packet with nothing filed yet is left alone and picked
+       * up on a later tick. A failed one is safe to finish immediately, because
+       * nothing is promoted from a run that did not finish and there is no
+       * conclusion to lose.
+       */
+      if (outcome !== 'FAILED' && !mission.documentId) {
+        report.awaitingFiling.push(mission.id);
+        continue;
+      }
+
       const result = await writeBack({
         missionId: mission.id,
         outcome,
-        // The conclusion and its provenance come from the filed packet, which
-        // the caller that has read it supplies. The loop's own writeback is the
-        // safety net for a completion nobody observed, so it says only what it
-        // can prove from rows: that the packet reached this outcome.
-        conclusion: `${mission.objective} — the packet reached its terminal state.`,
+        conclusion:
+          outcome === 'FAILED'
+            ? ''
+            : `${mission.objective} — filed and audited through the existing pipeline.`,
         provenance: {
           orchestrationId: mission.orchestrationId,
           documentId: mission.documentId,
