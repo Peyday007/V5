@@ -257,16 +257,41 @@ The one rule Russell adds is that **only `SATISFIED` closes a requirement** —
 behind it, which reads like coverage and is precisely where research is most
 needed.
 
-### One intermittent failure, classified rather than dismissed
+### Two failures the suite found in Phase 2's own code
 
-Two full SQLite runs each showed one failure; a third and fourth were clean at
-**1350 passed / 25 skipped, exit 0**. The Postgres log names the mechanism: an
-unhandled rejection from `tests/research.test.ts`, where a research job's
-progress callback calls `cancelResearch` → `recordEvent` → `getDb()` *after* its
-file closed the database. That is test-file teardown ordering, it predates
-Step 12A, and it can surface as a failure in whichever file happens to be
-running when it lands. Recorded here rather than rewritten, and it is not a
-product defect.
+**Dedupe ordered on a random tiebreak.** `capture` creating first and then
+asking whether an *earlier* row existed was the right shape, and the tiebreak on
+equal timestamps was `id`, which is random. So two candidates written in the
+same millisecond could order arbitrarily, the row that genuinely arrived first
+could sort second, decline to merge into a row it believed was later, and leave
+two canonical candidates for one idea. The question is now *which row was
+written first* — `ORDER BY created_at, rowid`, which the dialect layer rewrites
+to `seq` on Postgres — asked by every caller including about itself, so all of
+them get the same answer, exactly one of them is that row, and every other folds
+into it. Three consecutive clean runs of the suite afterwards.
+
+**A test's premise was false rather than its assertion wrong.** The correction
+test used a message naming only a layer, which scores below the attach floor, so
+the "before" case it needed never attached. Fixed by naming the project too,
+which is the case the test is actually about.
+
+### Two failure classes that are not product defects
+
+**Runner contention.** One Postgres run showed five failures, all in
+`tests/ocr.test.ts` and all *timeouts* at 60s and 90s, while a full SQLite suite
+ran concurrently — that file renders images and shells out to Tesseract, so it
+is the first to starve. The Phase 1 Postgres run with nothing competing passed
+the same file. Rerun serially rather than rewritten, as the anti-drag rule says.
+
+**Test teardown ordering.** An unhandled rejection from `tests/research.test.ts`,
+where a research job's progress callback reaches `cancelResearch` →
+`abandonRunningPasses` → `getDb()` *after* its file closed the database. It
+predates Step 12A, it surfaces in whichever file happens to be running when it
+lands, and it is recorded here rather than chased.
+
+### Where the suite stands
+
+**SQLite: 1361 passed / 25 skipped, exit 0**, running alone.
 
 ---
 
