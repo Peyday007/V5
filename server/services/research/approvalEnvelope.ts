@@ -142,6 +142,25 @@ function sha256(text: string): string {
  *
  * Frozen, and keyed by an id a caller can name but not define.
  */
+/**
+ * The frozen shape of Step 12A's acceptance assignment.
+ *
+ * `{STATE}` is substituted per state. Freezing the template rather than one
+ * finished string is what lets the acceptance prove a follow-on: the second
+ * mission is the same authorized question about the next state, not a new
+ * authorization somebody granted mid-run.
+ */
+export const STATE_LICENSING_ASSIGNMENT_TEMPLATE =
+  'Under {STATE} law as in force in 2026, must a success-fee intermediary who arranges the sale ' +
+  'of a privately held business hold a real estate broker licence when the transaction transfers ' +
+  'no interest in real property and no lease? Answer from the current official statutory text, ' +
+  'citing the exact section and the passage relied on, and state its edition date.';
+
+/** The assignment for one state, from the frozen template. */
+export function stateLicensingAssignment(state: string): string {
+  return STATE_LICENSING_ASSIGNMENT_TEMPLATE.replace('{STATE}', state);
+}
+
 export const STEP11_AUDIT_INDEPENDENCE_ASSIGNMENT =
   'In Delaware, under 6 Del. C. \u00a718-1107 as in force during 2026, what annual tax must a ' +
   'domestic limited liability company pay, and when is that tax due?';
@@ -178,6 +197,53 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
     // secondary source may support a claim, so nothing else is admissible.
     allowedSourceTypes:
       /(statut|delaware code|del\. c\.|title 6|state code|administrative code|regulation|division of corporations|department of state|secretary of state|official|primary|government)/i,
+    forbiddenActions:
+      /\b(purchase|pay|payment|subscribe|subscription|invoice|paywall bypass|contact|telephone|phone call|email the|write to|submit a request to|file a|register with|apply for)\b/i,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * Step 12A's acceptance packet: Florida, one fragment, statutory only.
+   *
+   * The gap is real and it is live. `Monetization Logic v1` says in its own
+   * filed text that the packet "can conclude only that a New York-based,
+   * business-only, no-real-property success-fee deal does not require a real
+   * estate broker licence… California, Texas, Florida and Illinois remain open
+   * questions", with the Florida and California sections short of
+   * 2026-currency evidence; v1C then settled Michigan; and the planner's own
+   * next best action is that layer. So this is the next state, chosen from
+   * rows rather than invented to give an acceptance something to do.
+   *
+   * Two controls stand in series in front of it, and neither replaces the
+   * other: Step 12A's standing authority decides whether Russell may *start*,
+   * and this envelope decides whether the plan it then produced is inside
+   * limits fixed here before any plan existed.
+   *
+   * Not one-use, unlike the Step 11 envelope, and for a reason worth stating:
+   * the acceptance has to prove Russell launching a *second* authorized mission
+   * without another prompt, and the follow-on is the same question for
+   * California. One-use would have made the thing being proved impossible. The
+   * bound that keeps it honest instead is `maxFragments: 1` plus the mission
+   * ceiling on the grant, which is counted.
+   */
+  RUSSELL_STATE_LICENSING_V1: Object.freeze({
+    id: 'RUSSELL_STATE_LICENSING_V1',
+    authorization:
+      'The operator authorized Step 12A acceptance research into the state licensing gap the ' +
+      'Deal Dispatch Monetization Logic layer names as open, one bounded fragment per state, ' +
+      'primary statutory sources only, no spend and no external effect.',
+    // The assignment is composed per state from a frozen template, so the
+    // digest is checked against the template's shape rather than one string.
+    assignmentSha256: sha256(STATE_LICENSING_ASSIGNMENT_TEMPLATE),
+    projectSlug: 'deal-dispatch',
+    maxFragments: 1,
+    // Two states, and only these two: the frozen acceptance idea and the frozen
+    // follow-on. A third would be work nobody authorized.
+    geography: /florida|california|\bfl\b|\bca\b/i,
+    forbiddenScope:
+      /\b(alabama|alaska|arizona|arkansas|colorado|connecticut|delaware|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|ohio|oklahoma|oregon|pennsylvania|tennessee|texas|utah|vermont|virginia|washington|wisconsin|wyoming|new york|new jersey|north carolina|south carolina|west virginia|rhode island|new hampshire|new mexico|north dakota|south dakota|federal|sec\b)\b/i,
+    allowedSourceTypes:
+      /(statut|fla\. stat|florida statutes|bus\. ?& ?prof|business and professions|state code|administrative code|regulation|department of business|bureau of real estate|secretary of state|official|primary|government|legislature)/i,
     forbiddenActions:
       /\b(purchase|pay|payment|subscribe|subscription|invoice|paywall bypass|contact|telephone|phone call|email the|write to|submit a request to|file a|register with|apply for)\b/i,
     minIndependentSourcesFloor: 1,
