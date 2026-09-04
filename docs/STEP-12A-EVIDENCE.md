@@ -189,7 +189,7 @@ field arrives.
 
 ## 4. Phase 2 — the nervous system
 
-**CODE and TEST**, partial. `tests/russellNervousSystem.test.ts` — **29 tests,
+**CODE and TEST**, partial. `tests/russellNervousSystem.test.ts` — **33 tests,
 passing on SQLite.**
 
 | Built | What it does |
@@ -199,6 +199,28 @@ passing on SQLite.**
 | `services/russell/coverage.ts` | the archive check that runs before any work is created |
 | `services/russell/launch.ts` | the one way a mission comes into existence |
 | `services/russell/writeback.ts` | what happens when one finishes, exactly once |
+| `services/russell/loop.ts` | the durable tick, started by the server beside the dispatcher |
+
+**The loop is a row, and that is the whole of "while the laptop is closed".**
+One tick finishes what ended, resumes what a person answered, ends what a
+deadline passed, and starts at most one thing — in that order, so a decision
+about what to do next is taken against what the project now knows rather than
+what it knew before the result landed. Ownership is a compare-and-swap on the
+cycle generation; an expired lease is claimable, so recovery never depends on
+the previous owner shutting down cleanly, and the timer is a convenience whose
+loss costs throughput and nothing else.
+
+**Its bounds are the part that matters.** A completion writes a briefing, a
+briefing is a turn, and a turn could seed a candidate whose mission writes
+another briefing — nothing wrong on its own, and together a machine for spending
+an allowance on itself. Three things stop it, and none of them is a model being
+sensible: only a `USER` turn is ever a capture source, one launch and one
+follow-on per cycle from the row, and the goal's mission ceiling counted in the
+database. Hitting a bound preserves the remaining work rather than dropping it.
+
+**Boot repairs before it ticks**, by re-entering the launcher's own
+`repairLaunches` rather than a second implementation of a recovery path — which
+is the one nobody tests.
 
 **Routing considers only what the asker may see.** `candidateProjects` asks
 `decideProjectAccess` before it scores anything, so an unauthorized project is
