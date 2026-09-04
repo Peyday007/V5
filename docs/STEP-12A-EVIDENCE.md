@@ -2335,3 +2335,71 @@ go and find.
 
 **V2 remains `QUARANTINED`. No Routine prompt, model, target, connector or
 state was touched. No turn, bin, fire or fixture was created.**
+
+---
+
+## 25. The first production reading of all twenty-two gates — 2026-09-04
+
+**LIVE PRODUCTION.** Acceptance run
+[33922266259](https://github.com/Peyday007/V5/actions/runs/33922266259), read
+from the container against the deployed image, read-only by construction.
+
+    A01_SHELL_IDENTITY         PASS
+    A02_CONVERSATION_ROUTE     PASS
+    A03_ROUTE_CORRECTION       PASS
+    A04_IRRELEVANT             PASS
+    A05_DEDUPE                 NOT_RUN
+    A06_JUDGMENT_OVERRIDE      NOT_RUN
+    A07_PROBE_BOUNDS           NOT_RUN
+    A08_COVERAGE               PASS
+    A09_AUTH_BUDGET            NOT_RUN
+    A10_MISSION_PIPELINE       NOT_RUN
+    A11_INDEPENDENT_AUDIT      NOT_RUN
+    A12_WRITEBACK              NOT_RUN
+    A13_AUTO_NEXT              NOT_RUN
+    A14_HUMAN_RESUME           NOT_RUN
+    A15_RECOVERY               PASS
+    A16_DD_FRESHNESS           PASS
+    A17_PRIVACY_AUTH           PASS
+    A18_BASELINES              PASS
+    A19_DELIVERY               PASS
+    A20_USABLE_READ_SURFACES   NOT_RUN
+    A21_LIVING_PROJECT_MAP     PASS
+    A22_FAST_CHAT_ROUTING      NOT_RUN
+
+    STEP 12A — composed: 11 PASS · 0 FAIL · 0 BLOCKED · 11 NOT_RUN
+    STEP 12A IS NOT COMPLETE.
+
+### What moved, and what that is worth
+
+**A19 is now PASS**, at 5/5. Each of the five ledger runs shows
+`deploy=success before=success restart=success after=success`, and the
+deployed commit `c87d857` matches the acceptance reading `b29207d` across
+`server client scripts package.json package-lock.json Dockerfile fly.toml` —
+the running program is the program being read. Live `/healthz` 200 and
+anonymous `/api/projects` 401 at read time.
+
+**A21 is PASS, and the pass is weaker than the gate's name suggests.** Its
+production condition is a row count — that an explicit, provenance-bearing idea
+structure exists for the map to draw. It does. What it cannot check from inside
+a container is whether the constellation *renders*, and that evidence is §18.4:
+local visual QA at 1280×900 and 390×844, 12 of 12 screens rendering and
+fitting. That is code proof, not a production reading, and A21's row condition
+should not be mistaken for one. Tightening it is a code change and therefore a
+deployment, which is not authorized here; it is recorded as a limitation rather
+than quietly counted as strength.
+
+**A20 stays NOT_RUN** because production holds no `russell_knowledge` rows yet.
+That is the honest state: the projection is deployed and there is nothing
+Russell has captured for it to project. The frozen chain is what creates the
+first ones.
+
+### The nine still open
+
+`A05`, `A06`, `A07`, `A09`, `A10`, `A11`, `A12`, `A13`, `A14` are all scoped to
+`ACCEPTANCE_SCOPE.conversationId`, which is still empty — so each reports
+`NOT_RUN` naming that reason rather than counting a historical row. `A20` needs
+captured knowledge and `A22` needs a paid provider call nobody has authorized.
+
+Nothing here is wrong. Eleven gates are proved against production, and the
+other eleven are waiting on one message a person has to send.
