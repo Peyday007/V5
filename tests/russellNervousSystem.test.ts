@@ -38,6 +38,7 @@ import {
 } from '../server/services/russell/coverage.ts';
 import { launch, repairLaunches } from '../server/services/russell/launch.ts';
 import { writeBack } from '../server/services/russell/writeback.ts';
+import { briefing, focusLayer, roughProgress } from '../server/services/russell/projections.ts';
 import {
   looksLikeInjection,
   MAX_PROPOSED_LOOKUPS,
@@ -1065,5 +1066,69 @@ describe('a model proposes; the server decides', () => {
       if (result.ok) throw new Error('unreachable');
       expect(result.code).toBe('UNKNOWN_ACTION');
     }
+  });
+});
+
+describe('a briefing says what changed, why, what next, and whether you are needed', () => {
+  it('never turns a feeling into a percentage', () => {
+    // Every phrase is a range over a counted milestone ratio, and none of them
+    // contains a number a reader could mistake for precision.
+    for (const input of [
+      { settled: 0, underWay: 0, total: 8 },
+      { settled: 0, underWay: 2, total: 8 },
+      { settled: 1, underWay: 2, total: 8 },
+      { settled: 3, underWay: 1, total: 8 },
+      { settled: 4, underWay: 1, total: 8 },
+      { settled: 7, underWay: 1, total: 8 },
+      { settled: 8, underWay: 0, total: 8 },
+    ]) {
+      const phrase = roughProgress(input);
+      expect(phrase).not.toMatch(/%/);
+      expect(phrase).not.toMatch(/\b0\.\d+\b/);
+    }
+  });
+
+  it('says "about halfway" only when the milestones support it', () => {
+    expect(roughProgress({ settled: 4, underWay: 1, total: 8 })).toMatch(/About halfway/);
+    expect(roughProgress({ settled: 1, underWay: 1, total: 8 })).not.toMatch(/About halfway/);
+    expect(roughProgress({ settled: 8, underWay: 0, total: 8 })).toMatch(/Every part/);
+  });
+
+  it('refuses to describe work it cannot see', () => {
+    expect(roughProgress({ settled: 0, underWay: 0, total: 0 })).toMatch(/Nothing is mapped out/);
+    expect(roughProgress({ settled: 0, underWay: 0, total: 8 })).toMatch(/Nothing has been started/);
+  });
+
+  it('leads with the focus and ends with whether a person is needed', async () => {
+    const view = await briefing({ projectId, projectName: 'Deal Dispatch' });
+    expect(view.focus).toMatch(/^Russell is (working on|watching) Deal Dispatch/);
+    expect(view.needsYou).toBe('You are not needed.');
+    expect(view.openRequests).toBe(0);
+    // Nothing invented while there is nothing to report.
+    expect(view.latest).toBeNull();
+  });
+
+  it('says a person is needed only when something is actually waiting', async () => {
+    await askHuman({
+      projectId,
+      authorityNeeded: 'permission to pay for a statutory lookup',
+      whyNotRussell: 'the standing authority prohibits new spending',
+      choices: [{ key: 'approve', label: 'Approve', consequence: 'Russell continues' }],
+      urgency: 'BLOCKING',
+      resumeKey: 'brief-resume-1',
+    });
+    const view = await briefing({ projectId, projectName: 'Deal Dispatch' });
+    expect(view.needsYou).toMatch(/You are needed/);
+    expect(view.openRequests).toBe(1);
+  });
+
+  it('names the focus layer in plain words, never the internal one', async () => {
+    const layer = await focusLayer(projectId);
+    if (layer) expect(layer).not.toBe('Monetization Logic');
+  });
+
+  it('reports what it is watching rather than promising to continue', async () => {
+    const view = await briefing({ projectId, projectName: 'Deal Dispatch' });
+    expect(view.next).toMatch(/watching for something worth starting|Next, Russell is|waiting on|cheap look/);
   });
 });
