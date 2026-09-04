@@ -1848,3 +1848,412 @@ legend {
   width: 100%;
   margin-top: 20px;
 }
+
+/* ================================================================ Russell ==
+ *
+ * The default shell. Two layouts, one breakpoint, and the breakpoint matches
+ * `PHONE_MAX_WIDTH` in `russell/present.ts` — the class is set from that value
+ * in JavaScript so the behaviour is testable, and this media query is the
+ * belt to its braces for the case where the width changes before React hears
+ * about it.
+ * ========================================================================== */
+
+.rs-boot {
+  padding: 40px;
+  color: var(--fg-muted);
+  font: 14px/1.5 var(--sans);
+}
+
+.rs-shell {
+  display: grid;
+  min-height: 100vh;
+  background: var(--bg-0);
+  color: var(--fg);
+  font: 15px/1.6 var(--sans);
+  grid-template-areas:
+    'header header'
+    'nav    main';
+  grid-template-columns: 220px 1fr;
+  grid-template-rows: auto 1fr;
+}
+
+.rs-shell-bar {
+  /* Phone: the conversation is the screen, and the sections sit under it
+     within thumb reach rather than in a rail nobody can hold. */
+  grid-template-areas:
+    'header'
+    'main'
+    'nav';
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
+}
+
+.rs-header {
+  grid-area: header;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1);
+}
+
+.rs-brand {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+
+.rs-briefing {
+  flex: 1;
+  min-width: 0;
+}
+
+.rs-briefing p {
+  margin: 0 0 2px;
+  color: var(--fg-dim);
+}
+
+.rs-briefing-focus {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.rs-briefing-latest {
+  color: var(--accent-fg);
+}
+
+.rs-briefing-needs {
+  color: var(--amber);
+}
+
+.rs-more {
+  position: relative;
+}
+
+.rs-menu {
+  position: absolute;
+  right: 0;
+  z-index: 20;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 200px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.rs-menu button,
+.rs-menu a {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--fg-dim);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.rs-menu button:hover,
+.rs-menu a:hover,
+.rs-menu button:focus-visible,
+.rs-menu a:focus-visible {
+  background: var(--bg-4);
+  color: var(--fg);
+}
+
+.rs-nav {
+  grid-area: nav;
+  border-right: 1px solid var(--border);
+  background: var(--bg-1);
+}
+
+.rs-shell-bar .rs-nav {
+  border-right: 0;
+  border-top: 1px solid var(--border);
+}
+
+.rs-nav ul {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  gap: 2px;
+}
+
+.rs-shell-bar .rs-nav ul {
+  flex-direction: row;
+  justify-content: space-between;
+  overflow-x: auto;
+}
+
+.rs-nav button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--fg-dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* Comfortably tappable at phone width without a second rule. */
+  min-height: 44px;
+}
+
+.rs-nav button[aria-current='page'] {
+  background: var(--accent-bg);
+  color: var(--fg);
+}
+
+.rs-nav button:focus-visible,
+.rs-retry:focus-visible,
+.rs-composer button:focus-visible,
+.rs-choices button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.rs-badge {
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--amber);
+  color: #16202b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rs-main {
+  grid-area: main;
+  min-width: 0;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+/* ------------------------------------------------------------- the states */
+
+.rs-state {
+  margin: 8px 0;
+  color: var(--fg-muted);
+}
+
+.rs-state-error {
+  color: var(--red);
+}
+
+.rs-state-forbidden {
+  color: var(--amber);
+}
+
+.rs-state-stale {
+  color: var(--orange);
+}
+
+.rs-state-unavailable {
+  color: var(--red);
+}
+
+.rs-state-current {
+  color: var(--green);
+}
+
+.rs-retry {
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--fg-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------ the panels */
+
+.rs-panel h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.rs-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.rs-item-title {
+  color: var(--fg);
+}
+
+.rs-item-meta {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.rs-fleet-line {
+  margin: 0 0 6px;
+  color: var(--fg-dim);
+}
+
+.rs-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.rs-choices button {
+  min-height: 40px;
+  padding: 6px 12px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------ the conversation */
+
+.rs-conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.rs-turns {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rs-turn {
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+}
+
+.rs-turn-user {
+  background: var(--bg-2);
+}
+
+.rs-turn-who {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--fg-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rs-turn-body {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.rs-turn-status {
+  margin: 6px 0 0;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.rs-turn-failed {
+  color: var(--red);
+}
+
+.rs-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  position: sticky;
+  bottom: 0;
+  padding: 8px 0;
+  background: var(--bg-0);
+}
+
+.rs-composer textarea {
+  flex: 1;
+  padding: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--fg);
+  font: inherit;
+  resize: vertical;
+}
+
+.rs-composer button {
+  min-height: 44px;
+  padding: 0 18px;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rs-composer button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rs-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 720px) {
+  .rs-shell {
+    grid-template-areas:
+      'header'
+      'main'
+      'nav';
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .rs-shell .rs-nav {
+    border-right: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .rs-shell .rs-nav ul {
+    flex-direction: row;
+    justify-content: space-between;
+    overflow-x: auto;
+  }
+
+  .rs-header {
+    flex-wrap: wrap;
+  }
+}

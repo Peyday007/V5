@@ -2,14 +2,15 @@
  * Client entry point.
  *
  * Nothing here may know about project state: the whole application is mounted
- * blind and `App` asks the server what is true. A missing `#root` is reported
+ * blind and `Root` asks the server what is true — including which shell this
+ * address wants and who is signed in. A missing `#root` is reported
  * loudly rather than silently producing a blank page, because a blank screen is
  * indistinguishable from "the project has no work left" and that ambiguity is
  * exactly what this platform exists to remove.
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App.tsx';
+import Root from './Root.tsx';
 import './styles.css';
 
 const container = document.getElementById('root');
@@ -23,6 +24,6 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <App />
+    <Root />
   </StrictMode>,
 );
