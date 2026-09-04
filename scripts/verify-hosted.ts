@@ -1485,6 +1485,103 @@ function proofOf(claimed: { workItemId: string; leaseId: string; leaseGeneration
   };
 }
 
+/**
+ * Step 12A — Russell, against the deployment.
+ *
+ * The suites prove these routes against SQLite on a loopback socket. What this
+ * proves is the deployed program: that the shell's own API is behind the same
+ * gate, that a conversation is its owner's, and that a turn is dispatched
+ * rather than answered optimistically.
+ *
+ * It creates one conversation and says one thing into it, which is the smallest
+ * exercise that touches routing, the turn, the bin and the fleet-facing
+ * contract. The conversation belongs to the verification member, who is
+ * disabled at the end of the run like every other fixture here.
+ */
+async function russellChecks(fixtures: Fixtures, cookie: string): Promise<void> {
+  console.log('\nRussell');
+  if (!cookie) {
+    record('Russell', false, 'skipped: there was no session to test with');
+    return;
+  }
+
+  const anonymous = await call('/api/russell/conversations');
+  expectStatus('an anonymous caller cannot list conversations', anonymous.status, 401);
+
+  const opened = await call('/api/russell/conversations', {
+    cookie,
+    method: 'POST',
+    body: { title: 'hosted verification', projectId: fixtures.scope.id },
+  });
+  expectStatus('a member may open a conversation', opened.status, 200);
+  const conversationId = (opened.json as { id?: string })?.id ?? '';
+  record('the conversation has an id', conversationId.startsWith('rcv_'), conversationId ? 'created' : 'no id');
+
+  if (conversationId) {
+    const mine = await call(`/api/russell/conversations/${conversationId}`, { cookie });
+    expectStatus('its owner may read it', mine.status, 200);
+
+    // The administrator is not the owner. This is the boundary that is easiest
+    // to lose in a refactor and hardest to notice, because an administrator
+    // testing the feature would never see it fail.
+    const asAdmin = await call(`/api/russell/conversations/${conversationId}`, {
+      cookie: fixtures.adminCookie,
+    });
+    const absent = await call('/api/russell/conversations/rcv_does_not_exist', {
+      cookie: fixtures.adminCookie,
+    });
+    record(
+      'a Brain administrator is refused somebody else’s thread, identically to one that does not exist',
+      asAdmin.status === 404 && absent.status === 404 && asAdmin.body === absent.body,
+      asAdmin.status === absent.status && asAdmin.body === absent.body
+        ? `both ${asAdmin.status}, identical body`
+        : `owner-refusal ${asAdmin.status} · absent ${absent.status}`,
+    );
+
+    const said = await call(`/api/russell/conversations/${conversationId}/turns`, {
+      cookie,
+      method: 'POST',
+      body: { content: 'What is the state of this project?' },
+    });
+    expectStatus('saying something is accepted for dispatch', said.status, 202);
+    const turn = said.json as { pending?: { status?: string; pendingReason?: string | null } };
+    record(
+      'the reply is a pending turn with a stated reason, not a manufactured answer',
+      turn?.pending?.status === 'PENDING' && Boolean(turn.pending.pendingReason),
+      `${turn?.pending?.status ?? 'no pending turn'}`,
+    );
+    record(
+      'no internal bin id reaches the person',
+      !JSON.stringify(said.json ?? {}).includes('"binId"'),
+      'checked the response body',
+    );
+
+    const empty = await call(`/api/russell/conversations/${conversationId}/turns`, {
+      cookie,
+      method: 'POST',
+      body: { content: '   ' },
+    });
+    expectStatus('an empty message is refused rather than dispatched', empty.status, 400);
+  }
+
+  const briefing = await call(`/api/russell/projects/${fixtures.scope.id}/briefing`, { cookie });
+  expectStatus('the briefing is served to a member', briefing.status, 200);
+  record(
+    'the briefing carries no percentage',
+    !/\d+\s*%/.test(JSON.stringify(briefing.json ?? {})),
+    'checked every sentence',
+  );
+
+  if (fixtures.holdout) {
+    const denied = await call(`/api/russell/projects/${fixtures.holdout.id}/briefing`, { cookie });
+    expectStatus(
+      'a project the member cannot open has no Russell view either',
+      denied.status,
+      404,
+    );
+  }
+}
+
 async function revocationEndsAccess(fixtures: Fixtures, cookie: string): Promise<void> {
   console.log('\nTaking access away');
 
@@ -2684,6 +2781,8 @@ async function main(): Promise<void> {
     await mcpChecks(fixtures);
     // Step 9. Also before revocation: it needs the same live credential.
     await researchChecks(fixtures);
+    // Step 12A. Before revocation, like the two above: it needs a live session.
+    await russellChecks(fixtures, cookie);
     await revocationEndsAccess(fixtures, cookie);
 
     // Last, so the beacon is not swept up by the checks above.

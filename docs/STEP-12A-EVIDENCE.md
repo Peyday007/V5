@@ -27,30 +27,40 @@ stale — re-run the reporter, do not edit the table.
 
 | Gate | Verdict | Proof so far | Evidence |
 |---|---|---|---|
-| `A01_SHELL_IDENTITY` | NOT_RUN | CODE, TEST (data half) | `projections.ts` — milestone-backed progress or non-numeric, never a percentage; **nothing renders it** |
+| `A01_SHELL_IDENTITY` | NOT_RUN | CODE, TEST | default route is Russell; Legacy behind a secondary menu, Admin only for an administrator; 23 behaviour tests |
 | `A02_CONVERSATION_ROUTE` | NOT_RUN | CODE, TEST | `routing.ts`; attaches on a named project, asks otherwise |
 | `A03_ROUTE_CORRECTION` | NOT_RUN | CODE, TEST | append-only context history; a correction outweighs a name match |
 | `A04_IRRELEVANT` | NOT_RUN | CODE, TEST | `shouldCapture`; social and short remarks stay conversation |
 | `A05_DEDUPE` | NOT_RUN | CODE, TEST | insertion-order dedupe, concurrent captures, guarded split |
 | `A06_JUDGMENT_OVERRIDE` | NOT_RUN | CODE, TEST | stored priority and reason; override supersedes without erasing |
-| `A07_PROBE_BOUNDS` | NOT_RUN | CODE, TEST | envelope enforced server-side; **the runner that performs lookups is not built** |
+| `A07_PROBE_BOUNDS` | NOT_RUN | CODE, TEST | envelope in code, destinations chosen by Brain; lookups counted from observations; a redirect off the allowlist refused |
 | `A08_COVERAGE` | NOT_RUN | CODE, TEST | only `SATISFIED` closes a requirement; the constant is pinned |
 | `A09_AUTH_BUDGET` | NOT_RUN | CODE, TEST | atomic reservation, idempotent replay, server-clock expiry |
-| `A10_MISSION_PIPELINE` | NOT_RUN | CODE, TEST | one mission, orchestration and bin under retries; capabilities routed |
+| `A10_MISSION_PIPELINE` | NOT_RUN | CODE, TEST | one mission, orchestration and bin under retries; capabilities routed; crash injection at each step |
 | `A11_INDEPENDENT_AUDIT` | BLOCKED | — | provisioning, outside this repository — §5 |
 | `A12_WRITEBACK` | NOT_RUN | CODE, TEST | exactly-once under three concurrent observers and a replay |
 | `A13_AUTO_NEXT` | NOT_RUN | CODE, TEST | one launch per cycle, the rest preserved for the next |
 | `A14_HUMAN_RESUME` | NOT_RUN | CODE, TEST | the exact parked mission resumes, once |
-| `A15_RECOVERY` | NOT_RUN | CODE, TEST | boot repair, fenced late writer, expired probe ended honestly |
+| `A15_RECOVERY` | NOT_RUN | CODE, TEST | boot repair re-enters the launcher; fenced late writer; expired probe ended honestly; an unrebuildable mission reported, not marked done |
 | `A16_DD_FRESHNESS` | NOT_RUN | CODE, TEST | `CURRENT` / `STALE` / `UNAVAILABLE`; memory never returned as live |
-| `A17_PRIVACY_AUTH` | NOT_RUN | CODE, TEST (partial) | routing, dedupe and proposal references are all scope-first, and a model's reference is re-resolved against the principal; **the HTTP-level IDOR suite is not written, because the routes are not** |
+| `A17_PRIVACY_AUTH` | NOT_RUN | CODE, TEST | scope-first routing and dedupe; a model's reference re-resolved against the principal; HTTP IDOR against a booted server; four injection shapes refused |
 | `A18_BASELINES` | NOT_RUN | — | nothing deployed, so nothing to compare |
-| `A19_DELIVERY` | NOT_RUN | TEST | typecheck clean; **SQLite 1367 passed / 25 skipped, Postgres 1387 passed, both exit 0**; upgrade path proven on both chains. No deploy, no hosted verification. |
+| `A19_DELIVERY` | NOT_RUN | TEST | typecheck clean, client builds; **SQLite 1449 passed / 25 skipped, exit 0**; upgrade path proven on both chains. No deploy, no hosted verification. |
 
 **No gate is `PASS`, and none can be**: every one requires production-row proof
 against a deployed commit after a real restart, and **zero of the three delivery
 mutations have been spent**. The middle column says what is true today, which is
-that most of the mechanisms exist and are proven by tests on both backends.
+that the mechanisms exist and are proven by tests on both backends.
+
+`npm run step12a:acceptance` is now the machine verdict, and against the local
+database it reports **2 PASS · 0 FAIL · 1 BLOCKED · 16 NOT_RUN** and exits 1.
+Two rules shape it and are worth stating because they are what stop it becoming
+a rubber stamp. **"Implemented" is never a production verdict** — a gate whose
+condition is about a real run reports `NOT_RUN` until that run's rows exist,
+however complete the code is, and there is no flag that turns a test into
+evidence. And **`A11` is hard-coded `BLOCKED` rather than derived from rows**,
+because a check that read the database could be made to pass by writing rows,
+and a gate satisfiable by the thing it constrains is not a gate.
 
 ---
 
@@ -194,8 +204,9 @@ field arrives.
 
 ## 4. Phase 2 — the nervous system
 
-**CODE and TEST**, partial. `tests/russellNervousSystem.test.ts` — **33 tests,
-passing on SQLite.**
+**CODE and TEST.** `tests/russellNervousSystem.test.ts` — **77 tests, passing on
+both backends.** The first three-quarters of them are described below; §5 covers
+the turn, the probe and the API, which finished the phase.
 
 | Built | What it does |
 |---|---|
@@ -207,6 +218,10 @@ passing on SQLite.**
 | `services/russell/loop.ts` | the durable tick, started by the server beside the dispatcher |
 | `services/russell/dealDispatch.ts` | the read-only connected system, with its freshness in the type |
 | `services/russell/proposal.ts` | zero-trust validation of what a model proposes |
+| `services/russell/turn.ts` | one conversation turn, carried by the fleet — §5 |
+| `services/russell/probe.ts` | the bounded light probe, and its verdict — §5 |
+| `services/russell/probeEnvelope.ts` | where a probe is allowed to look, in code — §5 |
+| `routes/russell.ts` | the HTTP surface and its two authorization boundaries — §5 |
 
 **A model proposes; the server decides.** `validateProposal` is the audit
 engine's rule applied to a conversation. Actions come from a closed set matched
@@ -371,9 +386,9 @@ every old conversation would have been much harder to undo than to do.
 | | |
 |---|---|
 | `npm run typecheck` | clean |
-| SQLite | **1384 passed / 25 skipped, exit 0** |
-| Postgres | **52/52 files, 1387 passed, exit 0** |
-| Both Russell suites on Postgres | 104 / 104 |
+| `npm run build` | clean; 57 modules, 315 kB JS / 30 kB CSS |
+| SQLite | **1449 passed / 25 skipped, exit 0** |
+| Postgres | see the Phase 4 run below |
 | Migrations from empty | both chains |
 | Migration over existing data | both chains, `scripts/upgrade-check.ts` |
 
@@ -384,7 +399,233 @@ shells out to Tesseract.
 
 ---
 
-## 5. What is not claimed
+## 5. Phase 2, completed — the turn, the probe and the API
+
+**CODE and TEST.** The three seams Phase 2 was still missing.
+
+### The turn is carried by the fleet, and the server decides
+
+A person says something; the turn persists as `PENDING` with its reason, a
+`RUSSELL_TURN` bin takes it to a worker, and the worker's structured reply comes
+back through the same completion contract every other bin uses. That inherits
+crash safety for nothing: an interrupted turn is a `PENDING` row and a `READY`
+bin, both of which the existing machinery already resumes.
+
+**A worker produces a proposal, and it is validated against the conversation
+owner's authority rather than the worker's.** The effects land in the owner's
+scope, so a worker that could widen a thread's reach by answering in it would be
+escalating through a chat box. The owner's memberships are read at the moment
+the effect happens, so somebody whose access was revoked between asking and
+being answered is judged by what they may reach now.
+
+### Three defects the turn found
+
+**The effect ran before the guard.** `applyTurn` performed its side effect and
+*then* resolved the pending message, so a redelivered bin — which the queue is
+at-least-once by design, so this is ordinary — captured the same idea twice, and
+every later redelivery added another. The resolve is the compare-and-swap, so
+the effect now happens on the far side of it, with `recordProduced` attaching
+the result afterwards. That opens a crash window which loses the effect while
+showing the answer, and that is the right way round here: a lost capture is one
+a person can simply say again, whereas a duplicated one quietly corrupts the
+backlog Russell's own ranking reads.
+
+**A bin state that does not exist.** The loop's answered-turn query filtered on
+`PARKED`, which is not a member of `BIN_STATES`, and omitted `FAILED` and
+`CANCELLED`. So a turn whose bin died sat `PENDING` for ever with no path out —
+§22's rule at a new altitude, and a spinner that never ends is not waiting, it
+is stuck. `NEEDS_HUMAN` is deliberately *not* in the closing set: that state has
+a guarded way out and the work is still alive.
+
+**A response that reported a settled turn as pending.** `beginTurn` returned the
+pending message as it was written, so a turn resolved immediately in the same
+call — the "which project is this about?" path — still read `PENDING` to the
+caller. An interface would have shown a spinner over an answer it already had.
+Found by the HTTP suite, not by the unit tests, because it is a property of what
+crosses the boundary.
+
+### The probe: Brain chooses where to look
+
+`services/russell/probeEnvelope.ts` is the same idea as the approval envelope at
+a smaller scale, and for the same reason: **nobody supplies the limits their own
+work is judged against.** The envelope lives in code and a probe names it by id.
+A proposal supplies one thing — a narrow question — and it is carried as an
+encoded query value into a URL Brain wrote, so the worst a confused or hostile
+proposal can do is ask a silly question of an approved source. A redirect out of
+the allowlist is refused rather than followed, because following one silently is
+how an allowlist becomes decorative.
+
+The bound is asked before each fetch, from rows, and the **observations table is
+the budget** rather than a log of it — so a runner that crashed and resumed
+cannot get its allowance back by forgetting. One consequence caught in review: a
+refusal must *not* be written as an observation, or it spends an allowance
+nothing consumed.
+
+No model is called and nothing is spent, so the verdict ladder is deliberately
+modest. `SUPPORTED` means an approved source demonstrably discusses the subject
+— a claim about presence, never about truth. `WEAKENED` means pages were read
+and did not mention it. `UNKNOWN` means nothing was read, because learning that
+a network is closed is not learning about the subject; that is Step 10's rule,
+and it is why a 429 from the host, an unreachable host and a missing page are
+three recorded facts rather than one.
+
+The envelope is deliberately minimal — one general source — and **widening it is
+a code change somebody reviews.** A light probe's job is to decide whether to
+spend the allowance a real packet would; a wider reach nobody has justified buys
+nothing that the evidence gate, the verification pass and three audit roles do
+not already do properly.
+
+### The API is a door, not a second set of rules
+
+Every route is a thin wrapper over a service that already existed, with the
+scope it already required. Two boundaries meet in the file and they are not the
+same one: a **project** is guarded by `decideProjectAccess` through
+`requireProject`, and a **conversation** is guarded by its owner plus, for a
+shared thread, read access to the attached project.
+
+**A Brain administrator is deliberately not entitled to somebody's private
+thread.** An administrator who can read everyone's conversations is a different
+product. Both refuse with the same 404 and the same body, because a status code
+that matches while the body differs is still an enumeration oracle — and that
+one survives a test asserting only the status, so the HTTP suite asserts the
+bodies are equal.
+
+A worker principal is refused at the conversation routes by **principal type**
+rather than by scope: there is no membership configuration that turns a machine
+into a person.
+
+Two POSTs are declared `READ` in the policy rather than taking the method
+default. Asking a person for write access to find out whether Russell would need
+to research something is backwards — the coverage answer exists to be consulted
+*before* anything is spent.
+
+---
+
+## 6. Phase 3 — the Russell shell
+
+**CODE and TEST.** `tests/russellShell.test.tsx` — **23 behaviour tests**,
+through a scripted `fetch` so the components go through the same `api()` they
+use in production, including its error handling, which is where the forbidden
+case is actually decided.
+
+Opening Brain lands on a conversation. The old three-pane console is at
+`/legacy`, one click away behind a secondary menu — not deleted, and not hidden
+as punishment: it is still the only place some operations exist, and a person
+who needs it should not have to be told a URL. The operator console is offered
+only to a Brain administrator.
+
+**Routing is written rather than installed.** What this needs is one path, a few
+segments and the back button; a package for that is weight somebody has to keep
+working, and the deploy budget for this step is three mutations. An unknown
+address becomes `NOT_FOUND` rather than quietly becoming the home page, because
+a stale bookmark that showed something else is how a person ends up sure they
+are looking at what they asked for.
+
+**The five view states are decided in one tested place.** `listState` owns
+loading, ready, empty, forbidden and error, so "an empty list and a forbidden
+project must not look the same" is a thing a test asserts rather than something
+a person has to notice in a browser. The forbidden message deliberately does
+*not* claim the work is absent: the server cannot distinguish absent from
+forbidden, and an interface that invented an answer would undo that on the last
+hop.
+
+**Nothing is optimistic.** A person's message appears because the server stored
+it; Russell's side appears as a pending turn carrying the server's own reason; a
+send that fails keeps the words and says so; a failed turn is labelled failed.
+The polling that watches for an answer runs only while something is pending,
+because a poll that runs all the time is a poll nobody notices is broken.
+
+**Layout is one decision taken from the viewport** — `navigationMode` — so
+"a rail on a desktop, a bar within thumb reach on a phone" is asserted in a test
+rather than left to a media query nobody exercises. The media query is still
+there as the belt to its braces, for the frames before React hears about a
+resize.
+
+One robustness fix came out of writing the tests: `scrollIntoView` is guarded,
+because a conversation that throws while being polite about scrolling is worse
+than one that does not scroll.
+
+---
+
+## 7. Phase 4 — crash injection, privacy, and the machine verdict
+
+**CODE and TEST.** `tests/russellRecovery.test.ts` — **11 tests on both
+backends** — plus `tests/russellHttp.test.ts` — **12 tests against a really
+booted server**.
+
+### The defect the crash injection found
+
+`repairLaunches` documented itself as re-entering `completeLaunch`, and did not.
+A mission that crashed before its orchestration existed was pushed onto
+`completed` with nothing done, so **every future repair pass reported a stranded
+mission as healthy.** That is the "waiting for a person who cannot resolve it"
+defect again — this time waiting for a repair that had already declared itself
+finished.
+
+The reason the code had drifted from its comment is that `completeLaunch` needs
+a `LaunchInput` the mission row does not carry. It turned out to be recoverable
+without a migration: the specification is the **candidate's own recorded
+judgment**, the identical source `nextLaunchable` launches from. So repair asks
+the same question the launch asked, gets the same answer, and re-enters the same
+function — which is what makes crash repair a re-entry rather than a second
+implementation of a recovery path, and a second implementation of a recovery
+path is the one nobody tests.
+
+A mission whose candidate or specification has genuinely gone is reported as
+**orphaned**, not marked finished. Visibly stuck is recoverable; silently
+complete is a mission nobody ever looks at again.
+
+### What the eleven tests kill it at
+
+The earliest crash point — mission row only, bin deleted so nothing can be found
+and relinked — is finished end to end, one mission and one bin. The
+`createBin`-to-`linkMission` window finds the bin rather than making another.
+Repairing twice does the work once and the second pass has nothing to inspect.
+An unrebuildable mission is orphaned rather than completed. And the loop repairs
+on its own without waiting for a restart.
+
+### Privacy at the seams
+
+Visibility flows from the thread onto the idea and onto its probe: most
+restrictive source wins, so a probe about a private idea is private however
+public the project is. Private findings are **absent** from the shared listing
+rather than filtered out of it, so a count taken from that listing cannot leak
+that they exist.
+
+One thing is deliberate and is stated rather than left implicit: a private idea
+*is* listed to the project it belongs to. Candidate visibility governs how a
+finding is published, not whether the project's own listing knows the idea
+exists — the route above it is what decides who may call that at all.
+
+### Injection
+
+Four shapes — an override instruction, a forged system line, a smuggled tool
+call, and SQL — are each refused as `UNKNOWN_ACTION` when they arrive as an
+action, and each stored **verbatim** when they arrive inside an answer. Kept
+rather than filtered, because removing it destroys the evidence that somebody
+tried; the actual control is that the only field carrying state is `action`, and
+it comes from a closed set matched exactly. A proposal carrying extra fields —
+`authorizedBy`, `maxLookups`, `spend` — is refused whole.
+
+### The acceptance reporter
+
+`npm run step12a:acceptance` reports all nineteen gates from authoritative rows
+and exits non-zero unless every one is `PASS`. It is read-only by construction:
+it opens the configured database, counts, prints and closes, so it is safe to
+point at production, which is where most of these gates are actually settled.
+
+Its verdicts are shaped so that it cannot be flattered. A gate about a real run
+is `NOT_RUN` until that run's rows exist. `A07` and `A10` and `A15` and `A17`
+and `A18` can each read `FAIL` — a probe that outspent its bound, a mission
+missing a link, an item stranded past its deadline, an idea less private than
+its thread, a frozen layer that lost its artifact — so the reporter is capable
+of saying no, which a reporter that only counted upwards would not be. `A19` is
+`NOT_RUN` always: no row in this database proves a hosted verification passed
+after a real restart, and inventing one would be the worst thing in the file.
+
+---
+
+## 8. What is not claimed
 
 ### `A11_INDEPENDENT_AUDIT` — blocked on provisioning, not on code
 

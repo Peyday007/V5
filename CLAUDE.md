@@ -931,6 +931,96 @@ now credited from the dispatch row that produced the worker, never from anything
 the worker says about itself, and a takeover of an expired lease credits nothing
 because that session genuinely did not finish.
 
+## 24. Russell is a way in, not a second brain.
+
+Step 12A (`server/services/russell/`, `client/src/russell/`,
+`docs/STEP-12A-PLAN.md`) turns the smallest genuine Russell on: a conversation
+that grounds itself in a project, forms its own opinion about what is worth
+doing, checks the archive before it spends anything, takes a cheap look or
+refuses, launches one mission through the pipeline that already exists, and
+tells a person what happened in words. Everything it adds is a new *entrance*
+to machinery Steps 4 to 11 already built, and none of it is a second set of
+rules.
+
+- **A model proposes; the server decides.** `services/russell/proposal.ts` is
+  §8's rule applied to a conversation. Actions come from a closed set matched
+  exactly, an unknown field refuses the *whole* proposal, and every project
+  reference is re-resolved with `decideProjectAccess` against the authenticated
+  principal. Injection-shaped text is flagged and stored verbatim, never
+  filtered: removing it destroys the evidence somebody tried, and the actual
+  control is that nothing found inside text is ever executed.
+- **A turn is validated against the conversation owner's authority, never the
+  worker's.** The effects land in the owner's scope, so a worker that could
+  widen a thread's reach by answering in it would be escalating through a chat
+  box. Memberships are read at the moment the effect happens.
+- **Claim, then act.** `resolveMessage` and `claimWriteback` are
+  compare-and-swaps, and the effect belongs on the far side of them. The queue
+  is at-least-once, so an effect performed before the guard is an effect that
+  repeats on every redelivery. The crash window this opens loses an effect and
+  shows the answer, which is the right way round when the effect is a capture a
+  person can simply repeat.
+- **Brain chooses where a probe looks.** `probeEnvelope.ts` is §16's approval
+  envelope at a smaller scale and for the identical reason: nobody supplies the
+  limits their own work is judged against. A proposal supplies a question, and
+  it is carried as an encoded query value into a URL Brain wrote — never a
+  host, a path, a scheme or a redirect. A redirect off the allowlist is refused
+  rather than followed, the observations table *is* the lookup budget rather
+  than a log of it, and a probe's verdict is a claim about presence, never
+  about truth. Widening that envelope is a code change somebody reviews.
+- **Every escalation has an answering transition.** A turn whose bin ends
+  `FAILED` or `CANCELLED` is closed with a truthful message; `NEEDS_HUMAN` is
+  deliberately left alone because it has its own guarded way out. A launch
+  interrupted between its steps is finished by re-entering `completeLaunch` —
+  the specification is read back from the candidate's own recorded judgment,
+  which is the identical source the loop launches from — and one that genuinely
+  cannot be rebuilt is reported as **orphaned** rather than marked finished.
+  Visibly stuck is recoverable; silently complete is a mission nobody looks at
+  again.
+- **Two boundaries meet at the HTTP surface and they are not the same
+  boundary.** A project is guarded by `decideProjectAccess`; a conversation is
+  guarded by its owner, plus read access to the attached project for a shared
+  thread. **A Brain administrator is not entitled to somebody's private
+  thread.** Both refuse with the same 404 *and the same body*, because a status
+  code that matches while the body differs is still an oracle. A worker
+  principal is refused at the conversation routes by principal type: no
+  membership configuration turns a machine into a person.
+- **Translation may simplify; it may not invent.** Progress is milestone-backed
+  or non-numeric, and there is no code path that turns a feeling into a
+  percentage. A briefing answers what changed, why it matters, what is next and
+  whether a person is needed, in that order. Layer names reach a person through
+  one tested mapping.
+- **The interface is never optimistic.** A message appears because the server
+  stored it; a pending turn carries the server's own reason; a failed send
+  keeps the words. Loading, empty, forbidden and error are four different
+  screens, and the forbidden one does not claim the work is absent — the server
+  cannot distinguish absent from forbidden, and the last hop must not invent an
+  answer either.
+- **Russell is the default route; the old console is at `/legacy`.** One click
+  away behind a secondary menu, not deleted and not hidden: it is still the
+  only place some operations exist. `/operator` stays server-rendered and
+  outside the bundle, for the same reason §22 gave.
+
+**No inference is bought.** The deployed Brain has no `ANTHROPIC_API_KEY` and
+no `BRAIN_PROVIDER`, so its only permitted model path is the fixed-subscription
+Cowork fleet Steps 10 and 11 already fire. A Russell turn is therefore a bin: it
+persists as `PENDING` with its reason, a worker answers it, and the server
+validates the answer before anything is stored. That costs latency and buys
+crash safety for free — an interrupted turn is a `PENDING` row and a `READY`
+bin, both of which the existing machinery already resumes. The mock provider is
+refused outright: canned prose presented as a grounded answer is the one thing
+Russell's conversation may never be.
+
+**Step 12A is not complete until `npm run step12a:acceptance` exits 0**, which
+requires production rows against a deployed commit after a real restart.
+`A11_INDEPENDENT_AUDIT` remains **BLOCKED** on a fresh authentic second-account
+worker identity — provisioning outside this repository — and is hard-coded
+blocked in the reporter rather than derived from rows, because a gate
+satisfiable by the thing it constrains is not a gate. Step 12B's items
+(collections, Discovery Frontier, Capability Lab, maps, a mobile-first rebuild,
+the full Fleet centre, personalization, advanced math, 3D, social-media
+intelligence) are listed in `docs/STEP-12B-BACKLOG.md` and are not built here.
+
+
 ---
 
 ## Repository map
@@ -1007,6 +1097,19 @@ server/
       scaler.ts         raise, lower, quarantine — proposals, never actions
       simulate.ts       a deterministic projection, structurally labelled
       profiles.ts       workload cost and activation traces, as queries
+    russell/
+      routing.ts        which project a conversation is about, authorization-first
+      judgment.ts       what is worth capturing, dedupe, and Russell's own priority
+      coverage.ts       the archive check that runs before any work is created
+      launch.ts         the one way a mission comes into existence, and its repair
+      turn.ts           one conversation turn, carried by the Routine fleet
+      probe.ts          the bounded light probe, and its deterministic verdict
+      probeEnvelope.ts  where a probe may look — in code, named by id
+      proposal.ts       zero-trust validation of what a model proposes
+      writeback.ts      what happens when a mission finishes, exactly once
+      loop.ts           the durable tick, beside the dispatcher
+      dealDispatch.ts   the connected system, with its freshness in the type
+      projections.ts    the briefing, and progress that may not be invented
     research/
       schema.ts         zero-trust validation of every research pass
       sources.ts        what makes a claim sourced; structural URL validation
@@ -1059,6 +1162,7 @@ server/
     legacy.ts           the 2025-11-25 front-end, over the official SDK
     endpoint.ts         POST /mcp: auth, origin, limits, era selection
   routes/               HTTP API
+    russell.ts          Russell's surface: threads, briefing, work, Needs You (Step 12A)
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
     operator.ts         the operator console: workers, access, projects, queued work
     pages.ts            shared chrome for the server-rendered pages
@@ -1067,8 +1171,12 @@ server/
     admin.ts            people, workers, credentials, membership, the identity audit
     access.ts           the optional shared-token outer layer (not the security model)
     files.ts            serving a stored document through the storage layer
-client/                 React UI (three panes: layers / workflow / planner)
+client/                 React UI
+  src/Root.tsx          which shell this address wants, and who is signed in
+  src/russell/          the default shell: conversation, thin views, states
+  src/App.tsx           the legacy console, at /legacy
 scripts/
+  step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
   fleet.ts                  the operator's fleet surface: register, target, explain
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
   migrate-cloud.ts          npm run migrate:cloud
