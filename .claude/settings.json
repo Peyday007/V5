@@ -3,7 +3,9 @@
   "permissions": {
     "allow": [
       "mcp__cloud-brain",
-      "mcp__cloud-brain__*"
+      "mcp__cloud-brain__*",
+      "mcp__cloud_brain",
+      "mcp__cloud_brain__*"
     ]
   }
 }
