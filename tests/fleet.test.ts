@@ -62,12 +62,25 @@ beforeEach(async () => {
 });
 
 /** A bin-shaped object the router can rank. Only the fields it reads. */
-function binLike(over: Partial<Bin> & { requiredCapabilities?: string[] } = {}): Bin {
+/*
+ * A synthetic bin for the pure routing tests.
+ *
+ * `requiredCapabilities` is defaulted here rather than tolerated in the router.
+ * It used to be absent, the router read it through a cast, and every real bin
+ * loaded from the database got `undefined` — so the capability rule was dead in
+ * production while this fixture, which always supplied the field when a test
+ * asked for it, went on passing. The router now reads an ordinary field, and a
+ * fixture that omits it is a wrong fixture rather than something the production
+ * path should defend against.
+ */
+function binLike(over: Partial<Bin> = {}): Bin {
   return {
     id: 'bin_test',
     projectId,
     state: 'READY',
     priority: 5,
+    requiredCapabilities: [],
+    workloadClass: null,
     createdAt: new Date().toISOString(),
     ...over,
   } as unknown as Bin;
@@ -795,7 +808,9 @@ describe('a burst spends the headroom it measured, once', () => {
     );
   }
 
-  async function readyBin(over: { priority?: number } = {}): Promise<string> {
+  async function readyBin(
+    over: { priority?: number; requiredCapabilities?: string[]; workloadClass?: string } = {},
+  ): Promise<string> {
     const bin = await createBin({
       projectId,
       kind: 'DETERMINISTIC_CHECK',
@@ -821,9 +836,69 @@ describe('a burst spends the headroom it measured, once', () => {
       createdById: 'test',
       ready: true,
       priority: over.priority,
+      requiredCapabilities: over.requiredCapabilities,
+      workloadClass: over.workloadClass,
     });
     return bin.id;
   }
+
+  /*
+   * The gap this closes, and why the router test above did not catch it.
+   *
+   * `routeBin`'s capability test builds its bin with `binLike({ … })` — a
+   * hand-made object that always had the field. A bin read back from the
+   * database never did: migration 026 added both columns, and the row type, the
+   * mapper and the create path had all never learned about them, so the router
+   * reached the value through a cast and got `undefined` for every real bin.
+   * Every capability requirement therefore evaluated to "none" in production
+   * while the unit test went on passing.
+   *
+   * So this one goes through storage. It is the difference between proving a
+   * pure function and proving the field arrives.
+   */
+  it('persists a bin’s capability requirement all the way to the router', async () => {
+    const binId = await readyBin({
+      requiredCapabilities: ['egress:flsenate.gov'],
+      workloadClass: 'RESEARCH_LIGHT',
+    });
+    const stored = await getBin(binId);
+    expect(stored!.requiredCapabilities).toEqual(['egress:flsenate.gov']);
+    expect(stored!.workloadClass).toBe('RESEARCH_LIGHT');
+
+    const account = await createAccount({ name: 'capability-account' });
+    const routine = await createRoutine({
+      accountId: account.id,
+      routineRef: `trig_cap_${account.id}`,
+      name: 'V1',
+      tokenSecretName: 'BRAIN_TEST_TOKEN',
+      capabilities: [],
+    });
+
+    // A surface without the tag is refused, by name.
+    const refused = routeBin({
+      bin: stored!,
+      candidates: [
+        {
+          account,
+          routine,
+          accountInFlight: 0,
+          routineInFlight: 0,
+          accountTarget: 1,
+          routineTarget: 1,
+        } as never,
+      ],
+      fleetPolicy: null,
+      fleetInFlight: 0,
+      now: new Date().toISOString(),
+    });
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.refusal).toBe('NO_CAPABLE_SURFACE');
+
+    // And a bin that requires nothing still routes, so the fix did not turn an
+    // absent requirement into an impossible one.
+    const plain = await getBin(await readyBin());
+    expect(plain!.requiredCapabilities).toEqual([]);
+  });
 
   it('fires one activation at a Routine whose target is one, not five', async () => {
     const account = await createAccount({ name: 'personal' });

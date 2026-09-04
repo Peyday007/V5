@@ -3812,6 +3812,16 @@ export interface BinRow {
   terminal_reason: string | null;
   last_refusal: string | null;
   refusal_count: number;
+  /*
+   * Added by migration 026 and, until Step 12A, present in neither this type
+   * nor the create path. The router read it through
+   * `(bin as unknown as { requiredCapabilities?: string[] | null })`, which
+   * compiles and routes nothing: a cast asserts a shape rather than reading
+   * one, so a bin that declared a capability was dispatched as if it had
+   * declared none. Both columns are now mapped end to end.
+   */
+  required_capabilities: string | null;
+  workload_class: string | null;
   created_by_type: string;
   created_by_id: string | null;
   created_at: string;
@@ -3850,6 +3860,10 @@ export interface Bin {
   checkpoint: Record<string, unknown> | null;
   checkpointAt: string | null;
   terminalReason: string | null;
+  /** Capability tags a Routine must have to be eligible for this bin. */
+  requiredCapabilities: string[];
+  /** What kind of work this is, for capacity attribution. */
+  workloadClass: string | null;
   lastRefusal: string | null;
   refusalCount: number;
   createdByType: string;
@@ -3973,4 +3987,643 @@ export interface BinEvent {
   reason: string | null;
   /** True when a usage figure here is an observable proxy, not the provider's own accounting. */
   isProxy: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// RUSSELL (Step 12A)
+//
+// Russell is the user-facing name of this Brain. These are the records that
+// turn it on: a conversation that knows what it is about, a candidate that
+// carries Russell's own judgment, a bounded probe, a standing authority with a
+// budget, a mission that links the whole chain, the knowledge a finished
+// mission writes back, the human decisions Russell may not take itself, and the
+// loop that keeps going while nobody is watching.
+//
+// Every one of them carries its project and visibility from creation. There is
+// no unscoped Russell row, because privacy applied on the way out is privacy
+// that leaks through the first count, cache or duplicate match nobody filtered.
+// ---------------------------------------------------------------------------
+
+export const RUSSELL_VISIBILITIES = ['PRIVATE', 'SHARED'] as const;
+export type RussellVisibility = (typeof RUSSELL_VISIBILITIES)[number];
+
+export const ATTACHMENT_SOURCES = ['NONE', 'AUTOMATIC', 'USER', 'MIGRATED'] as const;
+export type AttachmentSource = (typeof ATTACHMENT_SOURCES)[number];
+
+export const RUSSELL_MESSAGE_ROLES = ['USER', 'RUSSELL', 'SYSTEM'] as const;
+export type RussellMessageRole = (typeof RUSSELL_MESSAGE_ROLES)[number];
+
+export const RUSSELL_MESSAGE_STATES = ['COMPLETE', 'PENDING', 'FAILED'] as const;
+export type RussellMessageState = (typeof RUSSELL_MESSAGE_STATES)[number];
+
+/**
+ * A candidate's life.
+ *
+ * `PARKED` is not a bin. Every parked candidate has an authorized way back to
+ * `QUEUED`, and `MERGED` has a guarded split, because a model's confidence
+ * score may not permanently erase a valid idea.
+ */
+export const CANDIDATE_STATES = [
+  'CAPTURED',
+  'PROBING',
+  'PROMOTED',
+  'QUEUED',
+  'PARKED',
+  'REJECTED',
+  'MERGED',
+  'DONE',
+] as const;
+export type CandidateState = (typeof CANDIDATE_STATES)[number];
+
+/**
+ * Russell's priority labels, internal spelling.
+ *
+ * Ordered strongest-first, so a comparison is an index comparison in one place
+ * rather than a switch in several. The user-facing wording lives in the
+ * translation table and never in a component: **snake case is never product
+ * copy.**
+ */
+export const CANDIDATE_PRIORITIES = [
+  'MUST_DO',
+  'BIG_MOVE',
+  'WORTH_DOING',
+  'EXPLORE',
+  'PARKED',
+] as const;
+export type CandidatePriority = (typeof CANDIDATE_PRIORITIES)[number];
+
+/** What a person reads. One mapping, tested, not scattered through the UI. */
+export const CANDIDATE_PRIORITY_LABELS: Record<CandidatePriority, string> = {
+  MUST_DO: 'Must do',
+  BIG_MOVE: 'Big move',
+  WORTH_DOING: 'Worth doing',
+  EXPLORE: 'Explore',
+  PARKED: 'Parked',
+};
+
+export const PROBE_STATES = ['PENDING', 'RUNNING', 'COMPLETE', 'FAILED'] as const;
+export type ProbeState = (typeof PROBE_STATES)[number];
+
+export const PROBE_OUTCOMES = [
+  'SUPPORTED',
+  'WEAKENED',
+  'DUPLICATE',
+  'UNKNOWN',
+  'REFUSED',
+] as const;
+export type ProbeOutcome = (typeof PROBE_OUTCOMES)[number];
+
+/**
+ * How one lookup went.
+ *
+ * Deliberately the same vocabulary Step 10's `SURFACE_PROBE_V1` uses, and for
+ * the same reason: "blocked" is four different facts that lead to four
+ * different actions, and collapsing them loses the only information that says
+ * what to do next.
+ */
+export const PROBE_RETRIEVALS = [
+  'RETRIEVED',
+  'REFUSED',
+  'BLOCKED',
+  'UNREACHABLE',
+  'NOT_FOUND',
+] as const;
+export type ProbeRetrieval = (typeof PROBE_RETRIEVALS)[number];
+
+export const GOAL_STATES = ['ACTIVE', 'PAUSED', 'REVOKED', 'EXPIRED'] as const;
+export type GoalState = (typeof GOAL_STATES)[number];
+
+export const RESERVATION_KINDS = ['MISSION', 'FRAGMENT', 'PROBE'] as const;
+export type ReservationKind = (typeof RESERVATION_KINDS)[number];
+
+export const RESERVATION_STATES = ['HELD', 'SETTLED', 'RELEASED', 'EXPIRED'] as const;
+export type ReservationState = (typeof RESERVATION_STATES)[number];
+
+export const MISSION_STATES = [
+  'PLANNED',
+  'LAUNCHING',
+  'RUNNING',
+  'WAITING',
+  'NEEDS_HUMAN',
+  'DONE',
+  'FAILED',
+  'CANCELLED',
+] as const;
+export type MissionState = (typeof MISSION_STATES)[number];
+
+/** The five groups a person sees, and the states each one projects from. */
+export const MISSION_GROUPS = [
+  'WORKING_NOW',
+  'UP_NEXT',
+  'EXPLORING',
+  'WAITING',
+  'FINISHED',
+] as const;
+export type MissionGroup = (typeof MISSION_GROUPS)[number];
+
+export const KNOWLEDGE_KINDS = [
+  'CONCLUSION',
+  'ASSUMPTION',
+  'UNKNOWN',
+  'DECISION',
+  'GAP',
+  'CONTRADICTION',
+] as const;
+export type KnowledgeKind = (typeof KNOWLEDGE_KINDS)[number];
+
+export const KNOWLEDGE_AUTHORS = ['RUSSELL', 'HUMAN', 'PIPELINE'] as const;
+export type KnowledgeAuthor = (typeof KNOWLEDGE_AUTHORS)[number];
+
+/** Confidence follows evidence, never tone. */
+export const KNOWLEDGE_CONFIDENCE = [
+  'ESTABLISHED',
+  'SUPPORTED',
+  'UNCERTAIN',
+  'DISPUTED',
+] as const;
+export type KnowledgeConfidence = (typeof KNOWLEDGE_CONFIDENCE)[number];
+
+export const HUMAN_REQUEST_URGENCIES = ['URGENT', 'BLOCKING', 'WHENEVER'] as const;
+export type HumanRequestUrgency = (typeof HUMAN_REQUEST_URGENCIES)[number];
+
+export const HUMAN_REQUEST_STATES = ['OPEN', 'ANSWERED', 'RESUMED', 'WITHDRAWN'] as const;
+export type HumanRequestState = (typeof HUMAN_REQUEST_STATES)[number];
+
+export const CYCLE_STATES = ['RUNNING', 'PAUSED', 'STOPPED'] as const;
+export type CycleState = (typeof CYCLE_STATES)[number];
+
+// --- rows -------------------------------------------------------------------
+
+export interface RussellConversationRow {
+  id: string;
+  owner_user_id: string;
+  project_id: string | null;
+  title: string;
+  visibility: string;
+  attachment_confidence: number | null;
+  attachment_source: string;
+  grounding: string;
+  legacy_conversation_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RussellConversationContextRow {
+  id: string;
+  conversation_id: string;
+  project_id: string | null;
+  source: string;
+  confidence: number | null;
+  reason: string;
+  actor_user_id: string | null;
+  created_at: string;
+}
+
+export interface RussellMessageRow {
+  id: string;
+  conversation_id: string;
+  role: string;
+  author_user_id: string | null;
+  content: string;
+  status: string;
+  pending_reason: string | null;
+  produced: string;
+  metadata: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RussellCandidateRow {
+  id: string;
+  project_id: string | null;
+  visibility: string;
+  conversation_id: string | null;
+  source_message_id: string | null;
+  title: string;
+  statement: string;
+  fingerprint: string;
+  state: string;
+  canonical_candidate_id: string | null;
+  priority: string | null;
+  ordinal: number | null;
+  confidence: number | null;
+  reason: string | null;
+  judgment: string;
+  supporting: string;
+  contradicting: string;
+  override_user_id: string | null;
+  override_reason: string | null;
+  override_at: string | null;
+  superseded_decision: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RussellCandidateMergeRow {
+  id: string;
+  candidate_id: string;
+  canonical_id: string;
+  action: string;
+  method: string;
+  confidence: number | null;
+  reason: string;
+  actor_user_id: string | null;
+  created_at: string;
+}
+
+export interface RussellProbeRow {
+  id: string;
+  candidate_id: string;
+  project_id: string | null;
+  visibility: string;
+  question: string;
+  allowed_sources: string;
+  max_lookups: number;
+  deadline_at: string;
+  reservation_id: string | null;
+  state: string;
+  outcome: string | null;
+  explanation: string | null;
+  lookups_used: number;
+  idempotency_key: string;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface RussellProbeObservationRow {
+  id: string;
+  probe_id: string;
+  ordinal: number;
+  source_url: string;
+  retrieval: string;
+  note: string | null;
+  observed_at: string;
+}
+
+export interface RussellGoalRow {
+  id: string;
+  project_id: string;
+  owner_user_id: string;
+  name: string;
+  policy_version: number;
+  allowed_work: string;
+  prohibitions: string;
+  max_missions: number;
+  max_fragments: number;
+  max_concurrent: number;
+  max_probes: number;
+  max_external_spend: number;
+  starts_at: string;
+  expires_at: string | null;
+  state: string;
+  revoked_at: string | null;
+  revoked_by_user_id: string | null;
+  revoked_reason: string | null;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RussellReservationRow {
+  id: string;
+  goal_id: string;
+  kind: string;
+  amount: number;
+  idempotency_key: string;
+  state: string;
+  expires_at: string;
+  settled_at: string | null;
+  released_at: string | null;
+  release_reason: string | null;
+  created_at: string;
+}
+
+export interface RussellMissionRow {
+  id: string;
+  project_id: string;
+  layer_id: string | null;
+  visibility: string;
+  candidate_id: string | null;
+  conversation_id: string | null;
+  probe_id: string | null;
+  goal_id: string | null;
+  reservation_id: string | null;
+  objective: string;
+  why_now: string;
+  state: string;
+  waiting_on: string | null;
+  orchestration_id: string | null;
+  bin_id: string | null;
+  document_id: string | null;
+  audit_id: string | null;
+  writeback_at: string | null;
+  next_mission_id: string | null;
+  terminal_reason: string | null;
+  idempotency_key: string;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface RussellKnowledgeRow {
+  id: string;
+  project_id: string;
+  layer_id: string | null;
+  visibility: string;
+  kind: string;
+  statement: string;
+  detail: string | null;
+  provenance: string;
+  author_type: string;
+  confidence: string;
+  as_of: string | null;
+  last_confirmed_at: string | null;
+  supersedes_id: string | null;
+  superseded_by_id: string | null;
+  mission_id: string | null;
+  conversation_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RussellHumanRequestRow {
+  id: string;
+  project_id: string;
+  visibility: string;
+  mission_id: string | null;
+  candidate_id: string | null;
+  conversation_id: string | null;
+  authority_needed: string;
+  why_not_russell: string;
+  recommendation: string | null;
+  choices: string;
+  urgency: string;
+  state: string;
+  answered_by_user_id: string | null;
+  answered_choice: string | null;
+  answered_reason: string | null;
+  answered_at: string | null;
+  resume_key: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RussellCycleRow {
+  id: string;
+  generation: number;
+  cursor_at: string | null;
+  lease_owner: string | null;
+  lease_expires_at: string | null;
+  state: string;
+  pause_reason: string | null;
+  paused_by_user_id: string | null;
+  max_launches_per_cycle: number;
+  max_followons_per_cycle: number;
+  max_events_per_cycle: number;
+  max_retry_age_minutes: number;
+  last_ran_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// --- views ------------------------------------------------------------------
+
+export interface RussellConversation {
+  id: string;
+  ownerUserId: string;
+  projectId: string | null;
+  title: string;
+  visibility: RussellVisibility;
+  attachmentConfidence: number | null;
+  attachmentSource: AttachmentSource;
+  grounding: Record<string, unknown>;
+  legacyConversationId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RussellConversationContext {
+  id: string;
+  conversationId: string;
+  projectId: string | null;
+  source: AttachmentSource;
+  confidence: number | null;
+  reason: string;
+  actorUserId: string | null;
+  createdAt: string;
+}
+
+export interface RussellMessage {
+  id: string;
+  conversationId: string;
+  role: RussellMessageRole;
+  authorUserId: string | null;
+  content: string;
+  status: RussellMessageState;
+  pendingReason: string | null;
+  produced: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  /** True when this row came from a pre-12A `messages` row through the union. */
+  legacy?: boolean;
+}
+
+export interface RussellCandidate {
+  id: string;
+  projectId: string | null;
+  visibility: RussellVisibility;
+  conversationId: string | null;
+  sourceMessageId: string | null;
+  title: string;
+  statement: string;
+  fingerprint: string;
+  state: CandidateState;
+  canonicalCandidateId: string | null;
+  priority: CandidatePriority | null;
+  ordinal: number | null;
+  confidence: number | null;
+  reason: string | null;
+  judgment: Record<string, unknown>;
+  supporting: string[];
+  contradicting: string[];
+  overrideUserId: string | null;
+  overrideReason: string | null;
+  overrideAt: string | null;
+  supersededDecision: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RussellProbe {
+  id: string;
+  candidateId: string;
+  projectId: string | null;
+  visibility: RussellVisibility;
+  question: string;
+  allowedSources: string[];
+  maxLookups: number;
+  deadlineAt: string;
+  reservationId: string | null;
+  state: ProbeState;
+  outcome: ProbeOutcome | null;
+  explanation: string | null;
+  lookupsUsed: number;
+  idempotencyKey: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
+export interface RussellProbeObservation {
+  id: string;
+  probeId: string;
+  ordinal: number;
+  sourceUrl: string;
+  retrieval: ProbeRetrieval;
+  note: string | null;
+  observedAt: string;
+}
+
+export interface RussellGoal {
+  id: string;
+  projectId: string;
+  ownerUserId: string;
+  name: string;
+  policyVersion: number;
+  allowedWork: string[];
+  prohibitions: string[];
+  maxMissions: number;
+  maxFragments: number;
+  maxConcurrent: number;
+  maxProbes: number;
+  maxExternalSpend: number;
+  startsAt: string;
+  expiresAt: string | null;
+  state: GoalState;
+  revokedAt: string | null;
+  revokedByUserId: string | null;
+  revokedReason: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RussellReservation {
+  id: string;
+  goalId: string;
+  kind: ReservationKind;
+  amount: number;
+  idempotencyKey: string;
+  state: ReservationState;
+  expiresAt: string;
+  settledAt: string | null;
+  releasedAt: string | null;
+  releaseReason: string | null;
+  createdAt: string;
+}
+
+export interface RussellMission {
+  id: string;
+  projectId: string;
+  layerId: string | null;
+  visibility: RussellVisibility;
+  candidateId: string | null;
+  conversationId: string | null;
+  probeId: string | null;
+  goalId: string | null;
+  reservationId: string | null;
+  objective: string;
+  whyNow: string;
+  state: MissionState;
+  waitingOn: string | null;
+  orchestrationId: string | null;
+  binId: string | null;
+  documentId: string | null;
+  auditId: string | null;
+  writebackAt: string | null;
+  nextMissionId: string | null;
+  terminalReason: string | null;
+  idempotencyKey: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
+export interface RussellKnowledge {
+  id: string;
+  projectId: string;
+  layerId: string | null;
+  visibility: RussellVisibility;
+  kind: KnowledgeKind;
+  statement: string;
+  detail: string | null;
+  provenance: Record<string, unknown>;
+  authorType: KnowledgeAuthor;
+  confidence: KnowledgeConfidence;
+  asOf: string | null;
+  lastConfirmedAt: string | null;
+  supersedesId: string | null;
+  supersededById: string | null;
+  missionId: string | null;
+  conversationId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RussellHumanRequest {
+  id: string;
+  projectId: string;
+  visibility: RussellVisibility;
+  missionId: string | null;
+  candidateId: string | null;
+  conversationId: string | null;
+  authorityNeeded: string;
+  whyNotRussell: string;
+  recommendation: string | null;
+  choices: HumanRequestChoice[];
+  urgency: HumanRequestUrgency;
+  state: HumanRequestState;
+  answeredByUserId: string | null;
+  answeredChoice: string | null;
+  answeredReason: string | null;
+  answeredAt: string | null;
+  resumeKey: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One thing a person may choose.
+ *
+ * `consequence` is required because a card that offers a choice without saying
+ * what it causes is asking somebody to guess. An option must also have a
+ * guarded server transition behind it — an action a person can press where
+ * nothing happens is worse than no action at all.
+ */
+export interface HumanRequestChoice {
+  key: string;
+  label: string;
+  consequence: string;
+}
+
+export interface RussellCycle {
+  id: string;
+  generation: number;
+  cursorAt: string | null;
+  leaseOwner: string | null;
+  leaseExpiresAt: string | null;
+  state: CycleState;
+  pauseReason: string | null;
+  pausedByUserId: string | null;
+  maxLaunchesPerCycle: number;
+  maxFollowonsPerCycle: number;
+  maxEventsPerCycle: number;
+  maxRetryAgeMinutes: number;
+  lastRanAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

@@ -98,9 +98,18 @@ function capable(routine: FleetRoutine, required: string[]): boolean {
   return required.every((tag) => has.has(tag));
 }
 
+/*
+ * Read, not asserted.
+ *
+ * This used to be `(bin as unknown as { requiredCapabilities?: … })`, which
+ * type-checked and routed nothing: `Bin` had no such field, so the cast handed
+ * back `undefined` for every bin and every capability requirement silently
+ * evaluated to "none". Migration 026 had added the column; the row type, the
+ * mapper and the create path had never learned about it, so there was nothing
+ * to read. All four are wired now and this is an ordinary field access.
+ */
 function requiredCapabilities(bin: Bin): string[] {
-  const raw = (bin as unknown as { requiredCapabilities?: string[] | null }).requiredCapabilities;
-  return Array.isArray(raw) ? raw : [];
+  return bin.requiredCapabilities;
 }
 
 /**

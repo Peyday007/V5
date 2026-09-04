@@ -145,6 +145,12 @@ export function mapBin(row: BinRow): Bin {
     checkpoint: row.checkpoint ? parseJson<Record<string, unknown>>(row.checkpoint, {}) : null,
     checkpointAt: row.checkpoint_at,
     terminalReason: row.terminal_reason,
+    // Migration 026 added both columns; nothing read them through a type until
+    // Step 12A, and the router reached one of them through a cast. A cast is
+    // not a mapping: it asserts a shape rather than reading one, so a bin that
+    // declared a capability routed as if it had declared none.
+    requiredCapabilities: parseJson<string[]>(row.required_capabilities ?? '[]', []),
+    workloadClass: row.workload_class,
     lastRefusal: row.last_refusal,
     refusalCount: row.refusal_count,
     createdByType: row.created_by_type,
@@ -416,6 +422,15 @@ export interface CreateBinInput {
   maxAttempts?: number;
   createdByType: string;
   createdById?: string | null;
+  /**
+   * Capability tags a Routine must carry to be eligible for this bin, and the
+   * class of work it is. Both reach `fleet_routines.capabilities` in the router
+   * and `bin_events.workload_class` in the capacity ledger; a bin that names a
+   * capability nothing in the fleet has parks truthfully rather than being
+   * handed to a surface that cannot do it.
+   */
+  requiredCapabilities?: string[];
+  workloadClass?: string | null;
   /** Author it already dispatchable. Used by every caller that has finished planning. */
   ready?: boolean;
 }
@@ -440,9 +455,11 @@ export async function createBin(input: CreateBinInput): Promise<Bin> {
        attempt_count, max_attempts, lease_generation, lease_id, worker_id, lease_credential_id,
        lease_session_ref, leased_at, heartbeat_at, lease_expires_at, lease_renewals,
        checkpoint, checkpoint_at, terminal_reason, last_refusal, refusal_count,
+       required_capabilities, workload_class,
        created_by_type, created_by_id, created_at, updated_at, ready_at, completed_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL, NULL, NULL,
              NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, 0,
+             ?, ?,
              ?, ?, ?, ?, ?, NULL)`,
     [
       id,
@@ -460,6 +477,8 @@ export async function createBin(input: CreateBinInput): Promise<Bin> {
       input.orchestrationId ?? null,
       input.budgetUnits ?? null,
       Math.max(1, input.maxAttempts ?? 3),
+      toJson(input.requiredCapabilities ?? []),
+      input.workloadClass ?? null,
       input.createdByType,
       input.createdById ?? null,
       at,
