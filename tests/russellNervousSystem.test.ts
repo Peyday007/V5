@@ -38,6 +38,12 @@ import {
 } from '../server/services/russell/coverage.ts';
 import { launch, repairLaunches } from '../server/services/russell/launch.ts';
 import { writeBack } from '../server/services/russell/writeback.ts';
+import {
+  ageFreshness,
+  FRESHNESS_WINDOW_MS,
+  plainLayerName,
+  readDealDispatch,
+} from '../server/services/russell/dealDispatch.ts';
 import { tick } from '../server/services/russell/loop.ts';
 import { pauseCycle, resumeCycle } from '../server/repos/russellCycle.ts';
 import { askHuman, answerHumanRequest, getHumanRequest, transitionMission } from '../server/repos/russellMissions.ts';
@@ -888,5 +894,53 @@ describe('the loop does not spend the writeback on a placeholder', () => {
     expect(written.alreadyDone).toBe(false);
     const knowledge = await listCurrentKnowledge({ projectId });
     expect(knowledge[0]!.statement).toMatch(/Florida does require a broker licence/);
+  });
+});
+
+describe('the connected system never presents memory as live state', () => {
+  it('reads it, and says when', async () => {
+    const view = await readDealDispatch();
+    expect(view.freshness).toBe('CURRENT');
+    expect(view.observedAt).toBeTruthy();
+    expect(view.reason).toBeNull();
+    // Plain layer names, not the internal ones.
+    const names = [...view.activeWork, ...view.blocked].map((w) => w.name);
+    expect(names.some((n) => n === 'Monetization Logic')).toBe(false);
+  });
+
+  it('translates layer names from one tested mapping', () => {
+    expect(plainLayerName('Monetization Logic')).toBe('How the money works');
+    expect(plainLayerName('World Model')).toBe('How the market works');
+    // A layer it does not know about keeps its own name rather than a guess.
+    expect(plainLayerName('Something New')).toBe('Something New');
+  });
+
+  it('reports UNAVAILABLE when there is nothing to read and nothing remembered', async () => {
+    const view = await readDealDispatch({ slug: 'no-such-system' });
+    expect(view.freshness).toBe('UNAVAILABLE');
+    expect(view.observedAt).toBeNull();
+    expect(view.reason).toMatch(/not configured here/);
+    expect(view.activeWork).toHaveLength(0);
+  });
+
+  it('keeps the last reading but labels it STALE rather than returning it as live', async () => {
+    const live = await readDealDispatch();
+    const degraded = await readDealDispatch({ slug: 'no-such-system', lastKnown: live });
+    expect(degraded.freshness).toBe('STALE');
+    // The content is still there — hiding it would be its own dishonesty — and
+    // the timestamp is the *original* one, so its age is readable.
+    expect(degraded.observedAt).toBe(live.observedAt);
+    expect(degraded.activeWork).toEqual(live.activeWork);
+    expect(degraded.reason).toBeTruthy();
+  });
+
+  it('ages a current reading out on the Brain’s clock', async () => {
+    const live = await readDealDispatch();
+    const later = new Date(Date.parse(live.observedAt!) + FRESHNESS_WINDOW_MS + 1000).toISOString();
+    const aged = ageFreshness(live, later);
+    expect(aged.freshness).toBe('STALE');
+    expect(aged.reason).toMatch(/last reading, not a live one/);
+    // And a reading inside the window is left alone.
+    expect(ageFreshness(live, live.observedAt!).freshness).toBe('CURRENT');
   });
 });
