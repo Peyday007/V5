@@ -387,14 +387,19 @@ every old conversation would have been much harder to undo than to do.
 | `npm run typecheck` | clean |
 | `npm run build` | clean; 57 modules, 315 kB JS / 30 kB CSS |
 | SQLite | **1449 passed / 25 skipped, exit 0** |
-| Postgres | see the Phase 4 run below |
+| Postgres | **56/56 files, 1489 passed, 0 failed, exit 0** |
 | Migrations from empty | both chains |
 | Migration over existing data | both chains, `scripts/upgrade-check.ts` |
 
-Both full runs were taken with nothing else competing for the machine. That is
-not a detail: the one run that showed failures had a full SQLite suite running
-beside it, and every failure was a timeout in the file that renders images and
-shells out to Tesseract.
+Both full runs were taken with nothing else competing for the machine, and the
+Postgres one is capped at two workers. That is not a detail. An earlier attempt
+ran vitest's default worker count on a four-core box beside a typecheck, and it
+crawled — nine files in twenty-five minutes with the load average at 17. It was
+stopped rather than waited out, because a run that slow is not evidence being
+gathered, it is a machine thrashing. Re-run alone at two workers it completed
+in 603 seconds with every file passing. The same lesson as the earlier OCR
+timeouts, at a different scale: **a saturated runner produces failures that say
+nothing about the code.**
 
 ---
 
