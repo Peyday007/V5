@@ -96,7 +96,24 @@ const BLOCKED_BY_A11: Record<string, string> = {
  * nothing has happened.
  */
 const ACCEPTANCE_SCOPE = {
-  /** The conversation the frozen Workstream 5 scenario is held in. */
+  /**
+   * The scenario this chain is judged against.
+   *
+   * Frozen in `docs/STEP-12A-ACCEPTANCE-SCENARIO.md` before any live result was
+   * seen, so the standard cannot be adjusted to fit an outcome. The id is here
+   * rather than only in the document because a reader of this file should be
+   * able to find the standard without being told where to look.
+   */
+  scenarioId: 'S12A-ACC-1',
+  /**
+   * The conversation the frozen Workstream 5 scenario is held in.
+   *
+   * Deliberately empty. It is a production fact that does not exist yet — the
+   * conversation is created when a person sends the frozen message — so
+   * setting it is a one-line commit made after that message exists. Until
+   * then every scoped gate reports NOT_RUN naming that reason, which is the
+   * truthful state: nothing has happened and nothing is wrong.
+   */
   conversationId: '',
 } as const;
 

@@ -64,17 +64,26 @@ export function ringPositions(count: number, width: number): [number, number][] 
    */
   const stagger = count > 6;
   /*
-   * An even count is rotated by half a step so that no node sits on the
-   * horizontal through the nucleus.
+   * Where the ring starts, and why an even count starts somewhere else.
    *
    * Also found by looking. With eight children, two of them landed exactly
-   * beside the centre node and overlapped it — on a phone the ring simply is
-   * not wider than a label plus the nucleus. Half a step costs nothing and
-   * guarantees a vertical gap of at least `ry · sin(π/count)`.
+   * beside the centre node and covered it — on a phone the ring simply is not
+   * wider than a label plus the nucleus.
+   *
+   * An odd count starts at the top and never lands on the nucleus's own
+   * horizontal, because no odd count divides an even number of half-turns. An
+   * even count starts at `π/count`, which puts every node at an *odd* multiple
+   * of `π/count` — and an odd multiple can never be a whole multiple of `π`
+   * when the count is even, so no node can sit on that line for any even count
+   * at all.
+   *
+   * The obvious fix — rotate the top-start by half a step — is wrong, and the
+   * suite caught it: it works for four and eight and puts a node exactly on
+   * the line for two and six.
    */
-  const offset = count % 2 === 0 ? Math.PI / count : 0;
+  const start = count % 2 === 0 ? Math.PI / count : -Math.PI / 2;
   return Array.from({ length: count }, (_, index) => {
-    const angle = -Math.PI / 2 + offset + (index * 2 * Math.PI) / count;
+    const angle = start + (index * 2 * Math.PI) / count;
     const scale = stagger && index % 2 === 1 ? 0.62 : 1;
     return [cx + rx * scale * Math.cos(angle), cy + ry * scale * Math.sin(angle)] as [
       number,

@@ -54,7 +54,11 @@ import {
   validateProposal,
   type ValidatedProposal,
 } from './proposal.ts';
+import { getDb } from '../../db/database.ts';
 import { parseJson } from '../../repos/util.ts';
+import { answerFast, noFastLane } from '../conversation/fastLane.ts';
+import { standingInstructions } from '../conversation/review.ts';
+import type { ChatAdapter } from '../conversation/adapter.ts';
 import type { BinState, Principal, RussellMessage } from '../../domain/types.ts';
 
 /** The one unit a turn bin asks for. */
@@ -82,10 +86,33 @@ export interface BeginTurnResult {
  * the worker is asked a narrower question and so that the parts a model could
  * get wrong are the parts a model is actually needed for.
  */
+/**
+ * Which adapter the fast lane uses.
+ *
+ * Injected rather than imported, and defaulting to the one that refuses. The
+ * deployed Brain has no API key and no provider configured, so the default is
+ * also the truth about production — and a test that wants a fast answer has to
+ * say so explicitly rather than getting one by accident.
+ *
+ * `scripted` is refused outside a test run for the same reason §12 refuses the
+ * mock provider: canned prose presented as a grounded answer is the one thing
+ * this conversation may never produce.
+ */
+function usableAdapter(adapter: ChatAdapter | undefined): ChatAdapter {
+  if (!adapter) return noFastLane();
+  if (adapter.name === 'scripted' && process.env['NODE_ENV'] === 'production') {
+    return noFastLane();
+  }
+  return adapter;
+}
+
 export async function beginTurn(input: {
   principal: Principal;
   conversationId: string;
   content: string;
+  /** The fast lane's provider. Absent means there is no fast lane. */
+  adapter?: ChatAdapter;
+  provider?: string;
 }): Promise<BeginTurnResult> {
   const conversation = await getConversation(input.conversationId);
   // Absent and forbidden are one answer. A person who may not have this thread
@@ -152,6 +179,58 @@ export async function beginTurn(input: {
       // object would tell the caller a settled turn is still pending, and an
       // interface that showed a spinner over an answer it already had would be
       // wrong in exactly the way this design exists to avoid.
+      pendingMessage: (await getMessage(pendingMessage.id)) ?? pendingMessage,
+      binId: null,
+      attachedProjectId,
+    };
+  }
+
+  /*
+   * The fast lane, before the fleet.
+   *
+   * A turn that a direct model may answer is answered here and never becomes a
+   * bin — which is the whole point: three minutes for "what did we decide about
+   * the fee" is not a conversation. Everything the fast lane will not take
+   * falls through unchanged to the path that has always worked, so this is an
+   * addition rather than a replacement, and a Brain with nothing configured
+   * behaves exactly as it did before.
+   *
+   * The reply is stored through `resolveMessage`, which is a compare-and-swap
+   * on the pending row, so a duplicated call answers once. The lane is recorded
+   * in the message's metadata because "this answer came from a fast model" is a
+   * fact a reader is owed and the acceptance reporter reads.
+   */
+  const fast = await answerFast({
+    adapter: usableAdapter(input.adapter),
+    provider: input.provider ?? 'anthropic',
+    ownerUserId: conversation.ownerUserId,
+    conversationId: conversation.id,
+    messageId: pendingMessage.id,
+    projectId,
+    projectName: (await getProject(projectId))?.name ?? null,
+    text: content,
+    turnCount: (await listTurns(conversation.id, 200)).length,
+    standingInstructions: await standingInstructions({
+      projectId,
+      conversationId: conversation.id,
+    }),
+  });
+  if (fast.answer !== null) {
+    await resolveMessage({ messageId: pendingMessage.id, content: fast.answer });
+    await recordProduced(pendingMessage.id, {
+      lane: fast.lane,
+      reservationId: fast.reservationId,
+      spentMicros: fast.spentMicros,
+      omittedContext: fast.hat?.omitted ?? [],
+    });
+    await getDb().run('UPDATE russell_messages SET metadata = ? WHERE id = ?', [
+      JSON.stringify({ lane: fast.lane, spentMicros: fast.spentMicros }),
+      pendingMessage.id,
+    ]);
+    return {
+      ok: true,
+      reason: `answered on the ${fast.lane.toLowerCase()} lane`,
+      userMessage,
       pendingMessage: (await getMessage(pendingMessage.id)) ?? pendingMessage,
       binId: null,
       attachedProjectId,

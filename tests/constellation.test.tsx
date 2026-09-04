@@ -88,17 +88,32 @@ describe('the ring generalises rather than reproducing five fixed points', () =>
     }
   });
 
-  it('starts at the top and goes clockwise, so the order is the projection’s', () => {
-    const ring = ringPositions(4, 900);
+  it('puts an odd count’s first node at the top and goes clockwise', () => {
+    const ring = ringPositions(5, 900);
     const first = ring[0]!;
     const second = ring[1]!;
-    const third = ring[2]!;
-    const fourth = ring[3]!;
+    const last = ring[4]!;
     expect(first[0]).toBeCloseTo(50, 5);
-    expect(first[1]).toBeLessThan(second[1]);
-    expect(second[0]).toBeGreaterThan(50);
-    expect(third[1]).toBeGreaterThan(first[1]);
-    expect(fourth[0]).toBeLessThan(50);
+    // Clockwise: the next one is to the right and lower, the last to the left.
+    expect(second[0]).toBeGreaterThan(first[0]);
+    expect(second[1]).toBeGreaterThan(first[1]);
+    expect(last[0]).toBeLessThan(50);
+  });
+
+  it('rotates an even count so no node sits on the nucleus’s own line', () => {
+    /*
+     * The reason this rotation exists, asserted directly. With eight children
+     * on a 390-wide canvas, two of them landed exactly beside the centre node
+     * and covered it — the ring simply is not wider than a label plus the
+     * nucleus. Half a step guarantees a vertical gap.
+     */
+    for (const count of [2, 4, 6, 8, 10]) {
+      const ring = ringPositions(count, 390);
+      const centreY = ring.reduce((total, point) => total + point[1], 0) / count;
+      for (const [, y] of ring) {
+        expect(Math.abs(y - centreY), `count ${count}`).toBeGreaterThan(1);
+      }
+    }
   });
 
   it('uses a narrower, taller ring on a phone', () => {

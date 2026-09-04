@@ -1785,3 +1785,162 @@ One path, in order:
 V1  ENABLED      target 1  fires=19  refusals=0  no-shows=0
 V2  QUARANTINED            fires=12  refusals=0  no-shows=5
 ```
+
+---
+
+## 18. The read layer, the constellation and the conversation lane — 2026-09-04
+
+Everything in this section is **LOCAL / CODE PROOF** unless a line says
+otherwise. **Production is unchanged.** No deployment, no secret, no fire, no
+turn, no bin. The deployed image is still `3b6ebfb` from mutation 4, and the
+mutation budget is still four spent.
+
+### 18.1 What was wrong, in the words of the person who hit it
+
+Work was empty while a real research packet was running. Ideas was empty.
+Knows was nearly empty while the archive held the material that had already
+answered a question. Who said nobody was on the project to the only person
+looking at it. Every screen scrolled sideways on a phone. Each of those is a
+projection defect and none of them is an honest empty state.
+
+The shape was the same every time: the surface read the one table Russell had
+started filling that week, and the Brain's actual history lived elsewhere.
+
+### 18.2 Work — three sources, one list
+
+`services/russell/work.ts` reads `russell_missions`, `research_orchestrations`
+and `bins`, and projects them into the five groups. It deduplicates **by
+foreign key**: a mission that owns a packet that owns a bin is one piece of
+work, not three. Step 9 paid for the lesson that an identity reconstructed by
+matching titles breaks the first time two things are called the same thing.
+
+Provenance is a fact about the row. Migration **028** adds
+`projects.purpose`, for the reason migration 021 gave for
+`orchestrations.fixture`: a slug prefix or a title match puts the
+classification in whichever query remembers it, and a scope renamed once
+rejoins the ordinary counts silently. The verifier's scope and the Step 10/11
+harness scopes now declare `TECHNICAL` at creation.
+
+The ordinary view asks for `PROJECT` only and reports `technicalHidden`.
+"Nothing here" and "nothing here, and four harness rows held back" are
+different facts, and a person who cannot see the second concludes the first is
+a bug.
+
+### 18.3 Ideas and the constellation — one projection, two resolutions
+
+`services/russell/ideas.ts` returns nodes and edges: site → major idea →
+ordinary idea as a **tree** for unambiguous breadcrumbs, with genuine
+cross-links as **edges** so an idea that feeds three others is not duplicated
+into three places. `FEEDS` edges come from real `dependencies` rows, never from
+layer adjacency — two layers next to each other in a list are not thereby
+connected, and drawing that would be decoration presented as structure.
+
+An idea whose missions name no layer is filed under nothing and says so. §11's
+rule holds at this altitude too: forcing it under a heading to tidy the map is
+a guess that renders well.
+
+`client/src/russell/Constellation.tsx` renders that projection. **No node in
+it comes from anywhere but the API**, and none of the prototype's demo
+vocabulary reaches production — a test asserts that every rendered label is a
+title the projection returned.
+
+### 18.4 What looking at it actually found
+
+`scripts/visual-qa.ts` boots a real server against a throwaway directory and
+drives Chromium over the DevTools protocol — no dependency added to the
+deployed package for a development convenience — reporting per screen and per
+width whether the shell rendered, whether the page scrolls sideways, and which
+element is responsible.
+
+It found four defects that no assertion in this repository would have caught:
+
+1. **The whole shell scrolled sideways at every phone width, on every screen.**
+   A grid item's default `min-width: auto` refuses to shrink below its content,
+   so one long briefing sentence widened the shell past the viewport; and the
+   phone navigation gave each of six sections `width: 100%` in a row. Both
+   predate this work.
+2. **Eight major ideas on one ellipse overlapped into an unreadable pile** at
+   390 wide, with two of them sitting on the nucleus. Neighbours above six are
+   now staggered onto two radii and an even count is rotated half a step, which
+   guarantees a vertical gap rather than relying on an arc length that label
+   widths do not respect.
+3. **The briefing filled a third of a phone screen** before anything a person
+   navigated to appeared. Its last sentences fold into a native `details`.
+4. **Who told the only person looking at it that nobody was on the project** —
+   a Brain administrator reaches a project through `isBrainAdmin` rather than a
+   membership row.
+
+Recorded readings after the fixes, at 1280×900 and 390×844, across Russell,
+Work, Ideas, Knows, Who and Needs You: **12 of 12 rendered, 12 of 12 fit, no
+console errors.** The images are evidence for one run at one commit and are
+deliberately not committed.
+
+### 18.5 One progress projection
+
+`services/russell/progress.ts` is the only implementation. A fraction is
+reported **only** over a declared closed set — a project's layers, an idea's
+pipeline, the build's own steps. An open-ended set gets a stage and a milestone
+list and no denominator. Blocking outranks every band.
+
+`BUILD_MILESTONES` is a declared constant rather than a query, and the cost is
+named: closing a step means editing a list in a change somebody reviews.
+Inferring build progress from row counts would let any fixture advance the
+product, which is the mistake §24's acceptance scoping exists to undo.
+
+### 18.6 The conversation lane — built, wired, and switched off
+
+Migration **029** adds `llm_models`, `spend_authorizations`, `spend_ledger`,
+`spend_reservations`, `conversation_reviews` and `russell_rules`.
+`docs/CONVERSATION.md` has the whole contract; the load-bearing parts:
+
+- **Nothing spends by default.** Five conditions must all hold, each failure
+  has a name, and no branch treats a missing row as permission. A ceiling of
+  zero is a refusal.
+- **Over-spending is impossible, not merely untested.** `CHECK (held +
+  settled <= ceiling)`, asserted by a test that writes past the application
+  straight at the row. The reservation is a compare-and-swap on
+  `spend_ledger.generation` — the third time this codebase has needed that
+  primitive, for the same reason each time.
+- **The worst case is reserved**, so concurrent callers cannot collectively
+  exceed a ceiling each individually respected. Six callers against a
+  three-call ceiling: three win, `remaining` is zero.
+- **An unknown outcome keeps its hold.** Step 6's rule applied to money.
+- **No model name exists in `services/conversation/`.** The catalogue is rows;
+  routing is configuration. There is nowhere to hardcode Haiku, which is how
+  that stays true.
+- **A review reads a manifest, not a conversation**, and `reviewerMayCarry`
+  does not take capacity as an argument — capacity is scheduling, this is
+  authorization, and where they meet the cheap answer wins.
+- **A lesson is a proposal.** `proposeRule` has no `state` parameter.
+
+`beginTurn` now tries the fast lane before the fleet, and falls through
+unchanged when there is none — which is what the deployed Brain has. A turn the
+fast lane answers creates **no bin**, and records its lane in the message
+metadata, which is what `A22` reads.
+
+**A22 stays `NOT_RUN`.** No real provider has been called, there is no key,
+there is no authorization, and adapter contract tests are code proof rather
+than live acceptance — the same distinction Step 3 drew between the research
+engine passing its tests and a real job having run.
+
+### 18.7 The Workstream 5 scenario is frozen
+
+`docs/STEP-12A-ACCEPTANCE-SCENARIO.md` — scenario `S12A-ACC-1`, written before
+any live result was seen. Permit intelligence in Michigan, **conditional on its
+own coverage check**: if `coverBeforeWork` reports the requirement already
+satisfied, the scenario is abandoned and a different one frozen, because a
+scenario that ignored its coverage check to reach a green gate would be the
+acceptance lying about the control it is evidence for.
+
+`ACCEPTANCE_SCOPE.conversationId` is still empty and says why in the code: it
+is a production fact that does not exist until a person sends the frozen
+message. Every scoped gate therefore reports `NOT_RUN`, which is the truthful
+state — nothing has happened and nothing is wrong.
+
+### 18.8 The tally
+
+Unchanged at **10 PASS · 0 FAIL · 0 BLOCKED · 12 NOT_RUN** across 22 gates.
+
+Nothing in this section moves a gate, and that is correct: every remaining gate
+needs production rows from a real chain, which needs a mutation nobody has
+authorized. Code that is finished and unproven is exactly what `NOT_RUN` means.
