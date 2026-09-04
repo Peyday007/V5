@@ -1202,3 +1202,126 @@ authorization, fencing, idempotency or the approval envelope changed. The
 correction moved one acceptance requirement from a topology count to the
 property that actually defeats the threat, and made the result it reports
 honest about which tier was reached.
+
+---
+
+## 11. Mutation 4 delivered, and the first real retest of the surface
+
+### Delivery
+
+| | |
+| --- | --- |
+| Run | `33845601961` |
+| Commit | `3b6ebfb` |
+| Deploy | success, image released 06:49:39Z |
+| Hosted verification **before** restart | success, 06:49:49–06:52:52Z |
+| Real restart | success, 06:52:53–06:53:46Z |
+| Hosted verification **after** restart | success, 06:53:46–06:56:54Z |
+| Fourth image current | `deployed commit: 3b6ebfb` · `the deployed application tree is identical to the one being read` · `live /healthz: 200` · `anonymous /api/projects: 401` |
+
+Local verification before the deploy: typecheck clean; SQLite suite 56 files /
+1495 passed / 25 skipped / 0 failed; `vite build` succeeded; migration
+verification over populated data SQLite 26→27 `UPGRADE: OK` and Postgres 17→18
+`UPGRADE: OK`; Postgres suite at two workers 1496 passed with one file failing
+on a server-boot timeout under concurrency, which passed 85/85 when the three
+HTTP suites were re-run alone against Postgres.
+
+### The canonical result
+
+```
+A01_SHELL_IDENTITY      PASS     14 Russell conversations
+A02_CONVERSATION_ROUTE  PASS     2 conversations Russell attached itself
+A03_ROUTE_CORRECTION    PASS     4 recorded corrections
+A04_IRRELEVANT          PASS     20 turns produced 0 ideas
+A05_DEDUPE              NOT_RUN  0 of 1 merges onto a canonical idea
+A06_JUDGMENT_OVERRIDE   NOT_RUN  0 of 1 ideas carrying a stated judgment
+A07_PROBE_BOUNDS        NOT_RUN  0 of 1 probes completed inside their bounds
+A08_COVERAGE            PASS     152 recorded coverage verdicts
+A09_AUTH_BUDGET         NOT_RUN  0 of 1 settled budget reservations
+A10_MISSION_PIPELINE    NOT_RUN  0 of 1 fully linked missions
+A11_INDEPENDENT_AUDIT   PASS     three distinct authenticated sessions; achieved SESSION_SEPARATED
+A12_WRITEBACK           NOT_RUN  0 of 1 missions written back
+A13_AUTO_NEXT           NOT_RUN  0 of 1 automatic follow-on launches
+A14_HUMAN_RESUME        NOT_RUN  0 of 1 human decisions answered and resumed
+A15_RECOVERY            PASS     1 cycles that have claimed and released
+A16_DD_FRESHNESS        PASS     1 Deal Dispatch projects to read
+A17_PRIVACY_AUTH        PASS     6840 recorded authorization denials
+A18_BASELINES           PASS     10 layers intact
+A19_DELIVERY            PASS     4/4 mutations, each verified before and after a real restart
+```
+
+**11 PASS · 0 FAIL · 0 BLOCKED · 8 NOT_RUN.** Acceptance run `33846930151`.
+
+**A11 passed from production rows, at the tier it earned.** The corrected
+evaluator found a packet whose three audit roles ran in three distinct
+authenticated sessions, each resolving to a real credential of the worker that
+presented it, with the judge completing after both arguments, on an
+orchestration that filed a document with bytes. It reports
+**`SESSION_SEPARATED`** and does not describe itself as cross-account
+independent, because it is not. Under the superseded contract this identical
+evidence read `BLOCKED — DISTINCT_BOUND_WORKERS`, which was a statement about
+fleet topology rather than about the audit.
+
+**Nothing is BLOCKED any more.** A12 and A13 were previously reported as blocked
+by A11; they are now `NOT_RUN`, which is the truthful state — nothing stands in
+their way, the work simply has not run.
+
+### The first real retest of the Routine, and what it showed
+
+The hosted verification created fresh Russell turns, and Brain dispatched them
+by itself. Read once at 06:58:38Z:
+
+```
+V1  fires=17 refusals=0 no-shows=5  in-flight=2
+V2  fires=12 refusals=0 no-shows=5  in-flight=2
+fleet in flight 4 · candidates 2 considered, 0 eligible now
+```
+
+Five new activations, zero refusals. **The dispatcher half of §22 works.**
+
+The exact provider run, read once:
+
+| | |
+| --- | --- |
+| Routine | `trig_01CBLu5oCZziEwznw5q9xU7g` ("Brain Worker (dispatch)") |
+| Session | `cse_01KTng2dz9VLmJp7kBqsq2bX` |
+| Origin | `fire_routine` — Brain's own dispatch produced it |
+| Fired | 2026-09-04T06:54:58.29Z |
+| Finished | 2026-09-04T06:55:12.93Z |
+| Terminal status | **`ROUTINE_RUN_STATUS_SUCCEEDED`** |
+| Duration | **14.6 seconds** |
+| Output tokens | **198** |
+| Session status | `IDLE`, `disconnected` |
+| Rate limit | `status: "allowed"` — **not** throttled |
+| Model served | `claude-sonnet-5` |
+| Tags | `config:routine-lineage-none`, `routine_notify_push` |
+
+**Brain recorded no check-in for it.** So the session started, consumed its
+prompt, emitted 198 output tokens and ended — without `brain_check_in` reaching
+the Brain.
+
+### Two hypotheses eliminated by direct evidence
+
+- **Connector name spelling.** The Routine declares its connector as
+  `cloud-brain`, which `.claude/settings.json` already allowed before commit
+  `1111b3e`. Refuted.
+- **The settings file not reaching the worker.** The Routine attaches
+  `https://github.com/Peyday007/V5` as a source with no branch pin, and the
+  repository's `default_branch` is `claude/zealous-hypatia-78a2yp` — the branch
+  carrying `.claude/settings.json`. So the worker's checkout does contain the
+  grant. Eliminated.
+
+**The cause of the no-show is therefore still unresolved.** One further
+observation is recorded without being promoted to a diagnosis: the Routine's
+`allowed_tools` is `["Bash","Read","Write","Edit","Glob","Grep","WebFetch",
+"WebSearch"]` with no `mcp__*` entry. §22 already records that the *working*
+Step 10 routine also carried no `mcp__*` entry, so the allowlist cannot by
+itself be what separates a working surface from this one — which is exactly why
+this is left as an observation rather than the answer. The session transcript
+itself is not readable from here, so the reason `brain_check_in` was not called
+has not been established, and no further fire was made to guess at it.
+
+What is established, and is the durable part: **Brain owns dispatch and it is
+working** — routed, slot claimed, fired, accepted, zero refusals, five
+activations in four minutes with nobody involved. **The surface owns whether a
+worker may act, and that half is not yet demonstrated.**
