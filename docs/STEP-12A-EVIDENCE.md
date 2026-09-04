@@ -43,7 +43,7 @@ stale — re-run the reporter, do not edit the table.
 | `A14_HUMAN_RESUME` | NOT_RUN | CODE, TEST | the exact parked mission resumes, once |
 | `A15_RECOVERY` | NOT_RUN | CODE, TEST | boot repair, fenced late writer, expired probe ended honestly |
 | `A16_DD_FRESHNESS` | NOT_RUN | CODE, TEST | `CURRENT` / `STALE` / `UNAVAILABLE`; memory never returned as live |
-| `A17_PRIVACY_AUTH` | NOT_RUN | CODE, TEST (partial) | routing and dedupe are scope-first; **IDOR and injection suites are not written** |
+| `A17_PRIVACY_AUTH` | NOT_RUN | CODE, TEST (partial) | routing, dedupe and proposal references are all scope-first, and a model's reference is re-resolved against the principal; **the HTTP-level IDOR suite is not written, because the routes are not** |
 | `A18_BASELINES` | NOT_RUN | — | nothing deployed, so nothing to compare |
 | `A19_DELIVERY` | NOT_RUN | TEST | typecheck clean; **SQLite 1367 passed / 25 skipped, Postgres 1387 passed, both exit 0**; upgrade path proven on both chains. No deploy, no hosted verification. |
 
@@ -205,6 +205,29 @@ passing on SQLite.**
 | `services/russell/launch.ts` | the one way a mission comes into existence |
 | `services/russell/writeback.ts` | what happens when one finishes, exactly once |
 | `services/russell/loop.ts` | the durable tick, started by the server beside the dispatcher |
+| `services/russell/dealDispatch.ts` | the read-only connected system, with its freshness in the type |
+| `services/russell/proposal.ts` | zero-trust validation of what a model proposes |
+
+**A model proposes; the server decides.** `validateProposal` is the audit
+engine's rule applied to a conversation. Actions come from a closed set matched
+exactly — no substring, no closest match, no inferred intent. An unknown field
+refuses the *whole* proposal rather than being dropped, because a proposal whose
+author believed an extra instruction would also take effect is not one to act on
+halfway. Every project reference is re-resolved with `decideProjectAccess`
+against the authenticated principal, and a real project the caller cannot see
+returns the identical refusal to an invented id — so watching how the refusal
+differs teaches nothing.
+
+Injection-shaped text is **flagged, never filtered**: it is stored and shown as
+written, because removing it would destroy the evidence that somebody tried, and
+the actual control is that nothing found inside text is ever executed — a
+property of acting only on a closed action set rather than of any pattern list.
+
+**The connected system never presents memory as live state.** `CURRENT` carries
+when it was observed, `STALE` keeps the last reading *and labels it* so its age
+is readable, `UNAVAILABLE` says what went wrong without naming anything
+internal. One function builds the object, and it is the one that refuses to
+return a remembered reading as current.
 
 **The loop is a row, and that is the whole of "while the laptop is closed".**
 One tick finishes what ended, resumes what a person answered, ends what a
@@ -331,7 +354,7 @@ every old conversation would have been much harder to undo than to do.
 | `npm run typecheck` | clean |
 | SQLite | **1367 passed / 25 skipped, exit 0** |
 | Postgres | **52/52 files, 1387 passed, exit 0** |
-| The three changed suites on Postgres | 153 / 153 |
+| Both Russell suites on Postgres | 97 / 97 |
 | Migrations from empty | both chains |
 | Migration over existing data | both chains, `scripts/upgrade-check.ts` |
 
