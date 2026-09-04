@@ -394,6 +394,48 @@ describe('A11 refuses every shortcut, and names which one', () => {
   });
 });
 
+/**
+ * The scope filter, which is what stops a historical packet standing in for
+ * the mission under acceptance.
+ *
+ * This is the defect the product owner caught: `A11` passed while `A10`
+ * truthfully reported that no Step 12A mission had ever been linked, because
+ * the evaluator asked "has *an* audit ever run here" and a Step 10/11 packet
+ * answered yes. Scoping is the fix, and these are its teeth.
+ */
+describe('a historical packet cannot stand in for the scoped mission', () => {
+  it('passes when the scope names the orchestration the audit actually ran on', async () => {
+    const shape = await authenticShape();
+    const evidence = await auditIndependenceEvidence([shape.orchestrationId]);
+    expect(evidence.verdict).toBe('PASS');
+  });
+
+  it('refuses three genuine sessions that belong to a different mission', async () => {
+    const shape = await authenticShape();
+    // The audit is real and its lineage is impeccable — it is simply not this
+    // mission's audit. That is the whole point.
+    const evidence = await auditIndependenceEvidence([`${shape.orchestrationId}-not-this-one`]);
+    expect(evidence.verdict).toBe('NOT_RUN');
+    expect(evidence.missing).toMatch(/AUDIT_PASSES_RECORDED/);
+  });
+
+  it('refuses an empty scope rather than widening to every packet', async () => {
+    // A scope that resolved to no orchestration is a different fact from no
+    // scope at all, and must never fall back to "search everything".
+    await authenticShape();
+    const evidence = await auditIndependenceEvidence([]);
+    expect(evidence.verdict).toBe('NOT_RUN');
+    expect(evidence.missing).toMatch(/no orchestration is in the acceptance scope/);
+  });
+
+  it('still searches everything when no scope is given, for the unscoped caller', async () => {
+    const shape = await authenticShape();
+    expect(shape.orchestrationId).toBeTruthy();
+    const evidence = await auditIndependenceEvidence();
+    expect(evidence.verdict).toBe('PASS');
+  });
+});
+
 describe('the gate is evidence for a control that must still exist', () => {
   it('is the corrected minimum, and contains no topology at all', () => {
     /*

@@ -1606,3 +1606,111 @@ reservations, `A10` linked missions, `A12` writebacks, `A13` follow-ons and
 
 The honest summary is that the first two links of the chain are proven and the
 third is unread. Brain is left running; nothing is waiting on a person.
+
+---
+
+## 16. The acceptance reporter is scoped to the frozen mission — 2026-09-04
+
+### The defect this closes
+
+`A11` passed while `A10` truthfully reported `0 of 1 fully linked missions`. Both
+statements were correct, which is what made the pair a defect rather than a
+contradiction: **nine gates counted whole tables.** "Is there *a* probe", "is
+there *a* mission", "has *an* audit ever run" are questions about the database,
+not about the acceptance, and any historical row answered them. `A11` was
+answering with a Step 10/11 packet filed before Russell existed.
+
+### The fix
+
+The nine mission gates are now answered against a **declared** acceptance chain.
+
+`ACCEPTANCE_SCOPE` in `scripts/step12a-acceptance.ts` names one conversation id
+and nothing else. Everything downstream is **derived** from it by walking real
+foreign keys:
+
+```
+conversation → messages → candidates → merges → probes
+             → missions (by conversation or candidate)
+             → follow-on missions (next_mission_id)
+             → orchestrations → research_passes
+             → reservations
+             → human requests (by conversation or mission)
+```
+
+A gate therefore cannot be satisfied by a row outside that chain, however many
+similar rows exist. It is a constant rather than a row for the same reason
+`A19`'s delivery ledger is: **nobody should be able to widen the evidence their
+own work is judged against by writing rows.** Setting it is a code change
+somebody reviews.
+
+While the anchor is empty every scoped gate reports `NOT_RUN` naming that fact —
+which is the truthful state before the acceptance run. Nothing is wrong and
+nothing has happened, and those are different from each other and from failure.
+
+`auditIndependenceEvidence` now takes the scoped orchestrations. Three
+distinctions it draws deliberately:
+
+- **no argument** — search every packet, for an unscoped caller;
+- **an empty array** — *no orchestration is in scope*, refused by name rather
+  than falling back to searching everything;
+- **a list** — only those packets.
+
+### What stayed global, and why
+
+Three checks are conservation properties and are deliberately **not** scoped,
+because narrowing them would hide the very thing they exist to catch:
+
+- probe **overspend** — an exceeded lookup bound is a broken envelope wherever
+  it happened;
+- **half-built missions** — a mission stranded without its links is a launcher
+  defect wherever it sits;
+- `A17` **visibility widening** and `A18` **frozen-layer conservation**.
+
+`A02`, `A03`, `A04` and `A08` also stay as they are: they are conversation-level
+properties already proven by frozen conversations 1, 3, 6 and 2, and the build
+contract's own expanded baseline arithmetic requires them to remain `PASS`.
+
+### Three gates added
+
+| | |
+| --- | --- |
+| `A20_USABLE_READ_SURFACES` | the primary surfaces have real rows behind them, so a working backend cannot ship with hollow views |
+| `A21_LIVING_PROJECT_MAP` | the constellation has a canonical hierarchy to draw — *a list with lines beside it does not satisfy this* |
+| `A22_FAST_CHAT_ROUTING` | a turn actually took the fast lane against a real provider; adapter mocks and contract tests are code proof, never live acceptance |
+
+The historical nineteen keep their ids and meanings, so an archived reading
+still reads correctly against its own run. The workflow's gate-count guard moves
+from 19 to 22.
+
+### Inversion tests
+
+`tests/independenceEvidence.test.ts` (22 tests) now additionally proves:
+
+- a scope naming the audit's own orchestration **passes**;
+- three genuine, impeccably separated sessions belonging to a **different**
+  mission are refused — the exact defect above;
+- an **empty** scope is refused by name rather than widening;
+- an **absent** scope still searches everything, for the unscoped caller.
+
+Already proven and unchanged: invented sessions refused, predicted `future:`
+sessions refused, judge-before-arguments refused, same-session reuse refused,
+session-separated passes accepted, and a same-account result reported as
+`SESSION_SEPARATED` rather than failing.
+
+### The expanded baseline
+
+**10 PASS · 0 FAIL · 0 BLOCKED · 12 NOT_RUN** across twenty-two gates. The nine
+mission gates read `NOT_RUN` because the acceptance chain is not frozen yet;
+`A20`–`A22` read `NOT_RUN` because their production evidence does not exist yet.
+
+### Fleet, verified at 19:24Z
+
+```
+V1  ENABLED      fires=19  refusals=0  no-shows=0  in-flight=0
+V2  QUARANTINED  fires=12  refusals=0  no-shows=5  in-flight=0
+```
+
+One correction to the previous checkpoint: V1 reads **19** fires, not 18. An
+additional activation occurred unattended in the intervening hours and it
+checked in too — `no-shows` is still 0. The hardened Routine prompt is holding
+across more than the one canary.

@@ -1,7 +1,7 @@
 # The Step 12A acceptance verdict, read from production.
 #
 # `npm run step12a:acceptance` counts authoritative rows and prints the
-# nineteen gates. It is read-only by construction — it opens the configured
+# twenty-two gates. It is read-only by construction — it opens the configured
 # database, counts, prints and closes — so this workflow creates nothing,
 # advances nothing and takes no decision. It is not a delivery mutation, for the
 # same reason `step12a-inspect.yml` is not: nothing about what is running
@@ -209,22 +209,25 @@ jobs:
           # The captured output can carry the table more than once — an SSH
           # session replays what it streamed — and A19 legitimately appears
           # twice, once from the container and once from the step above. A
-          # straight `grep -c` would report twenty-odd gates out of nineteen,
+          # straight `grep -c` would report more gates than exist,
           # which is the kind of arithmetic that makes a summary worthless.
           # Taking the last verdict per id is also what makes the derived A19
           # override the reporter's, without either of them knowing about the
           # other.
           awk '/^A[0-9][0-9]_[A-Z_]+[ ]+(PASS|FAIL|BLOCKED|NOT_RUN)/ { seen[$1] = $2 }
                END { for (g in seen) print g, seen[g] }' acceptance.txt | sort > gates.txt
-          echo "--- nineteen gates, one verdict each ---"
+          echo "--- twenty-two gates, one verdict each ---"
           cat gates.txt
           total=$(wc -l < gates.txt)
           pass=$(awk '$2=="PASS"' gates.txt | wc -l)
           fail=$(awk '$2=="FAIL"' gates.txt | wc -l)
           blocked=$(awk '$2=="BLOCKED"' gates.txt | wc -l)
           notrun=$(awk '$2=="NOT_RUN"' gates.txt | wc -l)
-          if [ "$total" -ne 19 ]; then
-            echo "::error::read $total gates, expected 19 — the reporter's output was not fully captured"
+          # A20-A22 were added for the usability contract; the historical
+          # nineteen keep their ids and their meaning, so an older archived
+          # reading still reads correctly against its own run.
+          if [ "$total" -ne 22 ]; then
+            echo "::error::read $total gates, expected 22 — the reporter's output was not fully captured"
             exit 1
           fi
           echo "STEP 12A — composed: $pass PASS · $fail FAIL · $blocked BLOCKED · $notrun NOT_RUN"

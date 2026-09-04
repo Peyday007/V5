@@ -128,7 +128,20 @@ async function rows<T>(sql: string, params: unknown[] = []): Promise<T[]> {
   return getDb().all<T>(sql, params as never[]);
 }
 
-export async function auditIndependenceEvidence(): Promise<IndependenceEvidence> {
+export async function auditIndependenceEvidence(
+  /**
+   * Restrict the search to these orchestrations.
+   *
+   * Without it the evaluator answers "has *an* audit ever run here", which any
+   * historical packet satisfies. The acceptance reporter passes the
+   * orchestrations reached from the frozen Step 12A mission, so a Step 10/11
+   * packet — however genuine its own lineage — cannot stand in for the mission
+   * under acceptance. An empty array means *no orchestration in scope*, which
+   * is a different fact from `undefined` and is reported as such rather than
+   * silently widening to everything.
+   */
+  onlyOrchestrations?: readonly string[],
+): Promise<IndependenceEvidence> {
   const conditions: IndependenceCondition[] = [];
 
   /** Record one condition and say whether the walk may continue. */
@@ -265,6 +278,17 @@ export async function auditIndependenceEvidence(): Promise<IndependenceEvidence>
     /* ---------------------------------------------------------------------
      * 5. Three completed audit passes exist, with lineage recorded.
      * ------------------------------------------------------------------- */
+    if (onlyOrchestrations && onlyOrchestrations.length === 0) {
+      require(
+        'AUDIT_PASSES_RECORDED',
+        false,
+        'no orchestration is in the acceptance scope, so no audit can belong to it',
+      );
+      return settle();
+    }
+    const scoped = onlyOrchestrations
+      ? ` AND orchestration_id IN (${onlyOrchestrations.map(() => '?').join(', ')})`
+      : '';
     const passes = await rows<LineageRow>(
       `SELECT orchestration_id, ordinal, completed_at,
               executor_worker_id, executor_routine_id, executor_account_id, executor_session_ref
@@ -274,9 +298,14 @@ export async function auditIndependenceEvidence(): Promise<IndependenceEvidence>
           AND executor_worker_id IS NOT NULL
           AND executor_account_id IS NOT NULL
           AND executor_session_ref IS NOT NULL
-          AND executor_session_ref <> ''
+          AND executor_session_ref <> ''${scoped}
         ORDER BY orchestration_id, ordinal`,
-      [ROLE_ORDINALS.PRIMARY, ROLE_ORDINALS.ADVERSARIAL, ROLE_ORDINALS.JUDGE],
+      [
+        ROLE_ORDINALS.PRIMARY,
+        ROLE_ORDINALS.ADVERSARIAL,
+        ROLE_ORDINALS.JUDGE,
+        ...(onlyOrchestrations ?? []),
+      ],
     );
     const byOrchestration = new Map<string, Map<number, LineageRow>>();
     for (const pass of passes) {

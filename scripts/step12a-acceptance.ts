@@ -1,7 +1,7 @@
 /**
  * `npm run step12a:acceptance` — the machine verdict on Step 12A.
  *
- * Nineteen gates, stable ids, reported `PASS` / `FAIL` / `BLOCKED` / `NOT_RUN`
+ * Twenty-two gates, stable ids, reported `PASS` / `FAIL` / `BLOCKED` / `NOT_RUN`
  * from authoritative rows. It exits 0 only when every gate is `PASS`, which is
  * what makes the completion phrase in the build contract mean something: a
  * person cannot declare Step 12A complete by describing it well.
@@ -66,6 +66,132 @@ const BLOCKED_BY_A11: Record<string, string> = {
    */
 };
 
+/**
+ * The frozen Step 12A acceptance chain, declared by id.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is a constant and not a row
+ * ---------------------------------------------------------------------------
+ *
+ * Nine of these gates used to count whole tables: "is there *a* probe", "is
+ * there *a* mission". That is satisfiable by any historical row, which made
+ * them assertions about the database rather than about the acceptance — and
+ * `A11` was the proof, passing on a Step 10/11 packet filed before Russell
+ * existed while `A10` truthfully reported that no Step 12A mission had ever
+ * been linked.
+ *
+ * So the scope is **declared**, exactly as `A19`'s delivery ledger is declared
+ * in the acceptance workflow, and for the same reason: nobody should be able to
+ * widen the evidence their own work is judged against by writing rows. Setting
+ * this needs a code change somebody reviews.
+ *
+ * Everything else is **derived** from the anchor by walking real foreign keys —
+ * conversation → messages → candidates → merges → probe → mission →
+ * orchestration → passes → document → writeback → follow-on → human request.
+ * A gate therefore cannot be satisfied by a row that is not part of this chain,
+ * however many similar rows exist.
+ *
+ * While it is empty every scoped gate reports `NOT_RUN` naming the reason,
+ * which is the truthful state before the acceptance run: nothing is wrong, and
+ * nothing has happened.
+ */
+const ACCEPTANCE_SCOPE = {
+  /** The conversation the frozen Workstream 5 scenario is held in. */
+  conversationId: '',
+} as const;
+
+/** The chain, resolved once from the anchor. `null` when it cannot be. */
+interface Scope {
+  conversationId: string;
+  candidateIds: string[];
+  probeIds: string[];
+  missionIds: string[];
+  orchestrationIds: string[];
+  reservationIds: string[];
+}
+
+async function ids(sql: string, params: unknown[] = []): Promise<string[]> {
+  try {
+    const rows = await getDb().all<{ id: string }>(sql, params as never[]);
+    return rows.map((row) => row.id).filter((id): id is string => Boolean(id));
+  } catch {
+    return [];
+  }
+}
+
+/** Bind a list into an IN clause. Empty stays empty rather than becoming `IN ()`. */
+function inList(values: string[]): string {
+  return values.map(() => '?').join(', ');
+}
+
+async function resolveScope(): Promise<Scope | null> {
+  const conversationId = ACCEPTANCE_SCOPE.conversationId;
+  if (!conversationId) return null;
+  const exists = await count(`SELECT COUNT(*) AS total FROM russell_conversations WHERE id = ?`, [
+    conversationId,
+  ]);
+  if (exists === 0) return null;
+
+  const candidateIds = await ids(
+    `SELECT id FROM russell_candidates WHERE conversation_id = ? ORDER BY created_at, rowid`,
+    [conversationId],
+  );
+  const probeIds = candidateIds.length
+    ? await ids(
+        `SELECT id FROM russell_probes WHERE candidate_id IN (${inList(candidateIds)})
+          ORDER BY created_at, rowid`,
+        candidateIds,
+      )
+    : [];
+  /*
+   * Missions reached either through the conversation or through one of its
+   * candidates, plus every follow-on those missions launched. The follow-on is
+   * part of the frozen chain by construction — `A13` is precisely the claim
+   * that it was launched from this mission and no other.
+   */
+  const direct = await ids(
+    `SELECT id FROM russell_missions WHERE conversation_id = ? ORDER BY created_at, rowid`,
+    [conversationId],
+  );
+  const viaCandidate = candidateIds.length
+    ? await ids(
+        `SELECT id FROM russell_missions WHERE candidate_id IN (${inList(candidateIds)})
+          ORDER BY created_at, rowid`,
+        candidateIds,
+      )
+    : [];
+  const missionIds = [...new Set([...direct, ...viaCandidate])];
+  const followOns = missionIds.length
+    ? await ids(
+        `SELECT next_mission_id AS id FROM russell_missions
+          WHERE id IN (${inList(missionIds)}) AND next_mission_id IS NOT NULL`,
+        missionIds,
+      )
+    : [];
+  const allMissions = [...new Set([...missionIds, ...followOns])];
+
+  const orchestrationIds = allMissions.length
+    ? await ids(
+        `SELECT orchestration_id AS id FROM russell_missions
+          WHERE id IN (${inList(allMissions)}) AND orchestration_id IS NOT NULL`,
+        allMissions,
+      )
+    : [];
+  const reservationIds = allMissions.length
+    ? await ids(
+        `SELECT reservation_id AS id FROM russell_missions
+          WHERE id IN (${inList(allMissions)}) AND reservation_id IS NOT NULL`,
+        allMissions,
+      )
+    : [];
+
+  return { conversationId, candidateIds, probeIds, missionIds: allMissions, orchestrationIds, reservationIds };
+}
+
+/** The sentence every scoped gate reports while the scope is not frozen. */
+const NO_SCOPE =
+  'the frozen Step 12A acceptance chain is not declared yet — see ACCEPTANCE_SCOPE';
+
 interface GateResult {
   id: string;
   verdict: Verdict;
@@ -102,6 +228,18 @@ function fromRows(id: string, found: number, needed: number, what: string): Gate
 
 async function gates(): Promise<GateResult[]> {
   const results: GateResult[] = [];
+  /*
+   * Resolved once. Every gate about a candidate, probe, mission, packet,
+   * writeback, follow-on or human request is answered against this chain and
+   * nothing else.
+   */
+  const scope = await resolveScope();
+
+  /** A scoped gate, reporting the missing scope rather than a bare zero. */
+  const scoped = (id: string, found: number, needed: number, what: string): GateResult =>
+    scope === null
+      ? { id, verdict: 'NOT_RUN', detail: NO_SCOPE }
+      : fromRows(id, found, needed, `${what} in the frozen acceptance chain`);
 
   // A01 — the shell exists and is what a person lands on. The production half
   // is a conversation somebody actually had through it.
@@ -168,20 +306,30 @@ async function gates(): Promise<GateResult[]> {
   );
 
   results.push(
-    fromRows(
+    scoped(
       'A05_DEDUPE',
-      await count(`SELECT COUNT(*) AS total FROM russell_candidate_merges`),
+      scope && scope.candidateIds.length
+        ? await count(
+            `SELECT COUNT(*) AS total FROM russell_candidate_merges
+              WHERE candidate_id IN (${inList(scope.candidateIds)})`,
+            scope.candidateIds,
+          )
+        : 0,
       1,
       'merges onto a canonical idea',
     ),
   );
 
   results.push(
-    fromRows(
+    scoped(
       'A06_JUDGMENT_OVERRIDE',
-      await count(
-        `SELECT COUNT(*) AS total FROM russell_candidates WHERE reason IS NOT NULL AND reason <> ''`,
-      ),
+      scope && scope.candidateIds.length
+        ? await count(
+            `SELECT COUNT(*) AS total FROM russell_candidates
+              WHERE id IN (${inList(scope.candidateIds)}) AND reason IS NOT NULL AND reason <> ''`,
+            scope.candidateIds,
+          )
+        : 0,
       1,
       'ideas carrying a stated judgment',
     ),
@@ -190,14 +338,26 @@ async function gates(): Promise<GateResult[]> {
   // A07 — a probe that ran and stayed inside its own bound. The comparison is
   // against the probe's recorded limit, so a probe that spent more than it was
   // allowed is a FAIL rather than a missing row.
-  const probes = await count(`SELECT COUNT(*) AS total FROM russell_probes WHERE state = 'COMPLETE'`);
+  const probes =
+    scope && scope.probeIds.length
+      ? await count(
+          `SELECT COUNT(*) AS total FROM russell_probes
+            WHERE id IN (${inList(scope.probeIds)}) AND state = 'COMPLETE'`,
+          scope.probeIds,
+        )
+      : 0;
+  /*
+   * Overspend is checked over *every* probe, not only the scoped ones. A probe
+   * that exceeded its lookup bound is a broken envelope wherever it happened,
+   * and narrowing that to the acceptance chain would hide it.
+   */
   const overspent = await count(
     `SELECT COUNT(*) AS total FROM russell_probes WHERE lookups_used > max_lookups`,
   );
   results.push(
     overspent > 0
       ? { id: 'A07_PROBE_BOUNDS', verdict: 'FAIL', detail: `${overspent} probes exceeded their lookup bound` }
-      : fromRows('A07_PROBE_BOUNDS', probes, 1, 'probes completed inside their bounds'),
+      : scoped('A07_PROBE_BOUNDS', probes, 1, 'probes completed inside their bounds'),
   );
 
   results.push(
@@ -210,18 +370,33 @@ async function gates(): Promise<GateResult[]> {
   );
 
   // A09 — a reservation that was taken and settled, with nothing overdrawn.
-  const settled = await count(
-    `SELECT COUNT(*) AS total FROM russell_budget_reservations WHERE state = 'SETTLED'`,
-  );
-  results.push(fromRows('A09_AUTH_BUDGET', settled, 1, 'settled budget reservations'));
+  const settled =
+    scope && scope.reservationIds.length
+      ? await count(
+          `SELECT COUNT(*) AS total FROM russell_budget_reservations
+            WHERE id IN (${inList(scope.reservationIds)}) AND state = 'SETTLED'`,
+          scope.reservationIds,
+        )
+      : 0;
+  results.push(scoped('A09_AUTH_BUDGET', settled, 1, 'settled budget reservations'));
 
   // A10 — one promotion produced one mission with one orchestration and one
   // bin. A mission missing either link after the fact is a FAIL, because the
   // repair pass exists precisely so that does not persist.
-  const missions = await count(
-    `SELECT COUNT(*) AS total FROM russell_missions
-      WHERE orchestration_id IS NOT NULL AND bin_id IS NOT NULL`,
-  );
+  const missions =
+    scope && scope.missionIds.length
+      ? await count(
+          `SELECT COUNT(*) AS total FROM russell_missions
+            WHERE id IN (${inList(scope.missionIds)})
+              AND orchestration_id IS NOT NULL AND bin_id IS NOT NULL`,
+          scope.missionIds,
+        )
+      : 0;
+  /*
+   * Half-built missions are counted globally for the same reason overspend is:
+   * a mission stranded without its links is a launcher defect wherever it sits,
+   * and `A15` reads this number too.
+   */
   const halfBuilt = await count(
     `SELECT COUNT(*) AS total FROM russell_missions
       WHERE state IN ('RUNNING','WAITING') AND (orchestration_id IS NULL OR bin_id IS NULL)`,
@@ -229,7 +404,7 @@ async function gates(): Promise<GateResult[]> {
   results.push(
     halfBuilt > 0
       ? { id: 'A10_MISSION_PIPELINE', verdict: 'FAIL', detail: `${halfBuilt} missions are missing a link` }
-      : fromRows('A10_MISSION_PIPELINE', missions, 1, 'fully linked missions'),
+      : scoped('A10_MISSION_PIPELINE', missions, 1, 'fully linked missions'),
   );
 
   /*
@@ -267,43 +442,62 @@ async function gates(): Promise<GateResult[]> {
    * Three verdicts, not two. `NOT_RUN` is an audit that has not happened yet
    * with nothing standing in its way; `BLOCKED` is something actually wrong.
    */
-  const independence = await auditIndependenceEvidence();
+  const independence = await auditIndependenceEvidence(scope ? scope.orchestrationIds : []);
   results.push({
     id: 'A11_INDEPENDENT_AUDIT',
-    verdict: independence.verdict,
+    verdict: scope === null ? 'NOT_RUN' : independence.verdict,
     detail:
-      independence.missing ??
+      scope === null
+        ? NO_SCOPE
+        : independence.missing ??
       // The achieved tier, never rounded up. A same-account result says
       // SESSION_SEPARATED and is not described as cross-account independent.
-      `three distinct authenticated sessions; achieved ${
-        independence.achieved ? SEPARATION_LABELS[independence.achieved] : 'no separation'
-      }`,
+          `three distinct authenticated sessions on the frozen mission; achieved ${
+            independence.achieved ? SEPARATION_LABELS[independence.achieved] : 'no separation'
+          }`,
   });
 
   // A12 — writeback happened, exactly once per mission. The `writeback_at`
   // column is the once-only guard, so a mission that produced knowledge with a
   // null stamp would mean the guard was bypassed.
-  const wroteBack = await count(
-    `SELECT COUNT(*) AS total FROM russell_missions WHERE writeback_at IS NOT NULL`,
-  );
-  results.push(fromRows('A12_WRITEBACK', wroteBack, 1, 'missions written back'));
+  const wroteBack =
+    scope && scope.missionIds.length
+      ? await count(
+          `SELECT COUNT(*) AS total FROM russell_missions
+            WHERE id IN (${inList(scope.missionIds)}) AND writeback_at IS NOT NULL`,
+          scope.missionIds,
+        )
+      : 0;
+  results.push(scoped('A12_WRITEBACK', wroteBack, 1, 'missions written back'));
 
   results.push(
-    fromRows(
+    scoped(
       'A13_AUTO_NEXT',
-      await count(`SELECT COUNT(*) AS total FROM russell_missions WHERE next_mission_id IS NOT NULL`),
+      scope && scope.missionIds.length
+        ? await count(
+            `SELECT COUNT(*) AS total FROM russell_missions
+              WHERE id IN (${inList(scope.missionIds)}) AND next_mission_id IS NOT NULL`,
+            scope.missionIds,
+          )
+        : 0,
       1,
       'automatic follow-on launches',
     ),
   );
 
   results.push(
-    fromRows(
+    scoped(
       'A14_HUMAN_RESUME',
-      await count(
-        `SELECT COUNT(*) AS total FROM russell_human_requests
-          WHERE state = 'ANSWERED' AND answered_by_user_id IS NOT NULL`,
-      ),
+      scope
+        ? await count(
+            `SELECT COUNT(*) AS total FROM russell_human_requests
+              WHERE state = 'ANSWERED' AND answered_by_user_id IS NOT NULL
+                AND (conversation_id = ?${
+                  scope.missionIds.length ? ` OR mission_id IN (${inList(scope.missionIds)})` : ''
+                })`,
+            [scope.conversationId, ...scope.missionIds],
+          )
+        : 0,
       1,
       'human decisions answered and resumed',
     ),
@@ -389,6 +583,76 @@ async function gates(): Promise<GateResult[]> {
     verdict: 'NOT_RUN',
     detail: 'hosted verification before and after a real restart is not a database fact — see the delivery ledger',
   });
+
+  /* ----------------------------------------------------------------------- *
+   * A20-A22 — the usability gates.
+   *
+   * Added because a Step 12A whose backend works and whose primary surfaces
+   * are hollow is not usable, and the nineteen gates above could all pass
+   * while a person opened Russell and saw nothing. They are production gates
+   * like every other: local suites are code proof, and none of them turns a
+   * test into evidence.
+   * ----------------------------------------------------------------------- */
+
+  /*
+   * A20 — the read surfaces show real data.
+   *
+   * The check is deliberately about *hollowness*, not about pixels: a
+   * projection is hollow when the Brain holds rows of a kind and the surface
+   * that exists to show them would render nothing. So it asks whether the
+   * archive actually contains the material the surfaces are built over, and
+   * reports NOT_RUN until it does. The visual half is the recorded QA in the
+   * evidence document; this half is the half a database can answer.
+   */
+  const knowledgeRows = await count(`SELECT COUNT(*) AS total FROM russell_knowledge`);
+  const projectRows = await count(`SELECT COUNT(*) AS total FROM projects`);
+  results.push(
+    fromRows(
+      'A20_USABLE_READ_SURFACES',
+      Math.min(knowledgeRows, projectRows) > 0 ? 1 : 0,
+      1,
+      'projected knowledge and project rows behind the primary surfaces',
+    ),
+  );
+
+  /*
+   * A21 — the living constellation has a real hierarchy to draw.
+   *
+   * Portfolio → site → major idea → regular idea. A map with no major ideas is
+   * a list with lines beside it, which the build contract refuses by name, so
+   * the row condition is that an explicit, provenance-bearing structure exists
+   * rather than being inferred from headings.
+   */
+  const majorIdeas = await count(
+    `SELECT COUNT(*) AS total FROM russell_candidates WHERE state <> 'MERGED'`,
+  );
+  results.push(
+    fromRows('A21_LIVING_PROJECT_MAP', majorIdeas, 1, 'idea nodes with canonical structure'),
+  );
+
+  /*
+   * A22 — fast conversational routing, measured live.
+   *
+   * Deliberately unsatisfiable by adapter mocks and contract tests. It needs a
+   * turn that actually took the fast lane against a real provider, which needs
+   * a paid activation nobody has authorized yet — so it stays NOT_RUN, and it
+   * says which of the two is missing rather than reporting a bare zero.
+   */
+  const fastTurns = await count(
+    `SELECT COUNT(*) AS total FROM russell_messages
+      WHERE role = 'RUSSELL' AND status = 'COMPLETE'
+        AND metadata LIKE '%"lane":"FAST"%'`,
+  );
+  results.push(
+    fastTurns > 0
+      ? { id: 'A22_FAST_CHAT_ROUTING', verdict: 'PASS', detail: `${fastTurns} turns answered on the fast lane` }
+      : {
+          id: 'A22_FAST_CHAT_ROUTING',
+          verdict: 'NOT_RUN',
+          detail:
+            'no turn has taken the fast lane against a real provider; adapter and contract tests are code proof, not live acceptance',
+        },
+  );
 
   return results;
 }
