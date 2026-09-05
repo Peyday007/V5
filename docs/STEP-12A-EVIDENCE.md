@@ -2873,3 +2873,121 @@ Six more tests than §30: three in `tests/dispatchDeferral.test.ts`, three in
 `tests/russellShell.test.tsx` for the conversation controls, and the manifest
 assertion extended in place rather than added. No migration was touched; SQLite
 stays at **029** and Postgres at **020**.
+
+---
+
+## 32. A correction about what mutation 6 shipped — 2026-09-05
+
+**I said the A22 deferral had not shipped. It had.** The owner challenged the
+claim and it is wrong; it is corrected here rather than quietly edited out of
+§31, the same way §22 keeps Step 7's wrong reasoning about OAuth.
+
+What happened is a reporting error with a clear shape. The acceptance reading I
+quoted was taken at **16:43:33Z, before mutation 6 deployed at 17:10–17:18**.
+At 16:43 the container was running `c87d857` and its reporter genuinely had no
+`DEFERRED` verdict, so A22 read `NOT_RUN`. I then wrote the report *after* the
+deployment and described that pre-deployment reading as though it were the
+current state, instead of taking a new one. **A reading has a timestamp, and a
+claim about what is running has to be made from a reading taken after the thing
+was deployed.**
+
+Settled by reading production rather than by argument. Acceptance run
+[33992811168](https://github.com/Peyday007/V5/actions/runs/33992811168), against
+the deployed image:
+
+    A22_FAST_CHAT_ROUTING      DEFERRED
+
+    STEP 12A — composed: 10/21 PASS · 0 FAIL · 0 BLOCKED · 11 NOT_RUN · 1 DEFERRED (of 22 gates)
+    Deferred by the owner and excluded from the denominator:
+      A22_FAST_CHAT_ROUTING
+
+So the ledger stands as written and needs no repair: **mutation 6 shipped
+everything `f5ca139` contained** — the capacity-ledger attribution, the arrival
+counter, the derived pending state, `turn-trace`, **and the A22 `DEFERRED`
+verdict**. Nothing was missing and nothing needs re-including.
+
+What is *not* deployed is exactly what was committed after `f5ca139`: the
+conversation controls (`81c4a82`) and the priority vocabulary plus the capacity
+deferral (`0a958eb`). `A19_DELIVERY` reads `NOT_RUN` for that reason and says so
+— the guard working, not a regression.
+
+**The in-scope tally is now `10/21`**, with A22 shown separately, which is the
+first production reading taken under the owner's deferral.
+
+---
+
+## 33. Capacity: a reservation is not an occupied slot — 2026-09-05
+
+The owner asked for two confirmations before mutation 7. Both were worth asking
+for, and one of them found a defect.
+
+### Retry accounting is preserved exactly, and is now demonstrated
+
+`claimDispatchIntent` takes one attempt every time a tick picks an intent up.
+`markDispatchDeferred` gives that one back, guarded at zero; `markDispatchFailed`
+keeps it. Nothing else is touched — not `max_attempts`, not the bin's own
+`attempt_count`, not the generation.
+
+`tests/dispatchDeferral.test.ts` states it as arithmetic rather than as a
+comment: ten waits in a row leave the counter at **0**, and five real failures
+after them abandon on the fifth and leave it at **5**. A second test drives
+three refunds against one claim and pins the counter at zero, because a counter
+that could go negative would silently *extend* the budget — a worse bug than the
+one the refund fixes.
+
+So the budget now measures attempts actually made, which is what `max_attempts`
+was always supposed to mean, and a busy fleet cannot consume it.
+
+### The capacity calculation did not distinguish stale reservations. Now it does.
+
+This number is what produces `ACCOUNT_TARGETS_REACHED`, so counting a session
+that is not running is not a rounding error — it is a fleet refusing work it has
+room for, which is exactly what happened to the frozen message.
+
+`inFlightByRoutine` excluded terminal bins and fires older than thirty minutes,
+and **three stale cases leaked through**:
+
+1. **A bin fired twice reserved two slots.** A worker that never arrives leaves
+   its `SENT` row behind — `supersedeStaleIntents` only touches `PENDING` rows,
+   deliberately, because a fire that really happened must not be rewritten as
+   though it had not. The old row and the new one were both counted.
+2. **A lapsed lease still counted.** An expired lease is claimable work
+   everywhere else in this codebase (§19); here it went on holding a slot.
+3. **A bin parked at `NEEDS_HUMAN` still counted.** That is terminal for the
+   worker — its session ended when it escalated — and holding a slot for a bin
+   waiting on a *person* is the clearest stale reservation there is.
+
+All three are now excluded, exactly rather than heuristically. The second
+condition is deliberately "**is this the newest `SENT` fire for this bin**" and
+**not** a generation match against the bin: a bin's generation advances the
+moment a worker is assigned, so requiring equality would drop the count exactly
+when a session starts working — reintroducing the hole the original comment
+exists to close. Two tests pin that distinction from both sides.
+
+Every condition can only *lower* the count, so the direction of risk is
+under-firing rather than over-firing, and the targets, the fire slot's
+compare-and-swap and the provider's own refusals all still bound the other way.
+
+**Verified by inversion**, not by assertion: with `candidates.ts` reverted, the
+three stale-reservation tests fail and the two genuinely-occupied ones still
+pass.
+
+### Nothing was rewritten
+
+The failed turn and its evidence are untouched. `rmsg_584b3e03c1fa46feb608`
+still reads `FAILED` with "the priority was not one this version recognises",
+bin `bin_aaee02cbf6714010b352` still holds its five `ACCOUNT_TARGETS_REACHED`
+refusals, its abandonment, its assignment and its stored proposal unit. None of
+this work rewrites a row; every fix is forward and applies to what happens next.
+
+### Verification before mutation 7
+
+| | |
+| --- | --- |
+| `npm run typecheck` | clean |
+| SQLite | **1,641 passed**, 25 skipped, 0 failed, 65 files |
+| Postgres | **1,666 passed**, 0 failed, 66 files |
+
+Eight more than §31: five capacity cases and two retry-accounting cases in
+`tests/dispatchDeferral.test.ts`, plus the sixth capacity case for the
+thirty-minute window. Still no migration on either chain.

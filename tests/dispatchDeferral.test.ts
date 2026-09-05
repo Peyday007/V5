@@ -25,10 +25,20 @@ import { createAccount, createRoutine, bindRoutineWorker, setPolicy } from '../s
 import { createUser, createWorker } from '../server/repos/identity.ts';
 import {
   createBin,
+  claimDispatchIntent,
+  ensureDispatchIntent,
   getBin,
   listBinEvents,
   listDispatchesForBin,
+  markDispatchDeferred,
+  markDispatchFailed,
+  markDispatchRoutine,
+  markDispatchSent,
+  releaseBin,
+  assignNextBin,
 } from '../server/repos/bins.ts';
+import { getDb } from '../server/db/database.ts';
+import { inFlightByRoutine } from '../server/services/dispatch/candidates.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import type { BinManifest } from '../server/domain/types.ts';
 
@@ -187,5 +197,168 @@ describe('an intent the fleet had no room for', () => {
     expect(intent!.state).toBe('ABANDONED');
     delete process.env['BRAIN_ROUTINE_ID'];
     delete process.env['BRAIN_ROUTINE_TOKEN'];
+  });
+});
+
+describe('a deferral preserves the retry budget exactly', () => {
+  it('spends an attempt on a real failure and none on a wait', async () => {
+    /*
+     * The accounting, stated as arithmetic rather than as a comment.
+     *
+     * `claimDispatchIntent` takes one attempt every time a tick picks the
+     * intent up. A deferral gives it back; a failure keeps it. So the budget
+     * measures *attempts actually made*, which is what `max_attempts` was
+     * always supposed to mean, and a busy fleet cannot consume it.
+     */
+    const binId = await aReadyBin();
+    await ensureDispatchIntent((await getBin(binId))!);
+
+    const claimable = async (): Promise<void> => {
+      await getDb().run(
+        "UPDATE bin_dispatch SET next_attempt_at = '2000-01-01T00:00:00.000Z' WHERE bin_id = ?",
+        [binId],
+      );
+    };
+
+    // Ten waits in a row. The budget must not move.
+    for (let round = 0; round < 10; round += 1) {
+      await claimable();
+      const intent = (await claimDispatchIntent())!;
+      expect(intent.attemptCount).toBe(1);
+      await markDispatchDeferred(intent.id, { refusal: 'FLEET_PAUSED', message: 'no room' });
+      expect((await listDispatchesForBin(binId))[0]!.attemptCount).toBe(0);
+    }
+
+    // Now real failures. Five of them, and only then abandoned — the default
+    // `max_attempts` is 5, and the ten waits above bought nothing and cost
+    // nothing.
+    let state = 'PENDING';
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      await claimable();
+      const intent = (await claimDispatchIntent())!;
+      expect(intent.attemptCount).toBe(attempt);
+      state = await markDispatchFailed(intent.id, { kind: 'SERVER', message: '503' });
+    }
+    expect(state).toBe('ABANDONED');
+    expect((await listDispatchesForBin(binId))[0]!.attemptCount).toBe(5);
+  });
+
+  it('never lets the refund drive the counter below zero', async () => {
+    // A counter that could go negative would be a worse bug than the one the
+    // refund fixes: it would silently extend the budget.
+    const binId = await aReadyBin();
+    await ensureDispatchIntent((await getBin(binId))!);
+    const intent = (await claimDispatchIntent())!;
+    await markDispatchDeferred(intent.id, { refusal: 'FLEET_PAUSED', message: 'no room' });
+    await markDispatchDeferred(intent.id, { refusal: 'FLEET_PAUSED', message: 'again' });
+    await markDispatchDeferred(intent.id, { refusal: 'FLEET_PAUSED', message: 'and again' });
+    expect((await listDispatchesForBin(binId))[0]!.attemptCount).toBe(0);
+  });
+});
+
+describe('capacity counts occupied slots, not stale reservations', () => {
+  let routineId = '';
+  let workerId = '';
+
+  async function aFiredBin(options: { sentAt?: string } = {}): Promise<string> {
+    const binId = await aReadyBin();
+    await ensureDispatchIntent((await getBin(binId))!);
+    const intent = (await claimDispatchIntent())!;
+    // The dispatcher stamps the row before it fires; `markDispatchSent` records
+    // the Routine on the *event*, not on `bin_dispatch.routine_id`, and the
+    // capacity query groups by the column.
+    await markDispatchRoutine(intent.id, routineId);
+    await markDispatchSent(intent.id, { routineRef: 'trig_defer', routineId, projectId });
+    if (options.sentAt) {
+      await getDb().run('UPDATE bin_dispatch SET sent_at = ? WHERE id = ?', [options.sentAt, intent.id]);
+    }
+    return binId;
+  }
+
+  beforeEach(async () => {
+    const account = await createAccount({ provider: 'anthropic', name: 'capacity-account' });
+    const worker = await createWorker({
+      name: 'capacity-worker',
+      displayName: 'capacity-worker',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    workerId = worker.id;
+    const routine = await createRoutine({
+      accountId: account.id,
+      routineRef: 'trig_defer',
+      name: 'V-capacity',
+      tokenSecretName: 'DEFER_SECRET',
+    });
+    routineId = routine.id;
+  });
+
+  it('counts a fire nobody has answered yet', async () => {
+    await aFiredBin();
+    expect((await inFlightByRoutine(Date.now())).get(routineId)).toBe(1);
+  });
+
+  it('keeps counting it once a worker takes the bin', async () => {
+    // The generation advances on assignment, so a rule that matched
+    // generations would drop the count exactly when work starts.
+    const binId = await aFiredBin();
+    const assigned = await assignNextBin({ workerId, projectIds: [projectId] });
+    expect(assigned!.bin.id).toBe(binId);
+    expect((await inFlightByRoutine(Date.now())).get(routineId)).toBe(1);
+  });
+
+  it('stops counting a session whose lease has lapsed', async () => {
+    const binId = await aFiredBin();
+    await assignNextBin({ workerId, projectIds: [projectId] });
+    await getDb().run(
+      "UPDATE bins SET lease_expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?",
+      [binId],
+    );
+    expect((await inFlightByRoutine(Date.now())).get(routineId)).toBeUndefined();
+  });
+
+  it('counts one slot for a bin that was fired twice, not two', async () => {
+    /*
+     * The double-count. A worker that never arrives leaves its `SENT` row
+     * behind — `supersedeStaleIntents` deliberately only touches `PENDING`
+     * ones, because a fire that really happened must not be rewritten. Both
+     * rows were counted, so one bin reserved two slots on a fleet whose whole
+     * refusal is "every capable surface is at its configured target".
+     */
+    const binId = await aFiredBin();
+    // The lease lapses without an arrival, so the bin earns a fresh intent at
+    // the next generation and is fired again.
+    await assignNextBin({ workerId, projectIds: [projectId] });
+    await releaseBin(
+      {
+        binId,
+        leaseId: (await getBin(binId))!.leaseId!,
+        leaseGeneration: (await getBin(binId))!.leaseGeneration,
+        workerId,
+      },
+      'the session died',
+    );
+    await ensureDispatchIntent((await getBin(binId))!);
+    const second = (await claimDispatchIntent())!;
+    await markDispatchRoutine(second.id, routineId);
+    await markDispatchSent(second.id, { routineRef: 'trig_defer', routineId, projectId });
+
+    const sent = (await listDispatchesForBin(binId)).filter((d) => d.state === 'SENT');
+    expect(sent).toHaveLength(2);
+    expect((await inFlightByRoutine(Date.now())).get(routineId)).toBe(1);
+  });
+
+  it('stops counting a bin parked for a person', async () => {
+    const binId = await aFiredBin();
+    await getDb().run("UPDATE bins SET state = 'NEEDS_HUMAN', terminal_reason = ? WHERE id = ?", [
+      'a decision only a person can take',
+      binId,
+    ]);
+    expect((await inFlightByRoutine(Date.now())).get(routineId)).toBeUndefined();
+  });
+
+  it('stops counting a fire older than the window', async () => {
+    await aFiredBin({ sentAt: new Date(Date.now() - 60 * 60_000).toISOString() });
+    expect((await inFlightByRoutine(Date.now())).get(routineId)).toBeUndefined();
   });
 });
