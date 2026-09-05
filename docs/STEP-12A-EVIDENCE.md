@@ -3023,3 +3023,24 @@ takes the next number after this one.
 
 V2 remains `QUARANTINED`. No API key, no `BRAIN_PROVIDER`, no spend
 authorization row, no turn, bin, fire or fixture created by this work.
+
+### The reading taken after the deployment
+
+Acceptance run
+[33994200962](https://github.com/Peyday007/V5/actions/runs/33994200962), taken
+**after** mutation 7 rather than before it — which is the whole lesson of §32.
+
+    A19_DELIVERY               PASS
+    A22_FAST_CHAT_ROUTING      DEFERRED
+
+    STEP 12A — composed: 11/21 PASS · 0 FAIL · 0 BLOCKED · 10 NOT_RUN · 1 DEFERRED (of 22 gates)
+
+**A19 is PASS at 7/7**: every ledger run verified before and after a real
+restart, and the deployed application tree is once again the tree being read.
+
+Nothing else moved, and nothing else should have. A deployment cannot make
+`A05`, `A06`, `A07`, `A09`–`A14` or `A20` pass: they are scoped to
+`ACCEPTANCE_SCOPE.conversationId`, which is still empty, and they need a live
+conversation that has not happened yet. **Ten `NOT_RUN` is the honest state, not
+a defect**, and the two fixes this deployment carries are the reason the run can
+now be attempted at all rather than a reason any gate has moved.
