@@ -174,9 +174,22 @@ export function freshnessLabel(input: {
  * The pending reason comes from the server, so the interface never invents one.
  * A turn that failed says so plainly instead of leaving a spinner turning — a
  * spinner that never ends is not waiting, it is stuck.
+ *
+ * `pendingDetail` is preferred over `pendingReason` when the server sent one,
+ * and the order is the whole point. `pendingReason` is the sentence stored when
+ * the turn was created — a prediction, written before anything had happened,
+ * which stays word-for-word the same however long the turn waits and whatever
+ * goes wrong. `pendingDetail` is derived on the read path from the bin and its
+ * dispatch, so it can say "waiting to be handed to a worker", "a worker has
+ * been called and has not started yet", or "Russell could not reach a worker".
+ * Falling back the other way round would show the reassuring one by default.
  */
-export function turnLabel(status: string, pendingReason: string | null): string | null {
-  if (status === 'PENDING') return pendingReason ?? 'Russell is thinking.';
+export function turnLabel(
+  status: string,
+  pendingReason: string | null,
+  pendingDetail?: string | null,
+): string | null {
+  if (status === 'PENDING') return pendingDetail ?? pendingReason ?? 'Russell is thinking.';
   if (status === 'FAILED') return 'Russell could not answer that one.';
   return null;
 }

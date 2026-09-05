@@ -15,6 +15,61 @@ review first. The Step 12A wireframe waiver does not carry forward.
 
 ---
 
+## Immediately after Step 12A — the person-authenticated conversation connector
+
+**This is the next task, and it is not a Step 12A completion dependency.**
+Recorded here by the owner's instruction of 2026-09-05, at the top of the file
+rather than inside 12B, because it is neither part of Brain v1's interface work
+nor something to be picked up whenever 12B is scheduled — it comes first.
+
+Extend Cloud Brain with a **person-authenticated conversation connector**, so
+the owner can talk to Opus inside Claude and have that conversation be connected
+to the Brain rather than beside it. It must let the owner:
+
+- retrieve authorized Brain context into the conversation;
+- save discussion checkpoints and decisions back into the Brain;
+- submit governed work to the Brain from the conversation.
+
+Four things are settled about its shape before anything is designed:
+
+- **The conversation runs on the Claude subscription.** It is not a paid text
+  API activation and must not become the reason for one. See A22 below.
+- **The principal is a person, not a worker.** Every existing worker path
+  resolves to a `WORKER` principal, and §24 of `CLAUDE.md` is explicit that a
+  worker principal is refused at the conversation routes by principal type: no
+  membership configuration turns a machine into a person. A connector that let
+  a person's Claude session act as a person therefore needs its own
+  authenticated way in — Step 8's OAuth flow authorizes a *worker* on a human's
+  authority, which is a different thing and must not be reused by relabelling
+  it.
+- **Automatic complete transcript mirroring is not assumed.** What reaches the
+  Brain is what the owner deliberately saves. §11's rule still holds for
+  whatever does arrive: imported text is untrusted data, and nothing found
+  inside it may move project state.
+- **Submitted work goes through the machinery that already exists.** Coverage,
+  the approval envelope, the evidence gate, the audit roles and the fleet are
+  not bypassed because the request arrived through a chat window. Same rule as
+  §24: a new entrance, never a second set of rules.
+
+Not started during Step 12A. Nothing in Step 12A may be marked complete on the
+strength of it, and it may not become a completion dependency of anything else
+either.
+
+### Paid text-API activation — deferred, not cancelled
+
+`A22_FAST_CHAT_ROUTING` is **deferred by the owner**, recorded as `DEFERRED` by
+`scripts/step12a-acceptance.ts`, excluded from the Step 12A denominator, and
+kept in the twenty-two-gate table. It is not `PASS`, it has not been deleted,
+and the gate still reads the database — so the day a paid provider is activated
+it passes on its own evidence with no code change.
+
+The fast lane stays **built, tested and switched off**: no API key, no
+`BRAIN_PROVIDER`, a $0 ceiling, and the local safety checks around the disabled
+code preserved rather than stripped out because they currently guard something
+that never runs. See `docs/CONVERSATION.md`.
+
+---
+
 ## Step 12B — complete Brain v1
 
 ### Interface

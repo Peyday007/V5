@@ -482,6 +482,15 @@ export async function recordRoutineFire(input: {
  * Counted separately from a refusal because the remedies differ: a refusal is
  * the provider saying no, a no-show is a session that was created and never
  * checked in, which usually means the surface cannot authorize.
+ *
+ * **Nothing calls this, and that is the honest state rather than an oversight
+ * waiting to be tidied away.** `consecutive_no_shows` is advanced
+ * optimistically by `recordRoutineFire` and cleared by an arrival, so the
+ * column is really "fires awaiting an arrival". Proving a *real* no-show needs
+ * a reconciler that ages out a SENT dispatch nobody ever claimed, and there
+ * isn't one. Until there is, this function is the shape of the thing that is
+ * missing, and deleting it would delete the only statement of what the counter
+ * is supposed to mean.
  */
 export async function recordRoutineNoShow(routineId: string): Promise<void> {
   await getDb().run(
@@ -490,6 +499,44 @@ export async function recordRoutineNoShow(routineId: string): Promise<void> {
       WHERE id = ?`,
     [nowIso(), routineId],
   );
+}
+
+/**
+ * An authenticated session arrived, whether or not there was work for it.
+ *
+ * This is the repair for a health signal that pointed the wrong way.
+ *
+ * `recordRoutineFire` advances `consecutive_no_shows` on every successful fire,
+ * and until now the *only* thing that cleared it was a worker being handed a
+ * bin. So a session that started, authenticated, asked for work and was told
+ * `NO_READY_BINS` — which `checkIn`'s own comment calls "an ordinary answer",
+ * and which is the expected outcome for the losing half of a duplicate
+ * activation — left the counter exactly where a session that never started at
+ * all would have left it.
+ *
+ * Two consequences, and the second is worse than the first. An operator reading
+ * `no-shows=1` concluded nobody arrived when somebody had. And three such
+ * ordinary answers in a row quarantine a completely healthy Routine at
+ * `NO_SHOW_QUARANTINE_THRESHOLD`, which is the same "health signal pointing the
+ * opposite way to reality" §23 already recorded once and fixed only for the
+ * assignment path.
+ *
+ * Attribution is from `fleet_routines.worker_id` — a row the server owns,
+ * written by observation — and never from anything the worker said about
+ * itself. **Its imprecision is stated rather than hidden:** where several
+ * Routines are bound to one worker identity, an arrival credits all of them,
+ * because the evidence is "a session for this worker authorized and reached
+ * us" and that is genuinely evidence about every surface running as that
+ * worker. Where the binding is one-to-one it is exact.
+ */
+export async function recordWorkerArrival(workerId: string): Promise<number> {
+  const result = await getDb().run(
+    `UPDATE fleet_routines
+        SET consecutive_no_shows = 0, last_check_in_at = ?, updated_at = ?
+      WHERE worker_id = ? AND consecutive_no_shows > 0`,
+    [nowIso(), nowIso(), workerId],
+  );
+  return result.changes;
 }
 
 /* ------------------------------------------------------------------------- */

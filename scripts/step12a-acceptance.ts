@@ -30,7 +30,21 @@ import { getDb } from '../server/db/database.ts';
 import { auditIndependenceEvidence } from '../server/services/research/independenceEvidence.ts';
 import { SEPARATION_LABELS } from '../server/services/research/independence.ts';
 
-type Verdict = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_RUN';
+/**
+ * `DEFERRED` is a fifth verdict, and it is not a synonym for anything.
+ *
+ * `NOT_RUN` means nobody has tried yet and somebody still should. `BLOCKED`
+ * means something is wrong. `DEFERRED` means the owner has decided this proof
+ * is out of scope for now — so it must not be counted against completion, and
+ * it must not be quietly deleted either, because the requirement still exists
+ * and the day the decision changes it has to come back exactly as it was.
+ *
+ * It is therefore excluded from the denominator and printed on its own line.
+ * A gate that could be moved into this state by anything other than a written
+ * owner decision would be a loophole; the only place it is set is A22, in
+ * code, next to the reason.
+ */
+type Verdict = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_RUN' | 'DEFERRED';
 
 /**
  * Gates whose evidence cannot exist while `A11` is open, and why.
@@ -652,8 +666,14 @@ async function gates(): Promise<GateResult[]> {
    *
    * Deliberately unsatisfiable by adapter mocks and contract tests. It needs a
    * turn that actually took the fast lane against a real provider, which needs
-   * a paid activation nobody has authorized yet — so it stays NOT_RUN, and it
-   * says which of the two is missing rather than reporting a bare zero.
+   * a paid activation the owner has explicitly deferred out of Step 12A — so it
+   * reports DEFERRED, keeps its row, and says which of the two is missing
+   * rather than reporting a bare zero.
+   *
+   * It still reads the database rather than returning a constant, so the day a
+   * paid provider is activated the gate passes on its own evidence with no code
+   * change. A deferral that could only be undone by editing this file would be
+   * a deletion wearing a different word.
    */
   const fastTurns = await count(
     `SELECT COUNT(*) AS total FROM russell_messages
@@ -662,12 +682,17 @@ async function gates(): Promise<GateResult[]> {
   );
   results.push(
     fastTurns > 0
-      ? { id: 'A22_FAST_CHAT_ROUTING', verdict: 'PASS', detail: `${fastTurns} turns answered on the fast lane` }
+      ? {
+          id: 'A22_FAST_CHAT_ROUTING',
+          verdict: 'PASS',
+          detail: `${fastTurns} turns answered on the fast lane`,
+        }
       : {
           id: 'A22_FAST_CHAT_ROUTING',
-          verdict: 'NOT_RUN',
+          verdict: 'DEFERRED',
           detail:
-            'no turn has taken the fast lane against a real provider; adapter and contract tests are code proof, not live acceptance',
+            'paid-provider activation deferred by the owner; the lane is built, tested and ' +
+            'switched off, and no turn has taken it against a real provider',
         },
   );
 
@@ -693,11 +718,23 @@ async function main(): Promise<void> {
   const failed = results.filter((result) => result.verdict === 'FAIL');
   const blocked = results.filter((result) => result.verdict === 'BLOCKED');
   const notRun = results.filter((result) => result.verdict === 'NOT_RUN');
-  const passed = results.length - failed.length - blocked.length - notRun.length;
+  const deferred = results.filter((result) => result.verdict === 'DEFERRED');
+  /*
+   * The denominator is the gates Step 12A is actually being judged on, so a
+   * deferred gate leaves it entirely rather than being counted as a pass. Both
+   * numbers are printed: `results.length` never moves, which is what makes a
+   * gate quietly disappearing visible.
+   */
+  const inScope = results.length - deferred.length;
+  const passed = inScope - failed.length - blocked.length - notRun.length;
 
   console.log(
-    `${passed} PASS · ${failed.length} FAIL · ${blocked.length} BLOCKED · ${notRun.length} NOT_RUN`,
+    `${passed}/${inScope} PASS · ${failed.length} FAIL · ${blocked.length} BLOCKED · ` +
+      `${notRun.length} NOT_RUN · ${deferred.length} DEFERRED (of ${results.length} gates)`,
   );
+  for (const result of deferred) {
+    console.log(`  DEFERRED, excluded from the denominator — ${result.id}: ${result.detail}`);
+  }
   const transitive = blocked.filter((result) => BLOCKED_BY_A11[result.id]);
   if (transitive.length > 0) {
     console.log(

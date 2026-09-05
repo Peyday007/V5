@@ -218,7 +218,7 @@ jobs:
           # Taking the last verdict per id is also what makes the derived A19
           # override the reporter's, without either of them knowing about the
           # other.
-          awk '/^A[0-9][0-9]_[A-Z_]+[ ]+(PASS|FAIL|BLOCKED|NOT_RUN)/ { seen[$1] = $2 }
+          awk '/^A[0-9][0-9]_[A-Z_]+[ ]+(PASS|FAIL|BLOCKED|NOT_RUN|DEFERRED)/ { seen[$1] = $2 }
                END { for (g in seen) print g, seen[g] }' acceptance.txt | sort > gates.txt
           echo "--- twenty-two gates, one verdict each ---"
           cat gates.txt
@@ -227,19 +227,30 @@ jobs:
           fail=$(awk '$2=="FAIL"' gates.txt | wc -l)
           blocked=$(awk '$2=="BLOCKED"' gates.txt | wc -l)
           notrun=$(awk '$2=="NOT_RUN"' gates.txt | wc -l)
+          deferred=$(awk '$2=="DEFERRED"' gates.txt | wc -l)
           # A20-A22 were added for the usability contract; the historical
           # nineteen keep their ids and their meaning, so an older archived
           # reading still reads correctly against its own run.
+          #
+          # The gate *count* stays 22 whatever any of them says. A deferral
+          # leaves the denominator, never the table — a requirement that
+          # vanished from the list would be indistinguishable from one nobody
+          # wrote, which is exactly what the owner asked not to happen.
           if [ "$total" -ne 22 ]; then
             echo "::error::read $total gates, expected 22 — the reporter's output was not fully captured"
             exit 1
           fi
-          echo "STEP 12A — composed: $pass PASS · $fail FAIL · $blocked BLOCKED · $notrun NOT_RUN"
+          inscope=$((total - deferred))
+          echo "STEP 12A — composed: $pass/$inscope PASS · $fail FAIL · $blocked BLOCKED · $notrun NOT_RUN · $deferred DEFERRED (of $total gates)"
+          if [ "$deferred" -gt 0 ]; then
+            echo "Deferred by the owner and excluded from the denominator:"
+            awk '$2=="DEFERRED" { print "  " $1 }' gates.txt
+          fi
           if [ "$fail" -gt 0 ] || [ "$blocked" -gt 0 ] || [ "$notrun" -gt 0 ]; then
             echo "STEP 12A IS NOT COMPLETE."
             exit 0
           fi
-          echo "Every gate is PASS."
+          echo "Every in-scope gate is PASS."
 
       - name: Keep the reading
         if: always()

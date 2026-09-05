@@ -45,6 +45,7 @@ import {
   type ReopenOutcome,
 } from '../../repos/bins.ts';
 import { getOrchestration } from '../../repos/research.ts';
+import { recordWorkerArrival } from '../../repos/fleet.ts';
 import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
 import { auditAdmission, lineageForWorker } from '../research/auditAdmission.ts';
 import { claimWork, listWorkItemsForBin, type ClaimScope } from '../../repos/workQueue.ts';
@@ -119,6 +120,17 @@ export async function checkIn(input: {
   sessionRef?: string | null;
   leaseMs?: number;
 }): Promise<CheckInResult> {
+  /*
+   * The arrival is credited first, and unconditionally.
+   *
+   * A session that authenticated and asked for work has arrived. Whether Brain
+   * had a bin for it is a completely separate fact, and conflating the two made
+   * "arrived and found nothing" — the *expected* answer for the losing half of
+   * a duplicate activation — indistinguishable from "never started". See
+   * `recordWorkerArrival`.
+   */
+  await recordWorkerArrival(input.workerId);
+
   const scopes = claimableProjects(input.principal);
   if (scopes.length === 0) return { assigned: false, reason: 'NO_READY_BINS' };
 

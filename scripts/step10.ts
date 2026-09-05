@@ -1423,6 +1423,107 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === 'turn-trace') {
+    /*
+     * One Russell turn, end to end, read-only — and deliberately without a
+     * word of anybody's conversation in it.
+     *
+     * The question an operator actually has when an answer does not appear is
+     * structural: was a message stored, did it produce a bin, was the bin
+     * dispatched, did a session arrive, did it complete, and was an answer
+     * written back. Every one of those is an id, a state or a timestamp.
+     *
+     * **It prints no message content.** §24's boundary is that a machine must
+     * not read somebody's private thread, and the fact that this runs as the
+     * operator rather than as a worker is not a licence to turn it into a
+     * transcript reader. Ids, roles, states, reasons the server itself wrote,
+     * and times. That is enough to locate a break and not enough to read a
+     * conversation.
+     *
+     * The link from a turn to its bin is `bins.created_by_id`, which
+     * `beginTurn` writes as `russell:turn:<messageId>` — a real foreign
+     * reference rather than a title match.
+     */
+    const project = await getProjectBySlug('deal-dispatch');
+    if (!project) {
+      console.log('STEP10: OK turn-trace project=deal-dispatch found=false');
+      return;
+    }
+    const limit = Number(arg(0) ?? '8');
+    const messages = await getDb().all<{
+      id: string;
+      conversation_id: string;
+      role: string;
+      status: string;
+      pending_reason: string | null;
+      created_at: string;
+      updated_at: string;
+      chars: number;
+    }>(
+      `SELECT m.id, m.conversation_id, m.role, m.status, m.pending_reason,
+              m.created_at, m.updated_at, LENGTH(m.content) AS chars
+         FROM russell_messages m
+         JOIN russell_conversations c ON c.id = m.conversation_id
+        WHERE c.project_id = ?
+        ORDER BY m.created_at DESC, m.rowid DESC
+        LIMIT ?`,
+      [project.id, Math.min(60, Math.max(1, Number.isFinite(limit) ? limit : 8))],
+    );
+
+    console.log(`TURN TRACE  project ${project.slug} ${project.id}`);
+    console.log('  (content is deliberately not printed; lengths only)');
+    console.log('');
+    for (const message of messages) {
+      console.log(
+        `  ${message.created_at}  ${message.role.padEnd(7)} ${message.status.padEnd(8)} ` +
+          `${String(message.chars).padStart(5)} chars  conv ${message.conversation_id}  ${message.id}`,
+      );
+      if (message.pending_reason) console.log(`      pending: ${message.pending_reason}`);
+      if (message.updated_at !== message.created_at) {
+        console.log(`      settled: ${message.updated_at}`);
+      }
+      const bins = await getDb().all<{ id: string }>(
+        `SELECT id FROM bins WHERE created_by_id = ?`,
+        [`russell:turn:${message.id}`],
+      );
+      for (const row of bins) {
+        const bin = await getBin(row.id);
+        if (!bin) continue;
+        console.log(
+          `      bin ${bin.id}  ${bin.state}  gen ${bin.leaseGeneration}  ` +
+            `attempts ${bin.attemptCount}/${bin.maxAttempts}  workload ${bin.workloadClass ?? '—'}`,
+        );
+        console.log(
+          `          worker ${bin.workerId ?? '—'}  session ${bin.leaseSessionRef ?? '—'}  ` +
+            `completed ${bin.completedAt ?? '—'}`,
+        );
+        if (bin.terminalReason) console.log(`          terminal ${bin.terminalReason.slice(0, 120)}`);
+        for (const dispatch of await listDispatchesForBin(bin.id)) {
+          console.log(
+            `          dispatch gen ${dispatch.leaseGeneration} ${dispatch.state} ` +
+              `routine ${dispatch.routineRef ?? '—'} sent ${dispatch.sentAt ?? '—'} ` +
+              `session ${dispatch.sessionRef ?? '—'}`,
+          );
+        }
+        for (const event of await listBinEvents(bin.id, 60)) {
+          console.log(
+            `          ${event.at}  ${event.eventType.padEnd(22)} ` +
+              `worker ${(event.workerId ?? '—').padEnd(24)} session ${event.sessionRef ?? '—'}`,
+          );
+        }
+        for (const unit of await listBinUnitResults(bin.id)) {
+          console.log(
+            `          unit ${unit.unitKey} ${unit.contentHash.slice(0, 16)} ` +
+              `by ${unit.submittedBy ?? '—'} ${unit.createdAt}`,
+          );
+        }
+      }
+      console.log('');
+    }
+    console.log(`STEP10: OK turn-trace messages=${messages.length}`);
+    return;
+  }
+
   if (command === 'watch') {
     const projectId = (await getProjectBySlug(SLUG))?.id;
     if (!projectId) {

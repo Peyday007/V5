@@ -143,7 +143,7 @@ export function Conversation({ conversationId }: { conversationId: string }): JS
 }
 
 function Turn({ turn }: { turn: RussellMessage }): JSX.Element {
-  const label = turnLabel(turn.status, turn.pendingReason);
+  const label = turnLabel(turn.status, turn.pendingReason, turn.pendingDetail);
   return (
     <li className={`rs-turn rs-turn-${turn.role.toLowerCase()}`}>
       <span className="rs-turn-who">{turn.role === 'USER' ? 'You' : 'Russell'}</span>

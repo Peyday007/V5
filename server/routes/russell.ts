@@ -40,6 +40,7 @@ import { listProbesForCandidate, listObservations } from '../repos/russellProbes
 import { getCycle } from '../repos/russellCycle.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
 import { beginTurn, conversationIsReadable } from '../services/russell/turn.ts';
+import { withPendingDetail } from '../services/russell/pending.ts';
 import { briefing, focusLayer } from '../services/russell/projections.ts';
 import { knowsForProject, surfaceState } from '../services/russell/knows.ts';
 import { groupWork, workForProject } from '../services/russell/work.ts';
@@ -139,7 +140,16 @@ russellRouter.get(
   handler(async (req) => {
     const { conversation } = await requireConversation(pathId(req, 'conversationId'));
     const limit = optionalInteger(queryOf(req)['limit'], 'limit', { min: 1, max: 200 }) ?? 100;
-    return { conversation, turns: await listTurns(conversation.id, limit) };
+    /*
+     * The pending explanation is derived here rather than stored, because what
+     * a turn is waiting for changes after the row is written and the row does
+     * not. See `services/russell/pending.ts` — a caption that cannot become
+     * wrong is not an explanation.
+     */
+    return {
+      conversation,
+      turns: await withPendingDetail(await listTurns(conversation.id, limit)),
+    };
   }),
 );
 
@@ -164,9 +174,18 @@ russellRouter.post(
     const started = await beginTurn({ principal, conversationId: conversation.id, content });
     if (!started.ok) throw badRequest(started.reason);
     res.status(202);
+    /*
+     * The pending turn goes back with the same derived explanation the read
+     * path adds, so the first thing a person sees and the thing they see on the
+     * next poll are produced by one function. Two sentences for one condition
+     * is how an interface starts disagreeing with itself.
+     */
+    const [pending] = started.pendingMessage
+      ? await withPendingDetail([started.pendingMessage])
+      : [null];
     return {
       userMessage: started.userMessage,
-      pending: started.pendingMessage,
+      pending: pending ?? started.pendingMessage,
       attachedProjectId: started.attachedProjectId,
       // Deliberately not the bin id. A person has no use for it and it names an
       // internal resource they may not address.

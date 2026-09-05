@@ -4457,6 +4457,16 @@ export interface RussellMessage {
   updatedAt: string;
   /** True when this row came from a pre-12A `messages` row through the union. */
   legacy?: boolean;
+  /**
+   * What this turn is waiting for **right now**, derived on the read path by
+   * `services/russell/pending.ts` from the bin and its dispatch.
+   *
+   * View-only, like `legacy`: there is no column behind it. `pendingReason` is
+   * the sentence stored when the turn was created and is part of the row's
+   * history; this is the one that can become wrong and therefore the one worth
+   * showing. Absent on anything that is not `PENDING`.
+   */
+  pendingDetail?: string | null;
 }
 
 export interface RussellCandidate {
