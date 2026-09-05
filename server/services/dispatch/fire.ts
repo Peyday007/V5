@@ -294,11 +294,16 @@ export async function recordAllowanceObservation(input: {
   message: string;
   accountId?: string | null;
   routineId?: string | null;
+  /** The bin's project, so a per-project capacity report can see the refusal. */
+  projectId?: string | null;
+  workloadClass?: string | null;
 }): Promise<void> {
   if (input.kind !== 'RATE_LIMIT') return;
   await recordBinEvent({
     eventType: 'PROVIDER_ALLOWANCE',
     binId: input.binId,
+    projectId: input.projectId ?? null,
+    workloadClass: input.workloadClass ?? null,
     accountId: input.accountId ?? null,
     routineId: input.routineId ?? null,
     // The provider refused. That is the one capacity fact nothing Brain infers

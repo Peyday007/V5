@@ -200,3 +200,57 @@ fit a result. Running it needs a production mutation, and that needs one
 explicit authorization from the operator enumerating the exact number and order
 of real production mutations, the spending ceiling, the canary and the
 rollback. That request is in `docs/STEP-12A-EVIDENCE.md`.
+
+---
+
+## 6. Reconciliation with the permit conversation — 2026-09-05
+
+On 2026-09-04 the owner sent a real message about permit data into an
+**existing** Russell conversation, and the question arose whether that turn
+could serve as this scenario's live run. It cannot, and the reasons are recorded
+here so that the scope is decided against the frozen document rather than
+against which records happen to pass.
+
+**The message is a different message.** Frozen above:
+
+> Do Michigan's larger counties publish building-permit records in a form we
+> could actually consume — an open-data portal or a feed — and on what terms? I
+> want to know before we design any discovery around it.
+
+Actually sent:
+
+> I want Deal Dispatch to continuously collect public permit data as a new lead
+> and intelligence source. Decide whether it is genuinely worth adding. Do
+> whatever bounded research and planning you're already authorized to do, but do
+> not build the scraper yet.
+
+They are about the same subject and they ask for different things. The frozen
+one is a bounded factual question with a named expected attachment
+(`Discovery Logic`) and a probe question derived from it. The one sent asks for
+a worth-it judgment about an ongoing capability. Condition 2 is judged against
+the frozen wording, and swapping the wording after the fact is adjusting the
+standard to fit the result.
+
+**It is an existing thread, which is the disqualifying problem.** §3's anchor is
+the conversation, and everything is walked from it by foreign key — *every*
+candidate with that `conversation_id`, every merge, every probe, every mission.
+Pinning `ACCEPTANCE_SCOPE.conversationId` to a thread that already has history
+would let rows created before this scenario existed satisfy its gates. That is
+precisely what a frozen scope is for, so the thread is preserved as real project
+history and is **not** the acceptance scope.
+
+**One reply cannot satisfy the chain in any case.** The scenario needs a second,
+deliberately reworded message for semantic dedupe (condition 4), a person's
+override of a stored priority (5), a probe inside `GENERAL_LIGHT_PROBE_V1` (6),
+one atomic budget reservation (8), one fragment researched, verified,
+synthesised and audited by three separate sessions (11, 12), exactly one
+follow-on (15), and a genuine out-of-authority park that a person answers and
+the **same** mission resumes from (17). A conversational reply that discusses
+capturing a candidate is not evidence that any of that happened, and the prose
+of a reply is never evidence for a row.
+
+**What a clean run therefore is.** One **new** conversation, the frozen message
+sent verbatim, the near-duplicate sent after the first is captured, and then the
+scenario's own steps. Nothing about the seventeen conditions changes, no scope
+is chosen after the fact, and the permit thread keeps every message, candidate
+and attempt it already has.

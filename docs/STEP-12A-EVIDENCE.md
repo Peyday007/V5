@@ -2403,3 +2403,311 @@ captured knowledge and `A22` needs a paid provider call nobody has authorized.
 
 Nothing here is wrong. Eleven gates are proved against production, and the
 other eleven are waiting on one message a person has to send.
+
+---
+
+## 26. The permit message: what the records can and cannot say — 2026-09-05
+
+The owner sent one message into an **existing** Russell conversation:
+
+> I want Deal Dispatch to continuously collect public permit data as a new lead
+> and intelligence source. Decide whether it is genuinely worth adding. Do
+> whatever bounded research and planning you're already authorized to do, but
+> do not build the scraper yet.
+
+It sat with no visible reply for at least thirty minutes. **The next day an
+answer was visible**, saying the archive did not address permits and discussing
+capturing a candidate for bounded research. The owner's Routine history showed
+no obvious corresponding run and one selected run reported `NO_READY_BINS`. The
+suspicion was that a friend's Routine answered it.
+
+This section records what production rows actually establish, what they do not,
+and why the second list was longer than it should have been.
+
+### What was read, and by what authorized path
+
+Four read-only production readings, all through paths that already existed.
+
+| | |
+| --- | --- |
+| `step12a-inspect` [33978629904](https://github.com/Peyday007/V5/actions/runs/33978629904) | release, image, machine, secret **names** |
+| `fleet show` [33978670083](https://github.com/Peyday007/V5/actions/runs/33978670083) | accounts, Routines, bindings, fires, refusals, no-shows |
+| `fleet profile --project prj_9d8…` [33978721652](https://github.com/Peyday007/V5/actions/runs/33978721652) | the Deal Dispatch slice of the capacity ledger |
+| `fleet profile` [33978783174](https://github.com/Peyday007/V5/actions/runs/33978783174) | the same ledger unscoped |
+
+No credential was read or printed. Nothing was claimed, fired, retried or
+mutated. No conversation content was read by any of them.
+
+### What is established
+
+**The deployment.** `northline-brain`, release **v103**, machine
+`811d651c26d948` last updated `2026-09-04T21:37:32Z` — the mutation 5 restart.
+One health check passing.
+
+**The spending boundary, from the secret list itself.** The deployed secrets are
+`BRAIN_DATABASE_PROVIDER`, `BRAIN_DATABASE_URL`, `BRAIN_STORAGE_BUCKET`,
+`BRAIN_STORAGE_PROVIDER`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`,
+`BRAIN_ROUTINE_ID`, `BRAIN_ROUTINE_VERSION`, `BRAIN_ROUTINE_TOKEN`,
+`BRAIN_ROUTINE_TOKEN_2`, `BRAIN_ROUTINE_TOKEN_3`. **There is no
+`ANTHROPIC_API_KEY` and no `BRAIN_PROVIDER`.** The $0 ceiling is not a claim
+about intent; it is a fact about what is deployed.
+
+**The fleet, at 2026-09-05T16:42:13Z.**
+
+    primary    ENABLED       target=2
+      V1       ENABLED       worker=wkr_1cdd82cfb2a54faf8edd  fires=20 refusals=0 no-shows=1
+    friend-2   ENABLED       target=2
+      V2       QUARANTINED   worker=wkr_1cdd82cfb2a54faf8edd  fires=12 refusals=0 no-shows=5
+    verify-hosted-account-a / -b   secrets never set, not routable
+
+Both live Routines are bound to **one** worker identity, which is §23's recorded
+state and unchanged. V1's fires moved 15 → 20 and V2's 9 → 12 since §23's
+reading. **Zero refusals on either.** V2 remains `QUARANTINED` and nothing here
+touched it.
+
+**Deal Dispatch bin activity.** Four bins reached `BIN_READY` and three reached
+`BIN_COMPLETION_ACCEPTED`. Zero takeovers.
+
+### What is not established, and the defect that is the reason
+
+The scoped profile also read **`activations: 0`** and **`perAccount: []`** for
+Deal Dispatch. Read alone that says no Deal Dispatch bin was ever dispatched to
+any Routine, which would have been a dramatic finding and would have made the
+"a friend's Routine answered" theory checkable.
+
+It is not a finding. It is a reporting defect, and the unscoped run proves it:
+
+    activations 124   perAccount [ { accountId: null, activations: 124, refusals: 34 } ]
+
+**Every `DISPATCH_SENT` row in the entire ledger carries `account_id` NULL and
+`project_id` NULL.** `markDispatchSent` wrote the event from the dispatch row
+alone, and a dispatch row knows its bin but not its project, its account, its
+Routine or its workload class. So the capacity ledger recorded that 124
+activations happened and nothing whatever about what any of them was for.
+
+§23 says "the capacity ledger is `bin_events`, not a second table" and that a
+fire carries `account_id`, `routine_id`, `evidence_class` and `workload_class`.
+`DISPATCH_ROUTED` did. `DISPATCH_SENT` — the row the ledger counts as an
+activation — did not. The sentence in §23 was true of the design and false of
+the running code, which is exactly the kind of gap running it is supposed to
+find.
+
+A second half of the same defect: `BinEvent` and `mapBinEvent` never carried
+those four columns either, so even the `DISPATCH_ROUTED` rows that *did* have an
+account were invisible to every reader that went through `listBinEvents`. Only
+`workloadProfile`, which writes its own `SELECT`, could see them at all.
+
+### So who answered the permit message?
+
+**Not established, and it is recorded as unknown rather than guessed.**
+
+What can be said:
+
+- The bin-level attribution genuinely exists in production. `BIN_ASSIGNED` and
+  `BIN_COMPLETION_ACCEPTED` carry `worker_id`, `session_ref` and `project_id`,
+  and `bins.lease_session_ref` holds the session that took the lease. Reading it
+  needs the bin id.
+- **There is no deployed read path from a Russell message to its bin.**
+  `step10 trace` takes a bin id; nothing in the deployed image lists Deal
+  Dispatch bins or joins a message to one. That is the specific missing
+  capability, and it is why this question could not be answered from a terminal.
+- A quarantine blocks new *dispatches*. It does not prove the absence of an
+  older or separately started session, and §22 is explicit that an ordinary
+  Claude conversation holding the connector is indistinguishable to the Brain
+  from a fired worker. So "V2 is quarantined" is not an answer to "did
+  friend-2 answer this", and it is not being used as one.
+
+**Aggregate fire counts are not attribution.** V1 fires=20 and V2 fires=12 say
+nothing about which activation, if any, produced this reply, and no reasoning
+here rests on them. Neither the provider's `SUCCEEDED` label, nor elapsed
+session time, nor the wording of the reply itself is treated as evidence.
+
+### The repair
+
+Three changes, all forward, none touching a deployed migration.
+
+1. **`markDispatchSent` takes the attribution and records it** — project,
+   account, Routine, workload class, `evidenceClass: 'MEASURED'` — supplied by
+   the dispatcher from the bin it re-read and the decision it acted on. A fire
+   with no routing decision leaves the Routine null rather than naming the only
+   one there is. `DISPATCH_ROUTED`, `DISPATCH_UNROUTED` and `PROVIDER_ALLOWANCE`
+   gain the project too. `tests/dispatchLedger.test.ts` (5 tests) pins it,
+   including the regression: sent with the old argument shape the row is
+   invisible to a project-scoped report and still counted by the unscoped one,
+   which is precisely the shape that made a reporting hole look like a fact.
+2. **`BinEvent` carries the four columns**, so a reader can see what the writer
+   wrote.
+3. **`step10 turn-trace`** joins a Russell message to its bin through
+   `bins.created_by_id = 'russell:turn:<messageId>'` — a real reference, not a
+   title match — and prints states, dispatches with their Routine and session,
+   events with worker, session, account and Routine, unit results, and the
+   candidates, missions and probes those conversations produced.
+
+   **It prints no message content and no candidate titles**, only lengths. §24's
+   boundary is that a machine must not read somebody's private thread, and
+   running as the operator rather than as a worker is not a licence to turn a
+   diagnostic into a transcript reader. A candidate title is authored by a
+   worker from the person's own words, so printing it in a CI log would put the
+   subject of a private thread there — the same rule, applied where it would
+   otherwise leak out sideways.
+
+None of these is deployed. They are the reason the remaining production action
+exists.
+
+---
+
+## 27. Two defects the wait itself exposed — 2026-09-05
+
+### A health counter that only ever went up
+
+`recordRoutineFire({ok: true})` advances `consecutive_no_shows` on **every**
+successful fire, and until now only a successful *assignment* cleared it. A
+session that started, authenticated, asked for work and was told
+`NO_READY_BINS` — which `checkIn`'s own comment calls an ordinary answer, and
+which is the *expected* outcome for the losing half of a duplicate activation —
+credited nothing at all. Three of those in a row quarantine a completely healthy
+Routine at `NO_SHOW_QUARANTINE_THRESHOLD = 3`.
+
+`recordRoutineNoShow` exists and **nothing calls it**. Its doc comment now says
+so, because a dead function that looks like the mechanism is worse than no
+function: the column is really "fires awaiting an arrival", and proving a real
+no-show would need a reconciler that ages out a `SENT` dispatch nobody claimed.
+There isn't one.
+
+`recordWorkerArrival` now credits the arrival itself, unconditionally, as the
+first thing `checkIn` does — before scopes, before work, before any decision
+about whether there is anything to hand over. `tests/arrivalCredit.test.ts`
+(8 tests) pins that a `NO_READY_BINS` answer clears the counter, that four
+fire-and-check-in rounds do not quarantine, and that a genuine three-fire
+streak with no arrival still does.
+
+**I read that counter the wrong way in a production report and said a fired
+Routine had failed to check in.** The code says `no-shows=1` means one fire is
+awaiting an arrival, which on a healthy fleet is the ordinary state a moment
+after a fire. The test exists so the next reader does not repeat it.
+
+Where several Routines share one worker identity — which is exactly the current
+fleet — an arrival credits all of them. That imprecision is written into the
+function rather than left for somebody to discover.
+
+### A pending state that could not become wrong
+
+`beginTurn` stores one sentence on the pending row —
+*"Russell is thinking — a worker is picking this up"* — and writes it **before**
+anything has picked anything up. It never changes. So a turn whose bin was never
+dispatched, whose dispatch ran out of attempts, whose fleet is paused, or which
+is waiting on a person, showed the owner the same reassuring line for half an
+hour.
+
+§24 says the interface is never optimistic. That rule applies to the caption
+too: **a pending state that cannot become wrong is not an explanation, it is a
+spinner with a subtitle.**
+
+`services/russell/pending.ts` derives the sentence on the read path from the bin
+and its current-generation dispatch: waiting to be handed to a worker; queued
+with no worker called yet; calling one now; called and not started; being worked
+on now; could not reach a worker after several attempts; needs a decision from
+you; the run has finished and the answer is being stored; or — the case that
+must never read as patience — **this one did not reach a worker, so nothing is
+running for it**. Past two minutes it says how long it has been.
+
+It is a projection. It writes nothing, leaves `pending_reason` intact as the
+row's history, and names no bin, Routine or session. `tests/pendingTurnState.
+test.ts` (10 tests) drives the database into each real condition and asserts the
+sentence, including that the stored column is untouched and that no internal
+identifier appears.
+
+The terminal-bin case was already covered and stays as it was: the Russell loop
+finds a `COMPLETE`, `FAILED` or `CANCELLED` bin whose turn is still `PENDING`
+and closes it with a truthful message, and `NEEDS_HUMAN` is deliberately left
+alone because it has its own guarded way out.
+
+---
+
+## 28. A22 deferred by the owner — 2026-09-05
+
+> "Paid text-API activation is outside Step 12A. Keep the existing fast-lane
+> code disabled, with no API spending or new key. Preserve A22 and its history,
+> but record its paid-provider activation proof as explicitly deferred by the
+> owner and exclude that deferred requirement from the current Step 12A
+> completion denominator. Do not mark it PASS or quietly delete it."
+> — product owner, 2026-09-05
+
+The reporter grows a fifth verdict. `DEFERRED` is not a synonym for anything
+else: `NOT_RUN` means nobody has tried and somebody still should, `BLOCKED`
+means something is wrong, and `DEFERRED` means the owner has decided this proof
+is out of scope for now.
+
+- It leaves the **denominator** and keeps its **row**. The table still reads
+  twenty-two gates, and the composed line prints `passed/inScope` alongside the
+  full count, so a gate quietly disappearing would be visible.
+- The gate still **reads the database**. A deferral that could only be undone by
+  editing the file would be a deletion wearing a different word; as written, the
+  day a paid provider is activated A22 passes on its own evidence with no code
+  change.
+- The only place `DEFERRED` is set is A22, in code, next to the owner's reason.
+- The fast lane stays built, tested and switched off, with its local safety
+  checks intact. Migration 029 created the spend tables empty, there is no
+  `spend_authorizations` row, `liveAuthorization` returns null, and the
+  deployed secret list has no API key in it.
+
+The workflow's verdict composition counts it the same way and prints the
+deferred gates by name.
+
+---
+
+## 29. The remaining production action — 2026-09-05
+
+Everything above is committed and unproven in production, because
+`.github/workflows/step12a-acceptance.yml`'s A19 check compares the deployed
+application tree to the tree being read and `scripts/` is part of that
+comparison. The acceptance reading taken at 2026-09-05T16:43:33Z therefore says:
+
+    STEP 12A — composed: 10/22 PASS · 0 FAIL · 0 BLOCKED · 12 NOT_RUN
+
+**A19 moved from PASS to NOT_RUN**, correctly: the branch now carries
+application changes the running image does not have. Every other verdict is
+unchanged from §25. That is the guard working, not a regression.
+
+What remains is one deployment, and it is described in full in the report to the
+owner rather than begun here. It carries the ledger attribution, the arrival
+credit, the derived pending explanation, `turn-trace`, and the `DEFERRED`
+verdict — and it does **not** carry `ACCEPTANCE_SCOPE.conversationId`, which
+cannot be set until the frozen scenario's conversation exists.
+
+---
+
+## 30. Verification of the repair — 2026-09-05
+
+**Local, both backends, against the branch tip.**
+
+| | |
+| --- | --- |
+| `npm run typecheck` | clean |
+| `npm run build` | clean (client bundle 324.60 kB, 94.19 kB gzipped) |
+| SQLite | **1,627 passed**, 25 skipped, 0 failed, 64 files |
+| Postgres | **1,652 passed**, 0 failed, 65 files |
+
+The counts moved 1,602 → 1,627 on SQLite and 1,627 → 1,652 on Postgres:
+twenty-five new tests, and no existing test changed its expectations. The two
+chains differ by the twenty-five Postgres-only cases that SQLite skips, which is
+the same relationship §22 recorded.
+
+- `tests/arrivalCredit.test.ts` — 8, the no-show counter.
+- `tests/pendingTurnState.test.ts` — 10, the derived pending explanation.
+- `tests/dispatchLedger.test.ts` — 5, the capacity ledger's attribution.
+- `tests/russellShell.test.tsx` — 2 more, pinning that the client prefers the
+  live condition over the sentence stored when the turn began, and falls back
+  the other way only when the server sent no live detail. Pure-function checks
+  over `turnLabel`, with no database involvement.
+
+**No migration was added, edited or renumbered.** The four `bin_events` columns
+this repair fills in have existed on both chains since SQLite 026 / Postgres
+017; the defect was that nothing wrote three of them on the activation row and
+nothing could read any of them through `BinEvent`. SQLite stays at **029** and
+Postgres at **020**, and the populated-data upgrade proof in §23 stands
+unchanged because the schema is unchanged.
+
+`step10 turn-trace` was run against a local Deal Dispatch fixture — a
+conversation, two messages and a candidate — and printed states, ids, times,
+`title 17 chars` and no content whatsoever.

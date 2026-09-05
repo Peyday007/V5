@@ -867,6 +867,20 @@ a value the claimant does not supply.**
   the one that drifts. `evidence_class` is the honesty requirement of the step:
   a refusal the provider issued is `PROVIDER_ENFORCED`, a duration Brain timed is
   `MEASURED`, and a ceiling nobody has observed is `UNKNOWN` and stays `UNKNOWN`.
+
+  **That sentence was true of the design and false of the running code, and the
+  correction is recorded rather than quietly applied.** `DISPATCH_ROUTED`
+  carried the account. `DISPATCH_SENT` — the row the ledger counts as an
+  *activation* — was written inside `markDispatchSent` from the dispatch row
+  alone, which knows its bin and not its project, account, Routine or class. So
+  in production the ledger read `activations: 124` against a single
+  `perAccount` entry of `{accountId: null}`, and every project-scoped capacity
+  question answered zero. `BinEvent` did not carry the four columns either, so
+  even the routed rows that had an account were invisible to anything reading
+  through `listBinEvents`. **A column nothing can read is not a ledger entry,
+  and an activation nobody can attribute is not one either.** Both halves are
+  fixed forward; `tests/dispatchLedger.test.ts` pins the attribution and the
+  regression that hid it.
 - **A refusal is not misconduct.** Rate limits advance the retry point and leave
   the failure streak alone, so an account at its ceiling is never quarantined for
   being busy. Only failures and no-shows quarantine, and never a refusal however
@@ -1041,6 +1055,15 @@ rules.
   screens, and the forbidden one does not claim the work is absent — the server
   cannot distinguish absent from forbidden, and the last hop must not invent an
   answer either.
+- **A pending state that cannot become wrong is not an explanation.** The
+  sentence stored on a pending turn is written before anything has happened, so
+  it stays reassuring however long the turn waits and whatever goes wrong with
+  it. `services/russell/pending.ts` derives what the turn is waiting for *now*,
+  on the read path, from the bin and its current-generation dispatch — and the
+  case it exists for is the one that must never read as patience: a pending turn
+  with no bin, which nothing is ever going to answer. It is a projection, so it
+  writes nothing, leaves the stored reason intact as history, and names no bin,
+  Routine or session.
 - **Russell is the default route; the old console is at `/legacy`.** One click
   away behind a secondary menu, not deleted and not hidden: it is still the
   only place some operations exist. `/operator` stays server-rendered and

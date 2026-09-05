@@ -201,6 +201,8 @@ export async function dispatchTick(
       await recordBinEvent({
         eventType: 'DISPATCH_UNROUTED',
         binId: intent.binId,
+        projectId: bin.projectId,
+        workloadClass: bin.workloadClass,
         outcome: decision.refusal,
         reason: decision.reason,
         evidenceClass: decision.refusal === 'ALL_SURFACES_RATE_LIMITED' ? 'PROVIDER_ENFORCED' : 'OPERATOR_POLICY',
@@ -251,6 +253,8 @@ export async function dispatchTick(
         await recordBinEvent({
           eventType: 'DISPATCH_UNROUTED',
           binId: intent.binId,
+          projectId: bin.projectId,
+          workloadClass: bin.workloadClass,
           accountId: decision.account.id,
           routineId: decision.routine.id,
           outcome: 'SLOT_LOST',
@@ -308,6 +312,8 @@ export async function dispatchTick(
       await recordBinEvent({
         eventType: 'DISPATCH_ROUTED',
         binId: intent.binId,
+        projectId: bin.projectId,
+        workloadClass: bin.workloadClass,
         accountId: decision.account.id,
         routineId: decision.routine.id,
         outcome: 'SELECTED',
@@ -324,6 +330,14 @@ export async function dispatchTick(
         routineVersion: decision?.ok ? decision.routine.routineVersion : config.routineVersion,
         sessionRef: outcome.sessionRef,
         fireEventId: outcome.fireEventId,
+        // Who this activation was for. Taken from the bin this tick re-read and
+        // the decision this tick acted on, so the ledger row says what the
+        // dispatcher knew at the moment it fired rather than what a later query
+        // can reconstruct — see `markDispatchSent`.
+        projectId: bin.projectId,
+        workloadClass: bin.workloadClass,
+        accountId: decision?.ok ? decision.account.id : null,
+        routineId: decision?.ok ? decision.routine.id : null,
       });
       if (decision?.ok) await recordRoutineFire({ routineId: decision.routine.id, ok: true });
       result.fired += 1;
@@ -335,6 +349,8 @@ export async function dispatchTick(
       kind: outcome.kind,
       retryAfterMs: outcome.retryAfterMs,
       message: outcome.message,
+      projectId: bin.projectId,
+      workloadClass: bin.workloadClass,
       accountId: decision?.ok ? decision.account.id : null,
       routineId: decision?.ok ? decision.routine.id : null,
     });

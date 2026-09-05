@@ -154,6 +154,28 @@ describe('a pending turn', () => {
     expect(turnLabel('FAILED', null)).toMatch(/could not answer/i);
     expect(turnLabel('COMPLETE', null)).toBeNull();
   });
+
+  it('prefers the live condition over the sentence stored when it began', () => {
+    /*
+     * The order is the fix. `pendingReason` is written before anything has
+     * happened and never changes, so it stays reassuring while a turn is
+     * stranded; `pendingDetail` is derived on the read path from the bin and
+     * its dispatch. Falling back the other way round would show the reassuring
+     * one by default, which is the defect rather than the repair.
+     */
+    expect(
+      turnLabel(
+        'PENDING',
+        'Russell is thinking — a worker is picking this up.',
+        'Russell could not reach a worker for this one after several attempts.',
+      ),
+    ).toMatch(/could not reach a worker/);
+  });
+
+  it('falls back to the stored reason when the server sent no live detail', () => {
+    expect(turnLabel('PENDING', 'Russell is thinking.', null)).toBe('Russell is thinking.');
+    expect(turnLabel('PENDING', null, null)).toBe('Russell is thinking.');
+  });
 });
 
 describe('addresses are real links', () => {

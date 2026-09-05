@@ -196,9 +196,18 @@ handling, the context hat's bounds, manifest scoping, rule promotion, and the
 turn path taking the fast lane without creating a bin — all tested, on both
 backends.
 
-**NOT PROVED.** No real provider has ever been called. `A22_FAST_CHAT_ROUTING`
-is `NOT_RUN` and must stay `NOT_RUN` until a turn has actually taken the fast
-lane against a real provider — which needs a key, an authorization and a
-ceiling that nobody has granted. Adapter contract tests are code proof, not
-live acceptance, and the distinction is the same one Step 3 drew between the
-research engine passing its tests and a real job having run.
+**NOT PROVED.** No real provider has ever been called. A turn has never taken
+the fast lane against one, which needs a key, an authorization and a ceiling.
+Adapter contract tests are code proof, not live acceptance, and the distinction
+is the same one Step 3 drew between the research engine passing its tests and a
+real job having run.
+
+**DEFERRED — 2026-09-05.** The owner has put paid text-API activation outside
+Step 12A. `A22_FAST_CHAT_ROUTING` therefore reports **`DEFERRED`** rather than
+`NOT_RUN`: it keeps its row among the twenty-two gates, it is excluded from the
+Step 12A denominator, and it is **not** `PASS`. The gate still reads the
+database, so it will pass on its own evidence the first time a turn genuinely
+takes this lane — no code change, no re-enabling, no edit to the reporter. The
+lane stays built, tested and switched off, and the safety checks around the
+disabled code stay in place precisely because they guard something that does not
+currently run. See `docs/STEP-12A-EVIDENCE.md` §28.

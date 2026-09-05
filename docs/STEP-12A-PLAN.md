@@ -469,3 +469,18 @@ the effect mechanism are all untouched. The three new gates —
 are additions to the 19, giving a corrected baseline of **10 PASS · 0 FAIL ·
 0 BLOCKED · 12 NOT_RUN**. The earlier 19-gate tally is history and is not
 rewritten to pretend these existed.
+
+### 10.6 A22 is deferred by the owner — 2026-09-05
+
+Paid text-API activation is outside Step 12A by the owner's written decision of
+2026-09-05. `A22_FAST_CHAT_ROUTING` reports **`DEFERRED`**: it keeps its row in
+the twenty-two-gate table, it is excluded from the completion denominator, it is
+**not** `PASS`, and it still reads the database — so it passes on its own
+evidence the day a paid provider is activated, with no code change. The fast
+lane stays built, tested and switched off, and the local safety checks around
+the disabled code stay where they are. See `docs/STEP-12A-EVIDENCE.md` §28.
+
+The immediate post-12A priority — a person-authenticated conversation connector
+so the owner can talk to Opus inside Claude against authorized Brain context —
+is recorded at the top of `docs/STEP-12B-BACKLOG.md`. Neither it nor paid API
+activation is a completion dependency of anything.

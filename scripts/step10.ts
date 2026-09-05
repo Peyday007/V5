@@ -1508,7 +1508,12 @@ async function main(): Promise<void> {
         for (const event of await listBinEvents(bin.id, 60)) {
           console.log(
             `          ${event.at}  ${event.eventType.padEnd(22)} ` +
-              `worker ${(event.workerId ?? '—').padEnd(24)} session ${event.sessionRef ?? '—'}`,
+              `worker ${(event.workerId ?? '—').padEnd(24)} session ${event.sessionRef ?? '—'}` +
+              // The capacity ledger's attribution, printed beside the worker so
+              // "which account answered this" is one line rather than a join.
+              // Null means the row genuinely does not say — never a guess.
+              `  account ${event.accountId ?? '—'} routine ${event.routineId ?? '—'}` +
+              (event.evidenceClass ? `  ${event.evidenceClass}` : ''),
           );
         }
         for (const unit of await listBinUnitResults(bin.id)) {
@@ -1520,6 +1525,117 @@ async function main(): Promise<void> {
       }
       console.log('');
     }
+    /*
+     * What the conversations actually produced.
+     *
+     * The question "did a candidate persist" is not answerable from bins, and
+     * it is the one an operator asks after reading a reply that *says* an idea
+     * was captured. Model prose is not a record; these rows are.
+     *
+     * Titles are **not** printed, only their length. A candidate title is
+     * authored by the worker from the person's own message, so printing it in a
+     * CI log would put the subject of a private thread there — the same rule
+     * that keeps message content out of this command, applied to the place it
+     * leaks out sideways.
+     */
+    const conversationIds = [...new Set(messages.map((message) => message.conversation_id))];
+    if (conversationIds.length > 0) {
+      const holes = conversationIds.map(() => '?').join(', ');
+      console.log('  RECORDS PRODUCED  (ids, states and times; no titles, no content)');
+
+      const candidates = await getDb().all<{
+        id: string;
+        conversation_id: string;
+        source_message_id: string | null;
+        state: string;
+        priority: string | null;
+        ordinal: number | null;
+        canonical_candidate_id: string | null;
+        created_at: string;
+        chars: number;
+      }>(
+        `SELECT id, conversation_id, source_message_id, state, priority, ordinal,
+                canonical_candidate_id, created_at, LENGTH(title) AS chars
+           FROM russell_candidates
+          WHERE conversation_id IN (${holes})
+          ORDER BY created_at, rowid`,
+        conversationIds,
+      );
+      console.log(`    candidates ${candidates.length}`);
+      for (const candidate of candidates) {
+        console.log(
+          `      ${candidate.created_at}  ${candidate.state.padEnd(10)} ` +
+            `priority ${candidate.priority ?? '—'} ordinal ${candidate.ordinal ?? '—'}  ` +
+            `title ${candidate.chars} chars  ${candidate.id}`,
+        );
+        console.log(
+          `          conv ${candidate.conversation_id}  from message ${candidate.source_message_id ?? '—'}` +
+            (candidate.canonical_candidate_id
+              ? `  merged into ${candidate.canonical_candidate_id}`
+              : ''),
+        );
+      }
+
+      const missions = await getDb().all<{
+        id: string;
+        candidate_id: string | null;
+        state: string;
+        orchestration_id: string | null;
+        next_mission_id: string | null;
+        terminal_reason: string | null;
+        created_at: string;
+      }>(
+        `SELECT id, candidate_id, state, orchestration_id, next_mission_id,
+                terminal_reason, created_at
+           FROM russell_missions
+          WHERE conversation_id IN (${holes})
+             OR candidate_id IN (SELECT id FROM russell_candidates WHERE conversation_id IN (${holes}))
+          ORDER BY created_at, rowid`,
+        [...conversationIds, ...conversationIds],
+      );
+      console.log(`    missions ${missions.length}`);
+      for (const mission of missions) {
+        console.log(
+          `      ${mission.created_at}  ${mission.state.padEnd(12)} ` +
+            `candidate ${mission.candidate_id ?? '—'}  orchestration ${mission.orchestration_id ?? '—'}  ${mission.id}`,
+        );
+        if (mission.next_mission_id) console.log(`          follow-on ${mission.next_mission_id}`);
+        if (mission.terminal_reason) {
+          console.log(`          terminal ${mission.terminal_reason.slice(0, 140)}`);
+        }
+      }
+
+      const probes = await getDb().all<{
+        id: string;
+        candidate_id: string;
+        state: string;
+        outcome: string | null;
+        max_lookups: number;
+        lookups_used: number;
+        deadline_at: string;
+        created_at: string;
+        completed_at: string | null;
+      }>(
+        `SELECT id, candidate_id, state, outcome, max_lookups, lookups_used,
+                deadline_at, created_at, completed_at
+           FROM russell_probes
+          WHERE candidate_id IN (SELECT id FROM russell_candidates WHERE conversation_id IN (${holes}))
+          ORDER BY created_at, rowid`,
+        conversationIds,
+      );
+      console.log(`    probes ${probes.length}`);
+      for (const probe of probes) {
+        // The bound and what was spent against it, because "did it stop where
+        // it was told" is the only thing worth knowing about a probe from here.
+        console.log(
+          `      ${probe.created_at}  ${probe.state.padEnd(10)} outcome ${probe.outcome ?? '—'} ` +
+            `lookups ${probe.lookups_used}/${probe.max_lookups} deadline ${probe.deadline_at} ` +
+            `completed ${probe.completed_at ?? '—'}  ${probe.id}`,
+        );
+      }
+      console.log('');
+    }
+
     console.log(`STEP10: OK turn-trace messages=${messages.length}`);
     return;
   }

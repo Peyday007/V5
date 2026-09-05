@@ -3989,6 +3989,10 @@ export interface BinEventRow {
   outcome: string | null;
   reason: string | null;
   is_proxy: number;
+  account_id: string | null;
+  routine_id: string | null;
+  evidence_class: string | null;
+  workload_class: string | null;
 }
 
 export interface BinEvent {
@@ -4015,6 +4019,22 @@ export interface BinEvent {
   reason: string | null;
   /** True when a usage figure here is an observable proxy, not the provider's own accounting. */
   isProxy: boolean;
+  /**
+   * The capacity ledger's four attribution columns, §23's ledger read back.
+   *
+   * They were on the table and on the insert and absent from this type, so
+   * every reader that went through `listBinEvents` saw a fire with no account
+   * and no Routine — only `workloadProfile`, which writes its own SELECT, could
+   * see them at all. A column nothing can read is not a ledger entry.
+   */
+  accountId: string | null;
+  routineId: string | null;
+  /**
+   * `PROVIDER_ENFORCED`, `MEASURED` or `UNKNOWN`. A ceiling nobody has observed
+   * stays `UNKNOWN` and is never upgraded by a report that wants a number.
+   */
+  evidenceClass: string | null;
+  workloadClass: string | null;
 }
 
 // ---------------------------------------------------------------------------

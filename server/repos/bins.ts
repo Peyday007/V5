@@ -222,6 +222,10 @@ export function mapBinEvent(row: BinEventRow): BinEvent {
     outcome: row.outcome,
     reason: row.reason,
     isProxy: row.is_proxy === 1,
+    accountId: row.account_id,
+    routineId: row.routine_id,
+    evidenceClass: row.evidence_class,
+    workloadClass: row.workload_class,
   };
 }
 
@@ -1522,9 +1526,41 @@ export async function markDispatchRoutine(id: string, routineId: string): Promis
   );
 }
 
+/**
+ * The activation happened. Record it, and record *whose* it was.
+ *
+ * The four attribution fields are the point of this signature and were the
+ * defect. §23 says the capacity ledger is `bin_events` rather than a second
+ * table, and `DISPATCH_SENT` is the row that ledger counts as an activation —
+ * but it was written from the dispatch alone, so it carried no project, no
+ * account, no Routine and no workload class. In production that made
+ * `workloadProfile` report `activations: 0` for **every** project and a single
+ * `perAccount` entry of `{accountId: null, activations: 124}` for the whole
+ * fleet: a ledger that recorded that 124 activations happened and nothing about
+ * what any of them was for.
+ *
+ * They are supplied by the caller rather than looked up here on purpose. The
+ * dispatcher already holds the bin it re-read and the routing decision it
+ * acted on, and re-reading them would be a second opinion about facts the
+ * caller has — the same reasoning that keeps `listDispatchableBins` the
+ * assigner's own predicate rather than a copy of it.
+ *
+ * They are attribution, never authorization: nothing reads these columns to
+ * decide anything, and a wrong one costs a wrong report rather than a wrong
+ * grant.
+ */
 export async function markDispatchSent(
   id: string,
-  input: { routineRef: string; routineVersion?: string | null; sessionRef?: string | null; fireEventId?: string | null },
+  input: {
+    routineRef: string;
+    routineVersion?: string | null;
+    sessionRef?: string | null;
+    fireEventId?: string | null;
+    projectId?: string | null;
+    accountId?: string | null;
+    routineId?: string | null;
+    workloadClass?: string | null;
+  },
 ): Promise<void> {
   const at = binNow();
   await getDb().run(
@@ -1552,6 +1588,16 @@ export async function markDispatchSent(
     provider: 'claude-routine',
     attempt: dispatch?.attemptCount ?? null,
     outcome: 'SENT',
+    projectId: input.projectId ?? null,
+    accountId: input.accountId ?? null,
+    // Null when the fire went out with no routing decision — the pre-fleet
+    // fallback path, which genuinely has no Routine row to name. Unknown stays
+    // unknown rather than being filled in with the only Routine there is.
+    routineId: input.routineId ?? null,
+    workloadClass: input.workloadClass ?? null,
+    // Brain watched this fire leave and the provider accept it. That is a
+    // measurement, not a projection.
+    evidenceClass: 'MEASURED',
   });
 }
 
