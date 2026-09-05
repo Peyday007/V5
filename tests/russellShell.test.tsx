@@ -365,9 +365,9 @@ describe('opening Brain', () => {
       },
     });
     await mount();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'New conversation' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Start a new one' })).toBeTruthy());
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Start a new one' }));
     });
     await waitFor(() => expect(created).toBe(true));
     expect(window.location.pathname).toBe('/conversation/rcv_2');
@@ -390,7 +390,7 @@ describe('opening Brain', () => {
       },
     });
     await mount();
-    const picker = await waitFor(() => screen.getByLabelText('Open a conversation'));
+    const picker = await waitFor(() => screen.getByLabelText('Open'));
     await act(async () => {
       fireEvent.change(picker, { target: { value: 'rcv_9' } });
     });
@@ -400,8 +400,33 @@ describe('opening Brain', () => {
   it('shows no picker when there is only one thread to pick', async () => {
     baseRoutes();
     await mount();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'New conversation' })).toBeTruthy());
-    expect(screen.queryByLabelText('Open a conversation')).toBeNull();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Start a new one' })).toBeTruthy());
+    expect(screen.queryByLabelText('Open')).toBeNull();
+  });
+
+  it('does not label the picker and the button with the same words', async () => {
+    /*
+     * The defect that sent one acceptance message into two threads. Every
+     * thread this shell creates was titled "New conversation", so the picker's
+     * selected option read "New conversation" beside a button reading "New
+     * conversation" — one navigates, one creates, and nothing on screen said
+     * which. Two clicks in twenty seconds, two threads.
+     */
+    baseRoutes({
+      'GET /api/russell/conversations': {
+        body: {
+          conversations: [
+            { id: 'rcv_1', title: 'A thread' },
+            { id: 'rcv_9', title: 'An older thread' },
+          ],
+        },
+      },
+    });
+    await mount();
+    const picker = await waitFor(() => screen.getByLabelText('Open'));
+    const button = screen.getByRole('button', { name: 'Start a new one' });
+    const optionNames = Array.from(picker.querySelectorAll('option')).map((o) => o.textContent);
+    expect(optionNames).not.toContain(button.textContent);
   });
 
   it('offers the operator console only to a Brain administrator', async () => {

@@ -3044,3 +3044,98 @@ Nothing else moved, and nothing else should have. A deployment cannot make
 conversation that has not happened yet. **Ten `NOT_RUN` is the honest state, not
 a defect**, and the two fixes this deployment carries are the reason the run can
 now be attempted at all rather than a reason any gate has moved.
+
+---
+
+## 35. The frozen message ran, and stopped at a policy row — 2026-09-05
+
+The owner sent the frozen message from the deployed shell. Three things came out
+of it: one mechanism working exactly as designed, one interface defect of mine,
+and one operator decision that is genuinely theirs.
+
+### The deferral works, in production, on the real message
+
+Conversation **`rcv_35d5b0340fc4479fa443`**, user message
+`rmsg_d10b82a9b724401c8127` at `22:55:55.687Z`, **207 characters** — the frozen
+message exactly. Bin `bin_89f7b0728aa945fa8724` ready 193ms later, intent at
+`22:56:03.557Z`, and then:
+
+    22:56:03  DISPATCH_UNROUTED   →  DISPATCH_DEFERRED
+    22:57:13  DISPATCH_UNROUTED   →  DISPATCH_DEFERRED
+    22:58:23  DISPATCH_UNROUTED   →  DISPATCH_DEFERRED
+    …  (every ~70s, still going ten minutes later)
+
+**State: `READY`, attempts `0/2`, intent `PENDING`.** Under the code that was
+running yesterday this bin would have been `ABANDONED` after five refusals in
+under five minutes — the exact fate of the message sent at 21:49 on 2026-09-04.
+It is not abandoned, it has spent no attempts, and it will go out the moment
+there is room. The mutation-7 fix is proved on live production rows rather than
+on a test.
+
+The person sees **"This is waiting to be handed to a worker."** — the derived
+pending state (§27) saying what is actually true, instead of "a worker is
+picking this up", which would have been a lie for ten minutes and counting.
+
+### Why nothing is being handed out
+
+`fleet explain-route` on the bin, which is the purpose-built read for exactly
+this question:
+
+    bin        bin_89f7b0728aa945fa8724  READY  priority 9
+    considered rtn_c7bcec972bd44afa91d7  routine at target 1/1
+    considered rtn_e6886570b3274430887a  routine QUARANTINED
+    decision   ACCOUNT_TARGETS_REACHED
+
+**V1 carries a `ROUTINE`-scope policy with target 1, and one activation is in
+flight. V2 is quarantined.** The fleet's whole capacity is one concurrent
+activation and it is occupied. `primary`'s *account* target is 2 and the fleet
+target is 4; neither binds. The Routine's own target of 1 does.
+
+That is not a defect. It is a row an operator wrote, doing what it says. §23:
+policy is rows, and raising a target is an INSERT with an actor and a reason —
+no deployment, and the previous value stays there to revert to. Step 10 measured
+the recommended operating ceiling at **10 concurrent bins on one Routine**, so 1
+is far below what the surface was shown to carry.
+
+`fleet show` at 23:00:19Z: `in flight 1`, `candidates 2 considered, 0 eligible
+now`, V1 `fires=24 refusals=0 **no-shows=0**`. The no-show counter reading zero
+against twenty-four fires is the §27 arrival credit working — it read 1 before
+mutation 6 and has been correct since.
+
+### The message was sent twice, and the interface is why
+
+Two 207-character messages exist, twenty seconds apart:
+
+| | |
+| --- | --- |
+| `22:55:35.126Z` | `rmsg_7b85dc53954b4ec187cd` → **`rcv_8085eba0beb04bc38ce6`**, the old permit thread |
+| `22:55:55.687Z` | `rmsg_d10b82a9b724401c8127` → **`rcv_35d5b0340fc4479fa443`**, the new one |
+
+**This is a defect I introduced in mutation 7.** Every thread the shell creates
+was titled "New conversation", so the picker's selected option read *New
+conversation* directly beside a button reading *New conversation* — one
+navigates, one creates, and nothing on screen said which. Two clicks, two
+threads, one of them the wrong one.
+
+Fixed: the picker's label is visible rather than screen-reader-only, the button
+reads **"Start a new one"**, and a new thread is titled by when it began so a
+list of them is a list of different things. A test asserts that no option in the
+picker carries the same text as the button beside it — the property that was
+violated, rather than the strings that happened to violate it.
+
+**Neither turn was deleted or rewritten.** Both are real turns and both keep
+their rows. The duplicate in the old thread is outside the acceptance scope and
+stays there as history.
+
+### The scope is unaffected, and was not chosen after the fact
+
+`ACCEPTANCE_SCOPE.conversationId` will be **`rcv_35d5b0340fc4479fa443`**: the
+new conversation, exactly one user message, 207 characters. §6 of the frozen
+scenario disqualified `rcv_8085eba0beb04bc38ce6` **before any of this happened**
+and for reasons that had nothing to do with which one passes — it is an existing
+thread whose prior history would satisfy scoped gates. Picking the new one is
+following that rule, not choosing a winner.
+
+The candidate `rcn_23e70baee1ba47478c28` still belongs to the old thread and is
+still `CAPTURED` with no priority, no mission and no probe. Nothing new has been
+produced by either turn, because neither has reached a worker.

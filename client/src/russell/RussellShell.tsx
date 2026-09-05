@@ -90,7 +90,18 @@ export function RussellShell({
       return;
     }
     let cancelled = false;
-    void RussellApi.openConversation('New conversation', projectId).then(
+    /*
+     * Titled by when it began, so a list of threads is a list of different
+     * things. Every one being called "New conversation" made the picker
+     * useless and made it read identically to the button beside it.
+     */
+    const title = `Conversation — ${new Date().toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })}`;
+    void RussellApi.openConversation(title, projectId).then(
       (created) => {
         if (!cancelled) setOpenedId(created.id);
       },
@@ -160,8 +171,20 @@ export function RussellShell({
         <div className="rs-threads">
           {threads.length > 1 ? (
             <>
-              <label className="rs-visually-hidden" htmlFor="rs-thread">
-                Open a conversation
+              {/*
+                A visible label, not a screen-reader-only one.
+                
+                It was hidden, and every thread this shell creates is titled
+                "New conversation" — so the picker's selected option read "New
+                conversation" directly beside a button reading "New
+                conversation". Two identical words, one of which navigates and
+                one of which creates. The owner clicked both within twenty
+                seconds and sent the frozen acceptance message into two
+                different threads. An interface that cannot be told apart is an
+                interface that will be used wrong.
+              */}
+              <label className="rs-threads-label" htmlFor="rs-thread">
+                Open
               </label>
               <select
                 id="rs-thread"
@@ -182,7 +205,7 @@ export function RussellShell({
             </>
           ) : null}
           <button type="button" onClick={startConversation} disabled={starting}>
-            {starting ? 'Starting…' : 'New conversation'}
+            {starting ? 'Starting…' : 'Start a new one'}
           </button>
         </div>
         <div className="rs-more">

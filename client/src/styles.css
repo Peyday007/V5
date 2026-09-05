@@ -1955,6 +1955,11 @@ legend {
   min-width: 0;
 }
 
+.rs-threads-label {
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
 .rs-threads select {
   max-width: 200px;
   padding: 6px 8px;
