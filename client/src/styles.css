@@ -1938,6 +1938,50 @@ legend {
   color: var(--amber);
 }
 
+/* Starting a thread and getting back to one.
+ *
+ * Deliberately unglamorous: a select and a button, sitting beside the More
+ * menu. They exist because without them a person could reach exactly one
+ * conversation — their newest — and Step 12B's collections and tailored
+ * starters are refinements of this floor rather than a substitute for it.
+ *
+ * `min-width: 0` and the truncating select keep a long title from pushing the
+ * header wider than the phone, which is the failure the shell already had once
+ * and is not repeating. */
+.rs-threads {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rs-threads select {
+  max-width: 200px;
+  padding: 6px 8px;
+  background: var(--bg-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  text-overflow: ellipsis;
+}
+
+.rs-threads button {
+  padding: 6px 10px;
+  white-space: nowrap;
+  background: var(--bg-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rs-threads button:disabled {
+  cursor: default;
+  color: var(--fg-dim);
+}
+
 .rs-more {
   position: relative;
 }
@@ -2266,6 +2310,17 @@ legend {
 
   .rs-header {
     flex-wrap: wrap;
+  }
+
+  /* On a phone the picker gets the row rather than competing for it. */
+  .rs-threads {
+    order: 3;
+    width: 100%;
+  }
+
+  .rs-threads select {
+    flex: 1;
+    max-width: none;
   }
 
   /* In a row the rail's `width: 100%` made every section as wide as the bar,

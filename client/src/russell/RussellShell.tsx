@@ -106,6 +106,42 @@ export function RussellShell({
   const conversationId =
     route.name === 'CONVERSATION' ? route.conversationId : openedId;
 
+  /*
+   * Starting a thread, and getting back to one.
+   *
+   * These were missing, and their absence was not cosmetic. The shell opens a
+   * person's *most recent* conversation and creates one only when they have
+   * none — so with one thread in existence there was no way to begin a second,
+   * and once a second existed there was no way back to the first except by
+   * knowing its id and typing the address. A shell where you can only ever see
+   * your newest thread is not a usable shell, whatever else it does.
+   *
+   * Both are deliberately minimal. Collections, pinning, ordering by meaning
+   * and tailored starters are Step 12B; this is the floor beneath them.
+   */
+  const [starting, setStarting] = useState(false);
+  const startConversation = useCallback(() => {
+    if (starting) return;
+    setStarting(true);
+    void RussellApi.openConversation('New conversation', projectId).then(
+      (created) => {
+        setStarting(false);
+        // Reload the list rather than patching it: the same rule the
+        // conversation itself follows, so what is listed is what is stored.
+        conversations.reload();
+        setOpenedId(created.id);
+        go({ name: 'CONVERSATION', conversationId: created.id });
+      },
+      () => {
+        // The button comes back rather than spinning. A control that never
+        // recovers from one failed click is worse than one that did nothing.
+        setStarting(false);
+      },
+    );
+  }, [starting, projectId, conversations, go]);
+
+  const threads = conversations.data?.conversations ?? [];
+
   const signOut = useCallback(() => {
     void Api.logout().then(onSignedOut, onSignedOut);
   }, [onSignedOut]);
@@ -121,6 +157,34 @@ export function RussellShell({
       <header className="rs-header">
         <h1 className="rs-brand">Russell</h1>
         <Briefing projectId={projectId} projectName={project?.name ?? null} />
+        <div className="rs-threads">
+          {threads.length > 1 ? (
+            <>
+              <label className="rs-visually-hidden" htmlFor="rs-thread">
+                Open a conversation
+              </label>
+              <select
+                id="rs-thread"
+                value={conversationId ?? ''}
+                onChange={(event) => {
+                  const id = event.target.value;
+                  if (!id) return;
+                  setOpenedId(id);
+                  go({ name: 'CONVERSATION', conversationId: id });
+                }}
+              >
+                {threads.map((thread) => (
+                  <option key={thread.id} value={thread.id}>
+                    {thread.title}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
+          <button type="button" onClick={startConversation} disabled={starting}>
+            {starting ? 'Starting…' : 'New conversation'}
+          </button>
+        </div>
         <div className="rs-more">
           <button
             type="button"

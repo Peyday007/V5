@@ -278,7 +278,21 @@ async function withChromium(body: (cdp: Cdp) => Promise<void>): Promise<void> {
     socket.close();
   } finally {
     chrome.kill('SIGTERM');
-    fs.rmSync(profile, { recursive: true, force: true });
+    /*
+     * `force` covers a missing directory; it does not cover a Chromium that has
+     * been sent SIGTERM and is still writing into its profile, which raced this
+     * and made the whole run exit non-zero *after* every screenshot had already
+     * been taken and checked. `maxRetries` waits it out, and a profile that
+     * still will not go is left in the system temp directory rather than turned
+     * into a failure — the evidence this script exists to produce is the
+     * images, and losing the run over a directory would be the tail wagging the
+     * dog.
+     */
+    try {
+      fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {
+      /* left behind in the temp directory, deliberately */
+    }
   }
 }
 

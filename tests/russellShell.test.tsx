@@ -346,6 +346,64 @@ describe('opening Brain', () => {
     expect(screen.getByRole('menuitem', { name: 'Full console' })).toBeTruthy();
   });
 
+  it('can start a conversation, which nothing in the shell could do before', async () => {
+    /*
+     * The shell opens a person's *most recent* thread and creates one only when
+     * they have none. With one thread in existence there was therefore no way
+     * to begin a second — which made the frozen acceptance scenario's "a new
+     * conversation" impossible to satisfy from the interface, and made the
+     * product unusable for the ordinary act of starting a new subject.
+     */
+    let created = false;
+    baseRoutes({
+      'POST /api/russell/conversations': () => {
+        created = true;
+        return { body: { id: 'rcv_2', title: 'New conversation' } };
+      },
+      'GET /api/russell/conversations/rcv_2': {
+        body: { conversation: { id: 'rcv_2', title: 'New conversation' }, turns: [] },
+      },
+    });
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New conversation' })).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
+    });
+    await waitFor(() => expect(created).toBe(true));
+    expect(window.location.pathname).toBe('/conversation/rcv_2');
+  });
+
+  it('offers a way back to a thread that is not the newest', async () => {
+    // Two threads and no picker is a shell where the older one is reachable
+    // only by knowing its id. One `select`; collections are Step 12B.
+    baseRoutes({
+      'GET /api/russell/conversations': {
+        body: {
+          conversations: [
+            { id: 'rcv_1', title: 'A thread' },
+            { id: 'rcv_9', title: 'An older thread' },
+          ],
+        },
+      },
+      'GET /api/russell/conversations/rcv_9': {
+        body: { conversation: { id: 'rcv_9', title: 'An older thread' }, turns: [] },
+      },
+    });
+    await mount();
+    const picker = await waitFor(() => screen.getByLabelText('Open a conversation'));
+    await act(async () => {
+      fireEvent.change(picker, { target: { value: 'rcv_9' } });
+    });
+    expect(window.location.pathname).toBe('/conversation/rcv_9');
+  });
+
+  it('shows no picker when there is only one thread to pick', async () => {
+    baseRoutes();
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New conversation' })).toBeTruthy());
+    expect(screen.queryByLabelText('Open a conversation')).toBeNull();
+  });
+
   it('offers the operator console only to a Brain administrator', async () => {
     baseRoutes({
       'GET /api/auth/session': { body: { authenticated: true, user: { ...USER, isBrainAdmin: false } } },

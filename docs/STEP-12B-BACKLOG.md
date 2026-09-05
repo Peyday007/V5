@@ -22,26 +22,42 @@ Recorded here by the owner's instruction of 2026-09-05, at the top of the file
 rather than inside 12B, because it is neither part of Brain v1's interface work
 nor something to be picked up whenever 12B is scheduled — it comes first.
 
+**The preferred surface is ChatGPT.** Corrected by the owner on 2026-09-05: the
+first version of this entry named Claude, and **ChatGPT-to-Brain is now the
+preferred conversation connector, with Claude compatibility to follow.** The
+correction is recorded rather than silently overwritten, the way §22 records
+Step 7's wrong reasoning about OAuth.
+
+That ordering is a decision about *which surface is built first*, and it is
+deliberately not a decision about the design. Everything below applies to both,
+because the requirement is the same either way and the second surface should
+cost a client registration rather than a second architecture.
+
 Extend Cloud Brain with a **person-authenticated conversation connector**, so
-the owner can talk to Opus inside Claude and have that conversation be connected
-to the Brain rather than beside it. It must let the owner:
+the owner can talk to a model inside their chat client and have that
+conversation be connected to the Brain rather than beside it. It must let the
+owner:
 
 - retrieve authorized Brain context into the conversation;
 - save discussion checkpoints and decisions back into the Brain;
 - submit governed work to the Brain from the conversation.
 
-Four things are settled about its shape before anything is designed:
+Five things are settled about its shape before anything is designed:
 
-- **The conversation runs on the Claude subscription.** It is not a paid text
-  API activation and must not become the reason for one. See A22 below.
+- **ChatGPT first, Claude after.** Neither is built during Step 12A, and
+  neither is a completion dependency of anything.
+- **The conversation runs on the chat subscription**, whichever client it is.
+  It is not a paid text-API activation and must not become the reason for one.
+  See A22 below.
 - **The principal is a person, not a worker.** Every existing worker path
   resolves to a `WORKER` principal, and §24 of `CLAUDE.md` is explicit that a
   worker principal is refused at the conversation routes by principal type: no
-  membership configuration turns a machine into a person. A connector that let
-  a person's Claude session act as a person therefore needs its own
-  authenticated way in — Step 8's OAuth flow authorizes a *worker* on a human's
-  authority, which is a different thing and must not be reused by relabelling
-  it.
+  membership configuration turns a machine into a person. A connector that lets
+  a person's chat session act as a person therefore needs its own authenticated
+  way in — Step 8's OAuth flow authorizes a *worker* on a human's authority,
+  which is a different thing and must not be reused by relabelling it. This is
+  the single hardest part of the task and the reason it is a task rather than a
+  configuration change.
 - **Automatic complete transcript mirroring is not assumed.** What reaches the
   Brain is what the owner deliberately saves. §11's rule still holds for
   whatever does arrive: imported text is untrusted data, and nothing found
@@ -50,6 +66,11 @@ Four things are settled about its shape before anything is designed:
   the approval envelope, the evidence gate, the audit roles and the fleet are
   not bypassed because the request arrived through a chat window. Same rule as
   §24: a new entrance, never a second set of rules.
+
+What it may reuse, and what it may not: `POST /mcp` and the tool registry are
+already the remote door (§21), and they are worth reusing exactly as they are.
+The bearer and OAuth paths that reach them both resolve to a `WORKER`, and that
+part is what the task has to extend rather than borrow.
 
 Not started during Step 12A. Nothing in Step 12A may be marked complete on the
 strength of it, and it may not become a completion dependency of anything else
