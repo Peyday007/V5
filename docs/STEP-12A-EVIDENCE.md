@@ -2991,3 +2991,35 @@ this work rewrites a row; every fix is forward and applies to what happens next.
 Eight more than §31: five capacity cases and two retry-accounting cases in
 `tests/dispatchDeferral.test.ts`, plus the sixth capacity case for the
 thirty-minute window. Still no migration on either chain.
+
+---
+
+## 34. Mutation 7 delivered — 2026-09-05
+
+Run [33993596193](https://github.com/Peyday007/V5/actions/runs/33993596193).
+Every step green: typecheck and tests, build, deploy, **hosted verification
+before the restart** (21:42:39→21:44:57), **restart** (21:44:58→21:45:36),
+**hosted verification after it** (21:45:36→21:48:00).
+
+**The deployed commit is `3e1e795`, and the authorization named `0a958eb`.**
+That is a superset, and it is recorded as one — in the workflow's
+`AUTHORIZATION` constant beside the quote, here, and in the report to the owner
+— rather than folded in quietly.
+
+The reason is in the same instruction that authorized the deployment: it
+required confirming, **before** deploying, that the capacity calculation
+distinguishes genuinely occupied slots from stale reservations. It did not
+(§33). Shipping the capacity *deferral* while knowingly leaving the phantom-slot
+*count* in place would have delivered a fleet that waits patiently on capacity
+it already has — the same refusal that lost the frozen message, with a politer
+failure mode. The difference between the two commits is `candidates.ts`, the
+eight tests that pin it, and this record.
+
+`LEDGER` now names seven runs and `EXPECTED` is `7`.
+
+**The acceptance-scope deployment is still unspent and still reserved for its
+original purpose**: the `ACCEPTANCE_SCOPE.conversationId` pin, nothing else. It
+takes the next number after this one.
+
+V2 remains `QUARANTINED`. No API key, no `BRAIN_PROVIDER`, no spend
+authorization row, no turn, bin, fire or fixture created by this work.
