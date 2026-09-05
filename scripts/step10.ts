@@ -71,6 +71,7 @@ import { advancePacket } from '../server/services/research/packetRunner.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
 import { DEAL_DISPATCH_SLUG } from '../server/seed.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
+import { IN_FLIGHT_WINDOW_MS } from '../server/services/dispatch/candidates.ts';
 import { describeFireTarget } from '../server/services/dispatch/fire.ts';
 import {
   instructionProblems,
@@ -1420,6 +1421,120 @@ async function main(): Promise<void> {
     }
     console.log('');
     console.log(`STEP10: OK trace bin=${bin.id} state=${bin.state}`);
+    return;
+  }
+
+  if (command === 'in-flight') {
+    /*
+     * What is holding the fleet's capacity, and whether it is really working.
+     *
+     * `ACCOUNT_TARGETS_REACHED` is decided by one number — the count of
+     * activations Brain believes are in flight — and until now there was no way
+     * to ask *which* ones. An operator staring at "routine at target 1/1" could
+     * see that a slot was taken and nothing about who had taken it, which makes
+     * raising the target the only available move and turns a diagnosis into a
+     * guess. Increasing capacity should not substitute for understanding what
+     * is using it.
+     *
+     * So this prints every recent `SENT` dispatch with the four exclusions
+     * `inFlightByRoutine` applies, **evaluated per row and shown**, rather than
+     * folded into a total. A row that counts says so; a row that does not says
+     * which condition excluded it. The point is that the number becomes
+     * auditable instead of merely trusted.
+     *
+     * Read-only, and it names no conversation content — a dispatch has none.
+     */
+    const windowMs = IN_FLIGHT_WINDOW_MS;
+    const now = new Date();
+    const since = new Date(now.getTime() - windowMs).toISOString();
+    // Deliberately wider than the window, so a fire that *just* aged out is
+    // visible beside the ones that count. "It expired ninety seconds ago" and
+    // "there is nothing there" are different answers.
+    const lookback = new Date(now.getTime() - windowMs * 2).toISOString();
+
+    const rows = await getDb().all<{
+      dispatch_id: string;
+      bin_id: string;
+      project_id: string | null;
+      slug: string | null;
+      workload_class: string | null;
+      sent_at: string | null;
+      routine_id: string | null;
+      session_ref: string | null;
+      lease_generation: number;
+      bin_state: string;
+      worker_id: string | null;
+      lease_expires_at: string | null;
+      heartbeat_at: string | null;
+      attempt_count: number;
+      max_attempts: number;
+      newest_sent: number | null;
+    }>(
+      `SELECT d.id AS dispatch_id, d.bin_id AS bin_id, b.project_id AS project_id,
+              p.slug AS slug, b.workload_class AS workload_class, d.sent_at AS sent_at,
+              d.routine_id AS routine_id, d.session_ref AS session_ref,
+              d.lease_generation AS lease_generation, b.state AS bin_state,
+              b.worker_id AS worker_id, b.lease_expires_at AS lease_expires_at,
+              b.heartbeat_at AS heartbeat_at, b.attempt_count AS attempt_count,
+              b.max_attempts AS max_attempts,
+              (SELECT MAX(d2.lease_generation) FROM bin_dispatch d2
+                WHERE d2.bin_id = d.bin_id AND d2.state = 'SENT') AS newest_sent
+         FROM bin_dispatch d
+         JOIN bins b ON b.id = d.bin_id
+         LEFT JOIN projects p ON p.id = b.project_id
+        WHERE d.state = 'SENT' AND d.sent_at >= ?
+        ORDER BY d.sent_at DESC`,
+      [lookback],
+    );
+
+    console.log(`IN FLIGHT  window ${Math.round(windowMs / 60_000)} minutes, as at ${now.toISOString()}`);
+    console.log('  (a row that does not count says which condition excluded it)');
+    console.log('');
+    let counted = 0;
+    for (const row of rows) {
+      const ageMs = row.sent_at ? now.getTime() - new Date(row.sent_at).getTime() : 0;
+      const reasons: string[] = [];
+      if (!row.sent_at || row.sent_at < since) reasons.push('older than the window');
+      if (['COMPLETE', 'CANCELLED', 'FAILED', 'NEEDS_HUMAN'].includes(row.bin_state)) {
+        reasons.push(`bin ${row.bin_state}`);
+      }
+      if (row.newest_sent !== null && row.lease_generation !== row.newest_sent) {
+        reasons.push(`superseded by the fire at generation ${row.newest_sent}`);
+      }
+      if (
+        row.bin_state === 'LEASED' &&
+        row.lease_expires_at !== null &&
+        row.lease_expires_at <= now.toISOString()
+      ) {
+        reasons.push('its lease has lapsed');
+      }
+      const counts = reasons.length === 0;
+      if (counts) counted += 1;
+
+      console.log(
+        `  ${counts ? 'COUNTS ' : 'stale  '} ${row.sent_at ?? '—'}  age ${Math.round(ageMs / 1000)}s  ` +
+          `${(row.slug ?? '—').padEnd(20)} ${row.workload_class ?? '—'}`,
+      );
+      console.log(
+        `           bin ${row.bin_id}  ${row.bin_state}  gen ${row.lease_generation}` +
+          `${row.newest_sent !== null ? ` (newest sent gen ${row.newest_sent})` : ''}  ` +
+          `attempts ${row.attempt_count}/${row.max_attempts}`,
+      );
+      console.log(
+        `           routine ${row.routine_id ?? '—'}  provider session ${row.session_ref ?? '—'}`,
+      );
+      // The three facts that separate "a worker is working" from "a fire nobody
+      // answered": did anybody arrive, are they still holding it, and have they
+      // said anything since.
+      console.log(
+        `           arrived ${row.worker_id ? `yes, worker ${row.worker_id}` : 'no worker has checked in'}  ` +
+          `lease until ${row.lease_expires_at ?? '—'}  last heartbeat ${row.heartbeat_at ?? '—'}`,
+      );
+      if (!counts) console.log(`           excluded: ${reasons.join('; ')}`);
+      console.log('');
+    }
+    if (rows.length === 0) console.log('  nothing has been fired recently at all.');
+    console.log(`STEP10: OK in-flight counted=${counted} examined=${rows.length}`);
     return;
   }
 

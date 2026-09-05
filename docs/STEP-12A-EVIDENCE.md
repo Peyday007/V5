@@ -3139,3 +3139,94 @@ following that rule, not choosing a winner.
 The candidate `rcn_23e70baee1ba47478c28` still belongs to the old thread and is
 still `CAPTURED` with no priority, no mission and no probe. Nothing new has been
 produced by either turn, because neither has reached a worker.
+
+---
+
+## 36. What is holding the slot, and what cannot be said about it — 2026-09-05
+
+The owner authorized raising V1's Routine target from 1 to 2, **on condition
+that the occupying dispatch is understood first**: "Increasing capacity should
+not substitute for understanding that." That condition is right, and it is only
+partly satisfiable with the read paths that are deployed. This section records
+exactly where the line falls.
+
+### What the deployed reads establish
+
+`fleet profile` unscoped, at 23:18:30Z, against the 16:44:30Z reading:
+
+| | 16:44 | 23:18 |
+| --- | --- | --- |
+| activations | 124 | **129** |
+| binsCompleted | 99 | **102** |
+| takeovers | 2 | 2 |
+| completionRefusals | 17 | 17 |
+| `perAccount` | one entry, `accountId: null` | **two** — `null` × 124, and **`acct_70dda3fae2e1428e944b` × 5, 0 refusals** |
+
+**The §26 ledger repair is proved in production.** Every activation since
+mutation 6 carries its account; the 124 unattributable rows are the historical
+ones and stay that way, because no logging can recreate what was never written.
+
+So: **five activations since mutation 6, every one of them `primary`/V1, and
+three bins completed.** One of the remaining two is the slot currently held.
+
+`fleet profile --project prj_9d86dfaec863473cb498` (Deal Dispatch) at
+23:20:43Z: `perAccount: []`, `medianActivationMs: null`. **None of the five was
+a Deal Dispatch bin** — every Deal Dispatch turn bin is still `READY` with a
+`PENDING` intent that has never been sent. The slot is held by work in another
+project.
+
+And by construction of the query that produces the number, the occupant is:
+sent within thirty minutes, the newest fire for its bin, on a bin that is not
+`COMPLETE`, `CANCELLED`, `FAILED` or `NEEDS_HUMAN`, and — if a worker took it —
+holding a lease that has not lapsed. Those are §33's four exclusions, running
+in production and verified by inversion.
+
+V1 also reads `no-shows=0` across 24 fires, which means the most recent fire was
+answered by an arriving worker.
+
+### What they do not establish
+
+**The occupying dispatch is not named.** Not its bin, not its project, not its
+worker, not its lease expiry, not its last heartbeat. There is no deployed read
+that lists in-flight dispatches; `fleet show` gives a count, `explain-route`
+gives a verdict, and `trace` needs a bin id nobody can obtain.
+
+That gap is the reason an operator faced with "routine at target 1/1" has
+exactly one available move — raise the target — which turns a diagnosis into a
+guess. **That is the shape of decision the owner's condition exists to
+prevent**, and it is a real hole rather than an inconvenience.
+
+So the honest summary is: the occupant is *probably* live work — it survives
+every stale test this codebase applies, on a surface whose workers are
+demonstrably arriving and completing — and the one case none of those tests can
+exclude is a session that died inside an unexpired lease. That case is bounded
+by the lease and by the thirty-minute window, and clears itself.
+
+**It is not proven to be working, and it is recorded as unproven.**
+
+### The read that closes it
+
+`step10 in-flight` lists every recent `SENT` dispatch with the four exclusions
+**evaluated per row and printed**, so the number becomes auditable rather than
+merely trusted: a row that counts says so, and a row that does not says which
+condition excluded it. Per row it prints the bin, project, workload class, age,
+Routine, provider session, whether a worker ever checked in, the lease expiry
+and the last heartbeat — which is precisely "identity, age, check-in and
+assignment state".
+
+It deliberately looks back **twice** the window, so a fire that has just aged
+out is visible beside the ones that count: "it expired ninety seconds ago" and
+"there is nothing there" are different answers.
+
+Read-only, and it names no conversation content because a dispatch has none.
+It is committed and **not deployed**.
+
+### A correction
+
+I recommended raising the target to **3**, arguing that A11 needs three distinct
+authenticated sessions and that at a target of 1 they could only be sequential.
+The owner's reply is correct and mine was not: **three distinct sessions do not
+require three concurrent activations.** Sequential activations produce distinct
+sessions perfectly well, and the audit floor is about separation, not
+parallelism. Concurrency is throughput here and nothing else, and it is not a
+completion gate.
