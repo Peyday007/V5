@@ -3230,3 +3230,113 @@ require three concurrent activations.** Sequential activations produce distinct
 sessions perfectly well, and the audit floor is about separation, not
 parallelism. Concurrency is throughput here and nothing else, and it is not a
 completion gate.
+
+---
+
+## 37. The queue drained, and the chain stopped at a second manifest gap — 2026-09-05
+
+### The target was raised, and it was not what unblocked the queue
+
+`fleet set-target ROUTINE trig_01CBLu5oCZziEwznw5q9xU7g 1 -> 2 version=2
+actor=operator:fleet-cli`, at 23:29:53Z, with the reason recorded on the row and
+the previous value preserved for the restore. Authorized by the owner, who also
+**removed the requirement to identify the occupying dispatch first** — so its
+identity and activity stay **unverified**, exactly as §36 recorded them, and
+that work is untouched.
+
+**Both bins were assigned before the raise, not after it.** The old thread's at
+`23:15:39.157Z` and the acceptance thread's at `23:16:54.983Z`; the target moved
+at `23:29:53Z`. The slot freed on its own — the occupant aged out of the window
+or finished — and the two queued bins went out fourteen minutes before capacity
+changed. The raise is real and authorized; it is **not** the cause of the drain,
+and recording it as the cause would be exactly the aggregate-shaped inference
+the owner has been right to keep refusing.
+
+**The deferral carried both bins across thirty-four minutes and twenty-nine
+refusals without spending an attempt.** The acceptance bin went
+`22:56:03 → 23:15:53`, seventeen `DISPATCH_UNROUTED → DISPATCH_DEFERRED` pairs,
+and was assigned at `attempts 0/2`. Yesterday's identical situation abandoned a
+bin in four minutes forty-one seconds. That is the mutation-7 capacity fix
+carrying a real acceptance message, in production, over half an hour.
+
+### Both turns reached a worker, and both proposals were refused
+
+| | acceptance thread `rcv_35d5b…` | old thread `rcv_8085e…` |
+| --- | --- | --- |
+| assigned | 23:16:54.983Z | 23:15:39.157Z |
+| unit submitted | 23:17:05.422Z | 23:16:49.941Z |
+| completion accepted | 23:17:08.023Z | 23:16:52.612Z |
+| unit content hash | **`b76af85d774c53c0`** | **`b76af85d774c53c0`** |
+| candidates produced | **0** | 0 |
+
+The two proposals are **byte-identical** — the same content hash — which is what
+you would expect from the same 207-character question asked twice in the same
+project. The old thread's turn resolved `FAILED` at 23:17:11.907Z with:
+
+> the proposed action was missing the part it acts on
+
+That is `MISSING_REQUIRED_PART` from `validateProposal`. The acceptance thread's
+bin completed with the same proposal and produced no candidate. *(Its stored
+message status was outside the log window I read; the identical hash and the
+zero candidates are what is recorded here, rather than a status I did not
+read.)*
+
+Neither turn was assigned by a fired activation — both show `BIN_ASSIGNED` with
+no preceding `DISPATCH_SENT` at that generation, so a worker already holding the
+connector checked in and was handed them. §22's point again: the Brain cannot
+tell that apart, which is why it is written down.
+
+### The second manifest gap, and it is the priority trap one level deeper
+
+`validateProposal` refuses six actions that arrive without the field they act
+on. The manifest named **two** of the six:
+
+| action | needs | was it in the manifest? |
+| --- | --- | --- |
+| `ATTACH_PROJECT` | `projectId` | **no** |
+| `CAPTURE_CANDIDATE` | `candidate` | yes |
+| `RUN_PROBE` | `probe` | yes |
+| `PROMOTE_MISSION` | `projectId` | **no** |
+| `PARK_CANDIDATE` | `priority` | **no** |
+| `REJECT_CANDIDATE` | `reason` | **no** |
+
+Worse than silence: the manifest lists `projectId`, `reason` and `priority`
+under **"optional"**, which is true in general and false for those six actions.
+A worker that read "optional projectId", chose `ATTACH_PROJECT` and left it out
+was **following the manifest exactly** and had its whole proposal refused.
+
+The fix is the same shape as the priority one and for the same reason. The field
+names now live in `REQUIRED_PART`, exported from `proposal.ts`, used by the
+validator's own predicate map *and* rendered into the manifest — so the two
+cannot drift. The manifest test asserts every entry, and fails on the old code
+with *"the manifest never says ATTACH_PROJECT requires projectId"*.
+
+One incidental thing worth keeping: the requirement line carries no quotes
+around the field name, because the manifest is read as JSON and a quoted name
+comes back escaped — stopping it matching anything a reader, or a test, searches
+for literally. The first version of the test failed for exactly that reason.
+
+### What this says about the pattern
+
+Three refusals in a row, all on the same seam: `BAD_PRIORITY`, then
+`MISSING_REQUIRED_PART`. Both were the platform enforcing a contract it had not
+fully stated, and in both cases the worker's answer was reasonable against what
+it was told. The zero-trust validator is right and stays exactly as strict; what
+was wrong is that the manifest — the only thing a worker sees — was an
+incomplete copy of it.
+
+Both fixes now generate the manifest text **from the validator's own
+constants**, which is the property that stops a fourth one: adding an action, a
+priority or a required field without telling the worker fails a test.
+
+### Verification
+
+| | |
+| --- | --- |
+| `npm run typecheck` | clean |
+| SQLite | **1,642 passed**, 25 skipped, 0 failed |
+| Postgres | **1,667 passed**, 0 failed |
+
+One more than §33 on each chain: the manifest assertion extended in place rather
+than added as a new case. No migration; SQLite stays at **029**, Postgres at
+**020**.

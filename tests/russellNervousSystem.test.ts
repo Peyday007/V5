@@ -68,6 +68,7 @@ import { askHuman, answerHumanRequest, getHumanRequest, transitionMission } from
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
 import { listTurns, createConversation, getConversation } from '../server/repos/russellConversations.ts';
 import { applyTurn, beginTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
+import { REQUIRED_PART } from '../server/services/russell/proposal.ts';
 import { assignNextBin, getBin, putBinUnitResult, terminateUnleasedBin } from '../server/repos/bins.ts';
 import { hashUnitValue } from '../server/services/bins/contracts.ts';
 import { requestCompletion } from '../server/services/bins/service.ts';
@@ -1317,6 +1318,23 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
      */
     for (const priority of CANDIDATE_PRIORITIES) {
       expect(written, `the manifest never names the ${priority} priority`).toContain(priority);
+    }
+
+    /*
+     * And which actions cannot be carried out without a particular field.
+     *
+     * The same trap one level deeper, and it also cost a real turn. The
+     * manifest calls `projectId`, `reason` and `priority` optional — true in
+     * general, false for six specific actions — and only two of the six
+     * requirements were written down. A worker that read "optional projectId",
+     * chose ATTACH_PROJECT and left it out was following the manifest exactly
+     * and had its whole proposal refused with MISSING_REQUIRED_PART.
+     */
+    for (const [forAction, field] of Object.entries(REQUIRED_PART)) {
+      expect(
+        written,
+        `the manifest never says ${forAction} requires ${field}`,
+      ).toContain(`${forAction} additionally requires ${field}`);
     }
   });
 

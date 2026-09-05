@@ -51,6 +51,7 @@ import { routeMessage } from './routing.ts';
 import {
   MAX_PROPOSED_LOOKUPS,
   PROPOSAL_ACTIONS,
+  REQUIRED_PART,
   validateProposal,
   type ValidatedProposal,
 } from './proposal.ts';
@@ -292,6 +293,24 @@ export async function beginTurn(input: {
         `optional "priority", from exactly this set: ${CANDIDATE_PRIORITIES.join(', ')}`,
         'for CAPTURE_CANDIDATE: a "candidate" object with "title" and "statement"',
         `for RUN_PROBE: a "probe" object with "question" and "maxLookups" (at most ${MAX_PROPOSED_LOOKUPS})`,
+        /*
+         * Which actions cannot be carried out without a particular field —
+         * generated from the validator's own map so the two cannot drift.
+         *
+         * The line above says `projectId`, `reason` and `priority` are
+         * optional. That is true in general and false for six specific
+         * actions, and the difference cost a real turn on 2026-09-05: a worker
+         * that read "optional projectId", chose ATTACH_PROJECT and left it out
+         * was following this manifest exactly, and the proposal was refused
+         * with MISSING_REQUIRED_PART. Two of the six were written down; four
+         * were not.
+         */
+        ...Object.entries(REQUIRED_PART).map(
+          // No quotes around the field: the manifest is read as JSON, where a
+          // quoted name comes back escaped and stops matching anything a
+          // reader — or a test — searches for literally.
+          ([forAction, field]) => `${forAction} additionally requires ${field}`,
+        ),
         'no other field — an unrecognised one refuses the whole proposal',
       ],
       outputs: [

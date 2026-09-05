@@ -101,6 +101,31 @@ const KNOWN_FIELDS = new Set([
 const MAX_ANSWER_CHARS = 8_000;
 const MAX_STATEMENT_CHARS = 2_000;
 
+/**
+ * Which field each action cannot be carried out without.
+ *
+ * Exported so the turn manifest can *state* the requirement instead of the
+ * worker having to infer it — and stated once, here, so the two cannot drift.
+ *
+ * This is the priority trap again, one level deeper, and it cost a real turn
+ * on 2026-09-05: the manifest listed `projectId`, `reason` and `priority` under
+ * "optional", which is true in general and false for six specific actions. A
+ * worker that read "optional projectId", chose `ATTACH_PROJECT` and left it out
+ * was following the manifest exactly, and `validateProposal` refused the whole
+ * proposal with `MISSING_REQUIRED_PART`. Only two of the six requirements were
+ * written down anywhere the worker could see.
+ *
+ * An action absent from this map needs nothing beyond `action` and `answer`.
+ */
+export const REQUIRED_PART: Partial<Record<ProposalAction, string>> = {
+  ATTACH_PROJECT: 'projectId',
+  CAPTURE_CANDIDATE: 'candidate',
+  RUN_PROBE: 'probe',
+  PROMOTE_MISSION: 'projectId',
+  PARK_CANDIDATE: 'priority',
+  REJECT_CANDIDATE: 'reason',
+};
+
 /** The hardest bound a proposed probe may name. The envelope narrows further. */
 export const MAX_PROPOSED_LOOKUPS = 3;
 
@@ -238,6 +263,10 @@ export function validateProposal(input: {
   // Actions that cannot be carried out without the part they act on. Checked
   // after the parts are validated, so the refusal names the missing piece
   // rather than the first thing that happened to be wrong.
+  //
+  // The *names* live in `REQUIRED_PART` so the bin manifest can state them
+  // rather than restate them; the predicates stay here because only this
+  // function has the validated values to test. See `REQUIRED_PART`.
   const needs: Partial<Record<ProposalAction, () => boolean>> = {
     ATTACH_PROJECT: () => projectId !== null,
     CAPTURE_CANDIDATE: () => candidate !== null,
