@@ -1608,6 +1608,80 @@ export function dispatchBackoffMs(attemptCount: number): number {
   return Math.min(10 * 60_000, base * 2 ** Math.max(0, capped - 1));
 }
 
+/**
+ * How long a dispatch waits when the fleet simply had no room for it.
+ *
+ * A minute rather than the exponential backoff a failure gets, because this is
+ * not a failure: the condition it is waiting on is another activation
+ * finishing, which takes about that long. Long enough not to spin, short enough
+ * that a person is not left waiting for capacity that freed up seconds later.
+ */
+export const DISPATCH_DEFER_MS = 60_000;
+
+/**
+ * The fleet had nowhere to put this. Wait, and do not spend an attempt on it.
+ *
+ * ---------------------------------------------------------------------------
+ * The defect this closes, observed in production
+ * ---------------------------------------------------------------------------
+ *
+ * `attempt_count` is incremented by `claimDispatchIntent`, at the moment a tick
+ * picks the intent up — before anything is routed and long before anything is
+ * fired. So a tick that claimed an intent, asked the router, and was told
+ * `ACCOUNT_TARGETS_REACHED` had already spent one of the intent's five
+ * attempts. Five ticks of a busy fleet exhausted them, and the intent was
+ * `ABANDONED`.
+ *
+ * That is exactly what happened to the frozen acceptance message on
+ * 2026-09-04: five `DISPATCH_UNROUTED / ACCOUNT_TARGETS_REACHED` refusals in
+ * four minutes and forty-one seconds, then `DISPATCH_ABANDONED`, and a person
+ * left looking at a pending turn that nothing was ever going to answer again.
+ *
+ * **A full fleet is not a broken dispatch.** Attempts exist to stop Brain
+ * retrying something that will not work; "every capable surface is at its
+ * configured target" is a condition that resolves by itself the moment an
+ * activation finishes. §23 already says a refusal is not misconduct, about
+ * accounts and quarantine. This is the same sentence one level down, about an
+ * intent and its attempt budget.
+ *
+ * So the attempt is given back — guarded at zero, because a counter that could
+ * go negative is a worse bug than the one being fixed — the state returns to
+ * `PENDING`, and the intent waits. The bin's own `attempt_count` is untouched
+ * and still bounds how many times a *worker* may hold it, which is the bound
+ * that matters for spending.
+ */
+export async function markDispatchDeferred(
+  id: string,
+  input: { refusal: string; message: string; retryAfterMs?: number | null },
+): Promise<void> {
+  const at = binNow();
+  const current = await getDispatch(id);
+  if (!current) return;
+  const next = plusMs(at, input.retryAfterMs ?? DISPATCH_DEFER_MS);
+  await getDb().run(
+    `UPDATE bin_dispatch
+        SET state = 'PENDING',
+            attempt_count = CASE WHEN attempt_count > 0 THEN attempt_count - 1 ELSE 0 END,
+            next_attempt_at = ?, last_error_kind = ?, last_error = ?, updated_at = ?
+      WHERE id = ?`,
+    [next, bounded(input.refusal, 80), bounded(input.message, 500), at, id],
+  );
+  await recordBinEvent({
+    eventType: 'DISPATCH_DEFERRED',
+    binId: current.binId,
+    leaseGeneration: current.leaseGeneration,
+    attempt: current.attemptCount,
+    provider: 'claude-routine',
+    outcome: input.refusal,
+    reason: input.message,
+    measures: { backoffMs: input.retryAfterMs ?? DISPATCH_DEFER_MS },
+    // The provider was never asked. Brain read its own capacity rows and
+    // decided to wait, which is a measurement of Brain rather than of anybody's
+    // allowance — never PROVIDER_ENFORCED.
+    evidenceClass: 'MEASURED',
+  });
+}
+
 export async function markDispatchFailed(
   id: string,
   input: { kind: string; message: string; retryAfterMs?: number | null },

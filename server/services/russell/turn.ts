@@ -59,6 +59,7 @@ import { parseJson } from '../../repos/util.ts';
 import { answerFast, noFastLane } from '../conversation/fastLane.ts';
 import { standingInstructions } from '../conversation/review.ts';
 import type { ChatAdapter } from '../conversation/adapter.ts';
+import { CANDIDATE_PRIORITIES } from '../../domain/types.ts';
 import type { BinState, Principal, RussellMessage } from '../../domain/types.ts';
 
 /** The one unit a turn bin asks for. */
@@ -274,7 +275,21 @@ export async function beginTurn(input: {
       evidence: [
         `one JSON object with an "action" from exactly this set: ${PROPOSAL_ACTIONS.join(', ')}`,
         'an "answer" field: what to say to the person, in plain words',
-        'optional "projectId", "confidence" (0-100), "reason", "priority"',
+        'optional "projectId", "confidence" (0-100), "reason"',
+        /*
+         * The priorities, written out for the same reason the actions are.
+         *
+         * They were not, and it cost a real turn. The frozen acceptance
+         * message reached a worker on 2026-09-05, the worker answered with a
+         * priority of its own invention, `validateProposal` refused the whole
+         * proposal with `BAD_PRIORITY`, and the person was told Russell could
+         * not answer. The comment directly above this list already said that a
+         * rule enforced against somebody who was never told it is a trap —
+         * and then listed `priority` without its vocabulary. Enumerated from
+         * the constant, so the set cannot drift from the one the validator
+         * matches against.
+         */
+        `optional "priority", from exactly this set: ${CANDIDATE_PRIORITIES.join(', ')}`,
         'for CAPTURE_CANDIDATE: a "candidate" object with "title" and "statement"',
         `for RUN_PROBE: a "probe" object with "question" and "maxLookups" (at most ${MAX_PROPOSED_LOOKUPS})`,
         'no other field — an unrecognised one refuses the whole proposal',

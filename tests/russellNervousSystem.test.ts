@@ -72,6 +72,7 @@ import { assignNextBin, getBin, putBinUnitResult, terminateUnleasedBin } from '.
 import { hashUnitValue } from '../server/services/bins/contracts.ts';
 import { requestCompletion } from '../server/services/bins/service.ts';
 import { listEvents } from '../server/repos/events.ts';
+import { CANDIDATE_PRIORITIES } from '../server/domain/types.ts';
 import type { ExistingClaim, Principal, ProjectMembership } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -1302,6 +1303,21 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
     }
     expect(written).toContain(TURN_UNIT_KEY);
     expect(written).toContain(String(MAX_PROPOSED_LOOKUPS));
+
+    /*
+     * And every priority, which is the half this assertion did not cover and
+     * which cost a real turn in production.
+     *
+     * On 2026-09-05 the frozen acceptance message reached a worker, the worker
+     * answered with a priority of its own invention, `validateProposal` refused
+     * the whole proposal with `BAD_PRIORITY`, and the person was told Russell
+     * could not answer. The manifest listed `"priority"` as an optional field
+     * and never said what the five values were — the exact trap the comment
+     * above describes, one field further down.
+     */
+    for (const priority of CANDIDATE_PRIORITIES) {
+      expect(written, `the manifest never names the ${priority} priority`).toContain(priority);
+    }
   });
 
   it('asks which project instead of dispatching, when it cannot tell', async () => {

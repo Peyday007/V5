@@ -57,6 +57,7 @@ import {
   getBin,
   isDispatchable,
   listDispatchableBins,
+  markDispatchDeferred,
   markDispatchFailed,
   markDispatchSent,
   recordBinEvent,
@@ -65,8 +66,28 @@ import {
 import { fireConfig, fireRoutine, isFireConfigured, isRetryable, recordAllowanceObservation, resolveToken } from './fire.ts';
 import { fleetSnapshot } from './candidates.ts';
 import { routeBin } from './router.ts';
+import type { RoutingRefusal } from './router.ts';
 import { markDispatchRoutine } from '../../repos/bins.ts';
 import { claimRoutineFireSlot, recordAccountRefusal, recordRoutineFire } from '../../repos/fleet.ts';
+
+/**
+ * Routing refusals that mean "wait", not "give up".
+ *
+ * Each of these resolves without anybody changing the fleet — an activation
+ * finishes, a rate limit lapses, an operator un-pauses — so an intent that
+ * meets one keeps its attempts and tries again. Everything outside this set
+ * means no surface exists to take the work at all, and retrying into an empty
+ * room forever would hide that from the person waiting.
+ *
+ * Declared as a constant next to the loop rather than as a property of the
+ * refusal, so adding a refusal makes somebody decide which kind it is.
+ */
+const WAIT_FOR_CAPACITY = new Set<RoutingRefusal>([
+  'FLEET_TARGET_REACHED',
+  'ACCOUNT_TARGETS_REACHED',
+  'ALL_SURFACES_RATE_LIMITED',
+  'FLEET_PAUSED',
+]);
 
 /**
  * How often the loop wakes.
@@ -94,6 +115,15 @@ export interface TickResult {
   fired: number;
   failed: number;
   skippedNotConfigured: boolean;
+  /**
+   * Intents put back because the fleet had no room, keeping their attempts.
+   *
+   * Counted separately from `unrouted` on purpose: `unrouted` says a routing
+   * decision refused, and this says what was then done about it. A deferral
+   * that showed up only as a refusal would look identical to the abandonment
+   * it replaced.
+   */
+  deferred: number;
   /** Intents held back because no surface could take them, by refusal. */
   unrouted: Record<string, number>;
   /** Registered Routines whose secret this deployment does not hold. */
@@ -113,6 +143,7 @@ export async function dispatchTick(
     fired: 0,
     failed: 0,
     skippedNotConfigured: false,
+    deferred: 0,
     unrouted: {},
     missingSecrets: 0,
   };
@@ -208,13 +239,40 @@ export async function dispatchTick(
         evidenceClass: decision.refusal === 'ALL_SURFACES_RATE_LIMITED' ? 'PROVIDER_ENFORCED' : 'OPERATOR_POLICY',
         measures: { considered: decision.considered },
       });
-      await markDispatchFailed(intent.id, {
-        kind: 'UNROUTED',
-        message: decision.reason,
-        retryAfterMs: decision.retryAt
-          ? Math.max(0, Date.parse(decision.retryAt) - Date.now())
-          : 60_000,
-      });
+      /*
+       * Capacity waits; a missing fleet fails.
+       *
+       * The comment above already said an unrouted intent is "not a failure of
+       * this intent" — and then called `markDispatchFailed`, which spends an
+       * attempt and abandons at five. `attempt_count` is incremented at *claim*,
+       * so five ticks of a busy fleet exhausted the budget without a single
+       * activation having been tried. The frozen acceptance message died that
+       * way on 2026-09-04.
+       *
+       * `WAIT_FOR_CAPACITY` is the set of refusals that resolve by themselves or
+       * by a switch an operator flips: a target reached, a rate limit, a paused
+       * fleet. Those defer and keep their attempts. The rest — no Routine
+       * registered, no capable surface, every surface ineligible — mean nothing
+       * is coming without somebody changing the fleet, so they still exhaust and
+       * abandon rather than retrying into an empty room forever.
+       */
+      const retryAfterMs = decision.retryAt
+        ? Math.max(0, Date.parse(decision.retryAt) - Date.now())
+        : null;
+      if (WAIT_FOR_CAPACITY.has(decision.refusal)) {
+        await markDispatchDeferred(intent.id, {
+          refusal: decision.refusal,
+          message: decision.reason,
+          retryAfterMs,
+        });
+        result.deferred += 1;
+      } else {
+        await markDispatchFailed(intent.id, {
+          kind: 'UNROUTED',
+          message: decision.reason,
+          retryAfterMs: retryAfterMs ?? 60_000,
+        });
+      }
       // Every intent in this burst faces the same fleet, so walking the rest of
       // them into the same refusal spends nothing but time.
       break;
@@ -261,11 +319,14 @@ export async function dispatchTick(
           reason: 'Another dispatcher took this surface\u2019s fire slot first.',
           evidenceClass: 'MEASURED',
         });
-        await markDispatchFailed(intent.id, {
-          kind: 'UNROUTED',
-          message: 'Another dispatcher took this surface\u2019s fire slot first.',
+        // Losing the race is §23's ordinary outcome, not misconduct. It cost
+        // an attempt until now, which is the same defect one branch over.
+        await markDispatchDeferred(intent.id, {
+          refusal: 'SLOT_LOST',
+          message: 'Another dispatcher took this surface’s fire slot first.',
           retryAfterMs: 5_000,
         });
+        result.deferred += 1;
         continue;
       }
 

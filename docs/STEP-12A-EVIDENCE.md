@@ -2711,3 +2711,165 @@ unchanged because the schema is unchanged.
 `step10 turn-trace` was run against a local Deal Dispatch fixture — a
 conversation, two messages and a candidate — and printed states, ids, times,
 `title 17 chars` and no content whatsoever.
+
+---
+
+## 31. Mutation 6, and the permit trace resolved — 2026-09-05
+
+### The deployment
+
+Run [33979964910](https://github.com/Peyday007/V5/actions/runs/33979964910),
+commit `f5ca139`, authorized in writing:
+
+> "I authorize mutation 6: deploy `f5ca139` with the documented attribution,
+> arrival-counter, pending-state, trace, and A22-deferral fixes. Use the
+> established deployment checks, verification before and after restart, and
+> rollback procedure."
+> — product owner, 2026-09-05
+
+Every step green: typecheck and tests, build, deploy, **hosted verification
+before the restart** (17:12:27→17:14:40), **restart** (17:14:41→17:15:19),
+**hosted verification after it** (17:15:19→17:18:20). `LEDGER` now names six
+runs and `EXPECTED` is `6`, with the authorization quoted beside them.
+
+**The acceptance-scope deployment the owner approved earlier is still
+unspent.** It remains scope-pin-only and will take whatever number it is
+actually given; nothing here consumed it or renumbered it.
+
+### The permit conversation, from its own rows
+
+`step10 turn-trace` against the deployed image
+([33980663588](https://github.com/Peyday007/V5/actions/runs/33980663588)) and
+`step10 trace` on the bin
+([33980785406](https://github.com/Peyday007/V5/actions/runs/33980785406)).
+Conversation `rcv_8085eba0beb04bc38ce6`, six messages, three turns.
+
+**The owner conflated two different messages, and so did I.** The trace
+separates them by length, and the lengths are decisive because the owner gave
+me both texts:
+
+| | chars | sent | outcome |
+| --- | --- | --- | --- |
+| turn 1 | 118 | 2026-09-04 07:42:34.867Z | answered 07:43:37.503Z, **63s** |
+| **the permit message** | **256** | 2026-09-04 08:42:45.761Z | answered 08:44:38.604Z, **1m 53s** |
+| **the frozen `S12A-ACC-1` message** | **207** | 2026-09-04 21:49:11.857Z | abandoned, then failed |
+
+The quoted permit message is 256 characters and the frozen scenario message is
+207, exactly matching the two rows. So:
+
+**Who answered the permit message, and when.** Bin `bin_0427805f892549fb9c3a`,
+ready 08:42:45.982Z, routed at 08:42:49.435Z to **account
+`acct_70dda3fae2e1428e944b`, Routine `rtn_c7bcec972bd44afa91d7`** — the
+`primary`/V1 pair — fired at 08:42:50.890Z into provider session
+`session_016Ak4LSRx4rMGnXyibshZ6t`, assigned at 08:43:01.292Z to worker
+`wkr_1cdd82cfb2a54faf8edd`, unit submitted 08:44:21.040Z, completion accepted
+08:44:23.950Z. **The answer was saved at 08:44:38.604Z — one minute and
+fifty-three seconds after the message.** It is 1,257 characters and its status
+is `COMPLETE`.
+
+**It created a candidate.** `rcn_23e70baee1ba47478c28`, state `CAPTURED`, at
+08:44:38.552Z, on this conversation. **No mission and no probe** — priority and
+ordinal are both unset, so nothing ranked it and nothing was launched from it.
+The reply's prose about "capturing a candidate for bounded research" was
+therefore true about the capture and not true about any research.
+
+This is the answer the owner saw the following day. It had been there since the
+morning.
+
+**No friend's Routine was involved.** `DISPATCH_ROUTED` names one account and
+one Routine, and they are the `primary` pair. That is a record Brain wrote at
+the moment it chose, not an inference from fire counts.
+
+### What actually went unanswered
+
+The **frozen acceptance message**, sent at 21:49:11.857Z. Bin
+`bin_aaee02cbf6714010b352`, ready at 21:49:12.112Z, intent created at
+21:49:13.308Z, and then:
+
+    21:49:13.440  DISPATCH_UNROUTED   ACCOUNT_TARGETS_REACHED
+    21:50:23.462  DISPATCH_UNROUTED   ACCOUNT_TARGETS_REACHED
+    21:51:33.514  DISPATCH_UNROUTED   ACCOUNT_TARGETS_REACHED
+    21:52:43.552  DISPATCH_UNROUTED   ACCOUNT_TARGETS_REACHED
+    21:53:53.602  DISPATCH_UNROUTED   ACCOUNT_TARGETS_REACHED
+    21:53:53.653  DISPATCH_ABANDONED
+
+"Every capable surface is at its configured target. Raise an account or Routine
+target, or wait for an activation to finish." Five refusals in **four minutes
+and forty-one seconds**, and then nothing was ever coming. The owner watched a
+pending turn for thirty minutes because the dispatch had already given up in
+the first five.
+
+**Nineteen hours and twenty-one minutes later**, at 2026-09-05T17:15:23.573Z —
+four seconds after mutation 6's restart — a worker checked in and was handed the
+long-abandoned bin. It submitted a proposal at 17:16:24.844Z, Brain accepted the
+completion at 17:16:27.291Z, and the turn resolved at 17:16:54.234Z as
+**`FAILED`**, with the reason **"the priority was not one this version
+recognises"**.
+
+### Attribution that is not recoverable, and is recorded as unknown
+
+The session that drained that bin on 2026-09-05 is **unknown**, and no new
+logging can recover it. `BIN_ASSIGNED` records `session_ref` only when the
+worker supplies it as telemetry, this one supplied none, and `lease_session_ref`
+is cleared when the lease ends. The worker is `wkr_1cdd82cfb2a54faf8edd` —
+which **both** V1 and V2 are bound to, so the account and Routine are not
+determinable from it either. It was not this session: the only Brain calls made
+here were `brain_whoami` and `brain_list_projects`, and neither claims work.
+
+That is the honest end of that thread. A quarantine blocks new dispatches and
+does not prove the absence of a separately started session, so nothing here
+concludes anything about friend-2 from V2's state.
+
+### Two defects the trace named, both fixed
+
+**1. A rule the worker was never told.** `validateProposal` matches `priority`
+against `CANDIDATE_PRIORITIES` exactly and refuses the whole proposal
+otherwise. The turn manifest listed `"priority"` as an optional field and
+**never said what the five values were** — while the comment directly above that
+list explains, at length, that a rule enforced against somebody who was never
+told it is a trap rather than a rule. One field further down, it was one.
+
+That is what failed the frozen message's turn on 2026-09-05: the worker answered
+with a priority of its own invention and the person was told Russell could not
+answer. The manifest now enumerates the priorities from the constant, the way it
+already enumerated the actions, and the manifest test asserts every one of them —
+an assertion that fails on the old code with *"the manifest never names the
+MUST_DO priority"*.
+
+It also blocked `A06_JUDGMENT_OVERRIDE`, which needs a stored priority to
+override.
+
+**2. A full fleet counted as a broken dispatch.** `claimDispatchIntent`
+increments `attempt_count` when a tick *picks an intent up* — before routing,
+long before firing. So being told to wait cost an attempt, and five ticks of a
+busy fleet exhausted the budget without one activation having been tried.
+
+`markDispatchDeferred` gives the attempt back, guarded at zero, and puts the
+intent back as `PENDING` with a one-minute wait. The refusals that defer are the
+ones that resolve by themselves or by a switch an operator flips —
+`FLEET_TARGET_REACHED`, `ACCOUNT_TARGETS_REACHED`, `ALL_SURFACES_RATE_LIMITED`,
+`FLEET_PAUSED`, and losing a fire slot to another dispatcher. The rest still
+exhaust and abandon, because "no Routine is registered" does not resolve by
+waiting and an intent retrying into an empty room forever would hide a broken
+deployment behind a patient spinner.
+
+§23 already says *a refusal is not misconduct*, about accounts and quarantine.
+This is the same sentence one level down, about an intent and its attempts.
+`tests/dispatchDeferral.test.ts` holds both halves.
+
+Neither of these is deployed. They are what the next deployment carries.
+
+### Verification of both fixes
+
+| | |
+| --- | --- |
+| `npm run typecheck` | clean |
+| `npm run build` | clean |
+| SQLite | **1,633 passed**, 25 skipped, 0 failed, 65 files |
+| Postgres | **1,658 passed**, 0 failed, 66 files |
+| Visual QA | 12 of 12 screens render and fit at 1280x900 and 390x844 |
+
+Six more tests than §30: three in `tests/dispatchDeferral.test.ts`, three in
+`tests/russellShell.test.tsx` for the conversation controls, and the manifest
+assertion extended in place rather than added. No migration was touched; SQLite
+stays at **029** and Postgres at **020**.

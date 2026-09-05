@@ -120,13 +120,21 @@ jobs:
           # fifth explicitly conditional on the populated-data upgrade path
           # being proved on both chains first, which it was.
           #
+          # The sixth is the capacity-ledger attribution, the arrival counter,
+          # the derived pending state, `turn-trace` and the A22 deferral. It was
+          # requested with its reason, expected effect and recovery plan, and
+          # authorized in writing before it was spent. It is **not** the
+          # acceptance-scope deployment the owner approved earlier: that one is
+          # still unspent, is still scope-pin-only, and will take the next
+          # number it is actually given rather than one assumed in advance.
+          #
           # Those authorizations are what `EXPECTED` is raised against; raising
           # it without one would be exactly the widening this constant exists to
           # prevent. The full texts are in docs/STEP-12A-EVIDENCE.md §10 and
           # §19, and the upgrade proof is §23.
-          LEDGER: '33835314104 33837508678 33838743276 33845601961 33921379946'
-          EXPECTED: '5'
-          AUTHORIZATION: 'mutation 4 — product owner, 2026-09-04: "I authorize exactly one additional application deployment for the adaptive audit correction." | mutation 5 — product owner, 2026-09-04, conditional on the populated-data upgrade proof passing on both chains: "I authorize this exact Step 12A activation sequence: 1. Deploy the current application tree ... with migrations 028/029. Perform the documented restart, hosted verification, canary, and rollback checks."'
+          LEDGER: '33835314104 33837508678 33838743276 33845601961 33921379946 33979964910'
+          EXPECTED: '6'
+          AUTHORIZATION: 'mutation 4 — product owner, 2026-09-04: "I authorize exactly one additional application deployment for the adaptive audit correction." | mutation 5 — product owner, 2026-09-04, conditional on the populated-data upgrade proof passing on both chains: "I authorize this exact Step 12A activation sequence: 1. Deploy the current application tree ... with migrations 028/029. Perform the documented restart, hosted verification, canary, and rollback checks." | mutation 6 — product owner, 2026-09-05: "I authorize mutation 6: deploy f5ca139 with the documented attribution, arrival-counter, pending-state, trace, and A22-deferral fixes. Use the established deployment checks, verification before and after restart, and rollback procedure."'
         run: |
           set -euo pipefail
           api() {
