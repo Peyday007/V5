@@ -2243,6 +2243,30 @@ legend {
   color: var(--red);
 }
 
+/*
+ * The way back from a failed turn. Quiet on purpose: it sits under a failure
+ * message, so it should read as an offer rather than an alarm.
+ */
+.rs-turn-retry {
+  margin: 8px 0 0;
+  padding: 4px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg-1);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rs-turn-retry:hover:not(:disabled) {
+  border-color: var(--fg-muted);
+}
+
+.rs-turn-retry:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .rs-composer {
   display: flex;
   gap: 8px;

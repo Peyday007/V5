@@ -240,7 +240,44 @@ export async function beginTurn(input: {
     };
   }
 
-  const bin = await createBin({
+  const bin = await createTurnBin({
+    projectId,
+    conversationId: conversation.id,
+    goal: content,
+    pendingMessageId: pendingMessage.id,
+  });
+
+  return {
+    ok: true,
+    reason: 'dispatched',
+    userMessage,
+    pendingMessage,
+    binId: bin.id,
+    attachedProjectId,
+  };
+}
+
+
+/**
+ * The bin one turn is answered by.
+ *
+ * Lifted out of `beginTurn` when a retry needed to create the same thing. It
+ * is deliberately one function rather than two similar ones: the manifest *is*
+ * the contract a proposal is judged against, so a retry built from a second
+ * copy would be answering a slightly different question than the attempt it
+ * replaces — and the drift would show up as a refusal nobody could explain.
+ *
+ * `createdById` is how `applyTurn` finds its way back to the pending turn, so
+ * the caller supplies the message this bin answers and nothing else links them.
+ */
+async function createTurnBin(input: {
+  projectId: string;
+  conversationId: string;
+  goal: string;
+  pendingMessageId: string;
+}) {
+  const { projectId, goal: content, pendingMessageId: pendingMessageIdForBin } = input;
+  return createBin({
     projectId,
     kind: 'RUSSELL_TURN',
     title: 'Answer one conversation turn',
@@ -254,7 +291,7 @@ export async function beginTurn(input: {
         {
           key: TURN_UNIT_KEY,
           establishes: 'one structured proposal',
-          input: await transcriptFor(conversation.id),
+          input: await transcriptFor(input.conversationId),
           transform: 'none',
           dependsOn: [],
         },
@@ -353,21 +390,12 @@ export async function beginTurn(input: {
     },
     completionContract: 'RUSSELL_TURN_V1',
     createdByType: 'SYSTEM',
-    createdById: `russell:turn:${pendingMessage.id}`,
+    createdById: `russell:turn:${pendingMessageIdForBin}`,
     ready: true,
     priority: 9,
     maxAttempts: 2,
     workloadClass: 'RUSSELL_TURN',
   });
-
-  return {
-    ok: true,
-    reason: 'dispatched',
-    userMessage,
-    pendingMessage,
-    binId: bin.id,
-    attachedProjectId,
-  };
 }
 
 function refusal(reason: string): BeginTurnResult {
@@ -379,6 +407,159 @@ function refusal(reason: string): BeginTurnResult {
     binId: null,
     attachedProjectId: null,
   };
+}
+
+/**
+ * How many times one question may be handed back to the fleet.
+ *
+ * A retry is not free — it is a real activation against a fixed subscription
+ * allowance — and a turn that fails deterministically would otherwise be a
+ * button that spends the fleet forever. Three attempts on one question is the
+ * ceiling; past it the honest answer is that this needs a person, which is
+ * what the refusal says.
+ */
+export const MAX_TURN_ATTEMPTS = 3;
+
+export interface RetryTurnResult {
+  ok: boolean;
+  /** Safe to show. */
+  reason: string;
+  /** The new pending turn, when one was created. */
+  pendingMessage: RussellMessage | null;
+  binId: string | null;
+  /** Which attempt this is, counting the original as 1. */
+  attempt: number | null;
+}
+
+/**
+ * Ask the same question again, without asking the person to.
+ *
+ * A turn that ends `FAILED` had no way back. `resolveMessage` is guarded on
+ * `PENDING` — correctly, because that guard is what makes a turn answer exactly
+ * once — so a settled turn can never be re-settled, and nothing anywhere
+ * re-opened one. The designed recovery was the sentence the failure shows:
+ * *"Ask me again and I will try once more"*, meaning a **new user message**.
+ *
+ * That is fine when the failure was about the question. It is wrong when the
+ * failure was Brain's own — a proposal refused because the worker was never
+ * told a rule — because then the remedy is to re-ask a question that was never
+ * defective, and making a person retype it is the product admitting it lost
+ * their turn. Every escalation needs an answering transition; this is that
+ * state's.
+ *
+ * What it does **not** do matters as much as what it does:
+ *
+ *   - **The failed attempt is untouched.** Its row keeps `FAILED`, its refusal
+ *     reason, and its bin keeps every dispatch, refusal and stored proposal.
+ *     A retry that tidied away the evidence would destroy the only record of
+ *     why the first attempt failed.
+ *   - **No new user message.** The person asked once. The retry answers the
+ *     original question, found by walking back to the nearest thing they
+ *     actually said, and a thread that grew a duplicate of their own words
+ *     every time a worker misfired would be a worse record than a failure.
+ *   - **Nothing is fabricated.** It creates a pending turn and a bin, and then
+ *     waits for a worker exactly like the first attempt. It never writes a
+ *     proposal, an answer or a candidate.
+ */
+export async function retryTurn(input: {
+  principal: Principal;
+  messageId: string;
+}): Promise<RetryTurnResult> {
+  const failed = await getMessage(input.messageId);
+  // Absent and forbidden are one answer, in the same words, at this boundary
+  // as at every other one.
+  if (!failed) return retryRefusal('no such turn');
+  const conversation = await getConversation(failed.conversationId);
+  if (!conversation || conversation.ownerUserId !== input.principal.id) {
+    return retryRefusal('no such turn');
+  }
+  if (failed.role !== 'RUSSELL') return retryRefusal('that is not one of my turns');
+  if (failed.status === 'PENDING') return retryRefusal('that turn has not finished yet');
+  if (failed.status !== 'FAILED') return retryRefusal('that turn was answered');
+
+  const projectId = conversation.projectId;
+  if (!projectId) {
+    // No project is no grounding and no bin to authorize one against — the same
+    // condition `beginTurn` answers directly rather than dispatching.
+    return retryRefusal('I do not know which project this is about');
+  }
+
+  const turns = await listTurns(conversation.id, 500);
+  const index = turns.findIndex((turn) => turn.id === failed.id);
+  if (index < 0) return retryRefusal('no such turn');
+
+  /*
+   * The question, as the person asked it.
+   *
+   * Walked back from the failure rather than taken from a parameter, because a
+   * caller-supplied question would make this a way to ask something new under
+   * the appearance of a retry — and the whole point is that the retry answers
+   * the attempt it replaces.
+   */
+  const asked = turns.slice(0, index).reverse().find((turn) => turn.role === 'USER');
+  if (!asked) return retryRefusal('I cannot find what that turn was answering');
+
+  /*
+   * Already retried, or already spent.
+   *
+   * Both are counted over the whole thread rather than by following a chain,
+   * so a retry of a retry is bounded by the same ceiling as the first. The
+   * in-flight check is what stops a person pressing twice and paying twice;
+   * it is a read rather than a compare-and-swap because the cost of losing
+   * that race is one duplicate activation, and the alternative — a guarded
+   * column on a table that has no natural one — is more machinery than the
+   * risk justifies. `resolveMessage` still makes each turn answer once.
+   */
+  const attempts = turns.filter(
+    (turn) => turn.role === 'RUSSELL' && retryOf(turn) === asked.id,
+  );
+  if (attempts.some((turn) => turn.status === 'PENDING')) {
+    return retryRefusal('I am already having another go at that one');
+  }
+  const attempt = attempts.length + 2;
+  if (attempt > MAX_TURN_ATTEMPTS) {
+    return retryRefusal('I have tried that one as many times as I am allowed to');
+  }
+
+  const pendingMessage = await addMessage({
+    conversationId: conversation.id,
+    role: 'RUSSELL',
+    content: '',
+    status: 'PENDING',
+    pendingReason: PENDING_REASON,
+    /*
+     * The link, on the row rather than in prose. `retryOf` names the attempt
+     * this replaces and `answers` names the question, so the thread can be read
+     * back as "one question, three attempts" by something that was not present
+     * when it happened.
+     */
+    metadata: { retryOf: failed.id, answers: asked.id, attempt },
+  });
+
+  const bin = await createTurnBin({
+    projectId,
+    conversationId: conversation.id,
+    goal: asked.content,
+    pendingMessageId: pendingMessage.id,
+  });
+
+  return {
+    ok: true,
+    reason: 'dispatched',
+    pendingMessage,
+    binId: bin.id,
+    attempt,
+  };
+}
+
+/** Which question a turn is an attempt at, or null for a first attempt. */
+function retryOf(turn: RussellMessage): string | null {
+  const answers = turn.metadata?.['answers'];
+  return typeof answers === 'string' ? answers : null;
+}
+
+function retryRefusal(reason: string): RetryTurnResult {
+  return { ok: false, reason, pendingMessage: null, binId: null, attempt: null };
 }
 
 /** The recent thread, as the worker reads it. Bounded, and text only. */
@@ -625,7 +806,16 @@ async function conversationForMessage(messageId: string) {
  * revoked between asking and being answered is judged by what they may reach
  * *at the moment the effect happens* — the same rule every request follows.
  */
-async function ownerPrincipal(userId: string): Promise<Principal | null> {
+/**
+ * The owner's own authority, rebuilt from rows.
+ *
+ * Exported because the operator script needs the same principal to drive a
+ * retry from inside the container, and a second construction of it would be a
+ * second answer to "what may this person reach". Nothing about a request
+ * contributes here — no header, no body, no token — so this cannot become a way
+ * to widen anybody's reach; it can only reproduce what the rows already say.
+ */
+export async function ownerPrincipal(userId: string): Promise<Principal | null> {
   const user = await getUser(userId);
   if (!user || user.disabledAt) return null;
   return {

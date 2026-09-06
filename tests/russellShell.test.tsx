@@ -529,6 +529,101 @@ describe('saying something', () => {
     );
     expect(document.querySelector('.rs-turn-pending')).toBeNull();
   });
+
+  it('offers a way back from a failed turn instead of telling a person to retype it', async () => {
+    let turns: unknown[] = [
+      { id: 'm1', role: 'USER', content: 'anything', status: 'COMPLETE', pendingReason: null },
+      {
+        id: 'm2',
+        role: 'RUSSELL',
+        content: 'I could not answer that one.',
+        status: 'FAILED',
+        pendingReason: null,
+      },
+    ];
+    baseRoutes({
+      'GET /api/russell/conversations/rcv_1': () => ({
+        body: { conversation: { id: 'rcv_1', title: 'A thread' }, turns },
+      }),
+      'POST /api/russell/conversations/rcv_1/turns/m2/retry': () => {
+        // The server is the thing that creates the new attempt; the view only
+        // re-reads. Nothing here is patched into place optimistically.
+        turns = [
+          ...turns,
+          { id: 'm3', role: 'RUSSELL', content: '', status: 'PENDING', pendingReason: null,
+            pendingDetail: 'This is waiting to be handed to a worker.' },
+        ];
+        return { status: 202, body: { pending: null, attempt: 2, dispatched: true } };
+      },
+    });
+    await mount();
+
+    const button = await waitFor(() => screen.getByRole('button', { name: 'Try again' }));
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    // It went to the retry route, and the thread was re-read rather than edited.
+    expect(calls).toContain('POST /api/russell/conversations/rcv_1/turns/m2/retry');
+    await waitFor(() =>
+      expect(document.querySelector('.rs-turn-status.rs-turn-pending')?.textContent).toMatch(
+        /waiting to be handed to a worker/i,
+      ),
+    );
+    // The failed attempt is still on screen. A retry that hid it would hide the
+    // only sign that anything went wrong.
+    expect(document.querySelector('.rs-turn-status.rs-turn-failed')).toBeTruthy();
+  });
+
+  it('shows the server\'s refusal rather than hiding the button', async () => {
+    baseRoutes({
+      'GET /api/russell/conversations/rcv_1': {
+        body: {
+          conversation: { id: 'rcv_1', title: 'A thread' },
+          turns: [
+            { id: 'm1', role: 'USER', content: 'anything', status: 'COMPLETE', pendingReason: null },
+            {
+              id: 'm2',
+              role: 'RUSSELL',
+              content: 'I could not answer that one.',
+              status: 'FAILED',
+              pendingReason: null,
+            },
+          ],
+        },
+      },
+      'POST /api/russell/conversations/rcv_1/turns/m2/retry': {
+        status: 400,
+        body: { error: 'I have tried that one as many times as I am allowed to' },
+      },
+    });
+    await mount();
+    await act(async () => {
+      fireEvent.click(await waitFor(() => screen.getByRole('button', { name: 'Try again' })));
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toMatch(/as many times as I am allowed/i),
+    );
+  });
+
+  it('offers nothing to retry on a turn that succeeded or is still running', async () => {
+    baseRoutes({
+      'GET /api/russell/conversations/rcv_1': {
+        body: {
+          conversation: { id: 'rcv_1', title: 'A thread' },
+          turns: [
+            { id: 'm1', role: 'USER', content: 'anything', status: 'COMPLETE', pendingReason: null },
+            { id: 'm2', role: 'RUSSELL', content: 'Here you go.', status: 'COMPLETE', pendingReason: null },
+            { id: 'm3', role: 'USER', content: 'and this', status: 'COMPLETE', pendingReason: null },
+            { id: 'm4', role: 'RUSSELL', content: '', status: 'PENDING', pendingReason: 'thinking' },
+          ],
+        },
+      },
+    });
+    await mount();
+    await waitFor(() => expect(screen.getByLabelText('Say something to Russell')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
 });
 
 describe('the thin views', () => {

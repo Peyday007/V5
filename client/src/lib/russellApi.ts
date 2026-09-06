@@ -65,6 +65,14 @@ export interface TurnResponse {
   dispatched: boolean;
 }
 
+/** What comes back from asking for another attempt at a failed turn. */
+export interface RetryResponse {
+  pending: RussellMessage | null;
+  /** Which attempt this is, counting the original as 1. */
+  attempt: number | null;
+  dispatched: boolean;
+}
+
 /**
  * One entry in Knows.
  *
@@ -122,6 +130,20 @@ export const RussellApi = {
       method: 'POST',
       body: JSON.stringify({ content }),
     }),
+
+  /**
+   * Have another go at a turn that failed.
+   *
+   * No body on purpose. A retry that carried text would be a way to ask
+   * something different while calling it the same question; the server walks
+   * back to what the person actually said.
+   */
+  retry: (conversationId: string, messageId: string): Promise<RetryResponse> =>
+    api(
+      `/api/russell/conversations/${encodeURIComponent(conversationId)}/turns/` +
+        `${encodeURIComponent(messageId)}/retry`,
+      { method: 'POST' },
+    ),
 
   briefing: (projectId: string): Promise<BriefingResponse> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/briefing`),

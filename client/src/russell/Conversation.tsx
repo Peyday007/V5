@@ -98,7 +98,12 @@ export function Conversation({ conversationId }: { conversationId: string }): JS
     <div className="rs-conversation">
       <ol className="rs-turns" aria-live="polite" aria-label="Conversation">
         {turns.map((turn) => (
-          <Turn key={turn.id} turn={turn} />
+          <Turn
+            key={turn.id}
+            turn={turn}
+            conversationId={conversationId}
+            onRetried={() => thread.reload()}
+          />
         ))}
       </ol>
       <div ref={bottom} />
@@ -142,14 +147,66 @@ export function Conversation({ conversationId }: { conversationId: string }): JS
   );
 }
 
-function Turn({ turn }: { turn: RussellMessage }): JSX.Element {
+function Turn({
+  turn,
+  conversationId,
+  onRetried,
+}: {
+  turn: RussellMessage;
+  conversationId: string;
+  onRetried: () => void;
+}): JSX.Element {
   const label = turnLabel(turn.status, turn.pendingReason, turn.pendingDetail);
+  const [retrying, setRetrying] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
+
+  /*
+   * The button only a failed turn gets.
+   *
+   * Before this, the failure sentence said "ask me again" and meant it
+   * literally: the person had to retype their question, because a settled turn
+   * cannot be re-settled. That is the right remedy when the question was the
+   * problem and the wrong one when the worker was refused over a rule it had
+   * never been told — which is what actually happened, twice, on two days.
+   *
+   * The server decides whether the retry is allowed and refuses in a sentence,
+   * so this shows the refusal rather than hiding the button. A control that
+   * disappears when it would not work tells a person nothing about why.
+   */
+  const retry = useCallback(async () => {
+    if (retrying) return;
+    setRetrying(true);
+    setRefused(null);
+    try {
+      await RussellApi.retry(conversationId, turn.id);
+      onRetried();
+    } catch (cause) {
+      setRefused(
+        cause instanceof ApiError
+          ? cause.message
+          : 'That did not go through. Nothing was lost — try again.',
+      );
+    } finally {
+      setRetrying(false);
+    }
+  }, [conversationId, onRetried, retrying, turn.id]);
+
   return (
     <li className={`rs-turn rs-turn-${turn.role.toLowerCase()}`}>
       <span className="rs-turn-who">{turn.role === 'USER' ? 'You' : 'Russell'}</span>
       {turn.content ? <p className="rs-turn-body">{turn.content}</p> : null}
       {label ? (
         <p className={`rs-turn-status rs-turn-${turn.status.toLowerCase()}`}>{label}</p>
+      ) : null}
+      {turn.status === 'FAILED' && turn.role === 'RUSSELL' ? (
+        <button type="button" className="rs-turn-retry" onClick={() => void retry()} disabled={retrying}>
+          {retrying ? 'Trying again…' : 'Try again'}
+        </button>
+      ) : null}
+      {refused ? (
+        <p className="rs-state rs-state-error" role="alert">
+          {refused}
+        </p>
       ) : null}
     </li>
   );

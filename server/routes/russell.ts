@@ -39,7 +39,7 @@ import {
 import { listProbesForCandidate, listObservations } from '../repos/russellProbes.ts';
 import { getCycle } from '../repos/russellCycle.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
-import { beginTurn, conversationIsReadable } from '../services/russell/turn.ts';
+import { beginTurn, conversationIsReadable, retryTurn } from '../services/russell/turn.ts';
 import { withPendingDetail } from '../services/russell/pending.ts';
 import { briefing, focusLayer } from '../services/russell/projections.ts';
 import { knowsForProject, surfaceState } from '../services/russell/knows.ts';
@@ -190,6 +190,45 @@ russellRouter.post(
       // Deliberately not the bin id. A person has no use for it and it names an
       // internal resource they may not address.
       dispatched: started.binId !== null,
+    };
+  }),
+);
+
+/**
+ * Have another go at a turn that failed.
+ *
+ * The supported recovery, and it did not exist. `resolveMessage` is a
+ * compare-and-swap on `PENDING`, so a settled turn can never be re-settled;
+ * nothing re-opened one; and the only path back was the sentence the failure
+ * shows a person — *ask me again* — which means retyping the question. That is
+ * the right remedy when the question was the problem and the wrong one when
+ * Brain refused its own worker over a rule the worker was never told, which is
+ * exactly what happened on 2026-09-05.
+ *
+ * Owner-only, on the same 404 as everything else here: a thread is one
+ * person's, and a reader of a shared thread may not spend the fleet on it.
+ *
+ * Deliberately takes no body. A retry that accepted text would be a way to ask
+ * something different while calling it the same question; the service walks
+ * back to what the person actually said instead.
+ */
+russellRouter.post(
+  '/conversations/:conversationId/turns/:messageId/retry',
+  handler(async (req, res) => {
+    const { conversation, principal } = await requireConversation(pathId(req, 'conversationId'));
+    if (conversation.ownerUserId !== principal.id) {
+      throw notFound('No conversation with that id.');
+    }
+    const again = await retryTurn({ principal, messageId: pathId(req, 'messageId') });
+    if (!again.ok) throw badRequest(again.reason);
+    res.status(202);
+    const [pending] = again.pendingMessage
+      ? await withPendingDetail([again.pendingMessage])
+      : [null];
+    return {
+      pending: pending ?? again.pendingMessage,
+      attempt: again.attempt,
+      dispatched: again.binId !== null,
     };
   }),
 );

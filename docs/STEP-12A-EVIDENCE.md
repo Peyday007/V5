@@ -3415,3 +3415,93 @@ acceptance run.
 
 So the honest answer is that the supported path does not exist, and the repair
 is §39.
+
+---
+
+## 39. The recovery that did not exist — 2026-09-06
+
+The owner's instruction anticipated this outcome exactly: *use the supported
+recovery path; if no supported retry path exists, prepare the smallest concrete
+repair and report that specific gap.* There is none, so this is the gap and the
+repair.
+
+### Why there is none
+
+`resolveMessage` is a compare-and-swap on `status = 'PENDING'`. That guard is
+not incidental — it is what makes a turn answer exactly once under an
+at-least-once queue, and §24 is explicit that the effect belongs on the far side
+of it. A consequence nobody had followed through: **a settled turn can never be
+re-settled**, so a `FAILED` turn is terminal. Grepping the whole tree for
+anything that re-opens one finds nothing.
+
+The designed recovery is the sentence `applyTurn` writes into the failure:
+
+> I could not answer that one — the reply I got back was not something I am
+> allowed to act on. **Ask me again and I will try once more.**
+
+Which means a **new user message**. That is the right remedy when the question
+was the problem. It is the wrong one here, and the difference is whose fault the
+failure was: Brain refused its own worker over a rule the worker had never been
+told. Making the person retype a question that was never defective is the
+product admitting it lost their turn — and the owner has ruled out a second
+initial message for the acceptance run anyway, correctly, because it would
+change what the frozen scenario is testing.
+
+§24 already contains the rule this violates: **a state that says "waiting for a
+person" which that person cannot resolve is not waiting, it is stuck.** A turn
+whose only offered remedy is one the person is not able to take is the same
+defect at a smaller scale, and Step 10 met it three times at three altitudes.
+
+### The repair, in one sentence
+
+`retryTurn` creates **a new pending turn and a new bin against the question the
+person already asked**, and touches nothing else.
+
+  - `createTurnBin` is lifted out of `beginTurn` so both paths build the *same*
+    manifest. The manifest is the contract the proposal is judged against, so a
+    retry built from a second copy would be answering a slightly different
+    question than the attempt it replaces, and the drift would surface as a
+    refusal nobody could explain.
+  - The bin's `created_by_id` is `russell:turn:<new message id>`, which is the
+    link `applyTurn` already walks back along — so the retry rejoins the
+    ordinary pipeline rather than needing one of its own. **Nothing about the
+    worker path changes.**
+  - The question is found by walking back to the nearest `USER` turn, never
+    supplied by the caller. A retry that accepted text would be a way to ask
+    something new while calling it the same question. The route takes no body at
+    all.
+  - The failed row keeps its `FAILED`, its refusal reason, its content and its
+    `updated_at`; its bin keeps its state and its generation. A test asserts all
+    six, because the evidence of *why* the first attempt failed is the thing
+    worth protecting.
+  - The transcript handed to the retry excludes the refusal sentence, because
+    `transcriptFor` already filters to `COMPLETE` turns and a person's own. The
+    worker is not shown Brain's apology as though it were an answer.
+  - Bounded at `MAX_TURN_ATTEMPTS = 3` over the whole question rather than along
+    a chain, so retrying an earlier attempt is not a way around the ceiling; and
+    refused outright while an attempt is in flight, so pressing twice does not
+    pay twice. A retry is a real activation against a fixed allowance.
+  - Refusals are one sentence and, for a thread that is not yours or does not
+    exist, **the same** sentence. Invariant 23 at one more boundary.
+
+Three surfaces, one function: the HTTP route `POST
+/conversations/:id/turns/:messageId/retry` (owner-only), a **Try again** button
+that a failed turn grows in the conversation itself, and `step10 retry-turn` for
+the operator, which names the person rather than assuming them so the ownership
+check is real instead of tautological.
+
+`tests/turnRetry.test.ts` — 11 tests. `tests/russellShell.test.tsx` — 3 more.
+
+### What this does not do
+
+It does not replay the completed bin, and it never could: `bin_89f7b0728aa945fa8724`
+is `COMPLETE` with its proposal stored, and that record is the evidence of the
+refusal. It does not write an answer, a candidate or a proposal. It creates the
+same two rows `beginTurn` creates and then waits for a worker, exactly like a
+first attempt.
+
+**It is prepared and not deployed.** The authorization in force covers deploying
+`8efefb9` and retrying the request through the normal worker path; it does not
+cover shipping this repair, and the instruction that anticipated this case asked
+for it to be prepared and reported rather than delivered. The acceptance turn
+stays `FAILED` and untouched until that is answered.

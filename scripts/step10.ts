@@ -72,6 +72,8 @@ import { createLayer, listLayers } from '../server/repos/layers.ts';
 import { DEAL_DISPATCH_SLUG } from '../server/seed.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import { IN_FLIGHT_WINDOW_MS } from '../server/services/dispatch/candidates.ts';
+import { MAX_TURN_ATTEMPTS, ownerPrincipal, retryTurn } from '../server/services/russell/turn.ts';
+import { getConversation, getMessage } from '../server/repos/russellConversations.ts';
 import { describeFireTarget } from '../server/services/dispatch/fire.ts';
 import {
   instructionProblems,
@@ -1752,6 +1754,75 @@ async function main(): Promise<void> {
     }
 
     console.log(`STEP10: OK turn-trace messages=${messages.length}`);
+    return;
+  }
+
+  if (command === 'retry-turn') {
+    /*
+     * Hand one failed turn back to the fleet.
+     *
+     * The recovery §24 was missing. A turn that ends `FAILED` cannot be
+     * re-settled — `resolveMessage` is a compare-and-swap on `PENDING`, which
+     * is exactly what makes a turn answer once — so the only route back was to
+     * make the person retype their question. That is the right remedy when the
+     * question was the problem and the wrong one when Brain refused its own
+     * worker over a rule the worker had never been told.
+     *
+     * **Not a second mechanism.** It calls `retryTurn`, the same function the
+     * HTTP route calls, and is subject to the same checks: the turn must be
+     * Russell's, must be `FAILED`, must have a project, must not already have
+     * an attempt in flight, and must be inside `MAX_TURN_ATTEMPTS`. The failed
+     * row and its bin are never touched.
+     *
+     * The person is named rather than assumed. `retryTurn` refuses a principal
+     * who does not own the thread, so passing the user id makes that check real
+     * instead of tautological — the same reasoning, and the same `usr_` shaped
+     * argument, as `gap-policy` above.
+     *
+     * No conversation content is printed, for §24's reason: running as the
+     * operator is not a licence to read somebody's thread.
+     */
+    const messageId = arg(0);
+    const userId = arg(1);
+    if (!messageId || !userId) {
+      console.log('STEP10 REFUSED: pass the failed turn id and the owner user id.');
+      process.exitCode = 1;
+      return;
+    }
+    const before = await getMessage(messageId);
+    const principal = await ownerPrincipal(userId);
+    if (!before || !principal) {
+      // One message for "no such turn", "no such user" and "disabled account".
+      // Invariant 23: a refusal must not tell a caller which ids exist.
+      console.log('STEP10 REFUSED: nothing here to retry.');
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`  turn        ${before.id}  ${before.role} ${before.status}`);
+    console.log(`  refused     ${before.pendingReason ?? '—'}`);
+    console.log(`  thread      ${before.conversationId}`);
+
+    const again = await retryTurn({ principal, messageId });
+    if (!again.ok) {
+      console.log(`STEP10 REFUSED: ${again.reason}`);
+      process.exitCode = 1;
+      return;
+    }
+    // Read back rather than trusting the object: the point of the whole
+    // exercise is that the original attempt is still there afterwards.
+    const after = await getMessage(messageId);
+    const conversation = await getConversation(before.conversationId);
+    console.log(`  attempt     ${again.attempt} of ${MAX_TURN_ATTEMPTS}`);
+    console.log(`  new turn    ${again.pendingMessage?.id ?? '—'}  PENDING`);
+    console.log(`  bin         ${again.binId ?? '—'}`);
+    console.log(`  project     ${conversation?.projectId ?? '—'}`);
+    console.log(
+      `  original    ${after?.status} — ${after?.pendingReason ?? '—'} (unchanged)`,
+    );
+    console.log(
+      `STEP10: OK retry-turn attempt=${again.attempt} bin=${again.binId ?? 'none'} ` +
+        `original=${after?.status}`,
+    );
     return;
   }
 
