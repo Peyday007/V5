@@ -237,6 +237,15 @@ export interface ArchiveAnswer {
   /** True when the project's own accepted claims settle it. */
   fullyAnswered: boolean;
   supporting: string[];
+  /**
+   * Claims the archive holds that argue *against* the idea.
+   *
+   * `CONTRADICTED` is one of the ten coverage statuses and it is the one that
+   * changes the answer rather than the confidence: `judge()` sends a contested
+   * idea for a cheap look before anything larger, which is exactly right and
+   * was unreachable while this was hard-coded empty.
+   */
+  contradicting: string[];
   claimsConsidered: number;
 }
 
@@ -266,10 +275,16 @@ export async function askArchive(
    */
   claims?: ExistingClaim[],
 ): Promise<ArchiveAnswer> {
-  if (!candidate.projectId) return { fullyAnswered: false, supporting: [], claimsConsidered: 0 };
+  const unknown: ArchiveAnswer = {
+    fullyAnswered: false,
+    supporting: [],
+    contradicting: [],
+    claimsConsidered: 0,
+  };
+  if (!candidate.projectId) return unknown;
   const layers = await listLayers(candidate.projectId);
   const layer = layers[0];
-  if (!layer) return { fullyAnswered: false, supporting: [], claimsConsidered: 0 };
+  if (!layer) return unknown;
   try {
     const coverage = await coverBeforeWork({
       projectId: candidate.projectId,
@@ -285,14 +300,58 @@ export async function askArchive(
     return {
       fullyAnswered: coverage.fullyAnswered,
       supporting: coverage.answered.flatMap((verdict) => verdict.claimIds).slice(0, 20),
+      contradicting: coverage.verdicts
+        .filter((verdict) => verdict.status === 'CONTRADICTED')
+        .flatMap((verdict) => verdict.claimIds)
+        .slice(0, 20),
       claimsConsidered: coverage.claimsConsidered,
     };
   } catch {
     // A coverage check that cannot run is not evidence that nothing is covered,
     // and it is certainly not evidence that everything is. Unknown, and the
     // candidate goes on to be asked about properly.
-    return { fullyAnswered: false, supporting: [], claimsConsidered: 0 };
+    return unknown;
   }
+}
+
+/**
+ * Whether the project may have research done for it at all.
+ *
+ * Read once and used twice: it decides whether a judgment can end anywhere
+ * launchable, and it supplies the layer the mission would hang on. Both callers
+ * need the same answer and asking twice invites them to disagree.
+ *
+ * A project with no standing authority is not a project whose ideas are
+ * worthless — it is one where a person has not yet said what Russell may do.
+ * That distinction is the difference between `PARKED` with an actionable reason
+ * and `QUEUED` forever behind a launch that can never happen, which is the
+ * "waiting for something nobody can resolve" defect §22 recorded three times.
+ */
+async function standingAuthority(projectId: string): Promise<{
+  ok: boolean;
+  /** Names what is missing, in words a person can act on. Null when fine. */
+  blockedBy: string | null;
+  layerId: string | null;
+  authorizedBy: string | null;
+}> {
+  const layers = await listLayers(projectId);
+  const layerId = layers[0]?.id ?? null;
+  if (!layerId) {
+    return { ok: false, blockedBy: 'this project having a layer to file the work under', layerId: null, authorizedBy: null };
+  }
+  const decision = await checkAuthority({ projectId, workClass: RESEARCH_WORK_CLASS });
+  if (!decision.ok || !decision.goal) {
+    return {
+      ok: false,
+      // The decision's own words when it has them: it already distinguishes no
+      // standing authority from an expired one from a budget that is spent, and
+      // restating that here in worse words would lose the distinction.
+      blockedBy: decision.reason ?? 'a standing authority for research on this project',
+      layerId,
+      authorizedBy: null,
+    };
+  }
+  return { ok: true, blockedBy: null, layerId, authorizedBy: decision.goal.createdByUserId ?? null };
 }
 
 export interface JudgeOutcome {
@@ -347,6 +406,7 @@ export async function judgeCandidate(
       reason: verdict.reason,
       judgment: { ...verdict.inputs, decidedBy: 'ARCHIVE', claimsConsidered: archive.claimsConsidered },
       supporting: archive.supporting,
+      contradicting: archive.contradicting,
     });
     return {
       ok: recorded,
@@ -515,12 +575,29 @@ export async function applyPlan(binId: string): Promise<ApplyPlanResult> {
   // archive may have moved between dispatch and completion, and §13's check is
   // Brain's to make.
   const archive = await askArchive(candidate);
+  const authority = await standingAuthority(candidate.projectId!);
+
+  /*
+   * Four sources, and each supplies only what it can actually know.
+   *
+   * The archive says whether the project already answers it and what supports
+   * or contradicts it. The worker says what only a reader of the question can:
+   * is the uncertainty cheap to reduce, and what is settling it worth. And the
+   * project's own standing authority says whether research may happen at all —
+   * which is a dependency like any other, so it goes in as `blockedBy` and
+   * `judge()` parks it with a reason a person can act on.
+   *
+   * Authority wins over the worker's own `blockedBy` when both are present,
+   * because it is the harder blocker: no amount of upstream work makes a
+   * mission launchable in a project nobody has authorized.
+   */
   const inputs: JudgmentInputs = {
     alreadyAnswered: archive.fullyAnswered,
     supporting: archive.supporting,
+    contradicting: archive.contradicting,
     cheapToReduce: validated.observations.cheapToReduce,
     expectedValue: validated.observations.expectedValue,
-    blockedBy: validated.observations.blockedBy,
+    blockedBy: authority.blockedBy ?? validated.observations.blockedBy,
   };
   const verdict = judge(inputs);
 
@@ -548,7 +625,7 @@ export async function applyPlan(binId: string): Promise<ApplyPlanResult> {
       ...(launchable && spec ? { missionSpec: spec } : { proposedMission: validated.spec }),
     },
     supporting: archive.supporting,
-    contradicting: [],
+    contradicting: archive.contradicting,
   });
 
   return {
@@ -584,14 +661,8 @@ async function missionSpecFor(
   spec: MissionSpec,
 ): Promise<Record<string, unknown> | null> {
   if (!candidate.projectId) return null;
-  const layers = await listLayers(candidate.projectId);
-  const layer = layers[0];
-  if (!layer) return null;
-  const authority = await checkAuthority({
-    projectId: candidate.projectId,
-    workClass: RESEARCH_WORK_CLASS,
-  });
-  if (!authority.ok || !authority.goal) return null;
+  const authority = await standingAuthority(candidate.projectId);
+  if (!authority.ok || !authority.layerId) return null;
 
   const conversation = candidate.conversationId
     ? await getConversation(candidate.conversationId)
@@ -599,7 +670,7 @@ async function missionSpecFor(
 
   return {
     projectId: candidate.projectId,
-    layerId: layer.id,
+    layerId: authority.layerId,
     conversationId: candidate.conversationId ?? null,
     visibility: candidate.visibility,
     title: spec.title,
@@ -618,6 +689,6 @@ async function missionSpecFor(
     envelopeId: 'RUSSELL_STATE_LICENSING_V1',
     // The person whose standing authority this runs under. Read from the goal
     // row, falling back to the thread's owner — never Russell, never a worker.
-    authorizedBy: authority.goal.createdByUserId ?? conversation?.ownerUserId ?? '',
+    authorizedBy: authority.authorizedBy ?? conversation?.ownerUserId ?? '',
   };
 }

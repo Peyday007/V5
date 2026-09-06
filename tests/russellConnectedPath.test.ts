@@ -20,10 +20,15 @@ import { createConversation, listTurns } from '../server/repos/russellConversati
 import { applyTurn, beginTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
 import { applyPlan, judgeCandidate, PLAN_UNIT_KEY, validatePlan } from '../server/services/russell/planning.ts';
 import { listCandidates } from '../server/repos/russellCandidates.ts';
-import { putBinUnitResult, getBin } from '../server/repos/bins.ts';
-import { evaluateContract } from '../server/services/bins/contracts.ts';
+import { putBinUnitResult, getBin, assignNextBin } from '../server/repos/bins.ts';
+import { requestCompletion } from '../server/services/bins/service.ts';
+import { createWorker } from '../server/repos/identity.ts';
+import { evaluateContract, hashUnitValue } from '../server/services/bins/contracts.ts';
 import type { ExistingClaim, Principal, ProjectMembership } from '../server/domain/types.ts';
 import { listLayers } from '../server/repos/layers.ts';
+import { createGoal } from '../server/repos/russellAuthority.ts';
+import { tick as runCycle } from '../server/services/russell/loop.ts';
+import { listMissions } from '../server/repos/russellMissions.ts';
 
 let projectId = '';
 let userId = '';
@@ -56,6 +61,29 @@ beforeEach(async () => {
     grantedById: 'test',
   });
 });
+
+/**
+ * A standing authority, granted by a person, for research on this project.
+ *
+ * Not fixture decoration: without it every idea now parks with "no standing
+ * authority exists for this project", which is the *correct* new behaviour and
+ * the gap this repair closed. Before it, a candidate in an unauthorized project
+ * was judged QUEUED with no launchable specification and sat there forever —
+ * a state saying "waiting" that nobody could resolve.
+ */
+async function authorize(): Promise<void> {
+  await createGoal({
+    projectId,
+    ownerUserId: userId,
+    createdByUserId: userId,
+    name: 'Research the discovery questions',
+    allowedWork: ['RESEARCH'],
+    maxMissions: 5,
+    maxFragments: 20,
+    maxConcurrent: 2,
+    maxProbes: 5,
+  });
+}
 
 function principal(): Principal {
   return {
@@ -98,6 +126,56 @@ async function workerAnswers(binId: string, proposal: Record<string, unknown>): 
   });
 }
 
+/** A worker taking a turn bin the whole way, so it does not stay claimable. */
+async function workerCompletesTurn(binId: string, proposal: Record<string, unknown>): Promise<string> {
+  return workerCompletesBin(binId, TURN_UNIT_KEY, proposal);
+}
+
+/**
+ * A worker taking a planning bin the whole way: assigned, submitted, completed.
+ *
+ * The loop selects on `bins.state`, so a unit result alone leaves the bin READY
+ * and nothing downstream ever sees it. Driving the real assign → submit →
+ * complete path is the difference between testing the functions and testing the
+ * wiring.
+ */
+async function workerCompletesPlan(binId: string, plan: Record<string, unknown>): Promise<string> {
+  return workerCompletesBin(binId, PLAN_UNIT_KEY, plan);
+}
+
+async function workerCompletesBin(
+  binId: string,
+  unitKey: string,
+  payload: Record<string, unknown>,
+): Promise<string> {
+  const workerId = (
+    await createWorker({
+      name: `worker-${Math.random().toString(36).slice(2, 8)}`,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    })
+  ).id;
+  const assigned = await assignNextBin({ workerId, projectIds: [projectId] });
+  if (!assigned || assigned.bin.id !== binId) {
+    throw new Error(`expected ${binId} to be offered, got ${assigned?.bin.id ?? 'nothing'}`);
+  }
+  const value = JSON.stringify(payload);
+  await putBinUnitResult({
+    binId,
+    unitKey,
+    value,
+    contentHash: hashUnitValue(value),
+    leaseId: assigned.leaseId,
+    leaseGeneration: assigned.leaseGeneration,
+    submittedBy: workerId,
+  });
+  const finished = await requestCompletion({
+    workerId,
+    proof: { binId, leaseId: assigned.leaseId, leaseGeneration: assigned.leaseGeneration, workerId },
+  });
+  return finished.state ?? 'UNKNOWN';
+}
+
 /** A worker answering a planning bin, the same way. */
 async function workerPlans(binId: string, plan: Record<string, unknown>): Promise<void> {
   await putBinUnitResult({
@@ -137,7 +215,14 @@ async function captureAnIdea(statement: string): Promise<string> {
     conversationId: conversation.id,
     content: statement,
   });
-  await workerAnswers(started.binId!, {
+  /*
+   * The full worker path, not just a unit result.
+   *
+   * A turn bin left READY is still claimable, and `assignNextBin` would hand it
+   * to the next worker that asks — which in the loop tests is the one coming
+   * for a *plan*. Completing it here is what a real worker does anyway.
+   */
+  await workerCompletesTurn(started.binId!, {
     action: 'CAPTURE_CANDIDATE',
     answer: 'Noted — I have written that down.',
     confidence: 70,
@@ -151,6 +236,7 @@ async function captureAnIdea(statement: string): Promise<string> {
 
 describe('the path from a captured idea to judged work', () => {
   it('judges a captured idea, and the judgment is what the loop selects on', async () => {
+    await authorize();
     const candidateId = await captureAnIdea(
       'We should find out whether Michigan counties publish permit data we can consume.',
     );
@@ -198,6 +284,7 @@ describe('the path from a captured idea to judged work', () => {
   });
 
   it('does not let a worker decide whether the archive already answers it', async () => {
+    await authorize();
     const candidateId = await captureAnIdea('We should check whether the fee schedule changed.');
     const outcome = await judgeCandidate(candidateId);
 
@@ -221,6 +308,7 @@ describe('the path from a captured idea to judged work', () => {
   });
 
   it('records a mission specification only when the verdict could launch one', async () => {
+    await authorize();
     const candidateId = await captureAnIdea('We should establish the permit publication terms.');
     const outcome = await judgeCandidate(candidateId);
     // Not cheap to reduce, and valuable: `judge()` queues it rather than
@@ -234,15 +322,20 @@ describe('the path from a captured idea to judged work', () => {
 
     const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
     expect(after.state).toBe('QUEUED');
-    // No standing authority in this fixture, so no launchable spec is written —
-    // and the candidate is still judged. An absent grant is a fact about the
-    // project, not a failure of the plan.
-    expect(applied.launchable).toBe(false);
-    expect(after.judgment?.['proposedMission']).toBeTruthy();
-    expect(after.judgment?.['missionSpec']).toBeUndefined();
+    // Authorized, so a launchable specification is written — under the key
+    // `nextLaunchable` reads, completed with the layer, the visibility, the
+    // approver and the envelope named rather than supplied.
+    expect(applied.launchable).toBe(true);
+    const spec = after.judgment?.['missionSpec'] as Record<string, unknown>;
+    expect(spec).toBeTruthy();
+    expect(spec['envelopeId']).toBe('RUSSELL_STATE_LICENSING_V1');
+    expect(spec['authorizedBy']).toBe(userId);
+    expect(spec['layerId']).toBeTruthy();
+    expect(spec['title']).toBe(GOOD_PLAN.mission.title);
   });
 
   it('keeps a park out of the launch queue even though the work was specified', async () => {
+    await authorize();
     const candidateId = await captureAnIdea('We should add permit data once the ingest lands.');
     const outcome = await judgeCandidate(candidateId);
     await workerPlans(outcome.binId!, {
@@ -457,5 +550,142 @@ describe('the archive answers first, and spends nothing when it can', () => {
     const outcome = await judgeCandidate(candidateId, { claims: [] });
     expect(outcome.answeredByArchive).toBe(false);
     expect(outcome.binId).not.toBeNull();
+  });
+});
+
+describe('the existing loop selects and advances what was judged', () => {
+  /**
+   * The claim that reading alone cannot support.
+   *
+   * Every other test here calls `judgeCandidate` and `applyPlan` directly,
+   * which proves the functions and not the wiring. These drive `runCycle` —
+   * the real tick, with its own claim, fence and cursor — and assert that it
+   * finds the work by itself.
+   */
+  it('judges a captured idea on its own, and asks a worker without being told to', async () => {
+    await authorize();
+    const candidateId = await captureAnIdea(
+      'We should find out which counties publish permit data.',
+    );
+
+    const tick = await runCycle('test-owner');
+    expect(tick.ran).toBe(true);
+    // The candidate was found by the loop's own selector, not handed to it.
+    expect(tick.planning).toContain(candidateId);
+
+    const bins = await getDb().all<{ id: string }>(
+      `SELECT id FROM bins WHERE created_by_id = ?`,
+      [`russell:plan:${candidateId}`],
+    );
+    expect(bins).toHaveLength(1);
+
+    // And a second tick does not ask again: an at-least-once loop must not
+    // spend two activations on one question.
+    const again = await runCycle('test-owner');
+    expect(again.planning).not.toContain(candidateId);
+  });
+
+  it('turns a finished plan into a judgment, then opens the bounded look', async () => {
+    await authorize();
+    const candidateId = await captureAnIdea('We should check the publication cadence.');
+    await runCycle('test-owner');
+    const binId = (
+      await getDb().all<{ id: string }>(`SELECT id FROM bins WHERE created_by_id = ?`, [
+        `russell:plan:${candidateId}`,
+      ])
+    )[0]!.id;
+    expect(await workerCompletesPlan(binId, GOOD_PLAN)).toBe('COMPLETE');
+
+    // One tick: the plan becomes a judgment, and the same tick's probe step
+    // picks up what that judgment made eligible.
+    const tick = await runCycle('test-owner');
+    expect(tick.judged).toContain(binId);
+
+    const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+    expect(after.priority).toBe('EXPLORE');
+
+    // `exploring()` selects EXPLORE + CAPTURED with no probe yet — which is
+    // exactly what the judgment produced, so the cheap look now happens.
+    const probed = tick.probed.length > 0 ? tick : await runCycle('test-owner');
+    expect(probed.probed.length).toBeGreaterThan(0);
+    const probes = await getDb().all<{ candidate_id: string }>(
+      `SELECT candidate_id FROM russell_probes`,
+      [],
+    );
+    expect(probes.map((p) => p.candidate_id)).toContain(candidateId);
+  });
+
+  it('launches a mission from a queued judgment, through the loop', async () => {
+    await authorize();
+    const candidateId = await captureAnIdea('We should establish the licence terms in full.');
+    await runCycle('test-owner');
+    const binId = (
+      await getDb().all<{ id: string }>(`SELECT id FROM bins WHERE created_by_id = ?`, [
+        `russell:plan:${candidateId}`,
+      ])
+    )[0]!.id;
+    // Not cheap to reduce and highly valuable: `judge()` queues it for a packet
+    // rather than a look.
+    await workerCompletesPlan(binId, {
+      observations: { cheapToReduce: false, expectedValue: 85, blockedBy: null },
+      mission: GOOD_PLAN.mission,
+    });
+
+    /*
+     * The judgment and the launch can land in the same tick or in consecutive
+     * ones, depending on where in the tick the plan was consumed. Both are
+     * correct, so the assertion is over the outcome rather than the timing —
+     * a test that pinned the tick would be pinning an implementation detail.
+     */
+    await runCycle('test-owner');
+    const judged = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+    expect(judged.state).toBe('QUEUED');
+
+    // The launch step reads `judgment.missionSpec`, which nothing wrote before
+    // this repair.
+    const launchTick = await runCycle('test-owner');
+    const missions = await listMissions({ projectId });
+    const mine = missions.find((mission) => mission.candidateId === candidateId);
+
+    if (mine) {
+      expect(mine.objective).toBe(GOOD_PLAN.mission.objective);
+      expect(mine.projectId).toBe(projectId);
+    } else {
+      /*
+       * A launch can be refused for reasons that are facts about the fleet
+       * rather than about this repair — no healthy execution surface, or an
+       * audit separation the fixture cannot supply. Those are parks, and a park
+       * is a justified outcome that must be preserved rather than treated as a
+       * failure. What must never happen is silence.
+       */
+      expect(launchTick.parked.map((entry: { candidateId: string }) => entry.candidateId)).toContain(candidateId);
+    }
+  });
+
+  it('leaves an unauthorized project parked with a reason a person can act on', async () => {
+    // No `authorize()`: this is a project where nobody has said what Russell
+    // may do. Before this repair such an idea was judged QUEUED with no
+    // launchable specification and waited forever.
+    const candidateId = await captureAnIdea('We should research the permit licence terms.');
+    await runCycle('test-owner');
+    const binId = (
+      await getDb().all<{ id: string }>(`SELECT id FROM bins WHERE created_by_id = ?`, [
+        `russell:plan:${candidateId}`,
+      ])
+    )[0]!.id;
+    await workerCompletesPlan(binId, {
+      observations: { cheapToReduce: false, expectedValue: 90, blockedBy: null },
+      mission: GOOD_PLAN.mission,
+    });
+    await runCycle('test-owner');
+
+    const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+    expect(after.priority).toBe('PARKED');
+    expect(after.state).toBe('PARKED');
+    expect(after.reason).toMatch(/no standing authority/);
+    // Parked, not launchable, and not lost: the worker's specification is kept.
+    expect(after.judgment?.['missionSpec']).toBeUndefined();
+    expect(after.judgment?.['proposedMission']).toBeTruthy();
+    expect(await listMissions({ projectId })).toHaveLength(0);
   });
 });

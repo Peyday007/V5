@@ -474,18 +474,30 @@ async function finishedPlanBins(limit: number): Promise<string[]> {
 }
 
 /**
- * Ideas captured and never judged.
+ * Ideas captured, never judged, and not already with a worker.
  *
- * `priority IS NULL` is the whole predicate, because that is precisely the
- * column every downstream selector reads. A merged candidate is excluded — its
+ * `priority IS NULL` is the core of it, because that is precisely the column
+ * every downstream selector reads. A merged candidate is excluded — its
  * canonical carries the judgment — and so is one with no project, which there
  * is nothing to judge against.
+ *
+ * The `NOT EXISTS` is the same shape as `exploring()`'s and exists for the same
+ * reason: a candidate whose plan bin is still out there must not be offered
+ * again every thirty seconds. `judgeCandidate` is idempotent and would return
+ * the existing bin, so this is throughput and honesty rather than safety — a
+ * tick that reported the same idea as newly dispatched on every pass would be
+ * describing work it did not do.
  */
 async function unjudged(limit: number): Promise<{ id: string }[]> {
   return getDb().all<{ id: string }>(
-    `SELECT id FROM russell_candidates
-      WHERE priority IS NULL AND state <> 'MERGED' AND project_id IS NOT NULL
-      ORDER BY created_at, rowid
+    `SELECT c.id FROM russell_candidates c
+      WHERE c.priority IS NULL AND c.state <> 'MERGED' AND c.project_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM bins b
+           WHERE b.created_by_id = 'russell:plan:' || c.id
+             AND b.state NOT IN ('CANCELLED','FAILED')
+        )
+      ORDER BY c.created_at, c.rowid
       LIMIT ?`,
     [Math.max(1, limit)],
   );
