@@ -3505,3 +3505,123 @@ first attempt.
 cover shipping this repair, and the instruction that anticipated this case asked
 for it to be prepared and reported rather than delivered. The acceptance turn
 stays `FAILED` and untouched until that is answered.
+
+---
+
+## 40. The retry's own race, found by being asked to prove it — 2026-09-06
+
+The owner authorized mutation 9 and attached a condition: *confirm that
+concurrent retry requests cannot create duplicate active attempts or exceed the
+three-attempt limit, and that the operator command enforces its intended
+authorization boundary.*
+
+The first half did not hold. I had written the comment that admitted it:
+
+> it is a read rather than a compare-and-swap because the cost of losing that
+> race is one duplicate activation, and the alternative … is more machinery
+> than the risk justifies
+
+That reasoning was wrong twice over. A duplicate activation is not a small cost
+against a fixed subscription allowance, and the machinery was not the burden I
+claimed — this repository already had the primitive in three places. Running the
+race rather than reasoning about it settled it in one line:
+
+    RACE RESULT {"a":true,"b":true,"aAttempt":2,"bAttempt":2}
+    RACE PENDING COUNT 2
+
+Two callers, both winners, both claiming attempt 2: two pending turns, two bins,
+two activations for one question. And because a later retry counts what already
+exists, the same window let the three-attempt ceiling be overshot — the ceiling
+was computed from a number that two callers could both read before either wrote.
+
+### The fix is the sentence this codebase keeps needing
+
+Migration **030** (SQLite) and **021** (Postgres) add two columns to
+`russell_messages` and one index:
+
+```sql
+answers_message_id  TEXT REFERENCES russell_messages(id) ON DELETE SET NULL
+attempt             INTEGER
+UNIQUE (answers_message_id, attempt)
+```
+
+`claimTurnAttempt` is an `INSERT ... ON CONFLICT DO NOTHING`. The caller
+supplies which question it is answering and which attempt number it believes is
+next; the index decides whether it was right, and exactly one INSERT survives.
+The loser gets `null` and is refused in the same words as somebody who arrived a
+moment later — because that is exactly what happened. **A claim is a
+compare-and-swap on a value the claimant does not supply**, for the fourth time
+in this repository after `lease_generation`, `fire_generation` and
+`UNIQUE (scope_hash, key_fingerprint)`.
+
+The bin is created on the far side of the claim, so a loser creates nothing at
+all: no message, no bin, no activation.
+
+**No backfill, and none needed.** Both columns are NULL on every ordinary turn,
+and NULLs are distinct under a unique index on both backends. The original turn
+is attempt 1 and carries no row of its own, so every turn recorded before this
+existed reads correctly as a first attempt — including
+`rmsg_b56979f1d6fd4839a3ff`, the production turn this was all built for, which
+must keep reading exactly as it does.
+
+### Why a column rather than a key in `metadata`
+
+The owner's other requirement: *keep retry attempts linked to the original
+question so they cannot falsely satisfy duplicate-idea or independent-session
+gates.* `answers_message_id IS NULL` is one predicate that any gate, index or
+query can apply. A JSON key nobody knows to look for is how a count silently
+starts lying.
+
+Checked directly against the two acceptance gates that count messages, and
+neither is inflatable by a retry:
+
+  - `A04_IRRELEVANT` counts `role = 'USER'`, and a retry creates no user
+    message — that is the whole point of it.
+  - `A22_FAST_CHAT_ROUTING` counts RUSSELL turns carrying `"lane":"FAST"`
+    metadata, and a retry carried by the fleet has none.
+
+The audit-independence gates read `research_passes` sessions, which a Russell
+turn does not touch at all. So the answer today is that no gate can be falsely
+satisfied — and the column is what keeps that true of gates not yet written.
+
+### The tests are adversarial, and one proves the other
+
+`tests/turnRetry.test.ts` is 17 tests. Three of them are the ones the owner
+asked for:
+
+  - two simultaneous retries produce **one** attempt, the loser refused with no
+    message and no bin, and exactly one bin exists for the winner;
+  - the ceiling cannot be raced past from four directions at once, *including
+    from earlier attempts in the chain*, because the ceiling belongs to the
+    question rather than to a link — attempts read `[null, 2, 3]`;
+  - two different questions may both hold attempt 2, because the index is over
+    the pair.
+
+And the tests were checked against a broken implementation rather than only
+against a working one: with `ON CONFLICT DO NOTHING` removed, the race test
+fails — 16 passed, 1 failed. The earlier probe output above is the other half,
+taken against the version with no index at all.
+
+### The operator command's boundary, stated exactly
+
+`step10 retry-turn <messageId> <userId>` builds the named person's principal
+with `ownerPrincipal` and hands it to `retryTurn`, which compares it to the
+conversation's owner. So the boundary is: **the command can do what that person
+could do in the browser, and nothing else.** Three tests pin it — a non-owner is
+refused with `no such turn`, a disabled or unknown account produces no principal
+at all, and the owner's own principal succeeds. Naming the person rather than
+assuming them is what makes the ownership check real instead of tautological,
+and it is why the command prints one sentence for "no such turn", "no such
+user" and "disabled" alike.
+
+### A distinction kept in the record
+
+The two dispatches `in-flight` reported at 00:54:46Z — `bin_c6f9cf2607a841fb80c2`
+and `bin_59f3620fe4784b29a29b`, both `verification-scope`, both fired at V1's
+Routine at 00:50Z with no worker checked in — **explain the occupancy at that
+moment and identify nothing about the earlier one.** They were created by
+mutation 8's own hosted verification, minutes before the reading. The occupant
+that refused the frozen message five times on 2026-09-05 was never observed and
+remains unidentified; the read path that would have identified it did not exist
+until mutation 8 shipped. That stays recorded as unverified rather than
+retro-fitted with a plausible answer.

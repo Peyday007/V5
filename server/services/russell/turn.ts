@@ -38,8 +38,10 @@ import { getUser, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import {
   addMessage,
   attachConversation,
+  claimTurnAttempt,
   getConversation,
   getMessage,
+  listTurnAttempts,
   listTurns,
   recordProduced,
   resolveMessage,
@@ -502,17 +504,13 @@ export async function retryTurn(input: {
   /*
    * Already retried, or already spent.
    *
-   * Both are counted over the whole thread rather than by following a chain,
-   * so a retry of a retry is bounded by the same ceiling as the first. The
-   * in-flight check is what stops a person pressing twice and paying twice;
-   * it is a read rather than a compare-and-swap because the cost of losing
-   * that race is one duplicate activation, and the alternative — a guarded
-   * column on a table that has no natural one — is more machinery than the
-   * risk justifies. `resolveMessage` still makes each turn answer once.
+   * Counted over the question rather than along a chain, so a retry of a retry
+   * is bounded by the same ceiling as the first, and retrying an *earlier*
+   * attempt is not a way around it. The original turn is attempt 1 and carries
+   * no row of its own — which is also why a turn recorded before this existed
+   * needs no backfill to read correctly.
    */
-  const attempts = turns.filter(
-    (turn) => turn.role === 'RUSSELL' && retryOf(turn) === asked.id,
-  );
+  const attempts = await listTurnAttempts(asked.id);
   if (attempts.some((turn) => turn.status === 'PENDING')) {
     return retryRefusal('I am already having another go at that one');
   }
@@ -521,20 +519,40 @@ export async function retryTurn(input: {
     return retryRefusal('I have tried that one as many times as I am allowed to');
   }
 
-  const pendingMessage = await addMessage({
+  /*
+   * Claim the attempt number, then act.
+   *
+   * The two checks above are a read, and a read cannot be the guard: two
+   * callers both saw one attempt, both computed 2, and both created it — two
+   * pending turns, two bins, two activations against a fixed allowance for one
+   * question, and a ceiling that could then be overshot because a later retry
+   * counts what exists. That is not a worry, it is what
+   * `tests/turnRetry.test.ts` observed against the first version of this
+   * function.
+   *
+   * So the arbiter is `UNIQUE (answers_message_id, attempt)`. This function
+   * supplies the number it believes is next and the database decides whether it
+   * was right; the loser is refused in the same words as somebody who arrived
+   * a moment later, because that is exactly what happened. Same shape as a lost
+   * queue claim and a lost fire slot — a claim is a compare-and-swap on a value
+   * the claimant does not supply.
+   *
+   * The bin is created on the far side of the claim, so a loser creates
+   * nothing at all.
+   */
+  const pendingMessage = await claimTurnAttempt({
     conversationId: conversation.id,
-    role: 'RUSSELL',
-    content: '',
-    status: 'PENDING',
+    answersMessageId: asked.id,
+    attempt,
     pendingReason: PENDING_REASON,
-    /*
-     * The link, on the row rather than in prose. `retryOf` names the attempt
-     * this replaces and `answers` names the question, so the thread can be read
-     * back as "one question, three attempts" by something that was not present
-     * when it happened.
-     */
-    metadata: { retryOf: failed.id, answers: asked.id, attempt },
+    // `retryOf` names the specific attempt this one replaces, which the columns
+    // deliberately do not: the columns answer "which question, which attempt",
+    // and the chain is history rather than an invariant.
+    metadata: { retryOf: failed.id },
   });
+  if (!pendingMessage) {
+    return retryRefusal('I am already having another go at that one');
+  }
 
   const bin = await createTurnBin({
     projectId,
@@ -550,12 +568,6 @@ export async function retryTurn(input: {
     binId: bin.id,
     attempt,
   };
-}
-
-/** Which question a turn is an attempt at, or null for a first attempt. */
-function retryOf(turn: RussellMessage): string | null {
-  const answers = turn.metadata?.['answers'];
-  return typeof answers === 'string' ? answers : null;
 }
 
 function retryRefusal(reason: string): RetryTurnResult {

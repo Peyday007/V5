@@ -4237,6 +4237,15 @@ export interface RussellMessageRow {
   pending_reason: string | null;
   produced: string;
   metadata: string;
+  /**
+   * The person's message this turn is an attempt at, and which attempt it is.
+   *
+   * NULL on every ordinary turn — a first attempt has nothing to record — which
+   * is what lets the unique index over the pair arbitrate concurrent retries
+   * without a backfill: NULLs are distinct on both backends.
+   */
+  answers_message_id: string | null;
+  attempt: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -4473,6 +4482,16 @@ export interface RussellMessage {
   pendingReason: string | null;
   produced: Record<string, unknown>;
   metadata: Record<string, unknown>;
+  /**
+   * Which question this turn answers, and which attempt at it this is.
+   *
+   * Both null on an ordinary turn and on every turn recorded before retries
+   * existed, which reads correctly as "the first attempt". `answersMessageId`
+   * being non-null is the one predicate that identifies a retry, so nothing
+   * that counts turns can mistake one for a fresh question.
+   */
+  answersMessageId: string | null;
+  attempt: number | null;
   createdAt: string;
   updatedAt: string;
   /** True when this row came from a pre-12A `messages` row through the union. */

@@ -75,6 +75,12 @@ function mapMessage(row: RussellMessageRow): RussellMessage {
     pendingReason: row.pending_reason,
     produced: parseJson<Record<string, unknown>>(row.produced, {}),
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
+    answersMessageId: row.answers_message_id ?? null,
+    // Postgres hands an integer back as a number and SQLite as a number too,
+    // but a driver that ever produced a string here would silently break the
+    // arithmetic the ceiling depends on. Normalised once, in the one place the
+    // two representations meet.
+    attempt: row.attempt === null || row.attempt === undefined ? null : Number(row.attempt),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -308,8 +314,8 @@ export async function addMessage(input: {
   await getDb().run(
     `INSERT INTO russell_messages
        (id, conversation_id, role, author_user_id, content, status, pending_reason,
-        produced, metadata, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        produced, metadata, answers_message_id, attempt, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`,
     [
       id,
       input.conversationId,
@@ -332,6 +338,77 @@ export async function addMessage(input: {
     id,
   ]);
   return mapMessage(rows[0]!);
+}
+
+/**
+ * Claim the next attempt at one question, or lose the race.
+ *
+ * The retry path used to count the attempts already made and then insert the
+ * next one. Read, then write, with a window between: two callers both counted
+ * one attempt and both created attempt 2 — two pending turns, two bins, two
+ * activations against a fixed allowance for a single question. The test that
+ * found it is in `tests/turnRetry.test.ts`, and it failed against the code as
+ * first written rather than being written to pass.
+ *
+ * So the arbiter is `UNIQUE (answers_message_id, attempt)` and this is an
+ * `INSERT ... ON CONFLICT DO NOTHING`. The caller supplies which question it is
+ * answering and which attempt number it believes is next; the index decides
+ * whether it was right. A loser gets `null`, which is an ordinary outcome and
+ * not an error — the same shape as a lost queue claim or a lost fire slot.
+ *
+ * It is deliberately not `addMessage` with two more parameters. `addMessage`
+ * writes NULL into both columns for every ordinary turn, and a function that
+ * could be called either way is one somebody eventually calls the wrong way;
+ * the ceiling and the no-duplicates rule both live on this path only.
+ */
+export async function claimTurnAttempt(input: {
+  conversationId: string;
+  /** The person's message this attempt is at. */
+  answersMessageId: string;
+  /** Which attempt this is, counting the original as 1. */
+  attempt: number;
+  pendingReason: string;
+  metadata?: Record<string, unknown>;
+}): Promise<RussellMessage | null> {
+  const id = newId('rmsg');
+  const at = nowIso();
+  const result = await getDb().run(
+    `INSERT INTO russell_messages
+       (id, conversation_id, role, author_user_id, content, status, pending_reason,
+        produced, metadata, answers_message_id, attempt, created_at, updated_at)
+     VALUES (?, ?, 'RUSSELL', NULL, '', 'PENDING', ?, '{}', ?, ?, ?, ?, ?)
+     ON CONFLICT DO NOTHING`,
+    [
+      id,
+      input.conversationId,
+      input.pendingReason,
+      toJson(input.metadata ?? {}),
+      input.answersMessageId,
+      input.attempt,
+      at,
+      at,
+    ],
+  );
+  if (result.changes !== 1) return null;
+  await getDb().run('UPDATE russell_conversations SET updated_at = ? WHERE id = ?', [
+    at,
+    input.conversationId,
+  ]);
+  const rows = await getDb().all<RussellMessageRow>('SELECT * FROM russell_messages WHERE id = ?', [
+    id,
+  ]);
+  return rows[0] ? mapMessage(rows[0]) : null;
+}
+
+/** Every attempt at one question, oldest first. The original is not among them. */
+export async function listTurnAttempts(answersMessageId: string): Promise<RussellMessage[]> {
+  const rows = await getDb().all<RussellMessageRow>(
+    `SELECT * FROM russell_messages
+      WHERE answers_message_id = ?
+      ORDER BY attempt, rowid`,
+    [answersMessageId],
+  );
+  return rows.map(mapMessage);
 }
 
 /**
@@ -455,6 +532,12 @@ export async function listTurns(
     pendingReason: null,
     produced: {},
     metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
+    // A legacy turn predates retries entirely, so it is a first attempt with
+    // nothing to record — the same reading as every row written before the
+    // columns existed. Inventing an attempt number for it would be worse than
+    // admitting there is not one.
+    answersMessageId: null,
+    attempt: null,
     createdAt: row.created_at,
     updatedAt: row.created_at,
     legacy: true,

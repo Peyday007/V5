@@ -26,6 +26,7 @@ import {
 import {
   beginTurn,
   MAX_TURN_ATTEMPTS,
+  ownerPrincipal,
   retryTurn,
   TURN_UNIT_KEY,
 } from '../server/services/russell/turn.ts';
@@ -178,8 +179,14 @@ describe('a failed turn can be handed back to the fleet', () => {
     // And it is linked to that question on the row, so the thread reads back as
     // one question with several attempts.
     const pending = (await getMessage(again.pendingMessage!.id))!;
+    // The chain, in metadata: which attempt this one replaces.
     expect(pending.metadata?.['retryOf']).toBe(failedId);
-    expect(pending.metadata?.['attempt']).toBe(2);
+    // The invariant, in columns: which question, and which attempt at it. The
+    // unique index is over this pair, so it has to be a column rather than a
+    // key inside JSON.
+    expect(pending.attempt).toBe(2);
+    const turns = await listTurns(pending.conversationId, 20);
+    expect(pending.answersMessageId).toBe(turns.find((turn) => turn.role === 'USER')!.id);
   });
 
   it('does not show the worker the refusal sentence as though it were an answer', async () => {
@@ -330,5 +337,137 @@ describe('what a retry refuses', () => {
       [`russell:turn:${failed.id}`],
     );
     expect(Number(bins[0]!.n)).toBe(0);
+  });
+});
+
+/**
+ * The property the owner asked to have confirmed rather than asserted.
+ *
+ * The first version of `retryTurn` counted the attempts already made and then
+ * inserted the next one. These two tests were written against that version and
+ * *failed*: two concurrent callers both won, both claimed attempt 2, and two
+ * bins were created for one question. The fix is `UNIQUE (answers_message_id,
+ * attempt)` and an `INSERT ... ON CONFLICT DO NOTHING`, so the database is the
+ * arbiter rather than a window between a read and a write.
+ */
+describe('two people pressing Try again at the same moment', () => {
+  it('creates exactly one attempt, and the loser is refused rather than broken', async () => {
+    const { conversationId, failedId } = await aFailedTurn();
+
+    const [a, b] = await Promise.all([
+      retryTurn({ principal: principal(), messageId: failedId }),
+      retryTurn({ principal: principal(), messageId: failedId }),
+    ]);
+
+    // One wins, one is refused. Which one is undefined and does not matter.
+    expect([a.ok, b.ok].filter(Boolean)).toHaveLength(1);
+    const winner = a.ok ? a : b;
+    const loser = a.ok ? b : a;
+    expect(winner.attempt).toBe(2);
+    // An ordinary outcome, in the words somebody arriving a moment later gets.
+    expect(loser.reason).toMatch(/already having another go/);
+    // And the loser created nothing: no message, and no bin.
+    expect(loser.binId).toBeNull();
+    expect(loser.pendingMessage).toBeNull();
+
+    const turns = await listTurns(conversationId, 50);
+    const pending = turns.filter((turn) => turn.role === 'RUSSELL' && turn.status === 'PENDING');
+    expect(pending).toHaveLength(1);
+    expect(pending[0]!.answersMessageId).toBe(
+      turns.find((turn) => turn.role === 'USER')!.id,
+    );
+    expect(pending[0]!.attempt).toBe(2);
+
+    const bins = await getDb().all<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM bins WHERE created_by_id = ?`,
+      [`russell:turn:${pending[0]!.id}`],
+    );
+    expect(Number(bins[0]!.n)).toBe(1);
+  });
+
+  it('cannot be raced past the three-attempt ceiling', async () => {
+    const { conversationId, failedId } = await aFailedTurn();
+
+    // Drive to the last attempt the ceiling allows, failing each one.
+    let latest = failedId;
+    for (let attempt = 2; attempt <= MAX_TURN_ATTEMPTS; attempt += 1) {
+      const again = await retryTurn({ principal: principal(), messageId: latest });
+      expect(again.ok).toBe(true);
+      latest = again.pendingMessage!.id;
+      await resolveMessage({
+        messageId: latest,
+        content: 'Still no.',
+        status: 'FAILED',
+        pendingReason: 'refused',
+      });
+    }
+
+    // Now hit it from four directions at once, including from earlier attempts
+    // in the chain — the ceiling belongs to the question, not to a link.
+    const all = await Promise.all([
+      retryTurn({ principal: principal(), messageId: latest }),
+      retryTurn({ principal: principal(), messageId: latest }),
+      retryTurn({ principal: principal(), messageId: failedId }),
+      retryTurn({ principal: principal(), messageId: failedId }),
+    ]);
+    expect(all.every((one) => !one.ok)).toBe(true);
+
+    const turns = await listTurns(conversationId, 50);
+    const russell = turns.filter((turn) => turn.role === 'RUSSELL');
+    expect(russell).toHaveLength(MAX_TURN_ATTEMPTS);
+    // Dense and distinct: attempt 1 is the original and carries no number.
+    expect(russell.map((turn) => turn.attempt)).toEqual([null, 2, 3]);
+  });
+
+  it('numbers attempts per question, so two questions do not collide', async () => {
+    // The unique index is over the pair, not over the attempt number alone.
+    const first = await aFailedTurn('First question?');
+    const second = await aFailedTurn('Second question?');
+    const a = await retryTurn({ principal: principal(), messageId: first.failedId });
+    const b = await retryTurn({ principal: principal(), messageId: second.failedId });
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    expect(a.attempt).toBe(2);
+    expect(b.attempt).toBe(2);
+  });
+});
+
+/**
+ * The operator command's boundary, at the level the command is a wrapper over.
+ *
+ * `step10 retry-turn <messageId> <userId>` builds the named person's principal
+ * with `ownerPrincipal` and hands it to `retryTurn`. So the boundary is exactly
+ * this: **the command can do what that person could do in the browser, and
+ * nothing else.** Naming somebody who does not own the thread refuses, and
+ * naming a disabled account produces no principal at all.
+ */
+describe('the operator command can only act as the thread owner', () => {
+  it('refuses when the named person does not own the thread', async () => {
+    const { failedId } = await aFailedTurn();
+    const asOther = await ownerPrincipal(otherUserId);
+    expect(asOther).not.toBeNull();
+    const again = await retryTurn({ principal: asOther!, messageId: failedId });
+    expect(again.ok).toBe(false);
+    expect(again.reason).toBe('no such turn');
+    expect(again.binId).toBeNull();
+  });
+
+  it('builds no principal at all for a disabled account', async () => {
+    await getDb().run('UPDATE users SET disabled_at = ? WHERE id = ?', [
+      '2026-01-01T00:00:00.000Z',
+      userId,
+    ]);
+    expect(await ownerPrincipal(userId)).toBeNull();
+    // And the command refuses before it reaches the service, which is why it
+    // prints one sentence for "no such turn", "no such user" and "disabled".
+    expect(await ownerPrincipal('usr_does_not_exist')).toBeNull();
+  });
+
+  it('acts for the owner exactly as the browser would', async () => {
+    const { failedId } = await aFailedTurn();
+    const asOwner = await ownerPrincipal(userId);
+    const again = await retryTurn({ principal: asOwner!, messageId: failedId });
+    expect(again.ok).toBe(true);
+    expect(again.attempt).toBe(2);
   });
 });
