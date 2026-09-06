@@ -1573,11 +1573,15 @@ async function main(): Promise<void> {
       role: string;
       status: string;
       pending_reason: string | null;
+      produced: string;
+      answers_message_id: string | null;
+      attempt: number | null;
       created_at: string;
       updated_at: string;
       chars: number;
     }>(
       `SELECT m.id, m.conversation_id, m.role, m.status, m.pending_reason,
+              m.produced, m.answers_message_id, m.attempt,
               m.created_at, m.updated_at, LENGTH(m.content) AS chars
          FROM russell_messages m
          JOIN russell_conversations c ON c.id = m.conversation_id
@@ -1598,6 +1602,32 @@ async function main(): Promise<void> {
       if (message.pending_reason) console.log(`      pending: ${message.pending_reason}`);
       if (message.updated_at !== message.created_at) {
         console.log(`      settled: ${message.updated_at}`);
+      }
+      /*
+       * What the turn *did*, as distinct from whether it was accepted.
+       *
+       * The gap this closes cost a whole reporting cycle. The frozen
+       * acceptance turn was answered, the proposal passed validation, the bin
+       * went terminal — and it captured no candidate. Nothing deployed could
+       * say which of two very different things had happened: the worker chose
+       * an action that has no side effect, or it proposed CAPTURE_CANDIDATE
+       * and Brain's own `shouldCapture` gate declined it. `produced` already
+       * distinguishes them — `{}` against `{captureDeclined: true}` against
+       * `{candidateId: …}` — and was simply never printed.
+       *
+       * Safe to print in full, and this is the reason rather than an
+       * assumption: `performProposal` only ever puts ids and booleans in here.
+       * There is no branch that writes a title, a statement, an answer or any
+       * other piece of somebody's conversation into `produced`, so §24's rule
+       * that this command must not become a transcript reader still holds.
+       */
+      if (message.produced && message.produced !== '{}') {
+        console.log(`      produced: ${message.produced}`);
+      }
+      if (message.answers_message_id) {
+        console.log(
+          `      attempt ${message.attempt ?? '—'} at ${message.answers_message_id}`,
+        );
       }
       const bins = await getDb().all<{ id: string }>(
         `SELECT id FROM bins WHERE created_by_id = ?`,

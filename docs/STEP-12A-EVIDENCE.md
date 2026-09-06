@@ -3721,3 +3721,99 @@ was empty because the conversation did not exist when the file was written.
 It exists now, and it has been answered, so the anchor is declared:
 `rcv_35d5b0340fc4479fa443`. `npm run step12a:acceptance` runs **inside the
 container**, so this reaches production only through a deployment.
+
+---
+
+## 42. The scope is live, and the chain is empty — 2026-09-06
+
+Mutation 10 (`cf80fa6`, run `34017681333`) deployed the scope pin: 163/163
+before and 169/169 after a real restart. One application line changed. The
+reserved scope-pin authorization is now spent.
+
+### The anchor is the right conversation, checked rather than assumed
+
+§6 of the frozen scenario disqualifies the 2026-09-04 permit thread by name and
+says a clean run is *one new conversation, the frozen message sent verbatim*.
+`rcv_35d5b0340fc4479fa443` satisfies that: its only user turn is
+`rmsg_d10b82a9b724401c8127` at **207 characters**, and the frozen message is
+207 characters. The thread holds one question and two Russell turns at it and
+nothing else — no history that predates the scenario, which is the specific
+failure §6 exists to prevent. `rcv_8085eba0beb04bc38ce6`, the disqualified
+thread, is a different conversation and is not in scope.
+
+### The gates now resolve, and say something different
+
+    11/21 PASS · 0 FAIL · 0 BLOCKED · 10 NOT_RUN · 1 DEFERRED
+
+The nine scoped gates changed from *the frozen chain is not declared yet* to
+real counts against the chain — `0 of 1 merges`, `0 of 1 ideas carrying a
+stated judgment`, `0 of 1 probes`, `0 of 1 settled budget reservations`, `0 of
+1 fully linked missions`, and for `A11`, *no orchestration is in the acceptance
+scope, so no audit can belong to it*. That is the scope resolving and walking
+foreign keys correctly. It is also the honest state: **the chain is empty
+downstream of the message.**
+
+### An accepted reply is not the chain, and here is the proof
+
+The retry settled `COMPLETE` with 782 characters that passed
+`validateProposal`. It produced **no candidate, no merge, no probe and no
+mission**. `RECORDS PRODUCED` queries `russell_candidates` by
+`conversation_id`, and for this conversation it returns `candidates 0`.
+
+Condition 3 of the frozen scenario is *meaningful candidate capture*, falsified
+by *no candidate*. So **condition 3 is not satisfied**, and the owner's warning
+was exactly right: an accepted reply proves that the manifest and the validator
+now agree, and nothing whatever about the downstream chain.
+
+### Why the near-duplicate must not be sent yet
+
+The scenario is explicit that the second message is *sent after the first has
+been captured*, and condition 4 is falsified by *a second candidate for the
+reworded message*. With zero candidates, that test cannot fail and cannot pass
+— it would be vacuous. Sending it now would spend the frozen input and prove
+nothing.
+
+### Two candidate explanations, and nothing deployed could tell them apart
+
+`performProposal` records what it did in `russell_messages.produced`:
+
+  - `{ candidateId: …, merged: … }` — captured;
+  - `{ captureDeclined: true }` — the worker proposed `CAPTURE_CANDIDATE` and
+    Brain's own `shouldCapture` gate refused it;
+  - `{}` — the action was one with no side effect at a turn.
+
+Those are very different diagnoses with different remedies, the answer has been
+sitting in a column since 01:51:57Z, and **no deployed read prints it.**
+`turn-trace` prints states, times and ids; the acceptance reporter counts rows.
+So the honest position is that the *effect* is certain and the *cause* is not
+yet readable, and guessing between them would be the model prose this codebase
+refuses everywhere else.
+
+The repair is four printed lines in `turn-trace` and is prepared here. It is
+safe to print `produced` in full, and the reason is structural rather than
+hopeful: every branch of `performProposal` writes ids and booleans into it and
+none writes a title, a statement or an answer, so §24's rule that this command
+must never become a transcript reader still holds.
+
+### A structural finding the chain will meet again
+
+`performProposal` has side effects for exactly two actions: `ATTACH_PROJECT`
+and `CAPTURE_CANDIDATE`. `RUN_PROBE`, `PROMOTE_MISSION`, `PARK_CANDIDATE`,
+`REJECT_CANDIDATE` and `ANSWER_ONLY` all fall through to `produced: {}` and are
+accepted **as answers**, deliberately — the comment there says a probe needs an
+envelope and a reservation and a promotion needs a layer and a mission
+specification, and that a turn quietly composing a mission scope nobody
+approved would be worse.
+
+That is right, and it means conditions 6, 8 and 9 — the bounded probe, the
+atomic budget reservation, the single mission — were never going to be produced
+by a conversation turn at all. They need the probe and mission machinery driven
+by their own authorized paths. This is recorded now rather than discovered three
+gates later.
+
+### Attempt 3 is available and is deliberately not being spent
+
+One retry remains inside the ceiling. Re-running the identical bin in the hope
+of a different action is a retry rather than a repair, which is the thing §15
+refuses by name — *no two attempts can be the same search twice*. The next
+action is to read `produced`, not to roll again.
