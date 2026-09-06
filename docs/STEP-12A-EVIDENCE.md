@@ -3817,3 +3817,98 @@ One retry remains inside the ceiling. Re-running the identical bin in the hope
 of a different action is a retry rather than a repair, which is the thing §15
 refuses by name — *no two attempts can be the same search twice*. The next
 action is to read `produced`, not to roll again.
+
+---
+
+## 43. Who actually executes each advertised action — 2026-09-06
+
+Read from the code before deploying anything, because the owner was right that
+`produced={}` cannot identify an action and equally right that a diagnosis
+which stops at the first missing field wastes a production read.
+
+### The eight actions, and their consumers
+
+| action | executed by | when |
+| --- | --- | --- |
+| `ATTACH_PROJECT` | `performProposal` | at the turn |
+| `CAPTURE_CANDIDATE` | `performProposal` → `capture()` | at the turn, if `shouldCapture` agrees |
+| `ANSWER_ONLY` | — | correctly nothing; the answer *is* the effect |
+| `ASK_WHICH_PROJECT` | — | correctly nothing |
+| `RUN_PROBE` | **nobody** | — |
+| `PROMOTE_MISSION` | **nobody** | — |
+| `PARK_CANDIDATE` | **nobody** | — |
+| `REJECT_CANDIDATE` | **nobody** | — |
+
+The last four are **silently accepted no-ops, not asynchronous work.** The
+distinction the owner asked for is real and this is the wrong side of it: an
+asynchronous action records an intent that something later consumes, and
+nothing anywhere reads the proposed action after `performProposal` returns.
+There is no queue entry, no state, no row. The proposal is validated, accepted,
+and its action forgotten.
+
+Probes and missions *do* have executors — `loop.ts` opens a probe at step 3b
+and launches a mission at step 4 — but both select from **candidate state**,
+never from a proposal:
+
+```
+exploring()      → priority = 'EXPLORE' AND state = 'CAPTURED' AND no probe yet
+nextLaunchable() → state = 'QUEUED' AND project_id IS NOT NULL AND judgment.missionSpec
+```
+
+### The severed link, which is bigger than the capture question
+
+Both selectors read columns written **only** by `recordJudgment`. Its production
+callers are:
+
+  - `writeback.ts:180` — after a mission completes, which is downstream of the
+    thing we need to start;
+  - `applyJudgment` in `judgment.ts:272`.
+
+And `applyJudgment` is called by **`tests/russellNervousSystem.test.ts` and
+nothing else.** Grepping the whole tree for it returns its own definition, one
+test import and one test call.
+
+So a candidate captured by a turn is written `state = 'CAPTURED'`, `priority =
+NULL`, `judgment = {}`, and **nothing in production ever gives it a judgment**.
+It can therefore never satisfy `exploring()` and never satisfy
+`nextLaunchable()`. No probe opens. No mission launches. No reservation is
+taken.
+
+That is not a deduction from reading alone — production agrees. The single
+candidate this Brain holds, `rcn_23e70baee1ba47478c28` from 2026-09-04, reads
+`CAPTURED priority — ordinal —`, and `A06_JUDGMENT_OVERRIDE` reports `0 of 1
+ideas carrying a stated judgment`.
+
+**Conditions 5, 6, 7, 8 and 9 of the frozen scenario were unreachable before
+the capture question ever arose.** A stored priority and reason, a bounded
+probe, the coverage check, the atomic reservation and the single mission all
+sit downstream of a judgment nothing makes. Recorded now, in full, rather than
+discovered one gate at a time.
+
+### The diagnostic, batched and verified on both backends
+
+`step10 turn-diagnose <messageId>` prints, in one read: the message row and its
+attempt link; the bin and its submitted unit; **the action from the stored
+proposal**; which payload parts are present and how long they are; a *re-run*
+of `validateProposal` against the stored bytes as the owner; `shouldCapture`'s
+verdict and reason when the action is a capture; every candidate linked by
+source message, by conversation, **and through the merge table in both
+directions with each side's conversation id**; and the downstream reachability
+counts plus the `russell_cycle` row.
+
+The merge query matters and is the owner's point: `capture()` creates the row
+and *then* folds it into the earliest fingerprint match, and that canonical row
+can live in another conversation. A check that only looked locally would report
+"no capture" for a turn that captured and merged.
+
+No conversation content is printed. The action and priority are enums, produced
+holds ids and booleans, the capture reason is one of five phrases written in
+this repository, and every payload field is reported as present-or-absent with
+a length.
+
+**Verified by running it, not by compiling it.** A seeded turn with a real
+worker-shaped proposal was driven through it on SQLite and on a real Postgres,
+and the two outputs are identical. That run caught a defect a typecheck could
+not: the table is `russell_cycle`, not `russell_cycles`, and the command threw
+at the last section. Finding that in production would have been exactly the
+second wasted read the owner told me not to take.

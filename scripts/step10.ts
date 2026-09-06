@@ -73,6 +73,9 @@ import { DEAL_DISPATCH_SLUG } from '../server/seed.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import { IN_FLIGHT_WINDOW_MS } from '../server/services/dispatch/candidates.ts';
 import { MAX_TURN_ATTEMPTS, ownerPrincipal, retryTurn } from '../server/services/russell/turn.ts';
+import { parseJson } from '../server/repos/util.ts';
+import { validateProposal } from '../server/services/russell/proposal.ts';
+import { shouldCapture } from '../server/services/russell/judgment.ts';
 import { getConversation, getMessage } from '../server/repos/russellConversations.ts';
 import { describeFireTarget } from '../server/services/dispatch/fire.ts';
 import {
@@ -1784,6 +1787,238 @@ async function main(): Promise<void> {
     }
 
     console.log(`STEP10: OK turn-trace messages=${messages.length}`);
+    return;
+  }
+
+  if (command === 'turn-diagnose') {
+    /*
+     * Everything about one turn that decides whether it moved the chain.
+     *
+     * Written after a reporting cycle was lost to reading the effect and not
+     * the cause. The frozen acceptance turn was answered, its proposal passed
+     * validation, its bin went terminal — and no candidate existed. Six
+     * different explanations fit that, and nothing deployed could separate
+     * them, so the honest report was "the cause is not readable", which is a
+     * bad place to have to stop twice.
+     *
+     * So this prints the whole structural trace in one read: the action the
+     * worker actually proposed, what validation says about the stored bytes
+     * now, what the turn recorded producing, what the capture gate says about
+     * the statement, every candidate linked to this turn *by any route*
+     * including a canonical one in a different conversation, and the loop
+     * state that decides whether anything downstream could ever pick it up.
+     *
+     * **No conversation content, ever.** The action and priority are enums,
+     * the produced map holds ids and booleans, the capture reason is one of
+     * five fixed phrases written in this repository, and every payload field
+     * is reported as present-or-absent with a length. The one thing a reader
+     * of this output cannot do is read somebody's thread — §24's boundary, at
+     * the boundary that most wants to cross it.
+     */
+    const messageId = arg(0);
+    if (!messageId) {
+      console.log('STEP10 REFUSED: pass a message id.');
+      process.exitCode = 1;
+      return;
+    }
+    const message = await getMessage(messageId);
+    if (!message) {
+      console.log('STEP10 REFUSED: nothing here to diagnose.');
+      process.exitCode = 1;
+      return;
+    }
+    const conversation = await getConversation(message.conversationId);
+
+    console.log(`TURN DIAGNOSE  ${message.id}`);
+    console.log('  (no message content is printed; enums, ids, booleans and lengths only)');
+    console.log('');
+    console.log(`  role/status   ${message.role} ${message.status}`);
+    console.log(`  pending       ${message.pendingReason ?? '—'}`);
+    console.log(`  created       ${message.createdAt}`);
+    console.log(`  settled       ${message.updatedAt !== message.createdAt ? message.updatedAt : '—'}`);
+    console.log(`  answers       ${message.answersMessageId ?? '—'}  attempt ${message.attempt ?? '—'}`);
+    console.log(`  produced      ${JSON.stringify(message.produced)}`);
+    console.log(`  conversation  ${message.conversationId}  project ${conversation?.projectId ?? '—'}`);
+    console.log('');
+
+    // ---- the bin, and the bytes the worker actually submitted ----
+    const binRows = await getDb().all<{ id: string; state: string; lease_generation: number; attempt_count: number }>(
+      `SELECT id, state, lease_generation, attempt_count FROM bins WHERE created_by_id = ?`,
+      [`russell:turn:${message.id}`],
+    );
+    for (const row of binRows) {
+      console.log(`  bin           ${row.id}  ${row.state}  gen ${row.lease_generation}  attempts ${row.attempt_count}`);
+      const results = await listBinUnitResults(row.id);
+      for (const unit of results) {
+        console.log(`    unit        ${unit.unitKey}  by ${unit.submittedBy ?? '—'}  ${unit.createdAt}`);
+        const raw = parseJson<Record<string, unknown> | null>(unit.value, null);
+
+        /*
+         * The action, which is the field the whole diagnosis turns on and the
+         * one `produced` can never tell you: an action with no side effect and
+         * a declined capture both record `{}`-shaped nothing.
+         */
+        const action = raw && typeof raw['action'] === 'string' ? String(raw['action']) : null;
+        console.log(`    action      ${action ?? '(none in the submitted value)'}`);
+        if (raw) {
+          // Presence and size, never the text.
+          const part = (key: string): string => {
+            const value = raw[key];
+            if (value === undefined || value === null) return 'absent';
+            if (typeof value === 'string') return `present (${value.length} chars)`;
+            if (typeof value === 'object') return `present (${Object.keys(value).length} keys)`;
+            return `present (${typeof value})`;
+          };
+          console.log(
+            `    parts       answer ${part('answer')}  candidate ${part('candidate')}  ` +
+              `probe ${part('probe')}  reason ${part('reason')}`,
+          );
+          const priority = typeof raw['priority'] === 'string' ? raw['priority'] : null;
+          const projectId = typeof raw['projectId'] === 'string' ? raw['projectId'] : null;
+          const confidence = typeof raw['confidence'] === 'number' ? raw['confidence'] : null;
+          console.log(
+            `    fields      priority ${priority ?? '—'}  projectId ${projectId ?? '—'}  ` +
+              `confidence ${confidence ?? '—'}  keys [${Object.keys(raw).sort().join(' ')}]`,
+          );
+        }
+
+        /*
+         * Validation re-run against the stored bytes, as the owner, now.
+         *
+         * A verdict rather than an inference from the message's status: a turn
+         * can read COMPLETE for reasons that have nothing to do with whether
+         * the proposal would pass today, and after two manifest fixes "would
+         * it pass now" is a different question from "did it pass then".
+         */
+        if (conversation) {
+          const principal = await ownerPrincipal(conversation.ownerUserId);
+          if (principal) {
+            const verdict = validateProposal({ raw, principal });
+            console.log(
+              `    validation  ${verdict.ok ? 'OK' : `REFUSED ${verdict.reason}`}`,
+            );
+            /*
+             * And the gate that runs *after* validation for a capture. This is
+             * the one that can accept a proposal and still produce nothing, so
+             * it is the difference between "the worker chose another action"
+             * and "Brain refused the worker's capture".
+             */
+            if (verdict.ok && verdict.proposal.action === 'CAPTURE_CANDIDATE' && verdict.proposal.candidate) {
+              const decision = shouldCapture(verdict.proposal.candidate.statement);
+              console.log(
+                `    capture     capture=${decision.capture}  reason="${decision.reason}"  ` +
+                  `statement ${verdict.proposal.candidate.statement.length} chars`,
+              );
+            }
+          }
+        }
+      }
+    }
+    console.log('');
+
+    /*
+     * ---- every candidate this turn could be linked to, by any route ----
+     *
+     * Deliberately not "candidates in this conversation". `capture()` creates
+     * the row and *then* folds it into the earliest one with the same
+     * fingerprint, and that canonical row can live in a different conversation
+     * entirely — so a chain that only looks locally would report "no capture"
+     * for a turn that captured and merged. Three routes are checked: the
+     * source message, the conversation, and the merge table in both
+     * directions.
+     */
+    console.log('  CANDIDATE LINKS');
+    const bySource = await getDb().all<{ id: string; conversation_id: string | null; state: string; priority: string | null; canonical_candidate_id: string | null }>(
+      `SELECT id, conversation_id, state, priority, canonical_candidate_id
+         FROM russell_candidates WHERE source_message_id = ?`,
+      [message.id],
+    );
+    console.log(`    by source message  ${bySource.length}`);
+    for (const c of bySource) {
+      console.log(`      ${c.id}  ${c.state}  priority ${c.priority ?? '—'}  canonical ${c.canonical_candidate_id ?? '—'}  conv ${c.conversation_id ?? '—'}`);
+    }
+    const byConversation = await getDb().all<{ id: string; state: string; priority: string | null; canonical_candidate_id: string | null; created_at: string }>(
+      `SELECT id, state, priority, canonical_candidate_id, created_at
+         FROM russell_candidates WHERE conversation_id = ? ORDER BY created_at, rowid`,
+      [message.conversationId],
+    );
+    console.log(`    by conversation    ${byConversation.length}`);
+    for (const c of byConversation) {
+      console.log(`      ${c.created_at}  ${c.id}  ${c.state}  priority ${c.priority ?? '—'}  canonical ${c.canonical_candidate_id ?? '—'}`);
+    }
+    const merges = await getDb().all<{ id: string; candidate_id: string; canonical_id: string; method: string; created_at: string; from_conv: string | null; to_conv: string | null }>(
+      `SELECT m.id, m.candidate_id, m.canonical_id, m.method, m.created_at,
+              a.conversation_id AS from_conv, b.conversation_id AS to_conv
+         FROM russell_candidate_merges m
+         JOIN russell_candidates a ON a.id = m.candidate_id
+         JOIN russell_candidates b ON b.id = m.canonical_id
+        WHERE a.conversation_id = ? OR b.conversation_id = ?
+        ORDER BY m.created_at, m.rowid`,
+      [message.conversationId, message.conversationId],
+    );
+    console.log(`    merges touching it ${merges.length}`);
+    for (const m of merges) {
+      console.log(
+        `      ${m.created_at}  ${m.method}  ${m.candidate_id} (conv ${m.from_conv ?? '—'}) -> ` +
+          `${m.canonical_id} (conv ${m.to_conv ?? '—'})`,
+      );
+    }
+    console.log('');
+
+    /*
+     * ---- the loop state that decides whether anything downstream can run ----
+     *
+     * `exploring()` needs priority EXPLORE and state CAPTURED; `nextLaunchable()`
+     * needs state QUEUED and a missionSpec inside the judgment. Both of those
+     * are written only by `recordJudgment`. Printing the counts says, from
+     * rows, whether the chain past capture is reachable at all.
+     */
+    console.log('  DOWNSTREAM REACHABILITY  (whole Brain, not just this chain)');
+    const one = async (sql: string): Promise<number> => {
+      const rows = await getDb().all<{ n: number }>(sql, []);
+      return Number(rows[0]?.n ?? 0);
+    };
+    console.log(`    candidates                    ${await one('SELECT COUNT(*) AS n FROM russell_candidates')}`);
+    console.log(`    …with any priority            ${await one("SELECT COUNT(*) AS n FROM russell_candidates WHERE priority IS NOT NULL")}`);
+    console.log(`    …EXPLORE + CAPTURED, unprobed ${await one("SELECT COUNT(*) AS n FROM russell_candidates c WHERE c.priority = 'EXPLORE' AND c.state = 'CAPTURED' AND NOT EXISTS (SELECT 1 FROM russell_probes p WHERE p.candidate_id = c.id)")}`);
+    console.log(`    …QUEUED with a project        ${await one("SELECT COUNT(*) AS n FROM russell_candidates WHERE state = 'QUEUED' AND project_id IS NOT NULL")}`);
+    console.log(`    probes                        ${await one('SELECT COUNT(*) AS n FROM russell_probes')}`);
+    console.log(`    missions                      ${await one('SELECT COUNT(*) AS n FROM russell_missions')}`);
+    console.log(`    budget reservations           ${await one('SELECT COUNT(*) AS n FROM russell_budget_reservations')}`);
+    const cycles = await getDb().all<{
+      id: string;
+      state: string;
+      lease_owner: string | null;
+      generation: number;
+      cursor_at: string | null;
+      last_ran_at: string | null;
+      pause_reason: string | null;
+      last_error: string | null;
+    }>(
+      `SELECT id, state, lease_owner, generation, cursor_at, last_ran_at, pause_reason, last_error
+         FROM russell_cycle ORDER BY rowid LIMIT 5`,
+    );
+    for (const c of cycles) {
+      console.log(
+        `    cycle ${c.id}  ${c.state}  gen ${c.generation}  owner ${c.lease_owner ?? '—'}`,
+      );
+      console.log(
+        `          cursor ${c.cursor_at ?? '—'}  last ran ${c.last_ran_at ?? '—'}  ` +
+          `paused ${c.pause_reason ?? '—'}`,
+      );
+      // Brain's own error text, not a caller's, and truncated: a loop that is
+      // failing every tick is the first thing worth seeing here.
+      console.log(`          error ${c.last_error ? c.last_error.slice(0, 160) : '—'}`);
+    }
+    if (cycles.length === 0) {
+      // Not the same as a healthy idle loop, and the difference matters: no row
+      // means the cycle has never been created, so nothing downstream of a
+      // capture would run however many candidates existed.
+      console.log('    cycle —  no russell_cycle row exists');
+    }
+
+    console.log('');
+    console.log(`STEP10: OK turn-diagnose ${message.id} status=${message.status} bins=${binRows.length}`);
     return;
   }
 
