@@ -49,6 +49,7 @@ import { getProject } from '../../repos/projects.ts';
 import { capture, shouldCapture } from './judgment.ts';
 import { routeMessage } from './routing.ts';
 import {
+  FIELD_LIMITS,
   MAX_PROPOSED_LOOKUPS,
   PROPOSAL_ACTIONS,
   REQUIRED_PART,
@@ -311,6 +312,24 @@ export async function beginTurn(input: {
           // reader — or a test — searches for literally.
           ([forAction, field]) => `${forAction} additionally requires ${field}`,
         ),
+        /*
+         * And the lengths, which were five magic numbers nobody was told.
+         *
+         * Each one refuses the *whole* proposal when exceeded, so each is a
+         * rule enforced against somebody who was never told it. None is as
+         * likely as the two that actually bit — a worker rarely writes an
+         * eight-thousand-character answer — but "unlikely" is not the standard
+         * this seam is held to, and the owner was right to ask for the rest of
+         * the contract rather than accept that one fix covered it.
+         */
+        `answer is at most ${FIELD_LIMITS.answer} characters`,
+        `candidate title is at most ${FIELD_LIMITS.candidateTitle} characters, ` +
+          `statement at most ${FIELD_LIMITS.candidateStatement}`,
+        `probe question is at most ${FIELD_LIMITS.probeQuestion} characters, ` +
+          `maxLookups is a whole number from 1 to ${MAX_PROPOSED_LOOKUPS}`,
+        `reason is at most ${FIELD_LIMITS.reason} characters`,
+        'confidence is a number from 0 to 100',
+        'projectId, when given, is the project this bin already names',
         'no other field — an unrecognised one refuses the whole proposal',
       ],
       outputs: [

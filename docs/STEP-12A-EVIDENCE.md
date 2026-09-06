@@ -3340,3 +3340,78 @@ priority or a required field without telling the worker fails a test.
 One more than §33 on each chain: the manifest assertion extended in place rather
 than added as a new case. No migration; SQLite stays at **029**, Postgres at
 **020**.
+
+---
+
+## 38. The whole proposal contract, checked in one pass — 2026-09-05
+
+The owner's instruction was exact: fixing `REQUIRED_PART` addresses the reported
+failure, but do not claim it prevents every future validation failure without
+checking the rest. The check was worth demanding — **four more unstated rules
+turned up**, and every one of them refuses a whole proposal.
+
+`validateProposal` against what the manifest told the worker, before this pass:
+
+| rule | enforced | stated |
+| --- | --- | --- |
+| eight allowed field names, an extra refuses the whole proposal | ✓ | ✓ |
+| `action` from a closed set of eight, matched exactly | ✓ | ✓ (generated) |
+| `answer` required, non-empty | ✓ | ✓ |
+| `priority` from a closed set of five | ✓ | ✓ (generated, §31) |
+| six actions each require a named field | ✓ | ✓ (generated, §37) |
+| `confidence` a number 0–100 | ✓ | ✓ |
+| `projectId` must resolve for the principal | ✓ | partly |
+| **`answer` at most 8,000 characters** | ✓ | **✗** |
+| **`candidate.title` at most 200** | ✓ | **✗** |
+| **`candidate.statement` at most 2,000** | ✓ | **✗** |
+| **`probe.question` at most 500** | ✓ | **✗** |
+| **`reason` at most 1,000** | ✓ | **✗** |
+| `probe.maxLookups` a whole number 1–3 | ✓ | partly — the ceiling, not the floor or the integer rule |
+
+Five magic numbers scattered through the checks, none of them written anywhere
+the worker could see. They now live in one exported `FIELD_LIMITS`, the
+validator reads its bounds from it, and the manifest renders them from the same
+object — so the contract a worker is *judged against* and the contract it is
+*handed* are the same value.
+
+**None of these is as likely as the two that actually bit.** A worker rarely
+writes an eight-thousand-character answer. That is not the standard this seam is
+held to: each one is a rule enforced against somebody who was never told it, and
+the reason to fix them now is that the same defect has already cost two real
+turns on two separate days.
+
+**Validation is unchanged and stays strict.** Not one bound was loosened, no
+refusal was downgraded to a warning, and the zero-trust rule that an unknown
+field refuses the whole proposal is exactly as it was. The only thing that
+changed is that the worker is now told.
+
+The manifest test asserts the whole set — actions, priorities, required parts
+and every limit — as **whole phrases collected rather than short-circuited**.
+Two things that matters for: a bare `toContain('200')` passes on a manifest that
+only mentions 2,000, because "2000" contains "200"; and a loop that throws on
+the first miss hides the others, which is how you fix one of five and believe
+you fixed the contract. On the old code all five phrases are reported missing at
+once.
+
+### The acceptance turn's stored status, read rather than inferred
+
+    RUSSELL FAILED   131 chars   conv rcv_35d5b0340fc4479fa443   rmsg_b56979f1d6fd4839a3ff
+        pending: the proposed action was missing the part it acts on
+        settled: 2026-09-05T23:17:12.009Z
+
+`MISSING_REQUIRED_PART`. **A completed worker bin with a rejected proposal is
+not an answered Russell turn**, and the records say so in both directions: the
+bin reads `COMPLETE` and the turn reads `FAILED`. The 131 characters are the
+standard refusal sentence, not an answer to the question.
+
+### There is no supported retry path, and that is the gap
+
+`resolveMessage` is guarded on `status = 'PENDING'`, so a `FAILED` turn can
+never be re-resolved — correctly, because that guard is what makes a turn
+answer once. Nothing anywhere re-opens or retries one. The designed recovery is
+the sentence the person is shown — *"Ask me again and I will try once more"* —
+which means a **new user message**, and the owner has ruled that out for the
+acceptance run.
+
+So the honest answer is that the supported path does not exist, and the repair
+is §39.

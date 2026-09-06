@@ -98,8 +98,27 @@ const KNOWN_FIELDS = new Set([
   'priority',
 ]);
 
-const MAX_ANSWER_CHARS = 8_000;
-const MAX_STATEMENT_CHARS = 2_000;
+/**
+ * Every length this validator enforces, in one place and exported.
+ *
+ * They were five magic numbers scattered through the checks, and none of them
+ * was stated anywhere the worker could see. Each one refuses a whole proposal
+ * when exceeded, so each one is a rule enforced against somebody who was never
+ * told it — the same trap that produced `BAD_PRIORITY` and then
+ * `MISSING_REQUIRED_PART`, twice, on real turns.
+ *
+ * Exported so the turn manifest renders them from here. The point is not that
+ * an eight-thousand-character answer is likely; it is that the contract a
+ * worker is judged against and the contract it is handed are now the same
+ * object, so a fourth surprise of this shape has to get past a test first.
+ */
+export const FIELD_LIMITS = {
+  answer: 8_000,
+  candidateTitle: 200,
+  candidateStatement: 2_000,
+  probeQuestion: 500,
+  reason: 1_000,
+} as const;
 
 /**
  * Which field each action cannot be carried out without.
@@ -174,9 +193,9 @@ export function validateProposal(input: {
     return refuse('UNKNOWN_ACTION', 'the proposal named an action this version does not perform');
   }
 
-  const answer = text(body['answer'], MAX_ANSWER_CHARS);
+  const answer = text(body['answer'], FIELD_LIMITS.answer);
   if (!answer) {
-    return typeof body['answer'] === 'string' && body['answer'].trim().length > MAX_ANSWER_CHARS
+    return typeof body['answer'] === 'string' && body['answer'].trim().length > FIELD_LIMITS.answer
       ? refuse('ANSWER_TOO_LONG', 'the answer was longer than a turn may be')
       : refuse('MISSING_ANSWER', 'the proposal had nothing to say to the person');
   }
@@ -224,8 +243,11 @@ export function validateProposal(input: {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return refuse('MISSING_REQUIRED_PART', 'the proposed idea was not readable');
     }
-    const title = text((value as Record<string, unknown>)['title'], 200);
-    const statement = text((value as Record<string, unknown>)['statement'], MAX_STATEMENT_CHARS);
+    const title = text((value as Record<string, unknown>)['title'], FIELD_LIMITS.candidateTitle);
+    const statement = text(
+      (value as Record<string, unknown>)['statement'],
+      FIELD_LIMITS.candidateStatement,
+    );
     if (!title || !statement) {
       return refuse('MISSING_REQUIRED_PART', 'a proposed idea needs a title and a statement');
     }
@@ -238,7 +260,7 @@ export function validateProposal(input: {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return refuse('MISSING_REQUIRED_PART', 'the proposed probe was not readable');
     }
-    const question = text((value as Record<string, unknown>)['question'], 500);
+    const question = text((value as Record<string, unknown>)['question'], FIELD_LIMITS.probeQuestion);
     const lookups = (value as Record<string, unknown>)['maxLookups'];
     if (!question) {
       return refuse('MISSING_REQUIRED_PART', 'a proposed probe needs one narrow question');
@@ -273,7 +295,7 @@ export function validateProposal(input: {
     RUN_PROBE: () => probe !== null,
     PROMOTE_MISSION: () => projectId !== null,
     PARK_CANDIDATE: () => priority !== null,
-    REJECT_CANDIDATE: () => text(body['reason'], 1_000) !== null,
+    REJECT_CANDIDATE: () => text(body['reason'], FIELD_LIMITS.reason) !== null,
   };
   const required = needs[action as ProposalAction];
   if (required && !required()) {
@@ -287,7 +309,7 @@ export function validateProposal(input: {
       answer,
       projectId,
       confidence,
-      reason: text(body['reason'], 1_000),
+      reason: text(body['reason'], FIELD_LIMITS.reason),
       candidate,
       probe,
       priority,

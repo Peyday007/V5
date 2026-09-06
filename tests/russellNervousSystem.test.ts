@@ -68,7 +68,7 @@ import { askHuman, answerHumanRequest, getHumanRequest, transitionMission } from
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
 import { listTurns, createConversation, getConversation } from '../server/repos/russellConversations.ts';
 import { applyTurn, beginTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
-import { REQUIRED_PART } from '../server/services/russell/proposal.ts';
+import { FIELD_LIMITS, REQUIRED_PART } from '../server/services/russell/proposal.ts';
 import { assignNextBin, getBin, putBinUnitResult, terminateUnleasedBin } from '../server/repos/bins.ts';
 import { hashUnitValue } from '../server/services/bins/contracts.ts';
 import { requestCompletion } from '../server/services/bins/service.ts';
@@ -1336,6 +1336,32 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
         `the manifest never says ${forAction} requires ${field}`,
       ).toContain(`${forAction} additionally requires ${field}`);
     }
+
+    /*
+     * And every length the validator enforces.
+     *
+     * Each one refuses the whole proposal when exceeded, so each is a rule the
+     * worker has to be told. Asserted from the same constant the checks use, so
+     * changing a bound without telling the worker fails here.
+     */
+    const expectedLimits = [
+      `answer is at most ${FIELD_LIMITS.answer} characters`,
+      `candidate title is at most ${FIELD_LIMITS.candidateTitle} characters`,
+      `statement at most ${FIELD_LIMITS.candidateStatement}`,
+      `probe question is at most ${FIELD_LIMITS.probeQuestion} characters`,
+      `reason is at most ${FIELD_LIMITS.reason} characters`,
+    ];
+    /*
+     * Whole phrases, not bare numbers, and collected rather than short-circuited.
+     *
+     * A bare `toContain('200')` passes on a manifest that only mentions 2000,
+     * because "2000" contains "200" — so the weaker assertion would have called
+     * the title limit stated when it was not. And a loop that throws on the
+     * first miss hides the others, which is how you fix one of five and believe
+     * you fixed the contract.
+     */
+    const missing = expectedLimits.filter((phrase) => !written.includes(phrase));
+    expect(missing, 'limits the manifest never states').toEqual([]);
   });
 
   it('asks which project instead of dispatching, when it cannot tell', async () => {
