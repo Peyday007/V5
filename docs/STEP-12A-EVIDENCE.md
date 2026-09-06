@@ -4370,3 +4370,86 @@ the same shape as the three escalations §22 records. It is not a Step 12A
 completion requirement and adding one now would be adding an acceptance
 requirement, so it belongs in the 12B backlog beside the verification-fixture
 defect.
+
+---
+
+## 48. The budget control, repaired rather than worked around — 2026-09-06
+
+The owner chose the harder option, and was right to: raising `maxConcurrent` to
+2 would have made the follow-on possible by mis-stating the limit, which is the
+thing they had just told me not to do.
+
+### Two ceilings, because they are two questions
+
+```ts
+// before
+case 'MISSION': return Math.min(goal.maxMissions, goal.maxConcurrent);
+// after
+case 'MISSION': return { total: goal.maxMissions, active: goal.maxConcurrent };
+```
+
+`totalsThroughMine` now returns both figures from **one pass over the same
+ranked rows**: `total` counts `SETTLED` plus live `HELD`, `active` counts live
+`HELD` only. One query rather than two, because two could land either side of a
+settlement and disagree about which reservations exist.
+
+Both are ranked through the row's own `rowid` — the property that stops two
+callers racing for the last slot from both winning *and* from both standing
+down — and that rank has to hold for **each** ceiling separately, because a
+request can be inside the cumulative limit and outside the concurrent one and
+must lose exactly one of them.
+
+A finished mission therefore gives back concurrency and refunds nothing
+cumulative, which is precisely the distinction the owner specified.
+
+### The defect this uncovered, which had to be fixed for their verification to be true
+
+The owner asked for proof that "the second mission is refused while the first is
+active, permitted after the first settles" **through the reservation/launch
+path**. Written against the launch path, that could not have passed.
+
+`launch()` keys a mission `russell:mission:<candidate>:<goal>` — stable per
+candidate on purpose, so a retry cannot become a second mission. But a refused
+reservation leaves a `RELEASED` row under that key, and `reserve()` read any
+existing row back as the answer. So **a candidate refused once on concurrency
+could never launch**, however free the fleet later became. The same
+"waiting for something nobody can resolve" shape, at the budget.
+
+A released row is now revived rather than reported, by a guarded
+compare-and-swap so two callers racing to revive one key produce one winner and
+one replay. It keeps its original `rowid`, so it keeps its place in the queue
+for the slot — it was there first.
+
+This is inside the authority path already in scope; it is not scope expansion,
+and without it the owner's stated verification is unprovable rather than
+merely unproven.
+
+### Verified against the approved limits, on both backends
+
+`tests/authorityBudget.test.ts` — 12 tests, using exactly
+`missions 2 · fragments 12 · concurrent 1 · probes 3`:
+
+  - first mission permitted, second refused **on concurrency** while it is
+    active — the refusal names the right reason, which the old code could not;
+  - the follow-on permitted once the first **settles**;
+  - a third refused **on the total** with nothing active — a settled mission
+    still counts, so "one at a time" cannot become "unlimited over time";
+  - a **released** reservation gives back both, because nothing was spent;
+  - fragments and probes bounded by their totals, with no concurrency limit to
+    stop them;
+  - two racing requests: exactly one wins the last concurrent slot, exactly one
+    wins the last cumulative slot, and the loser's reason names which;
+  - idempotent by key, so a retry is not a second mission;
+  - and through the launch path with the key `launch()` really uses: refused,
+    then permitted after settlement, still refused for a genuine third
+    candidate, a revived key spending the grant once rather than twice, and two
+    callers racing to revive one key getting one reservation between them.
+
+### What is deliberately not changed
+
+The older parked candidate `rcn_23e70baee1ba47478c28` is untouched. Its missing
+automatic reconsideration is a **backlog defect** about ideas parked before an
+authority existed, and it is not the frozen scenario's condition 17, which is a
+`NEEDS_HUMAN` mission park that a person answers and the **same mission**
+resumes from. Those are different mechanisms at different altitudes; condition
+17 stands unchanged and unwaived, and no new requirement is added in its place.

@@ -331,41 +331,126 @@ export async function reserve(input: {
   if (!existing) {
     return { ok: false, reservation: null, reason: 'the reservation could not be taken', replayed: false };
   }
+  let mine = existing;
   if (existing.id !== id) {
-    // Somebody equivalent got there first. That is success for an idempotent
-    // caller — the budget was spent once and this attempt is the same attempt.
-    return {
-      ok: existing.state === 'HELD' || existing.state === 'SETTLED',
-      reservation: mapReservation(existing),
-      reason: 'an equivalent reservation already exists',
-      replayed: true,
-    };
+    /*
+     * Somebody equivalent got there first. That is success for an idempotent
+     * caller — the budget was spent once and this attempt is the same attempt.
+     *
+     * Except when the row is `RELEASED`, which is not a previous success but a
+     * previous *stand-down*. `launch()` keys a mission reservation by candidate
+     * and goal, so a mission refused on concurrency left a released row under
+     * that key and every later attempt read it back as a refusal: the candidate
+     * could never launch, however free the fleet became. That is the "waiting
+     * for something nobody can resolve" shape again, at the budget.
+     *
+     * So a released row is revived rather than reported. The revival is a
+     * guarded compare-and-swap, so two callers racing to revive the same key
+     * produce one winner; the loser re-reads and replays like any other
+     * equivalent caller. It keeps its original `rowid`, which means it keeps
+     * its place in the queue for the slot — it was there first.
+     */
+    if (existing.state !== 'RELEASED') {
+      return {
+        ok: existing.state === 'HELD' || existing.state === 'SETTLED',
+        reservation: mapReservation(existing),
+        reason: 'an equivalent reservation already exists',
+        replayed: true,
+      };
+    }
+    const revived = await getDb().run(
+      `UPDATE russell_budget_reservations
+          SET state = 'HELD', expires_at = ?, released_at = NULL, release_reason = NULL
+        WHERE id = ? AND state = 'RELEASED'`,
+      [expires, existing.id],
+    );
+    const reread = (
+      await getDb().all<RussellReservationRow>(
+        'SELECT * FROM russell_budget_reservations WHERE id = ?',
+        [existing.id],
+      )
+    )[0];
+    if (!reread) {
+      return { ok: false, reservation: null, reason: 'the reservation could not be taken', replayed: false };
+    }
+    if (revived.changes !== 1) {
+      // Lost the revival. Whatever it is now is the shared answer.
+      return {
+        ok: reread.state === 'HELD' || reread.state === 'SETTLED',
+        reservation: mapReservation(reread),
+        reason: 'an equivalent reservation already exists',
+        replayed: true,
+      };
+    }
+    mine = reread;
   }
 
-  const ceiling = ceilingFor(goal, input.kind);
-  const held = await totalThroughMine(goal.id, input.kind, now, existing);
-  if (held > ceiling) {
-    await releaseReservation({ reservationId: id, reason: `over the ${input.kind.toLowerCase()} ceiling` });
+  /*
+   * Two ceilings, because they are two different questions.
+   *
+   * `ceilingFor` used to answer both with `Math.min(maxMissions,
+   * maxConcurrent)` against a cumulative count, and that is wrong in the
+   * direction that matters: a grant of two missions with one running at a time
+   * permitted **one mission ever**, and refused the automatic follow-on. The
+   * owner set those numbers from their plain meaning and would have been
+   * under-authorized without being told.
+   *
+   * So:
+   *
+   *   - **total** counts `SETTLED` and live `HELD` — a finished mission has
+   *     still been spent, and always counts against `maxMissions`;
+   *   - **active** counts live `HELD` only — settling a mission gives back
+   *     concurrency and refunds nothing cumulative.
+   *
+   * Both are ranked through this row's own `rowid`, which is what stops two
+   * callers racing for the last slot from both winning it *and* from both
+   * standing down. That property is the reason the rank exists and it has to
+   * hold for each ceiling separately: a request may be inside the cumulative
+   * limit and outside the concurrent one, and it must lose exactly one of them.
+   */
+  const totals = await totalsThroughMine(goal.id, input.kind, now, mine);
+  const limits = ceilingsFor(goal, input.kind);
+
+  if (totals.total > limits.total) {
+    await releaseReservation({ reservationId: mine.id, reason: `over the ${input.kind.toLowerCase()} total` });
     return {
       ok: false,
       reservation: null,
-      reason: `the standing authority allows ${ceiling} ${input.kind.toLowerCase()} at a time`,
+      reason: `the standing authority allows ${limits.total} ${input.kind.toLowerCase()} in total`,
+      replayed: false,
+    };
+  }
+  if (totals.active > limits.active) {
+    await releaseReservation({ reservationId: mine.id, reason: `over the ${input.kind.toLowerCase()} concurrency` });
+    return {
+      ok: false,
+      reservation: null,
+      reason: `the standing authority allows ${limits.active} ${input.kind.toLowerCase()} at a time`,
       replayed: false,
     };
   }
 
-  return { ok: true, reservation: mapReservation(existing), reason: 'reserved', replayed: false };
+  return { ok: true, reservation: mapReservation(mine), reason: 'reserved', replayed: false };
 }
 
-function ceilingFor(goal: RussellGoal, kind: ReservationKind): number {
+/**
+ * What this grant allows, cumulatively and at once.
+ *
+ * Only a mission has a meaningful concurrency limit; a fragment and a probe are
+ * bounded by their totals alone, so their `active` ceiling is the same number
+ * and the second check can never be the one that refuses them. Written out
+ * rather than special-cased at the call site, so adding a kind means answering
+ * both questions for it.
+ */
+function ceilingsFor(goal: RussellGoal, kind: ReservationKind): { total: number; active: number } {
   switch (kind) {
     case 'MISSION':
-      return Math.min(goal.maxMissions, goal.maxConcurrent);
+      return { total: goal.maxMissions, active: goal.maxConcurrent };
     case 'FRAGMENT':
-      return goal.maxFragments;
+      return { total: goal.maxFragments, active: goal.maxFragments };
     case 'PROBE':
     default:
-      return goal.maxProbes;
+      return { total: goal.maxProbes, active: goal.maxProbes };
   }
 }
 
@@ -401,21 +486,32 @@ function ceilingFor(goal: RussellGoal, kind: ReservationKind): number {
  * nothing — that is what makes a crashed launch's reservation recoverable
  * without anybody sweeping it — and a released one counts for nothing, which is
  * what makes standing down safe.
+ *
+ * Both figures come from one pass over the same ranked rows, so they cannot
+ * disagree about which reservations exist: `total` counts settled and live
+ * work, `active` counts only what is still held. Two queries could see
+ * different rows if one landed either side of a settlement.
  */
-async function totalThroughMine(
+async function totalsThroughMine(
   goalId: string,
   kind: ReservationKind,
   now: string,
   mine: RussellReservationRow,
-): Promise<number> {
-  const rows = await getDb().all<{ total: number }>(
-    `SELECT COALESCE(SUM(amount), 0) AS total FROM russell_budget_reservations
+): Promise<{ total: number; active: number }> {
+  const rows = await getDb().all<{ total: number; active: number }>(
+    `SELECT
+        COALESCE(SUM(CASE
+          WHEN state = 'SETTLED' OR (state = 'HELD' AND expires_at > ?) THEN amount
+          ELSE 0 END), 0) AS total,
+        COALESCE(SUM(CASE
+          WHEN state = 'HELD' AND expires_at > ? THEN amount
+          ELSE 0 END), 0) AS active
+       FROM russell_budget_reservations
       WHERE goal_id = ? AND kind = ?
-        AND (state = 'SETTLED' OR (state = 'HELD' AND expires_at > ?))
         AND rowid <= (SELECT rowid FROM russell_budget_reservations WHERE id = ?)`,
-    [goalId, kind, now, mine.id],
+    [now, now, goalId, kind, mine.id],
   );
-  return Number(rows[0]?.total ?? 0);
+  return { total: Number(rows[0]?.total ?? 0), active: Number(rows[0]?.active ?? 0) };
 }
 
 export async function settleReservation(reservationId: string): Promise<boolean> {
