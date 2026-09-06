@@ -136,6 +136,42 @@ export const FIELD_LIMITS = {
  *
  * An action absent from this map needs nothing beyond `action` and `answer`.
  */
+/**
+ * The actions a turn can actually carry out.
+ *
+ * `PROPOSAL_ACTIONS` is what the validator *accepts* and is deliberately not
+ * changed by this: a worker that sends one of the others is still parsed, still
+ * judged by the same rules, and still refused for the same reasons. What
+ * changes is what Brain *asks for*.
+ *
+ * The four that are missing here — `RUN_PROBE`, `PROMOTE_MISSION`,
+ * `PARK_CANDIDATE`, `REJECT_CANDIDATE` — have no consumer anywhere.
+ * `performProposal` accepts them and returns without doing anything, and
+ * nothing downstream ever reads the proposed action, so there is no queue, no
+ * state and no row for a later pass to pick up. They are silently accepted
+ * no-ops rather than asynchronous work, and advertising them is how a worker
+ * ends up choosing one.
+ *
+ * That is not hypothetical. On 2026-09-06 the frozen acceptance turn was
+ * answered with `RUN_PROBE`, carrying a well-formed probe question. Validation
+ * passed, the bin went terminal, the person got 782 characters of answer — and
+ * nothing happened. No probe, no candidate, nothing recorded. The manifest had
+ * offered an action the platform cannot perform, which is the same defect as
+ * enforcing a rule nobody was told, pointing the other way.
+ *
+ * A probe and a mission are still reachable, by the route that was always
+ * intended: capture the idea, let Russell judge it, and let the cycle open a
+ * probe for what it judged `EXPLORE` and launch a mission for what it queued.
+ * That is a decision Brain makes from its own state rather than one a model
+ * asks for, which is §8 at this seam.
+ */
+export const EXECUTABLE_ACTIONS = [
+  'ATTACH_PROJECT',
+  'CAPTURE_CANDIDATE',
+  'ANSWER_ONLY',
+  'ASK_WHICH_PROJECT',
+] as const satisfies readonly ProposalAction[];
+
 export const REQUIRED_PART: Partial<Record<ProposalAction, string>> = {
   ATTACH_PROJECT: 'projectId',
   CAPTURE_CANDIDATE: 'candidate',

@@ -52,6 +52,7 @@ import { briefing, focusLayer } from '../server/services/russell/projections.ts'
 import { describe as describeProgress, progressOf, stageFor } from '../server/services/russell/progress.ts';
 import {
   looksLikeInjection,
+  EXECUTABLE_ACTIONS,
   MAX_PROPOSED_LOOKUPS,
   PROPOSAL_ACTIONS,
   validateProposal,
@@ -1299,11 +1300,35 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
      * than a rule, and this is the assertion that keeps the two in step: adding
      * an action without telling the worker fails here.
      */
-    for (const action of PROPOSAL_ACTIONS) {
+    for (const action of EXECUTABLE_ACTIONS) {
       expect(written, `the manifest never names ${action}`).toContain(action);
     }
     expect(written).toContain(TURN_UNIT_KEY);
-    expect(written).toContain(String(MAX_PROPOSED_LOOKUPS));
+
+    /*
+     * And the other half, which is the one that cost a production turn.
+     *
+     * `PROPOSAL_ACTIONS` is what the validator parses; `EXECUTABLE_ACTIONS` is
+     * what `performProposal` can actually carry out. The four in the difference
+     * have no consumer anywhere — no queue entry, no state, no row — so a
+     * worker that chooses one gets a validated, accepted proposal that does
+     * nothing, and the person is told something that never happens.
+     *
+     * On 2026-09-06 the frozen acceptance turn came back `RUN_PROBE`. It
+     * validated, the bin went terminal, and no probe and no candidate existed.
+     * Offering an action the platform cannot perform is the same defect as
+     * enforcing a rule nobody was told, pointing the other way — so the
+     * manifest must not name them.
+     */
+    const inert = PROPOSAL_ACTIONS.filter(
+      (action) => !(EXECUTABLE_ACTIONS as readonly string[]).includes(action),
+    );
+    expect(inert).toEqual(['RUN_PROBE', 'PROMOTE_MISSION', 'PARK_CANDIDATE', 'REJECT_CANDIDATE']);
+    for (const action of inert) {
+      expect(written, `the manifest offers ${action}, which nothing executes`).not.toContain(
+        action,
+      );
+    }
 
     /*
      * And every priority, which is the half this assertion did not cover and
@@ -1331,6 +1356,16 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
      * and had its whole proposal refused with MISSING_REQUIRED_PART.
      */
     for (const [forAction, field] of Object.entries(REQUIRED_PART)) {
+      // Only for the actions Brain can carry out. A required field for an
+      // action the manifest no longer offers would be instructions for work
+      // that cannot happen.
+      if (!(EXECUTABLE_ACTIONS as readonly string[]).includes(forAction)) {
+        expect(
+          written,
+          `the manifest still explains ${forAction}, which nothing executes`,
+        ).not.toContain(`${forAction} additionally requires`);
+        continue;
+      }
       expect(
         written,
         `the manifest never says ${forAction} requires ${field}`,
@@ -1348,7 +1383,10 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
       `answer is at most ${FIELD_LIMITS.answer} characters`,
       `candidate title is at most ${FIELD_LIMITS.candidateTitle} characters`,
       `statement at most ${FIELD_LIMITS.candidateStatement}`,
-      `probe question is at most ${FIELD_LIMITS.probeQuestion} characters`,
+      // No probe limit: the manifest no longer offers RUN_PROBE, so stating
+      // the bound for a field nothing may send would be noise the worker has
+      // to reason about. The validator still enforces it for a proposal that
+      // sends one anyway.
       `reason is at most ${FIELD_LIMITS.reason} characters`,
     ];
     /*
@@ -1362,6 +1400,55 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
      */
     const missing = expectedLimits.filter((phrase) => !written.includes(phrase));
     expect(missing, 'limits the manifest never states').toEqual([]);
+  });
+
+  it('records that an accepted action had no effect, rather than leaving it silent', async () => {
+    /*
+     * The production failure this exists for.
+     *
+     * The frozen acceptance turn came back `RUN_PROBE`, validated cleanly, and
+     * produced nothing — no probe, no candidate. `produced` was `{}`, which is
+     * exactly what an ordinary answer records, so the row could not be told
+     * apart from a turn that had nothing to do. That ambiguity cost a whole
+     * production reporting cycle.
+     */
+    const conversation = await createConversation({
+      ownerUserId: userId,
+      title: 'Inert',
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    const started = await beginTurn({
+      principal: principal([membership(projectId)]),
+      conversationId: conversation.id,
+      content: 'Do the counties publish permit data in a usable form?',
+    });
+    expect(await answerTurnBin(started.binId!, {
+      action: 'RUN_PROBE',
+      answer: 'Here is what I can say about that.',
+      confidence: 70,
+      probe: { question: 'Which counties publish permit data?', maxLookups: 2 },
+    })).toBe('COMPLETE');
+
+    const applied = await applyTurn(started.binId!);
+    // Accepted — the validator is unchanged and still parses the action.
+    expect(applied.ok).toBe(true);
+    expect(applied.candidateId).toBeNull();
+
+    const answered = (await listTurns(conversation.id, 10)).find(
+      (turn) => turn.role === 'RUSSELL',
+    )!;
+    expect(answered.status).toBe('COMPLETE');
+    // And the row now says what happened: an action was accepted and nothing
+    // came of it. A reader can tell this from an ordinary answer.
+    expect(answered.produced).toMatchObject({ accepted: 'RUN_PROBE', effect: 'NONE' });
+
+    // Nothing was created behind it, which is the honest part of the outcome.
+    const probes = await getDb().all<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM russell_probes',
+      [],
+    );
+    expect(Number(probes[0]!.n)).toBe(0);
   });
 
   it('asks which project instead of dispatching, when it cannot tell', async () => {

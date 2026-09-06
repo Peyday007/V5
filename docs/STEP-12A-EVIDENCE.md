@@ -3912,3 +3912,108 @@ and the two outputs are identical. That run caught a defect a typecheck could
 not: the table is `russell_cycle`, not `russell_cycles`, and the command threw
 at the last section. Finding that in production would have been exactly the
 second wasted read the owner told me not to take.
+
+---
+
+## 44. The cause, read from production — 2026-09-06
+
+Mutation 11 (`f67021e`, run `34019241560`) deployed the batched diagnostic:
+163/163 before and 169/169 after a real restart, no behaviour change. One read
+settled it:
+
+```
+TURN DIAGNOSE  rmsg_52239a165ecc44ba9287
+  role/status   RUSSELL COMPLETE
+  answers       rmsg_d10b82a9b724401c8127  attempt 2
+  produced      {}
+  bin           bin_264d1427ec304698a4c5  COMPLETE  gen 2  attempts 1
+    unit        proposal  by wkr_1cdd82cfb2a54faf8edd
+    action      RUN_PROBE
+    parts       answer present (782 chars)  candidate absent  probe present (2 keys)
+    fields      priority —  projectId prj_9d86…  confidence 70
+    validation  OK
+  CANDIDATE LINKS   by source 0 · by conversation 0 · merges 0
+```
+
+**The worker proposed `RUN_PROBE`.** Not a capture that was declined — no
+capture was ever proposed. The proposal carried a well-formed probe object and
+a 782-character answer, `validateProposal` accepted it, the bin went terminal,
+the person was answered — and `RUN_PROBE` is one of the four actions with no
+consumer, so `performProposal` fell through its `default` and returned
+`produced: {}`.
+
+Nothing happened. No probe, no candidate, no row of any kind.
+
+**The hypothesis I had been carrying was wrong and is recorded rather than
+quietly dropped.** I had reasoned that `shouldCapture` — heuristics written for
+a person's raw message — might be rejecting a worker's declarative candidate
+statement. That is a real hazard and may yet bite, but it is not what happened
+here: `shouldCapture` never ran, because the action was never a capture. Saying
+so was the right call; asserting it would have been model prose in place of a
+row.
+
+Two further facts from the same read. The cycle is **healthy** — `RUNNING`,
+generation 6158, last ran seconds earlier, no error — so the loop is not stuck;
+it has nothing to select. And `candidates 1 … with any priority 0` confirms the
+judgment sever independently of this turn.
+
+### The executed capture condition is unsatisfied, and that is distinct from not run
+
+**Condition 3 — meaningful candidate capture — is UNSATISFIED**, observed. A
+turn ran, was answered, and produced no candidate. That is a different fact
+from conditions 5 through 9, which have **not run**: nothing has reached them,
+and nothing about them has been tested. The acceptance reporter's `0 of 1`
+phrasing covers both and the distinction is only visible here, so it is written
+down: one observed failure, and a set of gates still untouched.
+
+### The repair, part one: stop advertising what nothing executes
+
+`EXECUTABLE_ACTIONS` in `proposal.ts` names the four a turn can carry out —
+`ATTACH_PROJECT`, `CAPTURE_CANDIDATE`, `ANSWER_ONLY`, `ASK_WHICH_PROJECT` — and
+the manifest is generated from it. `PROPOSAL_ACTIONS` is **unchanged**: the
+validator parses and refuses exactly as before, so this weakens nothing. What
+changes is what Brain asks for.
+
+Offering an action the platform cannot perform is the same defect as enforcing
+a rule nobody was told, pointing the other way — and this repository has now
+paid for both directions of it on the same seam within two days.
+
+The manifest also gains one sentence saying a probe or a mission is not
+something to ask for: capture the idea, and Russell decides whether it needs a
+cheap look or a packet. That is the route the design always intended, and §8 at
+this seam — the decision is Brain's, from its own state, not a model's request.
+
+And the inert fallthrough now records `{ accepted: <action>, effect: 'NONE' }`
+instead of `{}`, so an accepted action that did nothing can never again be
+indistinguishable from an ordinary answer.
+
+Three tests pin it: the manifest names every executable action, names **none**
+of the four inert ones, and a `RUN_PROBE` proposal is accepted, creates no
+probe, and records the refusal-shaped outcome on the row.
+
+### The repair, part two: nothing gives a candidate a judgment
+
+This is the larger half and it is **scoped, not built**, because it needs a
+decision rather than a fix.
+
+`exploring()` selects `priority = 'EXPLORE' AND state = 'CAPTURED'`;
+`nextLaunchable()` selects `state = 'QUEUED'` with a `missionSpec` inside the
+judgment. Both columns are written only by `recordJudgment`, whose production
+callers are `writeback.ts` — downstream of a mission that has already run — and
+`applyJudgment`, which **no production code calls.**
+
+So even a successful capture stops dead. The open questions are genuine design,
+not omissions to be filled in silently:
+
+  - **What supplies `JudgmentInputs`?** `judge()` is deterministic over
+    `blockedBy`, `supporting`, `contradicting`, `alreadyAnswered`,
+    `cheapToReduce` and `expectedValue`. `alreadyAnswered` in particular is
+    §13's archive check, and `coverBeforeWork` exists to answer it. Wiring
+    `judge({})` would compile and would also be Russell forming an opinion from
+    nothing, which is the thing §24 says it must not do.
+  - **Where does `missionSpec` come from?** Without one, a `QUEUED` candidate is
+    still not launchable, so condition 9 stays out of reach.
+
+Guessing either would be adding design under the name of a repair. Part one is
+prepared and committed; part two is written down here with its two questions,
+for a decision.

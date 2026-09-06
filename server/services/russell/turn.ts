@@ -51,9 +51,8 @@ import { getProject } from '../../repos/projects.ts';
 import { capture, shouldCapture } from './judgment.ts';
 import { routeMessage } from './routing.ts';
 import {
+  EXECUTABLE_ACTIONS,
   FIELD_LIMITS,
-  MAX_PROPOSED_LOOKUPS,
-  PROPOSAL_ACTIONS,
   REQUIRED_PART,
   validateProposal,
   type ValidatedProposal,
@@ -314,7 +313,16 @@ async function createTurnBin(input: {
        * will guess at instead.
        */
       evidence: [
-        `one JSON object with an "action" from exactly this set: ${PROPOSAL_ACTIONS.join(', ')}`,
+        /*
+         * The actions Brain can actually carry out, not every action the
+         * validator will parse. Advertising the others cost the frozen
+         * acceptance turn: it came back `RUN_PROBE`, validated cleanly, and
+         * moved nothing, because nothing consumes that action. See
+         * EXECUTABLE_ACTIONS.
+         */
+        `one JSON object with an "action" from exactly this set: ${EXECUTABLE_ACTIONS.join(', ')}`,
+        'a probe or a mission is not something to ask for here — capture the idea ' +
+          'and Russell decides whether it needs a cheap look or a packet',
         'an "answer" field: what to say to the person, in plain words',
         'optional "projectId", "confidence" (0-100), "reason"',
         /*
@@ -332,7 +340,6 @@ async function createTurnBin(input: {
          */
         `optional "priority", from exactly this set: ${CANDIDATE_PRIORITIES.join(', ')}`,
         'for CAPTURE_CANDIDATE: a "candidate" object with "title" and "statement"',
-        `for RUN_PROBE: a "probe" object with "question" and "maxLookups" (at most ${MAX_PROPOSED_LOOKUPS})`,
         /*
          * Which actions cannot be carried out without a particular field —
          * generated from the validator's own map so the two cannot drift.
@@ -345,7 +352,11 @@ async function createTurnBin(input: {
          * with MISSING_REQUIRED_PART. Two of the six were written down; four
          * were not.
          */
-        ...Object.entries(REQUIRED_PART).map(
+        ...Object.entries(REQUIRED_PART)
+          .filter(([forAction]) =>
+            (EXECUTABLE_ACTIONS as readonly string[]).includes(forAction),
+          )
+          .map(
           // No quotes around the field: the manifest is read as JSON, where a
           // quoted name comes back escaped and stops matching anything a
           // reader — or a test — searches for literally.
@@ -364,8 +375,6 @@ async function createTurnBin(input: {
         `answer is at most ${FIELD_LIMITS.answer} characters`,
         `candidate title is at most ${FIELD_LIMITS.candidateTitle} characters, ` +
           `statement at most ${FIELD_LIMITS.candidateStatement}`,
-        `probe question is at most ${FIELD_LIMITS.probeQuestion} characters, ` +
-          `maxLookups is a whole number from 1 to ${MAX_PROPOSED_LOOKUPS}`,
         `reason is at most ${FIELD_LIMITS.reason} characters`,
         'confidence is a number from 0 to 100',
         'projectId, when given, is the project this bin already names',
@@ -800,7 +809,16 @@ async function applyValidated(input: {
        * alternative is a turn quietly composing a mission scope nobody
        * approved.
        */
-      break;
+      /*
+       * Recorded rather than silent.
+       *
+       * `produced: {}` is indistinguishable from a turn that had nothing to do,
+       * and that ambiguity cost a production reporting cycle: a `RUN_PROBE`
+       * proposal was accepted, did nothing, and left a row that looked exactly
+       * like an ordinary answer. An accepted action with no effect is a fact
+       * worth keeping, so it is written down.
+       */
+      return { produced: { accepted: proposal.action, effect: 'NONE' }, candidateId: null };
   }
   void owner;
   return { produced: {}, candidateId: null };
