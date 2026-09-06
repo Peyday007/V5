@@ -252,3 +252,56 @@ controls; preference foundations; and final mobile-first refinement.
 usability requirement again.** That is the addendum's rule and it is recorded
 here, in the backlog, because this file is where such a deferral would be
 written.
+
+---
+
+## Defect: hosted verification leaves fixture bins on the live queue — 2026-09-06
+
+Recorded here as its own defect, at the owner's instruction, rather than fixed
+inside a scope-pin deployment it does not belong in.
+
+**What happens.** `scripts/verify-hosted.sh` exercises the Russell turn path by
+sending real messages as its verification account. Each one becomes a
+`RUSSELL_TURN` bin in the `verification-scope` project, the dispatcher fires it
+at a registered Routine, and no worker ever claims it — the verification's
+purpose was served the moment the API answered. The bin is left `READY` with a
+`SENT` dispatch row. The deploy pipeline runs the verification twice, before and
+after the restart, so **each deployment leaves four of them**.
+
+**What it costs.** `inFlightByRoutine` counts a `SENT` dispatch against the
+Routine's target for `IN_FLIGHT_WINDOW_MS` — thirty minutes. With V1 at a target
+of 2, one deployment therefore holds the entire fleet closed for half an hour
+against work nobody is doing. Measured on 2026-09-06: the retry of the frozen
+acceptance turn was refused eleven times over sixteen minutes, every refusal
+`ACCOUNT_TARGETS_REACHED`, and was assigned three seconds after the second
+fixture aged out.
+
+**What it is not.** Not a leak. Mutation 8's pair, fired at 00:50:22 and
+00:50:50, still carried those same `sent_at` values at 01:42 — nothing re-fires
+them, and once the window lapses they stop counting entirely. They cost one
+activation each, once, and then thirty minutes of a slot. The deferral introduced
+in mutation 7 means queued work waits rather than failing, so the damage is
+latency and nothing else.
+
+**Why no existing control settles them.** `step10 cancel-bin` refuses any bin
+outside the acceptance project, deliberately — a narrow control that reaches one
+project is safe precisely because it does not reach the others, and widening it
+so an operator can terminate bins in an arbitrary project is the move §23 warns
+against: *never a widening of a narrower control that already exists for a
+different reason.* So there is nothing to run, and inventing something to run
+would be the defect rather than the fix.
+
+**The fix belongs in the harness.** Verification should settle what it creates:
+cancel its own turn bins before it reports, in the same script that made them,
+by the same reasoning as its existing cleanup — it already disables the
+verification account and worker it created, and prints no credential. A bin is
+the one thing it makes and leaves behind. That is a change to
+`scripts/verify-hosted.sh` plus a supported termination path scoped to the
+verification project, and it is not a Step 12A completion condition: no
+acceptance gate reads these rows, and the only symptom is a delay the dispatcher
+already absorbs correctly.
+
+**Until it is fixed**, the operating note is: after any deployment, expect the
+fleet to be at target for thirty minutes, and read a capacity delay in that
+window as this rather than as a fault. Do not raise concurrency to compensate —
+that spends real allowance to work around litter.
