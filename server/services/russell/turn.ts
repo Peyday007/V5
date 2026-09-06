@@ -714,6 +714,43 @@ export async function applyTurn(binId: string): Promise<ApplyTurnResult> {
    * lost capture is one a person can simply say again, whereas a duplicated one
    * quietly corrupts the backlog that Russell's own ranking reads.
    */
+  /*
+   * An action Brain cannot perform settles the turn as a failure, before the
+   * answer is stored.
+   *
+   * Checked here rather than after, because `resolveMessage` is the once-only
+   * claim and the *status* it writes is the thing that must be truthful. A turn
+   * that asked for a probe and got 782 characters of prose settled `COMPLETE`
+   * in production on 2026-09-06 while nothing whatsoever had happened, and
+   * everything downstream read that as an answered question.
+   *
+   * The person still gets the worker's words — they are usually a perfectly
+   * good answer to the question — followed by the plain fact that the thing it
+   * offered to do is not something Russell does from a conversation.
+   */
+  const unsupported = unsupportedAction(validated.proposal.action);
+  if (unsupported) {
+    const closed = await resolveMessage({
+      messageId,
+      content: `${validated.proposal.answer}\n\n(${unsupported})`,
+      status: 'FAILED',
+      pendingReason: `the proposed action ${validated.proposal.action} is not something a turn can carry out`,
+    });
+    if (closed) {
+      await recordProduced(messageId, {
+        accepted: validated.proposal.action,
+        effect: 'UNSUPPORTED',
+      });
+    }
+    return {
+      ok: false,
+      reason: `${validated.proposal.action} is not something a turn can carry out`,
+      alreadyAnswered: !closed,
+      action: validated.proposal.action,
+      candidateId: null,
+    };
+  }
+
   const resolved = await resolveMessage({ messageId, content: validated.proposal.answer });
   if (!resolved) {
     return {
@@ -738,6 +775,27 @@ export async function applyTurn(binId: string): Promise<ApplyTurnResult> {
 }
 
 /**
+ * The sentence a person gets when Russell will not do what was proposed.
+ *
+ * One per action, naming the route that does work, because a refusal with no
+ * remedy is the defect §22 recorded three times. `null` for everything a turn
+ * can actually carry out.
+ */
+function unsupportedAction(action: string): string | null {
+  switch (action) {
+    case 'RUN_PROBE':
+      return 'I do not run a look-up straight from a conversation — tell me the idea and I will decide whether it needs one';
+    case 'PROMOTE_MISSION':
+      return 'I do not start a research packet straight from a conversation — tell me the idea and I will decide whether it warrants one';
+    case 'PARK_CANDIDATE':
+    case 'REJECT_CANDIDATE':
+      return 'parking or dropping an idea is done on the idea itself, not in a reply';
+    default:
+      return null;
+  }
+}
+
+/**
  * Perform exactly the effect the validated action names, and nothing else.
  *
  * A `switch` over a closed set, with no default that guesses. An action this
@@ -749,7 +807,12 @@ async function applyValidated(input: {
   proposal: ValidatedProposal;
   conversationId: string;
   owner: Principal;
-}): Promise<{ produced: Record<string, unknown>; candidateId: string | null }> {
+}): Promise<{
+  produced: Record<string, unknown>;
+  candidateId: string | null;
+  /** Set when the action is real but nothing here can perform it. */
+  unsupported?: string;
+}> {
   const { proposal, conversationId, owner } = input;
   const conversation = await getConversation(conversationId);
   if (!conversation) return { produced: {}, candidateId: null };
@@ -810,15 +873,27 @@ async function applyValidated(input: {
        * approved.
        */
       /*
-       * Recorded rather than silent.
+       * Refused, and the person is told.
        *
-       * `produced: {}` is indistinguishable from a turn that had nothing to do,
-       * and that ambiguity cost a production reporting cycle: a `RUN_PROBE`
-       * proposal was accepted, did nothing, and left a row that looked exactly
-       * like an ordinary answer. An accepted action with no effect is a fact
-       * worth keeping, so it is written down.
+       * `effect: 'NONE'` on its own was not enough. A turn that requested a
+       * probe, was answered, and settled `COMPLETE` reads as a success to
+       * everything downstream — the person, the reporter and the acceptance
+       * gates alike — while the thing it asked for never happened. That is the
+       * defect §24 names: a state that says one thing while the rows say
+       * another.
+       *
+       * So an action Brain cannot carry out at a turn is an explicit refusal.
+       * The capability itself is not withdrawn — a probe and a mission are
+       * reachable, through capture and Russell's own judgment, which is the
+       * route the design always intended and the one `planning.ts` now
+       * completes. What is refused is the *request*, because honouring it here
+       * would mean composing a mission scope nobody approved.
        */
-      return { produced: { accepted: proposal.action, effect: 'NONE' }, candidateId: null };
+      return {
+        produced: { accepted: proposal.action, effect: 'UNSUPPORTED' },
+        candidateId: null,
+        unsupported: proposal.action,
+      };
   }
   void owner;
   return { produced: {}, candidateId: null };

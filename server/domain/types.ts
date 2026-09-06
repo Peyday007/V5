@@ -3758,6 +3758,13 @@ export const COMPLETION_CONTRACTS = [
   // One conversation turn. The worker submits a structured proposal and Brain
   // decides what, if anything, it causes — see `services/russell/turn.ts`.
   'RUSSELL_TURN_V1',
+  // One captured idea, read. The worker submits what only a reader of the
+  // question can judge — is the uncertainty cheap to reduce, what would a
+  // packet have to establish, what is it worth — and Brain turns that into a
+  // priority with `judge()`. Brain asks its own archive first and never asks
+  // the worker whether the project already answers the question; see
+  // `services/russell/planning.ts`.
+  'RUSSELL_PLAN_V1',
 ] as const;
 export type CompletionContract = (typeof COMPLETION_CONTRACTS)[number];
 

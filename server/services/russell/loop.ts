@@ -60,6 +60,7 @@ import { GENERAL_LIGHT_PROBE_V1 } from './probeEnvelope.ts';
 import { outcomeOf, writeBack } from './writeback.ts';
 import { launch, repairLaunches, type LaunchInput } from './launch.ts';
 import { applyTurn } from './turn.ts';
+import { applyPlan, judgeCandidate } from './planning.ts';
 import { parseJson } from '../../repos/util.ts';
 import type { RussellMission } from '../../domain/types.ts';
 
@@ -78,6 +79,15 @@ export interface TickReport {
   probed: string[];
   /** Turn bins whose proposal was applied and whose pending turn now reads. */
   answered: string[];
+  /** Plan bins whose worker observations became a judgment this tick. */
+  judged: string[];
+  /**
+   * Ideas the project's own archive already answered, judged and parked without
+   * anything being dispatched. §13's default outcome, and the cheapest one.
+   */
+  answeredByArchive: string[];
+  /** Ideas the archive did not answer, now with a worker reading them. */
+  planning: string[];
   launched: string[];
   /**
    * Candidates left queued because they asked for a stronger audit separation
@@ -102,6 +112,9 @@ const EMPTY: TickReport = {
   skipped: null,
   generation: null,
   wroteBack: [],
+  judged: [],
+  answeredByArchive: [],
+  planning: [],
   resumed: [],
   expiredProbes: [],
   probed: [],
@@ -131,6 +144,9 @@ export async function tick(owner: string): Promise<TickReport> {
     ran: true,
     generation: claim.generation,
     wroteBack: [],
+    judged: [],
+    answeredByArchive: [],
+    planning: [],
     resumed: [],
     expiredProbes: [],
     probed: [],
@@ -188,6 +204,41 @@ export async function tick(owner: string): Promise<TickReport> {
     for (const binId of await answeredTurnBins(cycle.maxEventsPerCycle)) {
       const applied = await applyTurn(binId);
       if (applied.ok && !applied.alreadyAnswered) report.answered.push(binId);
+    }
+
+    /*
+     * 1c. Take the plans workers have finished.
+     *
+     * Before judging new candidates, so a plan that landed this tick becomes a
+     * judgment this tick rather than next. `applyPlan` is guarded on the
+     * candidate not already carrying a priority, so a redelivered bin judges
+     * once — the queue is at-least-once and this is the effect that must not
+     * repeat.
+     */
+    for (const binId of await finishedPlanBins(cycle.maxEventsPerCycle)) {
+      const applied = await applyPlan(binId);
+      if (applied.ok && !applied.alreadyJudged) report.judged.push(binId);
+    }
+
+    /*
+     * 1d. Judge what has been captured and never judged.
+     *
+     * This is the link that did not exist: `applyJudgment` was written, tested
+     * and called by nobody, so every captured idea sat at `priority = NULL`
+     * with an empty judgment — exactly what `exploring()` and
+     * `nextLaunchable()` select against. No probe could open and no mission
+     * could launch, whatever anybody asked for.
+     *
+     * `judgeCandidate` asks the archive first and spends nothing when the
+     * project already answers the question, which is §13's default and the
+     * cheapest correct outcome. Only what the archive does not settle reaches a
+     * worker. Bounded per tick for the same reason the probe step is: a backlog
+     * must not turn one tick into a crawl.
+     */
+    for (const candidate of await unjudged(cycle.maxLaunchesPerCycle)) {
+      const outcome = await judgeCandidate(candidate.id);
+      if (outcome.answeredByArchive) report.answeredByArchive.push(candidate.id);
+      else if (outcome.binId) report.planning.push(candidate.id);
     }
 
     // 2. Resume what a person answered.
@@ -396,6 +447,48 @@ async function answeredTurnBins(limit: number): Promise<string[]> {
     [Math.max(1, limit)],
   );
   return rows.map((row) => row.id);
+}
+
+/**
+ * Plan bins a worker has finished, whose idea is still unjudged.
+ *
+ * Joined on the candidate rather than on the bin alone, so a plan already
+ * applied is not looked at again — the same shape as `answeredTurnBins`, and
+ * read from rows rather than from an event because a bin event is best-effort
+ * by design.
+ */
+async function finishedPlanBins(limit: number): Promise<string[]> {
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT b.id FROM bins b
+       JOIN russell_candidates c
+         ON b.created_by_id = 'russell:plan:' || c.id
+      WHERE b.completion_contract = 'RUSSELL_PLAN_V1'
+        AND b.state IN ('COMPLETE','FAILED','CANCELLED')
+        AND c.priority IS NULL
+        AND c.state <> 'MERGED'
+      ORDER BY b.updated_at, b.rowid
+      LIMIT ?`,
+    [Math.max(1, limit)],
+  );
+  return rows.map((row) => row.id);
+}
+
+/**
+ * Ideas captured and never judged.
+ *
+ * `priority IS NULL` is the whole predicate, because that is precisely the
+ * column every downstream selector reads. A merged candidate is excluded — its
+ * canonical carries the judgment — and so is one with no project, which there
+ * is nothing to judge against.
+ */
+async function unjudged(limit: number): Promise<{ id: string }[]> {
+  return getDb().all<{ id: string }>(
+    `SELECT id FROM russell_candidates
+      WHERE priority IS NULL AND state <> 'MERGED' AND project_id IS NOT NULL
+      ORDER BY created_at, rowid
+      LIMIT ?`,
+    [Math.max(1, limit)],
+  );
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;

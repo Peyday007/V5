@@ -503,11 +503,53 @@ export async function readSurfaceProbe(bin: Bin): Promise<SurfaceProbeReading[]>
   return readings;
 }
 
+/**
+ * One judged idea: is there a plan, and is it structurally a plan?
+ *
+ * Structure only, for the same reason `evaluateRussellTurn` checks only
+ * structure: whether the plan may *cause* anything is decided by `validatePlan`
+ * and then by `judge()`, against Brain's own archive check, and a second weaker
+ * copy of that here would be worse than a narrow check that says what it
+ * checks.
+ *
+ * `RETRY` rather than `HUMAN` on a missing or unparseable submission: the
+ * worker can still submit one, and putting a person in front of an idea that
+ * only needed asking again is the queue this platform exists to avoid.
+ */
+async function evaluateRussellPlan(bin: Bin): Promise<ContractVerdict> {
+  const results = await listBinUnitResults(bin.id);
+  const submitted = results.find((row) => row.unitKey === 'plan');
+  const observed = { unitsSubmitted: results.length, hasPlan: Boolean(submitted) };
+
+  if (!submitted) {
+    return refuse('RETRY', ['No plan was submitted, so there is nothing to judge the idea with.'], observed);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(submitted.value);
+  } catch {
+    return refuse('RETRY', ['The plan was not valid JSON.'], observed);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return refuse('RETRY', ['The plan was not a structured object.'], observed);
+  }
+  const record = parsed as Record<string, unknown>;
+  if (!record['observations'] || !record['mission']) {
+    return refuse(
+      'RETRY',
+      ['The plan needs both an "observations" object and a "mission" object.'],
+      observed,
+    );
+  }
+  return satisfied(observed);
+}
+
 const EVALUATORS: Record<string, Evaluator> = {
   DETERMINISTIC_UNITS_V1: evaluateDeterministicUnits,
   RESEARCH_PACKET_V1: evaluateResearchPacket,
   SURFACE_PROBE_V1: evaluateSurfaceProbe,
   RUSSELL_TURN_V1: evaluateRussellTurn,
+  RUSSELL_PLAN_V1: evaluateRussellPlan,
 };
 
 /**

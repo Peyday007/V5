@@ -1402,7 +1402,7 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
     expect(missing, 'limits the manifest never states').toEqual([]);
   });
 
-  it('records that an accepted action had no effect, rather than leaving it silent', async () => {
+  it('refuses an action it cannot carry out instead of reporting success', async () => {
     /*
      * The production failure this exists for.
      *
@@ -1431,17 +1431,29 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
     })).toBe('COMPLETE');
 
     const applied = await applyTurn(started.binId!);
-    // Accepted — the validator is unchanged and still parses the action.
-    expect(applied.ok).toBe(true);
+    // Parsed and accepted by the validator, which is unchanged — and then
+    // refused by Brain, because a turn cannot run a probe.
+    expect(applied.ok).toBe(false);
+    expect(applied.action).toBe('RUN_PROBE');
     expect(applied.candidateId).toBeNull();
 
     const answered = (await listTurns(conversation.id, 10)).find(
       (turn) => turn.role === 'RUSSELL',
     )!;
-    expect(answered.status).toBe('COMPLETE');
-    // And the row now says what happened: an action was accepted and nothing
-    // came of it. A reader can tell this from an ordinary answer.
-    expect(answered.produced).toMatchObject({ accepted: 'RUN_PROBE', effect: 'NONE' });
+    /*
+     * FAILED, not COMPLETE. This is the whole point: on 2026-09-06 a turn that
+     * asked for a probe settled COMPLETE with 782 characters of prose while
+     * nothing had happened, and every reader downstream — the person, the
+     * reporter, the acceptance gates — took that for an answered question.
+     */
+    expect(answered.status).toBe('FAILED');
+    expect(answered.pendingReason).toMatch(/RUN_PROBE is not something a turn can carry out/);
+    expect(answered.produced).toMatchObject({ accepted: 'RUN_PROBE', effect: 'UNSUPPORTED' });
+    // The worker's words are kept — they are usually a good answer — with the
+    // plain fact appended. A refusal that names no route is the defect §22
+    // recorded three times.
+    expect(answered.content).toContain('Here is what I can say about that.');
+    expect(answered.content).toMatch(/tell me the idea and I will decide/);
 
     // Nothing was created behind it, which is the honest part of the outcome.
     const probes = await getDb().all<{ n: number }>(

@@ -4017,3 +4017,117 @@ not omissions to be filled in silently:
 Guessing either would be adding design under the name of a repair. Part one is
 prepared and committed; part two is written down here with its two questions,
 for a decision.
+
+---
+
+## 45. The middle that was never joined — 2026-09-06
+
+Not a feature. Capture worked, `judge()` worked, `exploring()` and
+`nextLaunchable()` worked, `launch()` worked — and nothing called
+`applyJudgment`, so every captured idea sat at `priority = NULL` with an empty
+judgment and no selector could ever see it. This is that link, built.
+
+### The order is the design
+
+**The archive answers first, and it answers for free.** `judgeCandidate` runs
+`coverBeforeWork` over the candidate's own statement before anything is
+dispatched. A project that already answers the question gets
+`judge({ alreadyAnswered: true, supporting })` → `PARKED` / `REJECTED`, with the
+supporting claim ids stored beside the verdict — no worker, no bin, no
+allowance. That is §13's default and the cheapest correct outcome, and it must
+never be skipped to reach the interesting one.
+
+**Only what the archive cannot settle reaches a model, and only through the
+fleet.** `RUSSELL_PLAN_V1` is a bin like a turn: same dispatcher, same
+subscription workers, no API key, no paid path. It asks for the two things only
+a reader of the question can supply — is the uncertainty cheap to reduce, and
+what would a packet have to establish — and `validatePlan` checks the answer
+with the same zero trust `validateProposal` applies: exact bounds, and an
+unrecognised field refuses the whole plan.
+
+**Brain keeps the decision.** The worker supplies observations; `judge()` —
+deterministic, in code, unchanged — turns them into a priority and a state.
+`alreadyAnswered`, `supporting` and `contradicting` are never taken from the
+worker and are re-read from Brain's own coverage check at apply time. A plan
+that tries to send `alreadyAnswered` is refused by name, and a test proves it:
+a model asked whether the archive already answers something has every incentive
+to say no.
+
+**Nothing is invented.** There is no `judge({})` in the repository. A candidate
+with no coverage answer and no worker observations stays unjudged, which reads
+as *nothing has happened yet* rather than as an opinion Brain never formed. A
+coverage check that throws returns "not answered" — unknown leads to asking,
+never to closing a question.
+
+### The mission specification, and what Brain will not let a worker decide
+
+`missionSpecFor` completes the worker's specification with the parts that decide
+what a mission is *allowed* to do: the layer, the visibility, the standing
+authority's approver, and the approval envelope — **named, never supplied**,
+because §16's whole safety argument is that nobody hands over the rules their
+own plan is judged by.
+
+The spec is written under `judgment.missionSpec` — the key `nextLaunchable`
+reads — **only for a verdict that could launch one.** A `PARKED` or `EXPLORE`
+candidate keeps the worker's specification under `proposedMission` instead: it
+was real work and throwing it away means paying for it twice, but a park must
+not become launchable the moment somebody edits its state. Two tests pin both
+halves. A project with no standing authority produces no launchable spec and is
+still judged — an absent grant is a fact about the project, not a failure of the
+plan.
+
+### The action contract, resolved rather than hidden
+
+`effect: 'NONE'` was not enough, and the owner was right to say so. A turn that
+requested a probe, was answered and settled `COMPLETE` reads as success to the
+person, the reporter and every gate — while the thing it asked for never
+happened.
+
+So an action Brain cannot carry out at a turn now **settles the turn as
+`FAILED`**, before the answer is stored, with `produced` recording
+`{ accepted, effect: 'UNSUPPORTED' }` and a sentence naming the route that does
+work: *tell me the idea and I will decide whether it needs a look.* The worker's
+words are kept — they are usually a good answer — with the plain fact appended.
+A refusal that names no remedy is the defect §22 recorded three times.
+
+The **capability** is not withdrawn, which is the part hiding an action could
+never satisfy: a probe and a mission are now genuinely reachable, through
+capture → judgment → `exploring()` / `nextLaunchable()`, which is the route the
+design always intended and §8 at this seam — the decision is Brain's, from its
+own state, not a model's request.
+
+### Proven through the real entry points, on both backends
+
+`tests/russellConnectedPath.test.ts` — 10 tests, none of which write the row
+they then assert. Every one drives `beginTurn` → a worker-shaped unit result →
+`applyTurn` → `judgeCandidate` → a worker-shaped plan → `applyPlan`:
+
+  - a captured idea becomes `EXPLORE` + `CAPTURED`, which is exactly what
+    `exploring()` selects, so the bounded look is reachable where it never was;
+  - the plan bin's manifest states every rule it will be judged against;
+  - a worker cannot decide whether the archive answers the question, by the
+    contract and by the apply path;
+  - a `missionSpec` is stored only for a verdict that could launch;
+  - a park keeps its specification out of the launch queue;
+  - the archive path parks an idea the project already answers and **dispatches
+    nothing**, with the no-claims case asking rather than closing;
+  - **duplicate delivery**: a plan applied twice judges once, a candidate judged
+    twice asks for one plan, and a turn applied twice captures once;
+  - **the RUN_PROBE case exactly as production produced it** — refused, turn
+    `FAILED`, answer kept, no probe, no candidate.
+
+That last one is a faithful reproduction rather than an approximation: the
+proposal carries the same `projectId` production's did, which is why the fixture
+grants a real membership row — `applyTurn` rebuilds the owner's principal from
+the database and never trusts the one a caller held.
+
+**This is synthetic evidence and is kept separate from the live acceptance
+run.** It proves the path is connected; it proves nothing about what a real
+worker will propose, which is what the acceptance scenario is for.
+
+### No migration
+
+`completion_contract` is a plain TEXT column and the evaluators are a registry,
+so `RUSSELL_PLAN_V1` needed one line in `COMPLETION_CONTRACTS` and one in
+`EVALUATORS`. The judgment, priority and state columns have existed since
+migration 027. **Nothing to apply, on either chain.**
