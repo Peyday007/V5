@@ -16,12 +16,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser, grantMembership } from '../server/repos/identity.ts';
-import { createConversation, listTurns } from '../server/repos/russellConversations.ts';
+import { addMessage, createConversation, listTurns } from '../server/repos/russellConversations.ts';
 import { applyTurn, beginTurn, retryTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
 import { shouldCapture } from '../server/services/russell/judgment.ts';
 import { applyPlan, judgeCandidate, PLAN_UNIT_KEY, validatePlan } from '../server/services/russell/planning.ts';
 import { listCandidates } from '../server/repos/russellCandidates.ts';
-import { putBinUnitResult, getBin, assignNextBin } from '../server/repos/bins.ts';
+import { putBinUnitResult, getBin, assignNextBin, createBin } from '../server/repos/bins.ts';
 import { requestCompletion } from '../server/services/bins/service.ts';
 import { createWorker } from '../server/repos/identity.ts';
 import { evaluateContract, hashUnitValue } from '../server/services/bins/contracts.ts';
@@ -893,5 +893,81 @@ describe('authority decides whether a judged idea can become work', () => {
       const parked = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
       expect(parked.judgment?.['missionSpec']).toBeTruthy();
     }
+  });
+});
+
+describe('a turn with no source message', () => {
+  it('captures nothing and says the link is broken, rather than treating it as permission', async () => {
+    await authorize();
+    const conversation = await createConversation({
+      ownerUserId: userId,
+      title: 'Orphan',
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    /*
+     * A Russell turn with nothing before it. Every turn answers something a
+     * person said — that is what a turn is — so this is a fault in the thread,
+     * not a licence to capture without provenance.
+     *
+     * Constructed rather than driven through `beginTurn`, because `beginTurn`
+     * cannot produce it: it always writes the person's message first. That is
+     * the point — this state is a broken link, and the test is what stops it
+     * quietly becoming an idea in somebody's backlog.
+     */
+    const pending = await addMessage({
+      conversationId: conversation.id,
+      role: 'RUSSELL',
+      content: '',
+      status: 'PENDING',
+      pendingReason: 'waiting',
+    });
+    const bin = await createBin({
+      projectId,
+      kind: 'RUSSELL_TURN',
+      title: 'Answer one conversation turn',
+      objective: 'Read the conversation and propose one structured response.',
+      rationale: 'A person is waiting for an answer.',
+      manifest: {
+        objective: 'x',
+        why: 'y',
+        lineage: { projectId, layerId: null, goal: 'g', orchestrationId: null },
+        units: [{ key: TURN_UNIT_KEY, establishes: 'one proposal', input: '', transform: 'none', dependsOn: [] }],
+        acceptableSources: ['the conversation itself'],
+        excludedSources: ['anything else'],
+        evidence: ['one JSON object'],
+        outputs: ['one proposal'],
+        authorizedActions: ['reading this project'],
+        prohibitedActions: ['any spend'],
+        budgetUnits: 1,
+        retry: { maxAttempts: 2, backoffSeconds: 30 },
+        stoppingConditions: ['one proposal has been submitted'],
+      },
+      completionContract: 'RUSSELL_TURN_V1',
+      createdByType: 'SYSTEM',
+      createdById: `russell:turn:${pending.id}`,
+      ready: true,
+      priority: 9,
+      maxAttempts: 2,
+      workloadClass: 'RUSSELL_TURN',
+    });
+    await workerCompletesTurn(bin.id, {
+      action: 'CAPTURE_CANDIDATE',
+      answer: 'Noted.',
+      confidence: 80,
+      candidate: { title: 'Something', statement: 'A statement with no question behind it.' },
+    });
+
+    const applied = await applyTurn(bin.id);
+    // The operation is preserved and named, and nothing is captured.
+    expect(applied.candidateId).toBeNull();
+    const turn = (await listTurns(conversation.id, 10)).find((t) => t.role === 'RUSSELL')!;
+    expect(turn.produced).toMatchObject({
+      captureDeclined: true,
+      gateReason: 'NO_SOURCE_MESSAGE',
+    });
+    // Distinguishable from a gate that ran and refused, which is the whole
+    // reason it is named rather than folded into the ordinary decline.
+    expect(await listCandidates({ projectId })).toHaveLength(0);
   });
 });

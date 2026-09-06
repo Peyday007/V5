@@ -305,3 +305,41 @@ already absorbs correctly.
 fleet to be at target for thirty minutes, and read a capacity delay in that
 window as this rather than as a fault. Do not raise concurrency to compensate —
 that spends real allowance to work around litter.
+
+---
+
+## Defect: a park for missing authority has no way back — 2026-09-06
+
+`judgeCandidate` correctly parks an idea when the project has no standing
+research authority, with a reason a person can act on. When that person then
+grants the authority, **nothing reconsiders the parked idea**: `unjudged()`
+selects on `priority IS NULL` and the park has a priority, so it is never
+re-judged; `nextLaunchable()` selects `QUEUED`; `exploring()` selects `EXPLORE`.
+
+The park is therefore permanent unless somebody clears the priority by hand,
+which is the "waiting for something nobody can resolve" shape §22 records three
+times — one altitude further out. The remedy is a re-judge path for candidates
+parked on a blocker that has since lifted, guarded so it cannot become a way to
+re-run judgments generally.
+
+Not a Step 12A completion requirement: it affects ideas parked *before* an
+authority exists, and the replacement acceptance run starts after one is
+granted. Recorded so the next park is not discovered the same way.
+
+## Defect: `maxConcurrent` on a standing authority enforces nothing — 2026-09-06
+
+`ceilingFor` returns `Math.min(goal.maxMissions, goal.maxConcurrent)` for a
+MISSION reservation, and `totalThroughMine` counts `SETTLED` rows as well as
+live `HELD` ones. So the mission ceiling is **cumulative over the grant's whole
+life**, and `maxConcurrent` is a second cumulative cap rather than a limit on
+how many run at once — it appears nowhere else in the tree.
+
+The consequence is counter-intuitive in the direction that matters: a grant of
+two missions with `maxConcurrent: 1` permits **one** mission, ever, and refuses
+the automatic follow-on. Anybody setting these numbers from their plain meaning
+will under-authorize and not find out until a follow-on is silently refused.
+
+The fix is to count MISSION against `maxMissions` cumulatively and check
+`maxConcurrent` against currently-`HELD` rows only. It changes the semantics of
+a safety control, so it is a decision somebody makes deliberately rather than
+something to slip into an acceptance run.

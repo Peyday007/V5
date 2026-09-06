@@ -4281,3 +4281,92 @@ and failed, three times, for three different reasons**: `MISSING_REQUIRED_PART`,
 then an action nothing executed, then a capture gate applied to the wrong kind
 of text. Conditions 5 through 14 have **not run** — nothing has reached them.
 The distinction matters and the reporter's `0 of 1` cannot express it.
+
+---
+
+## 47. Three corrections before activation — 2026-09-06
+
+### The fleet setting I restored was the wrong one
+
+The agreed restoration was **V1's ROUTINE target**. I set the **ACCOUNT** target
+instead, and reported it in those words without noticing they were not the words
+of the agreement.
+
+Reading before changing settled which scope was real: `explain-route` had
+printed `routine at target 2/2`, and that message comes from a branch of
+`router.ts` that only executes when `candidate.routineTarget !== null`. So a
+ROUTINE policy for V1 existed and was 2. `show` prints account targets only and
+`policy-history` returns FLEET-scope rows, which is why neither settled it —
+worth recording, because the operator surface cannot currently display the
+target it is asked about.
+
+    FLEET: OK set-target ROUTINE trig_01CBLu5oCZziEwznw5q9xU7g 2 -> 1 version=3
+    FLEET: OK set-target ACCOUNT primary 2 -> 1 version=2      ← unintended
+    FLEET: OK set-target ACCOUNT primary 1 -> 2 version=3      ← undone
+
+The `2 -> 1` on the Routine confirms it was the value the agreement named.
+V2 remains QUARANTINED throughout.
+
+### A missing source message is a broken link, not permission
+
+The first version of this fix captured anyway when no user message could be
+found, recording `captureGate: NO_SOURCE_MESSAGE` beside the candidate. That was
+wrong and the owner was right to stop it: every Russell turn answers something a
+person said — that is what a turn *is* — so a turn with no reachable source is a
+fault in the thread, and capturing produces an idea with no provenance behind
+it.
+
+It now declines and names the condition:
+`{ captureDeclined: true, gateReason: 'NO_SOURCE_MESSAGE' }`. The operation is
+preserved and diagnosable, nothing is captured until the source is resolved, and
+it is distinguishable from a gate that ran and refused — which is the entire
+reason it is named rather than folded into the ordinary decline.
+
+**There are no other capture entry points.** `capture()` has exactly one caller,
+`performProposal`, so there is no second provenance to handle. Stated rather
+than designed for, because inventing handling for an entry point that does not
+exist is how `applyJudgment` came to be written and never called.
+
+### The approved limits do not permit the follow-on, and here is why
+
+The owner approved `maxMissions: 2` covering the initial mission and one
+automatic follow-on, with `maxConcurrent: 1`. **As enforced, that yields one
+mission and no follow-on.**
+
+```ts
+function ceilingFor(goal, kind) {
+  switch (kind) {
+    case 'MISSION': return Math.min(goal.maxMissions, goal.maxConcurrent);
+```
+
+and `totalThroughMine` counts `SETTLED` as well as live `HELD` rows, so the
+MISSION ceiling is **cumulative over the life of the grant**, not concurrent.
+`min(2, 1) = 1`, and the follow-on's reservation would be refused.
+
+**`maxConcurrent` is not a concurrency limit in this implementation.** Grepping
+the tree, it appears in exactly one place — that `Math.min`. It enforces nothing
+else, anywhere. Actual concurrency is bounded by the Routine fire target, now
+restored to 1.
+
+So describing the grant as "one mission at a time" would be describing a
+restriction the system does not enforce, which is the thing the owner warned
+about. The honest options are recorded in the reply rather than chosen here.
+
+### The grant will not resume older parked work
+
+Asked directly, and answered from the selectors rather than from expectation:
+
+  - `unjudged()` requires `priority IS NULL`. `rcn_23e70baee1ba47478c28` is
+    `PARKED` and carries a priority, so it is never re-judged.
+  - `nextLaunchable()` requires `state = 'QUEUED'`. A `PARKED` candidate is not.
+  - `exploring()` requires `EXPLORE` + `CAPTURED`. It is neither.
+
+So activating the grant consumes none of its budget on older work, and the
+replacement run starts from the full allowance.
+
+**That is also a gap, recorded and not fixed here.** A candidate parked for
+"no standing authority" has no answering transition when the authority arrives —
+the same shape as the three escalations §22 records. It is not a Step 12A
+completion requirement and adding one now would be adding an acceptance
+requirement, so it belongs in the 12B backlog beside the verification-fixture
+defect.

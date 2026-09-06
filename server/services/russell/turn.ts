@@ -887,23 +887,34 @@ async function applyValidated(input: {
        * decides everything is an idea from filling the backlog. What changed is
        * *what it reads*: the person's message rather than the worker's
        * restatement of it.
-       *
-       * When there is no message to judge — a turn with nothing before it — the
-       * gate has no input and cannot answer. Capturing is the safe side of that:
-       * the worker chose CAPTURE_CANDIDATE, and every captured idea now goes
-       * through `judgeCandidate`, which asks the archive and parks or rejects it
-       * on evidence. That filter did not exist when this gate was written, and
-       * it is a far better one. The fact that the gate could not run is recorded
-       * rather than hidden.
        */
-      if (input.askedText !== null) {
-        const decision = shouldCapture(input.askedText);
-        if (!decision.capture) {
-          return {
-            produced: { captureDeclined: true, gateReason: decision.reason },
-            candidateId: null,
-          };
-        }
+      if (input.askedText === null) {
+        /*
+         * No question to judge, which for a turn is a **broken link** rather
+         * than a licence.
+         *
+         * Every Russell turn answers something a person said; that is what a
+         * turn is. A turn with no reachable source message is a fault in the
+         * thread — a deleted row, a bad `answers_message_id`, a bug in this
+         * function — and capturing anyway would turn a diagnostic into an idea
+         * in somebody's backlog with no provenance behind it.
+         *
+         * So the operation is preserved and named. Nothing is captured until
+         * the source is resolved, and the turn says which of the two very
+         * different things happened: the gate refused the question, or the
+         * gate could not find one.
+         */
+        return {
+          produced: { captureDeclined: true, gateReason: 'NO_SOURCE_MESSAGE' },
+          candidateId: null,
+        };
+      }
+      const decision = shouldCapture(input.askedText);
+      if (!decision.capture) {
+        return {
+          produced: { captureDeclined: true, gateReason: decision.reason },
+          candidateId: null,
+        };
       }
       const outcome = await capture({
         title: proposal.candidate.title,
@@ -915,11 +926,7 @@ async function applyValidated(input: {
         conversationId,
       });
       return {
-        produced: {
-          candidateId: outcome.candidate?.id,
-          merged: outcome.merged,
-          ...(input.askedText === null ? { captureGate: 'NO_SOURCE_MESSAGE' } : {}),
-        },
+        produced: { candidateId: outcome.candidate?.id, merged: outcome.merged },
         candidateId: outcome.candidate?.id ?? null,
       };
     }
