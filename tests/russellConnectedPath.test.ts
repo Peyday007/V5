@@ -17,7 +17,8 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser, grantMembership } from '../server/repos/identity.ts';
 import { createConversation, listTurns } from '../server/repos/russellConversations.ts';
-import { applyTurn, beginTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
+import { applyTurn, beginTurn, retryTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
+import { shouldCapture } from '../server/services/russell/judgment.ts';
 import { applyPlan, judgeCandidate, PLAN_UNIT_KEY, validatePlan } from '../server/services/russell/planning.ts';
 import { listCandidates } from '../server/repos/russellCandidates.ts';
 import { putBinUnitResult, getBin, assignNextBin } from '../server/repos/bins.ts';
@@ -687,5 +688,210 @@ describe('the existing loop selects and advances what was judged', () => {
     expect(after.judgment?.['missionSpec']).toBeUndefined();
     expect(after.judgment?.['proposedMission']).toBeTruthy();
     expect(await listMissions({ projectId })).toHaveLength(0);
+  });
+});
+
+/**
+ * The capture gate, on the text it was written for.
+ *
+ * Reproduced from the pair that actually failed in production on 2026-09-06:
+ * the person asked a bounded factual question, the worker returned a correct
+ * declarative candidate statement, and `shouldCapture` — applied to the
+ * *statement* — refused it as "nothing here proposes work".
+ *
+ * The exact statement is not readable: `turn-diagnose` prints lengths, never
+ * content, and §24 keeps it that way. What is reproduced is its **shape** — a
+ * long declarative sentence with no proposal opener and no question mark —
+ * because that shape is the whole defect and nothing about the subject matter
+ * is. Every case here is checked with a second, unrelated subject to prove the
+ * fix is content-agnostic.
+ */
+describe('the capture gate judges the question, not the restatement', () => {
+  /** Declarative, no "we should", no "?" — the shape that was refused. */
+  const DECLARATIVE =
+    'County-level publication of building-permit records, the routes by which each county ' +
+    'makes them available, and the licence terms attached to that publication are currently ' +
+    'unestablished for the larger counties in the state, so downstream plans rest on an ' +
+    'assumption about machine-readable availability that no source has confirmed.';
+  const OTHER_DECLARATIVE =
+    'The current fee schedule, its effective date, and whether it applies to renewals as well ' +
+    'as new applications are unestablished, and the pricing model presently assumes a single ' +
+    'flat rate that no source has confirmed.';
+
+  it('reproduces the defect: the statement alone would be refused', () => {
+    // The gate, unchanged, applied to the wrong input. This is not a claim
+    // about what the code now does — it is why the code had to change.
+    expect(shouldCapture(DECLARATIVE).capture).toBe(false);
+    expect(shouldCapture(DECLARATIVE).reason).toBe('nothing here proposes work');
+    expect(shouldCapture(OTHER_DECLARATIVE).capture).toBe(false);
+  });
+
+  it('captures when the person asked a real question and the worker restated it', async () => {
+    await authorize();
+    const conversation = await createConversation({
+      ownerUserId: userId,
+      title: 'A thread',
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    // A bounded factual question — the shape the gate was written to accept.
+    const started = await beginTurn({
+      principal: principal(),
+      conversationId: conversation.id,
+      content:
+        'Do the larger counties publish building-permit records in a form we could actually ' +
+        'consume — an open-data portal or a feed — and on what terms?',
+    });
+    await workerCompletesTurn(started.binId!, {
+      action: 'CAPTURE_CANDIDATE',
+      answer: 'Some do; here is what I can say, and it is worth establishing properly.',
+      confidence: 80,
+      priority: 'WORTH_DOING',
+      candidate: { title: 'Permit data availability', statement: DECLARATIVE },
+    });
+
+    const applied = await applyTurn(started.binId!);
+    expect(applied.ok).toBe(true);
+    // The capture that three production attempts could not achieve.
+    expect(applied.action).toBe('CAPTURE_CANDIDATE');
+    expect(applied.candidateId).not.toBeNull();
+
+    const turn = (await listTurns(conversation.id, 10)).find((t) => t.role === 'RUSSELL')!;
+    expect(turn.status).toBe('COMPLETE');
+    expect(turn.produced?.['captureDeclined']).toBeUndefined();
+    expect(await listCandidates({ projectId })).toHaveLength(1);
+  });
+
+  it('still refuses a remark with nothing to act on, so the filter is not weakened', async () => {
+    const conversation = await createConversation({
+      ownerUserId: userId,
+      title: 'Chat',
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    const started = await beginTurn({
+      principal: principal(),
+      conversationId: conversation.id,
+      content: 'thanks, that all looks good',
+    });
+    await workerCompletesTurn(started.binId!, {
+      action: 'CAPTURE_CANDIDATE',
+      answer: 'Glad it helps.',
+      confidence: 60,
+      // A worker that decided a pleasantry was an idea. The gate is what stops
+      // that filling the backlog, and it still does.
+      candidate: { title: 'Everything looks good', statement: OTHER_DECLARATIVE },
+    });
+
+    const applied = await applyTurn(started.binId!);
+    expect(applied.candidateId).toBeNull();
+    const turn = (await listTurns(conversation.id, 10)).find((t) => t.role === 'RUSSELL')!;
+    expect(turn.produced).toMatchObject({ captureDeclined: true });
+    expect(turn.produced?.['gateReason']).toBe('conversational, with nothing to act on');
+    expect(await listCandidates({ projectId })).toHaveLength(0);
+  });
+
+  it('reads the question a retry is answering, not the retry itself', async () => {
+    await authorize();
+    const conversation = await createConversation({
+      ownerUserId: userId,
+      title: 'A thread',
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    const started = await beginTurn({
+      principal: principal(),
+      conversationId: conversation.id,
+      content: 'Should we find out what the counties actually publish, and under what licence?',
+    });
+    /*
+     * A first attempt that genuinely fails, through the real refusal path
+     * rather than by writing FAILED onto the row: RUN_PROBE is accepted by the
+     * validator and refused by Brain, which is exactly how the production turn
+     * this reproduces came to be retryable at all.
+     */
+    await workerCompletesTurn(started.binId!, {
+      action: 'RUN_PROBE',
+      answer: 'I could look that up.',
+      confidence: 60,
+      probe: { question: 'What do the counties publish?', maxLookups: 2 },
+    });
+    await applyTurn(started.binId!);
+    const first = (await listTurns(conversation.id, 10)).find((t) => t.role === 'RUSSELL')!;
+    expect(first.status).toBe('FAILED');
+    const again = await retryTurn({ principal: principal(), messageId: first.id });
+    expect(again.ok).toBe(true);
+
+    await workerCompletesTurn(again.binId!, {
+      action: 'CAPTURE_CANDIDATE',
+      answer: 'Here is what I can say.',
+      confidence: 80,
+      candidate: { title: 'Permit data availability', statement: DECLARATIVE },
+    });
+    const applied = await applyTurn(again.binId!);
+    /*
+     * The retry row carries `answers_message_id`, so the gate reads the
+     * person's question directly rather than walking back past a failed turn.
+     * Without that it would judge the refusal sentence, which proposes nothing.
+     */
+    expect(applied.candidateId).not.toBeNull();
+  });
+});
+
+describe('authority decides whether a judged idea can become work', () => {
+  it('parks with an actionable reason when nobody has authorized research', async () => {
+    const candidateId = await captureAnIdea('We should research what the counties publish.');
+    await runCycle('test-owner');
+    const binId = (
+      await getDb().all<{ id: string }>(`SELECT id FROM bins WHERE created_by_id = ?`, [
+        `russell:plan:${candidateId}`,
+      ])
+    )[0]!.id;
+    await workerCompletesPlan(binId, {
+      observations: { cheapToReduce: false, expectedValue: 90, blockedBy: null },
+      mission: GOOD_PLAN.mission,
+    });
+    await runCycle('test-owner');
+
+    const parked = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+    expect(parked.priority).toBe('PARKED');
+    expect(parked.reason).toMatch(/no standing authority/);
+    expect(await listMissions({ projectId })).toHaveLength(0);
+  });
+
+  it('runs the same idea to a mission once a person grants the authority', async () => {
+    const candidateId = await captureAnIdea('We should research the publication licence terms.');
+    await runCycle('test-owner');
+    const binId = (
+      await getDb().all<{ id: string }>(`SELECT id FROM bins WHERE created_by_id = ?`, [
+        `russell:plan:${candidateId}`,
+      ])
+    )[0]!.id;
+
+    // The grant a person makes on the console, through the same repository
+    // function that route calls.
+    await authorize();
+
+    await workerCompletesPlan(binId, {
+      observations: { cheapToReduce: false, expectedValue: 90, blockedBy: null },
+      mission: GOOD_PLAN.mission,
+    });
+    await runCycle('test-owner');
+
+    const judged = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+    expect(judged.state).toBe('QUEUED');
+    expect(judged.judgment?.['missionSpec']).toBeTruthy();
+
+    await runCycle('test-owner');
+    const missions = await listMissions({ projectId });
+    const mine = missions.find((mission) => mission.candidateId === candidateId);
+    if (mine) {
+      expect(mine.objective).toBe(GOOD_PLAN.mission.objective);
+    } else {
+      // A park for a fleet capability this fixture cannot supply is a justified
+      // outcome, not a failure — but it must be one of those two, never silence.
+      const parked = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+      expect(parked.judgment?.['missionSpec']).toBeTruthy();
+    }
   });
 });

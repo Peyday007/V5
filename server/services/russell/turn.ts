@@ -583,6 +583,27 @@ function retryRefusal(reason: string): RetryTurnResult {
   return { ok: false, reason, pendingMessage: null, binId: null, attempt: null };
 }
 
+/**
+ * The person's message a Russell turn is answering.
+ *
+ * A retry says so on the row — `answers_message_id` is written by
+ * `claimTurnAttempt` — so it is read directly and no walking is needed. A first
+ * attempt has no such column, so the nearest `USER` turn before it is the
+ * question, which is the same rule `retryTurn` uses to decide what to re-ask.
+ *
+ * Null when there is nothing before the turn, which is a real state rather than
+ * an error: the caller decides what that means.
+ */
+async function askedMessageFor(messageId: string): Promise<RussellMessage | null> {
+  const message = await getMessage(messageId);
+  if (!message) return null;
+  if (message.answersMessageId) return getMessage(message.answersMessageId);
+  const turns = await listTurns(message.conversationId, 500);
+  const index = turns.findIndex((turn) => turn.id === message.id);
+  if (index < 0) return null;
+  return turns.slice(0, index).reverse().find((turn) => turn.role === 'USER') ?? null;
+}
+
 /** The recent thread, as the worker reads it. Bounded, and text only. */
 async function transcriptFor(conversationId: string): Promise<string> {
   const turns = await listTurns(conversationId, 40);
@@ -762,7 +783,24 @@ export async function applyTurn(binId: string): Promise<ApplyTurnResult> {
     };
   }
 
-  const applied = await applyValidated({ proposal: validated.proposal, conversationId: conversation.id, owner });
+  /*
+   * The question the person actually asked, for the gate that judges it.
+   *
+   * `shouldCapture` is a filter on **a person's remark** — it looks for a
+   * proposal opener or a question mark and answers "is this worth writing
+   * down?". Applying it to a worker's declarative candidate *statement* asks a
+   * question it was never written to answer, and on 2026-09-06 that cost the
+   * frozen acceptance turn its last attempt: the worker proposed
+   * CAPTURE_CANDIDATE correctly, validation passed, and a 530-character
+   * statement describing the idea was refused as "nothing here proposes work".
+   */
+  const asked = await askedMessageFor(messageId);
+  const applied = await applyValidated({
+    proposal: validated.proposal,
+    conversationId: conversation.id,
+    owner,
+    askedText: asked?.content ?? null,
+  });
   await recordProduced(messageId, applied.produced);
 
   return {
@@ -807,6 +845,8 @@ async function applyValidated(input: {
   proposal: ValidatedProposal;
   conversationId: string;
   owner: Principal;
+  /** What the person said, which is what the capture gate judges. */
+  askedText: string | null;
 }): Promise<{
   produced: Record<string, unknown>;
   candidateId: string | null;
@@ -839,8 +879,31 @@ async function applyValidated(input: {
        * noise and make Russell's own ranking meaningless. `shouldCapture` is
        * cheap and conservative and runs regardless of who proposed it.
        */
-      if (!shouldCapture(proposal.candidate.statement).capture) {
-        return { produced: { captureDeclined: true }, candidateId: null };
+      /*
+       * The noise filter, on the input it was written for.
+       *
+       * Unchanged in what it does and when it refuses — a remark with nothing
+       * to act on still produces no idea, which is what stops a model that
+       * decides everything is an idea from filling the backlog. What changed is
+       * *what it reads*: the person's message rather than the worker's
+       * restatement of it.
+       *
+       * When there is no message to judge — a turn with nothing before it — the
+       * gate has no input and cannot answer. Capturing is the safe side of that:
+       * the worker chose CAPTURE_CANDIDATE, and every captured idea now goes
+       * through `judgeCandidate`, which asks the archive and parks or rejects it
+       * on evidence. That filter did not exist when this gate was written, and
+       * it is a far better one. The fact that the gate could not run is recorded
+       * rather than hidden.
+       */
+      if (input.askedText !== null) {
+        const decision = shouldCapture(input.askedText);
+        if (!decision.capture) {
+          return {
+            produced: { captureDeclined: true, gateReason: decision.reason },
+            candidateId: null,
+          };
+        }
       }
       const outcome = await capture({
         title: proposal.candidate.title,
@@ -852,7 +915,11 @@ async function applyValidated(input: {
         conversationId,
       });
       return {
-        produced: { candidateId: outcome.candidate?.id, merged: outcome.merged },
+        produced: {
+          candidateId: outcome.candidate?.id,
+          merged: outcome.merged,
+          ...(input.askedText === null ? { captureGate: 'NO_SOURCE_MESSAGE' } : {}),
+        },
         candidateId: outcome.candidate?.id ?? null,
       };
     }
