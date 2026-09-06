@@ -122,13 +122,20 @@ const ACCEPTANCE_SCOPE = {
   /**
    * The conversation the frozen Workstream 5 scenario is held in.
    *
-   * Deliberately empty. It is a production fact that does not exist yet — the
-   * conversation is created when a person sends the frozen message — so
-   * setting it is a one-line commit made after that message exists. Until
-   * then every scoped gate reports NOT_RUN naming that reason, which is the
-   * truthful state: nothing has happened and nothing is wrong.
+   * Declared on 2026-09-06, once the frozen message existed and had been
+   * answered. It holds `rmsg_d10b82a9b724401c8127` — the 207-character
+   * scenario message a person sent on 2026-09-05 at 22:55:55Z — and the two
+   * Russell turns at it: the attempt that was refused with
+   * MISSING_REQUIRED_PART, and the retry that answered it at 01:51:57Z.
+   *
+   * Declared rather than discovered, for the reason the block above gives: a
+   * scope resolved by searching for whichever conversation best fits would let
+   * the evidence be chosen after the outcome was known. Everything else is
+   * derived from this anchor by walking real foreign keys, so a gate cannot be
+   * satisfied by a row outside this chain however many similar rows exist —
+   * and there are many, since this Brain holds 36 conversations.
    */
-  conversationId: '',
+  conversationId: 'rcv_35d5b0340fc4479fa443',
 } as const;
 
 /** The chain, resolved once from the anchor. `null` when it cannot be. */

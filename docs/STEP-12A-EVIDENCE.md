@@ -3625,3 +3625,99 @@ that refused the frozen message five times on 2026-09-05 was never observed and
 remains unidentified; the read path that would have identified it did not exist
 until mutation 8 shipped. That stays recorded as unverified rather than
 retro-fitted with a plausible answer.
+
+---
+
+## 41. The frozen turn was answered — 2026-09-06
+
+`step10 retry-turn rmsg_b56979f1d6fd4839a3ff usr_14439966398243339341`, run
+against the deployed mutation 9:
+
+    turn        rmsg_b56979f1d6fd4839a3ff  RUSSELL FAILED
+    refused     the proposed action was missing the part it acts on
+    attempt     2 of 3
+    new turn    rmsg_52239a165ecc44ba9287  PENDING
+    bin         bin_264d1427ec304698a4c5
+    original    FAILED — the proposed action was missing the part it acts on (unchanged)
+
+Sixteen minutes later:
+
+    2026-09-06T01:35:54.741Z  RUSSELL COMPLETE   782 chars  rmsg_52239a165ecc44ba9287
+        settled: 2026-09-06T01:51:57.841Z
+        bin bin_264d1427ec304698a4c5  COMPLETE  gen 2  attempts 1/2
+
+**A 782-character answer that passed `validateProposal`**, where the first
+attempt produced a 131-character refusal. The manifest fixes of mutations 8 and
+9 are what changed between them, and nothing about the validator did.
+
+### The sixteen minutes were the deferral working, not a stall
+
+    01:35:58  DISPATCH_INTENT
+    01:36:18  UNROUTED / DEFERRED
+    01:37:48  UNROUTED / DEFERRED
+    …          eleven refuse-and-defer pairs, one every ~90 seconds
+    01:50:59  UNROUTED / DEFERRED
+    01:51:02  BIN_ASSIGNED       wkr_1cdd82cfb2a54faf8edd
+    01:51:47  BIN_UNIT_SUBMITTED
+    01:51:49  BIN_COMPLETION_ACCEPTED, BIN_TERMINAL
+
+Every refusal was `ACCOUNT_TARGETS_REACHED` — V1's Routine at 2/2, confirmed
+directly by `fleet explain-route`, which named both surfaces it considered and
+why neither could take it. The two occupants were **mutation 9's own hosted
+verification fixtures**, fired at 01:20:41 and 01:21:01. The bin was assigned
+**three seconds** after the second of them aged out of the thirty-minute
+window.
+
+The bin finished at `attempts 1/2`. Eleven refusals cost it nothing, which is
+precisely the mutation-7 deferral fix doing its job on the real acceptance
+turn: on 2026-09-04 the same conditions burned the frozen message's whole
+attempt budget in 4m41s without a single activation being tried.
+
+**A correction I owe the record.** Mid-run I read a trace taken two minutes
+after the second deferral and reported "27 minutes of silence — that is not a
+deferral rhythm." My elapsed-time estimate was wrong by half an hour; the clock
+said 01:43 and I had assumed 02:15. There was no stall, the rhythm was exactly
+90 seconds throughout, and the diagnosis I started from was of a fault that did
+not exist. The reading that settled it was `date -u`, which is the cheapest
+instrument in this whole apparatus.
+
+### What the retry preserved
+
+`rmsg_b56979f1d6fd4839a3ff` re-read after the retry: still `FAILED`, still 131
+characters, same `pending_reason`, same `settled` timestamp of
+2026-09-05T23:17:12.009Z. `bin_89f7b0728aa945fa8724` still `COMPLETE` at
+generation 2 with `attempts 1/2`, its four events, and its stored proposal
+`b76af85d774c53c0`. No user message was created; the thread holds one 207-
+character question and two Russell turns at it.
+
+### Hosted verification leaves fixtures on the live queue
+
+Each deploy runs the hosted verification twice — before and after the restart —
+and each run leaves `verification-scope` `RUSSELL_TURN` bins `READY` with a
+`SENT` dispatch and no worker that ever checks in. Four per deploy, each holding
+a fleet slot for thirty minutes.
+
+They are **litter rather than a leak**: mutation 8's pair, fired at 00:50, still
+carried that same `sent_at` at 01:42, so nothing re-fires them and they stop
+counting once the window lapses. The owner asked that existing supported
+controls settle or isolate them where appropriate, and the honest answer is that
+**none reaches them and none should**: `step10 cancel-bin` refuses any bin
+outside the acceptance project by design, and widening a narrow control so it
+can reach another project is the move §23 warns against. The durable fix is for
+the verification harness to settle its own fixtures, which is a code change
+nobody has authorized and which this run did not need.
+
+### Where the acceptance run actually stands
+
+    10 PASS · 0 FAIL · 0 BLOCKED · 10 NOT_RUN · 1 DEFERRED
+
+Nine of the ten `NOT_RUN` — A05, A06, A07, A09 through A14 — give one reason:
+*the frozen Step 12A acceptance chain is not declared yet.* That is
+`ACCEPTANCE_SCOPE.conversationId`, deliberately empty, deliberately a code
+change, and deliberately not something a row can set: a scope that could be
+chosen after the outcome was known would let the evidence be picked to fit. It
+was empty because the conversation did not exist when the file was written.
+
+It exists now, and it has been answered, so the anchor is declared:
+`rcv_35d5b0340fc4479fa443`. `npm run step12a:acceptance` runs **inside the
+container**, so this reaches production only through a deployment.
