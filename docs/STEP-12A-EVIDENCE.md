@@ -4131,3 +4131,153 @@ worker will propose, which is what the acceptance scenario is for.
 so `RUSSELL_PLAN_V1` needed one line in `COMPLETION_CONTRACTS` and one in
 `EVALUATORS`. The judgment, priority and state columns have existed since
 migration 027. **Nothing to apply, on either chain.**
+
+---
+
+## 46. The connected path, running in production — 2026-09-06
+
+Mutation 12 (`e3760c1`, run `34027453645`) deployed the connected repair:
+163/163 before and 169/169 after a real restart. No migration.
+
+### It started working before anybody asked it to
+
+Seven minutes after the deploy, `in-flight` showed this, unprompted:
+
+```
+COUNTS  2026-09-06T10:32:24.944Z  age 550s  deal-dispatch  RUSSELL_PLAN
+        bin bin_48244f0816e74e179f82  LEASED  gen 0  attempts 1/2
+        routine rtn_c7bcec972bd44afa91d7  session session_01WqsZFStPSX8KqUMUmUVJRT
+        arrived yes, worker wkr_1cdd82cfb2a54faf8edd
+        lease until 10:47:36  last heartbeat 10:32:36
+```
+
+A `RUSSELL_PLAN` bin, in the real project, **leased by a real worker that
+checked in and heartbeated.** Nobody dispatched it. The loop's new step found
+the candidate captured on 2026-09-04 — the one that had sat at `priority =
+NULL` since, because nothing called `applyJudgment` — asked the archive, got no
+answer, and sent it to the fleet.
+
+That is the whole repair demonstrating itself against production rows within
+minutes of shipping, and it is worth being precise about what it does *not*
+show: that candidate lives in `rcv_8085eba0beb04bc38ce6`, the thread §6 of the
+frozen scenario disqualifies. It advances no acceptance gate. It proves the
+mechanism, not the scenario.
+
+### The recovery was refused, exactly where the owner predicted
+
+The authorized operation was:
+
+    step10 retry-turn rmsg_52239a165ecc44ba9287 usr_14439966398243339341
+
+and it refused:
+
+    turn        rmsg_52239a165ecc44ba9287  RUSSELL COMPLETE
+    STEP10 REFUSED: that turn was answered
+
+`retryTurn` requires `FAILED`. That row settled `COMPLETE` under the old code
+*because* `RUN_PROBE` was accepted and did nothing — the precise defect mutation
+12 fixes, preserved in the one row the fix cannot reach. The new code would
+settle it `FAILED`; rewriting it after the fact is forbidden and would destroy
+the evidence of the defect.
+
+**The first attempt is a genuine `FAILED` attempt at the same question**, so the
+supported path was available through it, and the substitution is recorded rather
+than quietly made:
+
+    turn        rmsg_b56979f1d6fd4839a3ff  RUSSELL FAILED
+    refused     the proposed action was missing the part it acts on
+    attempt     3 of 3
+    new turn    rmsg_4752e7f351aa4570a822  PENDING
+    bin         bin_07b0f467a0f246288694
+    original    FAILED — the proposed action was missing the part it acts on (unchanged)
+
+Same question, same mechanism, same ceiling — attempt 3 of 3, the last one. The
+`answers_message_id` column counts attempts over the *question*, so naming a
+different parent could not and did not reset anything. Both earlier attempts
+keep their rows, their proposals, their outcomes and their links.
+
+**A defect this exposes, recorded rather than fixed here.** A turn that is
+`COMPLETE` but whose requested effect never executed has no recovery at all: the
+guard that makes a retry safe is the same guard that excludes it. Going forward
+no such row can be created — an unperformed action now settles `FAILED` — so
+this is a one-off with a live workaround rather than a standing hole. Writing a
+recovery for a state the system can no longer produce would be machinery with no
+future caller, which is how `applyJudgment` came to exist.
+
+### Attempt 3 ran, and named the last blocker
+
+    role/status   RUSSELL COMPLETE
+    answers       rmsg_d10b82a9b724401c8127  attempt 3
+    produced      {"captureDeclined":true}
+      action      CAPTURE_CANDIDATE
+      parts       answer 730 chars  candidate present  reason present (339 chars)
+      fields      priority WORTH_DOING  projectId prj_9d86…  confidence 80
+      validation  OK
+      capture     capture=false  reason="nothing here proposes work"  statement 530 chars
+
+**The worker did everything right.** `CAPTURE_CANDIDATE`, a well-formed
+candidate, a priority from the vocabulary, confidence 80, a reason. Validation
+passed. Then **Brain's own `shouldCapture` gate declined it.**
+
+This is the hypothesis §44 raised and deliberately refused to assert without a
+row behind it. It is now the row: `shouldCapture` requires a proposal opener
+("we should", "let's", "look into") or a literal question mark, because it was
+written to judge **a person's raw message** — *is this remark worth capturing at
+all?* `applyTurn` applies it to **a worker's declarative candidate statement**,
+which is a different kind of text entirely. A 530-character statement that
+correctly describes an idea has no "we should" and no "?", so it reads as
+"nothing here proposes work".
+
+A category error, and the last thing standing between the frozen question and a
+captured candidate.
+
+**Attempt 3 of 3 is now spent.** The ceiling holds and is not being reset.
+
+### The connected path did run end to end in production
+
+While that turn was in flight, the loop judged the candidate captured on
+2026-09-04 — untouched at `priority = NULL` for two days — entirely by itself:
+
+    rcn_23e70baee1ba47478c28   PARKED   priority PARKED
+
+Archive asked, no answer, plan bin created, dispatched, **a real worker leased
+it and heartbeated**, `applyPlan` validated the plan and `judge()` recorded a
+verdict. Nobody triggered any of it.
+
+`state = PARKED` with `priority = PARKED` identifies the branch exactly:
+`judge()` returns `REJECTED` for `alreadyAnswered` and `PARKED` for `blockedBy`,
+so this is the dependency branch — the standing-authority check, which is the
+part of the repair added last.
+
+### The blocked operation, and the missing remedy
+
+    checkAuthority({ projectId: <deal-dispatch>, workClass: 'RESEARCH' })
+      → { ok: false, reason: 'no standing authority exists for this project' }
+
+Fed in as `blockedBy`, `judge()` parks with a reason naming it. That is the
+designed behaviour and it is better than the alternative it replaced — a
+`QUEUED` candidate with no launchable specification, waiting forever.
+
+**But there is no user-facing way to resolve it.** `createGoal` — the only
+writer of `russell_goals` — has no HTTP route, no operator-console control and
+no script. Grepping the tree finds its definition and one test. It is the third
+instance in two days of the same defect: a capability that exists in code with
+no production caller, discovered only when something downstream needed it.
+
+So the park is explained rather than silent, and it is **not** silently
+resolved: creating that grant is a person's decision about what Russell may
+spend on their behalf, and inventing one from a background session is precisely
+what §16 exists to prevent. The remedy is a control that records the grant
+against the person who made it — which does not exist and is not being built
+without a decision.
+
+### The scoped reporter, after real progression
+
+    11/21 PASS · 0 FAIL · 0 BLOCKED · 10 NOT_RUN · 1 DEFERRED
+
+Unchanged from before the recovery, and correctly so. The acceptance chain
+still holds zero candidates, so condition 3 remains **unsatisfied — attempted
+and failed, three times, for three different reasons**: `MISSING_REQUIRED_PART`,
+then an action nothing executed, then a capture gate applied to the wrong kind
+of text. Conditions 5 through 14 have **not run** — nothing has reached them.
+The distinction matters and the reporter's `0 of 1` cannot express it.
