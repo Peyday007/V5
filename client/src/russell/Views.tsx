@@ -712,8 +712,9 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
     () => (projectId ? RussellApi.authority(projectId) : Promise.resolve(null)),
     [projectId],
   );
-  const [name, setName] = useState('');
-  const [expiresAt, setExpiresAt] = useState('');
+  const [name, setName] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const [limits, setLimits] = useState<Record<string, number> | null>(null);
   const [reason, setReason] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
@@ -727,6 +728,10 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
   // validator would refuse, and nothing from the server is bundled.
   const declared = view?.limits ?? [];
   const current = limits ?? ((view?.suggested ?? {}) as unknown as Record<string, number>);
+
+  const proposedName = name ?? view?.suggestedApproval?.name ?? '';
+  const proposedExpiry = expiresAt ?? view?.suggestedApproval?.expiresAt ?? '';
+  const expiryValid = Number.isFinite(Date.parse(proposedExpiry));
 
   async function run(action: () => Promise<unknown>): Promise<void> {
     setBusy(true);
@@ -846,75 +851,67 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
         </>
       ) : (
         <>
-          <label className="rs-decision-label" htmlFor="rs-authority-name">
-            What are you allowing it to look into?
-          </label>
-          <input
-            id="rs-authority-name"
-            type="text"
-            value={name}
-            maxLength={200}
-            placeholder="Research the discovery questions"
-            onChange={(event) => setName(event.target.value)}
-          />
-
-          {declared.map((limit) => (
-            <div key={limit.key} className="rs-authority-limit">
-              <label className="rs-decision-label" htmlFor={`rs-authority-${limit.key}`}>
-                {limit.label}
+          <div className="rs-approval-summary">
+            <h4>{proposedName || 'Research permission'}</h4>
+            <p>
+              Russell can start up to {current['maxMissions']} investigations
+              {current['maxConcurrent'] === 1 ? ', one at a time' : `, up to ${current['maxConcurrent']} at once`},
+              with {current['maxFragments']} research questions and {current['maxProbes']} quick checks in total.
+            </p>
+            <p>
+              {expiryValid
+                ? `Permission ends ${new Date(proposedExpiry).toISOString().replace('T', ' ').replace('.000Z', ' UTC')}. You can withdraw it sooner.`
+                : 'Choose an expiry before approving.'}
+            </p>
+            <p>No paid API spending, contacting people, or publishing outside this Brain.</p>
+          </div>
+          <button type="button" aria-expanded={editing} aria-controls="rs-authority-settings"
+            onClick={() => setEditing(!editing)} disabled={busy}>
+            {editing ? 'Hide limits' : 'Change limits'}
+          </button>
+          {editing ? (
+            <div id="rs-authority-settings">
+              <label className="rs-decision-label" htmlFor="rs-authority-name">
+                What are you allowing it to look into?
               </label>
-              {/* What the number buys, next to the number. A limit whose
-                  meaning a person has to guess is one they will set wrongly. */}
-              <p className="rs-item-meta">{limit.meaning}</p>
-              <input
-                id={`rs-authority-${limit.key}`}
-                type="number"
-                min={0}
-                max={limit.max}
-                value={current[limit.key] ?? limit.suggested}
-                onChange={(event) =>
-                  setLimits({ ...current, [limit.key]: Number(event.target.value) })
-                }
-              />
+              <input id="rs-authority-name" type="text" value={proposedName}
+                maxLength={200} disabled={busy}
+                onChange={(event) => setName(event.target.value)} />
+              {declared.map((limit) => (
+                <div key={limit.key} className="rs-authority-limit">
+                  <label className="rs-decision-label" htmlFor={`rs-authority-${limit.key}`}>
+                    {limit.label}
+                  </label>
+                  <p className="rs-item-meta">{limit.meaning}</p>
+                  <input id={`rs-authority-${limit.key}`} type="number" min={0} max={limit.max}
+                    disabled={busy} value={current[limit.key] ?? limit.suggested}
+                    onChange={(event) => setLimits({ ...current, [limit.key]: Number(event.target.value) })} />
+                </div>
+              ))}
+              <label className="rs-decision-label" htmlFor="rs-authority-expires">Permission ends (UTC)</label>
+              <input id="rs-authority-expires" type="datetime-local" disabled={busy}
+                value={expiryValid ? new Date(proposedExpiry).toISOString().slice(0, 16) : ''}
+                onChange={(event) => setExpiresAt(event.target.value ? `${event.target.value}:00.000Z` : '')} />
             </div>
-          ))}
-
-          <label className="rs-decision-label" htmlFor="rs-authority-expires">
-            Until when? Leave this empty to keep it until you withdraw it.
-          </label>
-          <input
-            id="rs-authority-expires"
-            type="date"
-            value={expiresAt}
-            onChange={(event) => setExpiresAt(event.target.value)}
-          />
-
+          ) : null}
           <div className="rs-choices">
-            <button
-              type="button"
-              disabled={busy || name.trim().length === 0}
+            <button type="button"
+              disabled={busy || proposedName.trim().length === 0 || !expiryValid}
               onClick={() => {
-                void run(() =>
-                  RussellApi.grantAuthority(projectId, {
-                    name: name.trim(),
-                    maxMissions: current['maxMissions'] ?? 0,
-                    maxConcurrent: current['maxConcurrent'] ?? 0,
-                    maxFragments: current['maxFragments'] ?? 0,
-                    maxProbes: current['maxProbes'] ?? 0,
-                    // A date input gives a day; the end of it is what a person
-                    // means by "until the 30th".
-                    expiresAt: expiresAt ? `${expiresAt}T23:59:59.999Z` : null,
-                  }),
-                );
-              }}
-            >
-              {busy ? 'Allowing…' : 'Allow this'}
+                void run(() => RussellApi.grantAuthority(projectId, {
+                  name: proposedName.trim(),
+                  maxMissions: current['maxMissions'] ?? 0,
+                  maxConcurrent: current['maxConcurrent'] ?? 0,
+                  maxFragments: current['maxFragments'] ?? 0,
+                  maxProbes: current['maxProbes'] ?? 0,
+                  expiresAt: proposedExpiry,
+                }));
+              }}>
+              {busy ? 'Approving…' : 'Approve'}
             </button>
           </div>
-          {name.trim().length === 0 ? (
-            <p className="rs-item-meta">
-              Say what this authorizes — a limit with no stated purpose cannot be reviewed later.
-            </p>
+          {proposedName.trim().length === 0 ? (
+            <p className="rs-item-meta">A purpose is needed before this permission can be approved.</p>
           ) : null}
         </>
       )}
@@ -975,7 +972,7 @@ export function NeedsYouView({
           decision outstanding that matters more than any individual request —
           and when the grant exists this is where a person comes to see what
           they agreed to and to take it back. */}
-      <AuthorityPanel projectId={projectId} />
+      <AuthorityPanel key={projectId} projectId={projectId} />
       <ul className="rs-list">
         {state.items.map((request) => (
           <li key={request.id}>

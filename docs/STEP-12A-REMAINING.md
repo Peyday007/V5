@@ -16,10 +16,34 @@ condition it reports on (§50). Where the two still differ, the condition wins.
 
 ---
 
+## Approval interaction — implementation prepared, not deployed
+
+The default Needs you surface must present a complete research permission and
+one **Approve** action. The owner already supplied the purpose and bounds;
+requiring them to enter those again, or displaying four numeric controls as the
+primary experience, violates the 12A interaction requirement. **Change limits**
+reveals optional edits. Viewing the card never creates a grant. Approval still
+uses the authenticated route, and the active grant retains its withdrawal path.
+
+The initial proposal derives its project name and 2/1/12/3 limits on the server.
+Its bounded-rollout expiry is exactly `2026-10-06T00:00:00.000Z`; it is not
+silently extended on refresh or converted to the end of the day. The form can
+explicitly change it, with UTC labelled. Changing projects resets any unsaved
+edits so one project's permission is never submitted to another by accident.
+
+Local verification: production build (including typecheck) passed; 61 shell and
+authority-surface tests passed. These cover opening without granting, approving
+without typing, the exact submitted bounds and expiry, optional edits, refusal
+without false success, existing withdrawal, and person/worker authorization.
+No production grant, deployment, acceptance result or fleet change is implied.
+
+The objective remains completing the connected 12A journey and its live
+acceptance. This correction does not reset that work or add acceptance gates.
+
 ## What the whole thing is now waiting on
 
-Everything scoped is waiting on the same two facts, and neither is a code
-change:
+The two owner actions below remain required. The approval-card correction
+prepared after mutation 15 must ship before asking the owner to perform them:
 
 1. **A standing research authority for Deal Dispatch**, granted by the owner in
    **Russell, under "Needs you"**. Without it every judged idea parks —

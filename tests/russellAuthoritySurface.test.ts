@@ -187,6 +187,9 @@ describe('a person grants it inside Russell', () => {
     expect(view.headline).toMatch(/may not start research/i);
     expect(view.headline).toMatch(/capture ideas/i);
     expect(view.suggested.maxMissions).toBe(2);
+    expect(view.suggestedApproval.name).toMatch(/discovery research$/);
+    expect(view.suggestedApproval.expiresAt).toBe('2026-10-06T00:00:00.000Z');
+    expect(await listGoals(projectId)).toHaveLength(0);
   });
 
   it('records the grant against the authenticated person, not a field', async () => {

@@ -24,6 +24,7 @@
  */
 import { listGoals, listReservations } from '../../repos/russellAuthority.ts';
 import { getUser } from '../../repos/identity.ts';
+import { getProject } from '../../repos/projects.ts';
 import type { RussellGoal } from '../../domain/types.ts';
 
 /** The one class of work a grant made here authorizes. */
@@ -129,6 +130,8 @@ export interface AuthorityView {
     max: number;
     suggested: number;
   }[];
+  /** A proposal only: nothing is granted until a person approves it. */
+  suggestedApproval: { name: string; expiresAt: string };
   /** The suggested numbers for a first grant, from `limits`. */
   suggested: Record<AuthorityLimitKey, number>;
 }
@@ -210,6 +213,13 @@ export async function authorityFor(input: {
 }): Promise<AuthorityView> {
   const now = input.now ?? new Date().toISOString();
   const goals = await listGoals(input.projectId);
+  const project = await getProject(input.projectId);
+  // Fixed expiry for the bounded 12A rollout. Never silently roll it forward
+  // on a refresh: renewing authority requires a new explicit decision.
+  const suggestedApproval = {
+    name: `${project?.name ?? 'Project'} discovery research`,
+    expiresAt: '2026-10-06T00:00:00.000Z',
+  };
 
   const live = goals.find(
     (goal) => goal.state === 'ACTIVE' && (!goal.expiresAt || goal.expiresAt > now),
@@ -240,6 +250,7 @@ export async function authorityFor(input: {
         'capture ideas and rank them — and it will park every one of them rather than spend ' +
         'anything you have not agreed to.',
       suggested,
+      suggestedApproval,
     };
   }
 
@@ -262,5 +273,6 @@ export async function authorityFor(input: {
     limits,
     headline: `Russell may research on this project, within the limits you set on ${live.createdAt.slice(0, 10)}.`,
     suggested,
+    suggestedApproval,
   };
 }

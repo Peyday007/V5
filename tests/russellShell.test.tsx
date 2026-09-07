@@ -214,6 +214,7 @@ interface Reply {
 
 let routes: Record<string, Reply | (() => Reply)> = {};
 let calls: string[] = [];
+let postedBodies: unknown[] = [];
 
 function reply(route: string): Reply {
   const found = routes[route];
@@ -223,10 +224,12 @@ function reply(route: string): Reply {
 
 beforeEach(() => {
   calls = [];
+  postedBodies = [];
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : String(input);
     const key = `${init?.method ?? 'GET'} ${url}`;
     calls.push(key);
+    if (init?.method === 'POST' && init.body) postedBodies.push(JSON.parse(String(init.body)));
     const answer = reply(key);
     const status = answer.status ?? 200;
     return {
@@ -819,6 +822,7 @@ describe('the thin views', () => {
    */
   const NO_GRANT = {
     grant: null,
+    suggestedApproval: { name: 'Deal Dispatch discovery research', expiresAt: '2026-10-06T00:00:00.000Z' },
     limits: [
       { key: 'maxMissions', label: 'Pieces of research, in total', meaning: 'How many separate investigations Russell may start before asking again.', max: 50, suggested: 2 },
       { key: 'maxConcurrent', label: 'At the same time', meaning: 'How many may be running at once. One means Russell finishes before it starts the next.', max: 20, suggested: 1 },
@@ -885,29 +889,54 @@ describe('the thin views', () => {
     expect(screen.getByRole('heading', { name: /What Russell may do on its own/i })).toBeTruthy();
   });
 
-  it('will not send a grant with no stated purpose, and says so first', async () => {
+  it('offers one approval without asking the owner to configure the machinery', async () => {
     await openNeedsYou(NO_GRANT);
-    await waitFor(() => expect(screen.getByLabelText(/What are you allowing it to look into/i)).toBeTruthy());
-    const allow = screen.getByRole('button', { name: /Allow this/i });
-    expect((allow as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(/cannot be reviewed later/i)).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Approve$/ })).toBeTruthy());
+    expect(screen.queryAllByRole('spinbutton')).toHaveLength(0);
+    expect(screen.queryByLabelText(/What are you allowing/i)).toBeNull();
+    expect(screen.getByText(/2026-10-06 00:00:00 UTC/)).toBeTruthy();
+    expect(screen.getByText(/No paid API spending/)).toBeTruthy();
+    expect(calls.filter((call) => call.includes('POST') && call.includes('/authority'))).toHaveLength(0);
 
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText(/What are you allowing it to look into/i), {
-        target: { value: 'Deal Dispatch discovery research' },
-      });
-    });
-    expect((screen.getByRole('button', { name: /Allow this/i }) as HTMLButtonElement).disabled).toBe(false);
+    routes['POST /api/russell/projects/prj_1/authority'] = () => {
+      routes['GET /api/russell/projects/prj_1/authority'] = { body: GRANTED };
+      return { body: GRANTED };
+    };
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Approve$/ })); });
+    expect(postedBodies).toEqual([{
+      name: 'Deal Dispatch discovery research', maxMissions: 2, maxConcurrent: 1,
+      maxFragments: 12, maxProbes: 3, expiresAt: '2026-10-06T00:00:00.000Z',
+    }]);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Withdraw this/ })).toBeTruthy());
   });
 
-  it('offers the server’s own numbers, and says what each one buys', async () => {
+  it('keeps editing optional and reflects changed limits in the permission being approved', async () => {
     await openNeedsYou(NO_GRANT);
-    await waitFor(() => expect(screen.getByLabelText(/Pieces of research, in total/i)).toBeTruthy());
-    // Suggested from the server, which is also where they are enforced — so
-    // the form cannot propose something the validator will refuse.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Change limits/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Change limits/ }));
     expect((screen.getByLabelText(/Pieces of research, in total/i) as HTMLInputElement).value).toBe('2');
-    expect((screen.getByLabelText(/At the same time/i) as HTMLInputElement).value).toBe('1');
-    expect(screen.getByText(/finishes before it starts the next/i)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Pieces of research, in total/i), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText(/Permission ends/i), { target: { value: '2026-10-05T12:30' } });
+    fireEvent.click(screen.getByRole('button', { name: /Hide limits/ }));
+    expect(screen.queryAllByRole('spinbutton')).toHaveLength(0);
+    expect(screen.getByText(/up to 1 investigations/)).toBeTruthy();
+    expect(screen.getByText(/2026-10-05 12:30:00 UTC/)).toBeTruthy();
+    routes['POST /api/russell/projects/prj_1/authority'] = { status: 403, body: { error: 'Permission refused' } };
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Approve$/ })); });
+    expect(postedBodies).toEqual([expect.objectContaining({ maxMissions: 1, expiresAt: '2026-10-05T12:30:00.000Z' })]);
+    expect(screen.queryByRole('button', { name: /Withdraw this/ })).toBeNull();
+    expect(screen.getByText(/Permission refused/)).toBeTruthy();
+  });
+
+  it('requires a purpose and expiry if the owner clears the proposed settings', async () => {
+    await openNeedsYou(NO_GRANT);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Change limits/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Change limits/ }));
+    fireEvent.change(screen.getByLabelText(/What are you allowing/i), { target: { value: '' } });
+    expect((screen.getByRole('button', { name: /^Approve$/ }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText(/What are you allowing/i), { target: { value: 'Research' } });
+    fireEvent.change(screen.getByLabelText(/Permission ends/i), { target: { value: '' } });
+    expect((screen.getByRole('button', { name: /^Approve$/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('shows an existing grant in the server’s words, and what it has spent', async () => {
@@ -916,7 +945,7 @@ describe('the thin views', () => {
     expect(screen.getByText(/Spend money, or turn on paid usage/i)).toBeTruthy();
     expect(screen.getByText(/Pieces of research, in total: 1 of 2/i)).toBeTruthy();
     // No form to make a second one while one is live.
-    expect(screen.queryByRole('button', { name: /Allow this/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Approve$/ })).toBeNull();
   });
 
   it('asks why before it withdraws one', async () => {
