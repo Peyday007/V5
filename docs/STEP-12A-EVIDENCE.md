@@ -4636,3 +4636,103 @@ scenario's conditions 4, 5, 15 and 17 are **reachable**, which four of them were
 not. Whether a real worker chooses to declare a follow-on, name a duplicate, or
 judge an idea worth doing is still the worker's decision, and the live run is
 where that is found out.
+
+---
+
+## 50. Mutation 14 — the controls, and three gates that could not fail — 2026-09-07
+
+§49 joined five transitions that had no production caller. Driving the same
+question through the *reporter* found the identical defect one level out, and
+this section records both halves of mutation 14: the user controls the new
+routes needed, and the gates that were weaker than the conditions they report
+on.
+
+### A route nobody can reach is a route with no caller
+
+`overrideJudgment` and `splitCandidate` got routes in §49 and no surface. That
+is the same defect that produced §49 — a mechanism nothing calls — displaced by
+one layer, and it matters more here than usual because §49 made merging
+*automatic*. Every merge before it was an exact fingerprint match, effectively
+never wrong. A merge from a worker's judgement held to a similarity floor can be
+wrong, and a wrong merge with no visible way back is a mechanism for quietly
+losing somebody's question.
+
+So Ideas carries a decision panel on the focused node:
+
+- **Disagree** — pick a priority from the server's own enum, give a reason, and
+  the override supersedes rather than erases. What Russell decided is shown
+  beside it rather than replaced in the interface either.
+- **Pull apart** — for an idea that was folded in, with the merge row kept.
+
+Three properties are worth naming because each one is a way this could have been
+built wrongly:
+
+- **`canOverride` and `canSplit` are derived on the server**, from the same
+  conditions the routes enforce. A button that appears and then fails is worse
+  than one that is absent, and two places deciding the same thing is how a
+  screen ends up offering a control the server refuses.
+- **A folded idea is filed under the one it folded into**, rather than appearing
+  as a peer whose state label happens to read `MERGED`, and the canonical
+  reports how many folded in. A merge nobody can see is a merge nobody can
+  disagree with — visibility is what makes the reversibility real.
+- **A reason is required, and the control says so before it is used.** The
+  server refuses an empty one; a refusal a person could have been warned about
+  is a refusal that should not have happened.
+
+### Three gates that could not fail
+
+A gate that cannot fail passes for free, and walking the reporter found three.
+
+**`A05_DEDUPE` counted any merge in the chain.** Condition 4 requires
+`method = 'SEMANTIC'` and states its reasoning outright: *"A deterministic
+fingerprint match would prove nothing here, which is why the wording is
+different."* The gate would have reported that condition satisfied by exactly
+the row the condition excludes. It now requires a semantic merge whose canonical
+is also in the chain, and **fails** on a second canonical idea — the falsifier
+the scenario names.
+
+**`A06_JUDGMENT_OVERRIDE` is named for an override and never looked at one.**
+Condition 5's second half — an override *supersedes rather than erases* — was
+unchecked for as long as the property existed. It stays **conditional**: nobody
+is obliged to overrule Russell, so no override is neither a pass nor a fail of
+that clause; an override that erased what it replaced is a fail, and so is a
+priority stored with no reason.
+
+**`A14_HUMAN_RESUME` counted `state = 'ANSWERED'`**, which is where a request
+sits *before* the loop acts on it. `markResumed` moves it to `RESUMED` within a
+tick — so **the gate scored better the less the mechanism worked**, and could
+only ever have passed on a decision nothing had carried out. That is condition
+17's own failure mode, sitting inside the gate that reports condition 17. It now
+counts both states and fails when a mission is still `NEEDS_HUMAN` after its
+answer.
+
+This was invisible until §49, because nothing produced a park at all: with no
+row ever reaching either state, both queries returned zero and neither could be
+told apart.
+
+### Proving a reporter
+
+`gates()` is exported and `main()` runs only as an entry point — a script that
+reports on production the moment it is imported cannot be tested at all.
+`tests/acceptanceGates.test.ts` builds each failure shape against a local
+database and asserts the verdict, with the scope still read from
+`ACCEPTANCE_SCOPE` so no test supplies the standard it is judged against.
+
+Checked rather than assumed: reverting the two behavioural changes — dropping
+`method = 'SEMANTIC'` and restoring `state = 'ANSWERED'` — makes exactly two of
+the eight fail, and restoring them makes all eight pass again.
+
+### Why this is in mutation 14 rather than the scope-pin deployment
+
+The reporter runs **inside the deployed machine** — the acceptance workflow is
+`flyctl ssh console -C "npm --prefix /app run step12a:acceptance"` — so a gate
+change needs a deployment. The only deployment left authorized after this one is
+scope-pin-only, and putting a gate repair in it would have made it something
+else. The first mutation-14 deploy (`34096753494`) was cancelled mid-verify to
+fold this in rather than spend a second one.
+
+| | |
+| --- | --- |
+| `npm run typecheck` | clean |
+| SQLite | **1,721 passed**, 25 skipped, 0 failed (72 files) |
+| Inverted check | 2 of 8 gate tests fail against the old gates, 8/8 against the new |
