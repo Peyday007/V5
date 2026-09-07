@@ -238,6 +238,81 @@ describe('a person grants it inside Russell', () => {
   });
 });
 
+describe('the agreed proposal, end to end', () => {
+  /*
+   * Exactly what the Approve button submits — the payload
+   * `tests/russellShell.test.tsx` pins from the request body — posted at the
+   * server and read back from the row.
+   *
+   * The two halves are asserted in different files because they are different
+   * risks: the screen can send the wrong thing, and the server can store
+   * something other than what it was sent. Proving one has never proved the
+   * other, and the expiry is where that would show: a value silently widened
+   * to unlimited, or pushed to the end of the day, reads identically on the
+   * card that sent it.
+   */
+  const AS_THE_CARD_SENDS_IT = {
+    name: 'Deal Dispatch discovery research',
+    maxMissions: 2,
+    maxConcurrent: 1,
+    maxFragments: 12,
+    maxProbes: 3,
+    expiresAt: '2026-10-06T00:00:00.000Z',
+  };
+
+  it('stores the agreed proposal exactly, expiry included', async () => {
+    await withRoutes(personPrincipal(userId, projectId), async (call) => {
+      const result = await call('POST', `/projects/${projectId}/authority`, AS_THE_CARD_SENDS_IT);
+      expect(result.status).toBe(200);
+    });
+
+    const goal = (await listGoals(projectId))[0]!;
+    expect(goal.name).toBe('Deal Dispatch discovery research');
+    expect(goal.allowedWork).toEqual(['RESEARCH']);
+    expect(goal.maxMissions).toBe(2);
+    expect(goal.maxConcurrent).toBe(1);
+    expect(goal.maxFragments).toBe(12);
+    expect(goal.maxProbes).toBe(3);
+    // The instant that was agreed, not the end of that day and not null.
+    expect(goal.expiresAt).toBe('2026-10-06T00:00:00.000Z');
+    expect(goal.state).toBe('ACTIVE');
+    // Paid spending at zero, from the schema default rather than the request:
+    // there is no field on this route that could raise it.
+    expect(goal.maxExternalSpend).toBe(0);
+    // And the prohibitions nobody supplies.
+    expect(goal.prohibitions).toContain('PAID_OVERAGE');
+    expect(goal.prohibitions).toContain('NEW_SPENDING');
+  });
+
+  it('reads back as a live permission with what it permits, and lapses on its own date', async () => {
+    await withRoutes(personPrincipal(userId, projectId), async (call) => {
+      await call('POST', `/projects/${projectId}/authority`, AS_THE_CARD_SENDS_IT);
+    });
+
+    const live = await authorityFor({ projectId, now: '2026-09-08T00:00:00.000Z' });
+    expect(live.grant).toBeTruthy();
+    expect(live.grant!.expiresAt).toBe('2026-10-06T00:00:00.000Z');
+    expect(live.grant!.permits.some((line) => /until 2026-10-06/.test(line))).toBe(true);
+
+    // One second after it, it is gone — derived from the clock, with nothing
+    // having had to run.
+    const after = await authorityFor({ projectId, now: '2026-10-06T00:00:01.000Z' });
+    expect(after.grant).toBeNull();
+    expect(after.history[0]!.endedReason).toMatch(/date it was set to run until/i);
+  });
+
+  it('proposes the same thing every time it is read, and creates nothing by being read', async () => {
+    const first = await authorityFor({ projectId });
+    const second = await authorityFor({ projectId });
+    expect(first.suggestedApproval).toEqual(second.suggestedApproval);
+    // A rollout expiry that moved with the clock would mean refreshing the
+    // page quietly extended what was about to be approved.
+    expect(first.suggestedApproval.expiresAt).toBe('2026-10-06T00:00:00.000Z');
+    expect(first.suggestedApproval.name).toBe('Deal Dispatch discovery research');
+    expect(await listGoals(projectId)).toHaveLength(0);
+  });
+});
+
 describe('the limits are refused rather than defaulted', () => {
   it('refuses a missing, fractional, negative or over-large number', async () => {
     await withRoutes(personPrincipal(userId, projectId), async (call) => {

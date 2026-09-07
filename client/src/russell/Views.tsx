@@ -863,6 +863,10 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
                 ? `Permission ends ${new Date(proposedExpiry).toISOString().replace('T', ' ').replace('.000Z', ' UTC')}. You can withdraw it sooner.`
                 : 'Choose an expiry before approving.'}
             </p>
+            {/* The class of work, stated. Every ceiling above is a number
+                *within* it, so a card that showed only the numbers would be
+                describing how much of something it never named. */}
+            <p>Research only — reading sources and writing findings into this Brain.</p>
             <p>No paid API spending, contacting people, or publishing outside this Brain.</p>
           </div>
           <button type="button" aria-expanded={editing} aria-controls="rs-authority-settings"

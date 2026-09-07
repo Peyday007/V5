@@ -24,6 +24,7 @@
  */
 import { listLayers } from '../../repos/layers.ts';
 import { groupOf, listMissions, listCurrentKnowledge } from '../../repos/russellMissions.ts';
+import { authorityFor } from './authority.ts';
 import { listOpenRequests } from '../../repos/russellMissions.ts';
 import { plainLayerName } from './dealDispatch.ts';
 import { projectProgress, type Progress } from './progress.ts';
@@ -68,7 +69,15 @@ export interface Briefing {
   openGaps: string[];
   /** Whether a person is actually needed, and for what. */
   needsYou: string;
-  /** How many open human decisions there are, for a badge. */
+  /**
+   * How many open decisions there are, for a badge.
+   *
+   * A *decision*, not a `russell_human_requests` row. A project with no
+   * standing authority is waiting on a person just as surely as a parked
+   * packet is, and counting only the rows made the two screens contradict each
+   * other: the briefing said "You are not needed" while the panel underneath
+   * it presented an approval that had to be given before anything could run.
+   */
   openRequests: number;
 }
 
@@ -134,7 +143,23 @@ export async function briefing(input: {
     }),
   ]);
 
+  /*
+   * The approval is a decision too.
+   *
+   * Read from the same projection the panel renders, so the sentence and the
+   * card cannot disagree — which they did: a project with no grant showed "You
+   * are not needed" above an approval that had to be given before Russell
+   * could do anything at all. A status that contradicts the control beside it
+   * is worse than no status, because it teaches a person to stop reading it.
+   *
+   * It is deliberately the *first* thing named when it is outstanding. Nothing
+   * else in the list can proceed until it is answered.
+   */
+  const authority = await authorityFor({ projectId: input.projectId });
+  const needsApproval = authority.grant === null;
+
   const blocking = requests.filter((request) => request.urgency !== 'WHENEVER');
+  const decisions = requests.length + (needsApproval ? 1 : 0);
 
   return {
     focus: focusOf(input.projectName, missions),
@@ -143,14 +168,19 @@ export async function briefing(input: {
     next: nextOf(missions),
     openGaps: gaps.map((gap) => gap.statement),
     // The honest default is that a person is *not* needed. Saying otherwise
-    // when nothing is blocked trains people to ignore the one time it matters.
-    needsYou:
-      requests.length === 0
+    // when nothing is blocked trains people to ignore the one time it matters
+    // — and so does saying it when something *is* blocked, which is why the
+    // approval is counted here rather than only rendered underneath.
+    needsYou: needsApproval
+      ? requests.length === 0
+        ? 'You are needed: Russell needs your permission before it can research anything here.'
+        : `You are needed: Russell needs your permission to research here, and ${requests.length} other ${requests.length === 1 ? 'decision is' : 'decisions are'} waiting.`
+      : requests.length === 0
         ? 'You are not needed.'
         : blocking.length > 0
           ? `You are needed: ${blocking.length} ${blocking.length === 1 ? 'decision is' : 'decisions are'} holding work up.`
           : `${requests.length} ${requests.length === 1 ? 'decision is' : 'decisions are'} waiting whenever you have a moment.`,
-    openRequests: requests.length,
+    openRequests: decisions,
   };
 }
 

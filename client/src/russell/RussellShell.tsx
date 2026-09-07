@@ -161,7 +161,23 @@ export function RussellShell({
     () => (projectId ? RussellApi.needsYou(projectId) : Promise.resolve({ requests: [] })),
     [projectId],
   );
-  const openCount = needsYou.data?.requests.length ?? 0;
+  /*
+   * The badge counts decisions, and an outstanding approval is one.
+   *
+   * It counted `russell_human_requests` rows, so a project waiting on the one
+   * permission that lets Russell do anything showed no badge at all — while
+   * the briefing beside it now says a person is needed. The briefing derives
+   * that count on the server; this reads it rather than computing a second
+   * one, because two places counting the same thing is how they come to
+   * disagree.
+   */
+  const authority = useAsync(
+    () => (projectId ? RussellApi.authority(projectId) : Promise.resolve(null)),
+    [projectId],
+  );
+  const openCount =
+    (needsYou.data?.requests.length ?? 0) +
+    (authority.data && authority.data.grant === null ? 1 : 0);
 
   return (
     <div className={`rs-shell rs-shell-${mode.toLowerCase()}`} data-nav={mode}>

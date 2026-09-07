@@ -1094,6 +1094,22 @@ rules.
   percentage. A briefing answers what changed, why it matters, what is next and
   whether a person is needed, in that order. Layer names reach a person through
   one tested mapping.
+- **The decision that lets Russell act is a proposal to approve, not a form to
+  fill in.** Moving the grant into Russell was half the correction; the other
+  half is that it still asked a person to configure machinery. The card arrives
+  prefilled — the purpose derived from the project, the ceilings from the
+  server's own suggestions, the bounded rollout expiry as a fixed instant that
+  never rolls forward on a refresh — and offers one **Approve**. *Change limits*
+  reveals the detailed controls, which start hidden. Reading the card creates
+  nothing.
+
+  **The status around it has to agree with it.** The briefing said "You are not
+  needed" directly above an approval that had to be given before anything could
+  run, and the nav badge showed nothing, because both counted
+  `russell_human_requests` rows and an ungranted project has none. A status that
+  contradicts the control beside it is worse than no status: it teaches a person
+  to stop reading it. An outstanding approval is now the decision it is, named
+  first because nothing else can proceed until it is answered.
 - **The decision that lets Russell act is made in Russell.** A standing
   authority names the project, the class of work, four ceilings and an expiry,
   and `services/russell/authority.ts` renders all of it as sentences the server

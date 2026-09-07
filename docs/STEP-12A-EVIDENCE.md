@@ -4846,3 +4846,116 @@ that the console no longer serves the form.
 | --- | --- |
 | `npm run typecheck` | clean |
 | SQLite | **1,745 passed**, 25 skipped, 0 failed (73 files) |
+
+---
+
+## 52. One approval, not a settings form — 2026-09-07
+
+§51 moved the authority decision into Russell and stopped there. The owner's
+correction: moving the form still left them configuring machinery, which is not
+the agreed experience.
+
+They were right, and it is the same mistake twice — §51 fixed *where* the
+decision lived without fixing *what it asked for*.
+
+### The implementation is Codex's, reused rather than redesigned
+
+A prepared patch arrived against base `e57f55c`, which was this branch's HEAD,
+so it applied cleanly with nothing to reconcile. Its 61 tests reproduce here
+unchanged and are not re-derived. It is committed on its own (`a046486`) so the
+diff between what was handed over and what was added to it stays legible.
+
+What it does: a prefilled card replaces the settings form — the purpose derived
+from the project name, the ceilings from `AUTHORITY_LIMITS`' own suggestions,
+and the bounded rollout expiry `2026-10-06T00:00:00.000Z` as a **fixed instant**
+in `suggestedApproval`. One **Approve**. *Change limits* reveals the detailed
+controls with `aria-expanded`/`aria-controls`, hidden until asked for.
+`key={projectId}` drops unsaved edits when the project changes. Reading the card
+creates nothing.
+
+Three properties of the expiry are worth naming because each is a way this
+could have been built wrongly, and the tests pin all three: it is not rolled
+forward on a refresh (which would mean reloading the page quietly extended what
+was about to be approved), not widened to unlimited, and not pushed to the end
+of its day — the previous version did exactly that, appending `T23:59:59.999Z`
+to a date input.
+
+### What the patch did not cover, and the owner named
+
+**The surrounding status contradicted the card.** `briefing()` derives
+`needsYou` and `openRequests` from `listOpenRequests` alone, and an ungranted
+project has no rows there — so the deployed Brain read:
+
+```
+You are not needed.
+```
+
+directly above a panel presenting the one permission that has to be given before
+Russell can do anything at all. The nav badge showed nothing for the same
+reason.
+
+A status that disagrees with the control beside it is worse than none: it
+teaches a person to stop reading it. An outstanding approval is now counted as
+the decision it is, and named **first** when it is outstanding, because nothing
+else on that list can proceed until it is answered:
+
+```
+You are needed: Russell needs your permission before it can research anything here.
+You are needed: Russell needs your permission to research here, and 1 other decision is waiting.
+```
+
+The badge reads the same server-side count rather than computing a second one.
+
+**The card named every ceiling and never the class of work.** Every number on
+it is a quantity *within* a class, so a card showing only the numbers describes
+how much of something it never mentioned. It now says *Research only — reading
+sources and writing findings into this Brain*, beside the money line.
+
+### Verified as an interaction, not as components
+
+The owner asked for the whole interaction to be checked. The two halves are
+proven in different files on purpose — the screen can send the wrong thing, and
+the server can store something other than what it was sent, and proving one has
+never proved the other.
+
+**What Approve submits** (`tests/russellShell.test.tsx`, from the request body):
+
+```json
+{ "name": "Deal Dispatch discovery research",
+  "maxMissions": 2, "maxConcurrent": 1, "maxFragments": 12, "maxProbes": 3,
+  "expiresAt": "2026-10-06T00:00:00.000Z" }
+```
+
+with no POST issued by opening the page, and the detailed controls absent until
+*Change limits* is pressed.
+
+**What is stored** (`tests/russellAuthoritySurface.test.ts`, from the row): that
+payload posted at the real route, read back as `allowedWork: ['RESEARCH']`,
+2/1/12/3, `expiresAt` exactly `2026-10-06T00:00:00.000Z`, `maxExternalSpend: 0`
+from the schema default because no field on the route could raise it, and the
+`PAID_OVERAGE` / `NEW_SPENDING` prohibitions nobody supplies. It reads back as a
+live permission the next day and is gone one second after its own date, derived
+from the clock with nothing having had to run.
+
+**Optional edits**: the toggle's `aria-expanded` flips, an edited ceiling shows
+in the summary immediately — the summary and the button read one object — and
+the edited value is what the request carries.
+
+**Refusal**: a 400 from the server renders the server's own words in an alert
+and leaves the card still offering the decision, rather than appearing to have
+worked.
+
+**Status**: the briefing never says "not needed" while an approval is
+outstanding, counts it alongside a waiting request rather than instead of it,
+and returns to "You are not needed." once a grant exists.
+
+| | |
+| --- | --- |
+| `npm run build` | clean, 335.54 kB bundle |
+| SQLite | **1,756 passed**, 25 skipped, 0 failed (73 files) |
+
+### Not a completion of 12A
+
+This is a UI repair. Every scoped acceptance condition is still waiting on the
+approval being given and the frozen message being sent —
+`docs/STEP-12A-REMAINING.md` is unchanged in what it says is outstanding.

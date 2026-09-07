@@ -1275,13 +1275,45 @@ describe('a briefing says what changed, why, what next, and whether you are need
   it('leads with the focus and ends with whether a person is needed', async () => {
     const view = await briefing({ projectId, projectName: 'Deal Dispatch' });
     expect(view.focus).toMatch(/^Russell is (working on|watching) Deal Dispatch/);
-    expect(view.needsYou).toBe('You are not needed.');
-    expect(view.openRequests).toBe(0);
     // Nothing invented while there is nothing to report.
     expect(view.latest).toBeNull();
   });
 
-  it('says a person is needed only when something is actually waiting', async () => {
+  it('never says a person is not needed while an approval is outstanding', async () => {
+    /*
+     * The contradiction this replaces was live on the deployed Brain: with no
+     * standing authority the briefing read "You are not needed." directly above
+     * a panel presenting the one permission that has to be given before Russell
+     * can do anything at all.
+     *
+     * A status that disagrees with the control beside it is worse than none —
+     * it teaches a person to stop reading it — so the approval counts as the
+     * decision it is, and is named first because nothing else can proceed
+     * until it is answered.
+     */
+    const ungranted = await briefing({ projectId, projectName: 'Deal Dispatch' });
+    expect(ungranted.needsYou).not.toMatch(/not needed/i);
+    expect(ungranted.needsYou).toMatch(/permission before it can research/i);
+    expect(ungranted.openRequests).toBe(1);
+
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'Deal Dispatch discovery research',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 2,
+      maxFragments: 12,
+      maxConcurrent: 1,
+      maxProbes: 3,
+    });
+
+    const granted = await briefing({ projectId, projectName: 'Deal Dispatch' });
+    expect(granted.needsYou).toBe('You are not needed.');
+    expect(granted.openRequests).toBe(0);
+  });
+
+  it('counts a waiting decision alongside the approval rather than instead of it', async () => {
     await askHuman({
       projectId,
       authorityNeeded: 'permission to pay for a statutory lookup',
@@ -1290,9 +1322,26 @@ describe('a briefing says what changed, why, what next, and whether you are need
       urgency: 'BLOCKING',
       resumeKey: 'brief-resume-1',
     });
-    const view = await briefing({ projectId, projectName: 'Deal Dispatch' });
-    expect(view.needsYou).toMatch(/You are needed/);
-    expect(view.openRequests).toBe(1);
+    // No grant yet, so both are outstanding and the badge has to say two.
+    const both = await briefing({ projectId, projectName: 'Deal Dispatch' });
+    expect(both.needsYou).toMatch(/You are needed/);
+    expect(both.needsYou).toMatch(/permission to research here/i);
+    expect(both.openRequests).toBe(2);
+
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'Deal Dispatch discovery research',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 2,
+      maxFragments: 12,
+      maxConcurrent: 1,
+      maxProbes: 3,
+    });
+    const onlyRequest = await briefing({ projectId, projectName: 'Deal Dispatch' });
+    expect(onlyRequest.needsYou).toMatch(/holding work up/);
+    expect(onlyRequest.openRequests).toBe(1);
   });
 
   it('names the focus layer in plain words, never the internal one', async () => {

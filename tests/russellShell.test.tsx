@@ -975,6 +975,130 @@ describe('the thin views', () => {
     expect(screen.queryByText(/may not start research/i)).toBeNull();
   });
 
+  it('approves the whole proposal in one action, and sends exactly it', async () => {
+    /*
+     * The correction this proves. The previous version showed a blank purpose
+     * and four empty number boxes: a person was configuring machinery rather
+     * than answering a question. What Approve *submits* is the part a review
+     * of the screen cannot see, so it is asserted from the request body.
+     */
+    baseRoutes({
+      'GET /api/russell/projects/prj_1/authority': { body: NO_GRANT },
+      'POST /api/russell/projects/prj_1/authority': { body: GRANTED },
+    });
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Needs you/ })).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Needs you/ }));
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Approve$/ })).toBeTruthy());
+
+    // Nothing was created by reading the card.
+    expect(calls.filter((c) => c.startsWith('POST /api/russell/projects/prj_1/authority'))).toHaveLength(0);
+    // The detailed controls start hidden.
+    expect(screen.queryByLabelText(/Pieces of research, in total/i)).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Approve$/ }));
+    });
+
+    await waitFor(() =>
+      expect(calls.filter((c) => c.startsWith('POST /api/russell/projects/prj_1/authority'))).toHaveLength(1),
+    );
+    expect(postedBodies[postedBodies.length - 1]).toEqual({
+      name: 'Deal Dispatch discovery research',
+      maxMissions: 2,
+      maxConcurrent: 1,
+      maxFragments: 12,
+      maxProbes: 3,
+      // Exactly the agreed instant. Not rolled forward on a refresh, not
+      // widened to unlimited, and not converted to the end of the day.
+      expiresAt: '2026-10-06T00:00:00.000Z',
+    });
+  });
+
+  it('states the class of work and the money, not only the numbers', async () => {
+    await openNeedsYou(NO_GRANT);
+    await waitFor(() => expect(screen.getByText(/Research only/i)).toBeTruthy());
+    expect(screen.getByText(/No paid API spending/i)).toBeTruthy();
+    // Every ceiling is a quantity *within* a class, so a card showing only the
+    // numbers would be describing how much of something it never named.
+    expect(screen.getByText(/up to 2 investigations/i)).toBeTruthy();
+    expect(screen.getByText(/2026-10-06 00:00:00 UTC/)).toBeTruthy();
+  });
+
+  it('hides the detail until asked, and sends what the edits changed', async () => {
+    baseRoutes({
+      'GET /api/russell/projects/prj_1/authority': { body: NO_GRANT },
+      'POST /api/russell/projects/prj_1/authority': { body: GRANTED },
+    });
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Needs you/ })).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Needs you/ }));
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Change limits/i })).toBeTruthy());
+
+    const toggle = screen.getByRole('button', { name: /Change limits/i });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    expect(screen.getByRole('button', { name: /Hide limits/i }).getAttribute('aria-expanded')).toBe('true');
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Pieces of research, in total/i), {
+        target: { value: '3' },
+      });
+    });
+    // The summary is the same object the button submits, so an edit shows.
+    expect(screen.getByText(/up to 3 investigations/i)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Approve$/ }));
+    });
+    await waitFor(() => expect(postedBodies.length).toBeGreaterThan(0));
+    expect((postedBodies[postedBodies.length - 1] as { maxMissions: number }).maxMissions).toBe(3);
+  });
+
+  it('shows the server’s refusal rather than appearing to have worked', async () => {
+    baseRoutes({
+      'GET /api/russell/projects/prj_1/authority': { body: NO_GRANT },
+      'POST /api/russell/projects/prj_1/authority': {
+        status: 400,
+        body: { error: 'Russell cannot run more at a time than it is allowed to start in total.' },
+      },
+    });
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Needs you/ })).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Needs you/ }));
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Approve$/ })).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Approve$/ }));
+    });
+    // The server's own words, and the card still offering the decision.
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(screen.getByRole('alert').textContent).toMatch(/more at a time than/i);
+    expect(screen.getByRole('button', { name: /^Approve$/ })).toBeTruthy();
+  });
+
+  it('badges the outstanding approval, because it is a decision', async () => {
+    // It counted only human-request rows, so the one permission that has to be
+    // given before anything can run showed no badge at all.
+    baseRoutes({ 'GET /api/russell/projects/prj_1/authority': { body: NO_GRANT } });
+    await mount();
+    await waitFor(() => expect(screen.getByLabelText('1 waiting')).toBeTruthy());
+  });
+
+  it('drops the badge once the permission exists', async () => {
+    baseRoutes({ 'GET /api/russell/projects/prj_1/authority': { body: GRANTED } });
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Needs you/ })).toBeTruthy());
+    expect(screen.queryByLabelText(/waiting/)).toBeNull();
+  });
+
   it('says there is nothing at an address it does not know', async () => {
     baseRoutes();
     window.history.pushState({}, '', '/somewhere-else');
