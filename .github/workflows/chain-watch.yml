@@ -1,0 +1,62 @@
+# Where the acceptance chain has got to. Change nothing.
+#
+# The acceptance reporter runs *inside* the deployed machine, so its verdicts
+# only move when a deployment does. This runs from the checkout against the
+# cloud database, which makes it the way to watch a live run between
+# deployments — and to find the anchor conversation without anybody reading an
+# id off a screen and retyping it.
+#
+# Read-only by construction: `scripts/chain-watch.ts` issues SELECTs and
+# nothing else, and it reports structure rather than content. No message body,
+# no candidate statement, no probe page and no credential reaches this log; a
+# stored reason is reported as its length, because "a reason is stored" is a
+# structural fact and the words are the person's.
+name: Chain watch
+
+on:
+  workflow_dispatch:
+    inputs:
+      conversation:
+        description: 'A conversation id to anchor on. Empty lists the five most recent.'
+        required: false
+        default: ''
+
+# Not in the deploy group: this reads the database rather than the machine, so
+# it is safe beside a deployment and useful during one.
+concurrency:
+  group: chain-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Read the chain
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      HAS_DATABASE_URL: ${{ secrets.BRAIN_DATABASE_URL != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Refuse rather than report nothing
+        if: env.HAS_DATABASE_URL != 'true'
+        run: |
+          echo "::error::BRAIN_DATABASE_URL is not configured for this environment."
+          exit 1
+
+      - name: The chain
+        env:
+          BRAIN_DATABASE_PROVIDER: postgres
+          BRAIN_DATABASE_URL: ${{ secrets.BRAIN_DATABASE_URL }}
+          # Through the environment, never interpolated into a shell command.
+          CHAIN_CONVERSATION: ${{ inputs.conversation }}
+        run: |
+          case "$CHAIN_CONVERSATION" in
+            ''|rcv_[0-9a-f]*) ;;
+            *) echo "::error::A conversation id is rcv_ followed by hex."; exit 1 ;;
+          esac
+          npm ci
+          npx tsx scripts/chain-watch.ts
