@@ -12,6 +12,8 @@
  */
 import { api } from './api.ts';
 import type {
+  CandidatePriority,
+  CandidateState,
   RussellCandidate,
   RussellConversation,
   RussellHumanRequest,
@@ -31,6 +33,8 @@ import type { WhoView } from '../../../server/services/russell/who.ts';
 
 export type {
   Briefing,
+  CandidatePriority,
+  CandidateState,
   ConnectedSystemView,
   GroupedWork,
   IdeaEdge,
@@ -206,6 +210,29 @@ export const RussellApi = {
     candidateId: string,
   ): Promise<{ probes: (RussellProbe & { observations: RussellProbeObservation[] })[] }> =>
     api(`/api/russell/candidates/${encodeURIComponent(candidateId)}/probes`),
+
+  /**
+   * Disagree with Russell about one idea.
+   *
+   * A reason is required by the server and is not optional here either: a
+   * ranking with no stated reason is one nobody can argue with later, which is
+   * the same rule Russell's own judgments are held to.
+   */
+  overrideJudgment: (
+    candidateId: string,
+    body: { priority: CandidatePriority; state: CandidateState; reason: string },
+  ): Promise<{ candidate: RussellCandidate }> =>
+    api(`/api/russell/candidates/${encodeURIComponent(candidateId)}/judgment`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /** Pull an idea back out of the one it was folded into. */
+  splitIdea: (candidateId: string, reason: string): Promise<{ candidate: RussellCandidate }> =>
+    api(`/api/russell/candidates/${encodeURIComponent(candidateId)}/split`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
 
   dealDispatch: (): Promise<ConnectedSystemView> => api('/api/russell/deal-dispatch'),
 };

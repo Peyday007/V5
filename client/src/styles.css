@@ -2189,6 +2189,43 @@ legend {
   cursor: pointer;
 }
 
+.rs-choices button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--bg-2);
+}
+
+.rs-choices button[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ------------------------------ disagreeing with Russell about one idea */
+
+.rs-decision {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+}
+
+.rs-decision-label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.rs-decision input[type='text'] {
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 10px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--fg);
+  font: inherit;
+}
+
 /* ------------------------------------------------------ the conversation */
 
 .rs-conversation {

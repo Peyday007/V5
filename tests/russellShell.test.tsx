@@ -679,6 +679,134 @@ describe('the thin views', () => {
     await waitFor(() => expect(screen.getByText(/no findings yet/i)).toBeTruthy());
   });
 
+  /*
+   * The idea controls.
+   *
+   * These are the surface of two routes that had no caller at all until this
+   * change: a person could read Russell's ranking and do nothing about it, and
+   * an automatic merge had no visible undo. What is asserted is the part a
+   * person notices when it is wrong — that the control is only offered where
+   * the server would accept it, and that it refuses to send an unreasoned
+   * decision rather than being refused after sending one.
+   */
+  function ideaMap(node: Record<string, unknown>): Record<string, unknown> {
+    return {
+      map: {
+        rootId: 'site:prj_1',
+        nodes: [
+          {
+            id: 'site:prj_1',
+            level: 'SITE',
+            parentId: null,
+            title: 'Deal Dispatch',
+            purpose: null,
+            why: null,
+            state: 'ACTIVE',
+            stateLabel: 'Active',
+            progress: { stage: 'OPERATIONAL', headline: 'x', completed: [], missing: [], ratio: null, blockedBy: [] },
+            priority: null,
+            priorityLabel: null,
+            counts: { knowledge: 0, unknowns: 0, work: 0, conversations: 0, children: 1 },
+            links: { projectId: 'prj_1', layerId: null, candidateId: null, conversationId: null },
+            decision: { canOverride: false, canSplit: false, overriddenReason: null, mergedIn: 0 },
+          },
+          node,
+        ],
+        edges: [],
+      },
+      state: { items: [], emptyReason: null, explanation: null },
+    };
+  }
+
+  const ORDINARY = {
+    id: 'idea:rcn_1',
+    level: 'REGULAR',
+    parentId: 'site:prj_1',
+    title: 'Assessment roll availability',
+    purpose: 'establish whether counties publish assessment rolls',
+    why: 'useful strengthening work with nothing blocking it',
+    state: 'QUEUED',
+    stateLabel: 'Queued',
+    progress: { stage: 'FORMING', headline: 'x', completed: [], missing: [], ratio: null, blockedBy: [] },
+    priority: 'WORTH_DOING',
+    priorityLabel: 'Worth doing',
+    counts: { knowledge: 0, unknowns: 0, work: 0, conversations: 0, children: 0 },
+    links: { projectId: 'prj_1', layerId: null, candidateId: 'rcn_1', conversationId: null },
+    decision: { canOverride: true, canSplit: false, overriddenReason: null, mergedIn: 0 },
+  };
+
+  /**
+   * Open Ideas, then walk into the one node under the site.
+   *
+   * The walk matters: the constellation *selects* on a click and *focuses* on
+   * the list button beneath it, and the decision panel follows focus rather
+   * than selection — a person acts on the idea they have opened, not on one
+   * they have glanced at. The list is rendered after the map, so the last
+   * matching button is the one that focuses.
+   */
+  async function openIdeas(node: Record<string, unknown>): Promise<void> {
+    baseRoutes({ 'GET /api/russell/projects/prj_1/ideas': { body: ideaMap(node) } });
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Ideas/ })).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Ideas/ }));
+    });
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Deal Dispatch' })).toBeTruthy());
+  }
+
+  async function walkInto(title: RegExp): Promise<void> {
+    await waitFor(() => expect(screen.getAllByRole('button', { name: title }).length).toBeGreaterThan(0));
+    const buttons = screen.getAllByRole('button', { name: title });
+    await act(async () => {
+      fireEvent.click(buttons[buttons.length - 1]!);
+    });
+  }
+
+  it('offers nothing to overrule on a site, which is not a judgment', async () => {
+    await openIdeas(ORDINARY);
+    // The site is in focus and is not something a person overrules, so the
+    // panel is absent entirely rather than present and inert.
+    expect(screen.queryByText(/A reason is needed/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Set this priority/i })).toBeNull();
+  });
+
+  it('offers the priority control on an ordinary idea, and refuses an empty reason', async () => {
+    await openIdeas(ORDINARY);
+    await walkInto(/Assessment roll availability/);
+
+    await waitFor(() => expect(screen.getByText(/Why do you disagree with Russell/i)).toBeTruthy());
+    const submit = screen.getByRole('button', { name: /Set this priority/i });
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/A reason is needed/i)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Why do you disagree/i), {
+        target: { value: 'valuation is blocked on this' },
+      });
+    });
+    expect((screen.getByRole('button', { name: /Set this priority/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('offers the undo on a folded idea, and never the priority control', async () => {
+    const folded = {
+      ...ORDINARY,
+      id: 'idea:rcn_2',
+      title: 'Assessment rolls in bulk',
+      state: 'MERGED',
+      stateLabel: 'Folded into another idea',
+      links: { ...ORDINARY.links, candidateId: 'rcn_2' },
+      decision: { canOverride: false, canSplit: true, overriddenReason: null, mergedIn: 0 },
+    };
+    await openIdeas(folded);
+    await walkInto(/Assessment rolls in bulk/);
+
+    await waitFor(() => expect(screen.getByText(/Why are these different questions/i)).toBeTruthy());
+    expect(screen.getByRole('button', { name: /These are different questions/i })).toBeTruthy();
+    // A merged idea has no judgment to supersede, and the server refuses one.
+    // Offering the control anyway would be a button that fails.
+    expect(screen.queryByRole('button', { name: /Set this priority/i })).toBeNull();
+  });
+
   it('says there is nothing at an address it does not know', async () => {
     baseRoutes();
     window.history.pushState({}, '', '/somewhere-else');

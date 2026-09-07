@@ -57,6 +57,7 @@ import {
 import { NEEDS_HUMAN_CHOICES } from '../server/services/russell/needsHuman.ts';
 import { finishPass, getOrchestration, startPass, updateOrchestration } from '../server/repos/research.ts';
 import { listProbesForCandidate } from '../server/repos/russellProbes.ts';
+import { ideaMapForProject } from '../server/services/russell/ideas.ts';
 import { clearsFloor } from '../server/services/russell/similarity.ts';
 import express from 'express';
 import type { AddressInfo } from 'node:net';
@@ -856,6 +857,105 @@ describe('a person disagrees with Russell', () => {
       ['SPLIT', 'USER'],
     ]);
     expect(history[1]!.actor_user_id).toBe(userId);
+  });
+});
+
+describe('a merge is visible, or it is not reversible', () => {
+  /*
+   * The half of deduplication that makes it safe.
+   *
+   * A fold nobody can see is a fold nobody can disagree with, so the map has to
+   * show it — and show it as what it is. A `MERGED` candidate used to appear as
+   * a peer node whose state label happened to read "merged", which is a fact
+   * about a row rather than a shape a person can act on.
+   */
+  it('files a folded idea under the one it folded into, and says how many', async () => {
+    await authorize();
+    await personAsks(ASKED, {
+      action: 'CAPTURE_CANDIDATE',
+      answer: 'Noted.',
+      candidate: {
+        title: 'Assessment roll availability',
+        statement: 'establish whether counties publish assessment rolls in bulk or by API',
+      },
+    });
+    const canonical = (
+      await getDb().all<{ id: string }>(`SELECT id FROM russell_candidates WHERE project_id = ?`, [
+        projectId,
+      ])
+    )[0]!.id;
+
+    await personAsks(ASKED_AGAIN, {
+      action: 'CAPTURE_CANDIDATE',
+      answer: 'Same question.',
+      candidate: {
+        title: 'Assessment rolls in bulk',
+        statement: 'is assessment roll data available in bulk or by API',
+        duplicateOf: canonical,
+      },
+    });
+
+    // Read as the person whose thread the ideas came from. The map is scoped
+    // by viewer for the same reason every other read here is.
+    const map = (await ideaMapForProject({ projectId, viewerUserId: userId, includePrivate: true }))!;
+    const parent = map.nodes.find((node) => node.id === `idea:${canonical}`)!;
+    const folded = map.nodes.find(
+      (node) => node.level === 'REGULAR' && node.id !== `idea:${canonical}`,
+    )!;
+
+    expect(folded.parentId).toBe(`idea:${canonical}`);
+    expect(parent.decision.mergedIn).toBe(1);
+    expect(parent.counts.children).toBe(1);
+
+    /*
+     * And the two controls are offered exactly where the routes would accept
+     * them. The override route's guard is `state <> 'MERGED'` and the split's
+     * is the opposite; a screen that offered either one anywhere else would be
+     * a button that fails.
+     */
+    expect(parent.decision.canOverride).toBe(true);
+    expect(parent.decision.canSplit).toBe(false);
+    expect(folded.decision.canOverride).toBe(false);
+    expect(folded.decision.canSplit).toBe(true);
+  });
+
+  it('shows a person’s override on the node they overrode', async () => {
+    await authorize();
+    await personAsks(ASKED, {
+      action: 'CAPTURE_CANDIDATE',
+      answer: 'Noted.',
+      candidate: {
+        title: 'Assessment roll availability',
+        statement: 'establish whether counties publish assessment rolls in bulk or by API',
+      },
+    });
+    const candidateId = (
+      await getDb().all<{ id: string }>(`SELECT id FROM russell_candidates WHERE project_id = ?`, [
+        projectId,
+      ])
+    )[0]!.id;
+    await workerAnswers(
+      await planBinFor(candidateId),
+      PLAN_UNIT_KEY,
+      plan({ cheapToReduce: false, expectedValue: 40 }),
+    );
+    await tick('journey');
+
+    await withRoutes(async (call) => {
+      const result = await call('POST', `/candidates/${candidateId}/judgment`, {
+        priority: 'MUST_DO',
+        state: 'QUEUED',
+        reason: 'valuation is blocked on this',
+      });
+      expect(result.status).toBe(200);
+    });
+
+    const map = (await ideaMapForProject({ projectId, viewerUserId: userId, includePrivate: true }))!;
+    const node = map.nodes.find((entry) => entry.id === `idea:${candidateId}`)!;
+    expect(node.priority).toBe('MUST_DO');
+    // Shown rather than swallowed: "Russell thought otherwise and I overruled
+    // it" is the fact somebody needs a year later.
+    expect(node.decision.overriddenReason).toMatch(/valuation/);
   });
 });
 

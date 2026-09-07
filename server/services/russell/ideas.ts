@@ -101,7 +101,45 @@ export interface IdeaNode {
     candidateId: string | null;
     conversationId: string | null;
   };
+  /**
+   * What a person may do about this node, and what has already been done to it.
+   *
+   * Derived here rather than inferred in the client, for the reason every other
+   * projection in this file gives: two places deciding the same thing is how a
+   * screen ends up offering a control the server then refuses. `canOverride`
+   * and `canSplit` are the *same* conditions the routes enforce — a button that
+   * appears and then fails is worse than one that is absent.
+   *
+   * A control offered here is still not authorization. The route re-decides
+   * against the authenticated principal; this only decides what is worth
+   * showing.
+   */
+  decision: {
+    /** True for an ordinary idea that has not been folded into another. */
+    canOverride: boolean;
+    /** True for an idea that *has* been folded in, and can be pulled back out. */
+    canSplit: boolean;
+    /** Set when a person has already overruled Russell here. */
+    overriddenReason: string | null;
+    /** How many other questions folded into this one. Zero is the usual answer. */
+    mergedIn: number;
+  };
 }
+
+/**
+ * A site and a major idea are not things a person overrules.
+ *
+ * A layer is a declared set fixed when the project was created and a project is
+ * not a candidate, so neither has a judgment to supersede or a merge to undo.
+ * Stated once rather than repeated as an object literal at each level.
+ */
+const NOT_A_DECISION: IdeaNode['decision'] = {
+  canOverride: false,
+  canSplit: false,
+  overriddenReason: null,
+  mergedIn: 0,
+};
+
 
 export interface IdeaMap {
   nodes: IdeaNode[];
@@ -225,17 +263,48 @@ export async function ideaMapForProject(input: {
    * Ordinary ideas first, so the majors can count their own children.
    * ------------------------------------------------------------------ */
   const ideaNodes: IdeaNode[] = [];
+  /*
+   * How many questions folded into each canonical idea.
+   *
+   * Counted before the loop so a canonical can report it whatever order the
+   * rows arrive in. A merge that is invisible on the screen is a merge nobody
+   * can disagree with, which is the half of deduplication that makes it safe:
+   * the fold is only reversible if somebody can see it happened.
+   */
+  const mergedInto = new Map<string, number>();
+  for (const candidate of candidates) {
+    if (candidate.state !== 'MERGED' || !candidate.canonicalCandidateId) continue;
+    mergedInto.set(
+      candidate.canonicalCandidateId,
+      (mergedInto.get(candidate.canonicalCandidateId) ?? 0) + 1,
+    );
+  }
+
   for (const candidate of candidates) {
     const own = missions.filter((mission) => mission.candidateId === candidate.id);
     const layerId = layerOfCandidate(candidate.id, missions);
-    if (layerId) childrenOfLayer.set(layerId, (childrenOfLayer.get(layerId) ?? 0) + 1);
+    const folded = candidate.state === 'MERGED' && candidate.canonicalCandidateId !== null;
+    // A folded idea is filed under the one it folded into, and is not a second
+    // child of the layer. Counting it there would inflate every major idea by
+    // however many times a person happened to ask the same question.
+    if (layerId && !folded) childrenOfLayer.set(layerId, (childrenOfLayer.get(layerId) ?? 0) + 1);
 
     ideaNodes.push({
       id: `idea:${candidate.id}`,
       level: 'REGULAR',
-      // An idea nobody has launched work for hangs off the site, which is where
-      // it honestly is: captured, and not yet filed under anything.
-      parentId: layerId ? `major:${layerId}` : siteId,
+      /*
+       * Three places an idea can hang, in order of how much is known about it.
+       *
+       * Folded into another question, it belongs under that question — shown as
+       * what it is rather than as a peer that happens to say MERGED. With a
+       * mission, under that mission's layer. With neither, off the site, which
+       * is where it honestly is: captured, and not yet filed under anything.
+       */
+      parentId: folded
+        ? `idea:${candidate.canonicalCandidateId!}`
+        : layerId
+          ? `major:${layerId}`
+          : siteId,
       title: candidate.title,
       purpose: candidate.statement,
       why: candidate.reason,
@@ -255,13 +324,21 @@ export async function ideaMapForProject(input: {
         unknowns: candidate.contradicting.length,
         work: own.length,
         conversations: candidate.conversationId ? 1 : 0,
-        children: 0,
+        children: mergedInto.get(candidate.id) ?? 0,
       },
       links: {
         projectId: project.id,
         layerId,
         candidateId: candidate.id,
         conversationId: candidate.conversationId,
+      },
+      decision: {
+        // The route's own guard is `state <> 'MERGED'`. Stated once, here, so
+        // the screen and the server cannot disagree about it.
+        canOverride: !folded,
+        canSplit: folded,
+        overriddenReason: candidate.overrideReason,
+        mergedIn: mergedInto.get(candidate.id) ?? 0,
       },
     });
 
@@ -319,6 +396,7 @@ export async function ideaMapForProject(input: {
       }),
       priority: null,
       priorityLabel: null,
+      decision: NOT_A_DECISION,
       counts: {
         knowledge: layerKnows.filter(
           (entry) => entry.kind === 'CONCLUSION' || entry.kind === 'DECISION',
@@ -404,6 +482,7 @@ export async function ideaMapForProject(input: {
     }),
     priority: null,
     priorityLabel: null,
+    decision: NOT_A_DECISION,
     counts: {
       knowledge: knows.filter(
         (entry) => entry.kind === 'CONCLUSION' || entry.kind === 'DECISION',

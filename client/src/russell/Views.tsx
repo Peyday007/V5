@@ -15,6 +15,7 @@ import { freshnessLabel, listState, readingState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { RussellApi } from '../lib/russellApi.ts';
 import type {
+  CandidatePriority,
   IdeaNode,
   KnowsEntry,
   Progress,
@@ -22,6 +23,24 @@ import type {
   WhoView as WhoData,
   WorkEntry,
 } from '../lib/russellApi.ts';
+
+/**
+ * The priorities a person may choose, and what each one is *for*.
+ *
+ * The vocabulary comes from the server's own enum — the same list
+ * `validateProposal` matches against and the override route re-checks — and the
+ * sentence beside each is here because a ranking whose meaning a person has to
+ * guess is one they will use wrongly. Deliberately not a shortened copy of the
+ * server's `CANDIDATE_PRIORITY_LABELS`: that answers "what is this called", and
+ * this answers "when would I pick it".
+ */
+const PRIORITY_CHOICES: { key: CandidatePriority; label: string; meaning: string }[] = [
+  { key: 'MUST_DO', label: 'Must do', meaning: 'other work is waiting on this' },
+  { key: 'BIG_MOVE', label: 'Big move', meaning: 'it changes what we can do, not just what we know' },
+  { key: 'WORTH_DOING', label: 'Worth doing', meaning: 'useful, and nothing is blocking it' },
+  { key: 'EXPLORE', label: 'Explore first', meaning: 'take a cheap look before committing to it' },
+  { key: 'PARKED', label: 'Park it', meaning: 'not now — the reason says why' },
+];
 
 /**
  * Progress, shown as what it actually is.
@@ -282,6 +301,8 @@ export function IdeasView({
     onFocus?.(nodeId);
   }
 
+  const focused = map && focus ? (map.nodes.find((node) => node.id === focus) ?? null) : null;
+
   return (
     <Panel title="Ideas" state={state} onRetry={query.reload}>
       {/*
@@ -293,6 +314,13 @@ export function IdeasView({
       {map && focus ? (
         <Constellation map={map} focusId={focus} onFocus={select} />
       ) : null}
+      {/*
+        What a person may do about the idea they are looking at.
+        Below the map rather than inside it: the constellation is a projection
+        and stays one, so the thing that changes rows is not tangled with the
+        thing that draws them.
+      */}
+      {focused ? <IdeaDecision node={focused} onChanged={query.reload} /> : null}
       {/*
         No second breadcrumb and no second detail card. The constellation
         carries both, and two navigations describing the same position is the
@@ -313,6 +341,155 @@ export function IdeasView({
         ))}
       </ul>
     </Panel>
+  );
+}
+
+/**
+ * The two things a person can do to one idea, and neither is decoration.
+ *
+ * **Disagree.** Russell ranks every idea and stores the reason; until this
+ * existed, `overrideJudgment` had no caller at all and a person could read
+ * Russell's opinion and do nothing about it. The override supersedes rather
+ * than erases — what Russell thought stays on the row — so the previous
+ * decision is shown here rather than replaced in the interface either.
+ *
+ * **Pull apart.** An idea can now be folded into another one automatically, by
+ * a worker's judgement held to a similarity floor. A judgement that can be
+ * wrong needs a visible way back, or automatic deduplication is a mechanism for
+ * quietly losing somebody's question.
+ *
+ * `canOverride` and `canSplit` come from the server and are the same conditions
+ * the routes enforce. Nothing is inferred here from the state string: a button
+ * that appears and then fails is worse than one that is absent.
+ *
+ * A reason is required for both, and the control says so before it is used
+ * rather than after — the server refuses an empty one, and a refusal a person
+ * could have been warned about is a refusal that should not have happened.
+ */
+export function IdeaDecision({
+  node,
+  onChanged,
+}: {
+  node: IdeaNode;
+  onChanged: () => void;
+}): JSX.Element | null {
+  const [priority, setPriority] = useState<CandidatePriority>(node.priority ?? 'WORTH_DOING');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const candidateId = node.links.candidateId;
+  if (!candidateId || (!node.decision.canOverride && !node.decision.canSplit)) return null;
+
+  async function run(action: () => Promise<unknown>): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      setReason('');
+      // Re-read rather than patch: what a person sees afterwards is what the
+      // server did, so a refusal shows as a refusal instead of appearing to
+      // work. The same rule the Needs You answer follows.
+      onChanged();
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : 'That did not go through.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rs-decision" aria-label={`What you can do about ${node.title}`}>
+      {node.decision.mergedIn > 0 ? (
+        <p className="rs-item-meta">
+          {node.decision.mergedIn === 1
+            ? 'One other question was folded into this one.'
+            : `${node.decision.mergedIn} other questions were folded into this one.`}{' '}
+          They are listed underneath it, and any of them can be pulled back out.
+        </p>
+      ) : null}
+
+      {node.decision.overriddenReason ? (
+        <p className="rs-item-meta">You already overruled Russell here: {node.decision.overriddenReason}</p>
+      ) : null}
+
+      <label className="rs-decision-label" htmlFor="rs-decision-reason">
+        {node.decision.canSplit
+          ? 'Why are these different questions?'
+          : 'Why do you disagree with Russell?'}
+      </label>
+      <input
+        id="rs-decision-reason"
+        type="text"
+        value={reason}
+        maxLength={1_000}
+        placeholder={
+          node.decision.canSplit
+            ? 'they look alike but they are asking different things'
+            : 'valuation is blocked on this, so it is not merely useful'
+        }
+        onChange={(event) => setReason(event.target.value)}
+      />
+
+      {node.decision.canOverride ? (
+        <div className="rs-choices">
+          {PRIORITY_CHOICES.map((choice) => (
+            <button
+              key={choice.key}
+              type="button"
+              aria-pressed={priority === choice.key}
+              title={choice.meaning}
+              onClick={() => setPriority(choice.key)}
+            >
+              {choice.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="rs-choices">
+        {node.decision.canOverride ? (
+          <button
+            type="button"
+            disabled={busy || reason.trim().length === 0}
+            onClick={() => {
+              void run(() =>
+                RussellApi.overrideJudgment(candidateId, {
+                  priority,
+                  // A person moving an idea up is saying to do it, so it goes
+                  // into the queue Russell launches from. Parking it is the one
+                  // case that does not, because a parked idea is not work.
+                  state: priority === 'PARKED' ? 'PARKED' : 'QUEUED',
+                  reason: reason.trim(),
+                }),
+              );
+            }}
+          >
+            {busy ? 'Saving…' : 'Set this priority'}
+          </button>
+        ) : null}
+        {node.decision.canSplit ? (
+          <button
+            type="button"
+            disabled={busy || reason.trim().length === 0}
+            onClick={() => {
+              void run(() => RussellApi.splitIdea(candidateId, reason.trim()));
+            }}
+          >
+            {busy ? 'Separating…' : 'These are different questions'}
+          </button>
+        ) : null}
+      </div>
+
+      {reason.trim().length === 0 ? (
+        <p className="rs-item-meta">A reason is needed — it is what makes the decision reviewable later.</p>
+      ) : null}
+      {error ? (
+        <p className="rs-state rs-state-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </section>
   );
 }
 
