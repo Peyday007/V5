@@ -161,6 +161,43 @@ decides.
 
 ---
 
+## Production, read after mutation 16
+
+`chain-watch`, run `34160122219` at 20:37:48Z — the first time it has been able
+to run at all, since mutation 16 is the deployment that carried it into the
+image.
+
+```
+PROJECT  Deal Dispatch  prj_9d86dfaec863473cb498
+STANDING AUTHORITY  0 grant(s)
+  none — every judged idea will park, correctly, until one exists.
+
+CHAIN FROM  rcv_35d5b0340fc4479fa443          (S12A-ACC-1, intact)
+  rmsg_d10b82a9b724401c8127  USER    COMPLETE  chars=207
+  rmsg_b56979f1d6fd4839a3ff  RUSSELL FAILED
+  rmsg_52239a165ecc44ba9287  RUSSELL COMPLETE  attempt=2
+  rmsg_4752e7f351aa4570a822  RUSSELL COMPLETE  attempt=3
+IDEAS 0 · MISSIONS 0 · NEEDS YOU 0
+
+LOOP  RUNNING  gen=10585  last error none  per tick: launches 1 · events 50
+```
+
+Four things worth stating from it:
+
+- **No grant exists.** Nothing was created on anyone's behalf while this was
+  being built.
+- **ACC-1 is whole** — the original message, the refused first attempt, and both
+  retries, with their attempt numbers. The three-attempt ceiling is spent and is
+  not being reset; ACC-2 is a different question, not a fourth try.
+- **The loop is healthy**, has run within the second, has no recorded error, and
+  is permitted to launch. A loop that is `RUNNING` and allowed to launch nothing
+  reads identically to one with nothing to do, which is why the bounds are
+  printed.
+- **The project id is `prj_9d86dfaec863473cb498`.** An earlier note in this
+  session quoted `prj_b8002f50902e4a6eb2da`, which is the id in a local
+  development database and does not exist in production. Corrected here rather
+  than left to mislead the next read.
+
 ## The fleet, read from production after the deployment
 
 `fleet show`, run `34100003866` at 08:19:49Z. Unchanged, as required:
