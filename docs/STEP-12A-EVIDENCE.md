@@ -4959,3 +4959,70 @@ and returns to "You are not needed." once a grant exists.
 This is a UI repair. Every scoped acceptance condition is still waiting on the
 approval being given and the frozen message being sent —
 `docs/STEP-12A-REMAINING.md` is unchanged in what it says is outstanding.
+
+## 53. Mutation 17 — the scope pin, and the test that had copied it — 2026-09-07
+
+The separately reserved scope-pin authorization, spent. Run `34164941717` from
+`dba3671`: typecheck, tests, build, deploy, hosted verification before a real
+unannounced restart and again after it.
+
+### The application change
+
+```ts
+export const ACCEPTANCE_SCOPE = {
+  scenarioId: 'S12A-ACC-2',
+  conversationId: 'rcv_02d5312e9d41465a9e0f',
+} as const;
+
+export const PREVIOUS_SCOPES = [
+  { scenarioId: 'S12A-ACC-1', conversationId: 'rcv_35d5b0340fc4479fa443', outcome: '…' },
+] as const;
+```
+
+S12A-ACC-1 is moved rather than deleted, per scenario 2 §5.3. Its conversation,
+its refused first attempt and both retries are all still there; the pin decides
+which conversation the reporter derives its gates from, and nothing else.
+
+### One `export`, disclosed rather than smuggled
+
+Re-pinning failed CI on the first attempt, and the failure is worth keeping.
+
+`tests/acceptanceGates.test.ts` reads the scope **from the reporter**, on
+purpose: a test that supplied the scope it is judged against would be
+supplying its own standard. It then additionally hardcoded ACC-1's conversation
+id as the anchor it builds its fixture rows against. The two agreed only
+because the pin happened to be that value. With the pin moved, the fixture built
+rows against a conversation the scope no longer named, `resolveScope` returned
+null, and three gates read `NOT_RUN` — three tests failing to notice the scope
+had moved, which is the opposite of what they exist for.
+
+The anchor now comes from `ACCEPTANCE_SCOPE.conversationId`, so the fixture
+follows the pin wherever it goes and still supplies nothing itself. That
+required `ACCEPTANCE_SCOPE` to be exported, which is the whole of the extra
+change: two pinned constants plus one keyword. Recorded here because "scope-pin
+only" is a bound the owner set, and a change that is defensible is still a
+change that has to be named.
+
+1,756 tests pass.
+
+### Read back from production
+
+`chain-watch` at 21:57:19Z, after the deployment:
+
+```
+STANDING AUTHORITY 1: rgl_30e34d717d9f4b47a6a9 ACTIVE  Deal Dispatch discovery research
+  missions 2 · fragments 12 · concurrent 1 · probes 3
+  owner usr_14439966398243339341  granted 2026-09-07T20:53:22.449Z
+  expires 2026-10-06T00:00:00.000Z
+ANCHOR rcv_02d5312e9d41465a9e0f  turns=4
+IDEAS 1: rcn_85f9689b461c4972a1ba QUEUED WORTH_DOING canonical=— reasonChars=50
+MERGES 0 · PROBES 0
+MISSIONS 1: rms_8e96b5f246464c069451 RUNNING orch=orc_e1afa97f566d4b468373 bin=bin_2922f249b95845ddb193
+AUDIT PASSES 0 · distinct sessions 0 · NEEDS YOU 0
+LOOP RUNNING gen=10744 last error none
+```
+
+The grant is exactly the approved proposal, expiry included. The idea has been
+judged — `WORTH_DOING`, with a stored reason — and a mission, an orchestration
+and a bin exist for it, which is conditions 5, 8 and 9's shape. `MERGES 0` is
+condition 4, and §54 is about why.
