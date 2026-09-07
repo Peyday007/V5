@@ -377,3 +377,23 @@ A mission's follow-on may itself declare a follow-on, and nothing caps the depth
 sensible one, but it is a *budget* bound rather than a structural one, so a
 generous grant permits a long chain nobody explicitly asked for. Worth a
 declared maximum depth, or a rule that a follow-on may not itself declare one.
+
+### The Ideas map is not scoped by candidate visibility — 2026-09-07
+
+`ideaMapForProject` takes `includePrivate`, and the route passes `false`. That
+flag gates **knowledge**; the candidates come from
+`listCandidates({ projectId, limit: 500 })` with no visibility filter, so every
+idea in the project appears on the map whatever thread it came from.
+
+Not a live exposure on this Brain — Deal Dispatch has one member — and not a
+falsifier of `A17_PRIVACY_AUTH`, which compares an idea's visibility to its
+thread's rather than asking who can see the map. But it is the same shape as
+the leak `findByFingerprint` and `openIdeasFor` both take care to avoid, and
+those two comments explain exactly why: a private idea surfaced into a shared
+view is disclosed to whoever can read that view.
+
+The fix is a visibility predicate in the candidate query, mirroring
+`findByFingerprint`. It is **deliberately not** being made mid-acceptance:
+narrowing what the Ideas map returns changes what a live run can observe, and
+a change to a read surface during the run it is being judged by is the one kind
+of change that cannot be told apart from tuning the result.
