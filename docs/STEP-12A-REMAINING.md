@@ -68,7 +68,35 @@ No production grant, deployment, acceptance result or fleet change is implied.
 The objective remains completing the connected 12A journey and its live
 acceptance. This correction does not reset that work or add acceptance gates.
 
-## What the whole thing is now waiting on
+## What the whole thing is now waiting on — current
+
+Two owner actions, both inside Russell, neither of them configuration.
+
+### 1. Answer the Needs You decision: **Stop this work**
+
+`rhr_b63a5478249e4b508803` is open on `rms_8e96b5f246464c069451`. The mission was
+launched from a placeholder specification (§54.2), its packet holds no
+fragments, no claims and no audits, and there is nothing in it to file.
+
+**Choose "Stop this work."** Mutation 18 stops offering "Record what could not
+be settled" on a packet with nothing to record — but this request was written
+before that, so it still carries both choices on its row. Clicking the other one
+is now refused at the transition with the reason, and the request stays open
+rather than being marked answered; nothing is damaged either way, but Stop is
+the answer that finishes it.
+
+Stopping settles the mission's reservation, leaving **one of the two** the
+standing authority allows.
+
+### 2. Send the two frozen messages, in order, in the same conversation
+
+Both are in `docs/STEP-12A-ACCEPTANCE-SCENARIO-2.md` §6, measured against the
+merge floor before being frozen. Wait for Russell to answer the first before
+sending the second, so the capture exists for the second to be judged against.
+
+### The older list, kept
+
+## What the whole thing was waiting on
 
 The two owner actions below remain required. The approval-card correction
 prepared after mutation 15 must ship before asking the owner to perform them:
