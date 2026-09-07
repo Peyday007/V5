@@ -32,31 +32,34 @@ jobs:
     name: Read the chain
     runs-on: ubuntu-latest
     environment: production
-    env:
-      HAS_DATABASE_URL: ${{ secrets.BRAIN_DATABASE_URL != '' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
+      - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Refuse rather than report nothing
-        if: env.HAS_DATABASE_URL != 'true'
-        run: |
-          echo "::error::BRAIN_DATABASE_URL is not configured for this environment."
-          exit 1
-
+      # Inside the machine, like every other production read here.
+      #
+      # The first version of this ran from the checkout against
+      # `BRAIN_DATABASE_URL`, on the assumption that it was a repository secret
+      # because `step12a-inspect.yml` guards on one. It is not — it is a Fly
+      # secret, and that guard has always been skipping. The database is
+      # reachable from the machine and from nowhere else, which is the correct
+      # arrangement and is why this asks the machine.
+      #
+      # `sh scripts/chain-watch.sh` rather than a `node` one-liner: `ssh
+      # console -C` opens in `/`, and `node --import tsx` resolves tsx relative
+      # to the working directory. Same reason `step10.sh` exists.
       - name: The chain
         env:
-          BRAIN_DATABASE_PROVIDER: postgres
-          BRAIN_DATABASE_URL: ${{ secrets.BRAIN_DATABASE_URL }}
-          # Through the environment, never interpolated into a shell command.
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Through the environment, never interpolated into a shell command:
+          # an input pasted into a command line is an injection whatever the
+          # dispatcher intended.
           CHAIN_CONVERSATION: ${{ inputs.conversation }}
         run: |
           case "$CHAIN_CONVERSATION" in
             ''|rcv_[0-9a-f]*) ;;
             *) echo "::error::A conversation id is rcv_ followed by hex."; exit 1 ;;
           esac
-          npm ci
-          npx tsx scripts/chain-watch.ts
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          flyctl ssh console --app "$app" \
+            -C "sh /app/scripts/chain-watch.sh $CHAIN_CONVERSATION"

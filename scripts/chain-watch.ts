@@ -1,11 +1,17 @@
 /**
  * Watch the acceptance chain, from the outside, changing nothing.
  *
- * The acceptance reporter runs *inside* the deployed machine, so its verdicts
- * move only when a deployment does. This runs from a checkout against the cloud
- * database, which makes it the one way to answer "where has the run got to"
- * between deployments — and to find the anchor conversation without anybody
- * having to read an id off a screen and retype it.
+ * The acceptance reporter prints verdicts against a scope pinned in code, so it
+ * answers "has the standard been met" and cannot answer "where has the run got
+ * to". This answers the second question: the same rows, no judgement, at any
+ * moment.
+ *
+ * It runs **inside the machine**, like every other production read here. The
+ * first version ran from a checkout against `BRAIN_DATABASE_URL`, on the
+ * assumption that it was a repository secret because `step12a-inspect.yml`
+ * guards on one — it is not, it is a Fly secret, and that guard has always been
+ * skipping silently. Recorded rather than quietly corrected: a guard that has
+ * never fired is indistinguishable from one that always passes.
  *
  * **Read-only, and deliberately content-blind.** No message body, no candidate
  * statement, no probe page, no credential. A reason is reported as present and
