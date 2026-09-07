@@ -109,7 +109,7 @@ const BLOCKED_BY_A11: Record<string, string> = {
  * which is the truthful state before the acceptance run: nothing is wrong, and
  * nothing has happened.
  */
-const ACCEPTANCE_SCOPE = {
+export const ACCEPTANCE_SCOPE = {
   /**
    * The scenario this chain is judged against.
    *

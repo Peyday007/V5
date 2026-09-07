@@ -26,10 +26,22 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser, grantMembership } from '../server/repos/identity.ts';
-import { gates } from '../scripts/step12a-acceptance.ts';
+import { ACCEPTANCE_SCOPE, gates } from '../scripts/step12a-acceptance.ts';
 
-/** The conversation the reporter's own scope names. Read, never chosen here. */
-const ANCHOR = 'rcv_35d5b0340fc4479fa443';
+/**
+ * The conversation the reporter's own scope names — read from the reporter,
+ * never chosen here.
+ *
+ * It was a literal, copied from the pin. That was wrong in a way only a re-pin
+ * could show: pinning the scope to `S12A-ACC-2` left the fixture building rows
+ * against a conversation the scope no longer named, `resolveScope` returned
+ * null, and every gate read `NOT_RUN` — three tests failing to report that the
+ * scope had moved, which is not what they are for.
+ *
+ * Reading it means these tests follow the pin wherever it goes, and still
+ * supply nothing: the standard is the reporter's, the rows are the fixture's.
+ */
+const ANCHOR = ACCEPTANCE_SCOPE.conversationId;
 
 let projectId = '';
 let userId = '';
