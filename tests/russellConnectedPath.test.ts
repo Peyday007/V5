@@ -19,7 +19,13 @@ import { createUser, grantMembership } from '../server/repos/identity.ts';
 import { addMessage, createConversation, listTurns } from '../server/repos/russellConversations.ts';
 import { applyTurn, beginTurn, retryTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
 import { shouldCapture } from '../server/services/russell/judgment.ts';
-import { applyPlan, judgeCandidate, PLAN_UNIT_KEY, validatePlan } from '../server/services/russell/planning.ts';
+import {
+  applyPlan,
+  judgeCandidate,
+  PLAN_MINIMUMS,
+  PLAN_UNIT_KEY,
+  validatePlan,
+} from '../server/services/russell/planning.ts';
 import { listCandidates } from '../server/repos/russellCandidates.ts';
 import { putBinUnitResult, getBin, assignNextBin, createBin } from '../server/repos/bins.ts';
 import { requestCompletion } from '../server/services/bins/service.ts';
@@ -282,6 +288,110 @@ describe('the path from a captured idea to judged work', () => {
     expect(after.priority).toBe('EXPLORE');
     expect(after.state).toBe('CAPTURED');
     expect(after.reason).toMatch(/cheap to reduce/);
+  });
+
+  it('refuses a plan that is placeholder text rather than a specification', async () => {
+    /*
+     * The production failure of 2026-09-07, and the most expensive one this
+     * run found.
+     *
+     * The judgment pass for S12A-ACC-2 returned a mission specification whose
+     * title, objective, assignment and reason were the word "test". Every
+     * field was a non-empty string within its maximum, so `validatePlan`
+     * accepted it; Brain reserved a mission and twelve fragments against the
+     * owner's standing authority, created an orchestration and a bin titled
+     * `test`, and fired the fleet at it. The worker read the manifest and
+     * released it three times — "This packet's own manifest is corrupted
+     * placeholder content" — the planning item failed, and the packet parked.
+     *
+     * Everything downstream behaved correctly. What was missing was the check
+     * that the thing being spent on is an assignment at all: every field had a
+     * maximum and none had a minimum.
+     *
+     * §12 already holds this rule for a provider — placeholder content "is
+     * refused for staged research outright". It was applied to a provider's
+     * output and not to a worker's plan.
+     */
+    await authorize();
+
+    // The exact shape that reached production.
+    const asShipped = validatePlan({
+      raw: {
+        observations: { cheapToReduce: false, expectedValue: 50, blockedBy: null },
+        mission: {
+          title: 'test',
+          objective: 'test',
+          assignment: 'test',
+          whyNow: 'test',
+          acceptableSources: ['test'],
+          excludedSources: ['test'],
+          evidence: ['test'],
+        },
+      },
+    });
+    expect(asShipped.ok).toBe(false);
+    if (!asShipped.ok) expect(asShipped.reason).toMatch(/placeholder/i);
+
+    // A placeholder anywhere refuses the whole plan, not just the field.
+    for (const field of ['title', 'objective', 'assignment', 'whyNow'] as const) {
+      const one = validatePlan({
+        raw: {
+          observations: { cheapToReduce: false, expectedValue: 50, blockedBy: null },
+          mission: { ...GOOD_PLAN.mission, [field]: 'TBD' },
+        },
+      });
+      expect(one.ok, `a placeholder ${field} was accepted`).toBe(false);
+    }
+
+    // Too short is refused with the number, so a worker can tell by how much.
+    const short = validatePlan({
+      raw: {
+        observations: { cheapToReduce: false, expectedValue: 50, blockedBy: null },
+        mission: { ...GOOD_PLAN.mission, assignment: 'Find out about permits.' },
+      },
+    });
+    expect(short.ok).toBe(false);
+    if (!short.ok) {
+      expect(short.reason).toContain(String(PLAN_MINIMUMS.assignment));
+      expect(short.reason).toContain('assignment');
+    }
+
+    /*
+     * And a real word that merely contains a placeholder is fine. Whole-field
+     * matching, never substring — §8's rule about enums, at a different
+     * boundary. "Latest test results" is a title somebody wrote.
+     */
+    const contains = validatePlan({
+      raw: {
+        observations: { cheapToReduce: false, expectedValue: 50, blockedBy: null },
+        mission: { ...GOOD_PLAN.mission, title: 'Latest test results for permit portals' },
+      },
+    });
+    expect(contains.ok).toBe(true);
+
+    // The good plan still passes, so the floor did not become a wall.
+    expect(validatePlan({ raw: GOOD_PLAN }).ok).toBe(true);
+  });
+
+  it('tells the worker about the floor rather than enforcing it silently', async () => {
+    /*
+     * The rule this file has now needed four times: a rule enforced against
+     * somebody who was never told it is a trap rather than a rule. The
+     * manifest stated every maximum and no minimum.
+     */
+    await authorize();
+    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
+    const outcome = await judgeCandidate(candidateId);
+    const manifest = JSON.stringify((await getBin(outcome.binId!))!.manifest);
+
+    for (const [field, floor] of Object.entries(PLAN_MINIMUMS)) {
+      expect(manifest, `the manifest never states the ${field} minimum`).toContain(
+        `mission.${field} is from ${floor} to`,
+      );
+    }
+    expect(manifest).toMatch(/placeholder/i);
+    // And what to do instead of filling the fields in with nothing.
+    expect(manifest).toContain('observations.blockedBy');
   });
 
   it('does not let a worker decide whether the archive already answers it', async () => {

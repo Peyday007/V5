@@ -55,7 +55,13 @@ import {
   listOpenRequests,
 } from '../server/repos/russellMissions.ts';
 import { NEEDS_HUMAN_CHOICES } from '../server/services/russell/needsHuman.ts';
-import { finishPass, getOrchestration, startPass, updateOrchestration } from '../server/repos/research.ts';
+import {
+  createFragments,
+  finishPass,
+  getOrchestration,
+  startPass,
+  updateOrchestration,
+} from '../server/repos/research.ts';
 import { listProbesForCandidate } from '../server/repos/russellProbes.ts';
 import { ideaMapForProject } from '../server/services/russell/ideas.ts';
 import { clearsFloor } from '../server/services/russell/similarity.ts';
@@ -602,6 +608,36 @@ describe('one question, walked the whole way', () => {
      * parking, the request, the person's answer reaching the packet — is the
      * loop.
      */
+    /*
+     * With the research the stop presupposes.
+     *
+     * This step used to park a packet holding no fragments at all and then
+     * answer RECORD_GAPS on it — recording unresolved questions about nothing.
+     * Production produced that shape for real on 2026-09-07 and the mismatch
+     * was invisible here, so the fixture now has to build the state its own
+     * failure reason describes.
+     */
+    await createFragments([
+      {
+        orchestrationId: mission.orchestrationId!,
+        projectId,
+        layerId: (await fixture.layerByName('Discovery Logic')).id,
+        fragmentIndex: 0,
+        fragmentKey: 'permit-coverage',
+        question: 'Which counties publish permit data, and on what terms?',
+        geography: 'Michigan',
+        requiredEvidence: [
+          { id: 'operative_definition', description: 'the county portal', necessity: 'REQUIRED' },
+        ],
+        acceptableSourceTypes: ['county government portals'],
+        excludedSourceTypes: ['vendor marketing'],
+        completionCriteria: ['a named portal per county'],
+        minIndependentSources: 1,
+        maxRepairs: 2,
+        dependsOn: [],
+        attempt: 1,
+      },
+    ] as unknown as Parameters<typeof createFragments>[0]);
     await updateOrchestration(mission.orchestrationId!, {
       status: 'NEEDS_HUMAN',
       failureReason:

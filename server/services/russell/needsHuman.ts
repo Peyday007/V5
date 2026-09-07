@@ -27,7 +27,7 @@
  * because an escalation whose answer does nothing is the same defect one level
  * up, and it is the one that produced this module.
  */
-import { getOrchestration } from '../../repos/research.ts';
+import { currentFragments, getOrchestration } from '../../repos/research.ts';
 import { askHuman, getMission, transitionMission } from '../../repos/russellMissions.ts';
 import { getUser } from '../../repos/identity.ts';
 import { getDb } from '../../db/database.ts';
@@ -119,6 +119,30 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       orchestration.failureReason?.trim() ||
       'The packet stopped at a decision only a person can make.';
 
+    /*
+     * Which stop this is, read from the packet rather than assumed.
+     *
+     * The sentences below used to be constants: "The evidence bar was not met
+     * and the repair ladder is spent." That is true of the stop this module
+     * was written for and false of the one that actually happened first. On
+     * 2026-09-07 `orc_e1afa97f566d4b468373` parked with **zero fragments and
+     * zero claims** — its planning item finished without recording anything —
+     * and a person opening Needs You would have read `waitingOn` saying the
+     * plan never happened, directly above an explanation saying the evidence
+     * bar was not met, above an offer to record gaps that do not exist.
+     *
+     * That is this module's own defect one level up. A park whose explanation
+     * contradicts its reason teaches a person to stop reading the explanation,
+     * and a choice that cannot act on this packet is a choice nothing
+     * implements — for this packet, which is the only one the person is
+     * looking at.
+     *
+     * Derived from rows, never from the packet's prose: `failureReason` is
+     * still reported verbatim as `waitingOn`, and what is decided here is only
+     * *which* answers can do anything.
+     */
+    const hasEvidence = (await currentFragments(orchestration.id)).length > 0;
+
     const moved = await transitionMission({
       missionId: mission.id,
       from: mission.state,
@@ -135,15 +159,30 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       missionId: mission.id,
       candidateId: mission.candidateId,
       conversationId: mission.conversationId,
-      authorityNeeded:
-        'Deciding whether this project accepts a report with unresolved questions in it, ' +
-        'rather than an answer. Brain may not make that call for you.',
-      whyNotRussell:
-        'The evidence bar was not met and the repair ladder is spent. Lowering the bar or ' +
-        'declaring the remaining questions out of scope is a decision about what the ' +
-        'project is willing to rely on.',
+      authorityNeeded: hasEvidence
+        ? 'Deciding whether this project accepts a report with unresolved questions in it, ' +
+          'rather than an answer. Brain may not make that call for you.'
+        : 'Deciding what happens to a mission that never produced any research. Brain will ' +
+          'not quietly abandon work you authorized, and it will not re-run something that ' +
+          'failed before it started.',
+      whyNotRussell: hasEvidence
+        ? 'The evidence bar was not met and the repair ladder is spent. Lowering the bar or ' +
+          'declaring the remaining questions out of scope is a decision about what the ' +
+          'project is willing to rely on.'
+        : 'This packet holds no fragments and no claims, so there is nothing to file and ' +
+          'nothing to lower a bar for. Whether the question is still worth asking is yours.',
       recommendation: null,
-      choices: Object.values(NEEDS_HUMAN_CHOICES),
+      /*
+       * Only the answers that can act on this packet.
+       *
+       * `RECORD_GAPS` files the report with its unresolved questions named. A
+       * packet with no fragments has no report and no questions, so offering
+       * it would be offering a button that does nothing — the failure this
+       * module exists to fix, wearing the module's own clothes.
+       */
+      choices: hasEvidence
+        ? Object.values(NEEDS_HUMAN_CHOICES)
+        : [NEEDS_HUMAN_CHOICES.STOP],
         // The packet is stopped and everything behind it is waiting, which is
       // what BLOCKING means here. Not URGENT: nothing is degrading, and an
       // urgency that is always the highest one stops sorting anything.
@@ -245,6 +284,31 @@ async function recordGaps(
       settled: false,
     };
   }
+  /*
+   * There has to be something to record.
+   *
+   * The choice set above no longer offers `RECORD_GAPS` to a packet with no
+   * fragments — but a request opened before that was true still carries both
+   * choices on its row, and the offer is what a person sees. So the guard is
+   * here too, at the transition rather than only at the offer: authorizing
+   * unresolved gaps on a packet that holds no research would record a person's
+   * name against a decision about nothing, and then advance a packet with
+   * nothing to advance.
+   *
+   * Left OPEN rather than settled, and the reason is said plainly, so the
+   * decision stays visible instead of being marked answered and dropped.
+   */
+  if ((await currentFragments(mission.orchestrationId)).length === 0) {
+    return {
+      ok: false,
+      reason:
+        'this packet holds no fragments, so there are no unresolved questions to record — ' +
+        'the honest answers here are to stop it or to ask again',
+      missionId: mission.id,
+      settled: false,
+    };
+  }
+
   /*
    * The authorization is recorded against the person who gave it, by id and
    * address, because "a script authorized it" answers nothing a year later.

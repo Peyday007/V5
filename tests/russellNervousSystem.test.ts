@@ -72,7 +72,7 @@ import {
   listOpenRequests,
   transitionMission,
 } from '../server/repos/russellMissions.ts';
-import { getOrchestration, updateOrchestration } from '../server/repos/research.ts';
+import { createFragments, getOrchestration, updateOrchestration } from '../server/repos/research.ts';
 import { NEEDS_HUMAN_CHOICES } from '../server/services/russell/needsHuman.ts';
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
 import { listTurns, createConversation, getConversation } from '../server/repos/russellConversations.ts';
@@ -736,6 +736,7 @@ describe('the loop keeps going without anybody watching', () => {
      * writes, and the loop derives the rest. The only thing set by hand here is
      * the packet stopping — which is the fact a person is being asked about.
      */
+    await withResearch(mission.orchestrationId!, layerId, projectId);
     await updateOrchestration(mission.orchestrationId!, {
       status: 'NEEDS_HUMAN',
       failureReason: 'The evidence bar was not met and the repair ladder is spent.',
@@ -788,6 +789,116 @@ describe('the loop keeps going without anybody watching', () => {
     // And a second tick does not resume it again.
     const second = await tick('instance-a');
     expect(second.resumed).not.toContain(request.id);
+  });
+
+  it('does not offer to record gaps on a packet that holds none', async () => {
+    /*
+     * The production shape, on 2026-09-07.
+     *
+     * `orc_e1afa97f566d4b468373` parked with zero fragments and zero claims:
+     * its planning item finished without recording anything, so there was no
+     * plan, no research and no unresolved question. A person opening Needs You
+     * was shown "The evidence bar was not met and the repair ladder is spent"
+     * — neither of which had happened — above an offer to record gaps that did
+     * not exist.
+     *
+     * Both halves are asserted here: the explanation follows the packet, and
+     * the only answer offered is one that can act on it.
+     */
+    const conversation = await ownedConversation('Nothing to record');
+    const mission = await parkedMission(conversation.id);
+
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason:
+        'A planning work item finished without recording anything. The packet cannot ' +
+        'continue on its own.',
+    });
+
+    const parked = await tick('instance-a');
+    expect(parked.needsHuman.map((entry) => entry.missionId)).toContain(mission.id);
+
+    const request = (await listOpenRequests(projectId)).find(
+      (entry) => entry.missionId === mission.id,
+    )!;
+    expect(request).toBeDefined();
+
+    // Only the answer that can do something.
+    expect(request.choices.map((choice) => choice.key)).toEqual([NEEDS_HUMAN_CHOICES.STOP.key]);
+    expect(request.choices.map((choice) => choice.key)).not.toContain(
+      NEEDS_HUMAN_CHOICES.RECORD_GAPS.key,
+    );
+    // And an explanation that matches the stop rather than asserting a
+    // different one.
+    expect(request.whyNotRussell).not.toMatch(/repair ladder/i);
+    expect(request.whyNotRussell).toMatch(/no fragments/i);
+    // The packet's own reason is still carried verbatim.
+    expect(request.missionId).toBe(mission.id);
+
+    // Stopping is a real answering transition on the same mission.
+    await answerHumanRequest({
+      requestId: request.id,
+      actorUserId: userId,
+      choice: NEEDS_HUMAN_CHOICES.STOP.key,
+    });
+    const after = await tick('instance-a');
+    expect(after.resumed).toContain(request.id);
+    const same = (await getMission(mission.id))!;
+    expect(same.id).toBe(mission.id);
+    expect(same.state).toBe('CANCELLED');
+    expect(await listMissions({ projectId })).toHaveLength(1);
+  });
+
+  it('refuses to record gaps on an empty packet even when the request offers it', async () => {
+    /*
+     * The guard at the transition, not only at the offer.
+     *
+     * A request opened before the offer was filtered still carries both
+     * choices on its row — the production one does — and the offer is what a
+     * person sees. Authorizing unresolved gaps on a packet holding no research
+     * would put somebody's name against a decision about nothing and then
+     * advance a packet with nothing to advance.
+     *
+     * The request stays OPEN rather than being marked resumed, because
+     * pretending to have acted on a decision nothing carried out is the exact
+     * failure this module exists to fix.
+     */
+    const conversation = await ownedConversation('Offered anyway');
+    const mission = await parkedMission(conversation.id);
+    await withResearch(mission.orchestrationId!, layerId, projectId);
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'The evidence bar was not met and the repair ladder is spent.',
+    });
+    await tick('instance-a');
+    const request = (await listOpenRequests(projectId)).find(
+      (entry) => entry.missionId === mission.id,
+    )!;
+    // Both choices, because the packet had research when it parked.
+    expect(request.choices.map((choice) => choice.key).sort()).toEqual(
+      Object.keys(NEEDS_HUMAN_CHOICES).sort(),
+    );
+
+    // Now the research is gone — the shape a stale request describes.
+    await getDb().run(`DELETE FROM research_fragments WHERE orchestration_id = ?`, [
+      mission.orchestrationId!,
+    ]);
+
+    await answerHumanRequest({
+      requestId: request.id,
+      actorUserId: userId,
+      choice: NEEDS_HUMAN_CHOICES.RECORD_GAPS.key,
+    });
+    const after = await tick('instance-a');
+    expect(after.resumed).not.toContain(request.id);
+
+    // Nothing was authorized in anybody's name.
+    const orchestration = await getOrchestration(mission.orchestrationId!);
+    expect(orchestration!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
+    expect(orchestration!.unresolvedGapAuthorizedBy).toBeNull();
+    // And the decision is still visible rather than marked answered and dropped.
+    expect((await getHumanRequest(request.id))!.state).not.toBe('RESUMED');
+    expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
   });
 
   it('leaves an answer it cannot carry out visible, rather than marking it resumed', async () => {
@@ -1408,6 +1519,87 @@ async function ownedConversation(title = 'A thread') {
 /** A thread with nothing to ground it, so routing has to decide. */
 async function looseConversation(title = 'A loose thread') {
   return createConversation({ ownerUserId: userId, title, visibility: 'PRIVATE' });
+}
+
+/**
+ * The research a "the evidence bar was not met" stop presupposes.
+ *
+ * Both park tests used to set a packet to NEEDS_HUMAN with **no fragments at
+ * all** and then answer RECORD_GAPS on it. That passed, and it should not
+ * have: recording unresolved questions on a packet holding no research is
+ * recording nothing, and production produced exactly that shape on
+ * 2026-09-07. So a stop that claims the ladder is spent now has to have a
+ * ladder — which is what this puts there.
+ */
+/**
+ * A launched mission, ready to be parked by the loop.
+ *
+ * The whole of it comes from production paths — a goal, a capture, a launch —
+ * so the only thing a park test sets by hand is the packet stopping, which is
+ * the fact a person is being asked about. Lifted out when a third and fourth
+ * park test needed the same twenty lines.
+ */
+async function parkedMission(conversationId: string, name = 'acceptance') {
+  await createGoal({
+    projectId,
+    ownerUserId: userId,
+    createdByUserId: userId,
+    name,
+    allowedWork: ['RESEARCH'],
+    maxMissions: 1,
+    maxFragments: 1,
+    maxConcurrent: 1,
+    maxProbes: 1,
+  });
+  const captured = await capture({
+    title: 'County permit data',
+    statement: 'establish which Michigan counties publish permit data in a usable form',
+    projectId,
+    conversationId,
+    visibility: 'PRIVATE',
+  });
+  const launched = await launch({
+    projectId,
+    layerId,
+    candidateId: captured.candidate!.id,
+    conversationId,
+    visibility: 'PRIVATE',
+    title: 'County permit data availability',
+    assignment: 'Which Michigan counties publish building permit data, and on what terms?',
+    objective: 'Settle the coverage position.',
+    whyNow: 'The layer names coverage as open.',
+    acceptableSources: ['county government portals'],
+    excludedSources: [],
+    evidence: ['a named portal per county'],
+    startedBy: { kind: 'PERSON', id: userId },
+    envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+    authorizedBy: userId,
+  });
+  return launched.mission!;
+}
+
+async function withResearch(orchestrationId: string, layerIdFor: string, projectIdFor: string) {
+  await createFragments([
+    {
+      orchestrationId,
+      projectId: projectIdFor,
+      layerId: layerIdFor,
+      fragmentIndex: 0,
+      fragmentKey: 'permit-coverage',
+      question: 'Which counties publish permit data?',
+      geography: 'Michigan',
+      requiredEvidence: [
+        { id: 'operative_definition', description: 'the county portal', necessity: 'REQUIRED' },
+      ],
+      acceptableSourceTypes: ['county government portals'],
+      excludedSourceTypes: ['vendor marketing'],
+      completionCriteria: ['a named portal per county'],
+      minIndependentSources: 1,
+      maxRepairs: 2,
+      dependsOn: [],
+      attempt: 1,
+    },
+  ] as unknown as Parameters<typeof createFragments>[0]);
 }
 
 describe('a turn goes out to the fleet and comes back as a decision', () => {

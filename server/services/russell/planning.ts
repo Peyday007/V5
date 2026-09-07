@@ -85,6 +85,82 @@ export const PLAN_LIMITS = {
   listItems: 12,
 } as const;
 
+/**
+ * The other end of those bounds, and the more important one.
+ *
+ * Every field above had a maximum and no minimum, so a mission specification of
+ * `{title: 'test', objective: 'test', assignment: 'test', whyNow: 'test'}`
+ * passed validation completely. On 2026-09-07 one did: the judgment pass for
+ * S12A-ACC-2 produced exactly that, Brain accepted it, reserved a mission and
+ * twelve fragments against the owner's standing authority, created an
+ * orchestration and a bin, and fired the fleet. The next worker read the
+ * manifest and released it three times — "This packet's own manifest is
+ * corrupted placeholder content", then "Same corrupted orchestration as
+ * before", then "Third release of the same corrupted orchestration" — the
+ * planning item failed, and the packet parked for a person.
+ *
+ * Every part of that behaved correctly except the one that let it start. The
+ * worker was right, `requestCompletion` was right to refuse to file, and the
+ * park was right to happen. What was missing was the check that a thing being
+ * spent on is an assignment at all.
+ *
+ * §12 already holds this rule for the other producer of prose: a provider
+ * returning placeholder content "declares `placeholder: true` and is refused
+ * for staged research outright". Brain applied it to a provider's output and
+ * not to a worker's plan.
+ *
+ * **This is a floor, not a judgement of quality.** It asks whether there is an
+ * assignment here, exactly as `shouldCapture` asks whether there is an idea
+ * here, and it refuses rather than rewriting. Deciding whether a well-formed
+ * assignment is a *good* one is model prose judging model prose, and nothing
+ * here does that.
+ */
+export const PLAN_MINIMUMS = {
+  title: 12,
+  objective: 40,
+  assignment: 80,
+  whyNow: 30,
+} as const;
+
+/**
+ * Whole fields that are placeholders rather than content.
+ *
+ * Matched against the entire trimmed, lowercased value — never as a substring.
+ * §8's rule about enums is the same rule: "latest test results" is a real
+ * title that contains "test", and a substring check would refuse it. A field
+ * that *is* the word is a field nobody wrote.
+ *
+ * It is a short list on purpose. It cannot catch a determined placeholder and
+ * is not the control that matters — `PLAN_MINIMUMS` is. It catches the exact
+ * shape that reached production, which is worth refusing by name.
+ */
+const PLACEHOLDER_FIELDS = new Set([
+  'test',
+  'testing',
+  'test test',
+  'todo',
+  'tbd',
+  'n/a',
+  'na',
+  'none',
+  'placeholder',
+  'example',
+  'sample',
+  'string',
+  'foo',
+  'bar',
+  'lorem ipsum',
+  'asdf',
+  'xxx',
+  '...',
+  '-',
+]);
+
+/** Is this field a placeholder rather than something somebody meant? */
+export function isPlaceholder(value: string): boolean {
+  return PLACEHOLDER_FIELDS.has(value.trim().toLowerCase());
+}
+
 /** What a worker may observe about an idea. Brain decides what follows from it. */
 export interface PlanObservations {
   /** Could a bounded look settle the uncertainty more cheaply than a packet? */
@@ -233,6 +309,40 @@ export function validatePlan(input: { raw: unknown }): PlanValidation {
   if (!objective) return { ok: false, reason: 'the mission needs an objective within its length' };
   if (!assignment) return { ok: false, reason: 'the mission needs an assignment within its length' };
   if (!whyNow) return { ok: false, reason: 'the mission needs a reason it is worth doing now' };
+
+  /*
+   * And the floor, which is the half that was missing. See PLAN_MINIMUMS.
+   *
+   * Refused as a whole plan rather than field by field, for the reason every
+   * other validator here refuses whole: a partly-accepted specification is one
+   * whose author believes they declared something they did not.
+   *
+   * The refusal names the field and the number, because a worker told only
+   * "too short" cannot tell whether it missed by ten characters or by a
+   * hundred — and a rule enforced against somebody who was never told it is a
+   * trap, which is the sentence this file has now needed four times.
+   */
+  const floors: [string, string, number][] = [
+    ['title', title, PLAN_MINIMUMS.title],
+    ['objective', objective, PLAN_MINIMUMS.objective],
+    ['assignment', assignment, PLAN_MINIMUMS.assignment],
+    ['whyNow', whyNow, PLAN_MINIMUMS.whyNow],
+  ];
+  for (const [name, value, floor] of floors) {
+    if (isPlaceholder(value)) {
+      return {
+        ok: false,
+        reason: `the mission's ${name} is placeholder text rather than a specification`,
+      };
+    }
+    if (value.length < floor) {
+      return {
+        ok: false,
+        reason: `the mission's ${name} is ${value.length} characters; a packet is not ` +
+          `researched from fewer than ${floor}`,
+      };
+    }
+  }
 
   const acceptableSources = boundedList(
     mission['acceptableSources'],
@@ -625,10 +735,18 @@ function planManifest(
           ]),
       'observations.expectedValue is a whole-ish number from 0 to 100 — how much would settling this move the project goal?',
       'observations.blockedBy is text naming what must happen first, or null',
-      `mission.title is at most ${PLAN_LIMITS.title} characters`,
-      `mission.objective is at most ${PLAN_LIMITS.objective} characters`,
-      `mission.assignment is at most ${PLAN_LIMITS.assignment} characters and says what to research`,
-      `mission.whyNow is at most ${PLAN_LIMITS.whyNow} characters`,
+      `mission.title is from ${PLAN_MINIMUMS.title} to ${PLAN_LIMITS.title} characters`,
+      `mission.objective is from ${PLAN_MINIMUMS.objective} to ${PLAN_LIMITS.objective} characters`,
+      `mission.assignment is from ${PLAN_MINIMUMS.assignment} to ${PLAN_LIMITS.assignment} characters and says what to research`,
+      `mission.whyNow is from ${PLAN_MINIMUMS.whyNow} to ${PLAN_LIMITS.whyNow} characters`,
+      /*
+       * Stated because it was not, and a real packet was created from the word
+       * "test" four times over. See PLAN_MINIMUMS.
+       */
+      'these are real work that gets spent on: a placeholder — "test", "TBD", ' +
+        '"placeholder" — refuses the whole plan, and so does a field too short to ' +
+        'be the thing it names. If you cannot specify the mission, say so in ' +
+        'observations.blockedBy instead of filling the fields in',
       `mission.acceptableSources, mission.excludedSources and mission.evidence are non-empty lists of at most ${PLAN_LIMITS.listItems} strings`,
       /*
        * Offered, never required.
