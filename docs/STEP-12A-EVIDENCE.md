@@ -4736,3 +4736,113 @@ fold this in rather than spend a second one.
 | `npm run typecheck` | clean |
 | SQLite | **1,721 passed**, 25 skipped, 0 failed (72 files) |
 | Inverted check | 2 of 8 gate tests fail against the old gates, 8/8 against the new |
+
+---
+
+## 51. The authority decision belongs in Russell — 2026-09-07
+
+A correction to the 12A experience, made because the owner named it: putting
+the standing-authority grant on the operator console and then requiring them to
+go there contradicted the instruction that 12A retires that console from the
+normal journey.
+
+### What I got wrong, and why it looked right
+
+§22 says the console holds the enqueue button, "because a machine that could
+create its own work could also create work nobody asked for." I built mutation
+13's grant form onto the console on the strength of that sentence.
+
+The sentence is about **machines**. A person deciding what Russell may spend on
+their own project is not a machine creating its own work — they are the
+authority the whole mechanism exists to defer to. Reading the rule as applying
+to them sent the one decision Russell most obviously needs from a person out of
+Russell and into the surface §24 had deliberately taken off the normal route.
+
+It is the same shape of mistake as §49's five transitions: a control that
+exists, works, is tested, and is somewhere the person it is for does not go.
+
+### Where it is now
+
+`POST /api/russell/projects/:projectId/authority`, and the panel is in **Needs
+You** — which is exactly what an ungranted project is: one thing Russell cannot
+decide for itself and cannot proceed without. No new route, no new nav item, no
+new section.
+
+The screen shows the grant as sentences the server composed:
+
+```
+This lets Russell
+  Start at most 2 pieces of research on this project
+  Run at most 1 at a time
+  Break them into at most 12 bounded questions
+  Take at most 3 cheap looks before committing to one
+  Do all of that until you withdraw this
+
+It will never
+  Spend money, or turn on paid usage
+  Contact anybody, or publish anything outside this Brain
+  Widen its own access, or issue itself a credential
+  Do work outside what this grant names
+```
+
+with what has been spent against each ceiling, read from the same
+`russell_budget_reservations` rows `reserve` counts — so the panel cannot report
+a different number than the one the ceiling is enforced against.
+
+### The gate is stronger than the one it replaced, not weaker
+
+| | operator console | Russell |
+| --- | --- | --- |
+| Who may reach it | `administrator()` + `originIsSameSite()` | `requirePerson()` + `decideProjectAccess` at the method's level |
+| A machine | refused by not having a session | **refused by principal type** — no membership configuration turns a worker into a person |
+| Who is recorded as granting | authenticated person, never a field | unchanged |
+| Which ceilings apply | `checkAuthority` / `reserve` | unchanged |
+
+The middle row is the one that matters. §22's actual concern — a machine
+granting itself authority — is now refused by the check that exists specifically
+to refuse machines, rather than incidentally by their not having a browser
+session.
+
+### Two defects the tests found rather than the review
+
+- **The read route omitted `requirePerson`.** The writes had it, the GET did
+  not, and a worker holding `project:read` could fetch a view that names the
+  granting person by display name and enumerates what the project will spend.
+  Not a considered asymmetry — an omission that read as one.
+- **The client was importing a server *value*.** Re-exporting
+  `AUTHORITY_LIMITS` through the API module dragged `getDb` and the whole
+  environment into the browser bundle, and 29 shell tests died on
+  `The URL must be of scheme file`. The limits now travel down *with* the view,
+  which is better than the fix it forced: the contract a person is shown and the
+  contract the validator enforces are one object, and nothing from the server is
+  bundled.
+
+### What stayed on the console, and why
+
+The **reading** and the **revoke**. Both are worth having when the client bundle
+will not load or a grant has to be stopped in a hurry, which is the case §22
+gave for that console existing at all. Creating one is gone from it entirely —
+a second way to make a grant is a second place for the limits to be set
+differently.
+
+### Verification
+
+`tests/russellAuthoritySurface.test.ts` — 15 tests: the grant recorded against
+the principal rather than a body field naming somebody else; the sentences; the
+project-history event; every limit refused rather than defaulted (missing,
+fractional, negative, over-large, wrong type); more-at-once-than-in-total
+refused as incoherent; an expiry in the past refused; a live grant not silently
+replaced; a non-member and a missing project refused **identically, body
+included**; a machine refused by type with `project:write`; the withdrawal
+keeping its reason; a grant from another project refused as absent; expiry
+derived from the clock rather than swept; and the ceilings still enforced
+through `reserve` — two permitted, a third refused — after a grant made this
+way.
+
+`tests/russellHttp.test.ts` gained three against the booted server, including
+that the console no longer serves the form.
+
+| | |
+| --- | --- |
+| `npm run typecheck` | clean |
+| SQLite | **1,745 passed**, 25 skipped, 0 failed (73 files) |

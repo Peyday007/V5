@@ -687,6 +687,261 @@ export function FleetView(): JSX.Element {
   );
 }
 
+/**
+ * What Russell may do on its own, and the decision that sets it.
+ *
+ * In "Needs you" because that is what this is: the one thing Russell cannot
+ * decide for itself and cannot proceed without. It lived on the operator
+ * console until now, which put the project owner's own decision behind an
+ * administration surface — and that surface was deliberately taken off the
+ * normal route in 12A. The correction is here rather than there.
+ *
+ * Three things it will not do:
+ *
+ * - **Invent a number.** The suggested limits come from the server, which is
+ *   also where they are enforced, so the form cannot propose something the
+ *   validator will refuse.
+ * - **Describe the grant in its own words.** Every sentence under "This lets
+ *   Russell" and "It will never" is composed on the server from the row. A
+ *   screen that paraphrased a permission would eventually paraphrase it wrongly.
+ * - **Pretend.** No optimistic update: the panel re-reads, so what a person
+ *   sees afterwards is what was stored.
+ */
+export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX.Element | null {
+  const query = useAsync(
+    () => (projectId ? RussellApi.authority(projectId) : Promise.resolve(null)),
+    [projectId],
+  );
+  const [name, setName] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [limits, setLimits] = useState<Record<string, number> | null>(null);
+  const [reason, setReason] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const view = query.data ?? null;
+  if (!projectId) return null;
+
+  // The limits come down with the view, so the form cannot offer a bound the
+  // validator would refuse, and nothing from the server is bundled.
+  const declared = view?.limits ?? [];
+  const current = limits ?? ((view?.suggested ?? {}) as unknown as Record<string, number>);
+
+  async function run(action: () => Promise<unknown>): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      setReason('');
+      setWithdrawing(false);
+      query.reload();
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : 'That did not go through.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (query.loading) {
+    return (
+      <section className="rs-authority">
+        <p className="rs-state rs-state-loading">Reading what Russell is allowed to do…</p>
+      </section>
+    );
+  }
+  if (query.error || !view) {
+    return (
+      <section className="rs-authority">
+        <p className="rs-state rs-state-error" role="alert">
+          What Russell is allowed to do here could not be read.{' '}
+          <button type="button" onClick={query.reload}>
+            Try again
+          </button>
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rs-authority" aria-labelledby="rs-authority-heading">
+      <h3 id="rs-authority-heading">What Russell may do on its own</h3>
+      {/* The server's sentence, whether or not a grant exists. */}
+      <p className="rs-authority-headline">{view.headline}</p>
+
+      {view.grant ? (
+        <>
+          <p className="rs-item-meta">
+            {view.grant.name} · set by {view.grant.grantedBy} on{' '}
+            {view.grant.grantedAt.slice(0, 10)}
+            {view.grant.expiresAt ? ` · runs until ${view.grant.expiresAt.slice(0, 10)}` : ''}
+          </p>
+
+          <h4>This lets Russell</h4>
+          <ul className="rs-authority-list">
+            {view.grant.permits.map((sentence) => (
+              <li key={sentence}>{sentence}</li>
+            ))}
+          </ul>
+
+          <h4>It will never</h4>
+          <ul className="rs-authority-list rs-authority-never">
+            {view.grant.neverPermits.map((sentence) => (
+              <li key={sentence}>{sentence}</li>
+            ))}
+          </ul>
+
+          <h4>Used so far</h4>
+          <ul className="rs-authority-list">
+            {declared.map((limit) => {
+              const spend = view.grant!.spend[limit.key];
+              return (
+                <li key={limit.key}>
+                  {limit.label}: {spend.used} of {spend.limit}
+                  {spend.active > 0 ? ` · ${spend.active} running now` : ''}
+                </li>
+              );
+            })}
+          </ul>
+
+          {withdrawing ? (
+            <>
+              <label className="rs-decision-label" htmlFor="rs-authority-reason">
+                Why are you withdrawing this?
+              </label>
+              <input
+                id="rs-authority-reason"
+                type="text"
+                value={reason}
+                maxLength={1_000}
+                onChange={(event) => setReason(event.target.value)}
+              />
+              <div className="rs-choices">
+                <button
+                  type="button"
+                  disabled={busy || reason.trim().length === 0}
+                  onClick={() => {
+                    void run(() =>
+                      RussellApi.revokeAuthority(projectId, view.grant!.id, reason.trim()),
+                    );
+                  }}
+                >
+                  {busy ? 'Withdrawing…' : 'Withdraw it'}
+                </button>
+                <button type="button" onClick={() => setWithdrawing(false)}>
+                  Keep it
+                </button>
+              </div>
+              <p className="rs-item-meta">
+                Research already accepted stays. Withdrawing stops Russell starting anything new.
+              </p>
+            </>
+          ) : (
+            <div className="rs-choices">
+              <button type="button" onClick={() => setWithdrawing(true)}>
+                Withdraw this
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <label className="rs-decision-label" htmlFor="rs-authority-name">
+            What are you allowing it to look into?
+          </label>
+          <input
+            id="rs-authority-name"
+            type="text"
+            value={name}
+            maxLength={200}
+            placeholder="Research the discovery questions"
+            onChange={(event) => setName(event.target.value)}
+          />
+
+          {declared.map((limit) => (
+            <div key={limit.key} className="rs-authority-limit">
+              <label className="rs-decision-label" htmlFor={`rs-authority-${limit.key}`}>
+                {limit.label}
+              </label>
+              {/* What the number buys, next to the number. A limit whose
+                  meaning a person has to guess is one they will set wrongly. */}
+              <p className="rs-item-meta">{limit.meaning}</p>
+              <input
+                id={`rs-authority-${limit.key}`}
+                type="number"
+                min={0}
+                max={limit.max}
+                value={current[limit.key] ?? limit.suggested}
+                onChange={(event) =>
+                  setLimits({ ...current, [limit.key]: Number(event.target.value) })
+                }
+              />
+            </div>
+          ))}
+
+          <label className="rs-decision-label" htmlFor="rs-authority-expires">
+            Until when? Leave this empty to keep it until you withdraw it.
+          </label>
+          <input
+            id="rs-authority-expires"
+            type="date"
+            value={expiresAt}
+            onChange={(event) => setExpiresAt(event.target.value)}
+          />
+
+          <div className="rs-choices">
+            <button
+              type="button"
+              disabled={busy || name.trim().length === 0}
+              onClick={() => {
+                void run(() =>
+                  RussellApi.grantAuthority(projectId, {
+                    name: name.trim(),
+                    maxMissions: current['maxMissions'] ?? 0,
+                    maxConcurrent: current['maxConcurrent'] ?? 0,
+                    maxFragments: current['maxFragments'] ?? 0,
+                    maxProbes: current['maxProbes'] ?? 0,
+                    // A date input gives a day; the end of it is what a person
+                    // means by "until the 30th".
+                    expiresAt: expiresAt ? `${expiresAt}T23:59:59.999Z` : null,
+                  }),
+                );
+              }}
+            >
+              {busy ? 'Allowing…' : 'Allow this'}
+            </button>
+          </div>
+          {name.trim().length === 0 ? (
+            <p className="rs-item-meta">
+              Say what this authorizes — a limit with no stated purpose cannot be reviewed later.
+            </p>
+          ) : null}
+        </>
+      )}
+
+      {view.history.length > 0 ? (
+        <>
+          <h4>Previously</h4>
+          <ul className="rs-authority-list rs-authority-history">
+            {view.history.map((past) => (
+              <li key={past.id}>
+                {past.name} — {past.endedReason ?? past.state.toLowerCase()}
+                {past.endedAt ? ` (${past.endedAt.slice(0, 10)})` : ''}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {error ? (
+        <p className="rs-state rs-state-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 export function NeedsYouView({
   projectId,
   onAnswered,
@@ -716,6 +971,11 @@ export function NeedsYouView({
 
   return (
     <Panel title="Needs you" state={state} onRetry={query.reload}>
+      {/* Above the list, because a project Russell may not act on has one
+          decision outstanding that matters more than any individual request —
+          and when the grant exists this is where a person comes to see what
+          they agreed to and to take it back. */}
+      <AuthorityPanel projectId={projectId} />
       <ul className="rs-list">
         {state.items.map((request) => (
           <li key={request.id}>

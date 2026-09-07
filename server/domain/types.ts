@@ -242,6 +242,17 @@ export const EVENT_TYPES = [
   // append-only ledger is where that belongs rather than in a bin event,
   // which is best-effort by design and may be swallowed.
   'RUSSELL_MISSION_WRITEBACK',
+
+  // A person deciding what Russell may spend on its own, and withdrawing it.
+  //
+  // In the project's own append-only history rather than only in
+  // `identity_events`, because this is not an identity fact — it is the moment
+  // the project agreed to let something run without being asked each time, and
+  // "who allowed this, and inside what limits" is a question about the project.
+  // `identity_events` records who may *reach* a project; this records what the
+  // project itself authorized.
+  'RUSSELL_AUTHORITY_GRANTED',
+  'RUSSELL_AUTHORITY_REVOKED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

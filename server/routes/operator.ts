@@ -39,7 +39,7 @@ import {
 } from '../repos/identity.ts';
 import { listTokensForWorker, revokeTokensForWorker } from '../repos/oauth.ts';
 import { createInvitation } from '../repos/invitations.ts';
-import { createGoal, listGoals, revokeGoal } from '../repos/russellAuthority.ts';
+import { listGoals, revokeGoal } from '../repos/russellAuthority.ts';
 import { createProject, getProject, getProjectBySlug, listProjects } from '../repos/projects.ts';
 import { PayloadTooLarge, enqueueWork, listWorkItems } from '../repos/workQueue.ts';
 import { InvalidWorkPayload, workType } from '../services/queue/workTypes.ts';
@@ -739,33 +739,19 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
        projects.length > 0
          ? card(`<h2>What Russell may do on its own</h2>
        ${goalRows || '<p class="note">No project has a standing authority. Russell can capture and judge ideas, and will park every one of them rather than start research nobody authorized.</p>'}
-       <form method="post" action="${OPERATOR_BASE}/authority">
-         <label for="goal_project">Project</label>
-         <select id="goal_project" name="project_id" required>${projectOptions}</select>
-         <label for="goal_name">What this authorizes</label>
-         <input id="goal_name" name="name" type="text" required maxlength="200"
-           placeholder="Research the discovery questions">
-         <label for="goal_missions">Missions at most</label>
-         <input id="goal_missions" name="max_missions" type="number" min="0" max="50" required value="1">
-         <label for="goal_fragments">Fragments at most</label>
-         <input id="goal_fragments" name="max_fragments" type="number" min="0" max="200" required value="6">
-         <label for="goal_concurrent">Running at once, at most</label>
-         <input id="goal_concurrent" name="max_concurrent" type="number" min="0" max="20" required value="1">
-         <label for="goal_probes">Cheap looks at most</label>
-         <input id="goal_probes" name="max_probes" type="number" min="0" max="50" required value="3">
-         <label for="goal_expires">Expires (optional, ISO date)</label>
-         <input id="goal_expires" name="expires_at" type="text" maxlength="40"
-           placeholder="2026-12-31T00:00:00.000Z">
-         <button type="submit">Authorize</button>
-       </form>
-       <p class="note">Russell judges every captured idea whether or not this exists — it asks the
+       <p class="note"><strong>Granting one happens in Russell, under &ldquo;Needs you&rdquo;.</strong>
+         It is a decision about a person&rsquo;s own project rather than an administrative act, and
+         12A took this console off the normal route deliberately. It was offered here for a while,
+         and that was a mistake: &sect;22 puts buttons on this console so that a <em>machine</em>
+         cannot create its own work, which is not a reason to send the person who owns the project
+         somewhere else.</p>
+       <p class="note">What stays here is the reading above and the way out below — both are worth
+         having when the client bundle is broken or a grant has to be stopped in a hurry, which is
+         what this console is for.</p>
+       <p class="note">Russell judges every captured idea whether or not a grant exists — it asks the
          project's own archive first, and parks what nobody has authorized rather than queueing it
-         forever. This is what lets a judged idea actually become work.</p>
-       <p class="note">The four numbers are the units the system enforces, not descriptions of
-         intent: a reservation is taken against them before a mission exists, and a mission that
-         cannot reserve does not start. They are ceilings on <em>this</em> grant, and revoking it
-         stops future work without disturbing anything already finished.</p>
-       <p class="note">This grants no spending on a paid provider. Research runs on the fixed
+         forever.</p>
+       <p class="note">No grant permits spending on a paid provider. Research runs on the fixed
          subscription fleet, and nothing here changes that.</p>`)
          : ''
      }
@@ -1039,101 +1025,24 @@ export function operatorRouter(): Router {
    * the same message.
    */
   /*
-   * Grant Russell a standing authority for a project.
+   * Creating a grant is not here any more.
    *
-   * The machinery for this existed since migration 027 — `createGoal`,
-   * `checkAuthority`, reservations, revocation — and had **no production
-   * caller**. `createGoal` was reachable from one test and nothing else, so a
-   * judged idea could never become work and parked with "no standing authority
-   * exists for this project", which is a truthful state with no remedy. That is
-   * the defect §24 names three times over, and this is its answering
-   * transition.
+   * It was, and that was a mistake: §22 puts buttons on this console so that a
+   * *machine* cannot create its own work, and reading that as applying to the
+   * person who owns the project sent their own decision out of Russell and into
+   * an administration surface §24 had already taken off the normal route.
    *
-   * On the console rather than in the API, deliberately: this decides what
-   * Russell may spend somebody's fixed subscription on, so it belongs where the
-   * other irreversible decisions are, behind `administrator()` and
-   * `originIsSameSite()`, on a page with no JavaScript. Nothing about the
-   * request contributes to who is granting it — the actor is the authenticated
-   * person, never a body field.
+   * `POST /api/russell/projects/:projectId/authority` is where it lives now,
+   * behind `requirePerson` and `decideProjectAccess` — the same two checks
+   * every other write on that router goes through, and a stronger guarantee
+   * than this console's administrator-plus-same-site pair, because a worker
+   * principal is refused there by type.
+   *
+   * Revoking stays below on purpose. Stopping something is worth being able to
+   * do when the client bundle will not load, which is the case this console
+   * exists for.
    */
-  router.post('/authority', (req: Request, res: Response) => {
-    void (async (): Promise<void> => {
-      const person = await administrator(req);
-      if (!person || !originIsSameSite(req)) {
-        denied(res);
-        return;
-      }
-      const body = (req.body ?? {}) as Record<string, unknown>;
-      const projectId = typeof body['project_id'] === 'string' ? body['project_id'] : '';
-      const name = typeof body['name'] === 'string' ? body['name'].trim() : '';
-      const project = await getProject(projectId);
-      if (!project) {
-        res.status(404).type('html').send(await consolePage(person, { err: 'No such project.' }));
-        return;
-      }
-      if (!name) {
-        res.status(400).type('html').send(
-          await consolePage(person, { err: 'Say what the authority is for; a limit with no purpose cannot be reviewed later.' }),
-        );
-        return;
-      }
 
-      /*
-       * The four numbers the system actually enforces, each read strictly.
-       *
-       * A limit that silently became zero — or NaN, or a default — would be a
-       * grant nobody chose, and this is the one form on this console where a
-       * quietly wrong number spends a subscription.
-       */
-      const limit = (key: string, max: number): number | null => {
-        const raw = body[key];
-        const value = typeof raw === 'string' ? Number(raw) : Number.NaN;
-        if (!Number.isInteger(value) || value < 0 || value > max) return null;
-        return value;
-      };
-      const maxMissions = limit('max_missions', 50);
-      const maxFragments = limit('max_fragments', 200);
-      const maxConcurrent = limit('max_concurrent', 20);
-      const maxProbes = limit('max_probes', 50);
-      if (maxMissions === null || maxFragments === null || maxConcurrent === null || maxProbes === null) {
-        res.status(400).type('html').send(
-          await consolePage(person, { err: 'Every limit must be a whole number inside its range.' }),
-        );
-        return;
-      }
-
-      const expiresRaw = typeof body['expires_at'] === 'string' ? body['expires_at'].trim() : '';
-      if (expiresRaw && Number.isNaN(Date.parse(expiresRaw))) {
-        res.status(400).type('html').send(
-          await consolePage(person, { err: 'The expiry is not a date this Brain can read.' }),
-        );
-        return;
-      }
-
-      const goal = await createGoal({
-        projectId: project.id,
-        // The person in front of the console, from the authenticated session.
-        // Never a field, and never Russell.
-        ownerUserId: person.id,
-        createdByUserId: person.id,
-        name,
-        allowedWork: ['RESEARCH'],
-        maxMissions,
-        maxFragments,
-        maxConcurrent,
-        maxProbes,
-        ...(expiresRaw ? { expiresAt: new Date(expiresRaw).toISOString() } : {}),
-      });
-      res.status(200).type('html').send(
-        await consolePage(person, {
-          ok: `Russell may now research for ${project.name}: at most ${maxMissions} missions, ` +
-            `${maxFragments} fragments, ${maxConcurrent} at once and ${maxProbes} cheap looks (${goal.id}).`,
-        }),
-      );
-    })().catch(() => denied(res));
-  });
-
-  /** Take it back. A grant with no way out is a ratchet rather than a control. */
   router.post('/authority/revoke', (req: Request, res: Response) => {
     void (async (): Promise<void> => {
       const person = await administrator(req);

@@ -205,6 +205,8 @@ describe('a caller with no credentials', () => {
       ['GET', `/api/russell/projects/${projectId}/briefing`],
       ['GET', `/api/russell/projects/${projectId}/work`],
       ['GET', `/api/russell/projects/${projectId}/candidates`],
+      ['GET', `/api/russell/projects/${projectId}/authority`],
+      ['POST', `/api/russell/projects/${projectId}/authority`],
       ['GET', '/api/russell/candidates/rcn_0123456789abcdef0123'],
       ['POST', '/api/russell/candidates/rcn_0123456789abcdef0123/judgment'],
       ['POST', '/api/russell/candidates/rcn_0123456789abcdef0123/split'],
@@ -381,6 +383,66 @@ describe('a project view is behind the project gate', () => {
       { cookie: aliceCookie },
     );
     expect(after.body.candidates).toEqual([]);
+  });
+});
+
+describe('the authority decision is a person’s, on Russell’s surface', () => {
+  /*
+   * It was on the operator console. §22 puts buttons there so a *machine*
+   * cannot create its own work, and applying that to the person who owns the
+   * project sent their own decision into an administration surface 12A had
+   * already taken off the normal route.
+   *
+   * `russellAuthoritySurface.test.ts` proves what it does. What is proven here
+   * is the half only a booted server can show: that the surface moved and the
+   * gate did not, against the real guard rather than an injected context.
+   */
+  it('shows a member what Russell may do, and refuses a non-member identically to a missing project', async () => {
+    const mine = await call<{ grant: unknown; headline: string }>(
+      'GET',
+      `/api/russell/projects/${projectId}/authority`,
+      { cookie: aliceCookie },
+    );
+    expect(mine.status).toBe(200);
+    // A project with no grant is an ordinary answer with a sentence, not an
+    // error and not an empty body.
+    expect(mine.body.headline).toBeTruthy();
+
+    const absent = await call('GET', '/api/russell/projects/prj_nope/authority', {
+      cookie: aliceCookie,
+    });
+    const forbidden = await call('GET', `/api/russell/projects/${projectId}/authority`, {
+      cookie: bobCookie,
+    });
+    expect(forbidden.status).toBe(absent.status);
+    expect(JSON.stringify(forbidden.body)).toBe(JSON.stringify(absent.body));
+  });
+
+  it('refuses a machine at the authority routes by principal type', async () => {
+    // The check §22 actually cared about, and it is stronger here than the
+    // console's administrator-plus-same-site pair: no membership configuration
+    // turns a worker into a person.
+    for (const [method, route, body] of [
+      ['GET', `/api/russell/projects/${projectId}/authority`, undefined],
+      [
+        'POST',
+        `/api/russell/projects/${projectId}/authority`,
+        { name: 'x', maxMissions: 1, maxConcurrent: 1, maxFragments: 1, maxProbes: 1, expiresAt: null },
+      ],
+    ] as const) {
+      const result = await call(method, route, { bearer: workerBearer, body });
+      expect(result.status, route).toBe(404);
+    }
+  });
+
+  it('no longer offers a way to create one on the operator console', async () => {
+    // The console keeps the reading and the break-glass revoke; creating a
+    // grant is Russell's. A second way to make one would be a second place for
+    // the limits to be set differently.
+    const console_ = await call<string>('GET', '/operator', { cookie: adminCookie });
+    expect(console_.status).toBe(200);
+    expect(String(console_.body)).toMatch(/Granting one happens in Russell/i);
+    expect(String(console_.body)).not.toMatch(/action="\/operator\/authority"/);
   });
 });
 

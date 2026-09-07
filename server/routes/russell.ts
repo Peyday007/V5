@@ -60,6 +60,13 @@ import {
 import { DEAL_DISPATCH_SLUG, readDealDispatch } from '../services/russell/dealDispatch.ts';
 import { coverBeforeWork, explainCoverage } from '../services/russell/coverage.ts';
 import {
+  AUTHORITY_LIMITS,
+  authorityFor,
+  RESEARCH_WORK,
+} from '../services/russell/authority.ts';
+import { createGoal, getGoal, revokeGoal } from '../repos/russellAuthority.ts';
+import { recordEvent } from '../repos/events.ts';
+import {
   badRequest,
   bodyOf,
   handler,
@@ -686,6 +693,189 @@ russellRouter.post(
       throw badRequest(outcome.reason);
     }
     return outcome.request;
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * What Russell may do on its own
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The decision a person makes about their own project, on the surface they
+ * already use.
+ *
+ * It was on the operator console, and that was a mistake I made rather than a
+ * design anybody chose. §22's rule that the console holds the button is about
+ * **machines** — "a machine that could create its own work could also create
+ * work nobody asked for" — and reading it as applying to the person who owns
+ * the project sent the one decision Russell most obviously needs from them out
+ * of Russell and into the administration surface §24 had already taken off the
+ * normal route.
+ *
+ * **Nothing about the authorization moved with it.** The gate is
+ * `requirePerson` plus `requireProject`, which is `decideProjectAccess` at the
+ * level this request's own method requires — the same two checks every other
+ * write on this router goes through. A worker principal is refused by type: no
+ * membership configuration turns a machine into a person, and a machine that
+ * could grant itself authority is precisely what §22 was protecting against.
+ * That protection is stronger here than it was on the console, because it is
+ * the same check the rest of the surface is already tested for.
+ */
+russellRouter.get(
+  '/projects/:projectId/authority',
+  handler(async (req) => {
+    /*
+     * `requirePerson` on the read as well as the writes.
+     *
+     * The first version had it only on the writes, and a test caught what that
+     * cost: a worker holding `project:read` could fetch this, which names the
+     * person who granted it by display name and enumerates what the project is
+     * willing to spend. Neither is a machine's business, and the asymmetry was
+     * not a considered decision — it was an omission that read as one.
+     */
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return authorityFor({ projectId: project.id });
+  }),
+);
+
+/**
+ * Grant it.
+ *
+ * Every limit is read strictly and refused rather than defaulted. This is the
+ * one form in the product where a quietly wrong number spends a subscription,
+ * so a missing field, a fraction, a negative or an over-large value refuses the
+ * whole request — the same rule `validateProposal` applies to a worker, applied
+ * to a person, and for the same reason: a value nobody chose is not a decision.
+ *
+ * `ownerUserId` and `createdByUserId` both come from the authenticated
+ * principal. There is no body field either could be read from, here or in
+ * `createGoal`, which is what makes "who authorized this" answerable a year
+ * later rather than merely recorded.
+ */
+russellRouter.post(
+  '/projects/:projectId/authority',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const name = requiredString(body['name'], 'name');
+    if (name.length > 200) {
+      throw badRequest('Keep the description of what this authorizes under 200 characters.');
+    }
+
+    /*
+     * A live grant is not replaced silently.
+     *
+     * Two active grants on one project would make "the limits you set" an
+     * ambiguous phrase and `checkAuthority`'s choice of which one applies an
+     * accident of ordering. Withdrawing is a separate, deliberate act.
+     */
+    const existing = await authorityFor({ projectId: project.id });
+    if (existing.grant) {
+      throw badRequest(
+        'This project already has a standing authority. Withdraw it first if you want to change the limits.',
+      );
+    }
+
+    const limits: Record<string, number> = {};
+    for (const limit of AUTHORITY_LIMITS) {
+      const raw = body[limit.key];
+      const value = typeof raw === 'number' ? raw : Number.NaN;
+      if (!Number.isInteger(value) || value < 0 || value > limit.max) {
+        throw badRequest(
+          `"${limit.label}" must be a whole number from 0 to ${limit.max}.`,
+        );
+      }
+      limits[limit.key] = value;
+    }
+    /*
+     * More at once than in total is not a stricter grant, it is an incoherent
+     * one — and after mutation 13 the two ceilings are genuinely different
+     * questions, so the incoherence would be invisible rather than harmless.
+     */
+    if ((limits['maxConcurrent'] ?? 0) > (limits['maxMissions'] ?? 0)) {
+      throw badRequest('Russell cannot run more at a time than it is allowed to start in total.');
+    }
+
+    const expiresAt = nullableString(body['expiresAt'], 'expiresAt') ?? null;
+    if (expiresAt !== null) {
+      const parsed = Date.parse(expiresAt);
+      if (Number.isNaN(parsed)) throw badRequest('That is not a date this Brain can read.');
+      if (parsed <= Date.now()) throw badRequest('An expiry in the past would grant nothing.');
+    }
+
+    const goal = await createGoal({
+      projectId: project.id,
+      // From the principal. Never a field — not here, and not in createGoal.
+      ownerUserId: principal.id,
+      createdByUserId: principal.id,
+      name,
+      // One class, named by the constant rather than taken from the request.
+      // A grant that could name its own class of work is a grant that could
+      // authorize something this screen never described.
+      allowedWork: [RESEARCH_WORK],
+      maxMissions: limits['maxMissions']!,
+      maxFragments: limits['maxFragments']!,
+      maxConcurrent: limits['maxConcurrent']!,
+      maxProbes: limits['maxProbes']!,
+      expiresAt,
+    });
+
+    await recordEvent({
+      projectId: project.id,
+      entityType: 'RUSSELL_GOAL',
+      entityId: goal.id,
+      eventType: 'RUSSELL_AUTHORITY_GRANTED',
+      payload: {
+        name: goal.name,
+        maxMissions: goal.maxMissions,
+        maxConcurrent: goal.maxConcurrent,
+        maxFragments: goal.maxFragments,
+        maxProbes: goal.maxProbes,
+        expiresAt: goal.expiresAt,
+        grantedByUserId: principal.id,
+        surface: 'RUSSELL',
+      },
+    });
+
+    return authorityFor({ projectId: project.id });
+  }),
+);
+
+/**
+ * Withdraw it.
+ *
+ * A reason is required for the same reason a judgment needs one: a decision
+ * nobody can explain later is one nobody can review. Revocation lands on the
+ * next check rather than at some sweep — every launch, provider call, writeback
+ * and resume revalidates — and accepted work is untouched, because stopping new
+ * work and corrupting finished work are different things.
+ */
+russellRouter.post(
+  '/projects/:projectId/authority/:goalId/revoke',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const goal = await getGoal(pathId(req, 'goalId'));
+    // A grant belonging to another project is refused as absent, like every
+    // other cross-scope reference on this router.
+    if (!goal || goal.projectId !== project.id) throw notFound('No authority with that id.');
+
+    const reason = requiredString(bodyOf(req)['reason'], 'reason');
+    const ok = await revokeGoal({ goalId: goal.id, actorUserId: principal.id, reason });
+    if (!ok) throw badRequest('That authority has already ended.');
+
+    await recordEvent({
+      projectId: project.id,
+      entityType: 'RUSSELL_GOAL',
+      entityId: goal.id,
+      eventType: 'RUSSELL_AUTHORITY_REVOKED',
+      payload: { reason, revokedByUserId: principal.id, surface: 'RUSSELL' },
+    });
+
+    return authorityFor({ projectId: project.id });
   }),
 );
 

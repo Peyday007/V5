@@ -30,8 +30,14 @@ import type { Progress } from '../../../server/services/russell/progress.ts';
 import type { GroupedWork, WorkEntry } from '../../../server/services/russell/work.ts';
 import type { IdeaEdge, IdeaMap, IdeaNode } from '../../../server/services/russell/ideas.ts';
 import type { WhoView } from '../../../server/services/russell/who.ts';
+import type {
+  AuthorityView,
+  AuthorityLimitKey,
+} from '../../../server/services/russell/authority.ts';
 
 export type {
+  AuthorityLimitKey,
+  AuthorityView,
   Briefing,
   CandidatePriority,
   CandidateState,
@@ -226,6 +232,45 @@ export const RussellApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+
+  /** What Russell may do on its own here, in the words a person decides in. */
+  authority: (projectId: string): Promise<AuthorityView> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/authority`),
+
+  /**
+   * Grant it.
+   *
+   * The limits go as numbers, not strings: the server refuses anything that is
+   * not a whole number in range rather than coercing it, so a form that sent
+   * "2" would be told off for something it did not do wrong.
+   */
+  grantAuthority: (
+    projectId: string,
+    body: {
+      name: string;
+      maxMissions: number;
+      maxConcurrent: number;
+      maxFragments: number;
+      maxProbes: number;
+      expiresAt: string | null;
+    },
+  ): Promise<AuthorityView> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/authority`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /** Withdraw it. A reason is required, and is kept. */
+  revokeAuthority: (
+    projectId: string,
+    goalId: string,
+    reason: string,
+  ): Promise<AuthorityView> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/authority/` +
+        `${encodeURIComponent(goalId)}/revoke`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    ),
 
   /** Pull an idea back out of the one it was folded into. */
   splitIdea: (candidateId: string, reason: string): Promise<{ candidate: RussellCandidate }> =>

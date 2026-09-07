@@ -807,6 +807,145 @@ describe('the thin views', () => {
     expect(screen.queryByRole('button', { name: /Set this priority/i })).toBeNull();
   });
 
+  /*
+   * The authority decision, where a person actually goes for decisions.
+   *
+   * It was on the operator console until now, which put the project owner's own
+   * choice behind an administration surface 12A had already taken off the
+   * normal route. What is asserted here is the part a person notices: that the
+   * screen says plainly what Russell may not do, and that the form refuses to
+   * send a grant with no stated purpose rather than being refused after
+   * sending one.
+   */
+  const NO_GRANT = {
+    grant: null,
+    limits: [
+      { key: 'maxMissions', label: 'Pieces of research, in total', meaning: 'How many separate investigations Russell may start before asking again.', max: 50, suggested: 2 },
+      { key: 'maxConcurrent', label: 'At the same time', meaning: 'How many may be running at once. One means Russell finishes before it starts the next.', max: 20, suggested: 1 },
+      { key: 'maxFragments', label: 'Questions inside them', meaning: 'The bounded sub-questions those investigations may break down into.', max: 200, suggested: 12 },
+      { key: 'maxProbes', label: 'Cheap looks', meaning: 'Quick checks Russell may take before committing to a full investigation.', max: 50, suggested: 3 },
+    ],
+    history: [],
+    headline:
+      'Russell may not start research on this project. It will still read what you say, ' +
+      'capture ideas and rank them — and it will park every one of them rather than spend ' +
+      'anything you have not agreed to.',
+    suggested: { maxMissions: 2, maxConcurrent: 1, maxFragments: 12, maxProbes: 3 },
+  };
+
+  const GRANTED = {
+    grant: {
+      id: 'rgl_1',
+      name: 'Deal Dispatch discovery research',
+      grantedBy: 'The owner',
+      grantedAt: '2026-09-07T00:00:00.000Z',
+      expiresAt: null,
+      expired: false,
+      permits: [
+        'Start at most 2 pieces of research on this project',
+        'Run at most 1 at a time',
+        'Break them into at most 12 bounded questions',
+        'Take at most 3 cheap looks before committing to one',
+        'Do all of that until you withdraw this',
+      ],
+      neverPermits: ['Spend money, or turn on paid usage'],
+      spend: {
+        maxMissions: { used: 1, active: 1, limit: 2 },
+        maxConcurrent: { used: 1, active: 1, limit: 1 },
+        maxFragments: { used: 4, active: 0, limit: 12 },
+        maxProbes: { used: 1, active: 0, limit: 3 },
+      },
+    },
+    limits: [
+      { key: 'maxMissions', label: 'Pieces of research, in total', meaning: 'How many separate investigations Russell may start before asking again.', max: 50, suggested: 2 },
+      { key: 'maxConcurrent', label: 'At the same time', meaning: 'How many may be running at once. One means Russell finishes before it starts the next.', max: 20, suggested: 1 },
+      { key: 'maxFragments', label: 'Questions inside them', meaning: 'The bounded sub-questions those investigations may break down into.', max: 200, suggested: 12 },
+      { key: 'maxProbes', label: 'Cheap looks', meaning: 'Quick checks Russell may take before committing to a full investigation.', max: 50, suggested: 3 },
+    ],
+    history: [],
+    headline: 'Russell may research on this project, within the limits you set on 2026-09-07.',
+    suggested: { maxMissions: 2, maxConcurrent: 1, maxFragments: 12, maxProbes: 3 },
+  };
+
+  async function openNeedsYou(authority: unknown): Promise<void> {
+    baseRoutes({ 'GET /api/russell/projects/prj_1/authority': { body: authority } });
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Needs you/ })).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Needs you/ }));
+    });
+  }
+
+  it('says what Russell may not do, rather than showing an empty screen', async () => {
+    await openNeedsYou(NO_GRANT);
+    await waitFor(() => expect(screen.getByText(/may not start research/i)).toBeTruthy());
+    // The reassuring half matters too: a person deciding this needs to know
+    // what carries on without it.
+    expect(screen.getByText(/capture ideas and rank them/i)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /What Russell may do on its own/i })).toBeTruthy();
+  });
+
+  it('will not send a grant with no stated purpose, and says so first', async () => {
+    await openNeedsYou(NO_GRANT);
+    await waitFor(() => expect(screen.getByLabelText(/What are you allowing it to look into/i)).toBeTruthy());
+    const allow = screen.getByRole('button', { name: /Allow this/i });
+    expect((allow as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/cannot be reviewed later/i)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/What are you allowing it to look into/i), {
+        target: { value: 'Deal Dispatch discovery research' },
+      });
+    });
+    expect((screen.getByRole('button', { name: /Allow this/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('offers the server’s own numbers, and says what each one buys', async () => {
+    await openNeedsYou(NO_GRANT);
+    await waitFor(() => expect(screen.getByLabelText(/Pieces of research, in total/i)).toBeTruthy());
+    // Suggested from the server, which is also where they are enforced — so
+    // the form cannot propose something the validator will refuse.
+    expect((screen.getByLabelText(/Pieces of research, in total/i) as HTMLInputElement).value).toBe('2');
+    expect((screen.getByLabelText(/At the same time/i) as HTMLInputElement).value).toBe('1');
+    expect(screen.getByText(/finishes before it starts the next/i)).toBeTruthy();
+  });
+
+  it('shows an existing grant in the server’s words, and what it has spent', async () => {
+    await openNeedsYou(GRANTED);
+    await waitFor(() => expect(screen.getByText(/Start at most 2 pieces of research/i)).toBeTruthy());
+    expect(screen.getByText(/Spend money, or turn on paid usage/i)).toBeTruthy();
+    expect(screen.getByText(/Pieces of research, in total: 1 of 2/i)).toBeTruthy();
+    // No form to make a second one while one is live.
+    expect(screen.queryByRole('button', { name: /Allow this/i })).toBeNull();
+  });
+
+  it('asks why before it withdraws one', async () => {
+    await openNeedsYou(GRANTED);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Withdraw this/i })).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Withdraw this/i }));
+    });
+    await waitFor(() => expect(screen.getByLabelText(/Why are you withdrawing/i)).toBeTruthy());
+    expect((screen.getByRole('button', { name: /Withdraw it/i }) as HTMLButtonElement).disabled).toBe(true);
+    // And it says what withdrawing does and does not touch.
+    expect(screen.getByText(/already accepted stays/i)).toBeTruthy();
+  });
+
+  it('says the reading failed rather than showing no grant', async () => {
+    baseRoutes({
+      'GET /api/russell/projects/prj_1/authority': { status: 500, body: { error: 'nope' } },
+    });
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Needs you/ })).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Needs you/ }));
+    });
+    // An unreadable authority must never render as "Russell may do nothing":
+    // those are different facts and only one of them is a decision to make.
+    await waitFor(() => expect(screen.getByText(/could not be read/i)).toBeTruthy());
+    expect(screen.queryByText(/may not start research/i)).toBeNull();
+  });
+
   it('says there is nothing at an address it does not know', async () => {
     baseRoutes();
     window.history.pushState({}, '', '/somewhere-else');

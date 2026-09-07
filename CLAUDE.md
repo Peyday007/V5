@@ -659,6 +659,19 @@ however correct its bearer design is.
   existed held real research, and a test worker's first bounded run must not be
   able to write into work somebody depends on.
 
+  **That reasoning is about machines, and I over-read it once; the correction is
+  recorded rather than quietly applied.** Step 12A's standing-authority grant
+  was built onto this console on the strength of the sentence above — and a
+  person deciding what Russell may spend on their own project is not a machine
+  creating its own work. It sent the one decision Russell most obviously needs
+  from a person out of Russell and into the surface §24 had deliberately taken
+  off the normal route. It now lives at `POST
+  /api/russell/projects/:projectId/authority`, behind `requirePerson` and
+  `decideProjectAccess` — which is a *stronger* guard than this console's
+  administrator-plus-same-site pair, because a worker principal is refused there
+  by type. What stays here is the reading and the revoke: both are worth having
+  when the client bundle will not load, which is what this console is for.
+
 Step 8 connects **one** worker and proves a bounded cycle. The first production
 research packet is Step 9, scheduling is Step 10, and a second worker is
 Step 11.
@@ -1081,6 +1094,23 @@ rules.
   percentage. A briefing answers what changed, why it matters, what is next and
   whether a person is needed, in that order. Layer names reach a person through
   one tested mapping.
+- **The decision that lets Russell act is made in Russell.** A standing
+  authority names the project, the class of work, four ceilings and an expiry,
+  and `services/russell/authority.ts` renders all of it as sentences the server
+  composed — a screen that paraphrased a permission would eventually paraphrase
+  it wrongly. It sits in **Needs You**, because that is exactly what it is: the
+  one thing Russell cannot decide for itself and cannot proceed without. The
+  limits travel down with the view rather than being duplicated in the client,
+  so the contract a person is shown and the contract the validator enforces are
+  one object — the manifest lesson, applied to a form.
+
+  **Nothing about the enforcement moved with the surface.** `checkAuthority` and
+  `reserve` are untouched, `owner_user_id` still comes from the principal and
+  from no field, the prohibitions are still the constant nobody supplies, and
+  both ceilings mutation 13 separated are still spent through the same
+  compare-and-swap. A live grant is not silently replaced — two active grants
+  would make "the limits you set" ambiguous and `checkAuthority`'s choice an
+  accident of ordering — and withdrawing one keeps it, with its reason.
 - **The interface is never optimistic.** A message appears because the server
   stored it; a pending turn carries the server's own reason; a failed send
   keeps the words. Loading, empty, forbidden and error are four different
@@ -1239,6 +1269,7 @@ server/
       routing.ts        which project a conversation is about, authorization-first
       judgment.ts       what is worth capturing, dedupe, and Russell's own priority
       similarity.ts     the floor a proposed semantic merge is held to
+      authority.ts      what Russell may do here, in the words a person decides in
       coverage.ts       the archive check that runs before any work is created
       launch.ts         the one way a mission comes into existence, and its repair
       turn.ts           one conversation turn, carried by the Routine fleet
