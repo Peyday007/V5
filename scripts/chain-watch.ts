@@ -308,13 +308,37 @@ async function main(): Promise<void> {
   }
 
   /* ---------------------------------------------------------- the cycle */
-  const cycles = await all<{ state: string; cursor_at: string | null; generation: number }>(
-    `SELECT state, cursor_at, generation FROM russell_cycle`,
+  const cycles = await all<{
+    state: string;
+    cursor_at: string | null;
+    generation: number;
+    pause_reason: string | null;
+    last_error: string | null;
+    last_ran_at: string | null;
+    max_launches_per_cycle: number;
+    max_events_per_cycle: number;
+  }>(
+    `SELECT state, cursor_at, generation, pause_reason, last_error, last_ran_at,
+            max_launches_per_cycle, max_events_per_cycle
+       FROM russell_cycle`,
   );
   console.log('');
   console.log('LOOP');
   for (const cycle of cycles) {
     line('state / cursor', `${cycle.state} ${cycle.cursor_at ?? '—'} gen=${cycle.generation}`);
+    line('paused because', cycle.pause_reason);
+    // The last tick, and whether it threw. A loop that is RUNNING and failing
+    // every pass reports the same state as one that is working.
+    line('last ran / last error', `${cycle.last_ran_at ?? '—'} ${cycle.last_error ?? 'none'}`);
+    /*
+     * The per-tick bounds, printed because a zero here stops the run silently.
+     * A loop that is RUNNING and permitted to launch nothing looks identical to
+     * one with nothing to launch, and only one of those is a problem.
+     */
+    line(
+      'per tick',
+      `launches ${cycle.max_launches_per_cycle} · events ${cycle.max_events_per_cycle}`,
+    );
   }
 }
 
