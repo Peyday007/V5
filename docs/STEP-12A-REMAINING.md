@@ -68,6 +68,26 @@ No production grant, deployment, acceptance result or fleet change is implied.
 The objective remains completing the connected 12A journey and its live
 acceptance. This correction does not reset that work or add acceptance gates.
 
+## Deployed and read back — 2026-09-07T23:09:47Z
+
+Mutations 18 (`34167283685`, `15cfc58`) and 19 (`34168301362`, `477e315`) are
+both live: typecheck, 1,761 tests, build, deploy, hosted verification, a real
+unannounced restart, and hosted verification again. Both are in the ledger,
+`EXPECTED` 19.
+
+```
+ANCHOR rcv_02d5312e9d41465a9e0f  turns=4
+IDEAS 1: rcn_85f9689b461c4972a1ba QUEUED WORTH_DOING canonical=— override=no
+MERGES 0 · PROBES 0
+MISSIONS 1: rms_8e96b5f246464c069451 NEEDS_HUMAN orch=orc_e1afa97f566d4b468373 doc=— audit=—
+NEEDS YOU 1: rhr_b63a5478249e4b508803 OPEN  choice=— by=— at=—
+LOOP RUNNING gen=10883 last error none  per tick: launches 1 · events 50
+```
+
+The loop reclaimed within seconds of the restart and has no recorded error. The
+decision is still `OPEN` and unanswered, which is correct: nothing moves until
+a person answers it, and nothing was answered on anyone's behalf.
+
 ## What the whole thing is now waiting on — current
 
 Two owner actions, both inside Russell, neither of them configuration.
