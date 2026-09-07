@@ -118,7 +118,7 @@ const ACCEPTANCE_SCOPE = {
    * rather than only in the document because a reader of this file should be
    * able to find the standard without being told where to look.
    */
-  scenarioId: 'S12A-ACC-1',
+  scenarioId: 'S12A-ACC-2',
   /**
    * The conversation the frozen Workstream 5 scenario is held in.
    *
@@ -135,8 +135,30 @@ const ACCEPTANCE_SCOPE = {
    * satisfied by a row outside this chain however many similar rows exist —
    * and there are many, since this Brain holds 36 conversations.
    */
-  conversationId: 'rcv_35d5b0340fc4479fa443',
+  conversationId: 'rcv_02d5312e9d41465a9e0f',
 } as const;
+
+/**
+ * The scopes this reporter has judged before, kept rather than deleted.
+ *
+ * `S12A-ACC-1` spent all three of its attempts on three different defects and
+ * is the historical evidence for every one of them. Deleting the pin would make
+ * `docs/STEP-12A-EVIDENCE.md` 38-46 refer to a conversation nothing in the code
+ * points at any more, which is how a record quietly becomes unverifiable.
+ *
+ * Nothing reads this. It is here so that "which chain was judged, and when" has
+ * an answer in the file that did the judging.
+ */
+export const PREVIOUS_SCOPES = [
+  {
+    scenarioId: 'S12A-ACC-1',
+    conversationId: 'rcv_35d5b0340fc4479fa443',
+    outcome:
+      'three attempts, three defects: MISSING_REQUIRED_PART, an accepted action nothing ' +
+      'executed, and a capture gate reading the wrong message. Replaced rather than retried; ' +
+      'see docs/STEP-12A-ACCEPTANCE-SCENARIO-2.md.',
+  },
+] as const;
 
 /** The chain, resolved once from the anchor. `null` when it cannot be. */
 interface Scope {
