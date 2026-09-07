@@ -16,25 +16,53 @@ condition it reports on (§50). Where the two still differ, the condition wins.
 
 ---
 
-## Approval interaction — implementation prepared, not deployed
+## The approval interaction
 
-The default Needs you surface must present a complete research permission and
-one **Approve** action. The owner already supplied the purpose and bounds;
-requiring them to enter those again, or displaying four numeric controls as the
-primary experience, violates the 12A interaction requirement. **Change limits**
-reveals optional edits. Viewing the card never creates a grant. Approval still
-uses the authenticated route, and the active grant retains its withdrawal path.
+The default Needs you surface presents a complete research permission and one
+**Approve**. The owner already supplied the purpose and bounds; requiring them
+to enter those again, or showing four numeric controls as the primary
+experience, is not the agreed interaction. **Change limits** reveals optional
+edits, hidden until asked for. Viewing the card never creates a grant. Approval
+uses the authenticated route, and an active grant keeps its withdrawal path.
 
-The initial proposal derives its project name and 2/1/12/3 limits on the server.
-Its bounded-rollout expiry is exactly `2026-10-06T00:00:00.000Z`; it is not
-silently extended on refresh or converted to the end of the day. The form can
-explicitly change it, with UTC labelled. Changing projects resets any unsaved
-edits so one project's permission is never submitted to another by accident.
+The proposal derives its purpose from the project and its 2/1/12/3 limits from
+the server's own constants. The bounded-rollout expiry is exactly
+`2026-10-06T00:00:00.000Z` — not extended on refresh, not widened to unlimited,
+and not converted to the end of the day. It can be changed explicitly, with UTC
+labelled. Changing projects resets unsaved edits, so one project's permission is
+never submitted against another.
 
-Local verification: production build (including typecheck) passed; 61 shell and
-authority-surface tests passed. These cover opening without granting, approving
-without typing, the exact submitted bounds and expiry, optional edits, refusal
-without false success, existing withdrawal, and person/worker authorization.
+**The status has to agree with the card.** An outstanding approval counts as the
+decision it is, in the briefing sentence and the nav badge. Both previously
+counted `russell_human_requests` rows only, so the briefing read "You are not
+needed" above an approval that gated everything.
+
+### Who verified what
+
+Recorded separately because the prepared patch's own note claimed more coverage
+than its tests carry, and an inherited claim is still a claim.
+
+**From the prepared patch** (`a046486`, unchanged): one approval without
+configuring anything; editing optional and reflected in what is being approved;
+a purpose and expiry required if the owner clears them; and the server proposing
+the same name and fixed expiry while creating nothing.
+
+**Added here** (`a5c93a5`), because the patch's note listed them and its tests
+did not contain them: the exact body `Approve` submits, asserted from the
+request rather than the screen; the stored row read back at the server, expiry
+included; the class of work and the money stated on the card; the detail hidden
+until asked, with `aria-expanded`; an edited ceiling reaching the request; a
+server refusal shown in its own words with the decision still on offer; and the
+briefing and badge never contradicting an outstanding approval.
+
+Local verification: `npm run build` clean; **1,756 tests** pass.
+
+**Deployed** as mutation 16, run `34158835836` from `a5c93a5`: typecheck, tests,
+build, deploy, hosted verification before a real unannounced restart and again
+after it. Confirmed on the live bundle — *Change limits*, *Approve*, *Research
+only* and *No paid API spending* all present; the old form's *Allow this* and
+*Until when? Leave this empty* both gone; and `/api/russell/.../authority`
+answers 401 to an anonymous caller.
 No production grant, deployment, acceptance result or fleet change is implied.
 
 The objective remains completing the connected 12A journey and its live
@@ -67,17 +95,14 @@ verification before a real unannounced restart and again after it — every step
 green. The five joined transitions, the Ideas decision controls and the three
 strengthened gates are live.
 
-### One thing the owner has to hand over besides the two actions
+### The conversation id is no longer something to hand over
 
-The new conversation's id. `chain-watch` was built to find it without anybody
-retyping anything, and then could not: `BRAIN_DATABASE_URL` is a Fly secret
-rather than a repository one, so a CI checkout cannot reach the database and
-the script has to run inside the machine — which means it has to be *in* the
-machine, and it is not in the image mutation 14 deployed.
-
-The scope-pin deployment carries it, and after that the chain is readable at
-any moment. Until then the id comes from the browser: the conversation's own
-address is `https://northline-brain.fly.dev/conversation/rcv_…`.
+`chain-watch` reads the chain from inside the machine. It could not run when it
+was written — `BRAIN_DATABASE_URL` is a Fly secret rather than a repository one,
+so a CI checkout cannot reach the database — and it was not in the image
+mutation 14 deployed. Mutation 16 carried it, so the anchor conversation, its
+turns, its ideas and their merges are readable at any moment without anybody
+reading an id off a screen.
 
 ---
 
@@ -107,7 +132,7 @@ decides.
 | A16 Deal Dispatch freshness | READY | derived at read time |
 | A17 privacy and authorization | READY | the live read |
 | A18 earlier baselines | READY | the live read |
-| A19 delivery ledger | RECORDED | run `34097522616` in the ledger, `EXPECTED` 14; will read clean once the scope-pin deployment brings the image level with the tree |
+| A19 delivery ledger | RECORDED | runs `34097522616`, `34146782575`, `34158835836` in the ledger, `EXPECTED` 16; reads clean once the scope-pin deployment brings the image level with the tree |
 | A20 usable read surfaces | READY | the live read |
 | A21 living project map | READY | the live read |
 | A22 fast chat routing | DEFERRED | excluded from the denominator by prior authorization |
