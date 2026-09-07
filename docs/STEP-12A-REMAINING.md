@@ -161,6 +161,27 @@ decides.
 
 ---
 
+## Two readings that cost time, recorded so they are not repeated
+
+**`step10 report` does not see this chain.** It is scoped to
+`step-10-acceptance prj_361119f7fd344fda8558` and reported 97 bins, all
+terminal — a completely healthy answer about a completely different project.
+Deal Dispatch's Russell bins are not visible through it, so "is the judgment
+bin in flight or stuck" cannot be answered with the tooling currently deployed.
+`chain-watch` shows candidates, probes, missions and requests, and deliberately
+not bins.
+
+That is a real gap and it is **not** being closed mid-run: extending
+`chain-watch` would make the one remaining authorized deployment something
+other than scope-pin-only. It is recorded for Step 12B instead.
+
+**A restart is less dangerous to a live turn than it first looks.** A worker is
+a Cowork session holding a lease recorded in the database, not in the Brain's
+memory. Restarting the Brain makes MCP calls fail for a few seconds; it does not
+kill the worker, and the lease survives. Waiting for a "quiet moment" that a
+30-second tick never actually provides would have deferred the scope pin
+indefinitely for a risk that is mostly imagined.
+
 ## The run is under way — S12A-ACC-2
 
 `chain-watch` on the anchor, run `34161633943` at 21:02:30Z.
@@ -181,6 +202,25 @@ IDEAS  1
 MERGES 0 · PROBES 0 · MISSIONS 0 · NEEDS YOU 0
 LOOP  RUNNING  gen=10634  last error none
 ```
+
+At 21:28 the near-duplicate had arrived and its turn was still pending a
+worker:
+
+```
+TURNS  4
+  rmsg_e86bc50020aa4833b183  USER    COMPLETE  chars=203
+  rmsg_fca6315a4d1e4bd1bbc9  RUSSELL COMPLETE  chars=664
+  rmsg_8851902b76a344d4bc1f  USER    COMPLETE  chars=119
+  rmsg_db75a5da08f9412c9905  RUSSELL PENDING
+IDEAS 1 · MERGES 0 · PROBES 0 · MISSIONS 0
+```
+
+and the first candidate was still unjudged 35 minutes after capture. That is
+consistent with its planning bin waiting for a worker rather than with anything
+being wrong — every stage here is one Cowork activation, and §22 already records
+that the largest single block of elapsed time in Step 9 was a packet sitting in
+a queue. It is reported as *waiting*, not as *stuck*: the difference is whether
+a bin exists, and see above for why that is currently unanswerable.
 
 **The grant is exactly the approved proposal**, expiry included — the instant,
 not the end of its day and not unlimited.
