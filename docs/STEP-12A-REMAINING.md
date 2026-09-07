@@ -31,6 +31,25 @@ Then one authorized deployment: `ACCEPTANCE_SCOPE.conversationId` re-pinned to
 the new conversation, with the old value moved to `PREVIOUS_SCOPES` rather than
 deleted, per scenario 2 §5.3.
 
+### Mutation 14 is deployed
+
+Run `34097522616` from `e7a9be5`: typecheck, 1,721 tests, build, deploy, hosted
+verification before a real unannounced restart and again after it — every step
+green. The five joined transitions, the Ideas decision controls and the three
+strengthened gates are live.
+
+### One thing the owner has to hand over besides the two actions
+
+The new conversation's id. `chain-watch` was built to find it without anybody
+retyping anything, and then could not: `BRAIN_DATABASE_URL` is a Fly secret
+rather than a repository one, so a CI checkout cannot reach the database and
+the script has to run inside the machine — which means it has to be *in* the
+machine, and it is not in the image mutation 14 deployed.
+
+The scope-pin deployment carries it, and after that the chain is readable at
+any moment. Until then the id comes from the browser: the conversation's own
+address is `https://northline-brain.fly.dev/conversation/rcv_…`.
+
 ---
 
 ## The gates
@@ -59,7 +78,7 @@ decides.
 | A16 Deal Dispatch freshness | READY | derived at read time |
 | A17 privacy and authorization | READY | the live read |
 | A18 earlier baselines | READY | the live read |
-| A19 delivery ledger | PENDING | mutation 14's run id recorded, `EXPECTED` 13 → 14 |
+| A19 delivery ledger | RECORDED | run `34097522616` in the ledger, `EXPECTED` 14; will read clean once the scope-pin deployment brings the image level with the tree |
 | A20 usable read surfaces | READY | the live read |
 | A21 living project map | READY | the live read |
 | A22 fast chat routing | DEFERRED | excluded from the denominator by prior authorization |
@@ -87,6 +106,25 @@ decides.
 | 17 | Genuine park and **same-mission** resume | reachable since §49; gate corrected in §50 |
 
 ---
+
+## The fleet, read from production after the deployment
+
+`fleet show`, run `34100003866` at 08:19:49Z. Unchanged, as required:
+
+```
+primary   ENABLED  target=2
+    V1    ENABLED  worker=wkr_1cdd82cf…  secret=BRAIN_ROUTINE_TOKEN
+          fires=66  refusals=0  no-shows=0  in-flight=1
+friend-2  ENABLED  target=2
+    V2    QUARANTINED  secret=BRAIN_ROUTINE_TOKEN_2
+          fires=12  refusals=0  no-shows=0  in-flight=0
+```
+
+V2 stays quarantined. V1 is healthy on both counters that can condemn a
+surface — a refusal is not misconduct and never quarantines, and the no-show
+counter has been credited from arrivals since Step 11 closed. The two
+`verify-hosted-*` accounts have never had their secrets set and are reported as
+not routable, which is what that state is for.
 
 ## What is deliberately not being done
 
