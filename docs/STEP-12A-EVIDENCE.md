@@ -5026,3 +5026,149 @@ The grant is exactly the approved proposal, expiry included. The idea has been
 judged — `WORTH_DOING`, with a stored reason — and a mission, an orchestration
 and a bin exist for it, which is conditions 5, 8 and 9's shape. `MERGES 0` is
 condition 4, and §54 is about why.
+
+## 54. What the live run found — 2026-09-07
+
+Three defects, none of them visible from reading. Each was found by driving the
+connected path in production and then asking a deployed diagnostic which of two
+explanations was true, rather than guessing.
+
+### 1. The near-duplicate was never told a repeat is worth capturing
+
+Condition 4 asks for deterministic **and** semantic dedupe. The owner sent the
+near-duplicate at 21:26:58Z; the turn completed at 21:33:18Z and produced
+**neither a second candidate nor a merge row**.
+
+`step10 turn-diagnose rmsg_db75a5da08f9412c9905` separates the two
+explanations and says which:
+
+```
+produced      {"accepted":"ANSWER_ONLY","effect":"UNSUPPORTED"}
+action        ANSWER_ONLY
+parts         answer present (941 chars)  candidate absent  probe absent  reason present (257 chars)
+fields        confidence 90  keys [action answer confidence projectId reason]
+validation    OK
+by source message  0     merges touching it 0
+```
+
+Not a refusal by Brain, and not a capture the gate declined. The worker did not
+propose one.
+
+**That was the manifest's fault.** The open-ideas list *was* on the bin — same
+project, same visibility, `rcn_85f9689b461c4972a1ba` unmerged — and so were both
+`duplicateOf` lines. But both of them begin "for CAPTURE_CANDIDATE": they say
+how to *modify* a capture, and nothing said that a message repeating an idea
+already on the list is one. Shown an idea plainly already recorded, answering it
+is the obvious reading.
+
+So the capability had a caller in code and no reason to fire — §49's "a
+mechanism nothing calls is not a mechanism", one level up, at the contract
+rather than the code. The branch is now stated before the modifier, only when
+there is a real idea to name, and it states what Brain *does* rather than what
+to conclude: the server still re-resolves the id in scope, refuses one already
+merged, and holds both statements to `SEMANTIC_MERGE_FLOOR`. A worker that names
+a repeat that is not one gets two ideas, which is the guard working.
+
+### 2. A packet was created from the word "test"
+
+This is the expensive one, and everything about it was invisible until the bin's
+own event log was read.
+
+At 21:31:18Z the judgment for `rcn_85f9689b461c4972a1ba` launched
+`rms_8e96b5f246464c069451` / `orc_e1afa97f566d4b468373`. The bin's title is
+`test`. So is the packet's. `step10 trace bin_2922f249b95845ddb193`:
+
+```
+21:31:19.989  BIN_READY
+21:32:58.187  BIN_ASSIGNED   wkr_1cdd82cf…
+21:33:18.042  BIN_RELEASED   "This packet's own manifest is corrupted placeholder content: title/objective/rat…"
+21:33:21.504  BIN_ASSIGNED
+21:34:02.862  BIN_RELEASED   "Same corrupted orchestration as before (orc_e1afa97f566d4b468373): manifest obje…"
+21:34:05.334  BIN_ASSIGNED
+21:34:22.076  BIN_RELEASED   "Third release of the same corrupted orchestration (orc_e1afa97f566d4b468373, RES…"
+…  22 minutes of DISPATCH_UNROUTED / DISPATCH_DEFERRED  ACCOUNT_TARGETS_REACHED
+21:56:36.506  BIN_ASSIGNED
+21:58:55.587  BIN_COMPLETION_REFUSED  "The packet is NEEDS_HUMAN, which is not a state it files a report in."
+21:58:55.630  BIN_TERMINAL  NEEDS_HUMAN
+```
+
+and `packet-report --orchestration orc_e1afa97f566d4b468373`:
+
+```
+title       test
+status      NEEDS_HUMAN   pass PLAN
+approval    RUSSELL_STATE_LICENSING_V1 — authorized by usr_14439966398243339341 at 21:31:19.509Z
+failure     A planning work item finished without recording anything.
+FRAGMENTS (0) · REQUIREMENTS (0)
+WORK ITEMS (1)  RESEARCH_PLAN FAILED
+EVIDENCE    claims 0 stored, 0 accepted · passes 0 · audits 0
+```
+
+**The worker was right three times, and nothing upstream had asked the
+question.** `validatePlan` bounded every field from above and none from below,
+so `{title: 'test', objective: 'test', assignment: 'test', whyNow: 'test'}` was
+a valid specification. Brain reserved a mission and twelve fragments against the
+owner's standing authority and fired the fleet at it.
+
+Everything after the launch behaved correctly: the worker refused the manifest
+rather than researching nonsense, `requestCompletion` refused to file, and the
+park happened. The `ACCOUNT_TARGETS_REACHED` runs are the preserved fleet
+settings doing exactly what they are set to do, not a fault.
+
+§12 already holds this rule for the other producer of prose — a provider
+returning placeholder content "declares `placeholder: true` and is refused for
+staged research outright". Brain applied it to a provider's output and never to
+a worker's plan. `PLAN_MINIMUMS` is the other end of `PLAN_LIMITS`, with a
+whole-field placeholder vocabulary matched exactly rather than as a substring,
+and the plan manifest now states both bounds.
+
+**It is a floor, not a judgement of quality.** It asks whether there is an
+assignment here, exactly as `shouldCapture` asks whether there is an idea here.
+Deciding whether a well-formed assignment is a *good* one would be model prose
+judging model prose, and nothing does that.
+
+### 3. The park explained a different stop than the one that happened
+
+`parkStoppedMissions` worked — the mission parked, `rhr_b63a5478249e4b508803`
+opened, and the Needs You count went to 1, all with nobody involved. But its
+`whyNotRussell` was a constant: *"The evidence bar was not met and the repair
+ladder is spent."* Neither had happened. This packet held zero fragments, zero
+claims and zero passes; nothing had been searched and no ladder had been walked.
+And beneath that sentence sat an offer to **record what could not be settled**,
+on a packet with nothing to record.
+
+That is §24's own sentence at a fourth altitude. A park whose explanation
+contradicts its reason teaches a person to stop reading the explanation, and a
+choice that cannot act on this packet is a choice nothing implements — for the
+only packet the person is looking at.
+
+Both are now derived from rows. The sentences follow which stop it is, and
+`RECORD_GAPS` is not offered to a packet with no fragments. The guard is also at
+the transition and not only at the offer, because the production request already
+carries both choices on its row: authorizing unresolved gaps on an empty packet
+would record a person's name against a decision about nothing. It stays OPEN and
+says why, rather than being marked resumed.
+
+### What the tests had been doing
+
+Two park tests built their own starting state — a `NEEDS_HUMAN` packet with **no
+fragments**, then `RECORD_GAPS` answered on it. They passed. They were rehearsing
+the production defect and calling it a pass. Both now build the research their
+stop presupposes, and two new tests cover the empty-packet park and the stale
+offer.
+
+### What was deliberately not built
+
+**`REPLAN`.** The packet's own failure reason names it — "re-plan it, or
+investigate why the worker completed without submitting" — and Brain does not
+offer it, which looks like the missing-transition defect again. It is not, here,
+and the difference is worth writing down: re-planning *this* packet would
+re-plan the word "test". The assignment is the thing that was wrong, so a second
+plan from the same assignment is not a repair. `packetRunner`'s own comment
+already records the decision that a no-op plan item is not automatically
+replaced and that a person looks at it.
+
+A packet whose plan failed for an unrelated reason — a crash, a blocked surface
+— is a different case and has no route out of Needs You. That is a real gap,
+recorded for Step 12B rather than built mid-run, because building it would make
+this deployment something other than the bounded repair it is.
