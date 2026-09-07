@@ -110,3 +110,66 @@ So:
 Nothing. Running it needs the owner's approval of the authority limits, then of
 the deployment, then of the run itself. No expectation in it may change after a
 result is seen; a scenario that cannot fail has not been passed.
+
+---
+
+## 6. Amendment, 2026-09-07 — two more frozen messages
+
+Recorded as an amendment rather than an edit, because the inputs above were
+frozen so they could not be adjusted to fit a result, and adding to them is a
+change somebody should be able to see.
+
+### Why there is a second near-duplicate
+
+The frozen near-duplicate was sent and **produced nothing** — no second
+candidate, no merge. `turn-diagnose` established that the worker answered
+`ANSWER_ONLY` with a validated proposal: it was never told that a message
+repeating an open idea is still a capture. That is §54.1, and it is Brain's
+defect, repaired in mutation 18.
+
+So this is not a second attempt at the same question against the same contract.
+It is the first attempt against the repaired one. The original near-duplicate
+keeps its row and its outcome.
+
+> Let me put the assessment roll question a third way: do those counties publish
+> the rolls in bulk or via an API we could consume, and on what terms?
+
+**Measured against `SEMANTIC_MERGE_FLOOR` before being frozen**, which is the
+part worth stating: overlap **0.615** against the first message and **0.444**
+against the frozen near-duplicate, both above the 0.34 a merge needs. The
+earlier draft of this line scored 0.20 and was discarded — a pair below the
+floor would have failed condition 4 with the guard working correctly, which is a
+badly chosen input rather than a result.
+
+Those numbers are on the **messages**. `capture` compares the two candidates'
+*statements*, which a worker writes from them, so this is a strong proxy and not
+the thing measured. If the merge is still refused, the score and the shared
+terms are recorded and reported as the guard's decision, not tuned away.
+
+**Expected:** a merge row on `rcn_85f9689b461c4972a1ba` with `method =
+'SEMANTIC'`. A second canonical candidate fails condition 4.
+
+### Why there is a fresh question
+
+Conditions 11 to 15 need a mission that actually researches something.
+`rcn_85f9689b461c4972a1ba` cannot supply one: its recorded judgment holds the
+placeholder specification of §54.2, its mission is spent, and §5 forbids
+rewriting history. A different idea, judged under the repaired floor, is the
+honest route.
+
+> Different question for the same layer: when a property changes hands, how
+> quickly does the county register show it — is there a lag between the closing
+> and the record appearing, and how long is it?
+
+Overlap **0.133** against the first message, well below the floor, so it will
+not be folded in. Same layer, genuinely different fact, and researchable from
+the same county sources.
+
+**Expected:** a new canonical candidate, judged, and one mission — the second and
+last the standing authority allows.
+
+### What is not changed
+
+The project, the layer, the anchor conversation, the standing authority and its
+four ceilings, the three-attempt turn limit, the fleet settings, and every
+earlier row.
