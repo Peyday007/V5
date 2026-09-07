@@ -368,6 +368,35 @@ async function createTurnBin(input: {
          */
         ...(openIdeas.ideas.length > 0
           ? [
+              /*
+               * When to take the branch, before how to take it.
+               *
+               * This line is here because the near-duplicate turn of
+               * S12A-ACC-2 did not produce one. The worker was offered the
+               * open-ideas list and the two lines below, read a message that
+               * plainly repeated the one open idea, and answered
+               * `ANSWER_ONLY` with confidence 90 — a completely reasonable
+               * reading of what it was told. Both lines below begin "for
+               * CAPTURE_CANDIDATE": they say how to *modify* a capture, and
+               * nothing said a repeat is one. Shown an idea already on the
+               * list, the obvious conclusion is that there is nothing left to
+               * record.
+               *
+               * So the capability had a caller in code and no reason to fire —
+               * §49's "a mechanism nothing calls is not a mechanism" one level
+               * up, at the contract rather than the code.
+               *
+               * It states what Brain does, not what to conclude. Whether the
+               * two are really the same idea is still decided afterwards and
+               * elsewhere: the server re-resolves the id in scope, refuses one
+               * already merged or out of scope, and holds the two statements
+               * to SEMANTIC_MERGE_FLOOR. A worker that names a repeat that is
+               * not one gets two ideas, which is the guard working.
+               */
+              'asking again is not nothing: a message that repeats an idea already ' +
+                'listed above is still CAPTURE_CANDIDATE rather than ANSWER_ONLY — the ' +
+                'repeat is a fact about the conversation, and Russell folds it into the ' +
+                'open idea rather than listing it twice or losing it',
               'for CAPTURE_CANDIDATE: if this repeats one of the ideas listed under ' +
                 '"Ideas already open" above, set candidate.duplicateOf to that idea id ' +
                 'and still give the title and statement — Russell folds it in rather than ' +

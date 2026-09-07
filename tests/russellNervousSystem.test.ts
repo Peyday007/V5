@@ -1556,6 +1556,87 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
     expect(missing, 'limits the manifest never states').toEqual([]);
   });
 
+  it('tells the worker a repeat is still something to capture', async () => {
+    /*
+     * The production turn this exists for, and the one condition 4 turned on.
+     *
+     * S12A-ACC-2's near-duplicate reached a worker on 2026-09-07 with the
+     * open-ideas list on its manifest and the `duplicateOf` contract stated
+     * underneath. The worker answered `ANSWER_ONLY`, confidence 90, and
+     * created nothing — so no second candidate existed, no `duplicateOf` was
+     * ever claimed, and the SEMANTIC merge path had nothing to run on.
+     *
+     * That was the manifest's fault, not the worker's. Both `duplicateOf`
+     * lines begin "for CAPTURE_CANDIDATE": they say how to modify a capture,
+     * and nothing said that a message repeating an idea already on the list is
+     * one. Shown an idea plainly already recorded, answering is the obvious
+     * reading.
+     *
+     * So this asserts the branch is offered before the modifier is — and, as
+     * the second half, that the offer only appears when there is a real idea
+     * to name. A manifest that invites a reference to an empty list is
+     * inviting an invented id.
+     */
+    const conversation = await ownedConversation('Repeats');
+
+    // Nothing open yet: the whole duplicate contract must be absent.
+    const first = await beginTurn({
+      principal: principal([membership(projectId)]),
+      conversationId: conversation.id,
+      content: 'Which counties publish permit data?',
+    });
+    const empty = JSON.stringify((await getBin(first.binId!))!.manifest);
+    expect(empty).not.toContain('Ideas already open');
+    expect(empty).not.toContain('duplicateOf');
+    expect(empty).not.toContain('asking again is not nothing');
+
+    // One open idea, captured the way a turn captures one.
+    expect(
+      await answerTurnBin(first.binId!, {
+        action: 'CAPTURE_CANDIDATE',
+        answer: 'Wayne, Oakland and Macomb publish permit data; the rest are mixed.',
+        candidate: {
+          title: 'County permit data availability',
+          statement:
+            'Establish which Michigan counties publish building permit data in a ' +
+            'machine-readable form, and on what cadence.',
+        },
+        priority: 'WORTH_DOING',
+        reason: 'It decides whether the coverage layer can be automated at all.',
+      }),
+    ).toBe('COMPLETE');
+    const applied = await applyTurn(first.binId!);
+    expect(applied.ok).toBe(true);
+    expect(applied.candidateId).not.toBeNull();
+
+    // Now the same question again, in different words.
+    const second = await beginTurn({
+      principal: principal([membership(projectId)]),
+      conversationId: conversation.id,
+      content: 'Can we get permit data out of the counties automatically?',
+    });
+    const written = JSON.stringify((await getBin(second.binId!))!.manifest);
+
+    expect(written).toContain('Ideas already open');
+    // The branch, stated as a branch.
+    expect(
+      written,
+      'the manifest never tells the worker a repeat is still a capture',
+    ).toContain('still CAPTURE_CANDIDATE rather than ANSWER_ONLY');
+    // And the modifier, still there underneath it.
+    expect(written).toContain('candidate.duplicateOf');
+    expect(written).toContain('duplicateOf is a claim, not an instruction');
+
+    /*
+     * And the order. The modifier read first is the reading that produced
+     * ANSWER_ONLY in production, so "both lines are present somewhere" is not
+     * the property being asserted.
+     */
+    expect(written.indexOf('still CAPTURE_CANDIDATE rather than ANSWER_ONLY')).toBeLessThan(
+      written.indexOf('candidate.duplicateOf'),
+    );
+  });
+
   it('refuses an action it cannot carry out instead of reporting success', async () => {
     /*
      * The production failure this exists for.
