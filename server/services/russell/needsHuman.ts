@@ -28,7 +28,12 @@
  * up, and it is the one that produced this module.
  */
 import { currentFragments, getOrchestration } from '../../repos/research.ts';
-import { askHuman, getMission, transitionMission } from '../../repos/russellMissions.ts';
+import {
+  askHuman,
+  getMission,
+  reopenRequest,
+  transitionMission,
+} from '../../repos/russellMissions.ts';
 import { getUser } from '../../repos/identity.ts';
 import { getDb } from '../../db/database.ts';
 import { authorizeUnresolvedGaps } from '../research/gapPolicy.ts';
@@ -71,6 +76,19 @@ export const NEEDS_HUMAN_CHOICES = {
 } as const satisfies Record<string, HumanRequestChoice>;
 
 export type NeedsHumanChoice = keyof typeof NEEDS_HUMAN_CHOICES;
+
+/**
+ * The answers a packet in this shape can actually take.
+ *
+ * One function, called by the park that writes the card and by the reopen that
+ * corrects it, so the two can never disagree about what is offerable. A packet
+ * with no fragments has no report to file and no unresolved questions to name,
+ * so `RECORD_GAPS` would be a button that does nothing — the failure this
+ * module exists to fix, wearing the module's own clothes.
+ */
+export function choicesFor(hasEvidence: boolean): HumanRequestChoice[] {
+  return hasEvidence ? Object.values(NEEDS_HUMAN_CHOICES) : [NEEDS_HUMAN_CHOICES.STOP];
+}
 
 /** States a mission can be parked *from*. A terminal one is not interrupted. */
 const PARKABLE = new Set(['PLANNED', 'LAUNCHING', 'RUNNING', 'WAITING']);
@@ -180,9 +198,7 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
        * it would be offering a button that does nothing — the failure this
        * module exists to fix, wearing the module's own clothes.
        */
-      choices: hasEvidence
-        ? Object.values(NEEDS_HUMAN_CHOICES)
-        : [NEEDS_HUMAN_CHOICES.STOP],
+      choices: choicesFor(hasEvidence),
         // The packet is stopped and everything behind it is waiting, which is
       // what BLOCKING means here. Not URGENT: nothing is degrading, and an
       // urgency that is always the highest one stops sorting anything.
@@ -261,6 +277,33 @@ export async function resumeAnsweredRequest(
     missionId: mission.id,
     settled: false,
   };
+}
+
+/**
+ * Put an answer that could not be carried out back in front of the person.
+ *
+ * Which choices come back is decided here, from the packet, by the same
+ * function the park uses — so a card that reappears offers only answers this
+ * packet can actually take. Deriving it rather than storing it once is the
+ * property the offer itself lacked: the row was written when the packet had a
+ * different shape, and the shape is what decides.
+ *
+ * Never invents a reason. `reason` is what `resumeAnsweredRequest` returned,
+ * which is Brain's own sentence about its own refusal.
+ */
+export async function reopenAnswered(
+  request: RussellHumanRequest,
+  reason: string,
+): Promise<boolean> {
+  const mission = request.missionId ? await getMission(request.missionId) : null;
+  const orchestrationId = mission?.orchestrationId ?? null;
+  const hasEvidence =
+    orchestrationId !== null && (await currentFragments(orchestrationId)).length > 0;
+  return reopenRequest({
+    requestId: request.id,
+    choices: choicesFor(hasEvidence),
+    recommendation: reason,
+  });
 }
 
 async function stop(mission: RussellMission): Promise<boolean> {

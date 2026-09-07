@@ -586,6 +586,46 @@ export async function answerHumanRequest(input: {
 }
 
 /**
+ * Put a request back in front of a person, with the answers that can still act.
+ *
+ * The module's own comment said an answer nothing could carry out was "left
+ * OPEN rather than marked resumed", and that was **not what the code did**. It
+ * was left `ANSWERED` — and `listOpenRequests` selects `state = 'OPEN'`, so the
+ * card vanished from Needs You the moment the person clicked, and nothing ever
+ * happened. A decision that disappears when you answer it is the same defect as
+ * a decision nothing carries out, wearing better clothes.
+ *
+ * That was unreachable in practice until a second refusal became real: a
+ * `RECORD_GAPS` answered on a packet holding no fragments. A request written
+ * before the offer was narrowed still carries the wider choice set on its row,
+ * and `answerHumanRequest` validates against exactly that row.
+ *
+ * So the answer is undone and the card comes back **narrowed** to the choices
+ * that can act, which is itself the explanation: the option that would have
+ * done nothing is no longer there. The refusal goes into `recommendation` —
+ * "what it recommends" — because saying which remaining answer finishes this,
+ * and why the other one did not, is precisely that.
+ *
+ * Guarded on `ANSWERED`, so two observers of the same failure reopen it once.
+ * Nothing here can reopen a `RESUMED` request: an answer that was carried out
+ * stays carried out.
+ */
+export async function reopenRequest(input: {
+  requestId: string;
+  choices: HumanRequestChoice[];
+  recommendation: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE russell_human_requests
+        SET state = 'OPEN', answered_by_user_id = NULL, answered_choice = NULL,
+            answered_at = NULL, choices = ?, recommendation = ?, updated_at = ?
+      WHERE id = ? AND state = 'ANSWERED'`,
+    [toJson(input.choices), input.recommendation, nowIso(), input.requestId],
+  );
+  return result.changes === 1;
+}
+
+/**
  * Mark an answered request as having been acted on.
  *
  * Guarded on `ANSWERED`, so the resume runs once however many observers notice

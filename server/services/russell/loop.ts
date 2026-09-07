@@ -62,7 +62,7 @@ import { outcomeOf, writeBack } from './writeback.ts';
 import { launch, repairLaunches, type LaunchInput } from './launch.ts';
 import { applyTurn } from './turn.ts';
 import { applyPlan, judgeCandidate } from './planning.ts';
-import { parkStoppedMissions, resumeAnsweredRequest } from './needsHuman.ts';
+import { parkStoppedMissions, reopenAnswered, resumeAnsweredRequest } from './needsHuman.ts';
 import { parseJson } from '../../repos/util.ts';
 import type { RussellMission, RussellVisibility } from '../../domain/types.ts';
 
@@ -352,15 +352,23 @@ export async function tick(owner: string): Promise<TickReport> {
      * A person could answer the same question forever and never see it move.
      *
      * `resumeAnsweredRequest` performs the decision — the authorization, or the
-     * stop — and says whether it succeeded. A request it could not carry out
-     * stays `ANSWERED` rather than being marked resumed, because a decision
-     * recorded as acted-on and not acted-on is the exact failure this whole
-     * path exists to prevent.
+     * stop — and says whether it succeeded. A request it could not carry out is
+     * **put back in front of the person**, because a decision recorded as
+     * acted-on and not acted-on is the exact failure this whole path exists to
+     * prevent.
+     *
+     * It used to be left `ANSWERED`, and the comment here said that kept it
+     * visible. It did not: `listOpenRequests` selects `state = 'OPEN'`, so the
+     * card left Needs You the instant the person clicked and nothing ever
+     * happened — the same disappearance, one state along. `reopenAnswered`
+     * undoes the answer and narrows the choices to the ones that can still act,
+     * so what comes back is a card whose remaining options are true.
      */
     for (const request of await listAnsweredRequests(cycle.maxEventsPerCycle)) {
       const outcome = await resumeAnsweredRequest(request);
       if (!outcome.settled) {
         report.unresolvedAnswers.push({ requestId: request.id, reason: outcome.reason });
+        await reopenAnswered(request, outcome.reason);
         continue;
       }
       if (await markResumed(request.id)) report.resumed.push(request.id);

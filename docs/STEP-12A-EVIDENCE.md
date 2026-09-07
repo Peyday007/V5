@@ -5172,3 +5172,76 @@ A packet whose plan failed for an unrelated reason — a crash, a blocked surfac
 — is a different case and has no route out of Needs You. That is a real gap,
 recorded for Step 12B rather than built mid-run, because building it would make
 this deployment something other than the bounded repair it is.
+
+## 55. Mutation 18, and the decision that vanished when you answered it — 2026-09-07
+
+### Mutation 18 is deployed
+
+Run `34167283685` from `15cfc58`: typecheck, 1,761 tests, build, deploy, hosted
+verification, a real unannounced restart, and hosted verification again — every
+step green. The three §54 repairs are live.
+
+### And then §54.3 was only half a repair
+
+Narrowing the *offer* does nothing for a request already written. The
+production one — `rhr_b63a5478249e4b508803` — still carries both choices on its
+row, and `answerHumanRequest` validates against exactly that row, on purpose.
+So the guard at the transition was the half that mattered.
+
+Checking what a person would actually see when they hit that guard found
+something worse than an unhelpful click.
+
+`resumeAnsweredRequest` returns `settled: false` for an answer it cannot carry
+out, and the loop left the request `ANSWERED`. `needsHuman.ts` said so in
+those words:
+
+> Left OPEN rather than marked resumed: pretending to have acted on a decision
+> nothing carried out is the failure this module exists to fix, and a request
+> that stays visible is one somebody can ask about.
+
+**It was not left OPEN.** `listOpenRequests` selects `state = 'OPEN'`, and
+`ANSWERED` is not that. The card leaves Needs You the instant a person clicks,
+and nothing happens. The comment described an intention; the code did the
+opposite of it.
+
+That was unreachable in practice while the only refusal was "an answer this
+version does not implement", which nothing could produce. Mutation 18 made a
+second refusal real, and with it the disappearance.
+
+### The test that should have caught it
+
+```
+it('leaves an answer it cannot carry out visible, rather than marking it resumed')
+  …
+  expect((await getHumanRequest(request.id))!.state).toBe('ANSWERED');
+```
+
+The name asks whether it stays **visible**. The assertion asks what a column
+says. Those are different questions and the second one passed on a card nobody
+could see. It now asserts `listOpenRequests` — where a person actually looks —
+which is the property the name always claimed.
+
+### The repair
+
+`reopenRequest` undoes the answer under a guarded `UPDATE ... WHERE state =
+'ANSWERED'`, and the card comes back **narrowed** to the choices that can act,
+which is itself the explanation: the option that would have done nothing is no
+longer on it. Brain's own refusal sentence becomes the `recommendation`, which
+is what that column is for. Nothing can reopen a `RESUMED` request — an answer
+that was carried out stays carried out.
+
+Which choices come back is decided by `choicesFor(hasEvidence)`, the same
+function the park uses, so the card that is written and the card that corrects
+it can never disagree about what is offerable. **Derived, not stored** — the
+row was written when the packet had a different shape, and the shape is what
+decides. That is `pending.ts`'s rule at a second surface: a state that cannot
+become wrong is not an explanation.
+
+### The correction to what was reported
+
+An earlier message in this session said that clicking the wrong choice on the
+production request would be "refused at the transition with the reason, and the
+request stays open rather than being marked answered; nothing is damaged either
+way". The first half was right and the second was wrong: it moved to `ANSWERED`
+and disappeared. Recorded here rather than quietly fixed, the same way §22
+records Step 7's wrong reasoning about OAuth.

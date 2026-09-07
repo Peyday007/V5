@@ -891,14 +891,48 @@ describe('the loop keeps going without anybody watching', () => {
     });
     const after = await tick('instance-a');
     expect(after.resumed).not.toContain(request.id);
+    expect(after.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
 
     // Nothing was authorized in anybody's name.
     const orchestration = await getOrchestration(mission.orchestrationId!);
     expect(orchestration!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
     expect(orchestration!.unresolvedGapAuthorizedBy).toBeNull();
-    // And the decision is still visible rather than marked answered and dropped.
-    expect((await getHumanRequest(request.id))!.state).not.toBe('RESUMED');
     expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
+
+    /*
+     * And the decision came *back*, rather than staying answered.
+     *
+     * This is the assertion that would have caught the defect. The module's
+     * comment said an uncarried-out answer was "left OPEN rather than marked
+     * resumed" — and the code left it `ANSWERED`, which `listOpenRequests` does
+     * not select. The card vanished from Needs You the moment the person
+     * clicked, and nothing happened. Asserting `state !== 'RESUMED'` passed
+     * happily through that.
+     */
+    const reopened = (await getHumanRequest(request.id))!;
+    expect(reopened.state).toBe('OPEN');
+    expect(reopened.answeredChoice).toBeNull();
+    expect(reopened.answeredByUserId).toBeNull();
+    // Visible where a person looks, which is the property that matters.
+    expect(
+      (await listOpenRequests(projectId)).map((entry) => entry.id),
+      'the decision left Needs You when it was answered',
+    ).toContain(request.id);
+    // Narrowed to what this packet can now take, so the option that did
+    // nothing is not offered a second time.
+    expect(reopened.choices.map((choice) => choice.key)).toEqual([NEEDS_HUMAN_CHOICES.STOP.key]);
+    // And Brain's own sentence about the refusal, not one invented for the card.
+    expect(reopened.recommendation).toMatch(/no fragments/i);
+
+    // Answering it the way that can act finishes it.
+    await answerHumanRequest({
+      requestId: request.id,
+      actorUserId: userId,
+      choice: NEEDS_HUMAN_CHOICES.STOP.key,
+    });
+    const finished = await tick('instance-a');
+    expect(finished.resumed).toContain(request.id);
+    expect((await getMission(mission.id))!.state).toBe('CANCELLED');
   });
 
   it('leaves an answer it cannot carry out visible, rather than marking it resumed', async () => {
@@ -964,7 +998,27 @@ describe('the loop keeps going without anybody watching', () => {
     const result = await tick('instance-a');
     expect(result.resumed).not.toContain(request.id);
     expect(result.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
-    expect((await getHumanRequest(request.id))!.state).toBe('ANSWERED');
+
+    /*
+     * This assertion used to read `toBe('ANSWERED')`, under a test whose name
+     * says the answer is left **visible**. It was not: `listOpenRequests`
+     * selects `state = 'OPEN'`, so an `ANSWERED` request is gone from Needs
+     * You. The test asserted the state and never asked the question its own
+     * name asks, so it passed on a card that disappeared when a person
+     * clicked it.
+     *
+     * The property is where a person looks, not what a column says.
+     */
+    expect((await getHumanRequest(request.id))!.state).toBe('OPEN');
+    expect(
+      (await listOpenRequests(projectId)).map((entry) => entry.id),
+      'an answer nothing carried out left Needs You',
+    ).toContain(request.id);
+    // The unimplementable choice is not offered again, and the packet decides
+    // what is: this one has no fragments, so stopping is all that can act.
+    expect((await getHumanRequest(request.id))!.choices.map((choice) => choice.key)).toEqual([
+      NEEDS_HUMAN_CHOICES.STOP.key,
+    ]);
   });
 
   it('ends a probe whose deadline passed, honestly, rather than leaving it running', async () => {
