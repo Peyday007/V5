@@ -22,8 +22,13 @@ Everything scoped is waiting on the same two facts, and neither is a code
 change:
 
 1. **A standing research authority for Deal Dispatch**, granted by the owner in
-   the operator console. Without it every judged idea parks — correctly — and
-   conditions 7 to 15 cannot run at all.
+   **Russell, under "Needs you"**. Without it every judged idea parks —
+   correctly — and conditions 7 to 15 cannot run at all.
+
+   It was briefly on the operator console, which was a mistake: §22's rule that
+   the console holds the button is about *machines*, and 12A took that console
+   off the normal route. Mutation 15 moved it. Nobody is sent to `/operator` for
+   this.
 2. **The frozen message, sent by a person into a new conversation.** Condition 1
    is "one human message, one turn"; a row inserted by a script is not that.
 
