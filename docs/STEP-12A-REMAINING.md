@@ -161,6 +161,41 @@ decides.
 
 ---
 
+## The run is under way — S12A-ACC-2
+
+`chain-watch` on the anchor, run `34161633943` at 21:02:30Z.
+
+```
+STANDING AUTHORITY  1 grant(s)
+  rgl_30e34d717d9f4b47a6a9  ACTIVE   Deal Dispatch discovery research
+  missions 2 · fragments 12 · concurrent 1 · probes 3
+  owner usr_14439966398243339341   granted 2026-09-07T20:53:22.449Z
+  expires 2026-10-06T00:00:00.000Z
+
+ANCHOR  rcv_02d5312e9d41465a9e0f   2026-09-07T20:53:45.528Z   turns=2
+  rmsg_e86bc50020aa4833b183  USER    COMPLETE  chars=203
+  rmsg_fca6315a4d1e4bd1bbc9  RUSSELL COMPLETE  chars=664
+
+IDEAS  1
+  rcn_85f9689b461c4972a1ba  CAPTURED  canonical=—  override=no  followOnOf=—
+MERGES 0 · PROBES 0 · MISSIONS 0 · NEEDS YOU 0
+LOOP  RUNNING  gen=10634  last error none
+```
+
+**The grant is exactly the approved proposal**, expiry included — the instant,
+not the end of its day and not unlimited.
+
+**Condition 3's shape holds so far.** One candidate, `canonical_candidate_id`
+null, in the anchor conversation, with no merge row. Scenario 2 §4 named the
+way this could have gone wrong — a first capture folding into the pre-existing
+permit idea `rcn_23e70baee1ba47478c28`, which would make condition 3
+unsatisfiable and condition 4 untestable, and would be a fault in the scenario
+rather than in Brain. It did not happen.
+
+What is **not** yet decided: the candidate carries no priority and no reason, so
+`judgeCandidate` has either not run or has asked a worker and is waiting. That
+is the next thing to watch, not a result.
+
 ## Production, read after mutation 16
 
 `chain-watch`, run `34160122219` at 20:37:48Z — the first time it has been able
