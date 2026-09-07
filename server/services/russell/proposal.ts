@@ -62,7 +62,19 @@ export interface ValidatedProposal {
   confidence: number | null;
   /** Why, in words a person reads. */
   reason: string | null;
-  candidate: { title: string; statement: string } | null;
+  candidate: {
+    title: string;
+    statement: string;
+    /**
+     * A candidate this repeats, named by the worker that read both.
+     *
+     * Shape-checked here and nothing more. Whether the id exists, is in this
+     * scope, and is close enough in subject to be the same idea are all
+     * questions about rows, so `capture` answers them against rows — and
+     * refuses the merge, rather than the proposal, when it disagrees.
+     */
+    duplicateOf: string | null;
+  } | null;
   probe: { question: string; maxLookups: number } | null;
   priority: CandidatePriority | null;
 }
@@ -82,6 +94,7 @@ export interface ProposalRefusal {
     | 'BAD_PRIORITY'
     | 'UNRESOLVABLE_REFERENCE'
     | 'MISSING_REQUIRED_PART'
+    | 'BAD_DUPLICATE_REFERENCE'
     | 'PROBE_OUT_OF_BOUNDS';
 }
 export type ProposalResult = { ok: true; proposal: ValidatedProposal } | ProposalRefusal;
@@ -287,7 +300,22 @@ export function validateProposal(input: {
     if (!title || !statement) {
       return refuse('MISSING_REQUIRED_PART', 'a proposed idea needs a title and a statement');
     }
-    candidate = { title, statement };
+    let duplicateOf: string | null = null;
+    const named = (value as Record<string, unknown>)['duplicateOf'];
+    if (named !== undefined && named !== null) {
+      // Shape only. A well-formed id that names nothing, or names something in
+      // another scope, is refused later by `capture` as a merge that will not
+      // happen — not here as a proposal that cannot be acted on, because the
+      // rest of the capture is still worth performing.
+      if (typeof named !== 'string' || !/^rcn_[0-9a-f]{20}$/.test(named)) {
+        return refuse(
+          'BAD_DUPLICATE_REFERENCE',
+          'the proposal named a duplicate that is not an idea reference',
+        );
+      }
+      duplicateOf = named;
+    }
+    candidate = { title, statement, duplicateOf };
   }
 
   let probe: ValidatedProposal['probe'] = null;

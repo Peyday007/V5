@@ -343,3 +343,37 @@ The fix is to count MISSION against `maxMissions` cumulatively and check
 `maxConcurrent` against currently-`HELD` rows only. It changes the semantics of
 a safety control, so it is a decision somebody makes deliberately rather than
 something to slip into an acceptance run.
+
+## Recorded during the connected integration pass — 2026-09-07
+
+The pass repaired five transitions with no production caller (see
+`docs/STEP-12A-EVIDENCE.md` §49). Three things it deliberately did **not**
+change are recorded here rather than fixed mid-acceptance.
+
+### The proposal validator's unknown-field rule stops at the top level
+
+`validateProposal` refuses a whole proposal for an unrecognised top-level field,
+which is the rule §24 states. Inside the `candidate` object it does not: an
+unknown key there is silently ignored. The claim in §24 is therefore broader
+than the code.
+
+Extending strictness inward is the correct fix and is a *widening of the refusal
+surface* — a worker that has been permitted to send an extra key would start
+having whole proposals refused. Not something to change while an acceptance run
+is live. The same applies to `probe` and, now, `mission.followOn` (which does
+check its own keys, so the inconsistency is between sub-objects too).
+
+### `failProbe` still has no caller, and that is a choice
+
+A probe whose run throws leaves the row `RUNNING`; `listExpiredProbes` ends it
+at `UNKNOWN` when the deadline passes. Recovery is real but slow, and it means
+the difference between "the probe crashed" and "the probe ran out of time" is
+not recorded. Worth a direct failure path; not worth adding one blind.
+
+### A follow-on chain is bounded only by the authority's budget
+
+A mission's follow-on may itself declare a follow-on, and nothing caps the depth
+— the ceiling that stops it is `maxMissions`. That is a real bound and a
+sensible one, but it is a *budget* bound rather than a structural one, so a
+generous grant permits a long chain nobody explicitly asked for. Worth a
+declared maximum depth, or a rule that a follow-on may not itself declare one.

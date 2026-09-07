@@ -54,6 +54,7 @@ function mapCandidate(row: RussellCandidateRow): RussellCandidate {
     overrideReason: row.override_reason,
     overrideAt: row.override_at,
     supersededDecision: row.superseded_decision,
+    followOnOfMissionId: row.follow_on_of_mission_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -84,6 +85,11 @@ export async function createCandidate(input: {
   visibility?: RussellVisibility;
   conversationId?: string | null;
   sourceMessageId?: string | null;
+  /**
+   * The mission this idea follows on from, when Brain created it from a
+   * finished one. Never supplied by a caller from outside the loop.
+   */
+  followOnOfMissionId?: string | null;
 }): Promise<RussellCandidate> {
   const id = newId('rcn');
   const at = nowIso();
@@ -92,9 +98,9 @@ export async function createCandidate(input: {
        (id, project_id, visibility, conversation_id, source_message_id, title, statement,
         fingerprint, state, canonical_candidate_id, priority, ordinal, confidence, reason,
         judgment, supporting, contradicting, override_user_id, override_reason, override_at,
-        superseded_decision, created_at, updated_at)
+        superseded_decision, follow_on_of_mission_id, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'CAPTURED', NULL, NULL, NULL, NULL, NULL,
-             '{}', '[]', '[]', NULL, NULL, NULL, NULL, ?, ?)`,
+             '{}', '[]', '[]', NULL, NULL, NULL, NULL, ?, ?, ?)`,
     [
       id,
       input.projectId ?? null,
@@ -104,6 +110,7 @@ export async function createCandidate(input: {
       input.title,
       input.statement,
       fingerprintOf(input.statement),
+      input.followOnOfMissionId ?? null,
       at,
       at,
     ],

@@ -4279,6 +4279,7 @@ export interface RussellCandidateRow {
   override_reason: string | null;
   override_at: string | null;
   superseded_decision: string | null;
+  follow_on_of_mission_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -4537,6 +4538,14 @@ export interface RussellCandidate {
   overrideReason: string | null;
   overrideAt: string | null;
   supersededDecision: string | null;
+  /**
+   * The mission whose completion produced this idea, when one did.
+   *
+   * An idea, not a mission: it is judged against the archive like everything
+   * else, because the parent mission has just changed what the archive says.
+   * The parent learns its `next_mission_id` only if and when this launches.
+   */
+  followOnOfMissionId: string | null;
   createdAt: string;
   updatedAt: string;
 }

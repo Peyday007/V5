@@ -1009,6 +1009,16 @@ rules.
   principal. Injection-shaped text is flagged and stored verbatim, never
   filtered: removing it destroys the evidence somebody tried, and the actual
   control is that nothing found inside text is ever executed.
+
+  The same shape decides deduplication by meaning, which nothing could do
+  before: `fingerprintOf` is exact and cannot see a rewording, so the worker
+  that read the conversation names the idea it believes this repeats — and
+  `capture` re-resolves that id **in scope**, refuses one already merged, and
+  holds the two statements to `SEMANTIC_MERGE_FLOOR` before merging anything.
+  Neither half is sufficient: the claim alone would let a confident model fold
+  unrelated ideas into one, and the floor alone cannot recognise a rewording. It
+  is a guard, never the decision, and it only ever *refuses* — which is why the
+  merge is reversible with `splitCandidate` and both rows stay readable.
 - **A turn is validated against the conversation owner's authority, never the
   worker's.** The effects land in the owner's scope, so a worker that could
   widen a thread's reach by answering in it would be escalating through a chat
@@ -1036,6 +1046,28 @@ rules.
   cannot be rebuilt is reported as **orphaned** rather than marked finished.
   Visibly stuck is recoverable; silently complete is a mission nobody looks at
   again.
+
+  **That guarded way out was itself half a transition, and the correction is
+  recorded rather than quietly applied.** Answering a Needs You request flipped
+  the mission back to `RUNNING` and marked the request resumed — while the
+  *packet* underneath stayed at `NEEDS_HUMAN`, so the next tick would have
+  parked it again. A person could have answered the same question every time it
+  reappeared and never learned that their decision was recorded and ignored.
+  That is §24's own sentence at a third altitude, and it survived because
+  nothing ever produced the park: `askHuman` had no caller and nothing wrote a
+  mission into `NEEDS_HUMAN`, so the test that proved the resume built its own
+  starting state. `services/russell/needsHuman.ts` is both halves —
+  **Brain derives the park from the packet's own recorded status**, never from a
+  worker saying it needs one, and every choice offered is one something
+  implements. An answer this version cannot carry out stays visible rather than
+  being marked resumed.
+- **A mechanism nothing calls is not a mechanism.** Walking the whole journey
+  found five transitions that existed, were tested, and could be reached by
+  nothing: a semantic merge, a person's override, the decision a settled probe
+  is *for*, the automatic follow-on, and the park above. Every one of them was
+  invisible to a test that arranged its own starting state, which is why
+  `tests/russellIntegrationPass.test.ts` walks the journey once from a person's
+  first message and simulates only the worker and the network.
 - **Two boundaries meet at the HTTP surface and they are not the same
   boundary.** A project is guarded by `decideProjectAccess`; a conversation is
   guarded by its owner, plus read access to the attached project for a shared
@@ -1206,6 +1238,7 @@ server/
     russell/
       routing.ts        which project a conversation is about, authorization-first
       judgment.ts       what is worth capturing, dedupe, and Russell's own priority
+      similarity.ts     the floor a proposed semantic merge is held to
       coverage.ts       the archive check that runs before any work is created
       launch.ts         the one way a mission comes into existence, and its repair
       turn.ts           one conversation turn, carried by the Routine fleet
@@ -1213,6 +1246,8 @@ server/
       probeEnvelope.ts  where a probe may look — in code, named by id
       proposal.ts       zero-trust validation of what a model proposes
       writeback.ts      what happens when a mission finishes, exactly once
+      needsHuman.ts     the park a packet stops at, and the answer that finishes it
+      planning.ts       the judgment pass, its post-probe repeat, and the mission spec
       loop.ts           the durable tick, beside the dispatcher
       dealDispatch.ts   the connected system, with its freshness in the type
       projections.ts    the briefing, and progress that may not be invented
@@ -1268,7 +1303,7 @@ server/
     legacy.ts           the 2025-11-25 front-end, over the official SDK
     endpoint.ts         POST /mcp: auth, origin, limits, era selection
   routes/               HTTP API
-    russell.ts          Russell's surface: threads, briefing, work, Needs You (Step 12A)
+    russell.ts          Russell's surface: threads, briefing, work, ideas, Needs You (Step 12A)
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
     operator.ts         the operator console: workers, access, projects, queued work
     pages.ts            shared chrome for the server-rendered pages

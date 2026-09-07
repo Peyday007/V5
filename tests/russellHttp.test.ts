@@ -205,6 +205,9 @@ describe('a caller with no credentials', () => {
       ['GET', `/api/russell/projects/${projectId}/briefing`],
       ['GET', `/api/russell/projects/${projectId}/work`],
       ['GET', `/api/russell/projects/${projectId}/candidates`],
+      ['GET', '/api/russell/candidates/rcn_0123456789abcdef0123'],
+      ['POST', '/api/russell/candidates/rcn_0123456789abcdef0123/judgment'],
+      ['POST', '/api/russell/candidates/rcn_0123456789abcdef0123/split'],
       ['GET', `/api/russell/projects/${projectId}/knowledge`],
       ['GET', `/api/russell/projects/${projectId}/needs-you`],
       ['POST', `/api/russell/projects/${projectId}/coverage`],
@@ -378,6 +381,56 @@ describe('a project view is behind the project gate', () => {
       { cookie: aliceCookie },
     );
     expect(after.body.candidates).toEqual([]);
+  });
+});
+
+describe('a person’s judgment override is behind the same gate as the idea', () => {
+  /*
+   * The routes that let a person disagree with Russell, or pull an automatic
+   * merge apart. `overrideJudgment` and `splitCandidate` have existed since
+   * Phase 1 with no caller at all, so these are new doors — and a new door is
+   * where a gate gets forgotten.
+   *
+   * What the behaviour *is* — that an override supersedes rather than erases,
+   * and that a split keeps the merge row — is proven in
+   * `russellIntegrationPass.test.ts`, which can get a candidate into the state
+   * worth overriding. What is proven here is the half only a booted server can
+   * show: that reaching them at all requires being allowed to.
+   */
+  const UNKNOWN = 'rcn_0123456789abcdef0123';
+
+  it('answers a member the same way for an idea that does not exist', async () => {
+    for (const [method, route, body] of [
+      ['GET', `/api/russell/candidates/${UNKNOWN}`, undefined],
+      ['POST', `/api/russell/candidates/${UNKNOWN}/judgment`, { priority: 'MUST_DO', state: 'QUEUED', reason: 'r' }],
+      ['POST', `/api/russell/candidates/${UNKNOWN}/split`, { reason: 'r' }],
+    ] as const) {
+      const result = await call(method, route, { cookie: aliceCookie, body });
+      expect(result.status, route).toBe(404);
+    }
+  });
+
+  it('refuses a non-member and a missing idea identically, body included', async () => {
+    // Bob is a member of nothing. If the refusal for "an idea in a project you
+    // are not in" differed from "no such idea" — in status *or* in body — it
+    // would be an oracle for what exists in a Brain he cannot see.
+    const mine = await call('GET', `/api/russell/candidates/${UNKNOWN}`, { cookie: aliceCookie });
+    const theirs = await call('GET', `/api/russell/candidates/${UNKNOWN}`, { cookie: bobCookie });
+    expect(theirs.status).toBe(mine.status);
+    expect(JSON.stringify(theirs.body)).toBe(JSON.stringify(mine.body));
+  });
+
+  it('refuses a machine at these routes by principal type', async () => {
+    // An idea belongs to a person's list. No worker scope reaches it, and no
+    // membership configuration turns a worker into a person.
+    for (const [method, route, body] of [
+      ['GET', `/api/russell/candidates/${UNKNOWN}`, undefined],
+      ['POST', `/api/russell/candidates/${UNKNOWN}/judgment`, { priority: 'MUST_DO', state: 'QUEUED', reason: 'r' }],
+      ['POST', `/api/russell/candidates/${UNKNOWN}/split`, { reason: 'r' }],
+    ] as const) {
+      const result = await call(method, route, { bearer: workerBearer, body });
+      expect(result.status, route).toBe(404);
+    }
   });
 });
 

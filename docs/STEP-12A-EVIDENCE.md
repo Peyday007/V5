@@ -4453,3 +4453,186 @@ authority existed, and it is not the frozen scenario's condition 17, which is a
 `NEEDS_HUMAN` mission park that a person answers and the **same mission**
 resumes from. Those are different mechanisms at different altitudes; condition
 17 stands unchanged and unwaived, and no new requirement is added in its place.
+
+---
+
+## 49. The connected integration pass — 2026-09-07
+
+The instruction was to close the remaining part of the previous one: walk the
+whole journey locally through production entry points, simulating only the
+external worker and provider boundary, and fix what it found **together**
+rather than discovering it through successive production attempts.
+
+I had not done this. Mutations 9 to 13 each repaired the seam the previous
+production run had failed at, which is exactly the pattern the owner asked me
+to stop.
+
+### What "no production caller" actually means, and how it was found
+
+Not by reading. By asking, for every exported function in `server/repos/russell*`
+and `server/services/russell/`, whether anything outside its own module calls
+it — and then by walking the journey end to end and seeing where it stopped.
+
+Five findings. Every one of them is a mechanism that exists, is tested, and
+could not be reached.
+
+| # | The transition | What it meant | Condition |
+| --- | --- | --- | --- |
+| 1 | `mergeCandidate` with `method: 'SEMANTIC'` | Its only caller passed `'FINGERPRINT'`. Nothing anywhere wrote a semantic merge, so a reworded question always became a second idea. | 4 |
+| 2 | `overrideJudgment` | No route. A person could not disagree with Russell at all. | 5 |
+| 3 | A settled probe | `exploring()` skips a candidate that already has a probe; `nextLaunchable()` reads only `QUEUED`. An idea judged `EXPLORE` was selected by **neither**, permanently, with its answer sitting unread beside it. | 6 → 7 |
+| 4 | `setNextMission` | No caller. `russell_missions.next_mission_id` could only ever be null. | 15 |
+| 5 | `askHuman`, and any writer of mission state `NEEDS_HUMAN` | The resume existed and worked. There was never anything to resume. | 17 |
+
+Finding 3 is the one reading would not have found: nothing is wrong with either
+query, and the gap is between them. It also means **every probe this Brain has
+ever run ended in a state nothing reads.**
+
+### Also checked, and clean
+
+- **Accepted-but-unexecuted actions.** `EXECUTABLE_ACTIONS` (mutation 12) still
+  covers the turn contract, and `unsupportedAction()` settles the turn `FAILED`
+  rather than reporting success. The plan contract's fields are all consumed.
+  One field was **not**: `WritebackResult.nextEligible` was returned by
+  `writeBack` and read by nobody. It is deleted rather than left looking like a
+  signal.
+- **`failProbe`** has no caller, and that is correct: a probe whose run throws
+  stays `RUNNING` and `listExpiredProbes` ends it at `UNKNOWN` on a later tick.
+  A slower recovery, but a real one, so nothing is added.
+- **The park's own answer.** The old resume flipped the mission back to
+  `RUNNING` and marked the request resumed — while the packet underneath stayed
+  at `NEEDS_HUMAN`. The next tick would have parked it again. A person could
+  have answered the same question forever and never learned their decision was
+  being recorded and ignored. This is §24's sentence at a third altitude, and it
+  was found by walking the path rather than by reading the resume.
+
+### The repair
+
+Five changes, one package, and every one of them a thin join between things
+that already existed.
+
+**Semantic dedupe (`server/services/russell/similarity.ts`).** The comparison is
+made by the worker that already read the conversation and the list of ideas
+open in this project; it names the one it believes this repeats. That is a
+model's opinion, so §8 forbids it deciding anything: `capture` re-resolves the
+id **in scope** — same project, same visibility, not already merged — and holds
+the two statements to `SEMANTIC_MERGE_FLOOR`. Both are needed. The claim alone
+would let a confident model fold unrelated ideas together; the floor alone
+cannot recognise a rewording.
+
+The floor's values are not guessed. Scored against the frozen pair declared in
+`docs/STEP-12A-ACCEPTANCE-SCENARIO-2.md` §3 **before this code existed**:
+
+```
+FROZEN PAIR   ok  0.44  shared: api, assessment, bulk, roll
+vs permit machine-readability      refused  (1 shared word)
+vs permit open-data portals        refused  (2 shared words)
+vs pricing for small brokerages    refused  (0)
+vs qualification signals           refused  (0)
+vs reaching assessors by email     refused  (0)
+```
+
+One near miss is worth recording rather than tuning away: the *follow-on's* own
+objective scores **0.43** against its parent, on "county", "publish", "term".
+That is correct for a guard. Lexical overlap cannot tell "do they publish" from
+"on what terms do they publish", and a floor tuned until it could would refuse
+the rewording it exists to admit — which is precisely why the floor never
+merges anything. It only ever refuses.
+
+**A person's override (`POST /api/russell/candidates/:id/judgment`, `/split`).**
+Behind `requireCandidate`, which is two gates because a candidate answers to
+two things: the project decides whether this principal may touch its ideas at
+the level the method requires, and a `PRIVATE` candidate is additionally
+reachable only through a conversation this person can read. `MERGED` is not a
+state a person may assign — a merge is a relationship between two rows, and
+setting the state alone leaves an idea folded into nothing.
+
+The split is **necessary rather than decorative, and it became necessary in this
+same change**: every merge until now was an exact fingerprint match, which is
+effectively never wrong. A judgement held to a floor can be wrong, and a wrong
+merge with no way back is a mechanism for quietly losing somebody's idea.
+
+**The probe decides something.** A second planning pass, keyed
+`russell:plan:<candidateId>:probed:<probeId>` so the first pass's completed bin
+does not read as this one already running. The verdict goes to the worker in the
+manifest. Brain overrides `cheapToReduce` to false on that pass — not taste:
+`judge` sends a true straight back to `EXPLORE`, the probe already exists so no
+second one opens, and the idea would loop forever. Brain knows the thing the
+worker cannot, which is that the look has already happened.
+
+**The follow-on.** A worker may declare, in its validated plan, the one question
+finishing the mission would obviously leave open. On accepted terminal that
+becomes an **idea**, not a mission — invariant 13 applies to it exactly as to a
+first question, and the archive it is checked against is the one the parent just
+filed into. Only if it launches does the parent learn its `next_mission_id`.
+Migration **031 / pg 022** adds `russell_candidates.follow_on_of_mission_id`,
+which is what makes the creation step re-entrant; the alternative was
+pattern-matching JSON text, which works until somebody reformats the JSON.
+
+Deliberately **not** inside the writeback's claimed window. A crash between
+claiming the writeback and creating the idea would lose the follow-on
+permanently with nothing left to notice it; as a separate step the same query
+asks again every tick until it lands.
+
+**The park and its answer (`server/services/russell/needsHuman.ts`).** Brain
+*derives* the park from the packet's own recorded status and reason, which the
+runner writes. No worker reports "I need a human" and there is no tool for
+asking — a model that could open a Needs You request could interrupt anything by
+saying so. Every choice offered is one something implements: `RECORD_GAPS` calls
+`authorizeUnresolvedGaps`, whose doc comment has said since Step 9 that *"Step
+12 will call it from wherever the Brain's own controls end up"*, and then
+re-advances the packet; `STOP` cancels. An answer this version cannot carry out
+leaves the request `ANSWERED` and reports why, rather than being marked resumed.
+
+### Verification
+
+`tests/russellIntegrationPass.test.ts` — one test walking capture → semantic
+merge → judgment → bounded probe → post-probe decision → launch → three-session
+audit → park → a person's decision → the same mission resuming → writeback →
+one automatic follow-on → launch → `next_mission_id`, plus the override, the
+split, the floor and a cross-scope merge refusal. Only the worker and the
+network are simulated; a worker is assigned a real bin, submits a real unit
+result and completes it, releasing anything it was offered and is not doing.
+
+Nothing in it writes a row it then asserts, and no branch is forced. Where a
+decision belongs to a worker the fixture makes the decision a worker would, and
+the test checks what Brain did with it — including the case where Brain
+overrides the worker (`cheapToReduce`) and says so.
+
+`tests/russellHttp.test.ts` gained the gate proofs for the three new routes
+against a booted server: unauthenticated 401, a non-member and a missing idea
+refused identically **body included**, and a worker refused by principal type.
+
+Two existing tests changed direction, and both are recorded rather than
+rewritten quietly:
+
+- the nervous system's park-and-resume test used to build its park by hand —
+  `transitionMission` plus `askHuman` with two invented choices — because there
+  was no producer to use. That is what let it pass while production could never
+  reach the state. It now provokes the packet stop and lets the loop do the
+  rest, and additionally asserts that the answer reached the **packet**.
+- a second test was added for the case that used to pass silently: an answer
+  this Brain does not implement now stays visible.
+
+| | |
+| --- | --- |
+| `npm run typecheck` | clean |
+| SQLite | **1,708 passed**, 25 skipped, 0 failed (71 files) |
+| Postgres | **1,733 passed**, 0 failed (71 files) |
+| Boot from empty | schema **31**, migrations applied 1–31 in order |
+| Restart against it | schema **31**, "up to date (31 already applied)" |
+
+One caveat reported rather than hidden: the Postgres run logged a single
+unhandled rejection from `tests/research.test.ts` — `cancelResearch` reaching
+`getDb()` after another file closed the database. Running that file alone
+against Postgres passes with no rejection (48/48), so it is a cross-file
+teardown race under parallel load, not a defect in this change, which touches
+neither that file nor `services/research/queue.ts`.
+
+### What this does not claim
+
+It does not claim the frozen scenario has passed. It claims the frozen
+scenario's conditions 4, 5, 15 and 17 are **reachable**, which four of them were
+not. Whether a real worker chooses to declare a follow-on, name a duplicate, or
+judge an idea worth doing is still the worker's decision, and the live run is
+where that is found out.

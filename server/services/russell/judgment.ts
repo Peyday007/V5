@@ -27,6 +27,7 @@ import {
   mergeCandidate,
   recordJudgment,
 } from '../../repos/russellCandidates.ts';
+import { clearsFloor } from './similarity.ts';
 import type {
   CandidatePriority,
   CandidateState,
@@ -123,6 +124,14 @@ export async function capture(input: {
   visibility: RussellVisibility;
   conversationId?: string | null;
   sourceMessageId?: string | null;
+  /**
+   * The candidate a worker that read both says this repeats.
+   *
+   * A claim, never an instruction. It is re-resolved against rows, held to the
+   * same scope every other comparison here uses, and put under
+   * `clearsFloor` before anything is merged.
+   */
+  duplicateOf?: string | null;
 }): Promise<CaptureOutcome> {
   const candidate = await createCandidate(input);
 
@@ -162,6 +171,71 @@ export async function capture(input: {
         candidate: await getCandidate(earliest.id),
         merged: true,
         reason: 'this is already on the list',
+      };
+    }
+  }
+
+  /*
+   * The same idea in different words.
+   *
+   * The fingerprint above is exact by construction, so it cannot see a
+   * rewording — and a rewording is the ordinary case, not the exotic one. What
+   * sees it is the worker that read the conversation and the list of ideas
+   * already open in this project, and named one.
+   *
+   * That is a model's opinion, so it decides nothing on its own (§8). Three
+   * things have to agree before a merge happens, and each is checked here
+   * against rows rather than taken from the proposal:
+   *
+   *   1. the named id resolves, in **this** scope — the same project and the
+   *      same visibility `findByFingerprint` uses, for the same reason: a
+   *      merge that reached across scopes would confirm the existence of a
+   *      private candidate to somebody who cannot read it;
+   *   2. it is not this candidate, and not one already merged away, so no
+   *      chain and no cycle;
+   *   3. the two statements clear `SEMANTIC_MERGE_FLOOR` — the guard that
+   *      stops a confident model folding two unrelated ideas into one.
+   *
+   * A failure at any of them leaves both candidates standing. Nothing is
+   * refused and nothing is lost: the capture already happened, and the reason
+   * records that a merge was proposed and why the server did not make it.
+   */
+  if (input.duplicateOf && input.duplicateOf !== candidate.id) {
+    const named = await getCandidate(input.duplicateOf);
+    const inScope =
+      named !== null &&
+      named.projectId === input.projectId &&
+      named.visibility === input.visibility &&
+      named.state !== 'MERGED';
+
+    if (!inScope) {
+      return {
+        candidate,
+        merged: false,
+        reason: 'captured; the idea it was said to repeat is not one that can be merged into',
+      };
+    }
+
+    const floor = clearsFloor(candidate.statement, named.statement);
+    if (!floor.ok) {
+      return {
+        candidate,
+        merged: false,
+        reason: `captured; not merged because ${floor.reason}`,
+      };
+    }
+
+    const ok = await mergeCandidate({
+      candidateId: candidate.id,
+      canonicalId: named.id,
+      method: 'SEMANTIC',
+      reason: `the same question in different words — ${floor.reason}`,
+    });
+    if (ok) {
+      return {
+        candidate: await getCandidate(named.id),
+        merged: true,
+        reason: 'this is already on the list, asked another way',
       };
     }
   }

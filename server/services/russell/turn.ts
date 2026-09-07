@@ -63,7 +63,12 @@ import { answerFast, noFastLane } from '../conversation/fastLane.ts';
 import { standingInstructions } from '../conversation/review.ts';
 import type { ChatAdapter } from '../conversation/adapter.ts';
 import { CANDIDATE_PRIORITIES } from '../../domain/types.ts';
-import type { BinState, Principal, RussellMessage } from '../../domain/types.ts';
+import type {
+  BinState,
+  Principal,
+  RussellMessage,
+  RussellVisibility,
+} from '../../domain/types.ts';
 
 /** The one unit a turn bin asks for. */
 export const TURN_UNIT_KEY = 'proposal';
@@ -244,6 +249,7 @@ export async function beginTurn(input: {
   const bin = await createTurnBin({
     projectId,
     conversationId: conversation.id,
+    visibility: conversation.visibility,
     goal: content,
     pendingMessageId: pendingMessage.id,
   });
@@ -274,10 +280,12 @@ export async function beginTurn(input: {
 async function createTurnBin(input: {
   projectId: string;
   conversationId: string;
+  visibility: RussellVisibility;
   goal: string;
   pendingMessageId: string;
 }) {
   const { projectId, goal: content, pendingMessageId: pendingMessageIdForBin } = input;
+  const openIdeas = await openIdeasFor(projectId, input.visibility);
   return createBin({
     projectId,
     kind: 'RUSSELL_TURN',
@@ -292,7 +300,12 @@ async function createTurnBin(input: {
         {
           key: TURN_UNIT_KEY,
           establishes: 'one structured proposal',
-          input: await transcriptFor(input.conversationId),
+          input: [
+            await transcriptFor(input.conversationId),
+            openIdeas.rendered,
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
           transform: 'none',
           dependsOn: [],
         },
@@ -340,6 +353,29 @@ async function createTurnBin(input: {
          */
         `optional "priority", from exactly this set: ${CANDIDATE_PRIORITIES.join(', ')}`,
         'for CAPTURE_CANDIDATE: a "candidate" object with "title" and "statement"',
+        /*
+         * The one comparison a model is better at than the server, offered as
+         * a claim the server then checks.
+         *
+         * `fingerprintOf` sees two identical asks. It cannot see the same
+         * question asked again in different words, and nothing else could
+         * either — `russell_candidate_merges.method` has allowed `SEMANTIC`
+         * since migration 027 and no code path had ever written one, so a
+         * reworded question always became a second idea.
+         *
+         * Offered only when there is something to name. A manifest that
+         * invites a reference to an empty list is inviting an invented id.
+         */
+        ...(openIdeas.ideas.length > 0
+          ? [
+              'for CAPTURE_CANDIDATE: if this repeats one of the ideas listed under ' +
+                '"Ideas already open" above, set candidate.duplicateOf to that idea id ' +
+                'and still give the title and statement — Russell folds it in rather than ' +
+                'listing it twice',
+              'duplicateOf is a claim, not an instruction: the server re-resolves the id ' +
+                'in this scope and compares the two statements before it merges anything',
+            ]
+          : []),
         /*
          * Which actions cannot be carried out without a particular field —
          * generated from the validator's own map so the two cannot drift.
@@ -566,6 +602,7 @@ export async function retryTurn(input: {
   const bin = await createTurnBin({
     projectId,
     conversationId: conversation.id,
+    visibility: conversation.visibility,
     goal: asked.content,
     pendingMessageId: pendingMessage.id,
   });
@@ -605,6 +642,44 @@ async function askedMessageFor(messageId: string): Promise<RussellMessage | null
 }
 
 /** The recent thread, as the worker reads it. Bounded, and text only. */
+/**
+ * The ideas already open in this project, in this scope, for the worker to
+ * compare against.
+ *
+ * Scoped by visibility as well as project, and for the reason
+ * `findByFingerprint` gives: a private candidate surfaced into a shared
+ * thread's prompt is disclosed to whoever can read that thread, whatever
+ * happens to the proposal afterwards.
+ *
+ * Title only, never the statement. The worker is being asked "is this one of
+ * these", which a title answers, and a full statement per idea would put the
+ * project's whole backlog into every turn.
+ *
+ * `MERGED` ones are left out because merging into a merged candidate would
+ * chain, and `capture` refuses it anyway — offering it would be inviting a
+ * refusal.
+ */
+async function openIdeasFor(
+  projectId: string,
+  visibility: RussellVisibility,
+): Promise<{ ideas: { id: string; title: string }[]; rendered: string }> {
+  const rows = await getDb().all<{ id: string; title: string }>(
+    `SELECT id, title FROM russell_candidates
+      WHERE project_id = ? AND visibility = ? AND state <> 'MERGED'
+      ORDER BY updated_at DESC, rowid DESC
+      LIMIT 12`,
+    [projectId, visibility],
+  );
+  if (rows.length === 0) return { ideas: [], rendered: '' };
+  return {
+    ideas: rows,
+    rendered: [
+      'Ideas already open in this project:',
+      ...rows.map((row) => `- ${row.id}: ${row.title}`),
+    ].join('\n'),
+  };
+}
+
 async function transcriptFor(conversationId: string): Promise<string> {
   const turns = await listTurns(conversationId, 40);
   return turns
@@ -924,9 +999,19 @@ async function applyValidated(input: {
         // private however public the project is.
         visibility: conversation.visibility,
         conversationId,
+        // The worker's claim that this repeats something already open. It is
+        // carried, not obeyed: `capture` re-resolves it in scope and holds the
+        // two statements to `SEMANTIC_MERGE_FLOOR` before merging anything.
+        duplicateOf: proposal.candidate.duplicateOf,
       });
       return {
-        produced: { candidateId: outcome.candidate?.id, merged: outcome.merged },
+        produced: {
+          candidateId: outcome.candidate?.id,
+          merged: outcome.merged,
+          // The reason is stored either way, so a merge that a worker proposed
+          // and the server refused is visible as that rather than as silence.
+          captureOutcome: outcome.reason,
+        },
         candidateId: outcome.candidate?.id ?? null,
       };
     }

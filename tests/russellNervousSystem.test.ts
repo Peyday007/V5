@@ -65,7 +65,15 @@ import {
 } from '../server/services/russell/dealDispatch.ts';
 import { tick } from '../server/services/russell/loop.ts';
 import { claimCycle, completeCycle, pauseCycle, resumeCycle } from '../server/repos/russellCycle.ts';
-import { askHuman, answerHumanRequest, getHumanRequest, transitionMission } from '../server/repos/russellMissions.ts';
+import {
+  askHuman,
+  answerHumanRequest,
+  getHumanRequest,
+  listOpenRequests,
+  transitionMission,
+} from '../server/repos/russellMissions.ts';
+import { getOrchestration, updateOrchestration } from '../server/repos/research.ts';
+import { NEEDS_HUMAN_CHOICES } from '../server/services/russell/needsHuman.ts';
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
 import { listTurns, createConversation, getConversation } from '../server/repos/russellConversations.ts';
 import { applyTurn, beginTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
@@ -715,40 +723,137 @@ describe('the loop keeps going without anybody watching', () => {
     });
     const mission = launched.mission!;
 
-    await transitionMission({
-      missionId: mission.id,
-      from: 'RUNNING',
-      to: 'NEEDS_HUMAN',
-      waitingOn: 'a person: paying for a statutory database is outside standing authority',
+    /*
+     * The park, made by the loop rather than by this test.
+     *
+     * It used to be two hand-written calls — `transitionMission` into
+     * NEEDS_HUMAN and `askHuman` with two invented choices — because there was
+     * no production producer to use. That is what made the test pass while
+     * production could never reach the state: `askHuman` had no caller
+     * anywhere, and nothing put a mission into NEEDS_HUMAN at all.
+     *
+     * Now the trigger is the packet's own recorded status, which the runner
+     * writes, and the loop derives the rest. The only thing set by hand here is
+     * the packet stopping — which is the fact a person is being asked about.
+     */
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'The evidence bar was not met and the repair ladder is spent.',
     });
+
+    const parked = await tick('instance-a');
+    expect(parked.needsHuman.map((entry) => entry.missionId)).toContain(mission.id);
+    expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
+
+    const open = await listOpenRequests(projectId);
+    const request = open.find((entry) => entry.missionId === mission.id)!;
+    expect(request).toBeDefined();
+    // The packet's own words reached the person, rather than a sentence Russell
+    // wrote about the packet.
+    expect(request.whyNotRussell).toMatch(/repair ladder/i);
+
+    // A second tick parks nothing further: the transition is guarded and the
+    // request key is derived from the mission and the packet.
+    const again = await tick('instance-a');
+    expect(again.needsHuman).toHaveLength(0);
+    expect(await listOpenRequests(projectId)).toHaveLength(1);
+
+    // Nothing moves while it is unanswered.
+    expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
+
+    await answerHumanRequest({
+      requestId: request.id,
+      actorUserId: userId,
+      choice: NEEDS_HUMAN_CHOICES.RECORD_GAPS.key,
+    });
+
+    const first = await tick('instance-a');
+    expect(first.resumed).toContain(request.id);
+    // The same mission, not a new one.
+    expect((await getMission(mission.id))!.state).not.toBe('NEEDS_HUMAN');
+    expect((await getHumanRequest(request.id))!.state).toBe('RESUMED');
+    /*
+     * And the answer reached the packet.
+     *
+     * This is the half that was missing and that made the old version of this
+     * test misleading. Flipping the mission back to RUNNING while the packet
+     * stayed at NEEDS_HUMAN meant the next tick parked it again — forever — so
+     * a person could answer the same question every time it reappeared and
+     * never learn that their decision was being recorded and ignored.
+     */
+    const orchestration = await getOrchestration(mission.orchestrationId!);
+    expect(orchestration!.unresolvedGapPolicy).toBe('RECORD_GAPS');
+    expect(orchestration!.unresolvedGapAuthorizedBy).toBe(userId);
+
+    // And a second tick does not resume it again.
+    const second = await tick('instance-a');
+    expect(second.resumed).not.toContain(request.id);
+  });
+
+  it('leaves an answer it cannot carry out visible, rather than marking it resumed', async () => {
+    /*
+     * The failure mode this whole path exists to prevent, exercised directly.
+     *
+     * A request written by an older version of Brain offers choices this one
+     * does not implement. `answerHumanRequest` accepts the answer — the key is
+     * one the request itself offered — and then nothing can act on it.
+     *
+     * The wrong behaviour is to mark it resumed anyway, which is what the loop
+     * did before: the person sees their decision recorded, the work never
+     * moves, and there is nothing left in the database saying so. It stays
+     * ANSWERED instead, and the tick reports why.
+     */
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'acceptance',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 1,
+      maxFragments: 1,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+    const captured = await capture({
+      title: 'Florida licensing',
+      statement: 'establish the Florida broker licence position from the 2026 statute',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const launched = await launch({
+      projectId,
+      layerId,
+      candidateId: captured.candidate!.id,
+      visibility: 'SHARED',
+      title: 'Florida broker licensing',
+      assignment: 'Under Florida law as in force in 2026, is a broker licence required?',
+      objective: 'Settle the Florida position.',
+      whyNow: 'The layer names Florida as open.',
+      acceptableSources: ['Florida Statutes'],
+      excludedSources: [],
+      evidence: ['the exact section'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    const mission = launched.mission!;
 
     const { request } = await askHuman({
       projectId,
       missionId: mission.id,
       authorityNeeded: 'permission to pay for one statutory lookup',
-      whyNotRussell: 'the standing authority prohibits new spending',
+      whyNotRussell: 'an answer this version of Brain does not implement',
       choices: [
         { key: 'approve', label: 'Approve', consequence: 'Russell buys one lookup and continues' },
-        { key: 'decline', label: 'Decline', consequence: 'Russell records the gap and stops' },
       ],
-      resumeKey: `resume:${mission.id}`,
+      resumeKey: `resume:legacy:${mission.id}`,
     });
-
-    // Nothing moves while it is unanswered.
-    await tick('instance-a');
-    expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
-
     await answerHumanRequest({ requestId: request.id, actorUserId: userId, choice: 'approve' });
 
-    const first = await tick('instance-a');
-    expect(first.resumed).toContain(request.id);
-    // The same mission, not a new one.
-    expect((await getMission(mission.id))!.state).toBe('RUNNING');
-    expect((await getHumanRequest(request.id))!.state).toBe('RESUMED');
-
-    // And a second tick does not resume it again.
-    const second = await tick('instance-a');
-    expect(second.resumed).not.toContain(request.id);
+    const result = await tick('instance-a');
+    expect(result.resumed).not.toContain(request.id);
+    expect(result.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
+    expect((await getHumanRequest(request.id))!.state).toBe('ANSWERED');
   });
 
   it('ends a probe whose deadline passed, honestly, rather than leaving it running', async () => {

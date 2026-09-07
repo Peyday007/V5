@@ -58,6 +58,14 @@ export const PLAN_CONTRACT = 'RUSSELL_PLAN_V1';
 
 /** How a planning bin is addressed back to its candidate. */
 export const PLAN_CREATED_BY = 'russell:plan:';
+/**
+ * The separator marking a second, post-probe planning pass.
+ *
+ * A colon-delimited suffix rather than a different prefix, so `applyPlan` still
+ * recovers the candidate from the bin by taking everything before it — one
+ * parse, one place, and a bin whose key it cannot read is not a plan.
+ */
+export const PLAN_AFTER_PROBE = ':probed:';
 
 /**
  * Bounds on what a worker may say, enforced exactly.
@@ -96,6 +104,20 @@ export interface MissionSpec {
   acceptableSources: string[];
   excludedSources: string[];
   evidence: string[];
+  /**
+   * The one question finishing this mission would obviously leave open.
+   *
+   * Optional, and it is the worker's call whether there is one — a mission
+   * that settles its subject completely declares none, and inventing one to
+   * fill the field would be Brain buying research nobody wanted.
+   *
+   * It is a declaration, not a launch. When the parent finishes accepted, this
+   * becomes an ordinary idea against the parent's project, and it is judged
+   * against the archive like any other — the archive the parent has just
+   * changed. Invariant 13 applies to a follow-on exactly as it does to a first
+   * question, so a follow-on the report already answered spends nothing.
+   */
+  followOn: { title: string; question: string; whyNow: string } | null;
 }
 
 export type PlanValidation =
@@ -112,7 +134,9 @@ const ALLOWED_MISSION_FIELDS = new Set([
   'acceptableSources',
   'excludedSources',
   'evidence',
+  'followOn',
 ]);
+const ALLOWED_FOLLOW_ON_FIELDS = new Set(['title', 'question', 'whyNow']);
 
 function boundedList(value: unknown, max: number, label: string): string[] | string {
   if (!Array.isArray(value)) return `${label} must be a list`;
@@ -225,10 +249,56 @@ export function validatePlan(input: { raw: unknown }): PlanValidation {
   const evidence = boundedList(mission['evidence'], PLAN_LIMITS.evidenceLine, 'evidence');
   if (typeof evidence === 'string') return { ok: false, reason: evidence };
 
+  /*
+   * The follow-on, validated with the same suspicion as everything else.
+   *
+   * Absent and null are the same answer — no follow-on — and both are ordinary.
+   * Present and malformed refuses the whole plan rather than being dropped,
+   * because a worker that believed it had declared the next question and had it
+   * silently discarded is exactly the seam `RUN_PROBE` was: accepted, and
+   * performed by nothing.
+   */
+  let followOn: MissionSpec['followOn'] = null;
+  const followOnRaw = mission['followOn'];
+  if (followOnRaw !== undefined && followOnRaw !== null) {
+    if (typeof followOnRaw !== 'object' || Array.isArray(followOnRaw)) {
+      return { ok: false, reason: 'the follow-on was not readable' };
+    }
+    const body = followOnRaw as Record<string, unknown>;
+    for (const key of Object.keys(body)) {
+      if (!ALLOWED_FOLLOW_ON_FIELDS.has(key)) {
+        return { ok: false, reason: 'the follow-on carried a field that is not part of the contract' };
+      }
+    }
+    const bounded = (key: string, max: number): string | null => {
+      const value = body[key];
+      if (typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      if (!trimmed || trimmed.length > max) return null;
+      return trimmed;
+    };
+    const followTitle = bounded('title', PLAN_LIMITS.title);
+    const question = bounded('question', PLAN_LIMITS.objective);
+    const followWhyNow = bounded('whyNow', PLAN_LIMITS.whyNow);
+    if (!followTitle || !question || !followWhyNow) {
+      return { ok: false, reason: 'a follow-on needs a title, a question and a reason, each within its length' };
+    }
+    followOn = { title: followTitle, question, whyNow: followWhyNow };
+  }
+
   return {
     ok: true,
     observations: { cheapToReduce: obs['cheapToReduce'], expectedValue, blockedBy },
-    spec: { title, objective, assignment, whyNow, acceptableSources, excludedSources, evidence },
+    spec: {
+      title,
+      objective,
+      assignment,
+      whyNow,
+      acceptableSources,
+      excludedSources,
+      evidence,
+      followOn,
+    },
   };
 }
 
@@ -379,12 +449,45 @@ export interface JudgeOutcome {
  */
 export async function judgeCandidate(
   candidateId: string,
-  options: { claims?: ExistingClaim[] } = {},
+  options: {
+    claims?: ExistingClaim[];
+    /**
+     * The cheap look, now that it has been taken.
+     *
+     * `judge` sends an idea to `EXPLORE` when a bounded look could settle it
+     * more cheaply than a packet, the loop opens a probe, and the probe reaches
+     * a verdict — and that was the end of the road. `exploring()` skips a
+     * candidate that already has a probe and `nextLaunchable()` only reads
+     * `QUEUED`, so an explored idea was selected by neither: it sat at
+     * `EXPLORE` forever, with its answer recorded beside it and nothing
+     * reading it. A dead end, not a decision.
+     *
+     * Supplying this is the second pass. The archive is asked again — it may
+     * have moved — the probe's verdict goes to the worker that reads the
+     * question, and the judgment it produces supersedes the `EXPLORE`.
+     */
+    afterProbe?: { probeId: string; outcome: string; explanation: string };
+  } = {},
 ): Promise<JudgeOutcome> {
   const candidate = await getCandidate(candidateId);
   if (!candidate) return outcome(false, 'no such idea');
   if (candidate.state === 'MERGED') return outcome(false, 'that idea was merged into another one');
-  if (candidate.priority) return outcome(false, 'already judged');
+  /*
+   * One priority may be superseded, and only one.
+   *
+   * A first pass judges an unjudged idea. A post-probe pass judges an idea
+   * whose only verdict so far was "look at this cheaply first", which the look
+   * has now answered. Everything else — `QUEUED`, `PARKED`, `REJECTED`, a
+   * person's override — is a decision, and a decision is not re-taken because
+   * a probe happens to exist beside it.
+   */
+  if (options.afterProbe) {
+    if (candidate.priority !== 'EXPLORE' || candidate.state !== 'CAPTURED') {
+      return outcome(false, 'this idea is not waiting on a cheap look');
+    }
+  } else if (candidate.priority) {
+    return outcome(false, 'already judged');
+  }
   if (!candidate.projectId) return outcome(false, 'no project to judge it against');
 
   const archive = await askArchive(candidate, options.claims);
@@ -417,10 +520,15 @@ export async function judgeCandidate(
     };
   }
 
-  // Not answered, so somebody has to read the question. One bin, once.
+  // Not answered, so somebody has to read the question. One bin, once — and a
+  // post-probe pass is a *different* one, keyed by the probe that settled, so
+  // the first pass's completed bin does not read as this one already running.
+  const createdById = options.afterProbe
+    ? `${PLAN_CREATED_BY}${candidate.id}${PLAN_AFTER_PROBE}${options.afterProbe.probeId}`
+    : `${PLAN_CREATED_BY}${candidate.id}`;
   const existing = await getDb().all<{ id: string; state: string }>(
     `SELECT id, state FROM bins WHERE created_by_id = ?`,
-    [`${PLAN_CREATED_BY}${candidate.id}`],
+    [createdById],
   );
   const live = existing.find((row) => row.state !== 'CANCELLED' && row.state !== 'FAILED');
   if (live) {
@@ -433,10 +541,10 @@ export async function judgeCandidate(
     title: 'Judge one idea and specify the work',
     objective: 'Say what a bounded look or a research packet would have to establish.',
     rationale: 'Russell captured an idea and the archive does not already answer it.',
-    manifest: planManifest(candidate, archive),
+    manifest: planManifest(candidate, archive, options.afterProbe ?? null),
     completionContract: PLAN_CONTRACT,
     createdByType: 'SYSTEM',
-    createdById: `${PLAN_CREATED_BY}${candidate.id}`,
+    createdById,
     ready: true,
     priority: 7,
     maxAttempts: 2,
@@ -450,7 +558,11 @@ function outcome(ok: boolean, reason: string): JudgeOutcome {
 }
 
 /** What the worker is told, generated from the constants it is judged against. */
-function planManifest(candidate: RussellCandidate, archive: ArchiveAnswer): BinManifest {
+function planManifest(
+  candidate: RussellCandidate,
+  archive: ArchiveAnswer,
+  afterProbe: { probeId: string; outcome: string; explanation: string } | null,
+): BinManifest {
   // How many of the project's own claims the archive check weighed. Carried in
   // the "why" rather than a field of its own, so a worker reading the bin knows
   // the check actually ran against something.
@@ -471,7 +583,24 @@ function planManifest(candidate: RussellCandidate, archive: ArchiveAnswer): BinM
       {
         key: PLAN_UNIT_KEY,
         establishes: 'one judgment observation set and one mission specification',
-        input: `IDEA: ${candidate.title}\nSTATEMENT: ${candidate.statement}`,
+        input: [
+          `IDEA: ${candidate.title}`,
+          `STATEMENT: ${candidate.statement}`,
+          /*
+           * What the cheap look found, when one was taken.
+           *
+           * The verdict and the explanation the probe recorded, verbatim, and
+           * nothing more — no pages, no fetched text. A probe's verdict is a
+           * claim about presence, never about truth (§24), so it is offered as
+           * one finding among the things to weigh rather than as an answer.
+           */
+          ...(afterProbe
+            ? [
+                `A BOUNDED LOOK HAS ALREADY BEEN TAKEN. Its verdict: ${afterProbe.outcome}.`,
+                `What it found: ${afterProbe.explanation}`,
+              ]
+            : []),
+        ].join('\n'),
         transform: 'none',
         dependsOn: [],
       },
@@ -486,7 +615,14 @@ function planManifest(candidate: RussellCandidate, archive: ArchiveAnswer): BinM
      */
     evidence: [
       'one JSON object with exactly two fields: "observations" and "mission"',
-      'observations.cheapToReduce is true or false — could a bounded look settle this more cheaply than a full packet?',
+      ...(afterProbe
+        ? [
+            'observations.cheapToReduce must be false: the bounded look has been taken and ' +
+              'there is not a second one — Russell ignores a true here',
+          ]
+        : [
+            'observations.cheapToReduce is true or false — could a bounded look settle this more cheaply than a full packet?',
+          ]),
       'observations.expectedValue is a whole-ish number from 0 to 100 — how much would settling this move the project goal?',
       'observations.blockedBy is text naming what must happen first, or null',
       `mission.title is at most ${PLAN_LIMITS.title} characters`,
@@ -494,6 +630,21 @@ function planManifest(candidate: RussellCandidate, archive: ArchiveAnswer): BinM
       `mission.assignment is at most ${PLAN_LIMITS.assignment} characters and says what to research`,
       `mission.whyNow is at most ${PLAN_LIMITS.whyNow} characters`,
       `mission.acceptableSources, mission.excludedSources and mission.evidence are non-empty lists of at most ${PLAN_LIMITS.listItems} strings`,
+      /*
+       * Offered, never required.
+       *
+       * A mission that settles its subject leaves nothing behind and says so by
+       * omitting this. The field exists because the opposite case is common and
+       * had nowhere to go: a report that answers "do they publish" almost
+       * always raises "on what terms", and until now that question was lost the
+       * moment the mission finished.
+       */
+      'optional "mission.followOn": the one question finishing this would obviously ' +
+        'leave open, as {title, question, whyNow} — omit it when there is not one',
+      `mission.followOn.title is at most ${PLAN_LIMITS.title} characters, question at most ` +
+        `${PLAN_LIMITS.objective}, whyNow at most ${PLAN_LIMITS.whyNow}`,
+      'a follow-on is a question Russell will judge against the archive afterwards, ' +
+        'not a second mission you are starting',
       'do not say whether the project already answers this — Brain has already checked its own archive and decided it does not',
       'no other field — an unrecognised one refuses the whole plan',
     ],
@@ -543,14 +694,31 @@ export interface ApplyPlanResult {
 export async function applyPlan(binId: string): Promise<ApplyPlanResult> {
   const bin = await getBin(binId);
   if (!bin) return planResult(false, 'no such bin');
-  const candidateId = bin.createdById?.startsWith(PLAN_CREATED_BY)
-    ? bin.createdById.slice(PLAN_CREATED_BY.length)
-    : null;
-  if (!candidateId) return planResult(false, 'this bin is not a plan');
+  const target = planTarget(bin.createdById);
+  if (!target) return planResult(false, 'this bin is not a plan');
 
-  const candidate = await getCandidate(candidateId);
+  const candidate = await getCandidate(target.candidateId);
   if (!candidate) return planResult(false, 'the idea is gone');
-  if (candidate.priority) {
+  /*
+   * The same rule `judgeCandidate` applied when it created this bin, applied
+   * again when the answer lands — because the two are minutes or hours apart
+   * and anything may have happened in between, including a person overriding
+   * the very judgment this pass was going to supersede.
+   *
+   * A post-probe pass may replace `EXPLORE` and nothing else. A first pass may
+   * only judge an idea with no priority at all.
+   */
+  if (target.afterProbe) {
+    if (candidate.priority !== 'EXPLORE' || candidate.state !== 'CAPTURED') {
+      return {
+        ok: true,
+        reason: 'this idea is no longer waiting on a cheap look',
+        alreadyJudged: true,
+        priority: candidate.priority,
+        launchable: false,
+      };
+    }
+  } else if (candidate.priority) {
     return { ok: true, reason: 'already judged', alreadyJudged: true, priority: candidate.priority, launchable: false };
   }
 
@@ -595,7 +763,22 @@ export async function applyPlan(binId: string): Promise<ApplyPlanResult> {
     alreadyAnswered: archive.fullyAnswered,
     supporting: archive.supporting,
     contradicting: archive.contradicting,
-    cheapToReduce: validated.observations.cheapToReduce,
+    /*
+     * The cheap look is taken once.
+     *
+     * On a post-probe pass Brain overrides the worker's answer to false, and
+     * this is not a matter of taste: `judge` sends `cheapToReduce` straight
+     * back to `EXPLORE`, the probe for this candidate already exists so
+     * `exploring()` will not open another, and the post-probe step would find
+     * the same settled probe and ask again. A worker that answered true twice —
+     * honestly, having read a question that genuinely does look cheap — would
+     * put the idea in a loop it could never leave.
+     *
+     * Brain knows the thing the worker cannot: that the look has already
+     * happened. So it decides this input from its own state, and the manifest
+     * says so rather than leaving the override silent.
+     */
+    cheapToReduce: target.afterProbe ? false : validated.observations.cheapToReduce,
     expectedValue: validated.observations.expectedValue,
     blockedBy: authority.blockedBy ?? validated.observations.blockedBy,
   };
@@ -635,6 +818,28 @@ export async function applyPlan(binId: string): Promise<ApplyPlanResult> {
     priority: verdict.priority,
     launchable: launchable && Boolean(spec),
   };
+}
+
+/**
+ * Which idea a plan bin is about, and which pass it is.
+ *
+ * `russell:plan:<candidateId>` is the first pass;
+ * `russell:plan:<candidateId>:probed:<probeId>` is the second, after a bounded
+ * look has settled. Split rather than pattern-matched so a key this version
+ * does not understand yields null — "not a plan" — instead of a candidate id
+ * assembled out of the wrong half of a string.
+ */
+function planTarget(
+  createdById: string | null,
+): { candidateId: string; afterProbe: boolean } | null {
+  if (!createdById || !createdById.startsWith(PLAN_CREATED_BY)) return null;
+  const rest = createdById.slice(PLAN_CREATED_BY.length);
+  const marker = rest.indexOf(PLAN_AFTER_PROBE);
+  if (marker === -1) return rest ? { candidateId: rest, afterProbe: false } : null;
+  const candidateId = rest.slice(0, marker);
+  const probeId = rest.slice(marker + PLAN_AFTER_PROBE.length);
+  if (!candidateId || !probeId) return null;
+  return { candidateId, afterProbe: true };
 }
 
 function planResult(ok: boolean, reason: string): ApplyPlanResult {
@@ -680,6 +885,9 @@ async function missionSpecFor(
     acceptableSources: spec.acceptableSources,
     excludedSources: spec.excludedSources,
     evidence: spec.evidence,
+    // Carried rather than acted on. Nothing reads it until the mission
+    // finishes accepted, and what it produces then is an idea, not a mission.
+    followOn: spec.followOn,
     workloadClass: 'RESEARCH',
     // Brain started it, on the authority of the person who holds the goal. The
     // approver is never Russell and never a worker.

@@ -28,7 +28,13 @@ import {
   listMissions,
   listOpenRequests,
 } from '../repos/russellMissions.ts';
-import { listCandidates } from '../repos/russellCandidates.ts';
+import {
+  getCandidate,
+  listCandidates,
+  listMergeHistory,
+  overrideJudgment,
+  splitCandidate,
+} from '../repos/russellCandidates.ts';
 import {
   attachConversation,
   createConversation,
@@ -68,8 +74,14 @@ import {
   requiredString,
 } from './helpers.ts';
 import { getProjectBySlug } from '../repos/projects.ts';
-import type { CandidateState, MissionState, Principal } from '../domain/types.ts';
-import { CANDIDATE_STATES, MISSION_STATES } from '../domain/types.ts';
+import type {
+  CandidatePriority,
+  CandidateState,
+  MissionState,
+  Principal,
+  RussellCandidate,
+} from '../domain/types.ts';
+import { CANDIDATE_PRIORITIES, CANDIDATE_STATES, MISSION_STATES } from '../domain/types.ts';
 
 export const russellRouter = Router();
 
@@ -98,6 +110,37 @@ async function requireConversation(conversationId: string) {
   const conversation = await getConversation(conversationId);
   if (!conversation) throw notFound('No conversation with that id.');
   return { conversation, principal };
+}
+
+/**
+ * A candidate this caller may act on, or the same 404 a missing one gives.
+ *
+ * Two gates, because a candidate answers to two things. The project decides
+ * whether this principal may touch the project's ideas at all, at the level
+ * the request's own method requires. Visibility then decides whether *this*
+ * idea is one of them: a `PRIVATE` candidate belongs to the thread it came
+ * from, so it is reachable only through a conversation this person can read —
+ * §24's rule that a Brain administrator is not entitled to somebody's private
+ * thread, applied to the idea the thread produced.
+ *
+ * A candidate with no project cannot be judged: there is nothing to authorize
+ * against, and inventing an authority for it is how a gate becomes a
+ * formality. Refused as absent, like everything else here.
+ */
+async function requireCandidate(candidateId: string): Promise<RussellCandidate> {
+  const principal = requirePerson();
+  const candidate = await getCandidate(candidateId);
+  if (!candidate || !candidate.projectId) throw notFound('No idea with that id.');
+  await requireProject(candidate.projectId);
+  if (candidate.visibility === 'PRIVATE') {
+    if (
+      !candidate.conversationId ||
+      !(await conversationIsReadable(principal, candidate.conversationId))
+    ) {
+      throw notFound('No idea with that id.');
+    }
+  }
+  return candidate;
 }
 
 /* --------------------------------------------------------------------------
@@ -416,6 +459,116 @@ russellRouter.get(
         limit: optionalInteger(query['limit'], 'limit', { min: 1, max: 200 }) ?? 100,
       }),
     };
+  }),
+);
+
+/**
+ * What Russell decided about one idea, and how it got there.
+ *
+ * The merge history is part of the answer rather than a separate screen,
+ * because a candidate that reads "captured once" while three questions folded
+ * into it is describing itself wrongly. It is also the only way a person can
+ * see that a merge happened at all — and therefore the only way they can know
+ * there is something to undo.
+ */
+russellRouter.get(
+  '/candidates/:candidateId',
+  handler(async (req) => {
+    const candidate = await requireCandidate(pathId(req, 'candidateId'));
+    return { candidate, merges: await listMergeHistory(candidate.id) };
+  }),
+);
+
+/**
+ * A person disagrees with Russell.
+ *
+ * `overrideJudgment` has existed since Phase 1 and has been called by nobody,
+ * so condition 5's second half — that an override *supersedes* rather than
+ * erases — was a property of a function no request could reach. This is the
+ * production caller.
+ *
+ * It changes a recommendation and nothing else. The priority is matched
+ * against the enum exactly, the state against its own, and neither the budget,
+ * the authority, the evidence gate nor the audit separation is reachable from
+ * here: an override can say "do this sooner", never "do this without the
+ * checks". The previous decision is kept by the repository in
+ * `superseded_decision`, which is what makes "Russell thought this was
+ * premature and I overruled it" a readable fact a year later.
+ */
+russellRouter.post(
+  '/candidates/:candidateId/judgment',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const candidate = await requireCandidate(pathId(req, 'candidateId'));
+    const body = bodyOf(req);
+
+    const priority = requiredString(body['priority'], 'priority');
+    if (!CANDIDATE_PRIORITIES.includes(priority as CandidatePriority)) {
+      throw badRequest('That is not a priority this Brain recognises.');
+    }
+    const state = requiredString(body['state'], 'state');
+    if (!CANDIDATE_STATES.includes(state as CandidateState)) {
+      throw badRequest('That is not a state an idea can be put into.');
+    }
+    /*
+     * `MERGED` is not a state a person may assign here.
+     *
+     * A merge is a relationship between two rows — it needs a canonical to
+     * point at — and setting the state alone would produce an idea marked as
+     * folded into nothing, which every downstream query treats as invisible.
+     * A merge is made at capture, by the fingerprint or by a worker's claim
+     * held to the floor; the only direction a person moves it from here is
+     * apart, which is the split below.
+     */
+    if (state === 'MERGED') {
+      throw badRequest('Use the merge and split operations to change what an idea folds into.');
+    }
+    const reason = requiredString(body['reason'], 'reason');
+
+    const ok = await overrideJudgment({
+      candidateId: candidate.id,
+      // From the authenticated principal. A body field naming an actor is not
+      // read, here or anywhere else.
+      actorUserId: principal.id,
+      priority: priority as CandidatePriority,
+      state: state as CandidateState,
+      reason,
+    });
+    if (!ok) {
+      // The guard is `state <> 'MERGED'`, so this is an idea that folded into
+      // another one while the person was typing. Reported as what it is: the
+      // canonical is the thing to judge now.
+      throw badRequest('That idea has been folded into another one, so judge that one instead.');
+    }
+    return { candidate: await getCandidate(candidate.id) };
+  }),
+);
+
+/**
+ * Undo a merge.
+ *
+ * Necessary rather than decorative, and it became necessary in this same
+ * change: until now every merge was a `FINGERPRINT` match, which is exact and
+ * effectively never wrong. A `SEMANTIC` merge is a worker's judgement held to
+ * a floor, and a judgement that can be wrong needs a way back — otherwise
+ * automatic deduplication is a mechanism for quietly losing somebody's idea.
+ *
+ * The split restores both identities and keeps the merge row, so what happened
+ * stays readable.
+ */
+russellRouter.post(
+  '/candidates/:candidateId/split',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const candidate = await requireCandidate(pathId(req, 'candidateId'));
+    const reason = requiredString(bodyOf(req)['reason'], 'reason');
+    const ok = await splitCandidate({
+      candidateId: candidate.id,
+      reason,
+      actorUserId: principal.id,
+    });
+    if (!ok) throw badRequest('That idea is not folded into another one.');
+    return { candidate: await getCandidate(candidate.id) };
   }),
 );
 

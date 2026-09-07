@@ -50,7 +50,6 @@ export interface WritebackResult {
   briefing: string;
   knowledgeIds: string[];
   /** True when an authorized next mission is available for the loop to start. */
-  nextEligible: boolean;
   reason: string;
 }
 
@@ -86,7 +85,6 @@ export interface WritebackInput {
   /** Accepted claim ids, document id and audit id behind the conclusion. */
   provenance: Record<string, unknown>;
   /** Whether an authorized next mission exists. Decided by the caller from rows. */
-  nextEligible?: boolean;
 }
 
 /**
@@ -108,7 +106,6 @@ export async function writeBack(input: WritebackInput): Promise<WritebackResult>
       missionId: input.missionId,
       briefing: '',
       knowledgeIds: [],
-      nextEligible: false,
       reason: 'no such mission',
     };
   }
@@ -121,7 +118,6 @@ export async function writeBack(input: WritebackInput): Promise<WritebackResult>
       missionId: mission.id,
       briefing: '',
       knowledgeIds: [],
-      nextEligible: false,
       reason: 'this mission was already written back',
     };
   }
@@ -226,7 +222,6 @@ export async function writeBack(input: WritebackInput): Promise<WritebackResult>
     missionId: mission.id,
     briefing,
     knowledgeIds,
-    nextEligible: input.nextEligible ?? false,
     reason: 'written back',
   };
 }
