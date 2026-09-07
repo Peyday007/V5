@@ -264,7 +264,20 @@ function fromRows(id: string, found: number, needed: number, what: string): Gate
     : { id, verdict: 'NOT_RUN', detail: `${found} of ${needed} ${what}` };
 }
 
-async function gates(): Promise<GateResult[]> {
+/**
+ * Exported for the one thing a production reporter cannot prove about itself:
+ * that a gate refuses what it claims to refuse.
+ *
+ * `tests/acceptanceGates.test.ts` builds each failure shape against a local
+ * database and asserts the verdict. Reading the queries is not enough — three
+ * of these gates were weaker than the condition they report on for as long as
+ * they existed, and one of them (`A14`) could only ever have passed on a
+ * decision nothing had carried out.
+ *
+ * The scope is still resolved from `ACCEPTANCE_SCOPE`, so a test proves the
+ * gate and never supplies its own standard.
+ */
+export async function gates(): Promise<GateResult[]> {
   const results: GateResult[] = [];
   /*
    * Resolved once. Every gate about a candidate, probe, mission, packet,
@@ -343,34 +356,113 @@ async function gates(): Promise<GateResult[]> {
           },
   );
 
+  /*
+   * A05 — deduplication, at the standard the scenario actually froze.
+   *
+   * This gate used to count *any* merge in the chain, and that was weaker than
+   * the condition it reports on. Condition 4 says the near-duplicate must
+   * resolve `method = 'SEMANTIC'`, and says why: "A deterministic fingerprint
+   * match would prove nothing here, which is why the wording is different." A
+   * gate that passed on a FINGERPRINT row would report a condition satisfied
+   * that the scenario says is not.
+   *
+   * Two facts, both required, both from the chain:
+   *
+   *   - a `SEMANTIC` merge whose canonical is also in the chain, so a fold onto
+   *     something outside the anchor cannot satisfy it;
+   *   - exactly one canonical candidate left, because "a second canonical
+   *     candidate fails it" is the falsifier the scenario names.
+   *
+   * The second is a FAIL rather than a NOT_RUN when it is wrong: two canonical
+   * candidates is a thing that happened, not a thing that has not happened yet.
+   */
+  const semanticMerges =
+    scope && scope.candidateIds.length
+      ? await count(
+          `SELECT COUNT(*) AS total FROM russell_candidate_merges
+            WHERE action = 'MERGE' AND method = 'SEMANTIC'
+              AND candidate_id IN (${inList(scope.candidateIds)})
+              AND canonical_id IN (${inList(scope.candidateIds)})`,
+          [...scope.candidateIds, ...scope.candidateIds],
+        )
+      : 0;
+  const canonicalInChain =
+    scope && scope.candidateIds.length
+      ? await count(
+          `SELECT COUNT(*) AS total FROM russell_candidates
+            WHERE id IN (${inList(scope.candidateIds)}) AND canonical_candidate_id IS NULL`,
+          scope.candidateIds,
+        )
+      : 0;
   results.push(
-    scoped(
-      'A05_DEDUPE',
-      scope && scope.candidateIds.length
-        ? await count(
-            `SELECT COUNT(*) AS total FROM russell_candidate_merges
-              WHERE candidate_id IN (${inList(scope.candidateIds)})`,
-            scope.candidateIds,
-          )
-        : 0,
-      1,
-      'merges onto a canonical idea',
-    ),
+    scope !== null && canonicalInChain > 1
+      ? {
+          id: 'A05_DEDUPE',
+          verdict: 'FAIL',
+          detail: `${canonicalInChain} canonical ideas in the chain — the reworded question made a second one`,
+        }
+      : scoped('A05_DEDUPE', semanticMerges, 1, 'semantic merges onto the canonical idea'),
   );
 
+  /*
+   * A06 — the stored judgment, and what an override does to it.
+   *
+   * The gate is named OVERRIDE and used to check only that some idea in the
+   * chain carried a reason, which is condition 5's first half. Its second half
+   * — "a person's override supersedes rather than erases them" — was not
+   * checked anywhere, so the property could have been false for as long as the
+   * route existed.
+   *
+   * It stays a *conditional* requirement rather than becoming a new one. The
+   * scenario does not oblige anybody to overrule Russell; it obliges an
+   * override, **if one happens**, to keep what it replaced. So an override with
+   * no `superseded_decision` is a FAIL, and no override at all is neither a
+   * pass nor a fail of that clause — the first half decides the gate.
+   *
+   * A priority with no reason is the other falsifier the condition names, and
+   * it is a FAIL for the same reason two canonicals are: it is a thing that
+   * happened.
+   */
+  const judged =
+    scope && scope.candidateIds.length
+      ? await count(
+          `SELECT COUNT(*) AS total FROM russell_candidates
+            WHERE id IN (${inList(scope.candidateIds)}) AND reason IS NOT NULL AND reason <> ''`,
+          scope.candidateIds,
+        )
+      : 0;
+  const unreasoned =
+    scope && scope.candidateIds.length
+      ? await count(
+          `SELECT COUNT(*) AS total FROM russell_candidates
+            WHERE id IN (${inList(scope.candidateIds)}) AND priority IS NOT NULL
+              AND (reason IS NULL OR reason = '')`,
+          scope.candidateIds,
+        )
+      : 0;
+  const erasing =
+    scope && scope.candidateIds.length
+      ? await count(
+          `SELECT COUNT(*) AS total FROM russell_candidates
+            WHERE id IN (${inList(scope.candidateIds)}) AND override_user_id IS NOT NULL
+              AND superseded_decision IS NULL`,
+          scope.candidateIds,
+        )
+      : 0;
   results.push(
-    scoped(
-      'A06_JUDGMENT_OVERRIDE',
-      scope && scope.candidateIds.length
-        ? await count(
-            `SELECT COUNT(*) AS total FROM russell_candidates
-              WHERE id IN (${inList(scope.candidateIds)}) AND reason IS NOT NULL AND reason <> ''`,
-            scope.candidateIds,
-          )
-        : 0,
-      1,
-      'ideas carrying a stated judgment',
-    ),
+    scope !== null && unreasoned > 0
+      ? {
+          id: 'A06_JUDGMENT_OVERRIDE',
+          verdict: 'FAIL',
+          detail: `${unreasoned} ideas carry a priority with no stated reason`,
+        }
+      : scope !== null && erasing > 0
+        ? {
+            id: 'A06_JUDGMENT_OVERRIDE',
+            verdict: 'FAIL',
+            detail: `${erasing} overrides erased what they replaced instead of superseding it`,
+          }
+        : scoped('A06_JUDGMENT_OVERRIDE', judged, 1, 'ideas carrying a stated judgment'),
   );
 
   // A07 — a probe that ran and stayed inside its own bound. The comparison is
@@ -523,22 +615,56 @@ async function gates(): Promise<GateResult[]> {
     ),
   );
 
+  /*
+   * A14 — a person decided, and the same mission carried on.
+   *
+   * This gate said "answered and resumed" and counted `state = 'ANSWERED'`,
+   * which is the state a request sits in **before** the loop acts on it. Once
+   * the resume works, `markResumed` moves it to `RESUMED` within one tick — so
+   * the better the mechanism behaved, the closer this gate read to zero. It
+   * could only ever have passed on a decision nothing had carried out.
+   *
+   * That was invisible while nothing produced a park at all. Both halves are
+   * now real, so both halves are checked: the answer exists and names the
+   * person who gave it, and the mission it belongs to is no longer waiting.
+   *
+   * A mission still `NEEDS_HUMAN` after its request was answered is the exact
+   * failure condition 17 exists to catch — an escalation with no answering
+   * transition — so it is a FAIL rather than a quiet zero.
+   */
+  // The chain predicate, written once and aliased by the caller, because the
+  // second query joins and an unqualified column name would be ambiguous.
+  const inChain = (alias: string): string =>
+    `(${alias}.conversation_id = ?${
+      scope && scope.missionIds.length
+        ? ` OR ${alias}.mission_id IN (${inList(scope.missionIds)})`
+        : ''
+    })`;
+  const answered = scope
+    ? await count(
+        `SELECT COUNT(*) AS total FROM russell_human_requests r
+          WHERE r.state IN ('ANSWERED','RESUMED') AND r.answered_by_user_id IS NOT NULL
+            AND ${inChain('r')}`,
+        [scope.conversationId, ...scope.missionIds],
+      )
+    : 0;
+  const stillParked = scope
+    ? await count(
+        `SELECT COUNT(*) AS total FROM russell_human_requests r
+           JOIN russell_missions m ON m.id = r.mission_id
+          WHERE r.state IN ('ANSWERED','RESUMED') AND m.state = 'NEEDS_HUMAN'
+            AND ${inChain('r')}`,
+        [scope.conversationId, ...scope.missionIds],
+      )
+    : 0;
   results.push(
-    scoped(
-      'A14_HUMAN_RESUME',
-      scope
-        ? await count(
-            `SELECT COUNT(*) AS total FROM russell_human_requests
-              WHERE state = 'ANSWERED' AND answered_by_user_id IS NOT NULL
-                AND (conversation_id = ?${
-                  scope.missionIds.length ? ` OR mission_id IN (${inList(scope.missionIds)})` : ''
-                })`,
-            [scope.conversationId, ...scope.missionIds],
-          )
-        : 0,
-      1,
-      'human decisions answered and resumed',
-    ),
+    scope !== null && stillParked > 0
+      ? {
+          id: 'A14_HUMAN_RESUME',
+          verdict: 'FAIL',
+          detail: `${stillParked} answered decisions left their mission waiting — the answer changed nothing`,
+        }
+      : scoped('A14_HUMAN_RESUME', answered, 1, 'human decisions answered and resumed'),
   );
 
   // A15 — recovery. Proven by a cycle that has run and by nothing being left
@@ -758,9 +884,17 @@ async function main(): Promise<void> {
   process.exitCode = failed.length + blocked.length + notRun.length === 0 ? 0 : 1;
 }
 
-main()
-  .catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-  })
-  .finally(() => closeDatabase());
+/*
+ * Run only when this file is the entry point.
+ *
+ * It is imported by its own test, and a script that reports on production the
+ * moment it is imported is one that cannot be tested at all.
+ */
+if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '\u0000')) {
+  main()
+    .catch((error: unknown) => {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    })
+    .finally(() => closeDatabase());
+}
