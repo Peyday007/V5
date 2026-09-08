@@ -31,15 +31,25 @@
  * completion writes another briefing. Nothing in that loop is wrong on its own
  * and together it is a machine for spending an allowance on itself.
  *
- * Three things stop it, and none of them is a model being sensible:
+ * Two things stop it, and neither of them is a model being sensible:
  *
  *   - only a `USER` turn is ever a capture source, so a `RUSSELL` turn cannot
- *     seed a candidate at all;
- *   - one launch and one follow-on per cycle, from the row;
- *   - and the goal's own mission ceiling, counted in the database.
+ *     seed a candidate at all. `askedMessageFor` resolves the question a turn
+ *     answers by walking back to the nearest `USER` turn, and a turn with no
+ *     reachable one refuses with `NO_SOURCE_MESSAGE` rather than capturing.
+ *     This is the bound that actually breaks the cycle, at its head;
+ *   - one launch and one follow-on per cycle, from the row, which paces it.
+ *
+ * There was a third — the goal's own cumulative mission ceiling — and it is
+ * gone with the lifetime quotas. Saying so rather than leaving the list at
+ * three: it was never the bound doing this work, because a ceiling large
+ * enough to be useful is a ceiling a runaway chain reaches anyway, and one
+ * small enough to stop a runaway chain stops ordinary work first. What bounds
+ * *concurrent* execution is `maxConcurrent`, which is real provider capacity
+ * and is untouched.
  *
  * Hitting a bound preserves the remaining candidates for the next cycle. It
- * never drops them, and it never consumes the whole budget in one pass.
+ * never drops them, and it never consumes a whole tick in one pass.
  */
 import {
   claimCycle,
