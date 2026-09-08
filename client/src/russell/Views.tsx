@@ -819,7 +819,22 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
                     * number on the grant that has it, and keeps everything
                     * already used.
                     */}
-                  {spent && raising !== limit.key ? (
+                  {/*
+                    * Offered on every line, not only where the limit is
+                    * already hit.
+                    *
+                    * It used to appear only once `used >= limit`, which reads
+                    * as tidy and costs the person a second visit: they cannot
+                    * raise a ceiling they can see coming, so the wall
+                    * interrupts them mid-journey instead. Raising a limit is a
+                    * decision they are entitled to make whenever they like.
+                    *
+                    * What stays tied to actually being spent is the *emphasis*
+                    * and the briefing sentence — a limit that is not blocking
+                    * anything is not a decision waiting, and saying otherwise
+                    * is what teaches people to stop reading the status.
+                    */}
+                  {raising !== limit.key ? (
                     <>
                       {' · '}
                       <button
@@ -831,11 +846,11 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
                           setReason('');
                         }}
                       >
-                        Raise this limit
+                        {spent ? 'Raise this limit' : 'Raise'}
                       </button>
                     </>
                   ) : null}
-                  {spent && raising === limit.key ? (
+                  {raising === limit.key ? (
                     <div className="rs-raise">
                       <label className="rs-decision-label" htmlFor="rs-raise-to">
                         Raise {limit.label.toLowerCase()} to

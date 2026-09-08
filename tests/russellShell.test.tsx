@@ -910,6 +910,44 @@ describe('the thin views', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /Withdraw this/ })).toBeTruthy());
   });
 
+  it('lets the owner raise a limit before it becomes a wall', async () => {
+    /*
+     * The raise used to appear only once `used >= limit`, which reads as tidy
+     * and costs the person a second visit: they cannot raise a ceiling they can
+     * see coming, so it interrupts them mid-journey instead.
+     *
+     * What stays tied to actually being spent is the emphasis and the briefing
+     * sentence — a limit that is blocking nothing is not a decision waiting.
+     */
+    await openNeedsYou(GRANTED);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Withdraw this/ })).toBeTruthy());
+
+    // Reachable while there is still room, which is the whole point.
+    const raise = screen.getAllByRole('button', { name: /^Raise$|^Raise this limit$/ })[0]!;
+    fireEvent.click(raise);
+
+    const to = screen.getByLabelText(/Raise .* to/i) as HTMLInputElement;
+    // Prefilled one above where it is, so the ordinary answer is one click.
+    expect(Number(to.value)).toBe(GRANTED.grant.spend.maxMissions.limit + 1);
+
+    fireEvent.change(screen.getByLabelText(/^Why\?$/i), {
+      target: { value: 'the follow-on needs one the original did not allow for' },
+    });
+
+    routes['POST /api/russell/projects/prj_1/authority/rgl_1/raise'] = { body: GRANTED };
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Raise it to 3/ }));
+    });
+
+    // The exact body, asserted from the request rather than the screen.
+    expect(postedBodies).toEqual([{
+      ceiling: 'maxMissions',
+      to: 3,
+      reason: 'the follow-on needs one the original did not allow for',
+    }]);
+    expect(calls).toContain('POST /api/russell/projects/prj_1/authority/rgl_1/raise');
+  });
+
   it('keeps editing optional and reflects changed limits in the permission being approved', async () => {
     await openNeedsYou(NO_GRANT);
     await waitFor(() => expect(screen.getByRole('button', { name: /Change limits/ })).toBeTruthy());
