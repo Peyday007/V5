@@ -9,6 +9,7 @@
 import { parseLanes, serializeLanes } from '../domain/evidenceLanes.ts';
 import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
+import { chargeFragments } from './russellAuthority.ts';
 import {
   parseDependencies,
   serializeDependencies,
@@ -449,8 +450,41 @@ export interface CreateFragmentInput {
   repairPlan?: RepairPlan | null;
 }
 
+/**
+ * Refused because the grant will not pay for it.
+ *
+ * A named error rather than a silent empty return: the packet runner's callers
+ * treat an empty result as "nothing to plan", and a plan refused for budget is
+ * emphatically not that. `advancePacket` turns this into a `NEEDS_HUMAN` the
+ * owner can answer, which is now a real control rather than a dead end.
+ */
+export class FragmentBudgetRefused extends Error {
+  constructor(public readonly detail: string) {
+    super(detail);
+    this.name = 'FragmentBudgetRefused';
+  }
+}
+
 export async function createFragments(inputs: CreateFragmentInput[]): Promise<ResearchFragment[]> {
   if (inputs.length === 0) return [];
+
+  /*
+   * Charged here, in the one function every creation path already goes
+   * through.
+   *
+   * There are eight callers — the planner, the reconciler, the splitter, the
+   * repairer, the reissuer, the replanner, the MCP tool and the fixtures — and
+   * guarding them one at a time is the arrangement this codebase has twice
+   * recorded as "one forgotten filter away from being skipped". A packet with
+   * no Russell mission has no grant and is charged nothing, so Steps 9 and 10
+   * are untouched.
+   */
+  const charge = await chargeFragments({
+    orchestrationId: inputs[0]!.orchestrationId,
+    fragmentKeys: inputs.map((input) => input.fragmentKey),
+  });
+  if (!charge.ok) throw new FragmentBudgetRefused(charge.reason);
+
   const db = getDb();
   const ts = nowIso();
   const ids: string[] = [];

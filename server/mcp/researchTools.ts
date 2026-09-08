@@ -85,6 +85,7 @@ import { SCOPE_MATCH_VALUES, type ClaimScopeMatch } from '../services/research/s
 import { CLAIM_TYPES } from '../domain/types.ts';
 import {
   createFragments,
+  FragmentBudgetRefused,
   getFragment,
   getOrchestration,
   listClaimsForFragment,
@@ -102,7 +103,7 @@ import {
   NothingToFile,
   UncitableClaims,
 } from '../services/research/filing.ts';
-import { conflictError, invalidInput, notFoundError } from './errors.ts';
+import { conflictError, invalidInput, limitExceeded, notFoundError } from './errors.ts';
 import {
   MUTATING,
   READ_ONLY,
@@ -851,7 +852,21 @@ const proposeFragmentsTool: McpTool = {
           (fragment) => decisionFor.get(fragment.key)?.needsResearch !== false,
         );
 
-        const created = await createFragments(
+        /*
+         * A plan the grant will not pay for is a refusal the worker can see,
+         * not a crash.
+         *
+         * `createFragments` charges the standing authority's bounded-question
+         * allowance and throws `FragmentBudgetRefused` when it is spent. §21
+         * is explicit that a tool's own failure is a *result* rather than a
+         * protocol error, because a refusal delivered as a transport failure
+         * is one the consumer cannot see or react to. The packet then parks
+         * for the owner on the next advance, with the raise control as its
+         * answer.
+         */
+        let created;
+        try {
+          created = await createFragments(
           toResearch.map((fragment, index) => {
             const decision = decisionFor.get(fragment.key);
             return {
@@ -891,7 +906,14 @@ const proposeFragmentsTool: McpTool = {
               status: 'PLANNED' as const,
             };
           }),
-        );
+          );
+        } catch (error) {
+          if (!(error instanceof FragmentBudgetRefused)) throw error;
+          throw limitExceeded(
+            `${error.detail}. Nothing was created and nothing was spent. The person who ` +
+              'granted this can raise that limit in Russell; everything already used stays used.',
+          );
+        }
 
         const answered = coverage.alreadyAnswered.map((decision) => ({
           fragmentKey: decision.fragmentKey,

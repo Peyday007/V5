@@ -662,14 +662,59 @@ export async function gates(): Promise<GateResult[]> {
         ? ` OR ${alias}.mission_id IN (${inList(scope.missionIds)})`
         : ''
     })`;
-  const answered = scope
+  /*
+   * What this now requires, and why each clause is here.
+   *
+   * The previous version counted `ANSWERED`/`RESUMED` requests and failed only
+   * if a mission was *still* `NEEDS_HUMAN`. `STOP` moves a mission to
+   * `CANCELLED`, which is not `NEEDS_HUMAN` — so stopping an empty packet
+   * passed a gate reading "answered and resumed". Stopping is **recovery**: it
+   * ends work rather than continuing it, and condition 17 asks for a park and
+   * a *resume*.
+   *
+   * So the evidence is that the person's decision **caused the same mission to
+   * carry on**:
+   *
+   *   - `r.state = 'RESUMED'` — the loop actually carried the answer out.
+   *     `ANSWERED` is the state before that, and an answer nothing performed
+   *     is the exact failure §55 records.
+   *   - `answered_by_user_id` — a person decided, not a script.
+   *   - `o.unresolved_gap_authorized_by = r.answered_by_user_id` — the
+   *     decision **reached the packet**, in the name of the person who gave
+   *     it. `authorizeUnresolvedGaps` is the only writer of that column, and
+   *     it runs only on the RECORD_GAPS path, so this cannot be satisfied by
+   *     a cancellation, by an answer left unprocessed, or by anything a worker
+   *     submits.
+   *   - `m.state NOT IN ('CANCELLED','FAILED')` — the mission continued.
+   *     `DONE` passes, because a mission that resumed and then finished keeps
+   *     its resume evidence; `RUNNING` and `WAITING` pass while it is still
+   *     going.
+   *   - `r.mission_id = m.id` and the chain predicate — the same mission, not
+   *     a replacement, and inside the frozen scope.
+   *
+   * Every clause is a row Brain wrote from its own state. None can be set by
+   * asking.
+   */
+  const resumed = scope
     ? await count(
         `SELECT COUNT(*) AS total FROM russell_human_requests r
-          WHERE r.state IN ('ANSWERED','RESUMED') AND r.answered_by_user_id IS NOT NULL
+           JOIN russell_missions m ON m.id = r.mission_id
+           JOIN research_orchestrations o ON o.id = m.orchestration_id
+          WHERE r.state = 'RESUMED'
+            AND r.answered_by_user_id IS NOT NULL
+            AND o.unresolved_gap_authorized_by = r.answered_by_user_id
+            AND m.state NOT IN ('CANCELLED','FAILED')
             AND ${inChain('r')}`,
         [scope.conversationId, ...scope.missionIds],
       )
     : 0;
+
+  /*
+   * And the failure that still has to be loud: an answer recorded and not
+   * carried out. A mission left waiting after its request was answered is the
+   * defect condition 17 exists to catch, and it is a FAIL rather than a quiet
+   * zero.
+   */
   const stillParked = scope
     ? await count(
         `SELECT COUNT(*) AS total FROM russell_human_requests r
@@ -679,14 +724,49 @@ export async function gates(): Promise<GateResult[]> {
         [scope.conversationId, ...scope.missionIds],
       )
     : 0;
+
+  /*
+   * Recovery, counted separately and never as a pass.
+   *
+   * A stopped mission is a legitimate answer to a legitimate escalation and it
+   * is worth reporting — but it is the end of that work, so it appears in the
+   * detail and never in the number the gate is judged on.
+   */
+  const stopped = scope
+    ? await count(
+        `SELECT COUNT(*) AS total FROM russell_human_requests r
+           JOIN russell_missions m ON m.id = r.mission_id
+          WHERE r.state = 'RESUMED' AND m.state = 'CANCELLED'
+            AND ${inChain('r')}`,
+        [scope.conversationId, ...scope.missionIds],
+      )
+    : 0;
+
   results.push(
-    scope !== null && stillParked > 0
-      ? {
-          id: 'A14_HUMAN_RESUME',
-          verdict: 'FAIL',
-          detail: `${stillParked} answered decisions left their mission waiting — the answer changed nothing`,
-        }
-      : scoped('A14_HUMAN_RESUME', answered, 1, 'human decisions answered and resumed'),
+    scope === null
+      ? { id: 'A14_HUMAN_RESUME', verdict: 'NOT_RUN', detail: NO_SCOPE }
+      : stillParked > 0
+        ? {
+            id: 'A14_HUMAN_RESUME',
+            verdict: 'FAIL',
+            detail: `${stillParked} answered decisions left their mission waiting — the answer changed nothing`,
+          }
+        : resumed >= 1
+          ? {
+              id: 'A14_HUMAN_RESUME',
+              verdict: 'PASS',
+              detail:
+                `${resumed} decision(s) a person made, carried out, and the same mission ` +
+                `continued past${stopped > 0 ? ` (${stopped} other mission(s) stopped, which is recovery rather than a resume)` : ''}`,
+            }
+          : {
+              id: 'A14_HUMAN_RESUME',
+              verdict: 'NOT_RUN',
+              detail:
+                stopped > 0
+                  ? `${stopped} decision(s) stopped a mission, which is recovery; no mission has resumed and carried on`
+                  : 'no human decision has been carried out on a mission that then continued',
+            },
   );
 
   // A15 — recovery. Proven by a cycle that has run and by nothing being left

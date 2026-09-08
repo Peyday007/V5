@@ -604,6 +604,127 @@ function ceilingsFor(goal: RussellGoal, kind: ReservationKind): { total: number;
  * concurrency ceiling counts. An expired hold is in neither, which is why
  * `renewLiveMissionReservations` exists.
  */
+/**
+ * The grant governing an orchestration, or null when nothing governs it.
+ *
+ * A packet reaches Russell's budget through the mission that launched it, and
+ * only through that: a Step 9 or Step 10 packet has no Russell mission, so it
+ * has no grant and is charged nothing. That is why the charges below can live
+ * in the repository every creation path already goes through without changing
+ * what those older steps do.
+ */
+async function goalForOrchestration(orchestrationId: string): Promise<RussellGoal | null> {
+  const rows = await getDb().all<{ goal_id: string | null }>(
+    `SELECT goal_id FROM russell_missions
+      WHERE orchestration_id = ? AND goal_id IS NOT NULL
+      ORDER BY created_at, rowid LIMIT 1`,
+    [orchestrationId],
+  );
+  const goalId = rows[0]?.goal_id ?? null;
+  return goalId ? getGoal(goalId) : null;
+}
+
+export interface ChargeOutcome {
+  ok: boolean;
+  /** Safe to show a person, and the reason a packet parks when it is refused. */
+  reason: string;
+  /** Which ceiling refused, when one did. */
+  refusedBy?: 'IN_TOTAL' | 'AT_ONCE';
+  /** How many of these were already charged — a repair, a redelivery, a replay. */
+  replayed: number;
+}
+
+/**
+ * Charge a grant for the bounded questions a packet is about to create.
+ *
+ * The owner's card says "Break them into at most 12 bounded questions" and
+ * until now **nothing anywhere reserved a FRAGMENT**: that ceiling counted zero
+ * for ever, whatever a packet did. The per-packet approval envelope bounds a
+ * single plan's decomposition, which is a different control answering a
+ * different question — it cannot enforce a cumulative allowance across
+ * missions, and reading it as though it could is how a limit becomes
+ * decoration.
+ *
+ * **Keyed on the fragment key, never on the attempt.** §15's repairs re-run the
+ * same bounded question with a different search strategy, and a repaired
+ * fragment is the same question — so a retry replays its reservation and is
+ * charged once. A *split* produces new keys, and new keys are new questions,
+ * which is exactly right: splitting a fragment in two does consume two of the
+ * twelve.
+ *
+ * A refusal is reported rather than thrown, and it charges nothing: the caller
+ * refuses the whole batch, so a packet never half-creates a plan it could not
+ * pay for.
+ */
+export async function chargeFragments(input: {
+  orchestrationId: string;
+  fragmentKeys: string[];
+}): Promise<ChargeOutcome> {
+  const goal = await goalForOrchestration(input.orchestrationId);
+  if (!goal) return { ok: true, reason: 'not governed by a standing authority', replayed: 0 };
+
+  const taken: string[] = [];
+  let replayed = 0;
+  for (const key of input.fragmentKeys) {
+    const outcome = await reserve({
+      goalId: goal.id,
+      kind: 'FRAGMENT',
+      idempotencyKey: `russell:fragment:${input.orchestrationId}:${key}`,
+    });
+    if (!outcome.ok) {
+      /*
+       * Undo only what *this* call took. A reservation that replayed was
+       * already spent by an earlier attempt and releasing it would refund
+       * somebody's allowance on the strength of an unrelated refusal.
+       */
+      for (const id of taken) {
+        await releaseReservation({ reservationId: id, reason: 'the plan was refused as a whole' });
+      }
+      return {
+        ok: false,
+        reason: outcome.reason,
+        ...(outcome.refusedBy ? { refusedBy: outcome.refusedBy } : {}),
+        replayed,
+      };
+    }
+    if (outcome.replayed) replayed += 1;
+    else if (outcome.reservation) taken.push(outcome.reservation.id);
+  }
+  return { ok: true, reason: 'charged', replayed };
+}
+
+/**
+ * Charge a grant for one cheap look.
+ *
+ * Keyed on the candidate, because `exploring()` opens at most one probe per
+ * candidate and a second look at the same idea is the same look. Like
+ * fragments, this ceiling reserved nothing before and therefore bounded
+ * nothing; the per-probe lookup budget is a different control, about how far
+ * one probe may reach rather than how many the owner allowed.
+ */
+export async function chargeProbe(input: {
+  projectId: string;
+  candidateId: string;
+}): Promise<ChargeOutcome> {
+  const goals = (await listGoals(input.projectId)).filter((goal) => goal.state === 'ACTIVE');
+  const goal = goals[0];
+  if (!goal) return { ok: true, reason: 'not governed by a standing authority', replayed: 0 };
+
+  const outcome = await reserve({
+    goalId: goal.id,
+    kind: 'PROBE',
+    idempotencyKey: `russell:probe:${input.candidateId}`,
+  });
+  return outcome.ok
+    ? { ok: true, reason: 'charged', replayed: outcome.replayed ? 1 : 0 }
+    : {
+        ok: false,
+        reason: outcome.reason,
+        ...(outcome.refusedBy ? { refusedBy: outcome.refusedBy } : {}),
+        replayed: 0,
+      };
+}
+
 export async function spendTotals(
   goalId: string,
   kind: ReservationKind,

@@ -997,6 +997,41 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
   return { ...result, status: 'NEEDS_HUMAN', waitingOn: `a person: left ${result.status} with an empty queue` };
 }
 
+/**
+ * A plan the grant will not pay for stops as a decision, not an exception.
+ *
+ * `createFragments` refuses the whole batch when the standing authority's
+ * bounded-question allowance is spent, and that has to reach a person: it is
+ * exactly the shape §24 calls stuck if it does not. The packet parks with the
+ * grant's own sentence, and the answering control is the raise already on the
+ * authority card — the owner sees which limit stopped it and can move it
+ * without losing what has been spent.
+ *
+ * Not a fragment fault: nothing was attempted and nothing failed. The plan was
+ * never allowed to exist, which is a different fact and reads differently to
+ * whoever has to act on it.
+ */
+async function refusedByBudget(
+  orchestration: ResearchOrchestration,
+  detail: string,
+): Promise<AdvanceResult> {
+  const reason =
+    `${detail}. Nothing was researched and nothing was spent on this plan. ` +
+    'Raising that limit on the permission you gave lets it continue; ' +
+    'everything already used stays used.';
+  await updateOrchestration(orchestration.id, {
+    status: 'NEEDS_HUMAN',
+    failureReason: reason,
+    completedAt: new Date().toISOString(),
+  });
+  return {
+    orchestrationId: orchestration.id,
+    status: 'NEEDS_HUMAN',
+    enqueued: [],
+    waitingOn: `a person: ${reason}`,
+  };
+}
+
 async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
   const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) {

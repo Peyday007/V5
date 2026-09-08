@@ -77,7 +77,14 @@ import {
   listOpenRequests,
   transitionMission,
 } from '../server/repos/russellMissions.ts';
-import { createFragments, getOrchestration, updateOrchestration } from '../server/repos/research.ts';
+import {
+  createFragments,
+  createOrchestration,
+  currentFragments,
+  getOrchestration,
+  updateOrchestration,
+} from '../server/repos/research.ts';
+import { createRun } from '../server/repos/runs.ts';
 import { NEEDS_HUMAN_CHOICES } from '../server/services/russell/needsHuman.ts';
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
 import { listTurns, createConversation, getConversation } from '../server/repos/russellConversations.ts';
@@ -928,6 +935,172 @@ describe('the loop keeps going without anybody watching', () => {
     expect(spend.grant!.spend.maxMissions.limit).toBe(3);
     // One running, which is what a concurrency figure should say.
     expect(spend.grant!.spend.maxConcurrent.used).toBe(1);
+  });
+
+  it('charges the grant for the bounded questions a packet creates', async () => {
+    /*
+     * The owner's card says "Break them into at most 12 bounded questions" and
+     * **nothing anywhere reserved a FRAGMENT**: that ceiling counted zero for
+     * ever, whatever a packet did. The per-packet approval envelope bounds one
+     * plan's decomposition, which is a different control answering a different
+     * question — it cannot enforce a cumulative allowance across missions, and
+     * reading it as though it could is how a limit becomes decoration.
+     *
+     * Charged in `createFragments`, the one function all eight creation paths
+     * go through, so this exercises the real entry point.
+     */
+    const conversation = await ownedConversation('Fragments');
+    const mission = await parkedMission(conversation.id, 'two questions only', {
+      maxFragments: 2,
+    });
+
+    const base = {
+      orchestrationId: mission.orchestrationId!,
+      projectId,
+      layerId,
+      geography: 'Michigan',
+      requiredEvidence: [
+        { id: 'operative_definition', description: 'the portal', necessity: 'REQUIRED' },
+      ],
+      acceptableSourceTypes: ['county government portals'],
+      excludedSourceTypes: [],
+      completionCriteria: ['a named portal'],
+      minIndependentSources: 1,
+      maxRepairs: 2,
+      dependsOn: [],
+      attempt: 1,
+    };
+    const brief = (index: number, key: string) =>
+      ({ ...base, fragmentIndex: index, fragmentKey: key, question: `What about ${key}?` });
+
+    // Inside the allowance.
+    await createFragments([brief(0, 'coverage'), brief(1, 'terms')] as unknown as Parameters<
+      typeof createFragments
+    >[0]);
+    expect((await authorityFor({ projectId })).grant!.spend.maxFragments.used).toBe(2);
+
+    // Beyond it, refused — and nothing half-created.
+    await expect(
+      createFragments([brief(2, 'cadence')] as unknown as Parameters<typeof createFragments>[0]),
+    ).rejects.toThrow(/12|2 fragment|in total/i);
+    expect(await currentFragments(mission.orchestrationId!)).toHaveLength(2);
+    expect((await authorityFor({ projectId })).grant!.spend.maxFragments.used).toBe(2);
+
+    /*
+     * A repair is the same question with a different search strategy, so it
+     * replays its reservation and is charged once. Keyed on the fragment key,
+     * never on the attempt — a retry that cost a second question would eat an
+     * allowance the owner set per question.
+     */
+    await createFragments([
+      { ...brief(0, 'coverage'), attempt: 2 },
+    ] as unknown as Parameters<typeof createFragments>[0]);
+    expect((await authorityFor({ projectId })).grant!.spend.maxFragments.used).toBe(2);
+  });
+
+  it('charges the grant for a cheap look, and refuses one past the allowance', async () => {
+    /*
+     * Same defect, other ceiling: "Take at most 3 cheap looks" reserved
+     * nothing. The per-probe lookup budget bounds how far one probe reaches,
+     * not how many the owner allowed.
+     */
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'one look only',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 2,
+      maxFragments: 4,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+
+    const first = await capture({
+      title: 'Permit coverage',
+      statement: 'establish which Michigan counties publish permit data in a usable form',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const opened = await openProbe({
+      candidateId: first.candidate!.id,
+      question: 'Which Michigan counties publish permit data?',
+      maxLookups: 2,
+    });
+    expect(opened.ok).toBe(true);
+    expect((await authorityFor({ projectId })).grant!.spend.maxProbes.used).toBe(1);
+
+    const second = await capture({
+      title: 'Register latency',
+      statement: 'establish how long a Michigan county register takes to show a transfer',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const refused = await openProbe({
+      candidateId: second.candidate!.id,
+      question: 'How long does a county register take?',
+      maxLookups: 2,
+    });
+    expect(refused.ok, 'a second look was opened past the allowance').toBe(false);
+    expect(refused.probe).toBeNull();
+    expect(refused.reason).toMatch(/in total/i);
+
+    // A second look at the *same* idea is the same look, and is charged once.
+    const again = await openProbe({
+      candidateId: first.candidate!.id,
+      question: 'Which Michigan counties publish permit data?',
+      maxLookups: 2,
+    });
+    expect(again.ok).toBe(true);
+    expect((await authorityFor({ projectId })).grant!.spend.maxProbes.used).toBe(1);
+  });
+
+  it('charges nothing for a packet no standing authority governs', async () => {
+    /*
+     * Steps 9 and 10 create packets with no Russell mission behind them. They
+     * have no grant, so they are charged nothing and behave exactly as before —
+     * which is why the charge can live in the repository every path goes
+     * through without rewriting those steps.
+     */
+    const run = await createRun({
+      projectId,
+      layerId,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'an ungoverned packet',
+    });
+    const orchestration = await createOrchestration({
+      projectId,
+      layerId,
+      runId: run.id,
+      title: 'an ungoverned packet',
+      assignment: 'the things that answer it',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    const made = await createFragments([
+      {
+        orchestrationId: orchestration.id,
+        projectId,
+        layerId,
+        fragmentIndex: 0,
+        fragmentKey: 'ungoverned',
+        question: 'What about it?',
+        geography: 'Michigan',
+        requiredEvidence: [
+          { id: 'operative_definition', description: 'the portal', necessity: 'REQUIRED' },
+        ],
+        acceptableSourceTypes: ['county government portals'],
+        excludedSourceTypes: [],
+        completionCriteria: ['a named portal'],
+        minIndependentSources: 1,
+        maxRepairs: 2,
+        dependsOn: [],
+        attempt: 1,
+      },
+    ] as unknown as Parameters<typeof createFragments>[0]);
+    expect(made).toHaveLength(1);
   });
 
   it('tells the person when a spent ceiling is the only thing in the way', async () => {
@@ -1939,17 +2112,21 @@ async function looseConversation(title = 'A loose thread') {
  * the fact a person is being asked about. Lifted out when a third and fourth
  * park test needed the same twenty lines.
  */
-async function parkedMission(conversationId: string, name = 'acceptance') {
+async function parkedMission(
+  conversationId: string,
+  name = 'acceptance',
+  limits: { maxMissions?: number; maxFragments?: number; maxProbes?: number } = {},
+) {
   await createGoal({
     projectId,
     ownerUserId: userId,
     createdByUserId: userId,
     name,
     allowedWork: ['RESEARCH'],
-    maxMissions: 1,
-    maxFragments: 1,
+    maxMissions: limits.maxMissions ?? 1,
+    maxFragments: limits.maxFragments ?? 1,
     maxConcurrent: 1,
-    maxProbes: 1,
+    maxProbes: limits.maxProbes ?? 1,
   });
   const captured = await capture({
     title: 'County permit data',

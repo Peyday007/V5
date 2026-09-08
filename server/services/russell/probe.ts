@@ -38,6 +38,7 @@ import {
   startProbe,
 } from '../../repos/russellProbes.ts';
 import { getCandidate } from '../../repos/russellCandidates.ts';
+import { chargeProbe } from '../../repos/russellAuthority.ts';
 import {
   allowlistFor,
   destinationFor,
@@ -79,6 +80,28 @@ export async function openProbe(input: {
 
   const question = input.question.trim();
   if (!question) return { ok: false, reason: 'a probe needs a question', probe: null };
+
+  /*
+   * Charged against the grant before it exists.
+   *
+   * The owner's card says "Take at most 3 cheap looks before committing to
+   * one" and nothing anywhere reserved a PROBE, so that ceiling counted zero
+   * for ever. The per-probe lookup budget in `probeEnvelope` is a different
+   * control answering a different question — how far one probe may reach, not
+   * how many the owner allowed — and reading it as though it enforced the
+   * grant is how a limit becomes decoration.
+   *
+   * Keyed on the candidate, so a second look at the same idea is the same
+   * look. Refused before anything is created, and the reason is the grant's
+   * own sentence.
+   */
+  if (candidate.projectId) {
+    const charge = await chargeProbe({
+      projectId: candidate.projectId,
+      candidateId: candidate.id,
+    });
+    if (!charge.ok) return { ok: false, reason: charge.reason, probe: null };
+  }
 
   const probe = await createProbe({
     candidateId: candidate.id,
