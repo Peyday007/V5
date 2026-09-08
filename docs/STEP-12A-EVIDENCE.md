@@ -5532,3 +5532,64 @@ An expired hold is counted by neither, asserted here too, which is what makes
 `renewLiveMissionReservations` load-bearing rather than tidy.
 
 1,775 pass. No migration, no ceiling changed, no reservation altered.
+
+## 59. The budget, read from production — 2026-09-08
+
+Mutation 21 deployed: run `34194345179` from `b7bb833`, green through a real
+unannounced restart.
+
+`chain-watch` at 06:22:18Z, reading `russell_budget_reservations` for
+`rgl_30e34d717d9f4b47a6a9` directly:
+
+```
+limits            missions 2 · fragments 12 · concurrent 1 · probes 3
+expires           2026-10-06T00:00:00.000Z
+spent mission     rows 1 · committed 1 · live 0 · lapsed 0 · released 0
+spent fragment    rows 0 · committed 0 · live 0 · lapsed 0 · released 0
+spent probe       rows 0 · committed 0 · live 0 · lapsed 0 · released 0
+```
+
+| Kind | Limit | Spent | Held | Remaining |
+| --- | --- | --- | --- | --- |
+| MISSION | 2 | 1 | 0 | **1** |
+| FRAGMENT | 12 | 0 | 0 | 12 |
+| PROBE | 3 | 0 | 0 | 3 |
+
+The one mission row is `rms_8e96b5f246464c069451`, `SETTLED` by the old
+settle-at-launch path. It stays settled and stays counted: nothing was refunded,
+and mutation 20's lifecycle change is not retroactive.
+
+### What the rest of the journey costs
+
+| Step | MISSION | FRAGMENT | PROBE |
+| --- | --- | --- | --- |
+| replacement research mission | 1 | 0 | 0 |
+| automatic follow-on | 1 | 0 | 0 |
+| **required** | **2** | **0** | **0** |
+| **remaining** | **1** | 12 | 3 |
+
+**Short by exactly one mission, and by nothing else.**
+
+Fragments and probes require nothing because **no production path reserves
+either kind** (§56.2) — those counters cannot move. That is not the same as
+unbounded: the approval envelope caps fragments at **1 per packet**, so two
+packets is two fragments of real work, inside 12 either way; and a probe is
+bounded per candidate and by its own lookup budget, so at most 1 here against 3.
+Both statements are true and the second is why raising missions alone is
+sufficient rather than merely necessary.
+
+Concurrency 1 needs nothing: the follow-on candidate is created *at* the
+replacement's writeback, by which time that mission is `DONE` and its hold
+settled.
+
+### The control was not reachable
+
+`Raise this limit` rendered only when `used >= limit`. Missions are 1 of 2, so
+the one control the remaining path depends on could not be pressed — the owner
+could not raise a ceiling they could see coming, and the wall would have
+interrupted them mid-journey instead.
+
+Offered on every ceiling line now, prefilled one above where it is. What stays
+tied to actually being spent is the emphasis and the briefing sentence: a limit
+blocking nothing is not a decision waiting, and saying otherwise is what teaches
+a person to stop reading the status.
