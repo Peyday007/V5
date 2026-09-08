@@ -5485,3 +5485,50 @@ name, candidate id or reservation id.
 That a worker produces research-grade output. The floor refuses a placeholder
 (§56.3) and the gate refuses ungrounded claims; neither makes a producer
 produce. Only a live run answers that, and it is not claimed here.
+
+## 58. The card counted rows; the guard counted weight — 2026-09-08
+
+Mutation 20 is deployed: run `34193404379` from `3759e0b`, every step green
+through a real unannounced restart.
+
+Then Codex read that commit and found the arithmetic underneath it did not
+agree with itself.
+
+`spendOf` in `services/russell/authority.ts`:
+
+```ts
+const committed = (kind: string): number =>
+  reservations.filter(…).length;          // rows
+```
+
+`totalsThroughMine` in `repos/russellAuthority.ts`:
+
+```sql
+COALESCE(SUM(CASE … THEN amount ELSE 0 END), 0)   -- weight
+```
+
+**Every caller passes no amount, so the two came out equal and nothing
+noticed.** `reserve` takes one — `Math.max(1, input.amount ?? 1)` — so the first
+reservation of 2 would have enforced as 2 and displayed as 1. A person would
+read *"1 of 2 used"* on the card and watch Russell refuse to start anything,
+with both numbers correct by their own rule.
+
+§24 requires that the contract a person is shown and the contract the validator
+enforces be **one object**. That was true of the shape and false of the
+arithmetic, in the way hardest to catch: right until the day it isn't.
+
+`spendTotals` is the guard's own expression, exported from the repository that
+owns it and sitting next to it, minus only the rank clause that makes a race
+deterministic. The projection calls it rather than re-deriving it, so the number
+on the card and the number in the refusal come from the same SQL.
+
+Demonstrated on a `FRAGMENT` of amount 10: the card reads **10 of 12**, three
+more are refused `IN_TOTAL`, two more are accepted at exactly 12 — the boundary
+is the same on both sides. A `MISSION` of amount 2 is refused `AT_ONCE` under
+concurrency 1, which is the same arithmetic from the other side and is why the
+mission case could not be used to show the cumulative one.
+
+An expired hold is counted by neither, asserted here too, which is what makes
+`renewLiveMissionReservations` load-bearing rather than tidy.
+
+1,775 pass. No migration, no ceiling changed, no reservation altered.
