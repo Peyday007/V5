@@ -115,6 +115,19 @@ result is seen; a scenario that cannot fail has not been passed.
 
 ## 6. Amendment, 2026-09-07 — two more frozen messages
 
+> **These are regression and recovery inputs, not acceptance inputs.**
+>
+> They were chosen after measuring candidate phrasings against
+> `SEMANTIC_MERGE_FLOOR` and discarding one that scored 0.20. Selecting an input
+> against the implementation it is meant to test makes what follows evidence
+> that a repaired mechanism works on a chosen example — not the untouched
+> acceptance run §3 was designed to be.
+>
+> §3's inputs remain the acceptance attempt, and its near-duplicate remains a
+> **failure**: `rmsg_8851902b76a344d4bc1f` produced no merge, for a reason that
+> was Brain's (evidence §54.1). No further wording will be tuned against the
+> implementation, and whatever these produce is reported at that strength.
+
 Recorded as an amendment rather than an edit, because the inputs above were
 frozen so they could not be adjusted to fit a result, and adding to them is a
 change somebody should be able to see.

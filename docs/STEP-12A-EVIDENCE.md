@@ -5245,3 +5245,153 @@ request stays open rather than being marked answered; nothing is damaged either
 way". The first half was right and the second was wrong: it moved to `ANSWERED`
 and disappeared. Recorded here rather than quietly fixed, the same way §22
 records Step 7's wrong reasoning about OAuth.
+
+## 56. Four corrections to the execution plan — 2026-09-08
+
+The owner had Codex inspect `156a8f5` and it found things I had not. Each is
+verified against the code below rather than accepted, and one turned out to be
+worse than reported.
+
+### 1. `maxConcurrent` was counting a state no running mission is ever in
+
+**Confirmed, and worse than stated.** `settleReservation` had exactly one call
+site — `launch.ts:194`, immediately after `completeLaunch`. And
+`completeLaunch` moves the mission to `RUNNING` at line 321, *before* returning.
+So the sequence was: reserve `HELD` → mission `RUNNING` → reservation `SETTLED`,
+and the mission then ran for minutes as settled work.
+
+`maxConcurrent` counts live `HELD` rows. It was therefore not merely
+under-counting: it could only ever refuse **two launches in the same instant**,
+never two missions running at once. `max_launches_per_cycle 1` bounds launches
+per tick, which is throughput rather than concurrency; two ticks thirty seconds
+apart gave two concurrent missions on a grant of one.
+
+`reserve`'s own comment was right about what the two ceilings should mean —
+"settling a mission gives back concurrency and refunds nothing cumulative" —
+and describes settle-at-finish. The lifecycle underneath it did settle-at-launch.
+
+**Why no test caught it.** `tests/authorityBudget.test.ts` exercises `reserve()`
+directly and is entirely correct: a second `MISSION` reservation *is* refused
+while the first is `HELD`. The primitive was tested; the lifecycle was not. And
+one test actively pinned the defect — *"settles the reservation it took, so
+capacity is accounted for"*, asserting `SETTLED` on a mission `launch()` had
+just put into `RUNNING`. The name claims a property and the assertion reads a
+column, which is the same shape §55 records.
+
+**The fix** puts settlement on the terminal transition. `transitionMission` is
+the one function that moves a mission and already computes `terminal`, so a
+terminal path added later cannot forget, and `stop()`'s cancellation gets it
+for free. The hold now spans exactly the mission's live span.
+
+**And expiry, which the fix would otherwise have made dangerous.** A hold lapses
+after two hours and *both* ceilings ignore a lapsed hold — `total` counts
+`SETTLED` or **unexpired** `HELD`. A mission running longer than its TTL would
+have dropped out of the cumulative count too, refunding the owner's allowance by
+the passage of time. Expiry is still worth having, so the loop renews a live
+mission's hold each tick: expiry now means *no tick has tended this in two
+hours*, which for a thirty-second loop is abandoned rather than slow.
+
+### 2. Stopping a mission does not refund it — and the journey is one short
+
+**Confirmed.** `stop()` moves the mission to `CANCELLED` and nothing released or
+settled its reservation. Under the fix, cancellation **settles**: a mission that
+was authorized and started has consumed one of the grant's missions however it
+ended. Releasing it would refund somebody's allowance on Brain's own
+initiative, which is not Brain's decision to take.
+
+So the reconciliation, from the rows and the code:
+
+| Reservation kind | Reserved by | Enforced |
+| --- | --- | --- |
+| `MISSION` | `launch.ts:159` | yes — `maxMissions` cumulatively, `maxConcurrent` now genuinely |
+| `FRAGMENT` | **nothing** | no — `maxFragments` counts zero for ever |
+| `PROBE` | **nothing** | no — `maxProbes` counts zero for ever |
+
+`FRAGMENT` and `PROBE` reservations appear only in tests. That does **not** mean
+fragments and probes are unbounded: the approval envelope caps fragments per
+packet (`RUSSELL_STATE_LICENSING_V1` allows **1**), and a probe is bounded by
+one-open-per-candidate and by `probeEnvelope`'s lookup budget. But the two
+numbers on the owner's card are not the things doing the bounding, and the card
+does not say so. Recorded rather than repaired: building that enforcement now
+would tighten limits against a run already in flight, which is a change to the
+authorized envelope in the restrictive direction without the owner asking for it.
+
+**The mission arithmetic.** The remaining journey costs three:
+
+| # | Mission | For |
+| --- | --- | --- |
+| 1 | `rms_8e96b5f246464c069451` | spent — launched from a placeholder, parked, to be stopped |
+| 2 | a replacement research mission | conditions 7–14 |
+| 3 | its automatic follow-on | condition 15, and `A13` counts `next_mission_id IS NOT NULL`, which `setNextMission` writes only after a follow-on genuinely **launches** |
+
+The grant allows two. **Short by exactly one, and no honest arrangement of the
+existing pieces closes it.** Dropping the follow-on fails condition 15;
+refunding mission 1 is Brain deciding somebody's budget was not really spent;
+and revoking and re-granting mints a **new goal id**, and every ceiling is
+counted per `goal_id`, so the spend history silently resets to zero — the same
+refund, made invisible.
+
+So `raiseGoalCeiling` exists: the same grant, the same id, the same purpose,
+prohibitions, owner and expiry, one named ceiling, **upward only**, with both
+ends of the move and who made it in `project_events`. Lowering is refused in the
+SQL rather than by a caller, because lowering under work already reserved would
+retroactively invalidate reservations legitimately taken; withdrawing authority
+is what `revokeGoal` is for, and it stops new work rather than un-authorizing
+old work.
+
+### 3. The floor refused a bad plan and then lost the idea
+
+**Confirmed, and this one was a defect I introduced in mutation 18.**
+
+`validatePlan` runs in `applyPlan`, which runs **after** the bin is `COMPLETE`.
+So a refused plan left the candidate at `priority = NULL` beside a completed
+bin — and `unjudged()` excludes any candidate whose plan bin is not `CANCELLED`
+or `FAILED`. The idea became permanently unselectable: no priority, no probe, no
+mission, no second attempt, and nothing anywhere saying so.
+
+Tracing the producer answers the question directly: the four `test` fields came
+from a **worker session** answering a `RUSSELL_PLAN_V1` bin, and the completion
+contract checked structure only — `observations` and `mission` present — so the
+placeholder satisfied it and closed the bin. A minimum length in the applier
+cannot make a producer produce anything; it can only refuse, and refusing after
+the bin is closed refuses the idea along with the plan.
+
+**So the floor moved to the completion contract**, where the worker is still in
+session and still holds its attempts — the way `RESEARCH_PACKET_V1` refused the
+placeholder packet three times on 2026-09-07 and the worker released it rather
+than researching nonsense. `evaluateRussellPlan` calls `validatePlan` itself, so
+the manifest, the contract and the applier are one rule rather than three
+standards. A `RETRY` disposition keeps the attempts; exhausting them stops the
+bin at `NEEDS_HUMAN`, which is visible and has an answering transition. Silent
+stasis had neither.
+
+`applyPlan` still validates, and that is not redundancy worth removing: it is
+the authoritative check and the only one that may write a judgment.
+
+**What is still not established** is that the producer now yields a *usable*
+assignment. The contract refuses a placeholder; whether the next attempt is
+research-grade is a worker's decision, and only a real run answers it. That is
+named as outstanding rather than claimed.
+
+### 4. The amended messages are regression inputs, not an independent run
+
+**Accepted without qualification.** The two messages frozen in
+`docs/STEP-12A-ACCEPTANCE-SCENARIO-2.md` §6 were chosen *after* I measured
+candidate phrasings against `SEMANTIC_MERGE_FLOOR` and discarded one that scored
+0.20. That is selecting an input against the implementation it is meant to test,
+and evidence produced from it is **recovery evidence for a repaired path**, not
+the untouched acceptance run the scenario was designed to be.
+
+The original stands as the acceptance attempt and its outcome stands as a
+failure: `rmsg_8851902b76a344d4bc1f` produced no merge, and the reason was
+Brain's (§54.1). No further wording will be tuned against the implementation,
+and condition 4's eventual result is reported at the strength it has — a
+repaired mechanism demonstrated on a chosen input — never as independent proof.
+
+### Stopping the empty mission is not the same-mission resume
+
+Also accepted. `STOP` is an answering transition on the same mission and it
+satisfies gate `A14` as written, because `A14` checks that no answered request
+left its mission at `NEEDS_HUMAN`. It does **not** satisfy condition 17, which
+asks for a park and a **resume**. Condition 17 stays outstanding, and a
+`CANCELLED` mission will not be offered as having met it.

@@ -16,8 +16,13 @@ import { createUser, createWorker } from '../server/repos/identity.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import { getCandidate, recordJudgment } from '../server/repos/russellCandidates.ts';
-import { createGoal, listReservations } from '../server/repos/russellAuthority.ts';
-import { getMission, listMissions } from '../server/repos/russellMissions.ts';
+import { createGoal, listGoals, listReservations } from '../server/repos/russellAuthority.ts';
+import { authorityFor } from '../server/services/russell/authority.ts';
+import {
+  getMission,
+  listMissions,
+  renewLiveMissionReservations,
+} from '../server/repos/russellMissions.ts';
 import { getDb } from '../server/db/database.ts';
 import {
   createProbe,
@@ -471,13 +476,29 @@ describe('the mission launcher', () => {
     expect(again.replayed).toBe(true);
   });
 
-  it('settles the reservation it took, so capacity is accounted for', async () => {
+  it('keeps holding the reservation it took, until the mission ends', async () => {
+    /*
+     * This test used to be called "settles the reservation it took, so capacity
+     * is accounted for", and asserted `SETTLED` on a mission that `launch()`
+     * had just put into `RUNNING`. It was pinning the defect, not the property
+     * its name claimed: capacity was *not* accounted for, because
+     * `maxConcurrent` counts live `HELD` rows and a running mission had none.
+     *
+     * The same shape as the `toBe('ANSWERED')` test §55 records — a name that
+     * asserts a property and an assertion that reads a column instead.
+     */
     const goal = await authorized();
     const candidate = await idea();
-    await launch(launchInput(candidate.id));
+    const outcome = await launch(launchInput(candidate.id));
     const held = await listReservations(goal.id);
     expect(held).toHaveLength(1);
-    expect(held[0]!.state).toBe('SETTLED');
+    // Running, and therefore holding — the two have to be the same span.
+    expect((await getMission(outcome.mission!.id))!.state).toBe('RUNNING');
+    expect(held[0]!.state).toBe('HELD');
+
+    // And settled by finishing, which is the only thing that should settle it.
+    await transitionMission({ missionId: outcome.mission!.id, from: 'RUNNING', to: 'DONE' });
+    expect((await listReservations(goal.id))[0]!.state).toBe('SETTLED');
   });
 
   it('refuses a second mission past the ceiling, keeping the first', async () => {
@@ -789,6 +810,189 @@ describe('the loop keeps going without anybody watching', () => {
     // And a second tick does not resume it again.
     const second = await tick('instance-a');
     expect(second.resumed).not.toContain(request.id);
+  });
+
+  it('holds the concurrency slot for as long as the mission actually runs', async () => {
+    /*
+     * The defect this exists for, and the reason no existing test caught it.
+     *
+     * `tests/authorityBudget.test.ts` exercises `reserve()` directly and is
+     * correct: a second MISSION reservation is refused while the first is
+     * `HELD`. But `launch()` settled the reservation one line after creating
+     * the mission — so in production the hold lasted the length of a function
+     * call and the mission then ran for minutes as `SETTLED`. `maxConcurrent`
+     * counts live `HELD` rows, so it counted a state no running mission was
+     * ever in: it refused two launches in the same instant and never two
+     * missions running at once.
+     *
+     * The primitive was tested and the lifecycle was not. So this goes through
+     * `launch()` and real missions, and asserts what the owner's "1 at a time"
+     * actually means: the second idea cannot start until the first is finished.
+     */
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'lifecycle',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 3,
+      maxFragments: 4,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+
+    const spec = (title: string, assignment: string) => ({
+      projectId,
+      layerId,
+      visibility: 'SHARED' as const,
+      title,
+      assignment,
+      objective: `Settle ${title}.`,
+      whyNow: 'The layer names it as open.',
+      acceptableSources: ['county government portals'],
+      excludedSources: [],
+      evidence: ['a named portal per county'],
+      startedBy: { kind: 'PERSON' as const, id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+
+    const first = await capture({
+      title: 'Permit coverage',
+      statement: 'establish which Michigan counties publish permit data in a usable form',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const second = await capture({
+      title: 'Register latency',
+      statement: 'establish how long a Michigan county register takes to show a transfer',
+      projectId,
+      visibility: 'SHARED',
+    });
+    // Two genuinely different ideas, so nothing here turns on deduplication.
+    expect(second.merged).toBe(false);
+    expect(second.candidate!.id).not.toBe(first.candidate!.id);
+
+    const a = await launch({
+      ...spec('Permit coverage', 'Which Michigan counties publish permit data, and on what terms?'),
+      candidateId: first.candidate!.id,
+    });
+    expect(a.ok).toBe(true);
+
+    /*
+     * `completeLaunch` already put it in RUNNING, which is exactly the point:
+     * the mission was running *before* `launch()` reached the line that settled
+     * its hold. The defect is visible in that ordering alone.
+     */
+    expect((await getMission(a.mission!.id))!.state).toBe('RUNNING');
+
+    /*
+     * The assertion the whole fix is about. Before it, this succeeded: the
+     * first mission's hold had already been settled, so the fleet would have
+     * been given two concurrent missions on a grant of one.
+     */
+    const b = await launch({
+      ...spec('Register latency', 'How long does a Michigan county register take to show a transfer?'),
+      candidateId: second.candidate!.id,
+    });
+    expect(b.ok, 'a second mission launched while the first was still running').toBe(false);
+    expect(b.reason).toMatch(/at a time/);
+
+    // Nothing was half-created behind the refusal.
+    expect(await listMissions({ projectId })).toHaveLength(1);
+
+    // Finishing the first frees the slot — and only finishing it.
+    expect(
+      await transitionMission({
+        missionId: a.mission!.id,
+        from: 'RUNNING',
+        to: 'DONE',
+      }),
+    ).toBe(true);
+
+    const retry = await launch({
+      ...spec('Register latency', 'How long does a Michigan county register take to show a transfer?'),
+      candidateId: second.candidate!.id,
+    });
+    expect(retry.ok, 'the slot did not come back when the mission finished').toBe(true);
+    expect(await listMissions({ projectId })).toHaveLength(2);
+
+    /*
+     * And the cumulative side is untouched by any of it: two missions have been
+     * started, so one of the three remains — a finished mission is still spent.
+     */
+    const goal = (await listGoals(projectId))[0]!;
+    const spend = await authorityFor({ projectId });
+    expect(spend.grant!.id).toBe(goal.id);
+    expect(spend.grant!.spend.maxMissions.used).toBe(2);
+    expect(spend.grant!.spend.maxMissions.limit).toBe(3);
+    // One running, which is what a concurrency figure should say.
+    expect(spend.grant!.spend.maxConcurrent.used).toBe(1);
+  });
+
+  it('counts a cancelled mission as spent rather than refunding it', async () => {
+    /*
+     * A mission that was authorized and started has consumed one, however it
+     * ended. Releasing the hold instead would refund somebody's allowance on
+     * Brain's own initiative, which is a decision about their budget that Brain
+     * does not get to take — and it is the shape a stopped acceptance mission
+     * would have taken without this.
+     */
+    const conversation = await ownedConversation('Cancelled');
+    const mission = await parkedMission(conversation.id, 'cancelled-spend');
+
+    expect(
+      await transitionMission({
+        missionId: mission.id,
+        from: mission.state,
+        to: 'CANCELLED',
+        terminalReason: 'stopped by a person',
+      }),
+    ).toBe(true);
+
+    const spend = await authorityFor({ projectId });
+    // Spent, not returned.
+    expect(spend.grant!.spend.maxMissions.used).toBe(1);
+    // And the slot is free, because nothing is running.
+    expect(spend.grant!.spend.maxConcurrent.used).toBe(0);
+  });
+
+  it('does not let a long mission refund itself by running out of time', async () => {
+    /*
+     * A hold expires after two hours, and both ceilings ignore an expired hold —
+     * `used` counts `SETTLED` or *unexpired* `HELD`. So a mission that ran
+     * longer than its TTL dropped out of the cumulative count as well as the
+     * concurrent one, refunding the owner's allowance by the passage of time.
+     *
+     * Expiry is still worth having, so the hold is renewed rather than made
+     * permanent: it comes to mean "no tick has tended this in two hours", which
+     * for a thirty-second loop is abandoned rather than merely slow.
+     */
+    const conversation = await ownedConversation('Long running');
+    const mission = await parkedMission(conversation.id, 'long-running');
+    expect(
+      await transitionMission({ missionId: mission.id, from: mission.state, to: 'RUNNING' }),
+    ).toBe(true);
+
+    // Wind its hold back past the deadline, the way real elapsed time would.
+    await getDb().run(
+      `UPDATE russell_budget_reservations SET expires_at = ? WHERE id = ?`,
+      ['2020-01-01T00:00:00.000Z', mission.reservationId],
+    );
+    const lapsed = await authorityFor({ projectId });
+    expect(lapsed.grant!.spend.maxMissions.used, 'the setup did not reproduce the lapse').toBe(0);
+
+    // The tick tends it, and the spend is itself again.
+    const renewed = await renewLiveMissionReservations(10);
+    expect(renewed).toContain(mission.reservationId);
+    const after = await authorityFor({ projectId });
+    expect(after.grant!.spend.maxMissions.used).toBe(1);
+    expect(after.grant!.spend.maxConcurrent.used).toBe(1);
+
+    // A finished mission is not renewed: its hold is settled and settled is final.
+    await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'DONE' });
+    expect(await renewLiveMissionReservations(10)).not.toContain(mission.reservationId);
+    expect((await authorityFor({ projectId })).grant!.spend.maxMissions.used).toBe(1);
   });
 
   it('does not offer to record gaps on a packet that holds none', async () => {

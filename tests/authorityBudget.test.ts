@@ -18,8 +18,12 @@ import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import {
   createGoal,
+  getGoal,
+  listReservations,
+  raiseGoalCeiling,
   releaseReservation,
   reserve,
+  revokeGoal,
   settleReservation,
 } from '../server/repos/russellAuthority.ts';
 
@@ -127,6 +131,72 @@ describe('the approved grant, through the real reservation path', () => {
       expect((await reserve({ goalId, kind: 'PROBE', idempotencyKey: `p${i}` })).ok).toBe(true);
     }
     expect((await reserve({ goalId, kind: 'PROBE', idempotencyKey: 'p3' })).ok).toBe(false);
+  });
+});
+
+describe('raising a ceiling on a live grant', () => {
+  it('raises the number, keeps the grant, and keeps what has been spent', async () => {
+    /*
+     * The alternative routes were both refunds. Refunding the spent mission is
+     * Brain deciding somebody's allowance was not really used; revoking and
+     * re-granting mints a new goal id, and every ceiling is counted per
+     * `goal_id`, so the spend silently goes to zero. Same id, same history, one
+     * number moved.
+     */
+    const first = await mission('spent-one');
+    expect(first.ok).toBe(true);
+    await settleReservation(first.reservation!.id);
+
+    const raised = await raiseGoalCeiling({ goalId, ceiling: 'maxMissions', to: APPROVED.maxMissions + 1 });
+    expect(raised.ok).toBe(true);
+    expect(raised.goal!.id).toBe(goalId);
+    expect(raised.goal!.maxMissions).toBe(APPROVED.maxMissions + 1);
+
+    // Everything else about the grant is untouched — this is an amendment to
+    // one number, not a second grant wearing the first one's id.
+    expect(raised.goal!.expiresAt).toBe((await getGoal(goalId))!.expiresAt);
+    expect(raised.goal!.maxFragments).toBe(APPROVED.maxFragments);
+    expect(raised.goal!.maxConcurrent).toBe(APPROVED.maxConcurrent);
+    expect(raised.goal!.maxProbes).toBe(APPROVED.maxProbes);
+    expect(raised.goal!.allowedWork).toEqual((await getGoal(goalId))!.allowedWork);
+
+    // The spent mission still counts. The extra one is extra, not a refund.
+    const reservations = await listReservations(goalId);
+    expect(reservations.filter((row) => row.state === 'SETTLED')).toHaveLength(1);
+    expect((await mission('the-extra-one')).ok).toBe(true);
+  });
+
+  it('raises only, so a limit cannot be lowered under work already reserved', async () => {
+    /*
+     * Lowering would retroactively invalidate reservations legitimately taken —
+     * work mid-flight would find itself over a bar that did not exist when it
+     * started. Withdrawing authority is `revokeGoal`, which stops new work
+     * rather than un-authorizing old work.
+     */
+    const down = await raiseGoalCeiling({ goalId, ceiling: 'maxMissions', to: 1 });
+    expect(down.ok).toBe(false);
+    expect(down.reason).toMatch(/only raises/i);
+    expect((await getGoal(goalId))!.maxMissions).toBe(APPROVED.maxMissions);
+
+    // Equal is not a raise either: nothing to do, and saying so beats a silent
+    // success on a change that did not happen.
+    const same = await raiseGoalCeiling({ goalId, ceiling: 'maxMissions', to: APPROVED.maxMissions });
+    expect(same.ok).toBe(false);
+  });
+
+  it('refuses a grant that is no longer live', async () => {
+    await revokeGoal({ goalId, actorUserId: userId, reason: 'done with it' });
+    const after = await raiseGoalCeiling({ goalId, ceiling: 'maxMissions', to: 99 });
+    expect(after.ok).toBe(false);
+    expect(after.reason).toMatch(/revoked/i);
+    expect((await getGoal(goalId))!.maxMissions).toBe(APPROVED.maxMissions);
+  });
+
+  it('refuses a number that is not a whole positive one', async () => {
+    for (const bad of [0, -1, 1.5, Number.NaN]) {
+      expect((await raiseGoalCeiling({ goalId, ceiling: 'maxMissions', to: bad })).ok).toBe(false);
+    }
+    expect((await getGoal(goalId))!.maxMissions).toBe(APPROVED.maxMissions);
   });
 });
 

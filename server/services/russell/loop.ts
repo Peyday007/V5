@@ -51,6 +51,7 @@ import {
   getMission,
   listAnsweredRequests,
   markResumed,
+  renewLiveMissionReservations,
   setNextMission,
 } from '../../repos/russellMissions.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
@@ -131,6 +132,12 @@ export interface TickReport {
    * visible backlog.
    */
   unresolvedAnswers: { requestId: string; reason: string }[];
+  /**
+   * Budget holds pushed out because their mission is still alive. A silence
+   * here beside a running mission means its hold is about to lapse and refund
+   * the owner's allowance by the passage of time.
+   */
+  renewedReservations: string[];
   /** True when a bound stopped the tick short, with work preserved. */
   bounded: boolean;
 }
@@ -154,6 +161,7 @@ const EMPTY: TickReport = {
   linkedNext: [],
   needsHuman: [],
   unresolvedAnswers: [],
+  renewedReservations: [],
   bounded: false,
 };
 
@@ -190,6 +198,7 @@ export async function tick(owner: string): Promise<TickReport> {
     linkedNext: [],
     needsHuman: [],
     unresolvedAnswers: [],
+  renewedReservations: [],
   };
 
   try {
@@ -329,6 +338,18 @@ export async function tick(owner: string): Promise<TickReport> {
       const outcome = await judgeCandidate(settled.candidateId, { afterProbe: settled.probe });
       if (outcome.answeredByArchive) report.answeredByArchive.push(settled.candidateId);
       else if (outcome.binId) report.planning.push(settled.candidateId);
+    }
+
+    /*
+     * 1e-ii. Keep a live mission's reservation from expiring underneath it.
+     *
+     * Before the park and the launch, because both read the budget: a mission
+     * whose hold lapsed during this very tick would look to `reserve` like
+     * spend that never happened, and the launch step would hand out a slot the
+     * owner had already committed.
+     */
+    for (const id of await renewLiveMissionReservations(cycle.maxEventsPerCycle)) {
+      report.renewedReservations.push(id);
     }
 
     /*

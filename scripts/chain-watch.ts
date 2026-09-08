@@ -85,6 +85,49 @@ async function main(): Promise<void> {
     );
     line('owner / granted', `${goal.owner_user_id} ${goal.created_at}`);
     line('expires', goal.expires_at);
+
+    /*
+     * What has actually been spent against it, per kind, from the rows.
+     *
+     * The limits above are what the card *says*; these are what the counters
+     * *count*, and on 2026-09-08 they turned out not to be the same thing. Two
+     * of the four kinds have no producer at all — nothing anywhere reserves a
+     * FRAGMENT or a PROBE — so those ceilings read zero for ever however much
+     * research runs. Printing the kinds rather than a total is what makes that
+     * visible instead of inferable.
+     *
+     * `live` is what `maxConcurrent` counts and `committed` is what the total
+     * ceilings count, named the same way `authorityFor` names them so a reading
+     * here and a reading on the card cannot drift.
+     */
+    const reservations = await all<{
+      kind: string;
+      state: string;
+      amount: number;
+      expires_at: string;
+      settled_at: string | null;
+      released_at: string | null;
+    }>(
+      `SELECT kind, state, amount, expires_at, settled_at, released_at
+         FROM russell_budget_reservations WHERE goal_id = ?
+        ORDER BY kind, rowid`,
+      [goal.id],
+    );
+    const now = new Date().toISOString();
+    for (const kind of ['MISSION', 'FRAGMENT', 'PROBE']) {
+      const mine = reservations.filter((row) => row.kind === kind);
+      const committed = mine.filter(
+        (row) => row.state === 'SETTLED' || (row.state === 'HELD' && row.expires_at > now),
+      ).length;
+      const live = mine.filter((row) => row.state === 'HELD' && row.expires_at > now).length;
+      const lapsed = mine.filter((row) => row.state === 'HELD' && row.expires_at <= now).length;
+      const released = mine.filter((row) => row.state === 'RELEASED').length;
+      line(
+        `spent ${kind.toLowerCase()}`,
+        `rows ${mine.length} · committed ${committed} · live ${live} · ` +
+          `lapsed ${lapsed} · released ${released}`,
+      );
+    }
     console.log('');
   }
   if (goals.length === 0) {

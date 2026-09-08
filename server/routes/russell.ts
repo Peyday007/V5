@@ -64,7 +64,27 @@ import {
   authorityFor,
   RESEARCH_WORK,
 } from '../services/russell/authority.ts';
-import { createGoal, getGoal, revokeGoal } from '../repos/russellAuthority.ts';
+import {
+  createGoal,
+  getGoal,
+  raiseGoalCeiling,
+  revokeGoal,
+} from '../repos/russellAuthority.ts';
+import type { RaisableCeiling } from '../repos/russellAuthority.ts';
+
+/**
+ * The ceilings this route will move, as a set rather than a cast.
+ *
+ * A closed vocabulary matched exactly, the same shape every other model- or
+ * caller-supplied enum on this router gets: an unknown name is a refusal, not
+ * a column built from a string somebody sent.
+ */
+const RAISABLE: ReadonlySet<string> = new Set<RaisableCeiling>([
+  'maxMissions',
+  'maxFragments',
+  'maxConcurrent',
+  'maxProbes',
+]);
 import { recordEvent } from '../repos/events.ts';
 import {
   badRequest,
@@ -873,6 +893,67 @@ russellRouter.post(
       entityId: goal.id,
       eventType: 'RUSSELL_AUTHORITY_REVOKED',
       payload: { reason, revokedByUserId: principal.id, surface: 'RUSSELL' },
+    });
+
+    return authorityFor({ projectId: project.id });
+  }),
+);
+
+/**
+ * Raise one ceiling on a live grant.
+ *
+ * Not a grant editor and not a second grant: the same row, the same id, the
+ * same purpose, prohibitions, owner and expiry, and every reservation already
+ * taken against it still counted. One named ceiling, upward only.
+ *
+ * It exists because the only other answers to "the standing authority allows 2
+ * missions in total" were to refund spend Brain had no business refunding, or
+ * to revoke and re-grant — which mints a new goal id, and since every ceiling
+ * is counted per `goal_id`, silently resets the spend to zero. §24 asks that
+ * every escalation have an answering transition; that one's only answer
+ * destroyed the record of what had been used.
+ *
+ * Guarded exactly like the grant it amends: `requirePerson` refuses a worker
+ * principal by type, `requireProject` re-resolves the project against the
+ * authenticated caller, and a grant belonging to another project is absent
+ * rather than forbidden.
+ */
+russellRouter.post(
+  '/projects/:projectId/authority/:goalId/raise',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const goal = await getGoal(pathId(req, 'goalId'));
+    if (!goal || goal.projectId !== project.id) throw notFound('No authority with that id.');
+
+    const body = bodyOf(req);
+    const ceiling = requiredString(body['ceiling'], 'ceiling');
+    if (!RAISABLE.has(ceiling)) throw badRequest('That is not a limit this can raise.');
+    const to = body['to'];
+    if (typeof to !== 'number' || !Number.isInteger(to) || to < 1) {
+      throw badRequest('A limit is a whole number of at least one.');
+    }
+    const reason = requiredString(body['reason'], 'reason');
+
+    const before = goal[ceiling as RaisableCeiling];
+    const raised = await raiseGoalCeiling({
+      goalId: goal.id,
+      ceiling: ceiling as RaisableCeiling,
+      to,
+    });
+    if (!raised.ok) throw badRequest(raised.reason);
+
+    /*
+     * Both ends of the move, and who made it. "The limit is 3" a year from now
+     * answers nothing; "it was 2, this person raised it to 3 on this date for
+     * this reason" answers all of it.
+     */
+    await recordEvent({
+      projectId: project.id,
+      entityType: 'RUSSELL_GOAL',
+      entityId: goal.id,
+      eventType: 'RUSSELL_AUTHORITY_RAISED',
+      payload: { ceiling, from: before, to, reason, raisedByUserId: principal.id, surface: 'RUSSELL' },
     });
 
     return authorityFor({ projectId: project.id });

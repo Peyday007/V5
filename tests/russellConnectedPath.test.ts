@@ -373,6 +373,62 @@ describe('the path from a captured idea to judged work', () => {
     expect(validatePlan({ raw: GOOD_PLAN }).ok).toBe(true);
   });
 
+  it('refuses a placeholder plan at completion, not after the bin is closed', async () => {
+    /*
+     * The correction to where mutation 18 put the floor.
+     *
+     * It went into `validatePlan`, which `applyPlan` calls — *after* the bin is
+     * COMPLETE. A refused plan therefore left the candidate at `priority =
+     * NULL` beside a completed bin, and `unjudged()` excludes any candidate
+     * whose plan bin is not CANCELLED or FAILED. The idea became permanently
+     * unselectable: no priority, no probe, no mission, no second attempt, and
+     * nothing anywhere saying so. The floor stopped Brain spending on a
+     * placeholder and started it losing the idea instead.
+     *
+     * So the same rule runs in the completion contract, where the worker is
+     * still in session and still has attempts — the way `RESEARCH_PACKET_V1`
+     * refused the placeholder packet three times on 2026-09-07.
+     */
+    await authorize();
+    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
+    const outcome = await judgeCandidate(candidateId);
+
+    await workerPlans(outcome.binId!, {
+      observations: { cheapToReduce: false, expectedValue: 50, blockedBy: null },
+      mission: {
+        title: 'test',
+        objective: 'test',
+        assignment: 'test',
+        whyNow: 'test',
+        acceptableSources: ['test'],
+        excludedSources: ['test'],
+        evidence: ['test'],
+      },
+    });
+
+    const verdict = await evaluateContract((await getBin(outcome.binId!))!);
+    expect(verdict.satisfied, 'a placeholder plan satisfied the completion contract').toBe(false);
+    // RETRY, not HUMAN: the worker can still write a real specification, and
+    // putting a person in front of that would be a queue for something that
+    // only needed asking again.
+    expect(verdict.disposition).toBe('RETRY');
+    expect(verdict.reasons.join(' ')).toMatch(/placeholder/i);
+
+    // The idea is untouched and still selectable, which is the property the
+    // stranding broke.
+    const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+    expect(after.priority).toBeNull();
+    expect(after.state).toBe('CAPTURED');
+
+    /*
+     * That the floor is a floor rather than a wall is asserted where a good
+     * plan is already submitted — "judges an idea a worker planned" evaluates
+     * the same contract on GOOD_PLAN and gets `satisfied`. Re-submitting onto
+     * this bin would need a second lease and would be testing the queue, not
+     * the contract.
+     */
+  });
+
   it('tells the worker about the floor rather than enforcing it silently', async () => {
     /*
      * The rule this file has now needed four times: a rule enforced against

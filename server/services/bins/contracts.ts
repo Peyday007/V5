@@ -29,6 +29,7 @@ import { listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
 import { getDocument } from '../../repos/documents.ts';
 import { listAuditsByProject } from '../../repos/audits.ts';
 import { readObject, storageKeyOf } from '../storage.ts';
+import { validatePlan } from '../russell/planning.ts';
 
 /** What an evaluation concluded, and why. */
 export interface ContractVerdict {
@@ -540,6 +541,41 @@ async function evaluateRussellPlan(bin: Bin): Promise<ContractVerdict> {
       ['The plan needs both an "observations" object and a "mission" object.'],
       observed,
     );
+  }
+
+  /*
+   * The whole contract, applied where the worker can still do something about
+   * it — and this is the correction to where mutation 18 put it.
+   *
+   * That mutation added a floor under a mission specification, in
+   * `validatePlan`, and `validatePlan` runs in `applyPlan` — *after* the bin is
+   * COMPLETE. So a refused plan left the candidate at `priority = NULL` beside
+   * a completed bin, and `unjudged()` excludes any candidate whose plan bin is
+   * not CANCELLED or FAILED. The idea became permanently unselectable: no
+   * priority, no probe, no mission, no second attempt and nothing saying so.
+   * The floor stopped Brain spending on a placeholder and started it losing the
+   * idea instead, which is the same defect one door along.
+   *
+   * Refusing here instead means the worker is told at submission, inside its
+   * own session, with its attempts intact — the way `RESEARCH_PACKET_V1`
+   * refused the placeholder packet on 2026-09-07, three times, and the worker
+   * released it rather than researching nonsense. A bin that exhausts its
+   * attempts stops at NEEDS_HUMAN, which is visible and has an answering
+   * transition; silent stasis has neither.
+   *
+   * `validatePlan` rather than a second copy of its rules, so the manifest, the
+   * contract and the applier cannot drift into three different standards. It is
+   * pure over the raw payload and needs no principal, which is exactly why it
+   * can be called from here — unlike `validateProposal`, whose authorization
+   * half is the reason `evaluateRussellTurn` deliberately does not.
+   *
+   * `applyPlan` still validates. Two checks minutes apart against a payload
+   * that has not moved is not redundancy worth removing: the applier is the
+   * authoritative one and the only one that may write a judgment.
+   */
+  const validated = validatePlan({ raw: parsed });
+  if (!validated.ok) {
+    return refuse('RETRY', [validated.reason], { ...observed, refusedBy: 'validatePlan' });
   }
   return satisfied(observed);
 }

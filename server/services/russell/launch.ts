@@ -46,7 +46,6 @@ import {
   checkAuthority,
   releaseReservation,
   reserve,
-  settleReservation,
 } from '../../repos/russellAuthority.ts';
 import { startPacket } from '../research/startPacket.ts';
 import {
@@ -191,7 +190,21 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
     return { ok: false, mission: completed.mission, reason: completed.reason, replayed: !created };
   }
 
-  await settleReservation(reservation.reservation.id);
+  /*
+   * The reservation is **not** settled here, and that is the fix rather than an
+   * omission.
+   *
+   * It used to be, one line after the mission existed — so a mission's
+   * reservation was `HELD` for the length of this function and `SETTLED` for
+   * the entire time the mission actually ran. `maxConcurrent` counts live
+   * `HELD` rows, so it counted a state no running mission was ever in: the
+   * owner's "one at a time" refused two launches in the same instant and never
+   * two missions running at once.
+   *
+   * Settling is what *finishing* does, and `transitionMission` does it on every
+   * terminal move. The hold now spans exactly the mission's live span, which is
+   * what a concurrency limit is about.
+   */
   await transitionCandidate({ candidateId: input.candidateId, from: candidate.state, to: 'QUEUED' });
   return { ok: true, mission: completed.mission, reason: 'launched', replayed: !created };
 }

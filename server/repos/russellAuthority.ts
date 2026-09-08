@@ -193,6 +193,80 @@ export async function revokeGoal(input: {
   return result.changes === 1;
 }
 
+/**
+ * Raise one ceiling on a live grant, keeping the grant and its spend.
+ *
+ * Written because the acceptance run needed it and there was no honest way to
+ * get there. The remaining journey costs three missions — the one already
+ * launched and stopped, a replacement, and the automatic follow-on the
+ * replacement declares — against a grant of two. The only routes were:
+ *
+ *   - refund the spent mission, which is Brain deciding somebody's allowance
+ *     was not really spent;
+ *   - revoke and re-grant, which mints a **new goal id** — and every ceiling is
+ *     counted per `goal_id`, so the spend history goes to zero. That is the
+ *     same refund wearing a different hat, and worse for being invisible;
+ *   - or this: the owner raises the number they set, on the grant they set it
+ *     on, and every reservation already taken against it still counts.
+ *
+ * §24 asks that every escalation have an answering transition. "The standing
+ * authority allows 2 missions in total" is an escalation, and until now the
+ * only answer to it destroyed the evidence of what had been spent.
+ *
+ * **Raise only.** A ceiling can go up and never down, and the guard is in the
+ * SQL rather than in a caller. Lowering a limit under work already reserved
+ * would retroactively invalidate reservations that were legitimately taken —
+ * a fragment mid-flight would find itself over a bar that did not exist when
+ * it started. Withdrawing authority is what `revokeGoal` is for, and it stops
+ * new work rather than un-authorizing old work.
+ *
+ * **One ceiling per call, named from a closed set**, so this is an amendment
+ * rather than a grant editor: nothing here can change the purpose, the class of
+ * work, the prohibitions, the owner or the expiry.
+ */
+export type RaisableCeiling = 'maxMissions' | 'maxFragments' | 'maxConcurrent' | 'maxProbes';
+
+const CEILING_COLUMN: Record<RaisableCeiling, string> = {
+  maxMissions: 'max_missions',
+  maxFragments: 'max_fragments',
+  maxConcurrent: 'max_concurrent',
+  maxProbes: 'max_probes',
+};
+
+export async function raiseGoalCeiling(input: {
+  goalId: string;
+  ceiling: RaisableCeiling;
+  to: number;
+}): Promise<{ ok: boolean; goal: RussellGoal | null; reason: string }> {
+  const column = CEILING_COLUMN[input.ceiling];
+  if (!column) return { ok: false, goal: null, reason: 'that is not a ceiling this can raise' };
+  if (!Number.isInteger(input.to) || input.to < 1) {
+    return { ok: false, goal: null, reason: 'a ceiling is a whole number of at least one' };
+  }
+
+  /*
+   * The comparison is inside the statement, not around it. Read-then-write
+   * would let two raises interleave and leave the smaller one last, which is
+   * the one shape a raise-only rule must not produce.
+   */
+  const result = await getDb().run(
+    `UPDATE russell_goals SET ${column} = ?, updated_at = ?
+      WHERE id = ? AND state = 'ACTIVE' AND ${column} < ?`,
+    [input.to, authorityNow(), input.goalId, input.to],
+  );
+  const goal = await getGoal(input.goalId);
+  if (result.changes === 1) return { ok: true, goal, reason: 'raised' };
+  if (!goal) return { ok: false, goal: null, reason: 'no such standing authority' };
+  if (goal.state !== 'ACTIVE') {
+    return { ok: false, goal, reason: `the standing authority is ${goal.state.toLowerCase()}` };
+  }
+  return {
+    ok: false,
+    goal,
+    reason: 'this only raises a limit; it is already at least that high',
+  };
+}
+
 export async function setGoalState(input: {
   goalId: string;
   from: GoalState;
@@ -520,6 +594,32 @@ export async function settleReservation(reservationId: string): Promise<boolean>
         SET state = 'SETTLED', settled_at = ?
       WHERE id = ? AND state = 'HELD'`,
     [authorityNow(), reservationId],
+  );
+  return result.changes === 1;
+}
+
+/**
+ * Push a live reservation's expiry out, so time does not refund a budget.
+ *
+ * The TTL is what stops a crashed launch holding a slot for ever, and that is
+ * worth keeping — but it must not decide that a mission which is still running
+ * was never started. `renewLiveMissionReservations` calls this each tick for
+ * reservations whose mission is still alive, which turns the TTL from "this
+ * work took too long" into "nothing has tended this in two hours".
+ *
+ * Guarded on `HELD`: a settled or released reservation is finished with, and
+ * renewing one would resurrect spend that had been accounted for.
+ */
+export async function renewReservation(
+  reservationId: string,
+  ttlMinutes = 120,
+): Promise<boolean> {
+  const now = authorityNow();
+  const expires = new Date(Date.parse(now) + Math.max(1, ttlMinutes) * 60_000).toISOString();
+  const result = await getDb().run(
+    `UPDATE russell_budget_reservations SET expires_at = ?
+      WHERE id = ? AND state = 'HELD'`,
+    [expires, reservationId],
   );
   return result.changes === 1;
 }

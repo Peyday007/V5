@@ -253,6 +253,7 @@ export const EVENT_TYPES = [
   // project itself authorized.
   'RUSSELL_AUTHORITY_GRANTED',
   'RUSSELL_AUTHORITY_REVOKED',
+  'RUSSELL_AUTHORITY_RAISED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

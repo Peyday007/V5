@@ -25,6 +25,7 @@
  * item from being a state nobody can clear.
  */
 import { getDb } from '../db/database.ts';
+import { renewReservation, settleReservation } from './russellAuthority.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
 import type {
   HumanRequestChoice,
@@ -231,6 +232,34 @@ export async function linkMission(input: {
  * A mission entering `WAITING` or `NEEDS_HUMAN` must say what for; the CHECK
  * constraint enforces it and this refuses it early with a sentence, because a
  * mission parked on nothing nameable is the state nobody can clear.
+ *
+ * **A terminal move settles the mission's budget reservation, here.**
+ *
+ * It used to be settled by `launch()`, one line after the mission was created —
+ * so a reservation was `HELD` for the duration of a function call and `SETTLED`
+ * for the whole time the mission actually ran. `maxConcurrent` counts live
+ * `HELD` rows, which meant it counted nothing a running mission was ever in:
+ * a grant of "one at a time" refused only two launches in the same instant, and
+ * never two missions running at once. The comment in `reserve` describing the
+ * two ceilings was right about what they should mean; the lifecycle underneath
+ * it was not.
+ *
+ * So the reservation now spans exactly the mission's live span, and settling is
+ * what *finishing* does. It belongs in this function rather than in the
+ * writeback because this is the one place a mission moves — a terminal path
+ * added later cannot forget to do it, and `stop()`'s cancellation gets it for
+ * free.
+ *
+ * **Settled, never released.** A cancelled mission consumed one of the grant's
+ * missions: it was authorized, it was started, and work was done against it.
+ * `SETTLED` keeps it counted cumulatively and frees the concurrency slot, which
+ * is exactly the truth. Releasing it would refund the owner's budget on Brain's
+ * own initiative, which is a decision about somebody's allowance that Brain does
+ * not get to take.
+ *
+ * Guarded twice over: only the caller whose compare-and-swap won gets here, and
+ * `settleReservation` is itself guarded on `state = 'HELD'`, so a redelivery
+ * settles nothing a second time.
  */
 export async function transitionMission(input: {
   missionId: string;
@@ -260,7 +289,49 @@ export async function transitionMission(input: {
       input.from,
     ],
   );
-  return result.changes === 1;
+  if (result.changes !== 1) return false;
+  if (terminal) {
+    const mission = await getMission(input.missionId);
+    if (mission?.reservationId) await settleReservation(mission.reservationId);
+  }
+  return true;
+}
+
+/**
+ * Keep a live mission's reservation from expiring underneath it.
+ *
+ * A reservation is `HELD` with a two-hour TTL, and both ceilings ignore an
+ * expired hold — `total` counts `SETTLED` or *unexpired* `HELD`. So a mission
+ * that ran longer than its TTL would drop out of the cumulative count as well
+ * as the concurrent one, quietly refunding the owner's allowance by the passage
+ * of time. That is a worse failure than the one it guards against.
+ *
+ * Expiry is still worth having: a launch that crashed between reserving and
+ * creating anything leaves a hold nothing will ever settle. So the reservation
+ * is renewed rather than made permanent, and expiry comes to mean what it
+ * should — *no tick has tended this in two hours*, which for a thirty-second
+ * loop is genuinely abandoned rather than merely slow.
+ *
+ * Returns the reservation ids it renewed, so the tick can report a number
+ * rather than a silence.
+ */
+export async function renewLiveMissionReservations(limit: number): Promise<string[]> {
+  const rows = await getDb().all<{ reservation_id: string }>(
+    `SELECT m.reservation_id AS reservation_id
+       FROM russell_missions m
+       JOIN russell_budget_reservations r ON r.id = m.reservation_id
+      WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING','NEEDS_HUMAN')
+        AND m.reservation_id IS NOT NULL
+        AND r.state = 'HELD'
+      ORDER BY r.expires_at
+      LIMIT ?`,
+    [Math.max(1, limit)],
+  );
+  const renewed: string[] = [];
+  for (const row of rows) {
+    if (await renewReservation(row.reservation_id)) renewed.push(row.reservation_id);
+  }
+  return renewed;
 }
 
 /**
