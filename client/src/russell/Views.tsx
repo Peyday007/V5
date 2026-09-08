@@ -718,6 +718,9 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
   const [limits, setLimits] = useState<Record<string, number> | null>(null);
   const [reason, setReason] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
+  /** Which ceiling the owner is raising, if any, and to what. */
+  const [raising, setRaising] = useState<string | null>(null);
+  const [raiseTo, setRaiseTo] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -800,10 +803,86 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
           <ul className="rs-authority-list">
             {declared.map((limit) => {
               const spend = view.grant!.spend[limit.key];
+              const spent = spend.used >= spend.limit;
               return (
-                <li key={limit.key}>
+                <li key={limit.key} className={spent ? 'rs-authority-spent' : undefined}>
                   {limit.label}: {spend.used} of {spend.limit}
                   {spend.active > 0 ? ` · ${spend.active} running now` : ''}
+                  {/*
+                    * The raise offered where the limit is, rather than on a
+                    * settings screen somewhere else.
+                    *
+                    * A ceiling that is reached is a decision waiting to be
+                    * made, and until now its only answers destroyed the record
+                    * of what had been spent — withdrawing and re-granting mints
+                    * a new grant, and every count is per grant. This raises the
+                    * number on the grant that has it, and keeps everything
+                    * already used.
+                    */}
+                  {spent && raising !== limit.key ? (
+                    <>
+                      {' · '}
+                      <button
+                        type="button"
+                        className="rs-inline-button"
+                        onClick={() => {
+                          setRaising(limit.key);
+                          setRaiseTo(spend.limit + 1);
+                          setReason('');
+                        }}
+                      >
+                        Raise this limit
+                      </button>
+                    </>
+                  ) : null}
+                  {spent && raising === limit.key ? (
+                    <div className="rs-raise">
+                      <label className="rs-decision-label" htmlFor="rs-raise-to">
+                        Raise {limit.label.toLowerCase()} to
+                      </label>
+                      <input
+                        id="rs-raise-to"
+                        type="number"
+                        min={spend.limit + 1}
+                        value={raiseTo}
+                        onChange={(event) => setRaiseTo(Number(event.target.value))}
+                      />
+                      <label className="rs-decision-label" htmlFor="rs-raise-reason">
+                        Why?
+                      </label>
+                      <input
+                        id="rs-raise-reason"
+                        type="text"
+                        value={reason}
+                        maxLength={1_000}
+                        onChange={(event) => setReason(event.target.value)}
+                      />
+                      <div className="rs-choices">
+                        <button
+                          type="button"
+                          disabled={busy || reason.trim().length === 0 || raiseTo <= spend.limit}
+                          onClick={() => {
+                            void run(() =>
+                              RussellApi.raiseAuthority(projectId, view.grant!.id, {
+                                ceiling: limit.key,
+                                to: raiseTo,
+                                reason: reason.trim(),
+                              }),
+                            );
+                          }}
+                        >
+                          {busy ? 'Raising…' : `Raise it to ${raiseTo}`}
+                        </button>
+                        <button type="button" onClick={() => setRaising(null)}>
+                          Leave it
+                        </button>
+                      </div>
+                      <p className="rs-item-meta">
+                        Everything already used stays used. This raises the limit on the
+                        permission you gave; it does not start anything over.
+                      </p>
+                    </div>
+                  ) : null}
                 </li>
               );
             })}

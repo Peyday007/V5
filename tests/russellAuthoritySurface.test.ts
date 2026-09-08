@@ -396,6 +396,90 @@ describe('the gate did not move with the surface', () => {
   });
 });
 
+describe('raising a ceiling', () => {
+  it('raises one number on the same grant, keeping everything already spent', async () => {
+    /*
+     * The alternative was withdraw-and-grant-again, which looks equivalent and
+     * is not: it mints a new goal id, and every ceiling is counted per goal, so
+     * the spend silently resets. This is the one route that answers "the
+     * standing authority allows 2 missions in total" without destroying the
+     * record of what used them.
+     */
+    const goalId = await withRoutes(personPrincipal(userId, projectId), async (call) => {
+      const granted = await call('POST', `/projects/${projectId}/authority`, APPROVED);
+      return granted.body.grant.id as string;
+    });
+
+    await withRoutes(personPrincipal(userId, projectId), async (call) => {
+      const path = `/projects/${projectId}/authority/${goalId}/raise`;
+
+      // A reason is required, exactly as it is for withdrawing.
+      expect((await call('POST', path, { ceiling: 'maxMissions', to: 3 })).status).toBe(400);
+      // And the ceiling comes from a closed set rather than being a column name
+      // somebody sent.
+      expect(
+        (await call('POST', path, { ceiling: 'max_missions', to: 3, reason: 'r' })).status,
+      ).toBe(400);
+      expect(
+        (await call('POST', path, { ceiling: 'ownerUserId', to: 3, reason: 'r' })).status,
+      ).toBe(400);
+      // Not a whole positive number.
+      for (const to of [0, -1, 2.5, '3']) {
+        expect((await call('POST', path, { ceiling: 'maxMissions', to, reason: 'r' })).status).toBe(
+          400,
+        );
+      }
+      // Downward is refused: lowering under work already reserved would
+      // retroactively invalidate reservations legitimately taken.
+      expect(
+        (await call('POST', path, { ceiling: 'maxMissions', to: 1, reason: 'r' })).status,
+      ).toBe(400);
+
+      const raised = await call('POST', path, {
+        ceiling: 'maxMissions',
+        to: APPROVED.maxMissions + 1,
+        reason: 'the follow-on needs one the original did not allow for',
+      });
+      expect(raised.status).toBe(200);
+      expect(raised.body.grant.id).toBe(goalId);
+      expect(raised.body.grant.spend.maxMissions.limit).toBe(APPROVED.maxMissions + 1);
+      // One number, and nothing else about the permission.
+      expect(raised.body.grant.spend.maxFragments.limit).toBe(APPROVED.maxFragments);
+      expect(raised.body.grant.spend.maxProbes.limit).toBe(APPROVED.maxProbes);
+      expect(raised.body.grant.expiresAt).toBe(APPROVED.expiresAt);
+    });
+
+    // One grant still, not two — the ambiguity §24 refuses.
+    const goals = await listGoals(projectId);
+    expect(goals).toHaveLength(1);
+    expect(goals[0]!.id).toBe(goalId);
+    expect(goals[0]!.maxMissions).toBe(APPROVED.maxMissions + 1);
+  });
+
+  it('refuses a machine by principal type, and another project as absent', async () => {
+    const goalId = await withRoutes(personPrincipal(userId, projectId), async (call) => {
+      const granted = await call('POST', `/projects/${projectId}/authority`, APPROVED);
+      return granted.body.grant.id as string;
+    });
+    const body = { ceiling: 'maxMissions', to: 9, reason: 'r' };
+
+    // No membership configuration turns a worker into a person, and a grant
+    // that could raise its own ceiling is a machine widening its own reach.
+    await withRoutes(machinePrincipal(), async (call) => {
+      expect(
+        (await call('POST', `/projects/${projectId}/authority/${goalId}/raise`, body)).status,
+      ).toBe(404);
+    });
+    await withRoutes(personPrincipal(userId, projectId), async (call) => {
+      expect(
+        (await call('POST', `/projects/prj_elsewhere/authority/${goalId}/raise`, body)).status,
+      ).toBe(404);
+    });
+
+    expect((await listGoals(projectId))[0]!.maxMissions).toBe(APPROVED.maxMissions);
+  });
+});
+
 describe('withdrawing it', () => {
   it('stops new work, keeps the record, and says why', async () => {
     const goalId = await withRoutes(personPrincipal(userId, projectId), async (call) => {
