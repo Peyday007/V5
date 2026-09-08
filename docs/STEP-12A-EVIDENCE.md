@@ -5593,3 +5593,82 @@ Offered on every ceiling line now, prefilled one above where it is. What stays
 tied to actually being spent is the emphasis and the briefing sentence: a limit
 blocking nothing is not a decision waiting, and saying otherwise is what teaches
 a person to stop reading the status.
+
+## 60. Two ceilings that counted nothing, and a gate that passed on a stop — 2026-09-08
+
+Mutation 23 deployed: run `34207562649` from `622e22a`, green through a real
+unannounced restart.
+
+### The grant's fragment and probe allowances were disconnected
+
+§56.2 recorded that nothing reserves a `FRAGMENT` or a `PROBE`, and then argued
+the ceilings were merely *redundant* because the approval envelope caps
+fragments per packet. That reasoning was wrong and is corrected here rather than
+left standing: **a per-packet envelope cannot enforce a cumulative allowance
+across missions.** Two of the four numbers on the owner's card counted zero for
+ever, and "something else bounds it differently" is not the same fact as "the
+limit you set is enforced".
+
+Charged in **`createFragments`** — the one function all eight creation paths go
+through — and in **`openProbe`**. Guarding eight call sites individually is the
+arrangement this codebase has twice recorded as one forgotten filter away from
+being skipped.
+
+- **Keyed on the fragment key, never the attempt.** §15's repairs re-run the
+  same bounded question with a different strategy, so a retry replays its
+  reservation and is charged once. A *split* makes new keys, and new keys are
+  new questions — splitting one fragment into two does consume two of the
+  twelve, which is right.
+- **A refused batch releases only what that call took.** A reservation that
+  replayed was spent by an earlier attempt, and releasing it would refund an
+  allowance on the strength of an unrelated refusal.
+- **A packet with no Russell mission has no grant and is charged nothing**, so
+  Steps 9 and 10 are untouched — which is why the charge can sit in the
+  repository every path shares.
+- **A refusal is a result, not a crash.** §21 is explicit that a tool's own
+  failure delivered as a transport error is one the consumer cannot react to, so
+  the MCP tool returns `LIMIT_EXCEEDED` and the packet parks with the grant's
+  own sentence. The answering control is the raise already on the authority
+  card.
+
+Verified through those entry points: work inside the allowance proceeds, work
+past it is refused with nothing half-created, a repair costs nothing further,
+and an ungoverned packet is unaffected.
+
+### A14 passed on a stop
+
+The gate counted `ANSWERED`/`RESUMED` and failed only when a mission was *still*
+`NEEDS_HUMAN`. `STOP` moves a mission to `CANCELLED`, which is not
+`NEEDS_HUMAN` — so stopping an empty packet scored as "answered and resumed".
+Stopping **ends** work; condition 17 asks for work that **continued**.
+
+It now requires all of:
+
+| Clause | What it rules out |
+| --- | --- |
+| `r.state = 'RESUMED'` | an answer nothing carried out (§55's failure) |
+| `answered_by_user_id` set | a script, rather than a person |
+| `o.unresolved_gap_authorized_by = r.answered_by_user_id` | a decision that never reached the packet, or one somebody else authorized |
+| `m.state NOT IN ('CANCELLED','FAILED')` | a stop, and a mission that died |
+| `r.mission_id = m.id`, in the frozen chain | a replacement mission |
+
+`DONE` passes: a mission that resumed and then finished keeps its evidence.
+`unresolved_gap_authorized_by` is written only by `authorizeUnresolvedGaps`, on
+the RECORD_GAPS path, in the answering person's name — so this cannot be
+satisfied by asking. A stop is counted separately and reported as **recovery**,
+never as a pass.
+
+### How the resume gets exercised without manufacturing it
+
+Waiting for a random research failure is not a plan, and it was not the plan.
+The route is the frozen follow-on question — *how long is the lag between a
+closing and the record appearing* — under the envelope's government-portal
+source class. **Whether** there is a lag is answerable from those sources; the
+**duration** is typically unpublished. An honest answer therefore contains a
+named unknown, which is exactly what `RECORD_GAPS` exists to file.
+
+That is choosing a real business question whose truthful answer includes a gap,
+not arranging one. If the run instead settles everything cleanly, condition 17
+is reported undemonstrated rather than forced.
+
+1,784 pass.
