@@ -22,7 +22,7 @@
  * through `reserve`'s compare-and-swap. This module composes sentences and
  * counts rows. It decides nothing.
  */
-import { listGoals, listReservations } from '../../repos/russellAuthority.ts';
+import { listGoals, spendTotals } from '../../repos/russellAuthority.ts';
 import { getUser } from '../../repos/identity.ts';
 import { getProject } from '../../repos/projects.ts';
 import type { RussellGoal } from '../../domain/types.ts';
@@ -173,23 +173,31 @@ async function spendOf(
   goal: RussellGoal,
   now: string,
 ): Promise<Record<AuthorityLimitKey, AuthoritySpend>> {
-  const reservations = await listReservations(goal.id);
-  const live = (kind: string): number =>
-    reservations.filter(
-      (row) => row.kind === kind && row.state === 'HELD' && row.expiresAt > now,
-    ).length;
-  const committed = (kind: string): number =>
-    reservations.filter(
-      (row) =>
-        row.kind === kind &&
-        (row.state === 'SETTLED' || (row.state === 'HELD' && row.expiresAt > now)),
-    ).length;
+  /*
+   * Read through the same arithmetic enforcement uses, not a second copy of it.
+   *
+   * This function had its own: it counted reservation **rows** while
+   * `totalsThroughMine` summed **`amount`**. Every caller passes no amount
+   * today, so the two agreed by accident — and `reserve` takes one, so the
+   * first reservation of 2 would have enforced as 2 and displayed as 1. A
+   * person would have been told they had a mission left while Russell refused
+   * to start one.
+   *
+   * `spendTotals` is that arithmetic, exported from the repository that owns
+   * it and sitting next to the guard, so the number on the card and the number
+   * in the refusal come from the same expression.
+   */
+  const [mission, fragment, probe] = await Promise.all([
+    spendTotals(goal.id, 'MISSION', now),
+    spendTotals(goal.id, 'FRAGMENT', now),
+    spendTotals(goal.id, 'PROBE', now),
+  ]);
 
   return {
-    maxMissions: { used: committed('MISSION'), active: live('MISSION'), limit: goal.maxMissions },
-    maxConcurrent: { used: live('MISSION'), active: live('MISSION'), limit: goal.maxConcurrent },
-    maxFragments: { used: committed('FRAGMENT'), active: live('FRAGMENT'), limit: goal.maxFragments },
-    maxProbes: { used: committed('PROBE'), active: live('PROBE'), limit: goal.maxProbes },
+    maxMissions: { used: mission.committed, active: mission.live, limit: goal.maxMissions },
+    maxConcurrent: { used: mission.live, active: mission.live, limit: goal.maxConcurrent },
+    maxFragments: { used: fragment.committed, active: fragment.live, limit: goal.maxFragments },
+    maxProbes: { used: probe.committed, active: probe.live, limit: goal.maxProbes },
   };
 }
 

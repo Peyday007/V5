@@ -583,6 +583,47 @@ function ceilingsFor(goal: RussellGoal, kind: ReservationKind): { total: number;
  * work, `active` counts only what is still held. Two queries could see
  * different rows if one landed either side of a settlement.
  */
+/**
+ * What a grant has committed and what it still holds, per kind.
+ *
+ * The **same arithmetic** `totalsThroughMine` applies at the moment of
+ * reservation, minus the rank clause that makes a race deterministic. It is
+ * here, beside it, rather than in the projection that renders it — because the
+ * projection had its own copy and the two had already drifted.
+ *
+ * `spendOf` counted **rows** (`.length`) while enforcement summed **`amount`**.
+ * Every caller passes no amount today, so both come out the same by accident;
+ * `reserve` takes one, and the first reservation of 2 would have enforced as 2
+ * and displayed as 1. A person would have been told they had a mission left
+ * while Russell refused to start one — §24's rule that the contract a person is
+ * shown and the contract the validator enforces must be one object, broken in
+ * the way that is hardest to notice, because it is right until it is not.
+ *
+ * Same predicates, said once: `committed` is `SETTLED` or unexpired `HELD` and
+ * is what a total ceiling counts; `live` is unexpired `HELD` and is what a
+ * concurrency ceiling counts. An expired hold is in neither, which is why
+ * `renewLiveMissionReservations` exists.
+ */
+export async function spendTotals(
+  goalId: string,
+  kind: ReservationKind,
+  now: string,
+): Promise<{ committed: number; live: number }> {
+  const rows = await getDb().all<{ committed: number; live: number }>(
+    `SELECT
+        COALESCE(SUM(CASE
+          WHEN state = 'SETTLED' OR (state = 'HELD' AND expires_at > ?) THEN amount
+          ELSE 0 END), 0) AS committed,
+        COALESCE(SUM(CASE
+          WHEN state = 'HELD' AND expires_at > ? THEN amount
+          ELSE 0 END), 0) AS live
+       FROM russell_budget_reservations
+      WHERE goal_id = ? AND kind = ?`,
+    [now, now, goalId, kind],
+  );
+  return { committed: Number(rows[0]?.committed ?? 0), live: Number(rows[0]?.live ?? 0) };
+}
+
 async function totalsThroughMine(
   goalId: string,
   kind: ReservationKind,

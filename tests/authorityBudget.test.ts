@@ -15,6 +15,8 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { authorityFor } from '../server/services/russell/authority.ts';
 import { createUser } from '../server/repos/identity.ts';
 import {
   createGoal,
@@ -131,6 +133,83 @@ describe('the approved grant, through the real reservation path', () => {
       expect((await reserve({ goalId, kind: 'PROBE', idempotencyKey: `p${i}` })).ok).toBe(true);
     }
     expect((await reserve({ goalId, kind: 'PROBE', idempotencyKey: 'p3' })).ok).toBe(false);
+  });
+});
+
+describe('what the card says and what the guard does', () => {
+  it('counts an amount, not a row, so the two cannot disagree', async () => {
+    /*
+     * `spendOf` counted reservation rows while `totalsThroughMine` summed
+     * `amount`. Every caller passes no amount today, so both came out the same
+     * and nothing noticed — and `reserve` takes one, so the first reservation
+     * of 2 would have enforced as 2 and displayed as 1. A person would read
+     * "1 of 2 used" on the card and watch Russell refuse to start anything.
+     *
+     * §24's rule is that the contract a person is shown and the contract the
+     * validator enforces are one object. This is the arithmetic half of it.
+     */
+    /*
+     * A fragment, because a MISSION reservation of 2 is refused outright — the
+     * concurrency ceiling is 1 and the guard sums `amount` there too, which is
+     * itself the property under test. Fragments have no separate concurrency
+     * limit, so this isolates the cumulative arithmetic.
+     */
+    const ten = await reserve({
+      goalId,
+      kind: 'FRAGMENT',
+      idempotencyKey: 'weighted',
+      amount: 10,
+    });
+    expect(ten.ok).toBe(true);
+    expect(ten.reservation!.amount).toBe(10);
+
+    // The card reads what the guard counted: ten of twelve, not one of twelve.
+    const view = await authorityFor({ projectId });
+    expect(view.grant!.spend.maxFragments.used, 'the card counted rows, not amount').toBe(10);
+    expect(view.grant!.spend.maxFragments.limit).toBe(APPROVED.maxFragments);
+
+    // And the guard agrees, which is the point of them sharing an expression:
+    // three more would be thirteen, and thirteen is over.
+    const over = await reserve({
+      goalId,
+      kind: 'FRAGMENT',
+      idempotencyKey: 'three-more',
+      amount: 3,
+    });
+    expect(over.ok).toBe(false);
+    expect(over.refusedBy).toBe('IN_TOTAL');
+    // Two more is exactly twelve, and twelve is allowed — the boundary is the
+    // same on both sides.
+    expect(
+      (await reserve({ goalId, kind: 'FRAGMENT', idempotencyKey: 'two-more', amount: 2 })).ok,
+    ).toBe(true);
+    expect((await authorityFor({ projectId })).grant!.spend.maxFragments.used).toBe(12);
+
+    // A MISSION reservation over the concurrency ceiling is refused by weight
+    // too, which is the other half of the same arithmetic.
+    const heavy = await reserve({
+      goalId,
+      kind: 'MISSION',
+      idempotencyKey: 'heavy',
+      amount: 2,
+    });
+    expect(heavy.ok).toBe(false);
+    expect(heavy.refusedBy).toBe('AT_ONCE');
+  });
+
+  it('leaves an expired hold out of both, exactly as the guard does', async () => {
+    const held = await reserve({ goalId, kind: 'MISSION', idempotencyKey: 'lapsing' });
+    expect((await authorityFor({ projectId })).grant!.spend.maxMissions.used).toBe(1);
+
+    await getDb().run(`UPDATE russell_budget_reservations SET expires_at = ? WHERE id = ?`, [
+      '2020-01-01T00:00:00.000Z',
+      held.reservation!.id,
+    ]);
+    // Not counted — which is why a live mission's hold has to be renewed rather
+    // than left to lapse.
+    const after = await authorityFor({ projectId });
+    expect(after.grant!.spend.maxMissions.used).toBe(0);
+    expect(after.grant!.spend.maxConcurrent.used).toBe(0);
   });
 });
 
