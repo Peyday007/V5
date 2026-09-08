@@ -40,44 +40,78 @@ export const RESEARCH_WORK = 'RESEARCH';
  */
 export const AUTHORITY_LIMITS = [
   {
-    key: 'maxMissions',
-    label: 'Pieces of research, in total',
-    meaning: 'How many separate investigations Russell may start before asking again.',
-    max: 50,
-    suggested: 2,
-  },
-  {
     key: 'maxConcurrent',
     label: 'At the same time',
-    meaning: 'How many may be running at once. One means Russell finishes before it starts the next.',
+    meaning:
+      'How many investigations may run at once. One means Russell finishes before it starts ' +
+      'the next. This is what your subscription can actually run in parallel, not an allowance ' +
+      'that runs out.',
     max: 20,
     suggested: 1,
+  },
+] as const;
+
+/**
+ * What the grant still counts, without stopping anything.
+ *
+ * Three of the four numbers a person used to set were lifetime quotas —
+ * missions, fragments, probes — and reaching one meant Russell stopped until
+ * somebody topped it up. That is a machine for managing an allowance rather
+ * than one that does the work, and the original specification had already said
+ * measured starting values must not become permanent capacity ceilings.
+ *
+ * The counting stays, because what a grant has consumed is real and worth
+ * showing. It is reported as *used*, with no denominator, because there is no
+ * denominator: `ceilingsFor` returns `null` for these under the UNCAPPED
+ * policy and `reserve` skips a null ceiling. A big number here would read as a
+ * limit, and one day would be.
+ */
+export const AUTHORITY_COUNTERS = [
+  {
+    key: 'maxMissions',
+    label: 'Pieces of research',
+    meaning: 'Separate investigations Russell has started here.',
   },
   {
     key: 'maxFragments',
     label: 'Questions inside them',
-    meaning: 'The bounded sub-questions those investigations may break down into.',
-    max: 200,
-    suggested: 12,
+    meaning: 'Bounded sub-questions those investigations broke down into.',
   },
   {
     key: 'maxProbes',
     label: 'Cheap looks',
-    meaning: 'Quick checks Russell may take before committing to a full investigation.',
-    max: 50,
-    suggested: 3,
+    meaning: 'Quick checks taken before committing to a full investigation.',
   },
 ] as const;
 
+/** A number a person sets. Today that is concurrency and nothing else. */
 export type AuthorityLimitKey = (typeof AUTHORITY_LIMITS)[number]['key'];
+
+/** A number a person reads. Counted, never capped. */
+export type AuthorityCounterKey = (typeof AUTHORITY_COUNTERS)[number]['key'];
+
+/**
+ * Everything the card shows, whether it caps anything or not.
+ *
+ * One record rather than two, because a reader wants "what has this grant
+ * done" in one place — and because splitting it would let the two drift about
+ * which key means what.
+ */
+export type AuthoritySpendKey = AuthorityLimitKey | AuthorityCounterKey;
 
 export interface AuthoritySpend {
   /** Everything this grant has committed, settled or still held. */
   used: number;
   /** What is running right now. */
   active: number;
-  /** The ceiling it is counted against. */
-  limit: number;
+  /**
+   * The ceiling it is counted against, or `null` when nothing stops it.
+   *
+   * Null is the ordinary answer for missions, fragments and probes: those are
+   * counted, not capped. Only concurrency has a real number, because it is
+   * real provider capacity rather than an allowance.
+   */
+  limit: number | null;
 }
 
 export interface AuthorityView {
@@ -95,7 +129,7 @@ export interface AuthorityView {
     permits: string[];
     /** What it will never permit, however the numbers are set. */
     neverPermits: string[];
-    spend: Record<AuthorityLimitKey, AuthoritySpend>;
+    spend: Record<AuthoritySpendKey, AuthoritySpend>;
   } | null;
   /**
    * Grants that are over: revoked, expired or spent. Kept because withdrawing
@@ -130,6 +164,14 @@ export interface AuthorityView {
     max: number;
     suggested: number;
   }[];
+  /**
+   * The numbers the card reports without capping anything.
+   *
+   * Sent alongside `limits` for the same reason those are: the screen renders
+   * from the server's own list rather than a second copy, so a counter cannot
+   * appear on one and not the other.
+   */
+  counters: { key: AuthorityCounterKey; label: string; meaning: string }[];
   /** A proposal only: nothing is granted until a person approves it. */
   suggestedApproval: { name: string; expiresAt: string };
   /** The suggested numbers for a first grant, from `limits`. */
@@ -144,13 +186,32 @@ const NEVER = [
   'Do work outside what this grant names',
 ];
 
+/**
+ * What this grant permits, said the way it is enforced.
+ *
+ * Under the UNCAPPED policy the sentences must not name a lifetime number,
+ * because there is not one: research keeps going on the subscription that is
+ * already paid for, and what bounds it is how much may run at once, what the
+ * grant is *for*, and when it ends. A sentence promising "at most 2 pieces of
+ * research" against a policy that stops at none would be the screen lying
+ * about the validator — which is the exact failure `limits` is sent down to
+ * prevent.
+ */
 function permitSentences(goal: RussellGoal): string[] {
-  const out = [
-    `Start at most ${goal.maxMissions} ${goal.maxMissions === 1 ? 'piece' : 'pieces'} of research on this project`,
-    `Run at most ${goal.maxConcurrent} at a time`,
-    `Break them into at most ${goal.maxFragments} bounded questions`,
-    `Take at most ${goal.maxProbes} cheap ${goal.maxProbes === 1 ? 'look' : 'looks'} before committing to one`,
-  ];
+  const capped = goal.workPolicy === 'CAPPED';
+  const out = capped
+    ? [
+        `Start at most ${goal.maxMissions} ${goal.maxMissions === 1 ? 'piece' : 'pieces'} of research on this project`,
+        `Run at most ${goal.maxConcurrent} at a time`,
+        `Break them into at most ${goal.maxFragments} bounded questions`,
+        `Take at most ${goal.maxProbes} cheap ${goal.maxProbes === 1 ? 'look' : 'looks'} before committing to one`,
+      ]
+    : [
+        'Keep researching this project for as long as there is work worth doing',
+        `Run at most ${goal.maxConcurrent} ${goal.maxConcurrent === 1 ? 'investigation' : 'investigations'} at a time, on the subscription you already pay for`,
+        'Break each one into as many bounded questions as the evidence actually needs',
+        'Take a cheap look before committing to a full investigation, whenever that is the cheaper answer',
+      ];
   out.push(
     goal.expiresAt
       ? `Do all of that until ${goal.expiresAt}`
@@ -172,7 +233,7 @@ function permitSentences(goal: RussellGoal): string[] {
 async function spendOf(
   goal: RussellGoal,
   now: string,
-): Promise<Record<AuthorityLimitKey, AuthoritySpend>> {
+): Promise<Record<AuthoritySpendKey, AuthoritySpend>> {
   /*
    * Read through the same arithmetic enforcement uses, not a second copy of it.
    *
@@ -193,11 +254,29 @@ async function spendOf(
     spendTotals(goal.id, 'PROBE', now),
   ]);
 
+  /*
+   * `null` where the policy is uncapped, so the card cannot show a
+   * denominator that stops nothing. Read from the same policy `ceilingsFor`
+   * applies, rather than from a second opinion about it.
+   */
+  const capped = goal.workPolicy === 'CAPPED';
   return {
-    maxMissions: { used: mission.committed, active: mission.live, limit: goal.maxMissions },
+    maxMissions: {
+      used: mission.committed,
+      active: mission.live,
+      limit: capped ? goal.maxMissions : null,
+    },
     maxConcurrent: { used: mission.live, active: mission.live, limit: goal.maxConcurrent },
-    maxFragments: { used: fragment.committed, active: fragment.live, limit: goal.maxFragments },
-    maxProbes: { used: probe.committed, active: probe.live, limit: goal.maxProbes },
+    maxFragments: {
+      used: fragment.committed,
+      active: fragment.live,
+      limit: capped ? goal.maxFragments : null,
+    },
+    maxProbes: {
+      used: probe.committed,
+      active: probe.live,
+      limit: capped ? goal.maxProbes : null,
+    },
   };
 }
 
@@ -237,6 +316,7 @@ export async function authorityFor(input: {
     AUTHORITY_LIMITS.map((limit) => [limit.key, limit.suggested]),
   ) as Record<AuthorityLimitKey, number>;
   const limits = AUTHORITY_LIMITS.map((limit) => ({ ...limit }));
+  const counters = AUTHORITY_COUNTERS.map((counter) => ({ ...counter }));
 
   const history = goals
     .filter((goal) => goal !== live)
@@ -253,6 +333,7 @@ export async function authorityFor(input: {
       grant: null,
       history,
       limits,
+      counters,
       headline:
         'Russell may not start research on this project. It will still read what you say, ' +
         'capture ideas and rank them — and it will park every one of them rather than spend ' +
@@ -279,6 +360,7 @@ export async function authorityFor(input: {
     },
     history,
     limits,
+    counters,
     headline: `Russell may research on this project, within the limits you set on ${live.createdAt.slice(0, 10)}.`,
     suggested,
     suggestedApproval,

@@ -248,10 +248,13 @@ export const RussellApi = {
     projectId: string,
     body: {
       name: string;
-      maxMissions: number;
+      /**
+       * The one number a person sets. Missions, fragments and probes are
+       * counted rather than rationed, so there is nothing else to send: the
+       * server names its own policy and refuses a body field it did not ask
+       * for the same way it always has.
+       */
       maxConcurrent: number;
-      maxFragments: number;
-      maxProbes: number;
       expiresAt: string | null;
     },
   ): Promise<AuthorityView> =>
@@ -270,26 +273,6 @@ export const RussellApi = {
       `/api/russell/projects/${encodeURIComponent(projectId)}/authority/` +
         `${encodeURIComponent(goalId)}/revoke`,
       { method: 'POST', body: JSON.stringify({ reason }) },
-    ),
-
-  /**
-   * Raise one ceiling on the grant that already exists.
-   *
-   * Deliberately not "edit the permission": the same grant keeps its id, its
-   * purpose, its prohibitions and its expiry, and everything already spent
-   * against it stays spent. Withdrawing and granting again would look like the
-   * same thing and would silently reset the count, because every ceiling is
-   * counted per grant.
-   */
-  raiseAuthority: (
-    projectId: string,
-    goalId: string,
-    body: { ceiling: string; to: number; reason: string },
-  ): Promise<AuthorityView> =>
-    api(
-      `/api/russell/projects/${encodeURIComponent(projectId)}/authority/` +
-        `${encodeURIComponent(goalId)}/raise`,
-      { method: 'POST', body: JSON.stringify(body) },
     ),
 
   /** Pull an idea back out of the one it was folded into. */

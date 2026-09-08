@@ -52,7 +52,7 @@ import type { ResearchFragment, ResearchOrchestration } from '../../domain/types
  * Recorded on every automatic approval, because "Brain approved this" is only
  * auditable if you can tell which rules it applied.
  */
-export const ENVELOPE_VALIDATOR_VERSION = '2026-09-01.2';
+export const ENVELOPE_VALIDATOR_VERSION = '2026-09-08.1';
 
 /** The exact assignment the Step 10 envelope authorizes, and nothing else. */
 export const MICHIGAN_LICENSING_ASSIGNMENT = `Determine whether, under Michigan law, a success-fee intermediary who arranges
@@ -103,7 +103,20 @@ export interface ApprovalEnvelope {
   authorization: string;
   /** The assignment text this envelope authorizes, pinned by digest. */
   assignmentSha256: string;
-  maxFragments: number;
+  /**
+   * How many fragments the plan may propose, or `null` for as many as the
+   * evidence needs.
+   *
+   * A number here is a genuine bound on one acceptance packet, and the two
+   * closed steps' envelopes keep theirs. `null` is not "unlimited spending":
+   * every other condition in this envelope still applies to every fragment,
+   * and each one is still gated, verified and audited exactly as before. What
+   * it stops being is a *count* — because a count fixed for a narrow test
+   * becomes a permanent restriction on how finely real research may be broken
+   * down, which is a decision the evidence should make rather than a constant
+   * written before the question was read.
+   */
+  maxFragments: number | null;
   /** Every fragment's geography must match this. */
   geography: RegExp;
   /** A fragment naming any of these is out of scope by construction. */
@@ -222,9 +235,20 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
    * Not one-use, unlike the Step 11 envelope, and for a reason worth stating:
    * the acceptance has to prove Russell launching a *second* authorized mission
    * without another prompt, and the follow-on is the same question for
-   * California. One-use would have made the thing being proved impossible. The
-   * bound that keeps it honest instead is `maxFragments: 1` plus the mission
-   * ceiling on the grant, which is counted.
+   * California. One-use would have made the thing being proved impossible.
+   *
+   * It carried `maxFragments: 1` as the bound that kept it honest, and that is
+   * gone. The correction is recorded rather than quietly applied: one fragment
+   * per state was chosen because the acceptance needed something small, and a
+   * number chosen for a test does not belong in the envelope a real question
+   * is judged against — "how many bounded questions is this?" is decided by
+   * the gaps, which is §12's own rule about there being no fixed fragment
+   * count. What actually keeps this envelope narrow is untouched and is doing
+   * all the work: two named states and every other one forbidden by name,
+   * statutory sources only, no spend and no external effect, and a pinned
+   * assignment digest. A fifth fragment inside those bounds is the same
+   * authorized question asked more carefully; a fragment outside them is
+   * refused however few there are.
    */
   RUSSELL_STATE_LICENSING_V1: Object.freeze({
     id: 'RUSSELL_STATE_LICENSING_V1',
@@ -236,7 +260,9 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
     // digest is checked against the template's shape rather than one string.
     assignmentSha256: sha256(STATE_LICENSING_ASSIGNMENT_TEMPLATE),
     projectSlug: 'deal-dispatch',
-    maxFragments: 1,
+    // As many bounded questions as the gaps require. The scope conditions
+    // below are what bound this packet, and they apply to every one of them.
+    maxFragments: null,
     // Two states, and only these two: the frozen acceptance idea and the frozen
     // follow-on. A third would be work nobody authorized.
     geography: /florida|california|\bfl\b|\bca\b/i,
@@ -401,7 +427,7 @@ export function planFitsEnvelope(input: {
   if (fragments.length === 0) {
     reasons.push('There is no plan to approve.');
   }
-  if (fragments.length > envelope.maxFragments) {
+  if (envelope.maxFragments !== null && fragments.length > envelope.maxFragments) {
     reasons.push(
       `The plan proposes ${fragments.length} fragments; the envelope authorizes at most ` +
         `${envelope.maxFragments}. A broader decomposition is a broader spend.`,

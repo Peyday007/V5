@@ -10,6 +10,7 @@ import {
   APPROVAL_ENVELOPES,
   ENVELOPE_VALIDATOR_VERSION,
   MICHIGAN_LICENSING_ASSIGNMENT,
+  STATE_LICENSING_ASSIGNMENT_TEMPLATE,
   getApprovalEnvelope,
   planFitsEnvelope,
 } from '../server/services/research/approvalEnvelope.ts';
@@ -158,7 +159,7 @@ describe('the source classes the authorized assignment actually names', () => {
     // Bumped when the checks changed meaning, so an approval recorded before
     // the correction and one recorded after are distinguishable in the audit.
     expect(verdict.validatorVersion).toBe(ENVELOPE_VALIDATOR_VERSION);
-    expect(verdict.validatorVersion).toBe('2026-09-01.2');
+    expect(verdict.validatorVersion).toBe('2026-09-08.1');
   });
 });
 
@@ -290,5 +291,110 @@ describe('a plan outside the envelope goes to a person', () => {
       fragments: [fragment({ geography: 'Texas', minIndependentSources: 0 })],
     });
     expect(verdict.reasons.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/**
+ * The narrow test envelope that must not have become a permanent restriction.
+ *
+ * `RUSSELL_STATE_LICENSING_V1` carried `maxFragments: 1`, chosen because the
+ * acceptance needed something small. A number chosen for a test is not a bound
+ * on spending — it is a bound on how carefully a real question may be asked,
+ * and §12 already says there is no fixed fragment count because the gaps decide
+ * it. So the count went and every scope condition stayed, which is the half
+ * that was doing the work all along.
+ */
+describe('the Russell envelope bounds scope rather than counting questions', () => {
+  const RUSSELL = APPROVAL_ENVELOPES['RUSSELL_STATE_LICENSING_V1']!;
+
+  function russellPacket(over: Partial<ResearchOrchestration> = {}): ResearchOrchestration {
+    return {
+      assignment: STATE_LICENSING_ASSIGNMENT_TEMPLATE,
+      fixture: false,
+      unresolvedGapPolicy: null,
+      approvalEnvelopeId: RUSSELL.id,
+      ...over,
+    } as unknown as ResearchOrchestration;
+  }
+
+  function floridaFragment(over: Partial<ResearchFragment> = {}): ResearchFragment {
+    return {
+      fragmentKey: 'licence-trigger',
+      question: 'What conduct triggers the Florida licence requirement?',
+      geography: 'Florida',
+      definitions: null,
+      population: null,
+      completionCriteria: ['a quoted primary provision with its citation'],
+      requiredEvidence: ['licence_trigger_definition'],
+      acceptableSourceTypes: ['Florida Statutes (statute)'],
+      excludedSourceTypes: ['law-firm article'],
+      minIndependentSources: 1,
+      ...over,
+    } as unknown as ResearchFragment;
+  }
+
+  it('declares no fragment count at all, rather than a large one', () => {
+    // A big number would read as a limit, and one day would be.
+    expect(RUSSELL.maxFragments).toBeNull();
+  });
+
+  it('approves a plan broken into as many bounded questions as the gaps need', () => {
+    const verdict = planFitsEnvelope({
+      envelope: RUSSELL,
+      orchestration: russellPacket(),
+      fragments: Array.from({ length: 9 }, (_, i) =>
+        floridaFragment({
+          fragmentKey: `florida-${i}`,
+          question: `Which Florida provision settles point ${i} of the licence trigger?`,
+        }),
+      ),
+    });
+    expect(verdict.reasons).toEqual([]);
+    expect(verdict.fits).toBe(true);
+    expect(verdict.checked.fragments).toBe(9);
+    expect(verdict.checked.maxFragments).toBeNull();
+  });
+
+  it('still refuses an empty plan, which is not a decomposition', () => {
+    const verdict = planFitsEnvelope({
+      envelope: RUSSELL,
+      orchestration: russellPacket(),
+      fragments: [],
+    });
+    expect(verdict.fits).toBe(false);
+    expect(verdict.reasons.join(' ')).toMatch(/no plan to approve/i);
+  });
+
+  it('still refuses a state nobody authorized, however few fragments there are', () => {
+    const verdict = planFitsEnvelope({
+      envelope: RUSSELL,
+      orchestration: russellPacket(),
+      fragments: [floridaFragment({ geography: 'Ohio' })],
+    });
+    expect(verdict.fits).toBe(false);
+  });
+
+  it('still refuses one bad fragment hidden among many good ones', () => {
+    /*
+     * The property that makes removing the count safe: every condition is
+     * applied per fragment, so a broader decomposition is more fragments to
+     * refuse rather than more room to hide in.
+     */
+    const verdict = planFitsEnvelope({
+      envelope: RUSSELL,
+      orchestration: russellPacket(),
+      fragments: [
+        ...Array.from({ length: 6 }, (_, i) => floridaFragment({ fragmentKey: `ok-${i}` })),
+        floridaFragment({
+          fragmentKey: 'sneaky',
+          acceptableSourceTypes: ['law-firm article'],
+        }),
+        floridaFragment({ fragmentKey: 'spendy', minIndependentSources: 0 }),
+      ],
+    });
+    expect(verdict.fits).toBe(false);
+    expect(verdict.reasons.length).toBeGreaterThanOrEqual(2);
+    expect(verdict.reasons.join(' ')).toMatch(/sneaky/);
+    expect(verdict.reasons.join(' ')).toMatch(/spendy/);
   });
 });

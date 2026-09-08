@@ -824,17 +824,19 @@ describe('the thin views', () => {
     grant: null,
     suggestedApproval: { name: 'Deal Dispatch discovery research', expiresAt: '2026-10-06T00:00:00.000Z' },
     limits: [
-      { key: 'maxMissions', label: 'Pieces of research, in total', meaning: 'How many separate investigations Russell may start before asking again.', max: 50, suggested: 2 },
-      { key: 'maxConcurrent', label: 'At the same time', meaning: 'How many may be running at once. One means Russell finishes before it starts the next.', max: 20, suggested: 1 },
-      { key: 'maxFragments', label: 'Questions inside them', meaning: 'The bounded sub-questions those investigations may break down into.', max: 200, suggested: 12 },
-      { key: 'maxProbes', label: 'Cheap looks', meaning: 'Quick checks Russell may take before committing to a full investigation.', max: 50, suggested: 3 },
+      { key: 'maxConcurrent', label: 'At the same time', meaning: 'How many investigations may run at once. One means Russell finishes before it starts the next. This is what your subscription can actually run in parallel, not an allowance that runs out.', max: 20, suggested: 1 },
+    ],
+    counters: [
+      { key: 'maxMissions', label: 'Pieces of research', meaning: 'Separate investigations Russell has started here.' },
+      { key: 'maxFragments', label: 'Questions inside them', meaning: 'Bounded sub-questions those investigations broke down into.' },
+      { key: 'maxProbes', label: 'Cheap looks', meaning: 'Quick checks taken before committing to a full investigation.' },
     ],
     history: [],
     headline:
       'Russell may not start research on this project. It will still read what you say, ' +
       'capture ideas and rank them — and it will park every one of them rather than spend ' +
       'anything you have not agreed to.',
-    suggested: { maxMissions: 2, maxConcurrent: 1, maxFragments: 12, maxProbes: 3 },
+    suggested: { maxConcurrent: 1 },
   };
 
   const GRANTED = {
@@ -846,29 +848,31 @@ describe('the thin views', () => {
       expiresAt: null,
       expired: false,
       permits: [
-        'Start at most 2 pieces of research on this project',
-        'Run at most 1 at a time',
-        'Break them into at most 12 bounded questions',
-        'Take at most 3 cheap looks before committing to one',
+        'Keep researching this project for as long as there is work worth doing',
+        'Run at most 1 investigation at a time, on the subscription you already pay for',
+        'Break each one into as many bounded questions as the evidence actually needs',
+        'Take a cheap look before committing to a full investigation, whenever that is the cheaper answer',
         'Do all of that until you withdraw this',
       ],
       neverPermits: ['Spend money, or turn on paid usage'],
       spend: {
-        maxMissions: { used: 1, active: 1, limit: 2 },
+        maxMissions: { used: 1, active: 1, limit: null },
         maxConcurrent: { used: 1, active: 1, limit: 1 },
-        maxFragments: { used: 4, active: 0, limit: 12 },
-        maxProbes: { used: 1, active: 0, limit: 3 },
+        maxFragments: { used: 4, active: 0, limit: null },
+        maxProbes: { used: 1, active: 0, limit: null },
       },
     },
     limits: [
-      { key: 'maxMissions', label: 'Pieces of research, in total', meaning: 'How many separate investigations Russell may start before asking again.', max: 50, suggested: 2 },
-      { key: 'maxConcurrent', label: 'At the same time', meaning: 'How many may be running at once. One means Russell finishes before it starts the next.', max: 20, suggested: 1 },
-      { key: 'maxFragments', label: 'Questions inside them', meaning: 'The bounded sub-questions those investigations may break down into.', max: 200, suggested: 12 },
-      { key: 'maxProbes', label: 'Cheap looks', meaning: 'Quick checks Russell may take before committing to a full investigation.', max: 50, suggested: 3 },
+      { key: 'maxConcurrent', label: 'At the same time', meaning: 'How many investigations may run at once. One means Russell finishes before it starts the next. This is what your subscription can actually run in parallel, not an allowance that runs out.', max: 20, suggested: 1 },
+    ],
+    counters: [
+      { key: 'maxMissions', label: 'Pieces of research', meaning: 'Separate investigations Russell has started here.' },
+      { key: 'maxFragments', label: 'Questions inside them', meaning: 'Bounded sub-questions those investigations broke down into.' },
+      { key: 'maxProbes', label: 'Cheap looks', meaning: 'Quick checks taken before committing to a full investigation.' },
     ],
     history: [],
     headline: 'Russell may research on this project, within the limits you set on 2026-09-07.',
-    suggested: { maxMissions: 2, maxConcurrent: 1, maxFragments: 12, maxProbes: 3 },
+    suggested: { maxConcurrent: 1 },
   };
 
   async function openNeedsYou(authority: unknown): Promise<void> {
@@ -903,73 +907,60 @@ describe('the thin views', () => {
       return { body: GRANTED };
     };
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Approve$/ })); });
+    // The name, the one real limit and the date. No lifetime quotas, because
+    // there are none to send and none for a person to be asked to top up.
     expect(postedBodies).toEqual([{
-      name: 'Deal Dispatch discovery research', maxMissions: 2, maxConcurrent: 1,
-      maxFragments: 12, maxProbes: 3, expiresAt: '2026-10-06T00:00:00.000Z',
+      name: 'Deal Dispatch discovery research', maxConcurrent: 1,
+      expiresAt: '2026-10-06T00:00:00.000Z',
     }]);
     await waitFor(() => expect(screen.getByRole('button', { name: /Withdraw this/ })).toBeTruthy());
   });
 
-  it('lets the owner raise a limit before it becomes a wall', async () => {
+  it('shows what has been used with nothing to top up, and offers no raise', async () => {
     /*
-     * The raise used to appear only once `used >= limit`, which reads as tidy
-     * and costs the person a second visit: they cannot raise a ceiling they can
-     * see coming, so it interrupts them mid-journey instead.
+     * There was a Raise control here, reachable before the ceiling was reached
+     * so a person could see it coming. It is gone with the ceilings.
      *
-     * What stays tied to actually being spent is the emphasis and the briefing
-     * sentence — a limit that is blocking nothing is not a decision waiting.
+     * The counting is not: what this grant has done is real and worth showing.
+     * What it must not show is a denominator, because a denominator is a
+     * promise that Russell stops — and it did stop, until somebody topped it
+     * up. That is the product defect this replaced.
      */
     await openNeedsYou(GRANTED);
     await waitFor(() => expect(screen.getByRole('button', { name: /Withdraw this/ })).toBeTruthy());
 
-    // Reachable while there is still room, which is the whole point.
-    const raise = screen.getAllByRole('button', { name: /^Raise$|^Raise this limit$/ })[0]!;
-    fireEvent.click(raise);
+    expect(screen.getByText(/Pieces of research: 1 so far/i)).toBeTruthy();
+    expect(screen.getByText(/Questions inside them: 4 so far/i)).toBeTruthy();
+    expect(screen.getByText(/Cheap looks: 1 so far/i)).toBeTruthy();
+    // The one that is real keeps its denominator.
+    expect(screen.getByText(/At the same time: 1 of 1/i)).toBeTruthy();
 
-    const to = screen.getByLabelText(/Raise .* to/i) as HTMLInputElement;
-    // Prefilled one above where it is, so the ordinary answer is one click.
-    expect(Number(to.value)).toBe(GRANTED.grant.spend.maxMissions.limit + 1);
-
-    fireEvent.change(screen.getByLabelText(/^Why\?$/i), {
-      target: { value: 'the follow-on needs one the original did not allow for' },
-    });
-
-    routes['POST /api/russell/projects/prj_1/authority/rgl_1/raise'] = { body: GRANTED };
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Raise it to 3/ }));
-    });
-
-    // The exact body, asserted from the request rather than the screen.
-    expect(postedBodies).toEqual([{
-      ceiling: 'maxMissions',
-      to: 3,
-      reason: 'the follow-on needs one the original did not allow for',
-    }]);
-    expect(calls).toContain('POST /api/russell/projects/prj_1/authority/rgl_1/raise');
+    expect(screen.queryByRole('button', { name: /Raise/i })).toBeNull();
+    expect(screen.queryByText(/1 of 2/)).toBeNull();
   });
 
   it('keeps editing optional and reflects changed limits in the permission being approved', async () => {
     await openNeedsYou(NO_GRANT);
-    await waitFor(() => expect(screen.getByRole('button', { name: /Change limits/ })).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Change limits/ }));
-    expect((screen.getByLabelText(/Pieces of research, in total/i) as HTMLInputElement).value).toBe('2');
-    fireEvent.change(screen.getByLabelText(/Pieces of research, in total/i), { target: { value: '1' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Change details/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Change details/ }));
+    expect((screen.getByLabelText(/At the same time/i) as HTMLInputElement).value).toBe('1');
+    fireEvent.change(screen.getByLabelText(/At the same time/i), { target: { value: '2' } });
     fireEvent.change(screen.getByLabelText(/Permission ends/i), { target: { value: '2026-10-05T12:30' } });
-    fireEvent.click(screen.getByRole('button', { name: /Hide limits/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Hide details/ }));
     expect(screen.queryAllByRole('spinbutton')).toHaveLength(0);
-    expect(screen.getByText(/up to 1 investigations/)).toBeTruthy();
+    expect(screen.getByText(/up to 2 investigations at once/)).toBeTruthy();
     expect(screen.getByText(/2026-10-05 12:30:00 UTC/)).toBeTruthy();
     routes['POST /api/russell/projects/prj_1/authority'] = { status: 403, body: { error: 'Permission refused' } };
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Approve$/ })); });
-    expect(postedBodies).toEqual([expect.objectContaining({ maxMissions: 1, expiresAt: '2026-10-05T12:30:00.000Z' })]);
+    expect(postedBodies).toEqual([expect.objectContaining({ maxConcurrent: 2, expiresAt: '2026-10-05T12:30:00.000Z' })]);
     expect(screen.queryByRole('button', { name: /Withdraw this/ })).toBeNull();
     expect(screen.getByText(/Permission refused/)).toBeTruthy();
   });
 
   it('requires a purpose and expiry if the owner clears the proposed settings', async () => {
     await openNeedsYou(NO_GRANT);
-    await waitFor(() => expect(screen.getByRole('button', { name: /Change limits/ })).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Change limits/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Change details/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Change details/ }));
     fireEvent.change(screen.getByLabelText(/What are you allowing/i), { target: { value: '' } });
     expect((screen.getByRole('button', { name: /^Approve$/ }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText(/What are you allowing/i), { target: { value: 'Research' } });
@@ -979,9 +970,11 @@ describe('the thin views', () => {
 
   it('shows an existing grant in the server’s words, and what it has spent', async () => {
     await openNeedsYou(GRANTED);
-    await waitFor(() => expect(screen.getByText(/Start at most 2 pieces of research/i)).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText(/as long as there is work worth doing/i)).toBeTruthy(),
+    );
     expect(screen.getByText(/Spend money, or turn on paid usage/i)).toBeTruthy();
-    expect(screen.getByText(/Pieces of research, in total: 1 of 2/i)).toBeTruthy();
+    expect(screen.getByText(/Pieces of research: 1 so far/i)).toBeTruthy();
     // No form to make a second one while one is live.
     expect(screen.queryByRole('button', { name: /^Approve$/ })).toBeNull();
   });
@@ -1034,7 +1027,7 @@ describe('the thin views', () => {
     // Nothing was created by reading the card.
     expect(calls.filter((c) => c.startsWith('POST /api/russell/projects/prj_1/authority'))).toHaveLength(0);
     // The detailed controls start hidden.
-    expect(screen.queryByLabelText(/Pieces of research, in total/i)).toBeNull();
+    expect(screen.queryByLabelText(/At the same time/i)).toBeNull();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /^Approve$/ }));
@@ -1045,10 +1038,7 @@ describe('the thin views', () => {
     );
     expect(postedBodies[postedBodies.length - 1]).toEqual({
       name: 'Deal Dispatch discovery research',
-      maxMissions: 2,
       maxConcurrent: 1,
-      maxFragments: 12,
-      maxProbes: 3,
       // Exactly the agreed instant. Not rolled forward on a refresh, not
       // widened to unlimited, and not converted to the end of the day.
       expiresAt: '2026-10-06T00:00:00.000Z',
@@ -1059,9 +1049,11 @@ describe('the thin views', () => {
     await openNeedsYou(NO_GRANT);
     await waitFor(() => expect(screen.getByText(/Research only/i)).toBeTruthy());
     expect(screen.getByText(/No paid API spending/i)).toBeTruthy();
-    // Every ceiling is a quantity *within* a class, so a card showing only the
-    // numbers would be describing how much of something it never named.
-    expect(screen.getByText(/up to 2 investigations/i)).toBeTruthy();
+    // The limit is a quantity *within* a class, so a card showing only the
+    // number would be describing how much of something it never named. And
+    // what it describes is continuous work, not an allowance of it.
+    expect(screen.getByText(/as long as there is work worth doing/i)).toBeTruthy();
+    expect(screen.getByText(/one investigation at a time/i)).toBeTruthy();
     expect(screen.getByText(/2026-10-06 00:00:00 UTC/)).toBeTruthy();
   });
 
@@ -1075,28 +1067,30 @@ describe('the thin views', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /^Needs you/ }));
     });
-    await waitFor(() => expect(screen.getByRole('button', { name: /Change limits/i })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: /Change details/i })).toBeTruthy());
 
-    const toggle = screen.getByRole('button', { name: /Change limits/i });
+    const toggle = screen.getByRole('button', { name: /Change details/i });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     await act(async () => {
       fireEvent.click(toggle);
     });
-    expect(screen.getByRole('button', { name: /Hide limits/i }).getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('button', { name: /Hide details/i }).getAttribute('aria-expanded')).toBe('true');
 
     await act(async () => {
-      fireEvent.change(screen.getByLabelText(/Pieces of research, in total/i), {
+      fireEvent.change(screen.getByLabelText(/At the same time/i), {
         target: { value: '3' },
       });
     });
     // The summary is the same object the button submits, so an edit shows.
-    expect(screen.getByText(/up to 3 investigations/i)).toBeTruthy();
+    expect(screen.getByText(/up to 3 investigations at once/i)).toBeTruthy();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /^Approve$/ }));
     });
     await waitFor(() => expect(postedBodies.length).toBeGreaterThan(0));
-    expect((postedBodies[postedBodies.length - 1] as { maxMissions: number }).maxMissions).toBe(3);
+    expect((postedBodies[postedBodies.length - 1] as { maxConcurrent: number }).maxConcurrent).toBe(
+      3,
+    );
   });
 
   it('shows the server’s refusal rather than appearing to have worked', async () => {

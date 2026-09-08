@@ -211,8 +211,10 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
       goalLines.push(
         `<li><strong>${esc(project.name)}</strong> — ${esc(goal.name)}
            <br><span class="note">${esc(goal.state)} ·
-           ${goal.maxMissions} missions · ${goal.maxFragments} fragments ·
-           ${goal.maxConcurrent} at once · ${goal.maxProbes} probes ·
+           ${goal.workPolicy === 'CAPPED'
+             ? `capped: ${goal.maxMissions} missions · ${goal.maxFragments} fragments · ${goal.maxProbes} probes`
+             : 'uncapped work'} ·
+           ${goal.maxConcurrent} at once ·
            ${goal.expiresAt ? `expires ${esc(goal.expiresAt)}` : 'no expiry'}</span>
            <form method="post" action="${OPERATOR_BASE}/authority/revoke" class="inline">
              <input type="hidden" name="goal_id" value="${esc(goal.id)}">

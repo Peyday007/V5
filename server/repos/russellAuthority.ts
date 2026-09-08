@@ -33,6 +33,7 @@ import type {
   ReservationKind,
   ReservationState,
   RussellGoal,
+  WorkPolicy,
   RussellGoalRow,
   RussellReservation,
   RussellReservationRow,
@@ -56,6 +57,7 @@ function mapGoal(row: RussellGoalRow): RussellGoal {
     maxFragments: row.max_fragments,
     maxConcurrent: row.max_concurrent,
     maxProbes: row.max_probes,
+    workPolicy: (row.work_policy ?? 'UNCAPPED') as WorkPolicy,
     maxExternalSpend: row.max_external_spend,
     startsAt: row.starts_at,
     expiresAt: row.expires_at,
@@ -119,6 +121,13 @@ export async function createGoal(input: {
   maxFragments: number;
   maxConcurrent: number;
   maxProbes: number;
+  /**
+   * Whether the cumulative counts stop anything. Written explicitly rather
+   * than left to the column default, because "this grant does not ration
+   * research" is a decision worth reading off the row rather than inferring
+   * from the absence of one. UNCAPPED is what the product issues.
+   */
+  workPolicy?: WorkPolicy;
   startsAt?: string;
   expiresAt?: string | null;
 }): Promise<RussellGoal> {
@@ -129,9 +138,10 @@ export async function createGoal(input: {
     `INSERT INTO russell_goals
        (id, project_id, owner_user_id, name, policy_version, allowed_work, prohibitions,
         max_missions, max_fragments, max_concurrent, max_probes, max_external_spend,
+        work_policy,
         starts_at, expires_at, state, revoked_at, revoked_by_user_id, revoked_reason,
         created_by_user_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'ACTIVE', NULL, NULL, NULL, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'ACTIVE', NULL, NULL, NULL, ?, ?, ?)`,
     [
       id,
       input.projectId,
@@ -143,6 +153,7 @@ export async function createGoal(input: {
       Math.max(0, input.maxFragments),
       Math.max(0, input.maxConcurrent),
       Math.max(0, input.maxProbes),
+      input.workPolicy ?? 'UNCAPPED',
       input.startsAt ?? at,
       input.expiresAt ?? null,
       input.createdByUserId,
@@ -193,79 +204,30 @@ export async function revokeGoal(input: {
   return result.changes === 1;
 }
 
-/**
- * Raise one ceiling on a live grant, keeping the grant and its spend.
+/*
+ * There was a `raiseGoalCeiling` here, and it is gone. The correction is
+ * recorded rather than quietly applied.
  *
- * Written because the acceptance run needed it and there was no honest way to
- * get there. The remaining journey costs three missions — the one already
- * launched and stopped, a replacement, and the automatic follow-on the
- * replacement declares — against a grant of two. The only routes were:
+ * It existed to answer one escalation: "the standing authority allows 2
+ * missions in total" with three missions left to run. Raising the number the
+ * owner set, on the grant they set it on, was the only answer that did not
+ * either refund spend Brain had no business refunding or mint a new goal id
+ * and take the spend history to zero with it.
  *
- *   - refund the spent mission, which is Brain deciding somebody's allowance
- *     was not really spent;
- *   - revoke and re-grant, which mints a **new goal id** — and every ceiling is
- *     counted per `goal_id`, so the spend history goes to zero. That is the
- *     same refund wearing a different hat, and worse for being invisible;
- *   - or this: the owner raises the number they set, on the grant they set it
- *     on, and every reservation already taken against it still counts.
+ * The escalation itself was the defect. Missions, fragments and probes were
+ * never scarce: the subscription behind them is already paid for, and a
+ * lifetime quota on them turned continuous authorized work into an allowance
+ * somebody had to keep topping up. Under the UNCAPPED policy there is no
+ * ceiling to reach, so there is nothing to raise — and a raise control kept
+ * "for completeness" would be a way to move the one limit that is real,
+ * concurrency, which is provider capacity rather than an allowance and is a
+ * fleet decision with its own actor and reason.
  *
- * §24 asks that every escalation have an answering transition. "The standing
- * authority allows 2 missions in total" is an escalation, and until now the
- * only answer to it destroyed the evidence of what had been spent.
- *
- * **Raise only.** A ceiling can go up and never down, and the guard is in the
- * SQL rather than in a caller. Lowering a limit under work already reserved
- * would retroactively invalidate reservations that were legitimately taken —
- * a fragment mid-flight would find itself over a bar that did not exist when
- * it started. Withdrawing authority is what `revokeGoal` is for, and it stops
- * new work rather than un-authorizing old work.
- *
- * **One ceiling per call, named from a closed set**, so this is an amendment
- * rather than a grant editor: nothing here can change the purpose, the class of
- * work, the prohibitions, the owner or the expiry.
+ * Changing concurrency is therefore what it always should have been: withdraw
+ * the grant and make a new one, deliberately. That used to be objectionable
+ * because it reset the counting; it no longer is, because the counting no
+ * longer stops anything. Every reservation ever written is still there.
  */
-export type RaisableCeiling = 'maxMissions' | 'maxFragments' | 'maxConcurrent' | 'maxProbes';
-
-const CEILING_COLUMN: Record<RaisableCeiling, string> = {
-  maxMissions: 'max_missions',
-  maxFragments: 'max_fragments',
-  maxConcurrent: 'max_concurrent',
-  maxProbes: 'max_probes',
-};
-
-export async function raiseGoalCeiling(input: {
-  goalId: string;
-  ceiling: RaisableCeiling;
-  to: number;
-}): Promise<{ ok: boolean; goal: RussellGoal | null; reason: string }> {
-  const column = CEILING_COLUMN[input.ceiling];
-  if (!column) return { ok: false, goal: null, reason: 'that is not a ceiling this can raise' };
-  if (!Number.isInteger(input.to) || input.to < 1) {
-    return { ok: false, goal: null, reason: 'a ceiling is a whole number of at least one' };
-  }
-
-  /*
-   * The comparison is inside the statement, not around it. Read-then-write
-   * would let two raises interleave and leave the smaller one last, which is
-   * the one shape a raise-only rule must not produce.
-   */
-  const result = await getDb().run(
-    `UPDATE russell_goals SET ${column} = ?, updated_at = ?
-      WHERE id = ? AND state = 'ACTIVE' AND ${column} < ?`,
-    [input.to, authorityNow(), input.goalId, input.to],
-  );
-  const goal = await getGoal(input.goalId);
-  if (result.changes === 1) return { ok: true, goal, reason: 'raised' };
-  if (!goal) return { ok: false, goal: null, reason: 'no such standing authority' };
-  if (goal.state !== 'ACTIVE') {
-    return { ok: false, goal, reason: `the standing authority is ${goal.state.toLowerCase()}` };
-  }
-  return {
-    ok: false,
-    goal,
-    reason: 'this only raises a limit; it is already at least that high',
-  };
-}
 
 export async function setGoalState(input: {
   goalId: string;
@@ -351,13 +313,18 @@ export interface ReservationOutcome {
    * A discriminant rather than a prose match, because the two refusals mean
    * opposite things to the person waiting. `AT_ONCE` is an ordinary wait —
    * something is running and this will start when it finishes, with nobody
-   * needed. `IN_TOTAL` is terminal: nothing will ever launch it until somebody
-   * raises a limit, and a caller that cannot tell them apart either alarms a
-   * person about a queue or leaves them never told about a wall.
+   * needed. `IN_TOTAL` is terminal: nothing will ever launch it while the
+   * cumulative ceiling stands, and a caller that cannot tell them apart either
+   * alarms a person about a queue or leaves them never told about a wall.
    *
    * The loop was doing the second. A cumulative refusal matched neither prefix
    * it checks for, so it was dropped from the tick report and from every
    * surface, and a queued idea sat behind a spent ceiling in silence.
+   *
+   * `AT_ONCE` is now the ordinary refusal and `IN_TOTAL` is reachable only for
+   * a CAPPED grant — the policy the product no longer issues, and which only
+   * grants that have already ended still carry. It is kept because those rows
+   * are real and because the distinction is what the surfaces read.
    */
   refusedBy?: 'IN_TOTAL' | 'AT_ONCE';
 }
@@ -500,7 +467,7 @@ export async function reserve(input: {
   const totals = await totalsThroughMine(goal.id, input.kind, now, mine);
   const limits = ceilingsFor(goal, input.kind);
 
-  if (totals.total > limits.total) {
+  if (limits.total !== null && totals.total > limits.total) {
     await releaseReservation({ reservationId: mine.id, reason: `over the ${input.kind.toLowerCase()} total` });
     return {
       ok: false,
@@ -510,7 +477,7 @@ export async function reserve(input: {
       refusedBy: 'IN_TOTAL',
     };
   }
-  if (totals.active > limits.active) {
+  if (limits.active !== null && totals.active > limits.active) {
     await releaseReservation({ reservationId: mine.id, reason: `over the ${input.kind.toLowerCase()} concurrency` });
     return {
       ok: false,
@@ -533,15 +500,44 @@ export async function reserve(input: {
  * rather than special-cased at the call site, so adding a kind means answering
  * both questions for it.
  */
-function ceilingsFor(goal: RussellGoal, kind: ReservationKind): { total: number; active: number } {
+/**
+ * What this grant allows, cumulatively and at once. `null` means uncapped.
+ *
+ * **The cumulative ceilings are gone by policy, not by being set very high.**
+ * A subscription-backed Brain that stops after N pieces of research for ever,
+ * and needs a person to top it up, is a machine for managing an allowance
+ * rather than one that does the work. Three of the grant's four numbers were
+ * lifetime quotas — missions, fragments, probes — and the original
+ * specification had already said that measured starting values must not become
+ * permanent capacity ceilings. They had.
+ *
+ * `null` rather than `Number.MAX_SAFE_INTEGER`: an enormous number pretending
+ * to be unlimited still reads as a limit on the card, still needs replenishing
+ * one day, and hides the decision behind a magnitude nobody chose.
+ *
+ * **Concurrency is untouched and stays a real number**, because it is not an
+ * artificial quota. It is what the provider can actually run at once, and
+ * exceeding it does not offend a policy — it overruns a subscription. Raising
+ * it is a fleet capacity decision, which §23 keeps in `fleet_policy` with an
+ * actor and a reason, not here.
+ *
+ * Reservations are still written for every kind. This removes the stopping
+ * rule, not the evidence: what a grant has consumed is still counted, still
+ * shown, and still what an audit reads.
+ */
+function ceilingsFor(
+  goal: RussellGoal,
+  kind: ReservationKind,
+): { total: number | null; active: number | null } {
+  const capped = goal.workPolicy === 'CAPPED';
   switch (kind) {
     case 'MISSION':
-      return { total: goal.maxMissions, active: goal.maxConcurrent };
+      return { total: capped ? goal.maxMissions : null, active: goal.maxConcurrent };
     case 'FRAGMENT':
-      return { total: goal.maxFragments, active: goal.maxFragments };
+      return { total: capped ? goal.maxFragments : null, active: capped ? goal.maxFragments : null };
     case 'PROBE':
     default:
-      return { total: goal.maxProbes, active: goal.maxProbes };
+      return { total: capped ? goal.maxProbes : null, active: capped ? goal.maxProbes : null };
   }
 }
 

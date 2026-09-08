@@ -1,17 +1,25 @@
 /**
- * Two limits, two questions.
+ * Two limits, two questions — and only one of them is still a limit.
  *
- * `ceilingFor` answered both with `Math.min(maxMissions, maxConcurrent)` over a
- * cumulative count that includes settled rows. A grant of **two missions, one
- * at a time** therefore permitted exactly **one mission, ever**, and silently
- * refused the automatic follow-on — with `maxConcurrent` appearing in that one
- * `Math.min` and nowhere else in the tree, so it never limited concurrency at
- * all.
- *
- * Anybody reading those numbers from their plain meaning would under-authorize
- * and not find out until a follow-on vanished. These tests hold the corrected
+ * `ceilingFor` once answered both with `Math.min(maxMissions, maxConcurrent)`
+ * over a cumulative count that includes settled rows. A grant of **two
+ * missions, one at a time** therefore permitted exactly **one mission, ever**,
+ * and silently refused the automatic follow-on — with `maxConcurrent`
+ * appearing in that one `Math.min` and nowhere else in the tree, so it never
+ * limited concurrency at all. Most of this file holds that corrected
  * distinction in place: finishing a mission gives back concurrency and refunds
  * nothing cumulative.
+ *
+ * The cumulative half is now the CAPPED policy, which the product no longer
+ * issues and only grants that have already ended still carry. It is tested
+ * here because those rows are real and the guard still has to be right about
+ * them — not because a person is ever asked for those numbers again.
+ *
+ * What the product issues is UNCAPPED, and the last block is the one that
+ * matters most: research keeps starting for as long as there is work worth
+ * doing, on the subscription that is already paid for, while concurrency —
+ * which is real provider capacity rather than an allowance — still refuses the
+ * second simultaneous mission every time.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
@@ -20,12 +28,9 @@ import { authorityFor } from '../server/services/russell/authority.ts';
 import { createUser } from '../server/repos/identity.ts';
 import {
   createGoal,
-  getGoal,
   listReservations,
-  raiseGoalCeiling,
   releaseReservation,
   reserve,
-  revokeGoal,
   settleReservation,
 } from '../server/repos/russellAuthority.ts';
 
@@ -33,8 +38,16 @@ let projectId = '';
 let userId = '';
 let goalId = '';
 
-/** Exactly the limits the owner approved. */
+/**
+ * A capped grant, of the shape grants used to have.
+ *
+ * Written out rather than taken from a constant because nothing produces these
+ * numbers any more: they are the four the owner set on the live 12A grant, and
+ * the guard still has to enforce them correctly for every grant that carries
+ * them.
+ */
 const APPROVED = {
+  workPolicy: 'CAPPED',
   maxMissions: 2,
   maxFragments: 12,
   maxConcurrent: 1,
@@ -213,72 +226,6 @@ describe('what the card says and what the guard does', () => {
   });
 });
 
-describe('raising a ceiling on a live grant', () => {
-  it('raises the number, keeps the grant, and keeps what has been spent', async () => {
-    /*
-     * The alternative routes were both refunds. Refunding the spent mission is
-     * Brain deciding somebody's allowance was not really used; revoking and
-     * re-granting mints a new goal id, and every ceiling is counted per
-     * `goal_id`, so the spend silently goes to zero. Same id, same history, one
-     * number moved.
-     */
-    const first = await mission('spent-one');
-    expect(first.ok).toBe(true);
-    await settleReservation(first.reservation!.id);
-
-    const raised = await raiseGoalCeiling({ goalId, ceiling: 'maxMissions', to: APPROVED.maxMissions + 1 });
-    expect(raised.ok).toBe(true);
-    expect(raised.goal!.id).toBe(goalId);
-    expect(raised.goal!.maxMissions).toBe(APPROVED.maxMissions + 1);
-
-    // Everything else about the grant is untouched — this is an amendment to
-    // one number, not a second grant wearing the first one's id.
-    expect(raised.goal!.expiresAt).toBe((await getGoal(goalId))!.expiresAt);
-    expect(raised.goal!.maxFragments).toBe(APPROVED.maxFragments);
-    expect(raised.goal!.maxConcurrent).toBe(APPROVED.maxConcurrent);
-    expect(raised.goal!.maxProbes).toBe(APPROVED.maxProbes);
-    expect(raised.goal!.allowedWork).toEqual((await getGoal(goalId))!.allowedWork);
-
-    // The spent mission still counts. The extra one is extra, not a refund.
-    const reservations = await listReservations(goalId);
-    expect(reservations.filter((row) => row.state === 'SETTLED')).toHaveLength(1);
-    expect((await mission('the-extra-one')).ok).toBe(true);
-  });
-
-  it('raises only, so a limit cannot be lowered under work already reserved', async () => {
-    /*
-     * Lowering would retroactively invalidate reservations legitimately taken —
-     * work mid-flight would find itself over a bar that did not exist when it
-     * started. Withdrawing authority is `revokeGoal`, which stops new work
-     * rather than un-authorizing old work.
-     */
-    const down = await raiseGoalCeiling({ goalId, ceiling: 'maxMissions', to: 1 });
-    expect(down.ok).toBe(false);
-    expect(down.reason).toMatch(/only raises/i);
-    expect((await getGoal(goalId))!.maxMissions).toBe(APPROVED.maxMissions);
-
-    // Equal is not a raise either: nothing to do, and saying so beats a silent
-    // success on a change that did not happen.
-    const same = await raiseGoalCeiling({ goalId, ceiling: 'maxMissions', to: APPROVED.maxMissions });
-    expect(same.ok).toBe(false);
-  });
-
-  it('refuses a grant that is no longer live', async () => {
-    await revokeGoal({ goalId, actorUserId: userId, reason: 'done with it' });
-    const after = await raiseGoalCeiling({ goalId, ceiling: 'maxMissions', to: 99 });
-    expect(after.ok).toBe(false);
-    expect(after.reason).toMatch(/revoked/i);
-    expect((await getGoal(goalId))!.maxMissions).toBe(APPROVED.maxMissions);
-  });
-
-  it('refuses a number that is not a whole positive one', async () => {
-    for (const bad of [0, -1, 1.5, Number.NaN]) {
-      expect((await raiseGoalCeiling({ goalId, ceiling: 'maxMissions', to: bad })).ok).toBe(false);
-    }
-    expect((await getGoal(goalId))!.maxMissions).toBe(APPROVED.maxMissions);
-  });
-});
-
 describe('two requests racing for the last slot', () => {
   it('gives the concurrent slot to exactly one of them', async () => {
     const [a, b] = await Promise.all([mission('race-a'), mission('race-b')]);
@@ -391,5 +338,161 @@ describe('through the launch path, with the key launch actually uses', () => {
     await settleReservation(x.reservation!.id);
     const third = await reserve({ goalId, kind: 'MISSION', idempotencyKey: launchKey('cand-c') });
     expect(third.ok).toBe(false);
+  });
+});
+
+describe('the uncapped policy the product issues', () => {
+  /*
+   * The correction this block exists for.
+   *
+   * Missions, fragments and probes were lifetime quotas, and reaching one
+   * stopped Russell until a person topped it up. Nothing was scarce: the
+   * subscription behind the work is already paid for, so the numbers measured
+   * a starting point and then became a permanent ceiling — the exact thing the
+   * original specification said must not happen.
+   *
+   * Every grant made through the authority card is UNCAPPED now. These tests
+   * are the product promise: authorized work continues without anybody being
+   * asked to replenish anything, and the limit that is real still holds.
+   */
+  let openProjectId = '';
+  let openGoalId = '';
+
+  beforeEach(async () => {
+    const fixture = await freshProject();
+    openProjectId = fixture.project.id;
+    const user = await createUser({
+      email: `uncapped-${Math.random().toString(36).slice(2, 10)}@example.test`,
+      displayName: 'Owner',
+      password: 'correct horse battery staple',
+    });
+    /*
+     * Exactly what `POST /projects/:projectId/authority` writes: one real
+     * limit, and zeroes in the three columns that no longer cap anything. If
+     * the policy were ever read wrongly, those zeroes would refuse the *first*
+     * mission — which is why they are the honest value to test against rather
+     * than a large number that would hide the mistake.
+     */
+    const goal = await createGoal({
+      projectId: openProjectId,
+      ownerUserId: user.id,
+      createdByUserId: user.id,
+      name: 'Research the discovery questions',
+      allowedWork: ['RESEARCH'],
+      workPolicy: 'UNCAPPED',
+      maxConcurrent: 1,
+      maxMissions: 0,
+      maxFragments: 0,
+      maxProbes: 0,
+    });
+    openGoalId = goal.id;
+  });
+
+  it('keeps starting missions, one after another, with nobody asked for more', async () => {
+    for (let i = 0; i < 25; i += 1) {
+      const taken = await reserve({
+        goalId: openGoalId,
+        kind: 'MISSION',
+        idempotencyKey: `open-${i}`,
+      });
+      expect(taken.ok, `mission ${i} was refused: ${taken.reason}`).toBe(true);
+      await settleReservation(taken.reservation!.id);
+    }
+
+    // Twenty-five settled missions, and the twenty-sixth is as available as
+    // the first. Under the old policy the third was a wall.
+    const next = await reserve({ goalId: openGoalId, kind: 'MISSION', idempotencyKey: 'open-25' });
+    expect(next.ok).toBe(true);
+  });
+
+  it('lets a fragment breakdown be as fine as the evidence needs', async () => {
+    for (let i = 0; i < 40; i += 1) {
+      expect(
+        (await reserve({ goalId: openGoalId, kind: 'FRAGMENT', idempotencyKey: `frag-${i}` })).ok,
+      ).toBe(true);
+    }
+    for (let i = 0; i < 20; i += 1) {
+      expect(
+        (await reserve({ goalId: openGoalId, kind: 'PROBE', idempotencyKey: `probe-${i}` })).ok,
+      ).toBe(true);
+    }
+  });
+
+  it('still refuses the second simultaneous mission, because that limit is real', async () => {
+    /*
+     * The half that must survive. Concurrency is what the fleet can actually
+     * run at once, not an allowance, and removing quotas is not permission to
+     * consume more at a time.
+     */
+    const running = await reserve({
+      goalId: openGoalId,
+      kind: 'MISSION',
+      idempotencyKey: 'running',
+    });
+    expect(running.ok).toBe(true);
+
+    const second = await reserve({
+      goalId: openGoalId,
+      kind: 'MISSION',
+      idempotencyKey: 'at-the-same-time',
+    });
+    expect(second.ok).toBe(false);
+    expect(second.refusedBy).toBe('AT_ONCE');
+    expect(second.reason).toMatch(/1 mission at a time/);
+
+    // And it is a wait rather than a wall: the moment the first finishes, the
+    // next one starts, with nobody involved.
+    await settleReservation(running.reservation!.id);
+    expect(
+      (await reserve({ goalId: openGoalId, kind: 'MISSION', idempotencyKey: 'at-the-same-time' }))
+        .ok,
+    ).toBe(true);
+  });
+
+  it('counts everything it has done, and shows no denominator to top up', async () => {
+    const first = await reserve({ goalId: openGoalId, kind: 'MISSION', idempotencyKey: 'one' });
+    await settleReservation(first.reservation!.id);
+    const second = await reserve({ goalId: openGoalId, kind: 'MISSION', idempotencyKey: 'two' });
+    await settleReservation(second.reservation!.id);
+    await reserve({ goalId: openGoalId, kind: 'FRAGMENT', idempotencyKey: 'f', amount: 7 });
+    await reserve({ goalId: openGoalId, kind: 'PROBE', idempotencyKey: 'p' });
+
+    const view = await authorityFor({ projectId: openProjectId });
+    // The history is intact — removing the stopping rule is not removing the
+    // evidence — and the same `amount` arithmetic the guard uses.
+    expect(view.grant!.spend.maxMissions.used).toBe(2);
+    expect(view.grant!.spend.maxFragments.used).toBe(7);
+    expect(view.grant!.spend.maxProbes.used).toBe(1);
+
+    // And nothing to replenish: no ceiling on any of the three.
+    expect(view.grant!.spend.maxMissions.limit).toBeNull();
+    expect(view.grant!.spend.maxFragments.limit).toBeNull();
+    expect(view.grant!.spend.maxProbes.limit).toBeNull();
+    // The one that is real keeps its number.
+    expect(view.grant!.spend.maxConcurrent.limit).toBe(1);
+
+    // The sentences a person reads must agree with that, or the card is
+    // promising a quota the validator does not enforce.
+    expect(view.grant!.permits.join(' ')).not.toMatch(/at most \d+ (piece|pieces)/);
+    expect(view.grant!.permits.join(' ')).toMatch(/as long as there is work worth doing/);
+    expect(view.grant!.permits.join(' ')).toMatch(/at most 1 investigation at a time/);
+  });
+
+  it('never refuses in total, however much it has already done', async () => {
+    for (let i = 0; i < 5; i += 1) {
+      const taken = await reserve({
+        goalId: openGoalId,
+        kind: 'MISSION',
+        idempotencyKey: `done-${i}`,
+      });
+      await settleReservation(taken.reservation!.id);
+    }
+    const next = await reserve({ goalId: openGoalId, kind: 'MISSION', idempotencyKey: 'next' });
+    expect(next.ok).toBe(true);
+    expect(next.refusedBy).toBeUndefined();
+
+    // Every reservation is still on the record, settled and countable.
+    const rows = await listReservations(openGoalId);
+    expect(rows.filter((row) => row.state === 'SETTLED')).toHaveLength(5);
   });
 });

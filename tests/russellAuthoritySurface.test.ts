@@ -169,12 +169,17 @@ async function withRoutes<T>(
   }
 }
 
+/*
+ * What the card sends now: a name, the one real limit, and a date.
+ *
+ * The three cumulative numbers are gone from the route entirely. They were
+ * lifetime quotas on work a paid subscription performs, and a grant that
+ * stopped after two pieces of research needed replenishing rather than
+ * deciding anything.
+ */
 const APPROVED = {
   name: 'Deal Dispatch discovery research',
-  maxMissions: 2,
   maxConcurrent: 1,
-  maxFragments: 12,
-  maxProbes: 3,
   expiresAt: null,
 };
 
@@ -186,7 +191,7 @@ describe('a person grants it inside Russell', () => {
     // ordinary state, and the sentence says what Russell *will* still do.
     expect(view.headline).toMatch(/may not start research/i);
     expect(view.headline).toMatch(/capture ideas/i);
-    expect(view.suggested.maxMissions).toBe(2);
+    expect(view.suggested.maxConcurrent).toBe(1);
     expect(view.suggestedApproval.name).toMatch(/discovery research$/);
     expect(view.suggestedApproval.expiresAt).toBe('2026-10-06T00:00:00.000Z');
     expect(await listGoals(projectId)).toHaveLength(0);
@@ -216,8 +221,17 @@ describe('a person grants it inside Russell', () => {
     await withRoutes(personPrincipal(userId, projectId), async (call) => {
       const result = await call('POST', `/projects/${projectId}/authority`, APPROVED);
       const permits: string[] = result.body.grant.permits;
-      expect(permits.some((line) => /at most 2 pieces of research/i.test(line))).toBe(true);
-      expect(permits.some((line) => /at most 1 at a time/i.test(line))).toBe(true);
+      // Continuous work, and the one limit that is real. A sentence promising
+      // "at most 2 pieces of research" against a policy that stops at none
+      // would be the card lying about the validator.
+      expect(permits.some((line) => /as long as there is work worth doing/i.test(line))).toBe(true);
+      expect(permits.some((line) => /at most 1 investigation at a time/i.test(line))).toBe(true);
+      expect(permits.some((line) => /as many bounded questions as the evidence/i.test(line))).toBe(
+        true,
+      );
+      expect(permits.some((line) => /at most \d+ (piece|pieces) of research/i.test(line))).toBe(
+        false,
+      );
       expect(permits.some((line) => /until you withdraw/i.test(line))).toBe(true);
       // And what it can never do, whatever the numbers say.
       const never: string[] = result.body.grant.neverPermits;
@@ -253,10 +267,7 @@ describe('the agreed proposal, end to end', () => {
    */
   const AS_THE_CARD_SENDS_IT = {
     name: 'Deal Dispatch discovery research',
-    maxMissions: 2,
     maxConcurrent: 1,
-    maxFragments: 12,
-    maxProbes: 3,
     expiresAt: '2026-10-06T00:00:00.000Z',
   };
 
@@ -269,10 +280,20 @@ describe('the agreed proposal, end to end', () => {
     const goal = (await listGoals(projectId))[0]!;
     expect(goal.name).toBe('Deal Dispatch discovery research');
     expect(goal.allowedWork).toEqual(['RESEARCH']);
-    expect(goal.maxMissions).toBe(2);
     expect(goal.maxConcurrent).toBe(1);
-    expect(goal.maxFragments).toBe(12);
-    expect(goal.maxProbes).toBe(3);
+    /*
+     * Uncapped, explicitly, and written by the server rather than sent. A
+     * grant that could name its own policy would be a grant that could ration
+     * itself — or not — on a caller's say-so.
+     */
+    expect(goal.workPolicy).toBe('UNCAPPED');
+    // Zero in the three columns that no longer cap anything. Not a large
+    // number pretending to be unlimited: the policy is what decides, and if it
+    // were ever read wrongly these zeroes refuse the first mission rather than
+    // hiding the mistake behind a ceiling nobody reaches.
+    expect(goal.maxMissions).toBe(0);
+    expect(goal.maxFragments).toBe(0);
+    expect(goal.maxProbes).toBe(0);
     // The instant that was agreed, not the end of that day and not null.
     expect(goal.expiresAt).toBe('2026-10-06T00:00:00.000Z');
     expect(goal.state).toBe('ACTIVE');
@@ -317,11 +338,11 @@ describe('the limits are refused rather than defaulted', () => {
   it('refuses a missing, fractional, negative or over-large number', async () => {
     await withRoutes(personPrincipal(userId, projectId), async (call) => {
       for (const bad of [
-        { ...APPROVED, maxMissions: undefined },
-        { ...APPROVED, maxMissions: 1.5 },
-        { ...APPROVED, maxMissions: -1 },
-        { ...APPROVED, maxMissions: 999 },
-        { ...APPROVED, maxProbes: '3' },
+        { ...APPROVED, maxConcurrent: undefined },
+        { ...APPROVED, maxConcurrent: 1.5 },
+        { ...APPROVED, maxConcurrent: -1 },
+        { ...APPROVED, maxConcurrent: 999 },
+        { ...APPROVED, maxConcurrent: '1' },
         { ...APPROVED, name: '' },
       ]) {
         const result = await call('POST', `/projects/${projectId}/authority`, bad);
@@ -332,16 +353,28 @@ describe('the limits are refused rather than defaulted', () => {
     });
   });
 
-  it('refuses more at a time than in total, which is incoherent rather than strict', async () => {
+  it('ignores a cumulative quota somebody sends anyway', async () => {
+    /*
+     * There was a check here refusing "more at a time than in total", which
+     * was the right refusal while a total existed. There is no total now, so
+     * the interesting property is the other one: a caller who sends the old
+     * fields — a stale client, a script, somebody trying — does not get them
+     * back. The route reads `maxConcurrent` and nothing else.
+     */
     await withRoutes(personPrincipal(userId, projectId), async (call) => {
       const result = await call('POST', `/projects/${projectId}/authority`, {
         ...APPROVED,
-        maxMissions: 1,
-        maxConcurrent: 2,
+        maxMissions: 99,
+        maxFragments: 99,
+        maxProbes: 99,
       });
-      expect(result.status).toBe(400);
-      expect(String(result.body.error)).toMatch(/more at a time than/i);
+      expect(result.status).toBe(200);
     });
+    const goal = (await listGoals(projectId))[0]!;
+    expect(goal.workPolicy).toBe('UNCAPPED');
+    expect(goal.maxMissions).toBe(0);
+    expect(goal.maxFragments).toBe(0);
+    expect(goal.maxProbes).toBe(0);
   });
 
   it('refuses an expiry in the past, which would grant nothing', async () => {
@@ -359,7 +392,7 @@ describe('the limits are refused rather than defaulted', () => {
       expect((await call('POST', `/projects/${projectId}/authority`, APPROVED)).status).toBe(200);
       const second = await call('POST', `/projects/${projectId}/authority`, {
         ...APPROVED,
-        maxMissions: 50,
+        maxConcurrent: 5,
       });
       expect(second.status).toBe(400);
       expect(String(second.body.error)).toMatch(/withdraw it first/i);
@@ -396,14 +429,20 @@ describe('the gate did not move with the surface', () => {
   });
 });
 
-describe('raising a ceiling', () => {
-  it('raises one number on the same grant, keeping everything already spent', async () => {
+describe('there is nothing to raise', () => {
+  it('has no raise route at all, because there is no ceiling to reach', async () => {
     /*
-     * The alternative was withdraw-and-grant-again, which looks equivalent and
-     * is not: it mints a new goal id, and every ceiling is counted per goal, so
-     * the spend silently resets. This is the one route that answers "the
-     * standing authority allows 2 missions in total" without destroying the
-     * record of what used them.
+     * There was one, and it was right for what it answered: "the standing
+     * authority allows 2 missions in total" needed a reply that did not
+     * silently refund the spend or mint a new grant. The escalation itself was
+     * the defect. A subscription-backed Brain that stops after N pieces of
+     * research and waits to be topped up is managing an allowance rather than
+     * doing the work, and under the UNCAPPED policy there is no N.
+     *
+     * Kept as a test rather than deleted with the code: a raise control is
+     * exactly the kind of thing that comes back, and a route that could move
+     * `maxConcurrent` would be a way to raise simultaneous consumption from a
+     * chat surface — which is a fleet decision with its own actor and reason.
      */
     const goalId = await withRoutes(personPrincipal(userId, projectId), async (call) => {
       const granted = await call('POST', `/projects/${projectId}/authority`, APPROVED);
@@ -411,72 +450,20 @@ describe('raising a ceiling', () => {
     });
 
     await withRoutes(personPrincipal(userId, projectId), async (call) => {
-      const path = `/projects/${projectId}/authority/${goalId}/raise`;
-
-      // A reason is required, exactly as it is for withdrawing.
-      expect((await call('POST', path, { ceiling: 'maxMissions', to: 3 })).status).toBe(400);
-      // And the ceiling comes from a closed set rather than being a column name
-      // somebody sent.
-      expect(
-        (await call('POST', path, { ceiling: 'max_missions', to: 3, reason: 'r' })).status,
-      ).toBe(400);
-      expect(
-        (await call('POST', path, { ceiling: 'ownerUserId', to: 3, reason: 'r' })).status,
-      ).toBe(400);
-      // Not a whole positive number.
-      for (const to of [0, -1, 2.5, '3']) {
-        expect((await call('POST', path, { ceiling: 'maxMissions', to, reason: 'r' })).status).toBe(
-          400,
-        );
+      for (const ceiling of ['maxMissions', 'maxFragments', 'maxProbes', 'maxConcurrent']) {
+        const result = await call('POST', `/projects/${projectId}/authority/${goalId}/raise`, {
+          ceiling,
+          to: 99,
+          reason: 'r',
+        });
+        expect(result.status, ceiling).toBe(404);
       }
-      // Downward is refused: lowering under work already reserved would
-      // retroactively invalidate reservations legitimately taken.
-      expect(
-        (await call('POST', path, { ceiling: 'maxMissions', to: 1, reason: 'r' })).status,
-      ).toBe(400);
-
-      const raised = await call('POST', path, {
-        ceiling: 'maxMissions',
-        to: APPROVED.maxMissions + 1,
-        reason: 'the follow-on needs one the original did not allow for',
-      });
-      expect(raised.status).toBe(200);
-      expect(raised.body.grant.id).toBe(goalId);
-      expect(raised.body.grant.spend.maxMissions.limit).toBe(APPROVED.maxMissions + 1);
-      // One number, and nothing else about the permission.
-      expect(raised.body.grant.spend.maxFragments.limit).toBe(APPROVED.maxFragments);
-      expect(raised.body.grant.spend.maxProbes.limit).toBe(APPROVED.maxProbes);
-      expect(raised.body.grant.expiresAt).toBe(APPROVED.expiresAt);
     });
 
-    // One grant still, not two — the ambiguity §24 refuses.
     const goals = await listGoals(projectId);
     expect(goals).toHaveLength(1);
-    expect(goals[0]!.id).toBe(goalId);
-    expect(goals[0]!.maxMissions).toBe(APPROVED.maxMissions + 1);
-  });
-
-  it('refuses a machine by principal type, and another project as absent', async () => {
-    const goalId = await withRoutes(personPrincipal(userId, projectId), async (call) => {
-      const granted = await call('POST', `/projects/${projectId}/authority`, APPROVED);
-      return granted.body.grant.id as string;
-    });
-    const body = { ceiling: 'maxMissions', to: 9, reason: 'r' };
-
-    // No membership configuration turns a worker into a person, and a grant
-    // that could raise its own ceiling is a machine widening its own reach.
-    await withRoutes(machinePrincipal(), async (call) => {
-      expect(
-        (await call('POST', `/projects/${projectId}/authority/${goalId}/raise`, body)).status,
-      ).toBe(404);
-    });
-    await withRoutes(personPrincipal(userId, projectId), async (call) => {
-      expect(
-        (await call('POST', `/projects/prj_elsewhere/authority/${goalId}/raise`, body)).status,
-      ).toBe(404);
-    });
-
-    expect((await listGoals(projectId))[0]!.maxMissions).toBe(APPROVED.maxMissions);
+    expect(goals[0]!.maxConcurrent).toBe(1);
+    expect(goals[0]!.workPolicy).toBe('UNCAPPED');
   });
 });
 
@@ -526,11 +513,17 @@ describe('enforcement is unchanged', () => {
     });
 
     /*
-     * Two missions permitted, a third refused — through `reserve`, which is the
-     * only thing that decides. The surface changed; the arbiter did not.
+     * One mission at a time, and the next one the moment it finishes — through
+     * `reserve`, which is the only thing that decides. The surface changed and
+     * the policy changed; the arbiter did neither.
      */
     const first = await reserve({ goalId, kind: 'MISSION', idempotencyKey: 'k1' });
     expect(first.ok).toBe(true);
+    // A second *while it runs* is refused, because concurrency is real.
+    const overlapping = await reserve({ goalId, kind: 'MISSION', idempotencyKey: 'k2' });
+    expect(overlapping.ok).toBe(false);
+    expect(overlapping.refusedBy).toBe('AT_ONCE');
+
     await getDb().run(`UPDATE russell_budget_reservations SET state = 'SETTLED' WHERE id = ?`, [
       first.reservation!.id,
     ]);
@@ -539,13 +532,15 @@ describe('enforcement is unchanged', () => {
     await getDb().run(`UPDATE russell_budget_reservations SET state = 'SETTLED' WHERE id = ?`, [
       second.reservation!.id,
     ]);
+    // The third is where a grant used to stop. It does not.
     const third = await reserve({ goalId, kind: 'MISSION', idempotencyKey: 'k3' });
-    expect(third.ok).toBe(false);
+    expect(third.ok).toBe(true);
 
-    // And the panel counts what was actually spent, from the same table.
+    // And the panel counts what was actually spent, from the same table —
+    // with no denominator to replenish.
     const view = await authorityFor({ projectId });
-    expect(view.grant!.spend.maxMissions.used).toBe(2);
-    expect(view.grant!.spend.maxMissions.limit).toBe(2);
+    expect(view.grant!.spend.maxMissions.used).toBe(3);
+    expect(view.grant!.spend.maxMissions.limit).toBeNull();
   });
 
   it('treats an expired grant as absent without anything having to run', async () => {

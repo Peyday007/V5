@@ -925,32 +925,36 @@ describe('the loop keeps going without anybody watching', () => {
     expect(await listMissions({ projectId })).toHaveLength(2);
 
     /*
-     * And the cumulative side is untouched by any of it: two missions have been
-     * started, so one of the three remains — a finished mission is still spent.
+     * And the counting is untouched by any of it: two missions have been
+     * started and both are on the record. There is no denominator, because
+     * research on a paid subscription does not run out — but a finished
+     * mission is still a mission that happened, and the card says so.
      */
     const goal = (await listGoals(projectId))[0]!;
     const spend = await authorityFor({ projectId });
     expect(spend.grant!.id).toBe(goal.id);
     expect(spend.grant!.spend.maxMissions.used).toBe(2);
-    expect(spend.grant!.spend.maxMissions.limit).toBe(3);
+    expect(spend.grant!.spend.maxMissions.limit).toBeNull();
     // One running, which is what a concurrency figure should say.
     expect(spend.grant!.spend.maxConcurrent.used).toBe(1);
   });
 
   it('charges the grant for the bounded questions a packet creates', async () => {
     /*
-     * The owner's card says "Break them into at most 12 bounded questions" and
-     * **nothing anywhere reserved a FRAGMENT**: that ceiling counted zero for
-     * ever, whatever a packet did. The per-packet approval envelope bounds one
-     * plan's decomposition, which is a different control answering a different
-     * question — it cannot enforce a cumulative allowance across missions, and
-     * reading it as though it could is how a limit becomes decoration.
+     * Nothing anywhere reserved a FRAGMENT: whatever a packet did, the
+     * accounting counted zero for ever. Charging happens in `createFragments`,
+     * the one function all eight creation paths go through, so this exercises
+     * the real entry point.
      *
-     * Charged in `createFragments`, the one function all eight creation paths
-     * go through, so this exercises the real entry point.
+     * The ceiling that used to sit on top of it is gone — a question count is
+     * decided by the gaps, not by a number set before the question was read —
+     * but the *counting* is not, and a repair must still not be charged twice.
+     * A CAPPED grant is used for the refusal half because the guard still has
+     * to be right about the grants that carry that policy.
      */
     const conversation = await ownedConversation('Fragments');
     const mission = await parkedMission(conversation.id, 'two questions only', {
+      workPolicy: 'CAPPED',
       maxFragments: 2,
     });
 
@@ -998,11 +1002,60 @@ describe('the loop keeps going without anybody watching', () => {
     expect((await authorityFor({ projectId })).grant!.spend.maxFragments.used).toBe(2);
   });
 
-  it('charges the grant for a cheap look, and refuses one past the allowance', async () => {
+  it('lets an uncapped grant break a packet down as finely as the evidence needs', async () => {
     /*
-     * Same defect, other ceiling: "Take at most 3 cheap looks" reserved
-     * nothing. The per-probe lookup budget bounds how far one probe reaches,
-     * not how many the owner allowed.
+     * The product default, through the same entry point. A count fixed before
+     * the question was read is not a bound on spending, it is a bound on how
+     * carefully the question may be asked — and §12 already says there is no
+     * fixed fragment count, the gaps decide it.
+     *
+     * What still bounds this packet is the approval envelope's scope
+     * conditions and the evidence gate, neither of which this touches.
+     */
+    const conversation = await ownedConversation('Many questions');
+    const mission = await parkedMission(conversation.id, 'as many as it takes');
+
+    const base = {
+      orchestrationId: mission.orchestrationId!,
+      projectId,
+      layerId,
+      geography: 'Michigan',
+      requiredEvidence: [
+        { id: 'operative_definition', description: 'the portal', necessity: 'REQUIRED' },
+      ],
+      acceptableSourceTypes: ['county government portals'],
+      excludedSourceTypes: [],
+      completionCriteria: ['a named portal'],
+      minIndependentSources: 1,
+      maxRepairs: 2,
+      dependsOn: [],
+      attempt: 1,
+    };
+    const briefs = Array.from({ length: 20 }, (_, index) => ({
+      ...base,
+      fragmentIndex: index,
+      fragmentKey: `question-${index}`,
+      question: `What about question ${index}?`,
+    }));
+
+    await createFragments(briefs as unknown as Parameters<typeof createFragments>[0]);
+    expect(await currentFragments(mission.orchestrationId!)).toHaveLength(20);
+    // Counted, all twenty, with nothing to replenish.
+    const view = await authorityFor({ projectId });
+    expect(view.grant!.spend.maxFragments.used).toBe(20);
+    expect(view.grant!.spend.maxFragments.limit).toBeNull();
+  });
+
+  it('charges the grant for a cheap look, and refuses one past a capped allowance', async () => {
+    /*
+     * Same defect, other counter: a probe reserved nothing, so it counted zero
+     * for ever. The per-probe lookup budget bounds how far one probe reaches,
+     * which is a different question.
+     *
+     * CAPPED, because that is the policy the refusal belongs to. A cheap look
+     * exists to avoid spending a full investigation, so rationing it is the
+     * one quota that would have cost more than it saved — the uncapped case is
+     * the test below.
      */
     await createGoal({
       projectId,
@@ -1010,6 +1063,7 @@ describe('the loop keeps going without anybody watching', () => {
       createdByUserId: userId,
       name: 'one look only',
       allowedWork: ['RESEARCH'],
+      workPolicy: 'CAPPED',
       maxMissions: 2,
       maxFragments: 4,
       maxConcurrent: 1,
@@ -1053,6 +1107,40 @@ describe('the loop keeps going without anybody watching', () => {
     });
     expect(again.ok).toBe(true);
     expect((await authorityFor({ projectId })).grant!.spend.maxProbes.used).toBe(1);
+  });
+
+  it('takes a cheap look whenever it is the cheaper answer, and counts each one', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'look before you spend',
+      allowedWork: ['RESEARCH'],
+      workPolicy: 'UNCAPPED',
+      maxConcurrent: 1,
+      maxMissions: 0,
+      maxFragments: 0,
+      maxProbes: 0,
+    });
+
+    for (let i = 0; i < 6; i += 1) {
+      const idea = await capture({
+        title: `Idea ${i}`,
+        statement: `establish whether Michigan county ${i} publishes a usable permit feed`,
+        projectId,
+        visibility: 'SHARED',
+      });
+      const opened = await openProbe({
+        candidateId: idea.candidate!.id,
+        question: `Does county ${i} publish a permit feed?`,
+        maxLookups: 2,
+      });
+      expect(opened.ok, `look ${i} was refused: ${opened.reason}`).toBe(true);
+    }
+
+    const view = await authorityFor({ projectId });
+    expect(view.grant!.spend.maxProbes.used).toBe(6);
+    expect(view.grant!.spend.maxProbes.limit).toBeNull();
   });
 
   it('charges nothing for a packet no standing authority governs', async () => {
@@ -1103,31 +1191,34 @@ describe('the loop keeps going without anybody watching', () => {
     expect(made).toHaveLength(1);
   });
 
-  it('tells the person when a spent ceiling is the only thing in the way', async () => {
+  it('starts the next mission after one finishes, and asks nobody for more', async () => {
     /*
-     * The silence this closes.
+     * There was a test here proving the briefing told a person when a spent
+     * cumulative ceiling was the only thing in the way. It was closing a real
+     * silence: the refusal matched neither prefix the loop tested for, so a
+     * queued idea sat behind a wall while the briefing said "You are not
+     * needed".
      *
-     * `launch` refuses a cumulative ceiling with a sentence that matched
-     * neither prefix the loop tested for, so the refusal was dropped from the
-     * tick report; the candidate stayed QUEUED; and the briefing — which
-     * counted only `russell_human_requests` and a missing grant — said "You are
-     * not needed" while nothing could ever start. That is §52's approval defect
-     * one ceiling along.
+     * The wall is what went. Missions are counted, not rationed, so the state
+     * that test described cannot arise from a grant the product issues — and a
+     * briefing that asked for a top-up would be asking a person to answer a
+     * question nothing poses. What replaces it is the property that matters:
+     * the second mission starts by itself, and nobody is told they are needed.
      *
-     * "At a time" is deliberately *not* this: something is running and the next
-     * will start when it finishes, with nobody needed. Reporting a queue as a
-     * blocker teaches a person to ignore the one that is.
+     * The refusal machinery is unchanged and still tested: `AT_ONCE` is the
+     * ordinary wait, in the test below.
      */
     await createGoal({
       projectId,
       ownerUserId: userId,
       createdByUserId: userId,
-      name: 'one only',
+      name: 'keep going',
       allowedWork: ['RESEARCH'],
-      maxMissions: 1,
-      maxFragments: 4,
+      workPolicy: 'UNCAPPED',
       maxConcurrent: 1,
-      maxProbes: 1,
+      maxMissions: 0,
+      maxFragments: 0,
+      maxProbes: 0,
     });
 
     const spec = (title: string) => ({
@@ -1154,7 +1245,6 @@ describe('the loop keeps going without anybody watching', () => {
     });
     const a = await launch({ ...spec('permit coverage'), candidateId: first.candidate!.id });
     expect(a.ok).toBe(true);
-    // Finished, so this is the cumulative wall and not the concurrency queue.
     await transitionMission({ missionId: a.mission!.id, from: 'RUNNING', to: 'DONE' });
 
     const second = await capture({
@@ -1163,13 +1253,11 @@ describe('the loop keeps going without anybody watching', () => {
       projectId,
       visibility: 'SHARED',
     });
+    // Where a grant used to stop. It carries on.
     const b = await launch({ ...spec('register latency'), candidateId: second.candidate!.id });
-    expect(b.ok).toBe(false);
-    // The discriminant, not a prose match: the two refusals mean opposite
-    // things to the person waiting.
-    expect(b.refusedBy).toBe('IN_TOTAL');
+    expect(b.ok, `the second mission was refused: ${b.reason}`).toBe(true);
+    expect(b.refusedBy).toBeUndefined();
 
-    // The idea is ready and waiting, which is the half that makes it a decision.
     await recordJudgment({
       candidateId: second.candidate!.id,
       state: 'QUEUED',
@@ -1186,12 +1274,15 @@ describe('the loop keeps going without anybody watching', () => {
       projectName: 'Deal Dispatch',
       includePrivate: true,
     });
-    expect(said.needsYou, 'the briefing said nobody was needed').toMatch(/You are needed/);
-    expect(said.needsYou).toMatch(/all the research you allowed/i);
-    // Counted, so the nav badge shows it rather than reading zero.
-    expect(said.openRequests).toBeGreaterThan(0);
-    // In the person's words: no ceiling name, no candidate id, no reservation.
-    expect(said.needsYou).not.toMatch(/maxMissions|rcn_|rrv_|reservation/);
+    // Nobody is needed, and nothing on the screen asks for an allowance.
+    expect(said.needsYou).toBe('You are not needed.');
+    expect(said.needsYou).not.toMatch(/research you allowed|raise|limit/i);
+    expect(said.openRequests).toBe(0);
+
+    // And both are on the record, which is the accounting the removal kept.
+    const view = await authorityFor({ projectId });
+    expect(view.grant!.spend.maxMissions.used).toBe(2);
+    expect(view.grant!.spend.maxMissions.limit).toBeNull();
   });
 
   it('does not call an ordinary concurrency wait a decision', async () => {
@@ -2115,7 +2206,12 @@ async function looseConversation(title = 'A loose thread') {
 async function parkedMission(
   conversationId: string,
   name = 'acceptance',
-  limits: { maxMissions?: number; maxFragments?: number; maxProbes?: number } = {},
+  limits: {
+    workPolicy?: 'UNCAPPED' | 'CAPPED';
+    maxMissions?: number;
+    maxFragments?: number;
+    maxProbes?: number;
+  } = {},
 ) {
   await createGoal({
     projectId,
@@ -2123,6 +2219,10 @@ async function parkedMission(
     createdByUserId: userId,
     name,
     allowedWork: ['RESEARCH'],
+    // UNCAPPED is what the product issues, so it is the default here too. A
+    // caller that wants a cumulative bound asks for CAPPED, which is what
+    // ended grants carry and what the guard still has to be right about.
+    workPolicy: limits.workPolicy ?? 'UNCAPPED',
     maxMissions: limits.maxMissions ?? 1,
     maxFragments: limits.maxFragments ?? 1,
     maxConcurrent: 1,

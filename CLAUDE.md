@@ -1097,11 +1097,11 @@ rules.
 - **The decision that lets Russell act is a proposal to approve, not a form to
   fill in.** Moving the grant into Russell was half the correction; the other
   half is that it still asked a person to configure machinery. The card arrives
-  prefilled — the purpose derived from the project, the ceilings from the
-  server's own suggestions, the bounded rollout expiry as a fixed instant that
-  never rolls forward on a refresh — and offers one **Approve**. *Change limits*
-  reveals the detailed controls, which start hidden. Reading the card creates
-  nothing.
+  prefilled — the purpose derived from the project, the one limit from the
+  server's own suggestion, the bounded rollout expiry as a fixed instant that
+  never rolls forward on a refresh — and offers one **Approve**. *Change
+  details* reveals the detailed controls, which start hidden. Reading the card
+  creates nothing.
 
   **The status around it has to agree with it.** The briefing said "You are not
   needed" directly above an approval that had to be given before anything could
@@ -1111,22 +1111,59 @@ rules.
   to stop reading it. An outstanding approval is now the decision it is, named
   first because nothing else can proceed until it is answered.
 - **The decision that lets Russell act is made in Russell.** A standing
-  authority names the project, the class of work, four ceilings and an expiry,
-  and `services/russell/authority.ts` renders all of it as sentences the server
-  composed — a screen that paraphrased a permission would eventually paraphrase
-  it wrongly. It sits in **Needs You**, because that is exactly what it is: the
-  one thing Russell cannot decide for itself and cannot proceed without. The
-  limits travel down with the view rather than being duplicated in the client,
-  so the contract a person is shown and the contract the validator enforces are
-  one object — the manifest lesson, applied to a form.
+  authority names the project, the class of work, how much may run at once, and
+  an expiry, and `services/russell/authority.ts` renders all of it as sentences
+  the server composed — a screen that paraphrased a permission would eventually
+  paraphrase it wrongly. It sits in **Needs You**, because that is exactly what
+  it is: the one thing Russell cannot decide for itself and cannot proceed
+  without. The limits travel down with the view rather than being duplicated in
+  the client, so the contract a person is shown and the contract the validator
+  enforces are one object — the manifest lesson, applied to a form.
 
   **Nothing about the enforcement moved with the surface.** `checkAuthority` and
   `reserve` are untouched, `owner_user_id` still comes from the principal and
   from no field, the prohibitions are still the constant nobody supplies, and
-  both ceilings mutation 13 separated are still spent through the same
-  compare-and-swap. A live grant is not silently replaced — two active grants
-  would make "the limits you set" ambiguous and `checkAuthority`'s choice an
-  accident of ordering — and withdrawing one keeps it, with its reason.
+  every ceiling that still exists is spent through the same compare-and-swap. A
+  live grant is not silently replaced — two active grants would make "the limits
+  you set" ambiguous and `checkAuthority`'s choice an accident of ordering — and
+  withdrawing one keeps it, with its reason.
+
+- **Authorized work does not run out; it is bounded by what may run at once.**
+  The grant carried four numbers and three of them — missions, fragments,
+  probes — were lifetime quotas: reaching one stopped Russell until a person
+  topped it up. Nothing was scarce. The subscription behind the work is already
+  paid for, so those numbers measured a starting point and then became a
+  permanent ceiling, which the original specification had already said must not
+  happen. **The correction is recorded rather than quietly applied**, because
+  the machinery built on top of them was real: a raise route, a raise control, a
+  briefing line telling a person to replenish, and a per-packet
+  `maxFragments: 1` in the acceptance envelope.
+
+  What replaced them is an explicit policy on the grant rather than an enormous
+  number pretending to be unlimited. `russell_goals.work_policy` is `UNCAPPED`
+  for everything the product issues; `ceilingsFor` returns `null` for those
+  three kinds; `reserve` skips a null ceiling. `CAPPED` is what grants that have
+  already **ended** carry, because saying what actually governed a decision is
+  the difference between recording history and rewriting it — it is not a
+  policy this product offers, and no live grant has it.
+
+  Four things did **not** move, and the removal is only safe because of them:
+  **concurrency**, which is real provider capacity rather than an allowance and
+  still refuses the second simultaneous mission; **the reservation rows**, which
+  are still written, still counted and still shown as *used so far* with no
+  denominator — removing the stopping rule is not removing the evidence; **the
+  evidence standards**, the gate, the verification pass, the three audit roles
+  and the approval envelope's scope conditions, every one of which applies per
+  fragment, so a broader decomposition is more fragments to refuse rather than
+  more room to hide in; and **the prohibitions**, so paid overages stay off,
+  `max_external_spend` stays 0, and nothing here authorizes a purchase, an
+  outreach or a publication.
+
+  There is therefore no "Raise this limit" anywhere in normal operation, and
+  changing concurrency is what it always should have been: withdraw the grant
+  and make a new one, deliberately. That used to destroy the spend history,
+  which is why the raise existed; it no longer matters, because the history no
+  longer stops anything.
 - **The interface is never optimistic.** A message appears because the server
   stored it; a pending turn carries the server's own reason; a failed send
   keeps the words. Loading, empty, forbidden and error are four different

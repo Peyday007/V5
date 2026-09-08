@@ -44,6 +44,7 @@ import {
   ALWAYS_PROHIBITED,
   checkAuthority,
   createGoal,
+  listReservations,
   releaseReservation,
   reserve,
   revokeGoal,
@@ -458,11 +459,33 @@ describe('budget reservations are atomic', () => {
     }
   });
 
-  it('keeps a settled reservation counted, so finished work still occupies its ceiling', async () => {
-    const created = await goal({ maxMissions: 1, maxConcurrent: 1 });
+  it('keeps a settled reservation counted, so a capped grant still spends', async () => {
+    /*
+     * CAPPED is the policy grants used to carry and only ended ones still do.
+     * The guard has to stay right about them: a settled reservation is spent,
+     * not returned, or "one at a time" would quietly become "unlimited over
+     * time" for every grant that is still counted against a total.
+     */
+    const created = await goal({ workPolicy: 'CAPPED', maxMissions: 1, maxConcurrent: 1 });
     const first = await reserve({ goalId: created.id, kind: 'MISSION', idempotencyKey: 'a' });
     await settleReservation(first.reservation!.id);
     expect((await reserve({ goalId: created.id, kind: 'MISSION', idempotencyKey: 'b' })).ok).toBe(false);
+  });
+
+  it('keeps counting a settled reservation on an uncapped grant, and stops nothing', async () => {
+    /*
+     * The other half, and the product promise: the history is intact and the
+     * next mission starts anyway. Removing the stopping rule is not removing
+     * the evidence.
+     */
+    const created = await goal({ workPolicy: 'UNCAPPED', maxConcurrent: 1 });
+    const first = await reserve({ goalId: created.id, kind: 'MISSION', idempotencyKey: 'a' });
+    await settleReservation(first.reservation!.id);
+    const second = await reserve({ goalId: created.id, kind: 'MISSION', idempotencyKey: 'b' });
+    expect(second.ok).toBe(true);
+    expect(
+      (await listReservations(created.id)).filter((row) => row.state === 'SETTLED'),
+    ).toHaveLength(1);
   });
 
   it('refuses to reserve against a revoked grant', async () => {

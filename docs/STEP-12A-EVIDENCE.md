@@ -5672,3 +5672,130 @@ not arranging one. If the run instead settles everything cleanly, condition 17
 is reported undemonstrated rather than forced.
 
 1,784 pass.
+
+## 61. The quotas were the product defect — 2026-09-08
+
+The owner's instruction, verbatim in the part that decides everything below:
+
+> I want Brain to continuously perform authorized work using my existing
+> subscriptions. I do NOT want artificial lifetime quotas on ideas, research
+> missions, fragments, or probes that repeatedly require me to replenish an
+> allowance. The earlier specification says: "Do not turn measured starting
+> values into artificial permanent capacity ceilings." Later assistant-written
+> instructions introduced the 2-mission/12-fragment/3-probe limits. Those
+> documents do not override this instruction.
+
+That is a correction to me, and it is worth being exact about what I got wrong.
+The 2/12/3 numbers were mine. They were written into a plan document as
+*starting* values, and then every subsequent piece of machinery treated them as
+the product: §56 fixed the mission ceiling's lifecycle, §59 read the remaining
+budget from production and told the owner what was left, §22 built a raise route
+so a spent ceiling had an answer, and §23 connected FRAGMENT and PROBE
+reservations so the other two ceilings would stop counting zero. Every one of
+those was a correct repair of a control that should not have existed. Four
+mutations went into making an allowance work properly.
+
+### What was removed
+
+| Was | Is |
+| --- | --- |
+| `maxMissions` — a lifetime ceiling on investigations | counted, no ceiling |
+| `maxFragments` — a lifetime ceiling on bounded questions | counted, no ceiling |
+| `maxProbes` — a lifetime ceiling on cheap looks | counted, no ceiling |
+| `raiseGoalCeiling` + `POST …/authority/:goalId/raise` | gone; the route answers 404 |
+| the Raise control on every spend line | gone |
+| the briefing's "you have used all the research you allowed" | gone |
+| `RUSSELL_STATE_LICENSING_V1.maxFragments: 1` | `null` — the gaps decide |
+| an approval card asking for four numbers | one number, and it is not an allowance |
+
+### It is an explicit policy, not a large number
+
+`russell_goals.work_policy` (migrations **032** / **023**), `CHECK IN
+('UNCAPPED','CAPPED')`. `ceilingsFor` returns `{ total: null }` for
+MISSION/FRAGMENT/PROBE under `UNCAPPED`, and `reserve` skips a null ceiling —
+so there is no ceiling to reach rather than one nobody reaches. The route
+writes `UNCAPPED` itself and stores **0** in the three columns, which is the
+honest value: if the policy were ever read wrongly, a zero refuses the *first*
+mission loudly instead of hiding the mistake behind a number nobody hits.
+
+`CAPPED` is not a dead branch kept for symmetry. The migration sets it on every
+grant that has **ended**, because those grants really were enforced against
+their four numbers and saying so is the difference between recording what
+governed a decision and rewriting it. No live grant carries it, and the product
+issues no more of them. The live 12A grant is corrected in place — same row,
+same id, same expiry, same owner, every reservation still counted.
+
+### What did not move, and why the removal is safe without it
+
+- **Concurrency.** `maxConcurrent` is untouched and is still refused by
+  `reserve`'s compare-and-swap. It is real provider capacity rather than an
+  allowance, and it is the reason "continuous" does not mean "simultaneous".
+  V1 target 1, ACCOUNT `primary` target 2, V2 still quarantined: no fleet
+  setting changed.
+- **The accounting.** Every MISSION, FRAGMENT and PROBE reservation is still
+  written, still keyed so a repair replays rather than charging twice, still
+  summed by the same `spendTotals` expression the guard uses. The card reads
+  *"Pieces of research: 2 so far"* — used, with no denominator, because there
+  is none.
+- **Every quality gate.** The seven evidence conditions, the verification pass,
+  the synthesis check, all three audit roles, `PLAN_MINIMUMS`, the placeholder
+  vocabulary, `MAX_FRAGMENT_ATTEMPTS`, `MAX_FRAGMENTS_TOTAL` (60, a per-packet
+  backstop against a pathological plan — a runaway-retry protection, not an
+  allowance), and the approval envelope's *scope* conditions.
+- **The prohibitions.** `max_external_spend` is still 0 from the schema
+  default, `ALWAYS_PROHIBITED` is still the constant nobody supplies, and
+  paid overages are still off. Removing a quota authorizes no purchase, no
+  outreach and no publication.
+
+### The envelope's fragment count, and why removing it is not a widening
+
+`RUSSELL_STATE_LICENSING_V1` carried `maxFragments: 1` because the acceptance
+needed something small, and §56.2 then reasoned *from* that number when
+counting the remaining budget. A count chosen for a test is not a bound on
+spending; it is a bound on how carefully a real question may be asked, and §12
+already says there is no fixed fragment count because the gaps decide it.
+
+Everything that actually bounds that envelope is unchanged: two named states
+with every other one forbidden by name, statutory sources only, the forbidden-
+action vocabulary, the pinned assignment digest, and the independent-source
+floor. All of them apply **per fragment**, which is the property that makes the
+count removable — a broader decomposition is more fragments to refuse, not more
+room to hide in. `tests/approvalEnvelope.test.ts` proves exactly that: nine
+Florida fragments approved, and a plan of eight where two are bad refused with
+both named. The Step 10 and Step 11 envelopes keep their counts; those steps
+are closed and their evidence is not being edited.
+
+`ENVELOPE_VALIDATOR_VERSION` moves to `2026-09-08.1`, because the checks
+changed meaning and an automatic approval has to record which rules it applied.
+
+### The tests prove continuity, not the obsolete quotas
+
+`tests/authorityBudget.test.ts` — a new block on the policy the product issues:
+25 sequential missions with nothing asked of anybody; 40 fragments and 20
+probes; the second *simultaneous* mission refused `AT_ONCE` and admitted the
+moment the first settles; the card showing `used` with `limit: null` on all
+three and `1` on concurrency; the permit sentences carrying no "at most N
+pieces". The capped block stays, against an explicitly `CAPPED` grant, because
+the guard still has to be right about grants that carry that policy.
+
+`tests/russellNervousSystem.test.ts` — the two charge tests keep their capped
+refusal half and gain an uncapped half (20 fragments through `createFragments`,
+6 probes through `openProbe`, both counted, neither refused). The briefing test
+that asserted "you have used all the research you allowed" is replaced by one
+asserting the opposite property through the same path: mission finishes, second
+mission launches by itself, `needsYou` is exactly *"You are not needed."*
+
+`tests/russellAuthoritySurface.test.ts` — the grant route stores `UNCAPPED` and
+zeroes; a caller who sends the old quota fields does not get them back; all
+four raise paths answer 404.
+
+`tests/russellShell.test.tsx` — Approve posts `{name, maxConcurrent,
+expiresAt}` and nothing else; the spend lines read *"1 so far"*; no Raise
+control exists.
+
+### What this does not claim
+
+Nothing here is production evidence. It is a code and test change; the live
+journey continues after it deploys, and the remaining conditions — genuine
+research, the filed document, writeback, the automatic follow-on, and the
+same-mission human resume — are unchanged and still outstanding.

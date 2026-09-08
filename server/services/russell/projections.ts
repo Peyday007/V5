@@ -26,7 +26,6 @@ import { listLayers } from '../../repos/layers.ts';
 import { groupOf, listMissions, listCurrentKnowledge } from '../../repos/russellMissions.ts';
 import { authorityFor } from './authority.ts';
 import { listOpenRequests } from '../../repos/russellMissions.ts';
-import { getDb } from '../../db/database.ts';
 import { plainLayerName } from './dealDispatch.ts';
 import { projectProgress, type Progress } from './progress.ts';
 import type { LayerStatus, RussellMission } from '../../domain/types.ts';
@@ -83,29 +82,6 @@ export interface Briefing {
 }
 
 /** What Russell is on, from the missions actually running. */
-/**
- * Is there an idea Russell has decided to research and cannot start?
- *
- * The same shape `nextLaunchable` selects — QUEUED, in a project, carrying a
- * mission specification — minus anything that already has a mission. If one of
- * those exists and the cumulative ceiling is spent, nothing will ever pick it
- * up without a person, and the briefing must say so.
- *
- * A read, never a decision: it opens nothing, spends nothing, and creates no
- * request. The control that answers it is the one already on the authority
- * card.
- */
-async function queuedAndUnlaunchable(projectId: string): Promise<boolean> {
-  const rows = await getDb().all<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM russell_candidates c
-      WHERE c.project_id = ? AND c.state = 'QUEUED'
-        AND c.judgment LIKE '%missionSpec%'
-        AND NOT EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = c.id)`,
-    [projectId],
-  );
-  return Number(rows[0]?.n ?? 0) > 0;
-}
-
 function focusOf(projectName: string, missions: RussellMission[]): string {
   const working = missions.filter((mission) => groupOf(mission) === 'WORKING_NOW');
   if (working.length === 0) return `Russell is watching ${projectName}.`;
@@ -183,27 +159,20 @@ export async function briefing(input: {
   const needsApproval = authority.grant === null;
 
   /*
-   * A ceiling that is spent while work waits behind it is the same kind of
-   * decision, and it was invisible.
+   * There was a `spentCeiling` here, and it is gone.
    *
-   * `launch` refuses a cumulative ceiling with a sentence that matched no case
-   * the loop tested for, so the refusal was dropped from the tick report; the
-   * candidate stayed QUEUED; and this briefing — which counts only
-   * `russell_human_requests` and a missing grant — said "You are not needed"
-   * while nothing could ever start. That is the approval defect §52 fixed,
-   * one ceiling along.
+   * It named a real defect at the time: a queued idea sitting behind a spent
+   * cumulative ceiling while the briefing said "You are not needed". The
+   * remedy was to count the wall as a decision and tell a person to raise the
+   * limit. Under the UNCAPPED policy there is no wall — missions, fragments
+   * and probes are counted rather than rationed — so a briefing that asked for
+   * a top-up would be asking a person to answer a question nothing poses.
    *
-   * Derived from two rows Brain already holds, and deliberately only when both
-   * hold: a spent ceiling with nothing queued is not a decision, it is a
-   * project that has finished what it asked for.
+   * What is left is the refusal that is real: `AT_ONCE`, which is an ordinary
+   * wait for the one investigation ahead of it and needs nobody.
    */
-  const spentCeiling =
-    authority.grant !== null &&
-    (await queuedAndUnlaunchable(input.projectId)) &&
-    authority.grant.spend.maxMissions.used >= authority.grant.spend.maxMissions.limit;
-
   const blocking = requests.filter((request) => request.urgency !== 'WHENEVER');
-  const decisions = requests.length + (needsApproval ? 1 : 0) + (spentCeiling ? 1 : 0);
+  const decisions = requests.length + (needsApproval ? 1 : 0);
 
   return {
     focus: focusOf(input.projectName, missions),
@@ -219,11 +188,6 @@ export async function briefing(input: {
       ? requests.length === 0
         ? 'You are needed: Russell needs your permission before it can research anything here.'
         : `You are needed: Russell needs your permission to research here, and ${requests.length} other ${requests.length === 1 ? 'decision is' : 'decisions are'} waiting.`
-      : spentCeiling
-        ? requests.length === 0
-          ? 'You are needed: Russell has an idea ready to research and has used all the research ' +
-            'you allowed. Raising that limit is the only thing standing in the way.'
-          : `You are needed: Russell has used all the research you allowed and cannot start what is ready, and ${requests.length} other ${requests.length === 1 ? 'decision is' : 'decisions are'} waiting.`
       : requests.length === 0
         ? 'You are not needed.'
         : blocking.length > 0

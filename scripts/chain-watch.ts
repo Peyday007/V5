@@ -62,13 +62,14 @@ async function main(): Promise<void> {
     state: string;
     max_missions: number;
     max_fragments: number;
+    work_policy: string;
     max_concurrent: number;
     max_probes: number;
     owner_user_id: string;
     expires_at: string | null;
     created_at: string;
   }>(
-    `SELECT id, name, state, max_missions, max_fragments, max_concurrent, max_probes,
+    `SELECT id, name, state, max_missions, max_fragments, max_concurrent, max_probes, work_policy,
             owner_user_id, expires_at, created_at
        FROM russell_goals WHERE project_id = ? ORDER BY created_at DESC`,
     [project.id],
@@ -80,8 +81,9 @@ async function main(): Promise<void> {
     line('name', goal.name);
     line(
       'limits',
-      `missions ${goal.max_missions} · fragments ${goal.max_fragments} · ` +
-        `concurrent ${goal.max_concurrent} · probes ${goal.max_probes}`,
+      `${goal.work_policy === 'CAPPED'
+        ? `capped: missions ${goal.max_missions} · fragments ${goal.max_fragments} · probes ${goal.max_probes}`
+        : 'uncapped work'} · concurrent ${goal.max_concurrent}`,
     );
     line('owner / granted', `${goal.owner_user_id} ${goal.created_at}`);
     line('expires', goal.expires_at);

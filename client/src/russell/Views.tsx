@@ -718,9 +718,6 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
   const [limits, setLimits] = useState<Record<string, number> | null>(null);
   const [reason, setReason] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
-  /** Which ceiling the owner is raising, if any, and to what. */
-  const [raising, setRaising] = useState<string | null>(null);
-  const [raiseTo, setRaiseTo] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -730,6 +727,12 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
   // The limits come down with the view, so the form cannot offer a bound the
   // validator would refuse, and nothing from the server is bundled.
   const declared = view?.limits ?? [];
+  /*
+   * What the grant counts without capping it. Sent by the server beside
+   * `limits` so the card names every line of its own spend record from the
+   * server's own vocabulary rather than a second copy kept here.
+   */
+  const counters = view?.counters ?? [];
   const current = limits ?? ((view?.suggested ?? {}) as unknown as Record<string, number>);
 
   const proposedName = name ?? view?.suggestedApproval?.name ?? '';
@@ -801,103 +804,31 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
 
           <h4>Used so far</h4>
           <ul className="rs-authority-list">
-            {declared.map((limit) => {
-              const spend = view.grant!.spend[limit.key];
-              const spent = spend.used >= spend.limit;
+            {/*
+              * Counted, not rationed.
+              *
+              * These lines used to read "1 of 2" with a Raise control beside
+              * them, and reaching the number meant Russell stopped until
+              * somebody topped it up. Ordinary authorized work now runs
+              * continuously on the subscription behind it, so there is no
+              * denominator to show and nothing to replenish. The counting
+              * stays because what this grant has done is worth seeing.
+              *
+              * A limit that genuinely caps something still shows one — that is
+              * concurrency, which is real capacity rather than an allowance.
+              */}
+            {Object.entries(view.grant.spend).map(([key, spend]) => {
+              const named =
+                declared.find((limit) => limit.key === key) ??
+                counters.find((counter) => counter.key === key);
+              if (!named) return null;
               return (
-                <li key={limit.key} className={spent ? 'rs-authority-spent' : undefined}>
-                  {limit.label}: {spend.used} of {spend.limit}
+                <li key={key}>
+                  {named.label}:{' '}
+                  {spend.limit === null
+                    ? `${spend.used} so far`
+                    : `${spend.used} of ${spend.limit}`}
                   {spend.active > 0 ? ` · ${spend.active} running now` : ''}
-                  {/*
-                    * The raise offered where the limit is, rather than on a
-                    * settings screen somewhere else.
-                    *
-                    * A ceiling that is reached is a decision waiting to be
-                    * made, and until now its only answers destroyed the record
-                    * of what had been spent — withdrawing and re-granting mints
-                    * a new grant, and every count is per grant. This raises the
-                    * number on the grant that has it, and keeps everything
-                    * already used.
-                    */}
-                  {/*
-                    * Offered on every line, not only where the limit is
-                    * already hit.
-                    *
-                    * It used to appear only once `used >= limit`, which reads
-                    * as tidy and costs the person a second visit: they cannot
-                    * raise a ceiling they can see coming, so the wall
-                    * interrupts them mid-journey instead. Raising a limit is a
-                    * decision they are entitled to make whenever they like.
-                    *
-                    * What stays tied to actually being spent is the *emphasis*
-                    * and the briefing sentence — a limit that is not blocking
-                    * anything is not a decision waiting, and saying otherwise
-                    * is what teaches people to stop reading the status.
-                    */}
-                  {raising !== limit.key ? (
-                    <>
-                      {' · '}
-                      <button
-                        type="button"
-                        className="rs-inline-button"
-                        onClick={() => {
-                          setRaising(limit.key);
-                          setRaiseTo(spend.limit + 1);
-                          setReason('');
-                        }}
-                      >
-                        {spent ? 'Raise this limit' : 'Raise'}
-                      </button>
-                    </>
-                  ) : null}
-                  {raising === limit.key ? (
-                    <div className="rs-raise">
-                      <label className="rs-decision-label" htmlFor="rs-raise-to">
-                        Raise {limit.label.toLowerCase()} to
-                      </label>
-                      <input
-                        id="rs-raise-to"
-                        type="number"
-                        min={spend.limit + 1}
-                        value={raiseTo}
-                        onChange={(event) => setRaiseTo(Number(event.target.value))}
-                      />
-                      <label className="rs-decision-label" htmlFor="rs-raise-reason">
-                        Why?
-                      </label>
-                      <input
-                        id="rs-raise-reason"
-                        type="text"
-                        value={reason}
-                        maxLength={1_000}
-                        onChange={(event) => setReason(event.target.value)}
-                      />
-                      <div className="rs-choices">
-                        <button
-                          type="button"
-                          disabled={busy || reason.trim().length === 0 || raiseTo <= spend.limit}
-                          onClick={() => {
-                            void run(() =>
-                              RussellApi.raiseAuthority(projectId, view.grant!.id, {
-                                ceiling: limit.key,
-                                to: raiseTo,
-                                reason: reason.trim(),
-                              }),
-                            );
-                          }}
-                        >
-                          {busy ? 'Raising…' : `Raise it to ${raiseTo}`}
-                        </button>
-                        <button type="button" onClick={() => setRaising(null)}>
-                          Leave it
-                        </button>
-                      </div>
-                      <p className="rs-item-meta">
-                        Everything already used stays used. This raises the limit on the
-                        permission you gave; it does not start anything over.
-                      </p>
-                    </div>
-                  ) : null}
                 </li>
               );
             })}
@@ -948,9 +879,12 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
           <div className="rs-approval-summary">
             <h4>{proposedName || 'Research permission'}</h4>
             <p>
-              Russell can start up to {current['maxMissions']} investigations
-              {current['maxConcurrent'] === 1 ? ', one at a time' : `, up to ${current['maxConcurrent']} at once`},
-              with {current['maxFragments']} research questions and {current['maxProbes']} quick checks in total.
+              Russell can keep researching this for as long as there is work worth doing,
+              {current['maxConcurrent'] === 1
+                ? ' one investigation at a time'
+                : ` up to ${current['maxConcurrent']} investigations at once`}, on the
+              subscription you already pay for. It breaks each one into as many bounded
+              questions as the evidence needs.
             </p>
             <p>
               {expiryValid
@@ -965,7 +899,7 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
           </div>
           <button type="button" aria-expanded={editing} aria-controls="rs-authority-settings"
             onClick={() => setEditing(!editing)} disabled={busy}>
-            {editing ? 'Hide limits' : 'Change limits'}
+            {editing ? 'Hide details' : 'Change details'}
           </button>
           {editing ? (
             <div id="rs-authority-settings">
@@ -998,10 +932,7 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
               onClick={() => {
                 void run(() => RussellApi.grantAuthority(projectId, {
                   name: proposedName.trim(),
-                  maxMissions: current['maxMissions'] ?? 0,
                   maxConcurrent: current['maxConcurrent'] ?? 0,
-                  maxFragments: current['maxFragments'] ?? 0,
-                  maxProbes: current['maxProbes'] ?? 0,
                   expiresAt: proposedExpiry,
                 }));
               }}>

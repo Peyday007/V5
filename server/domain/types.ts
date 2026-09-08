@@ -4158,6 +4158,9 @@ export const PROBE_RETRIEVALS = [
 export type ProbeRetrieval = (typeof PROBE_RETRIEVALS)[number];
 
 export const GOAL_STATES = ['ACTIVE', 'PAUSED', 'REVOKED', 'EXPIRED'] as const;
+export const WORK_POLICIES = ['UNCAPPED', 'CAPPED'] as const;
+export type WorkPolicy = (typeof WORK_POLICIES)[number];
+
 export type GoalState = (typeof GOAL_STATES)[number];
 
 export const RESERVATION_KINDS = ['MISSION', 'FRAGMENT', 'PROBE'] as const;
@@ -4350,6 +4353,7 @@ export interface RussellGoalRow {
   max_fragments: number;
   max_concurrent: number;
   max_probes: number;
+  work_policy?: string | null;
   max_external_spend: number;
   starts_at: string;
   expires_at: string | null;
@@ -4604,6 +4608,19 @@ export interface RussellGoal {
   maxFragments: number;
   maxConcurrent: number;
   maxProbes: number;
+  /**
+   * Whether the cumulative ceilings above stop anything.
+   *
+   * `UNCAPPED` is the product default: ordinary authorized work runs
+   * continuously on the subscription that backs it, and the numbers stay as
+   * accounting rather than as a lifetime allowance somebody has to replenish.
+   * `CAPPED` restores them, and exists so the mechanism is a policy rather
+   * than a deletion — a genuinely bounded experiment can still ask for one.
+   *
+   * `maxConcurrent` is *not* governed by this. Concurrency is real provider
+   * capacity, not an artificial quota.
+   */
+  workPolicy: WorkPolicy;
   maxExternalSpend: number;
   startsAt: string;
   expiresAt: string | null;
