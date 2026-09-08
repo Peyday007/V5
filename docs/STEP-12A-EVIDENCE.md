@@ -5395,3 +5395,93 @@ satisfies gate `A14` as written, because `A14` checks that no answered request
 left its mission at `NEEDS_HUMAN`. It does **not** satisfy condition 17, which
 asks for a park and a **resume**. Condition 17 stays outstanding, and a
 `CANCELLED` mission will not be offered as having met it.
+
+## 57. Walking the journey through the entry points — 2026-09-08
+
+Not reading it. Every transition traced from what starts it to what consumes
+its output, in the code that runs in production. Two connections were missing,
+and both made a condition *unreachable* rather than untested.
+
+### The walk
+
+| Transition | Started by | Consumed by | Verdict |
+| --- | --- | --- | --- |
+| message → turn | `beginTurn` (HTTP) → bin → dispatcher → worker | `applyTurn` (tick 1b) | connected |
+| capture → semantic merge | worker's `duplicateOf`, offered by the manifest branch added in §54.1 | `capture` → `clearsFloor` → `mergeCandidate` | connected |
+| owner override | `POST /candidates/:id/judgment` | `recordJudgment`; control mounted at `Views.tsx:323` | connected |
+| judgment → probe | tick 3b `exploring` → `openProbe` → `runProbe` (real `fetch`) | tick 1e `probedAwaitingDecision` → post-probe `judgeCandidate` | connected |
+| judgment → mission | tick 4 `nextLaunchable` → `launch` | `startPacket`, bin, dispatcher | connected |
+| mission → research | worker `brain_claim_work` → research tools → `advancePacket` | packet runner | connected; **the Russell loop never advances a packet**, by design — a stalled one recovers through the bin's lease and re-fire |
+| research → audit | packet runner mints `RESEARCH_AUDIT`; `admit` asked inside `claimWork` | `submitAudit` | connected |
+| audit → filing | `RESEARCH_SYNTHESIZE` → document with bytes | `RESEARCH_PACKET_V1` refuses completion without both | connected |
+| **filing → mission** | — | — | **broken** |
+| writeback → follow-on | tick 1a-ii `followOnsToCreate` | tick 4 launch → `setNextMission` | blocked behind the same break |
+| park → resume | `parkStoppedMissions` from the packet's own status | `resumeAnsweredRequest` | connected |
+
+### Gap 1 — the mission never learned what its packet produced
+
+`linkMission` was called with an orchestration and a bin at launch, and **never
+with a document or an audit**. Nothing anywhere set
+`russell_missions.document_id`.
+
+Tick step 1 reads:
+
+```ts
+if (outcome !== 'FAILED' && !mission.documentId) {
+  report.awaitingFiling.push(mission.id);
+  continue;
+}
+```
+
+So a packet that filed a real, audited report would have been pushed onto
+`awaitingFiling` on **every tick, for ever**. And `followOnsToCreate` requires
+`writeback_at IS NOT NULL`, so the automatic follow-on sat behind the same wall.
+Conditions 14 and 15 were not "not yet reached" — they were unreachable.
+
+**Why the integration test missed it.** Step 10 of
+`tests/russellIntegrationPass.test.ts` ran:
+
+```ts
+await getDb().run(`UPDATE russell_missions SET document_id = ? WHERE id = ?`, …);
+```
+
+The test supplied, by hand, the one connection production did not have. That is
+the fourth time this run has found a test arranging a state the product cannot
+reach — the same shape as `toBe('ANSWERED')` (§55) and *"settles the reservation
+it took"* (§56.1).
+
+The line is deleted. The step now asserts the column is **null before the tick**
+and set by it afterwards. `linkFiledWork` reads the document from the
+orchestration and the audit from the run the orchestration names — Brain's own
+records, never a worker's claim — and is a plain update on columns that stay
+null until the pipeline fills them, so a redelivery writes the same ids.
+
+### Gap 2 — a spent ceiling was a wall nobody was told about
+
+`launch` refuses a cumulative ceiling with *"the standing authority allows 2
+missions in total"*. That matched neither prefix the tick tests for, so it fell
+through every case: dropped from the report, the candidate stayed `QUEUED`, and
+the briefing — which counts `russell_human_requests` and a missing grant — said
+**"You are not needed"** while nothing could ever start.
+
+That is §52's approval defect one ceiling along, and it would have hit this run
+directly: the journey needs three missions against a grant of two.
+
+`reserve` now returns a **discriminant** rather than prose, because the two
+refusals mean opposite things to the person waiting:
+
+- `AT_ONCE` — something is running, this starts when it finishes, **nobody is
+  needed**. Still reported as nothing, deliberately: calling a queue a blocker
+  teaches a person to ignore the briefing.
+- `IN_TOTAL` — a wall only a person can move. Named in the briefing in plain
+  words and counted, so the nav badge stops reading zero.
+
+The control that answers it is the raise already on the authority card, on the
+line where the limit is spent. The test asserts the sentence contains no ceiling
+name, candidate id or reservation id.
+
+### What the walk did **not** establish
+
+That a worker produces research-grade output. The floor refuses a placeholder
+(§56.3) and the gate refuses ungrounded claims; neither makes a producer
+produce. Only a live run answers that, and it is not claimed here.
