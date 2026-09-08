@@ -186,3 +186,36 @@ last the standing authority allows.
 The project, the layer, the anchor conversation, the standing authority and its
 four ceilings, the three-attempt turn limit, the fleet settings, and every
 earlier row.
+
+---
+
+## 7. Amendment, 2026-09-08 — the standing authority has one limit, not four
+
+§6's "What is not changed" names *the standing authority and its four
+ceilings*. Three of those ceilings no longer exist: the owner instructed on
+2026-09-08 that lifetime quotas on missions, fragments and probes are not the
+product, and they were removed (evidence §61). The grant is the same row —
+`rgl_30e34d717d9f4b47a6a9`, same id, same owner, same expiry, every reservation
+still counted — and it now reads `uncapped work · concurrent 1`.
+
+Recorded as an amendment rather than an edit, for §6's own reason: the frozen
+text is frozen so it cannot be adjusted to fit a result.
+
+**No expectation in this scenario weakens as a result, and that is the part
+worth checking rather than asserting.** Every condition was tested against the
+list:
+
+- Condition 4 (the semantic merge) turns on `SEMANTIC_MERGE_FLOOR` and the
+  worker's `duplicateOf` claim. Neither is a budget.
+- Conditions 11 to 15 (research, filing, writeback, follow-on) turn on the
+  evidence gate, the verification pass, the audit roles and the envelope's
+  scope conditions. All unchanged.
+- Condition 17 (park and resume) turns on `choicesFor`, `RECORD_GAPS` and
+  `unresolved_gap_authorized_by`. Unchanged.
+- Gate `A09` asks for a settled budget reservation. Reservations are still
+  written and still settled; only the ceiling above them is gone, and A09 never
+  read a ceiling.
+
+The one line that *does* change is §6's parenthetical that the fresh question's
+mission is "the second and last the standing authority allows". It is no longer
+last, and nothing depended on it being last.

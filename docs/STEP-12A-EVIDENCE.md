@@ -5799,3 +5799,21 @@ Nothing here is production evidence. It is a code and test change; the live
 journey continues after it deploys, and the remaining conditions — genuine
 research, the filed document, writeback, the automatic follow-on, and the
 same-mission human resume — are unchanged and still outstanding.
+
+### Deployed — 2026-09-08
+
+Deploy run **34213508698** from `280246b`, green through its own restart. The
+first attempt (34213233812, from `4163c34`) was **cancelled at the test gate**,
+before anything shipped: the loop's account of what bounds it still named the
+cumulative mission ceiling as one of three protections, and correcting a comment
+about the thing this mutation removes belongs in the same deployment rather than
+a second one. Nothing was deployed by the cancelled run.
+
+Ledger: 24 runs, EXPECTED 24.
+
+The acceptance workflow's `AUTHORIZATION` value was **invalid YAML** and had
+been since mutation 13's entry introduced `the person's message` — an
+unescaped apostrophe inside a single-quoted scalar terminates it early. Twenty
+of the runs it names happened after that, so the reporter has not been able to
+read its own ledger for some time. It is a folded block scalar now, which takes
+the text literally, so no future entry can break it by using an apostrophe.
