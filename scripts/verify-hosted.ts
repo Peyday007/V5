@@ -54,6 +54,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ModernMcpClient } from './mcpModernClient.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import { listBins, terminateUnleasedBin } from '../server/repos/bins.ts';
 import {
   bindRoutineWorker,
   createAccount,
@@ -1663,6 +1664,69 @@ async function russellChecks(fixtures: Fixtures, cookie: string): Promise<void> 
       404,
     );
   }
+
+  await retireVerificationTurnBins(fixtures);
+}
+
+/**
+ * Give back the fleet capacity this run just took.
+ *
+ * The checks above post **real** Russell turns, because a pending turn with a
+ * server-written reason is the contract being verified and a mock would verify
+ * nothing. A real turn creates a real `RUSSELL_TURN` bin, and from there the
+ * ordinary machinery takes over: the bin goes READY, the dispatcher writes an
+ * intent, and on the next tick with capacity it fires a session at a Routine.
+ *
+ * Nobody ever answers those. The worker bound to the production Routine is not
+ * a member of this fixture project, so it cannot see the bin however many times
+ * it is fired for — and every fire counts as an in-flight activation for the
+ * whole `IN_FLIGHT_WINDOW_MS`. With a Routine target of 1, one of them is the
+ * entire fleet.
+ *
+ * That is not a hypothesis. On 2026-09-08 a person's message reached READY at
+ * 15:02:21Z and was refused `ACCOUNT_TARGETS_REACHED` ten times, every 170
+ * seconds, until 15:29:42Z. What held the slot was
+ * `bin_1e0f77fcd89844d783fb` — this project, this workload, fired 15:01:43Z,
+ * never checked in. Their turn waited thirty minutes behind a verification
+ * fixture, and because each deployment leaves more of them, the next one would
+ * have waited too.
+ *
+ * So the run cleans up after itself, in the project it owns:
+ *
+ *   - **scoped by project id**, resolved from the fixture slug, so no bin
+ *     outside this run's own project is addressable from here at all;
+ *   - **CAS-guarded on the generation** by `terminateUnleasedBin`, which
+ *     matches only READY or DRAFT — a bin a worker is holding cannot be
+ *     cancelled out from under it, and a finished one cannot be rewritten;
+ *   - **nothing is deleted.** The bin keeps its events and its dispatch rows,
+ *     because what this run measured is still the evidence for it.
+ *
+ * Cancelling is right rather than merely convenient: a verification fixture is
+ * a thing nobody wants performed. Leaving it READY asks the fleet to keep
+ * trying to have it performed, for ever.
+ */
+async function retireVerificationTurnBins(fixtures: Fixtures): Promise<void> {
+  const stale = (await listBins({ projectId: fixtures.scope.id, states: ['READY', 'DRAFT'], limit: 500 }))
+    .filter((bin) => bin.workloadClass === 'RUSSELL_TURN');
+
+  let retired = 0;
+  for (const bin of stale) {
+    const ok = await terminateUnleasedBin(
+      bin.id,
+      bin.leaseGeneration,
+      'CANCELLED',
+      'Hosted verification fixture. The turn it carries was posted to prove the interface ' +
+        'accepts one; no worker is a member of this project, so it can never be drained, and ' +
+        'leaving it READY spends a real fleet activation every thirty minutes.',
+    );
+    if (ok) retired += 1;
+  }
+
+  record(
+    'the run leaves no verification turn holding fleet capacity',
+    retired === stale.length,
+    `${retired} of ${stale.length} retired`,
+  );
 }
 
 async function revocationEndsAccess(fixtures: Fixtures, cookie: string): Promise<void> {

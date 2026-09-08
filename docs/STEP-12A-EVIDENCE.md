@@ -5817,3 +5817,106 @@ unescaped apostrophe inside a single-quoted scalar terminates it early. Twenty
 of the runs it names happened after that, so the reporter has not been able to
 read its own ledger for some time. It is a folded block scalar now, which takes
 the text literally, so no future entry can break it by using an apostrophe.
+
+## 62. A person's turn waited thirty minutes behind a test fixture — 2026-09-08
+
+The owner reported that a message had gone unanswered. It had not: it was
+answered, and it produced the semantic merge. But it took **thirty minutes and
+twenty seconds**, and the reason is a fault worth the name.
+
+### The trace
+
+`turn-trace` and `trace`, read from production at 15:41Z:
+
+| Time (Z) | What |
+| --- | --- |
+| 15:02:21.302 | `rmsg_d62ff29c8e834a45b124` stored — the person's message |
+| 15:02:21.502 | `bin_fe1fbf391c2244b38099` READY |
+| 15:02:31.805 | `DISPATCH_INTENT` written |
+| 15:04:11 → 15:29:42 | **ten** × `DISPATCH_UNROUTED` + `DISPATCH_DEFERRED`, `ACCOUNT_TARGETS_REACHED`, every 170s |
+| 15:32:05.816 | `BIN_ASSIGNED` — a worker arrived by itself and claimed it |
+| 15:32:35.936 | `BIN_COMPLETION_ACCEPTED` |
+| 15:32:41.448 | the reply settles: `rmsg_f58748342239400c8b99` |
+
+Its dispatch row reads `gen 0 SUPERSEDED · sent —`: **Brain never fired for
+this bin at all.** It was answered because a session that had been fired for
+something else turned up and took the highest-priority ready work.
+
+The answer itself is the acceptance condition:
+
+```
+produced: {"candidateId":"rcn_85f9689b461c4972a1ba","merged":true,
+           "captureOutcome":"this is already on the list, asked another way"}
+```
+
+`merged: true` — condition 4, the semantic merge, in production.
+
+### What was holding the capacity, by name
+
+Not a counter. `in-flight` prints every `SENT` dispatch with the four
+exclusions `inFlightByRoutine` applies, evaluated per row:
+
+```
+COUNTS  15:31:53.383Z  age 816s  verification-scope  RUSSELL_TURN
+        bin bin_6354e3105d8e48e881a4  READY  attempts 0/2
+        routine rtn_c7bcec972bd44afa91d7  session session_01Khz3U82NKmKw3wHFyVEy4h
+        arrived no worker has checked in  lease —  heartbeat —
+stale   15:01:43.634Z  age 2626s  verification-scope  RUSSELL_TURN
+        bin bin_1e0f77fcd89844d783fb  ... excluded: older than the window
+```
+
+Both belong to `verification-scope`, the hosted-verification fixture project.
+Neither is progressing: no lease, no heartbeat, still `READY` at attempts 0/2.
+The second one was fired at **15:01:43** and held V1's only slot across exactly
+the window in which the person's message was refused — 15:04:11 to 15:29:42.
+
+`fleet show` agrees from the other side: `V1 … fires=117 refusals=0 no-shows=0
+in-flight=1`.
+
+### Why it can never drain
+
+`verify-hosted` posts **real** Russell turns — a pending turn carrying the
+server's own reason is the contract it verifies, and a mock would verify
+nothing. Each creates a real `RUSSELL_TURN` bin. The worker bound to V1 is not
+a member of the fixture project, so it cannot see those bins however often they
+are fired for.
+
+The dispatcher does not know that. `router.ts` matches on **capabilities only**
+— there is no check that the Routine's bound worker may access the bin's
+project — so it fires, the session starts, nothing can be claimed, and the fire
+reserves a slot for the full `IN_FLIGHT_WINDOW_MS`. Every deployment leaves
+more of them, so this compounds.
+
+### The repair
+
+**The harness cleans up after itself.** `retireVerificationTurnBins` cancels
+the `RUSSELL_TURN` bins the run created, scoped to the fixture project by id,
+CAS-guarded on the generation through `terminateUnleasedBin`, READY or DRAFT
+only, nothing deleted. Cancelling is right rather than convenient: a
+verification fixture is something nobody wants performed, and leaving it READY
+asks the fleet to keep trying to have it performed for ever. The run records
+whether it left any behind, so a regression is a failed check rather than a
+slow Tuesday.
+
+**`retire-verification-bins`** retires the ones already there, with
+`cancel-ready`'s interlock — the exact expected count, or nothing changes.
+
+### The general defect, recorded and not repaired here
+
+Two things this exposed are real beyond the fixture, and both are dispatcher
+faults rather than harness ones:
+
+1. **The router never asks whether a surface may access the bin's project.**
+   `NO_CAPABLE_SURFACE` is about capabilities; there is no equivalent for
+   permission. A bin no worker may reach is not "waiting for capacity", it is
+   unroutable, and firing for it spends a real activation to discover nothing.
+2. **An arrival is credited to the bin the worker claims, not to the fire that
+   produced the session.** `creditDispatchArrival` looks up a `SENT` dispatch
+   on the claimed bin; when the arriving worker takes a different bin — which
+   `brain_bin_next_item` will do by design, and did here twelve seconds after
+   the 15:31:53 fire — the originating dispatch is never cleared and keeps its
+   slot for the whole window.
+
+Both are stated here with their evidence rather than half-fixed in a change
+about something else. Neither is required to stop the observed fault, which the
+harness cleanup removes at its source.

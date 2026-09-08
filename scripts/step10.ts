@@ -1301,6 +1301,72 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === 'retire-verification-bins') {
+    /*
+     * Give the fleet back the capacity the hosted verification harness took.
+     *
+     * `verify-hosted` posts real Russell turns — a pending turn with a
+     * server-written reason is the contract it verifies, and a mock would
+     * verify nothing. Each one creates a real `RUSSELL_TURN` bin in the
+     * fixture project, and no worker is a member of that project, so no
+     * session can ever drain it. The dispatcher does not know that: it fires
+     * for the bin, and the fire counts as an in-flight activation for the
+     * whole 30-minute window. At a Routine target of 1 that is the entire
+     * fleet, and every deployment leaves more of them.
+     *
+     * Measured on 2026-09-08: a person's message went READY at 15:02:21Z and
+     * was refused `ACCOUNT_TARGETS_REACHED` ten times until 15:29:42Z, behind
+     * `bin_1e0f77fcd89844d783fb` — this project, fired 15:01:43Z, never
+     * checked in.
+     *
+     * The harness now cleans up after itself, so this exists for the bins that
+     * are already there. Same interlock as `cancel-ready` and for the same
+     * reason: it takes the number the caller believes it will retire and
+     * refuses outright if the project disagrees, so a bin that arrived while
+     * the operator was deciding stops the command rather than being swept up
+     * in it. Scoped to the fixture project by slug — Deal Dispatch is not
+     * addressable from here — CAS-guarded on the generation, READY or DRAFT
+     * only, and nothing is deleted.
+     */
+    const projectId = (await getProjectBySlug('verification-scope'))?.id;
+    if (!projectId) {
+      console.log('STEP10: OK retire-verification-bins retired=0 (no verification project)');
+      return;
+    }
+    const expected = Number(arg(0) ?? 'NaN');
+    if (!Number.isInteger(expected) || expected < 0) {
+      console.log('STEP10 RETIRE REFUSED: pass the exact number of bins you expect to retire.');
+      process.exitCode = 1;
+      return;
+    }
+    const stale = (
+      await listBins({ projectId, states: ['READY', 'DRAFT'], limit: 500 })
+    ).filter((bin) => bin.workloadClass === 'RUSSELL_TURN');
+    if (stale.length !== expected) {
+      console.log(
+        `STEP10 RETIRE REFUSED: expected ${expected}, found ${stale.length}. Nothing was changed.`,
+      );
+      for (const bin of stale) console.log(`  ${bin.id}  ${bin.state}  ${bin.title}`);
+      process.exitCode = 1;
+      return;
+    }
+    let retired = 0;
+    for (const bin of stale) {
+      const ok = await terminateUnleasedBin(
+        bin.id,
+        bin.leaseGeneration,
+        'CANCELLED',
+        'Hosted verification fixture retired by the operator. No worker is a member of this ' +
+          'project, so it could never be drained, and leaving it READY spent a real fleet ' +
+          'activation every thirty minutes. Its events and dispatch rows are kept.',
+      );
+      if (ok) retired += 1;
+      console.log(`  ${ok ? 'retired ' : 'skipped '} ${bin.id}  ${bin.state}  ${bin.title}`);
+    }
+    console.log(`STEP10: OK retire-verification-bins retired=${retired} of ${stale.length}`);
+    return;
+  }
+
   if (command === 'cancel-bin') {
     // One named bin, and only inside the acceptance project — a bin id from
     // anywhere else is refused rather than looked up.
