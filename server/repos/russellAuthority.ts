@@ -345,6 +345,21 @@ export interface ReservationOutcome {
   reason: string;
   /** True when this call collided with an equivalent one that already held it. */
   replayed: boolean;
+  /**
+   * Which ceiling refused, when one did.
+   *
+   * A discriminant rather than a prose match, because the two refusals mean
+   * opposite things to the person waiting. `AT_ONCE` is an ordinary wait —
+   * something is running and this will start when it finishes, with nobody
+   * needed. `IN_TOTAL` is terminal: nothing will ever launch it until somebody
+   * raises a limit, and a caller that cannot tell them apart either alarms a
+   * person about a queue or leaves them never told about a wall.
+   *
+   * The loop was doing the second. A cumulative refusal matched neither prefix
+   * it checks for, so it was dropped from the tick report and from every
+   * surface, and a queued idea sat behind a spent ceiling in silence.
+   */
+  refusedBy?: 'IN_TOTAL' | 'AT_ONCE';
 }
 
 /**
@@ -492,6 +507,7 @@ export async function reserve(input: {
       reservation: null,
       reason: `the standing authority allows ${limits.total} ${input.kind.toLowerCase()} in total`,
       replayed: false,
+      refusedBy: 'IN_TOTAL',
     };
   }
   if (totals.active > limits.active) {
@@ -501,6 +517,7 @@ export async function reserve(input: {
       reservation: null,
       reason: `the standing authority allows ${limits.active} ${input.kind.toLowerCase()} at a time`,
       replayed: false,
+      refusedBy: 'AT_ONCE',
     };
   }
 

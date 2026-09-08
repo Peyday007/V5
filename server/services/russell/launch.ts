@@ -106,6 +106,13 @@ export interface LaunchOutcome {
   reason: string;
   /** True when this call found the work already done and did nothing. */
   replayed: boolean;
+  /**
+   * When a ceiling refused it, which one — carried through from `reserve`.
+   *
+   * `AT_ONCE` is a wait and nobody is needed. `IN_TOTAL` is a wall that only a
+   * person can move, and it must reach one.
+   */
+  refusedBy?: 'IN_TOTAL' | 'AT_ONCE';
 }
 
 /**
@@ -161,7 +168,7 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
     idempotencyKey: key,
   });
   if (!reservation.ok || !reservation.reservation) {
-    return refuse(reservation.reason);
+    return refuse(reservation.reason, reservation.refusedBy);
   }
 
   const { mission, created } = await insertMission({
@@ -209,8 +216,8 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
   return { ok: true, mission: completed.mission, reason: 'launched', replayed: !created };
 }
 
-function refuse(reason: string): LaunchOutcome {
-  return { ok: false, mission: null, reason, replayed: false };
+function refuse(reason: string, refusedBy?: 'IN_TOTAL' | 'AT_ONCE'): LaunchOutcome {
+  return { ok: false, mission: null, reason, replayed: false, ...(refusedBy ? { refusedBy } : {}) };
 }
 
 /**

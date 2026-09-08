@@ -687,12 +687,29 @@ describe('one question, walked the whole way', () => {
       status: 'COMPLETE_WITH_GAPS',
       documentId: filed.id,
     });
-    await getDb().run(`UPDATE russell_missions SET document_id = ? WHERE id = ?`, [
-      filed.id,
-      mission.id,
-    ]);
+
+    /*
+     * The mission's `document_id` is **not** set here, and that removal is the
+     * point.
+     *
+     * This step used to run `UPDATE russell_missions SET document_id = ?` by
+     * hand — supplying, itself, the one connection production did not have.
+     * `linkMission` was called with an orchestration and a bin at launch and
+     * never with a document, so nothing anywhere set that column; the tick's
+     * own guard skips a non-failed mission without one, and
+     * `followOnsToCreate` waits on `writeback_at`. A real filed packet would
+     * have sat on `awaitingFiling` for ever and the follow-on behind it.
+     *
+     * The test could not see that because it was writing the column the
+     * product could not. Now the tick reads it from the packet, and if that
+     * link breaks again this step fails rather than papering over it.
+     */
+    const beforeLink = (await getMission(mission.id))!;
+    expect(beforeLink.documentId, 'production set document_id without the tick').toBeNull();
 
     const writingBack = await tick('journey');
+    // The tick attached it from the packet's own row, and only then wrote back.
+    expect((await getMission(mission.id))!.documentId).toBe(filed.id);
     expect(writingBack.wroteBack).toContain(mission.id);
     expect((await getMission(mission.id))!.state).toBe('DONE');
 

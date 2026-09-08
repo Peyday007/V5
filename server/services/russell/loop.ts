@@ -49,11 +49,14 @@ import {
 } from '../../repos/russellCycle.ts';
 import {
   getMission,
+  linkMission,
   listAnsweredRequests,
   markResumed,
   renewLiveMissionReservations,
   setNextMission,
 } from '../../repos/russellMissions.ts';
+import { getOrchestration } from '../../repos/research.ts';
+import { listAuditsByProject } from '../../repos/audits.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { getDb } from '../../db/database.ts';
 import { completeProbe, listExpiredProbes } from '../../repos/russellProbes.ts';
@@ -203,9 +206,29 @@ export async function tick(owner: string): Promise<TickReport> {
 
   try {
     // 1. Finish what ended — but only where the loop can say something true.
-    for (const mission of await missionsAwaitingWriteback(cycle.maxEventsPerCycle)) {
-      const outcome = await outcomeOf(mission);
+    for (const raw of await missionsAwaitingWriteback(cycle.maxEventsPerCycle)) {
+      const outcome = await outcomeOf(raw);
       if (!outcome) continue;
+
+      /*
+       * Tell the mission what its own packet produced.
+       *
+       * This is the connection that was missing, and it made two conditions
+       * unreachable rather than merely untested. `linkMission` was called with
+       * an orchestration and a bin at launch and **never with a document or an
+       * audit** — nothing anywhere set `russell_missions.document_id`. The
+       * guard immediately below skips any non-failed mission without one, so a
+       * packet that filed a real report would have been pushed onto
+       * `awaitingFiling` on every tick, for ever. And `followOnsToCreate`
+       * requires `writeback_at IS NOT NULL`, so the automatic follow-on sat
+       * behind the same wall.
+       *
+       * Read from the orchestration and from the audit rows — Brain's own
+       * records of what the pipeline did — never from anything a worker said
+       * about itself. `linkMission` is a plain update on columns that are null
+       * until the pipeline fills them, so a redelivery writes the same ids.
+       */
+      const mission = await linkFiledWork(raw);
 
       /*
        * The loop must not spend the writeback on a placeholder.
@@ -470,6 +493,21 @@ export async function tick(owner: string): Promise<TickReport> {
             });
           }
         }
+      } else if (!outcome.ok && outcome.refusedBy === 'IN_TOTAL') {
+        /*
+         * A wall, not a queue, and the difference decides whether a person
+         * hears about it.
+         *
+         * This branch did not exist. A cumulative refusal's reason matches
+         * neither prefix below, so it fell through every case and was dropped
+         * from the report — a queued idea sat behind a spent ceiling in total
+         * silence, on every tick, with the briefing saying nobody was needed.
+         *
+         * `AT_ONCE` deliberately still falls through: something is running and
+         * this starts when it finishes. Reporting that as a blocker would
+         * teach a person to ignore the one that is.
+         */
+        report.parked.push({ candidateId: entry.candidateId, reason: outcome.reason });
       } else if (!outcome.ok && outcome.reason.startsWith('INSUFFICIENT_')) {
         // Reported rather than counted against the launch bound: a parked
         // mission consumed no slot, and a fleet short of a capability must not
@@ -501,6 +539,46 @@ export async function tick(owner: string): Promise<TickReport> {
  * is that re-derivation, and it is bounded per tick so one pass cannot walk the
  * whole table.
  */
+/**
+ * Attach the packet's filed document and its audit to the mission.
+ *
+ * Separate from the writeback because it is a *reading*, not a decision: it
+ * copies two ids Brain already holds onto the row that needs them, and returns
+ * the mission as it now stands. If the packet has filed nothing yet there is
+ * nothing to copy and the mission comes back unchanged, which is the ordinary
+ * case on most ticks.
+ *
+ * The audit is the packet's own — matched on the run the orchestration names,
+ * which is the same join `packet-report` uses. A project's other audits belong
+ * to other work and must not be attributed here.
+ */
+async function linkFiledWork(mission: RussellMission): Promise<RussellMission> {
+  if (!mission.orchestrationId) return mission;
+  if (mission.documentId && mission.auditId) return mission;
+
+  const orchestration = await getOrchestration(mission.orchestrationId);
+  if (!orchestration) return mission;
+
+  const documentId = mission.documentId ?? orchestration.documentId ?? null;
+  let auditId = mission.auditId ?? null;
+  if (!auditId) {
+    const audits = (await listAuditsByProject(mission.projectId)).filter(
+      (audit) => audit.runId === orchestration.runId,
+    );
+    // The latest, because an audit that superseded an earlier one is the one
+    // the packet's verdict rests on.
+    auditId = audits.length > 0 ? audits[audits.length - 1]!.id : null;
+  }
+  if (!documentId && !auditId) return mission;
+
+  await linkMission({
+    missionId: mission.id,
+    ...(documentId ? { documentId } : {}),
+    ...(auditId ? { auditId } : {}),
+  });
+  return (await getMission(mission.id)) ?? mission;
+}
+
 async function missionsAwaitingWriteback(limit: number): Promise<RussellMission[]> {
   const rows = await getDb().all<{ id: string }>(
     `SELECT id FROM russell_missions

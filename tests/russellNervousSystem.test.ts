@@ -930,6 +930,148 @@ describe('the loop keeps going without anybody watching', () => {
     expect(spend.grant!.spend.maxConcurrent.used).toBe(1);
   });
 
+  it('tells the person when a spent ceiling is the only thing in the way', async () => {
+    /*
+     * The silence this closes.
+     *
+     * `launch` refuses a cumulative ceiling with a sentence that matched
+     * neither prefix the loop tested for, so the refusal was dropped from the
+     * tick report; the candidate stayed QUEUED; and the briefing — which
+     * counted only `russell_human_requests` and a missing grant — said "You are
+     * not needed" while nothing could ever start. That is §52's approval defect
+     * one ceiling along.
+     *
+     * "At a time" is deliberately *not* this: something is running and the next
+     * will start when it finishes, with nobody needed. Reporting a queue as a
+     * blocker teaches a person to ignore the one that is.
+     */
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'one only',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 1,
+      maxFragments: 4,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+
+    const spec = (title: string) => ({
+      projectId,
+      layerId,
+      visibility: 'SHARED' as const,
+      title,
+      assignment: `Which Michigan counties settle ${title}, and on what terms?`,
+      objective: `Settle ${title}.`,
+      whyNow: 'The layer names it as open.',
+      acceptableSources: ['county government portals'],
+      excludedSources: [],
+      evidence: ['a named portal per county'],
+      startedBy: { kind: 'PERSON' as const, id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+
+    const first = await capture({
+      title: 'Permit coverage',
+      statement: 'establish which Michigan counties publish permit data in a usable form',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const a = await launch({ ...spec('permit coverage'), candidateId: first.candidate!.id });
+    expect(a.ok).toBe(true);
+    // Finished, so this is the cumulative wall and not the concurrency queue.
+    await transitionMission({ missionId: a.mission!.id, from: 'RUNNING', to: 'DONE' });
+
+    const second = await capture({
+      title: 'Register latency',
+      statement: 'establish how long a Michigan county register takes to show a transfer',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const b = await launch({ ...spec('register latency'), candidateId: second.candidate!.id });
+    expect(b.ok).toBe(false);
+    // The discriminant, not a prose match: the two refusals mean opposite
+    // things to the person waiting.
+    expect(b.refusedBy).toBe('IN_TOTAL');
+
+    // The idea is ready and waiting, which is the half that makes it a decision.
+    await recordJudgment({
+      candidateId: second.candidate!.id,
+      state: 'QUEUED',
+      priority: 'MUST_DO',
+      confidence: null,
+      reason: 'it decides whether the coverage layer can be automated',
+      judgment: { missionSpec: { title: 'Register latency' } },
+      supporting: [],
+      contradicting: [],
+    });
+
+    const said = await briefing({
+      projectId,
+      projectName: 'Deal Dispatch',
+      includePrivate: true,
+    });
+    expect(said.needsYou, 'the briefing said nobody was needed').toMatch(/You are needed/);
+    expect(said.needsYou).toMatch(/all the research you allowed/i);
+    // Counted, so the nav badge shows it rather than reading zero.
+    expect(said.openRequests).toBeGreaterThan(0);
+    // In the person's words: no ceiling name, no candidate id, no reservation.
+    expect(said.needsYou).not.toMatch(/maxMissions|rcn_|rrv_|reservation/);
+  });
+
+  it('does not call an ordinary concurrency wait a decision', async () => {
+    /*
+     * The other half, and the reason the discriminant exists. A mission that is
+     * running is not a blocker; saying so would train a person to ignore the
+     * briefing.
+     */
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'two, one at a time',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 2,
+      maxFragments: 4,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+    const first = await capture({
+      title: 'Permit coverage',
+      statement: 'establish which Michigan counties publish permit data in a usable form',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const a = await launch({
+      projectId,
+      layerId,
+      candidateId: first.candidate!.id,
+      visibility: 'SHARED',
+      title: 'Permit coverage',
+      assignment: 'Which Michigan counties publish permit data, and on what terms?',
+      objective: 'Settle the coverage position.',
+      whyNow: 'The layer names coverage as open.',
+      acceptableSources: ['county government portals'],
+      excludedSources: [],
+      evidence: ['a named portal per county'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    expect(a.ok).toBe(true);
+    // Still running: the slot is genuinely occupied.
+    expect((await getMission(a.mission!.id))!.state).toBe('RUNNING');
+
+    const said = await briefing({
+      projectId,
+      projectName: 'Deal Dispatch',
+      includePrivate: true,
+    });
+    expect(said.needsYou).toBe('You are not needed.');
+  });
+
   it('counts a cancelled mission as spent rather than refunding it', async () => {
     /*
      * A mission that was authorized and started has consumed one, however it
