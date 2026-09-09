@@ -82,6 +82,7 @@ import {
   createOrchestration,
   currentFragments,
   getOrchestration,
+  updateFragment,
   updateOrchestration,
 } from '../server/repos/research.ts';
 import { createRun } from '../server/repos/runs.ts';
@@ -1514,6 +1515,156 @@ describe('the loop keeps going without anybody watching', () => {
     expect((await getHumanRequest(request.id))!.state).toBe('WITHDRAWN');
   });
 
+  it('offers to authorize a plan the envelope refused, and running it starts the research', async () => {
+    /*
+     * The stop production actually reached, and the answer that was missing.
+     *
+     * On 2026-09-09 `orc_8adc4708f56f49a8964b` parked because
+     * `planFitsEnvelope` refused its plan: the assignment did not match the
+     * digest `RUSSELL_STATE_LICENSING_V1` pins, and the fragment's geography
+     * and source class were outside it. Nothing had been researched. The card
+     * offered "record what could not be settled" and "stop this work", so the
+     * one decision a person could make about a plan — read it and authorize it
+     * — was the one not on offer, and every future idea would have parked the
+     * same way with no way out. §24: an escalation with no answering transition
+     * is not waiting, it is stuck.
+     */
+    const conversation = await ownedConversation('Outside the envelope');
+    const mission = await parkedMission(conversation.id);
+    await withPlan(mission.orchestrationId!, layerId, projectId);
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason:
+        'The proposed plan falls outside the preauthorized envelope: the assignment is not ' +
+        'the text this envelope authorizes.',
+    });
+
+    await tick('instance-a');
+    const request = (await listOpenRequests(projectId)).find(
+      (entry) => entry.missionId === mission.id,
+    )!;
+    expect(request).toBeDefined();
+
+    // Two answers, and `RECORD_GAPS` is not one of them: there is no research
+    // to file, and offering to file it is how a placeholder becomes an archive
+    // entry somebody's name is on.
+    expect(request.choices.map((choice) => choice.key).sort()).toEqual(['APPROVE_PLAN', 'STOP']);
+
+    // The card says what actually happened, not the evidence-bar sentence.
+    expect(request.whyNotRussell).toMatch(/outside the preauthorized envelope/i);
+    expect(request.whyNotRussell).toMatch(/Which counties publish permit data/i);
+    expect(request.whyNotRussell).not.toMatch(/repair ladder/i);
+    expect(request.authorityNeeded).toMatch(/not preauthorized to start/i);
+
+    await answerHumanRequest({
+      requestId: request.id,
+      actorUserId: userId,
+      choice: NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key,
+    });
+
+    const resumed = await tick('instance-a');
+    expect(resumed.resumed).toContain(request.id);
+    expect((await getHumanRequest(request.id))!.state).toBe('RESUMED');
+
+    // The same mission, and the plan is now research that may run.
+    expect((await getMission(mission.id))!.state).not.toBe('NEEDS_HUMAN');
+    const fragments = await currentFragments(mission.orchestrationId!);
+    expect(fragments.every((fragment) => fragment.status !== 'PLANNED')).toBe(true);
+
+    // Recorded against the person, by id, from the authenticated principal —
+    // never as "a system approved it".
+    const reviewed = (await listEvents(projectId, 200)).find(
+      (event) => event.eventType === 'RESEARCH_PLAN_REVIEWED',
+    );
+    expect((reviewed?.payload as Record<string, unknown> | undefined)?.['approvedByUserId']).toBe(
+      userId,
+    );
+  });
+
+  it('re-offers an already-open request when the packet no longer matches it', async () => {
+    /*
+     * A repair that cannot reach the row that motivated it is half a repair.
+     *
+     * `rhr_acbf51e190924d99b5a3` was opened in production before `APPROVE_PLAN`
+     * existed, and `parkStoppedMissions` skips a mission already parked — so
+     * without this the one card that needed the new answer could never have
+     * been given it. Mutation 26 learned the same lesson about a mission that
+     * was already at NEEDS_HUMAN when its rule was written.
+     */
+    const conversation = await ownedConversation('Written before the answer existed');
+    const mission = await parkedMission(conversation.id);
+    await withPlan(mission.orchestrationId!, layerId, projectId);
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'The proposed plan falls outside the preauthorized envelope.',
+    });
+    await transitionMission({
+      missionId: mission.id,
+      from: mission.state,
+      to: 'NEEDS_HUMAN',
+      waitingOn: 'The proposed plan falls outside the preauthorized envelope.',
+    });
+    // The card an older version of this file would have written.
+    const { request } = await askHuman({
+      projectId,
+      missionId: mission.id,
+      authorityNeeded: 'Deciding whether this project accepts a report with unresolved questions.',
+      whyNotRussell: 'The evidence bar was not met and the repair ladder is spent.',
+      recommendation: null,
+      choices: [NEEDS_HUMAN_CHOICES.RECORD_GAPS, NEEDS_HUMAN_CHOICES.STOP],
+      urgency: 'BLOCKING',
+      resumeKey: `russell:needs-human:${mission.id}:${mission.orchestrationId}`,
+    });
+
+    await tick('instance-a');
+
+    const corrected = (await getHumanRequest(request.id))!;
+    // Same request, still OPEN, still unanswered — only the offer moved.
+    expect(corrected.state).toBe('OPEN');
+    expect(corrected.answeredByUserId).toBeNull();
+    expect(corrected.choices.map((choice) => choice.key).sort()).toEqual(['APPROVE_PLAN', 'STOP']);
+    expect(corrected.whyNotRussell).toMatch(/outside the preauthorized envelope/i);
+
+    // And a second tick changes nothing, so a card that already fits is not
+    // rewritten on every pass.
+    const before = (await getHumanRequest(request.id))!.updatedAt;
+    await tick('instance-a');
+    expect((await getHumanRequest(request.id))!.updatedAt).toBe(before);
+  });
+
+  it('refuses to authorize a plan that is no longer waiting for approval', async () => {
+    // The guard at the transition as well as at the offer, for the reason
+    // `recordGaps` has one: the row carries the choices it was written with,
+    // and the packet is what decides whether they can still act.
+    const conversation = await ownedConversation('Approved by somebody else first');
+    const mission = await parkedMission(conversation.id);
+    await withPlan(mission.orchestrationId!, layerId, projectId);
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'The proposed plan falls outside the preauthorized envelope.',
+    });
+    await tick('instance-a');
+    const request = (await listOpenRequests(projectId)).find(
+      (entry) => entry.missionId === mission.id,
+    )!;
+
+    // The plan moves on underneath the card.
+    for (const fragment of await currentFragments(mission.orchestrationId!)) {
+      await updateFragment(fragment.id, { status: 'CANCELLED' });
+    }
+
+    await answerHumanRequest({
+      requestId: request.id,
+      actorUserId: userId,
+      choice: NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key,
+    });
+    const after = await tick('instance-a');
+    expect(after.resumed).not.toContain(request.id);
+    expect(after.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
+    // Back in front of the person rather than marked acted-on.
+    expect((await getHumanRequest(request.id))!.state).toBe('OPEN');
+  });
+
   it('refuses to record gaps on an empty packet even when the request offers it', async () => {
     /*
      * The guard at the transition, not only at the offer.
@@ -1539,10 +1690,13 @@ describe('the loop keeps going without anybody watching', () => {
     const request = (await listOpenRequests(projectId)).find(
       (entry) => entry.missionId === mission.id,
     )!;
-    // Both choices, because the packet had research when it parked.
-    expect(request.choices.map((choice) => choice.key).sort()).toEqual(
-      Object.keys(NEEDS_HUMAN_CHOICES).sort(),
-    );
+    /*
+     * Two choices: the packet has research and nothing awaiting approval, so
+     * there is no plan to authorize. `APPROVE_PLAN` is deliberately absent —
+     * offering it would be a button with nothing to act on, which is the same
+     * defect this test is about, one choice along.
+     */
+    expect(request.choices.map((choice) => choice.key).sort()).toEqual(['RECORD_GAPS', 'STOP']);
 
     // Now the research is gone — the shape a stale request describes.
     await getDb().run(`DELETE FROM research_fragments WHERE orchestration_id = ?`, [
@@ -2320,7 +2474,34 @@ async function parkedMission(
   return launched.mission!;
 }
 
+/**
+ * A packet that has actually been researched.
+ *
+ * The fragment is moved off `PLANNED` deliberately, and that is a correction to
+ * what this fixture used to be. `createFragments` writes `PLANNED`, which means
+ * *proposed and awaiting approval* — so the old version created a plan and
+ * called it research, and every test built on it asserted that a packet holding
+ * nothing but an unapproved proposal could be told to "record what could not be
+ * settled". Production made the difference real: `orc_8adc4708f56f49a8964b`
+ * parked on 2026-09-09 with exactly one `PLANNED` fragment, and filing a report
+ * from it would have written a worker's placeholder into the archive as
+ * research somebody had authorized.
+ *
+ * `BLOCKED` is the honest status for the stop these tests set up — the evidence
+ * bar was not met and the repair ladder is spent.
+ */
 async function withResearch(orchestrationId: string, layerIdFor: string, projectIdFor: string) {
+  await withPlan(orchestrationId, layerIdFor, projectIdFor);
+  for (const fragment of await currentFragments(orchestrationId)) {
+    await updateFragment(fragment.id, {
+      status: 'BLOCKED',
+      blockedReason: 'The evidence bar was not met and the repair ladder is spent.',
+    });
+  }
+}
+
+/** A packet whose plan is proposed and waiting to be approved. */
+async function withPlan(orchestrationId: string, layerIdFor: string, projectIdFor: string) {
   await createFragments([
     {
       orchestrationId,

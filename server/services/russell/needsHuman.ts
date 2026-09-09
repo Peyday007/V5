@@ -32,6 +32,8 @@ import {
   askHuman,
   getMission,
   listOpenRequests,
+  openRequestFor,
+  reofferRequest,
   reopenRequest,
   transitionMission,
   withdrawRequest,
@@ -40,9 +42,10 @@ import { getUser } from '../../repos/identity.ts';
 import { getDb } from '../../db/database.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { authorizeUnresolvedGaps } from '../research/gapPolicy.ts';
-import { advancePacket } from '../research/packetRunner.ts';
+import { advancePacket, approvePlan } from '../research/packetRunner.ts';
 import type {
   HumanRequestChoice,
+  ResearchFragment,
   RussellHumanRequest,
   RussellMission,
 } from '../../domain/types.ts';
@@ -62,6 +65,39 @@ import type {
  * where they ended up.
  */
 export const NEEDS_HUMAN_CHOICES = {
+  /*
+   * Authorize a plan Brain was not preauthorized to start.
+   *
+   * The third answer, and it is here because the first two could not answer
+   * the stop production actually reached. `orc_8adc4708f56f49a8964b` parked on
+   * 2026-09-09 because `planFitsEnvelope` refused its plan — the assignment did
+   * not match the digest the envelope pins, and the fragment's geography and
+   * source class were outside it. Nothing about the evidence bar had happened;
+   * research had not started. The card offered "record what could not be
+   * settled" and "stop this work", so the one decision a person could actually
+   * make about a plan — read it and authorize it — was the one not on offer,
+   * and every future idea would have parked the same way.
+   *
+   * It is `approvePlan`, the identical function the envelope calls when a plan
+   * *does* fit and the identical one the console's own review screen calls. So
+   * this widens nothing: it moves the fragments from PLANNED to QUEUED under a
+   * named person, and the evidence gate, the verification pass, the synthesis
+   * check and all three audit roles run exactly as they would have. §16's
+   * sentence is that the envelope decides whether research may *start* — this
+   * is the other way a start gets authorized, and it is the way §16 already
+   * describes as `HUMAN`.
+   *
+   * Offered only when something is actually awaiting approval, for the reason
+   * every other choice here is conditional.
+   */
+  APPROVE_PLAN: {
+    key: 'APPROVE_PLAN',
+    label: 'Authorize this plan and let it run',
+    consequence:
+      'The proposed research starts, recorded as authorized by you rather than by a ' +
+      'preauthorized envelope. Nothing else changes: the same evidence standards, the same ' +
+      'verification and the same three audit roles decide what it may conclude.',
+  },
   RECORD_GAPS: {
     key: 'RECORD_GAPS',
     label: 'Record what could not be settled, and finish',
@@ -89,8 +125,91 @@ export type NeedsHumanChoice = keyof typeof NEEDS_HUMAN_CHOICES;
  * so `RECORD_GAPS` would be a button that does nothing — the failure this
  * module exists to fix, wearing the module's own clothes.
  */
-export function choicesFor(hasEvidence: boolean): HumanRequestChoice[] {
-  return hasEvidence ? Object.values(NEEDS_HUMAN_CHOICES) : [NEEDS_HUMAN_CHOICES.STOP];
+export interface PacketShape {
+  /** Fragments proposed and not yet approved — what `approvePlan` acts on. */
+  awaitingApproval: number;
+  /** Fragments past the plan — what a filed report could be made of. */
+  researched: number;
+}
+
+/**
+ * What a packet is, in the only two numbers the answers depend on.
+ *
+ * Read from the fragments rather than from the packet's prose, because which
+ * answers can act is a fact about rows. It replaced a boolean `hasEvidence`,
+ * and the distinction it added is the one that mattered: a packet whose only
+ * fragment is still `PLANNED` has *something*, so the boolean said yes — and
+ * `RECORD_GAPS` then offered to file a report of research that had not
+ * happened. In production that fragment was a worker's placeholder, so acting
+ * on the offer would have written invented work into the project's archive
+ * under a person's name.
+ */
+export async function packetShape(orchestrationId: string): Promise<PacketShape> {
+  const fragments = await currentFragments(orchestrationId);
+  const awaitingApproval = fragments.filter((fragment) => fragment.status === 'PLANNED').length;
+  return { awaitingApproval, researched: fragments.length - awaitingApproval };
+}
+
+export function choicesFor(shape: PacketShape): HumanRequestChoice[] {
+  return [
+    ...(shape.awaitingApproval > 0 ? [NEEDS_HUMAN_CHOICES.APPROVE_PLAN] : []),
+    ...(shape.researched > 0 ? [NEEDS_HUMAN_CHOICES.RECORD_GAPS] : []),
+    NEEDS_HUMAN_CHOICES.STOP,
+  ];
+}
+
+/**
+ * Why this packet stopped, and why Brain may not decide it, from its own rows.
+ *
+ * Two stops with two different remedies, and until this they shared one
+ * sentence: *the evidence bar was not met and the repair ladder is spent*. That
+ * is true of the stop this module was written for and false of the one
+ * production reached first, where nothing had been researched at all. A park
+ * whose explanation contradicts its own reason teaches a person to stop reading
+ * the explanation — the same defect mutation 18 fixed for `waitingOn` and left
+ * standing one field along.
+ */
+function stopWords(
+  shape: PacketShape,
+  awaiting: readonly ResearchFragment[],
+  packetReason: string,
+): { authorityNeeded: string; whyNotRussell: string } {
+  if (shape.awaitingApproval > 0) {
+    /*
+     * The plan, in the person's card, bounded.
+     *
+     * A person authorizing research has to see what they are authorizing, and
+     * the fragment questions are what the plan actually asks. Bounded because a
+     * decomposition is as many fragments as the gaps require (§12) and a card
+     * carrying twenty questions is one nobody reads — so the first few are
+     * named and the rest are counted rather than silently dropped.
+     */
+    const NAMED = 4;
+    const rest = awaiting.length - NAMED;
+    const asks =
+      awaiting
+        .slice(0, NAMED)
+        .map((fragment) => `“${fragment.question}”`)
+        .join('; ') + (rest > 0 ? `, and ${rest} more` : '');
+    return {
+      authorityNeeded:
+        'Authorizing research Brain was not preauthorized to start. Brain may not decide this ' +
+        'for you, because deciding it would mean setting the limits its own plan is judged by.',
+      whyNotRussell:
+        `The plan asks to establish ${asks}. ${packetReason} ` +
+        'Nothing has been researched yet, so this is a decision about whether to start rather ' +
+        'than about what to do with what was found.',
+    };
+  }
+  return {
+    authorityNeeded:
+      'Deciding whether this project accepts a report with unresolved questions in it, ' +
+      'rather than an answer. Brain may not make that call for you.',
+    whyNotRussell:
+      'The evidence bar was not met and the repair ladder is spent. Lowering the bar or ' +
+      'declaring the remaining questions out of scope is a decision about what the ' +
+      'project is willing to rely on.',
+  };
 }
 
 /** States a mission can be parked *from*. A terminal one is not interrupted. */
@@ -177,7 +296,13 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
      * still reported verbatim as `waitingOn`, and what is decided here is only
      * *which* answers can do anything.
      */
-    const hasEvidence = (await currentFragments(orchestration.id)).length > 0;
+    const fragments = await currentFragments(orchestration.id);
+    const awaiting = fragments.filter((fragment) => fragment.status === 'PLANNED');
+    const shape: PacketShape = {
+      awaitingApproval: awaiting.length,
+      researched: fragments.length - awaiting.length,
+    };
+    const hasEvidence = fragments.length > 0;
 
     /*
      * A decision with one option is not a decision.
@@ -250,12 +375,40 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
     }
 
     /*
-     * Already parked, and it has evidence: a real decision, waiting for a real
-     * answer. Nothing to do — and re-parking would be worse than a no-op,
-     * because `transitionMission` from NEEDS_HUMAN to NEEDS_HUMAN succeeds and
-     * would report a fresh park on every tick.
+     * Already parked, and it has something: a real decision, waiting for a real
+     * answer. Not re-parked — `transitionMission` from NEEDS_HUMAN to
+     * NEEDS_HUMAN succeeds, so that would report a fresh park on every tick.
+     *
+     * But the offer is re-derived, because a request is written once and the
+     * packet keeps moving. `rhr_acbf51e190924d99b5a3` was opened offering
+     * "record what could not be settled" and "stop this work" for a packet
+     * whose plan had been refused before any research began; the answer that
+     * fits it — authorize the plan — did not exist when the row was written,
+     * and this branch is the only thing that ever looks at a parked mission
+     * again. Without this the repair could not reach the row that motivated it,
+     * which is mutation 26's lesson at the same altitude.
+     *
+     * `reofferRequest` is guarded on OPEN and changes only what is offered and
+     * why: never the state, never an answer, never who gave one. And it is
+     * compared before it is written, so an unchanged card is not touched and a
+     * tick that reports nothing did nothing.
      */
-    if (mission.state === 'NEEDS_HUMAN') continue;
+    if (mission.state === 'NEEDS_HUMAN') {
+      const open = await openRequestFor(mission.id);
+      if (open) {
+        const wanted = choicesFor(shape);
+        const words = stopWords(shape, awaiting, waitingOn);
+        const same =
+          open.choices.length === wanted.length &&
+          open.choices.every((choice, at) => choice.key === wanted[at]?.key) &&
+          open.authorityNeeded === words.authorityNeeded &&
+          open.whyNotRussell === words.whyNotRussell;
+        if (!same) {
+          await reofferRequest({ requestId: open.id, choices: wanted, ...words });
+        }
+      }
+      continue;
+    }
 
     const moved = await transitionMission({
       missionId: mission.id,
@@ -275,13 +428,10 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       conversationId: mission.conversationId,
       // Only the evidence case reaches here now, so these are statements
       // rather than a branch. A packet that produced nothing failed above.
-      authorityNeeded:
-        'Deciding whether this project accepts a report with unresolved questions in it, ' +
-        'rather than an answer. Brain may not make that call for you.',
-      whyNotRussell:
-        'The evidence bar was not met and the repair ladder is spent. Lowering the bar or ' +
-        'declaring the remaining questions out of scope is a decision about what the ' +
-        'project is willing to rely on.',
+      // Derived from the packet, both of them. See `stopWords`: an envelope
+      // refusal and an exhausted repair ladder are different stops with
+      // different remedies, and one sentence cannot be true of both.
+      ...stopWords(shape, awaiting, waitingOn),
       recommendation: null,
       /*
        * Only the answers that can act on this packet.
@@ -291,7 +441,7 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
        * it would be offering a button that does nothing — the failure this
        * module exists to fix, wearing the module's own clothes.
        */
-      choices: choicesFor(hasEvidence),
+      choices: choicesFor(shape),
         // The packet is stopped and everything behind it is waiting, which is
       // what BLOCKING means here. Not URGENT: nothing is degrading, and an
       // urgency that is always the highest one stops sorting anything.
@@ -355,6 +505,10 @@ export async function resumeAnsweredRequest(
     return recordGaps(mission, request);
   }
 
+  if (choice === NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key) {
+    return authorizePlan(mission, request);
+  }
+
   /*
    * An answer this version does not implement.
    *
@@ -390,11 +544,12 @@ export async function reopenAnswered(
 ): Promise<boolean> {
   const mission = request.missionId ? await getMission(request.missionId) : null;
   const orchestrationId = mission?.orchestrationId ?? null;
-  const hasEvidence =
-    orchestrationId !== null && (await currentFragments(orchestrationId)).length > 0;
+  const shape = orchestrationId
+    ? await packetShape(orchestrationId)
+    : { awaitingApproval: 0, researched: 0 };
   return reopenRequest({
     requestId: request.id,
-    choices: choicesFor(hasEvidence),
+    choices: choicesFor(shape),
     recommendation: reason,
   });
 }
@@ -406,6 +561,94 @@ async function stop(mission: RussellMission): Promise<boolean> {
     to: 'CANCELLED',
     terminalReason: 'stopped by a person at a decision Brain could not make',
   });
+}
+
+/**
+ * Carry out "authorize this plan".
+ *
+ * The same order `recordGaps` uses, for the same reason: the mission comes back
+ * to `RUNNING` under a guard *before* the packet is advanced, because
+ * `approvePlan` can carry a packet all the way to terminal in this call and a
+ * mission still reading `NEEDS_HUMAN` when the writeback step looks at it would
+ * be written back from a parked state.
+ *
+ * Three refusals, and each leaves the request OPEN rather than marking it
+ * resumed — an answer recorded as acted-on and not acted-on is the exact
+ * failure this module exists to prevent.
+ */
+async function authorizePlan(
+  mission: RussellMission,
+  request: RussellHumanRequest,
+): Promise<ResumeResult> {
+  if (!mission.orchestrationId) {
+    return {
+      ok: false,
+      reason: 'this mission has no packet to authorize',
+      missionId: mission.id,
+      settled: false,
+    };
+  }
+
+  /*
+   * There has to be a plan. The offer is derived from the same numbers, but a
+   * request written when the packet had a different shape still carries its old
+   * choices, and the offer is what a person sees — so the guard is at the
+   * transition as well.
+   */
+  const shape = await packetShape(mission.orchestrationId);
+  if (shape.awaitingApproval === 0) {
+    return {
+      ok: false,
+      reason:
+        'nothing in this packet is waiting to be approved any more, so there is no plan to ' +
+        'authorize — the honest answers here are to stop it or to record what is unresolved',
+      missionId: mission.id,
+      settled: false,
+    };
+  }
+
+  /*
+   * Against the person who gave it, by id, read from `answered_by_user_id`,
+   * which `answerHumanRequest` took from the authenticated principal — never
+   * from a body field and never from here. `approvePlan` writes it onto
+   * `RESEARCH_PLAN_REVIEWED`, so the row says who authorized research to start
+   * rather than that "a script" did.
+   */
+  const answeredBy = request.answeredByUserId ? await getUser(request.answeredByUserId) : null;
+  if (!answeredBy) {
+    return {
+      ok: false,
+      reason: 'the person who answered cannot be resolved, so nothing is authorized in their name',
+      missionId: mission.id,
+      settled: false,
+    };
+  }
+
+  const moved = await transitionMission({
+    missionId: mission.id,
+    from: 'NEEDS_HUMAN',
+    to: 'RUNNING',
+    waitingOn: null,
+  });
+  if (!moved) {
+    return {
+      ok: false,
+      reason: 'the mission moved out of Needs You before the answer could be applied',
+      missionId: mission.id,
+      settled: false,
+    };
+  }
+
+  const advanced = await approvePlan({
+    orchestrationId: mission.orchestrationId,
+    approvedByUserId: answeredBy.id,
+  });
+  return {
+    ok: true,
+    reason: `the plan is authorized by you; the packet is now ${advanced.status}`,
+    missionId: mission.id,
+    settled: true,
+  };
 }
 
 async function recordGaps(

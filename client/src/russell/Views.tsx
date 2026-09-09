@@ -1013,17 +1013,29 @@ export function NeedsYouView({
             {request.recommendation ? (
               <span className="rs-item-meta">Russell suggests: {request.recommendation}</span>
             ) : null}
+            {/* The consequence, beside the button that causes it.
+
+                `askHuman` has refused a choice without one since it was
+                written — "Every choice must carry a key, a label and its
+                consequence" — and then this rendered the label alone. So the
+                server enforced a promise the interface did not keep, and a
+                person deciding between "record what could not be settled" and
+                "authorize this plan" saw two verbs and no consequences. It is
+                the one place in Russell where a wrong click spends real
+                research or files a report into the archive. */}
             <div className="rs-choices">
               {request.choices.map((choice) => (
-                <button
-                  key={choice.key}
-                  type="button"
-                  onClick={() => {
-                    void answer(request.id, choice.key);
-                  }}
-                >
-                  {choice.label}
-                </button>
+                <span key={choice.key} className="rs-choice">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void answer(request.id, choice.key);
+                    }}
+                  >
+                    {choice.label}
+                  </button>
+                  <span className="rs-item-meta">{choice.consequence}</span>
+                </span>
               ))}
             </div>
           </li>

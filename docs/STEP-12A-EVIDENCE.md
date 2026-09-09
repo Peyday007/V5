@@ -6362,3 +6362,103 @@ operator decides.
   because nothing has produced real research to run it on.
 - **Blocked on a decision**: the envelope, and the worker submitting
   placeholders. Both are the operator's.
+
+---
+
+## 68. The answer a plan outside the envelope needed — 2026-09-09
+
+Evidence 67 recorded the stop and held the repair, because its shape depended on
+a decision. The operator chose: **a person authorizes the plan.**
+
+### What was missing
+
+`orc_8adc4708f56f49a8964b` parked because `planFitsEnvelope` refused its plan.
+The card offered two answers:
+
+- *Record what could not be settled, and finish* — file the report with the
+  unresolved questions named in it.
+- *Stop this work.*
+
+Neither is the decision. Nothing had been researched: the envelope refused the
+plan before research began. The one answer a person could give about a plan —
+read it and authorize it — was not on offer, and **every** genuine idea would
+have parked the same way, because `missionSpecFor` names one envelope frozen to
+a Florida/California licensing question and a real conversation is about
+something else.
+
+Worse, the offer that *was* there would have acted. `RECORD_GAPS` on a packet
+whose only fragment is a worker's `test-placeholder-fragment` would have filed
+invented work into the project's archive under a person's name.
+
+### `APPROVE_PLAN`
+
+It is `approvePlan` — the identical function the envelope calls when a plan does
+fit, and the identical one the console's review screen calls. So it widens
+nothing: the fragments move `PLANNED` → `QUEUED` under a named person, and the
+evidence gate, the verification pass, the synthesis check and all three audit
+roles decide what the research may conclude exactly as before. §16's own words
+are that the envelope decides whether research may *start*; this is the other
+way a start is authorized, and §16 already calls it `HUMAN`.
+
+The person is read from `answered_by_user_id`, which `answerHumanRequest` took
+from the authenticated principal — never from a body field — and
+`RESEARCH_PLAN_REVIEWED` carries it, so the row says who authorized research to
+begin rather than that a system did.
+
+### Which answers a packet can take is now two numbers, not a boolean
+
+```ts
+interface PacketShape { awaitingApproval: number; researched: number }
+```
+
+`hasEvidence` was `currentFragments(...).length > 0`, and that is what made
+`RECORD_GAPS` offerable on a packet holding only an unapproved proposal. The
+distinction the two numbers add is the whole point: `APPROVE_PLAN` is offered
+iff something is awaiting approval, `RECORD_GAPS` iff something was actually
+researched, `STOP` always.
+
+Two test fixtures were describing a plan as research — `createFragments` writes
+`PLANNED`, and both `withResearch` and the integration pass left it there while
+asserting the packet "had research". They now move the fragment to `BLOCKED`,
+which is what the stop they set up actually is. That is a fixture correction,
+not a weakened assertion: the tests that used to pass on a plan now pass on
+research, and three new ones cover the plan.
+
+### The card no longer says the wrong thing
+
+`stopWords` derives both sentences from the packet. An envelope refusal names
+the plan's own questions and says nothing has been researched yet; an exhausted
+repair ladder keeps the sentence it always had. This is mutation 18's fix one
+field along — `waitingOn` was derived and `whyNotRussell` was left a constant.
+
+And the consequence is finally rendered. `askHuman` has refused a choice without
+one since it was written, and `Views.tsx` drew the label alone — so the server
+enforced a promise the interface did not keep, at the one screen where a wrong
+click spends real research.
+
+### It reaches the row that motivated it
+
+`parkStoppedMissions` skips a mission already parked, so `rhr_acbf51e190924d99b5a3`
+— written before `APPROVE_PLAN` existed — could never have been given the answer
+that fits it. `reofferRequest` is guarded on `OPEN` and changes only the offer
+and the two sentences: never the state, never an answer, never who gave one. It
+is compared before it is written, so a card that already fits is not rewritten
+on every tick. Mutation 26's lesson at the same altitude.
+
+### Verified
+
+Typecheck clean. SQLite **1824 passed / 73 files**. Postgres **1849 passed / 74
+files, 0 failures**. `npm run build` clean. Three new tests: the envelope park
+and its authorization end to end through `runCycle`, the re-offer of a card
+written before the answer existed, and the refusal to authorize a plan that is
+no longer waiting.
+
+### Still not demonstrated
+
+Sourced evidence, an audit, a filed document, the writeback and the automatic
+follow-on. The plan now sitting in `orc_8adc4708f56f49a8964b` awaiting approval
+is the worker's placeholder, and authorizing it would start research on
+`accepts ["a"]`. **The remaining blocker is the worker surface, not the Brain**,
+and it is the operator's: a Cowork session that submits placeholder content
+three times running is one Brain refuses correctly every time and cannot make
+do the work.

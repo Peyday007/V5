@@ -2178,6 +2178,21 @@ legend {
   margin-top: 6px;
 }
 
+/* One column per answer: the button, and under it what pressing it does. The
+   consequence has always been required on the server and was never rendered. */
+.rs-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 220px;
+  min-width: 200px;
+  max-width: 340px;
+}
+
+.rs-choice .rs-item-meta {
+  margin: 0;
+}
+
 .rs-choices button {
   min-height: 40px;
   padding: 6px 12px;

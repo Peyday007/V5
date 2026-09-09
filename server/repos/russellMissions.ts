@@ -647,6 +647,22 @@ export async function listOpenRequests(projectId: string): Promise<RussellHumanR
   return rows.map(mapRequest);
 }
 
+/**
+ * The one open request about a mission, if there is one.
+ *
+ * `askHuman`'s `resume_key` is derived from the mission and its packet, so at
+ * most one exists per park; the ordering makes the read deterministic anyway.
+ */
+export async function openRequestFor(missionId: string): Promise<RussellHumanRequest | null> {
+  const rows = await getDb().all<RussellHumanRequestRow>(
+    `SELECT * FROM russell_human_requests
+      WHERE mission_id = ? AND state = 'OPEN'
+      ORDER BY created_at, rowid`,
+    [missionId],
+  );
+  return rows[0] ? mapRequest(rows[0]) : null;
+}
+
 export interface AnswerOutcome {
   ok: boolean;
   request: RussellHumanRequest | null;
@@ -768,6 +784,43 @@ export async function reopenRequest(input: {
             answered_at = NULL, choices = ?, recommendation = ?, updated_at = ?
       WHERE id = ? AND state = 'ANSWERED'`,
     [toJson(input.choices), input.recommendation, nowIso(), input.requestId],
+  );
+  return result.changes === 1;
+}
+
+/**
+ * Correct what an open request offers, when the packet's shape has moved.
+ *
+ * Guarded on `OPEN`, and it changes only the offer — never the state, never an
+ * answer, never who gave one. Deliberately separate from `reopenRequest`, which
+ * undoes an answer.
+ *
+ * It exists because a request is written once and the packet keeps changing.
+ * `rhr_acbf51e190924d99b5a3` was opened on 2026-09-09 offering "record what
+ * could not be settled" and "stop this work" for a packet whose plan had been
+ * refused before research began — and the sweep skips a mission already parked,
+ * so the answer that would have fitted could never have reached the card that
+ * needed it. That is the same half-fix mutation 26 had to correct: a repair
+ * that cannot reach the row that motivated it is half a repair.
+ */
+export async function reofferRequest(input: {
+  requestId: string;
+  choices: HumanRequestChoice[];
+  authorityNeeded: string;
+  whyNotRussell: string;
+}): Promise<boolean> {
+  if (input.choices.length === 0) return false;
+  const result = await getDb().run(
+    `UPDATE russell_human_requests
+        SET choices = ?, authority_needed = ?, why_not_russell = ?, updated_at = ?
+      WHERE id = ? AND state = 'OPEN'`,
+    [
+      toJson(input.choices),
+      input.authorityNeeded,
+      input.whyNotRussell,
+      nowIso(),
+      input.requestId,
+    ],
   );
   return result.changes === 1;
 }

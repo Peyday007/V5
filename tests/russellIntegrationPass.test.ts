@@ -57,9 +57,11 @@ import {
 import { NEEDS_HUMAN_CHOICES } from '../server/services/russell/needsHuman.ts';
 import {
   createFragments,
+  currentFragments,
   finishPass,
   getOrchestration,
   startPass,
+  updateFragment,
   updateOrchestration,
 } from '../server/repos/research.ts';
 import { listProbesForCandidate } from '../server/repos/russellProbes.ts';
@@ -638,6 +640,21 @@ describe('one question, walked the whole way', () => {
         attempt: 1,
       },
     ] as unknown as Parameters<typeof createFragments>[0]);
+    /*
+     * Researched, then blocked — which is what the stop below describes.
+     *
+     * `createFragments` writes `PLANNED`, meaning *proposed and awaiting
+     * approval*, and leaving it there would have set up a different stop
+     * entirely: a plan nobody has authorized rather than research that ran and
+     * could not clear its bar. The two have different answers, and this journey
+     * is about the second one.
+     */
+    for (const fragment of await currentFragments(mission.orchestrationId!)) {
+      await updateFragment(fragment.id, {
+        status: 'BLOCKED',
+        blockedReason: 'The only source on point is outside the authorized allowlist.',
+      });
+    }
     await updateOrchestration(mission.orchestrationId!, {
       status: 'NEEDS_HUMAN',
       failureReason:
@@ -653,12 +670,15 @@ describe('one question, walked the whole way', () => {
     expect(open).toHaveLength(1);
     const request = open[0]!;
     expect(request.missionId).toBe(mission.id);
-    // The choices offered are the ones Brain implements, which is the property
-    // the whole park depends on: an escalation whose answer does nothing is
-    // the defect, one level up.
-    expect(request.choices.map((choice) => choice.key).sort()).toEqual(
-      Object.keys(NEEDS_HUMAN_CHOICES).sort(),
-    );
+    /*
+     * The choices offered are the ones that can act on *this* packet, which is
+     * the property the whole park depends on: an escalation whose answer does
+     * nothing is the defect, one level up.
+     *
+     * Two, not three. The research ran and was blocked, so there is nothing
+     * awaiting approval and `APPROVE_PLAN` would be a button with no plan.
+     */
+    expect(request.choices.map((choice) => choice.key).sort()).toEqual(['RECORD_GAPS', 'STOP']);
 
     /* ---------------------------------------------------------------- 9 */
     // The person decides, and the same mission resumes.
