@@ -281,6 +281,35 @@ describe('the path from a captured idea to compiled work', () => {
     expect(String(spec['whyNow'])).toMatch(/does not answer this/);
   });
 
+  it('uses the person\'s question even when the idea predates the link to it', async () => {
+    /*
+     * The blocker production reported, and it was a real one.
+     *
+     * `rcn_85f9689b461c4972a1ba` was captured before anything wrote
+     * `source_message_id`, so it carried only the worker's restatement — "the
+     * counties Deal Dispatch cares about" — and the compiled fragment inherited
+     * it. The worker researching that fragment blocked it, correctly: neither
+     * the orchestration nor the project names those counties. A specification
+     * faithful to a summary is not faithful to the question.
+     *
+     * So an idea with no link falls back to the last message the person sent at
+     * or before it was captured, which is the same rule a turn already used.
+     */
+    await authorize();
+    const asked =
+      'How quickly does the county register show a property changing hands in Wayne and Oakland?';
+    const candidateId = await captureAnIdea(asked);
+    // The link removed, which is exactly the shape every idea captured before
+    // this was written has in production.
+    await getDb().run(`UPDATE russell_candidates SET source_message_id = NULL WHERE id = ?`, [
+      candidateId,
+    ]);
+
+    await judgeCandidate(candidateId);
+    const spec = specOf((await listCandidates({ projectId })).find((c) => c.id === candidateId)!);
+    expect(String(spec['assignment'])).toContain('Wayne and Oakland');
+  });
+
   it('names the project\'s own envelope rather than one for another question', async () => {
     /*
      * The defect this replaced. `missionSpecFor` wrote the literal string

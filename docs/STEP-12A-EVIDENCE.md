@@ -6599,3 +6599,70 @@ specification rule, the park, and a compiled plan checked against the real
 Typecheck clean. SQLite **1817 passed / 73 files**. Postgres **1842 passed / 74
 files, 0 failures**. `npm run build` clean. No migration: nothing about the
 schema changed.
+
+---
+
+## 70. The chain runs; the question it carried was a summary — 2026-09-09
+
+`602e475` deployed at 09:48:01Z. What production did with it, in rows:
+
+```
+rms_b37b8fe4688c46e0a48d   NEEDS_HUMAN -> FAILED     (retired: retired planning)
+rhr_acbf51e190924d99b5a3   OPEN        -> WITHDRAWN
+rms_684c676e930a47eeb29b   launched from a compiled specification
+orc_acecd5b97e5248a693ca   title  "County property tax assessment roll access:
+                                   bulk download or API, and terms"
+                           approval  RUSSELL_PUBLIC_RECORDS_V1 — authorized by
+                                     usr_14439966398243339341 at 09:41:42.655Z
+frg official-record        lanes [official_source, office_variation]
+                           sources: register of deeds, clerk/assessor/treasurer,
+                                    municipal clerk, state guidance, statute or
+                                    rule, official portal or fee schedule
+wki_e1c6db3a0e8d44f7b6c6   RESEARCH_FRAGMENT, claimed by wkr_1cdd82cfb2a54faf8edd
+```
+
+Everything that had never happened happened. The placeholder mission was retired
+automatically with its reason kept and its question withdrawn; the idea was
+recompiled and relaunched at no cost to it; the compiled plan was **approved by
+the envelope** rather than refused by one written for a different question about
+a different state; a `RESEARCH_FRAGMENT` was queued and a real worker claimed it.
+
+And the worker did real work. It blocked the fragment with a substantive reason:
+
+> The fragment asks about "the counties Deal Dispatch cares about" but neither
+> the orchestration …
+
+That is a worker researching and reporting an under-specification — not a
+placeholder. The subsystem that produced three of those in two days is gone, and
+what replaced it is being told, correctly, that the question is ambiguous.
+
+### The ambiguity was Brain's to fix, and it was the same defect one row back
+
+`rcn_85f9689b461c4972a1ba` was captured before anything wrote
+`source_message_id`, so it carried only a worker's restatement of what the
+person asked — *"the counties Deal Dispatch cares about"* — and the compiled
+fragment inherited it faithfully. §69 fixed the column going forward; every idea
+already in the database still had null there.
+
+So the compiler falls back to the last message the person sent at or before the
+idea was captured, which is the rule `askedMessageFor` already applied to a
+turn. Deterministic — both timestamps are fixed — so the compiled specification
+stays stable, which `launch()`'s one-mission-per-specification rule and the
+recovery step both depend on.
+
+The consequence is intended: the specification changes, so the recovery step
+retires the mission that ran on the old one and relaunches from the new one,
+costing the idea nothing. That is the mechanism working, not a second exception.
+
+### Verified
+
+Typecheck clean. SQLite **1818 passed / 73 files**. Postgres **1843 passed / 74
+files, 0 failures**. Build clean. No migration.
+
+**This is a second deployment for one instruction, and the reason is stated
+rather than assumed.** The first was the replacement; this is a defect the
+replacement's own production run reported, in the class the replacement exists
+to fix — a specification faithful to a summary rather than to the question. The
+instruction's standing direction is to continue operating the chain until it
+reaches filed evidence, and it cannot while the question it carries is one no
+worker can answer.

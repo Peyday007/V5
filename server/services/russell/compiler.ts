@@ -51,7 +51,7 @@
  * that view. The probe path is untouched and still reached the other way — the
  * archive contradicting the idea — and by a person's override.
  */
-import { getMessage } from '../../repos/russellConversations.ts';
+import { getMessage, listTurns } from '../../repos/russellConversations.ts';
 import {
   fillAssignmentTemplate,
   getApprovalEnvelope,
@@ -289,8 +289,8 @@ export async function compileMission(input: {
    * assignment quotes when it is still there — and the summary is the fallback
    * rather than the source. Neither is a finding; both are the question.
    */
-  const asked = candidate.sourceMessageId ? await getMessage(candidate.sourceMessageId) : null;
-  const request = asked && asked.role === 'USER' ? tidy(asked.content) : '';
+  const asked = await personsRequest(candidate);
+  const request = asked ? tidy(asked) : '';
   const statement = tidy(candidate.statement);
   if (!statement) return refuse('this idea has no statement to compile a mission from');
 
@@ -439,4 +439,41 @@ export async function compileMission(input: {
 
 function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+/**
+ * What the person actually asked, by id when the idea carries one and from the
+ * conversation when it does not.
+ *
+ * `source_message_id` is written now, but every idea captured before that was
+ * true has a null there — and the fallback is not cosmetic. Production's idea
+ * carried the worker's restatement, *"the counties Deal Dispatch cares about"*,
+ * and the compiled fragment inherited it; the worker researching it reported,
+ * correctly, that neither the orchestration nor the project names those
+ * counties. A specification faithful to a summary is not faithful to the
+ * question.
+ *
+ * The fallback is the same rule `askedMessageFor` applies to a turn: the last
+ * message the person sent at or before the idea was captured. Deterministic —
+ * both timestamps are fixed — so the compiled specification stays stable, which
+ * `launch()` and the recovery step both depend on.
+ *
+ * Returns null rather than guessing when there is no such message. The
+ * candidate's own statement is then the question, which is what it was always
+ * meant to be a summary of.
+ */
+async function personsRequest(candidate: RussellCandidate): Promise<string | null> {
+  if (candidate.sourceMessageId) {
+    const message = await getMessage(candidate.sourceMessageId);
+    if (message?.role === 'USER' && message.content.trim()) return message.content;
+  }
+  if (!candidate.conversationId) return null;
+  const turns = await listTurns(candidate.conversationId, 200);
+  const before = turns.filter(
+    (turn) =>
+      turn.role === 'USER' &&
+      turn.content.trim().length > 0 &&
+      turn.createdAt <= candidate.createdAt,
+  );
+  return before[before.length - 1]?.content ?? null;
 }
