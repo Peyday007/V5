@@ -41,7 +41,6 @@ import {
 import { createAccount, createRoutine } from '../server/repos/fleet.ts';
 import { createConversation } from '../server/repos/russellConversations.ts';
 import { beginTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
-import { PLAN_UNIT_KEY } from '../server/services/russell/planning.ts';
 import { getCandidate, listMergeHistory } from '../server/repos/russellCandidates.ts';
 import { assignNextBin, putBinUnitResult, releaseBin } from '../server/repos/bins.ts';
 import { requestCompletion } from '../server/services/bins/service.ts';
@@ -315,60 +314,6 @@ async function personAsks(
   return tick('journey');
 }
 
-/** The planning bin the loop most recently opened for this candidate. */
-async function planBinFor(candidateId: string): Promise<string> {
-  const rows = await getDb().all<{ id: string }>(
-    `SELECT id FROM bins
-      WHERE created_by_id LIKE ? AND state NOT IN ('CANCELLED','FAILED','COMPLETE')
-      ORDER BY rowid DESC LIMIT 1`,
-    [`russell:plan:${candidateId}%`],
-  );
-  const found = rows[0];
-  if (!found) throw new Error(`no open plan bin for ${candidateId}`);
-  return found.id;
-}
-
-function plan(options: {
-  cheapToReduce: boolean;
-  expectedValue: number;
-  followOn?: { title: string; question: string; whyNow: string } | null;
-}): Record<string, unknown> {
-  return {
-    observations: {
-      cheapToReduce: options.cheapToReduce,
-      expectedValue: options.expectedValue,
-      blockedBy: null,
-    },
-    mission: {
-      title: 'Assessment roll availability',
-      objective:
-        'Establish which counties publish assessment rolls in bulk or by API, and on what terms.',
-      assignment:
-        'For each county in scope, identify the publication route, the licence and the cadence.',
-      whyNow: 'Valuation would otherwise rest on an assumption about availability.',
-      acceptableSources: ['county assessor sites', 'state open-data portals'],
-      excludedSources: ['data resellers'],
-      evidence: ['a canonical URL per county', 'the licence terms as published'],
-      ...(options.followOn === undefined
-        ? {}
-        : { followOn: options.followOn }),
-    },
-  };
-}
-
-/** Every source answers with text about the subject, so the probe can settle. */
-function scriptFetch(body: string): void {
-  globalThis.fetch = (async () => ({
-    status: 200,
-    headers: { get: () => null },
-    text: async () => body,
-  })) as unknown as typeof globalThis.fetch;
-}
-
-function restoreFetch(): void {
-  globalThis.fetch = realFetch;
-}
-
 /**
  * Three completed audit passes in three distinct authenticated sessions, with
  * the lineage the independence evaluator actually reads.
@@ -489,96 +434,41 @@ describe('one question, walked the whole way', () => {
     expect(firstTick.planning).toContain(candidateId);
     expect(firstTick.answeredByArchive).not.toContain(candidateId);
 
-    await workerAnswers(
-      await planBinFor(candidateId),
-      PLAN_UNIT_KEY,
-      plan({ cheapToReduce: true, expectedValue: 70 }),
-    );
-    /*
-     * One tick again, and again because the ordering is deliberate: 1c takes
-     * the finished plan, and 3b opens the probe for whatever that judgment sent
-     * to EXPLORE. So the network has to be scripted before this call rather
-     * than before a later one — the bounded look happens inside it.
-     */
-    scriptFetch(
-      'Counties publish assessment rolls in bulk and by API. This page establishes ' +
-        'whether assessment roll data is available for bulk download, and on what terms ' +
-        'the licence permits reuse.',
-    );
-    let judged: TickReport;
-    try {
-      judged = await tick('journey');
-    } finally {
-      restoreFetch();
-    }
-    expect(judged.judged).toHaveLength(1);
-
-    const explored = (await getCandidate(candidateId))!;
-    // Condition 5: a priority *and* the reason it was given, both on the row.
-    expect(explored.priority).toBe('EXPLORE');
-    expect(explored.reason).toMatch(/cheap/i);
-
     /* ---------------------------------------------------------------- 4 */
-    // The bounded look, opened and run by the loop inside its envelope.
-    expect(judged.probed).toHaveLength(1);
-
-    const probes = await listProbesForCandidate(candidateId);
-    expect(probes).toHaveLength(1);
-    expect(probes[0]!.state).toBe('COMPLETE');
-    expect(probes[0]!.outcome).toBe('SUPPORTED');
+    /*
+     * The specification, compiled rather than asked for.
+     *
+     * This step used to hand a worker a `RUSSELL_PLAN` bin and then inject a
+     * good plan into it. That is the shape that let this journey pass while
+     * production's could not: in production the worker answered the same bin
+     * with padded placeholders three times, and no test noticed because every
+     * test supplied its own answer. There is nothing to inject now — the first
+     * tick judged the idea *and* wrote its specification.
+     */
+    const specified = (await getCandidate(candidateId))!;
+    expect(specified.state).toBe('QUEUED');
+    expect(specified.judgment?.['decidedBy']).toBe('COMPILER');
+    expect(specified.judgment?.['envelopeId']).toBe('RUSSELL_PUBLIC_RECORDS_V1');
+    const compiledSpec = specified.judgment?.['missionSpec'] as Record<string, unknown>;
+    expect(compiledSpec).toBeTruthy();
+    // The person's own question is what the assignment is about — whitespace
+    // normalised, because the assignment is one composed text.
+    expect(String(compiledSpec['assignment'])).toContain(
+      ASKED.replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, ''),
+    );
+    // And nothing was dispatched to produce it.
+    expect(await getDb().all(`SELECT id FROM bins WHERE kind = 'RUSSELL_PLAN'`, [])).toHaveLength(0);
 
     /* ---------------------------------------------------------------- 5 */
     /*
-     * And the look decides something.
+     * One mission, one orchestration, one bin, one reservation.
      *
-     * Before this repair the journey ended here: `exploring()` skips a
-     * candidate that already has a probe and `nextLaunchable()` reads only
-     * QUEUED, so the idea sat at EXPLORE with its answer beside it, selected by
-     * nothing, forever.
+     * Compiling and launching are steps 1d and 4 of the same pass, so an idea
+     * that becomes launchable is launched by the tick that specified it. The
+     * assertion is on the outcome rather than on which tick it happened in — a
+     * test that pinned the tick would be pinning an ordering detail.
      */
-    const deciding = await tick('journey');
-    expect(deciding.planning).toContain(candidateId);
-
-    const secondPass = await planBinFor(candidateId);
-    // The verdict reached the worker, rather than the second pass asking the
-    // same question with none of what the first one bought.
-    const bin = await getDb().all<{ manifest: string }>(`SELECT manifest FROM bins WHERE id = ?`, [
-      secondPass,
-    ]);
-    expect(bin[0]!.manifest).toMatch(/BOUNDED LOOK HAS ALREADY BEEN TAKEN[\s\S]*SUPPORTED/);
-
-    await workerAnswers(
-      secondPass,
-      PLAN_UNIT_KEY,
-      plan({
-        // Answered honestly by a worker that has read the verdict. Brain
-        // overrides it to false regardless, which is what stops the idea
-        // looping back to EXPLORE and being probed again.
-        cheapToReduce: true,
-        expectedValue: 85,
-        followOn: {
-          title: 'Terms of use for the publishing counties',
-          question:
-            'Record the terms of use for whichever counties were found to publish, so a later design knows what it may rely on.',
-          whyNow: 'A design that relies on this data has to know what the licence permits.',
-        },
-      }),
-    );
-    const queued = await tick('journey');
-    expect(queued.judged).toHaveLength(1);
-
-    const readyToLaunch = (await getCandidate(candidateId))!;
-    expect(readyToLaunch.state).toBe('QUEUED');
-    expect(readyToLaunch.priority).toBe('MUST_DO');
-
-    /* ---------------------------------------------------------------- 6 */
-    /*
-     * One mission, one orchestration, one bin, one reservation — launched by
-     * the same tick that queued it, because step 4 follows 1c in one pass. The
-     * loop is deliberately eager: an idea that becomes launchable does not
-     * wait a cycle for somebody to notice.
-     */
-    expect(queued.launched).toHaveLength(1);
+    if ((await listMissions({ projectId })).length === 0) await tick('journey');
 
     const missions = await listMissions({ projectId });
     expect(missions).toHaveLength(1);
@@ -757,26 +647,39 @@ describe('one question, walked the whole way', () => {
     const followOn = (await getCandidate(followOnId))!;
     expect(followOn.followOnOfMissionId).toBe(mission.id);
     expect(followOn.visibility).toBe('SHARED');
-    expect(followOn.priority).toBeNull();
+    /*
+     * Derived from what the packet recorded, not declared in advance.
+     *
+     * A worker's plan could name the question finishing it would leave open. A
+     * compiled specification cannot and does not — so the follow-on is read
+     * from the requirement the filed report says it did not answer, which is a
+     * fact about the run rather than a prediction about it. The parent's own
+     * question is what it repeats, because that is what went unanswered.
+     */
+    expect(followOn.statement).toBeTruthy();
+    expect(followOn.title).toMatch(/^Unsettled:/);
 
-    // Judged, planned, queued and launched — the ordinary path, with no
-    // follow-on of its own, so the chain ends here rather than recurring.
+    // Judged and specified by the same tick that created it — the compiler is
+    // synchronous, so 1a-ii creates the idea and 1d judges it in one pass — and
+    // launched by the next. The chain ends here rather than recurring:
+    // `followOnsToCreate` excludes an idea that is itself a follow-on.
+    /*
+     * Judged, specified and launched — possibly all inside the tick that
+     * created it, because the compiler is synchronous: 1a-ii creates the idea,
+     * 1d specifies it and step 4 launches it in one pass. So the assertions are
+     * on the rows rather than on which tick's report carries them.
+     */
     await tick('journey');
-    await workerAnswers(
-      await planBinFor(followOnId),
-      PLAN_UNIT_KEY,
-      plan({ cheapToReduce: false, expectedValue: 65, followOn: null }),
-    );
-    const launchedFollowOn = await tick('journey');
     expect((await getCandidate(followOnId))!.state).toBe('QUEUED');
-    expect(launchedFollowOn.launched).toHaveLength(1);
-    expect(launchedFollowOn.linkedNext).toEqual([
-      { missionId: mission.id, nextMissionId: launchedFollowOn.launched[0]! },
-    ]);
+
+    const followOnMission = (await listMissions({ projectId })).find(
+      (entry) => entry.candidateId === followOnId,
+    );
+    expect(followOnMission, 'the follow-on never launched').toBeTruthy();
 
     // Condition 15, from the row it is actually read from.
     const parent = (await getMission(mission.id))!;
-    expect(parent.nextMissionId).toBe(launchedFollowOn.launched[0]!);
+    expect(parent.nextMissionId).toBe(followOnMission!.id);
 
     // And exactly one. A further tick creates no second follow-on for either
     // mission, and links nothing further.
@@ -810,11 +713,6 @@ describe('a person disagrees with Russell', () => {
       [projectId],
     );
     const candidateId = rows[0]!.id;
-    await workerAnswers(
-      await planBinFor(candidateId),
-      PLAN_UNIT_KEY,
-      plan({ cheapToReduce: false, expectedValue: 40 }),
-    );
     await tick('journey');
 
     const russellSaid = (await getCandidate(candidateId))!;
@@ -1007,11 +905,6 @@ describe('a merge is visible, or it is not reversible', () => {
         projectId,
       ])
     )[0]!.id;
-    await workerAnswers(
-      await planBinFor(candidateId),
-      PLAN_UNIT_KEY,
-      plan({ cheapToReduce: false, expectedValue: 40 }),
-    );
     await tick('journey');
 
     await withRoutes(async (call) => {

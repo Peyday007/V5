@@ -6462,3 +6462,140 @@ is the worker's placeholder, and authorizing it would start research on
 and it is the operator's: a Cowork session that submits placeholder content
 three times running is one Brain refuses correctly every time and cannot make
 do the work.
+
+---
+
+## 69. The worker is out of mission planning — 2026-09-09
+
+The operator's instruction: *replace the bad subsystem.* This is that
+replacement, and the case for it is four facts rather than an opinion.
+
+The `RUSSELL_PLAN` bin asked a subscription worker to write the mission
+specification. Across three occasions the same worker identity answered with
+padded placeholders — `{title: 'test', …}` on 09-07, then `"test placeholder
+title long enough"` with a fragment named `test-placeholder-fragment` accepting
+source `"a"` on 09-09. The manifest carried the real question, stated the
+placeholder rule in words, and named every bound; `WORKER_INSTRUCTIONS` says
+never submit one. Brain refused all three correctly and the idea went nowhere
+each time. And the connected tests could not have caught it, because every one
+of them injected its own good plan.
+
+### What replaced it
+
+`services/russell/compiler.ts`. `judgeCandidate` now compiles the specification
+in the same call that judges the idea — no bin, no dispatch, no waiting — from
+the candidate, the person's own message, the archive's answer, and the limits of
+the approval envelope the project's standing authorization names.
+
+**Specifying is not researching.** What a mission must establish is a
+restatement of a question somebody already asked, bounded by limits already
+fixed in code. Nothing in the compiled output is a finding about the world. The
+search, the claims, the seven gate conditions, the verification pass, the three
+audit roles and the synthesis are untouched and still entirely the fleet's.
+
+**The compiler cannot widen its own limits.** Source classes, jurisdiction,
+exclusions and the evidence floor are read from the envelope, which lives in
+code and is named by id — §16's property, applied to a compiler exactly as it
+applied to a model.
+
+**What Brain cannot judge, it does not claim to.** `cheapToReduce` and
+`expectedValue` were genuinely semantic; a compiler answers neither, and the
+judgment records `NOT_ASSESSED` rather than a `false` and a `0` that read as
+findings. The stated consequence: nothing now sends an idea to `EXPLORE` because
+a look would be cheap. The probe path is untouched and still reached the other
+way — the archive contradicting the idea — and by a person's override.
+
+### The envelope
+
+`RUSSELL_STATE_LICENSING_V1` was hard-coded onto every Russell mission in every
+project: an acceptance envelope for one licensing question about Florida and
+California, listing **Michigan** in its own `forbiddenScope`. Every genuine Deal
+Dispatch idea was therefore judged against limits for a different question about
+a different place, and refused.
+
+`RUSSELL_PUBLIC_RECORDS_V1` is the standing authorization: official Michigan
+state, county and municipal records, read-only, no paid API, no purchased
+records, no contact with any person or office, no publishing, no external
+effect. Selected by project slug from a table in code; a project with no entry
+compiles nothing.
+
+Two repairs came with it.
+
+- **The digest pin could never have matched.** `RUSSELL_STATE_LICENSING_V1` set
+  `assignmentSha256: sha256(TEMPLATE)` with a comment saying the digest was
+  checked "against the template's shape", and `planFitsEnvelope` hashed the
+  *substituted* assignment. `assignmentFitsTemplate` is the mechanism that
+  comment described: every literal word around the `{PLACEHOLDER}` fills is
+  pinned, only the fills vary.
+- **`forbiddenActions` contained the word `publish`.** In a public-records
+  envelope that refused "establish which counties publish permit data" and every
+  completion criterion asking for the date a source was published — the check
+  refusing exactly the work it exists to permit. It is phrases that describe
+  Brain *doing* something now. The prohibition on publishing is carried three
+  other ways: the pinned out-of-scope clause, `ALWAYS_PROHIBITED`, and
+  `max_external_spend` of zero.
+
+### Recovery, not repair
+
+Four production missions ran on specifications the retired subsystem wrote.
+They are defects rather than attempts, so they must not count against the idea.
+The loop identifies them from rows alone — it asks the compiler what the idea's
+specification *is* and compares — retires the mission with its own reason
+preserved and any open request withdrawn, and recompiles. §5 holds throughout.
+
+`launch()` therefore counts specifications rather than rows: one mission per
+specification, with `MAX_MISSION_ROWS` underneath as a runaway guard that is
+explicitly not an evidence rule. A specification no compiler produces neither
+counts nor blocks.
+
+The redo step is gone with the bin. With one specification per idea, "a repair
+must not repeat a tried strategy" and "there is nothing else to try" are the
+same sentence, so an idea whose only specification produced no report is
+**parked** with the run's own words — §24's answering transition — instead of
+being refused in silence every thirty seconds.
+
+### Defects the tests found before the deploy
+
+- **The compiled specification was not stable over time.** `whyNow` named how
+  many archive claims the check weighed, and that number moves — so "is this the
+  compiler's specification" stopped being decidable, which would have relaunched
+  ideas and retired healthy missions, both silently. The count is recorded on
+  the fragment instead, where nothing compares it.
+- **A launch replay re-ran the approval gate.** `completeLaunch` is re-entered
+  on every tick while a mission is live; it called `placePlan` unconditionally
+  and advanced when the counts lined up, so a fragment a person had not approved
+  was approved by a replay of a launch that had already happened.
+- **`source_message_id` was a column nothing ever wrote.** The compiler's "the
+  person's original request" input was always null and silently fell back to a
+  worker's restatement. `applyTurn` now carries the message id onto the idea it
+  produces.
+- **`unjudged()` excluded a candidate with a completed plan bin.** Written to
+  stop double-dispatch; with the bin gone it would have excluded exactly the
+  ideas the retired subsystem had touched, for ever.
+- **`QUEUED` counted as researched.** A plan the envelope approves moves straight
+  to `QUEUED`, so `RECORD_GAPS` became offerable for work that had not started —
+  the same harm §68 fixed for `PLANNED`, one status along.
+
+### The follow-on
+
+A compiled specification declares none: knowing what a report leaves open
+requires having read it. So it is derived from what the packet *recorded* — a
+mandatory requirement the filed report did not answer, by the same rule
+`assessPacket` uses — and only for a packet that reached `COMPLETE_WITH_GAPS`.
+One generation: `followOnsToCreate` excludes an idea that is itself a follow-on,
+because a derived follow-on has no stopping point of its own.
+
+### The tests
+
+Every `GOOD_PLAN` injection is gone. `russellIntegrationPass` walks the journey
+from a person's first message with nothing supplied but the worker's answers and
+the network, and the specification step now asserts that **no bin was created**.
+`russellConnectedPath` drives `runCycle` for the recovery, the one-per-
+specification rule, the park, and a compiled plan checked against the real
+`planFitsEnvelope`.
+
+### Verified
+
+Typecheck clean. SQLite **1817 passed / 73 files**. Postgres **1842 passed / 74
+files, 0 failures**. `npm run build` clean. No migration: nothing about the
+schema changed.

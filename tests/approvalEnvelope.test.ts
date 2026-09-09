@@ -159,7 +159,7 @@ describe('the source classes the authorized assignment actually names', () => {
     // Bumped when the checks changed meaning, so an approval recorded before
     // the correction and one recorded after are distinguishable in the audit.
     expect(verdict.validatorVersion).toBe(ENVELOPE_VALIDATOR_VERSION);
-    expect(verdict.validatorVersion).toBe('2026-09-08.1');
+    expect(verdict.validatorVersion).toBe('2026-09-09.1');
   });
 });
 

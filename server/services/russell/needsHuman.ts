@@ -125,10 +125,29 @@ export type NeedsHumanChoice = keyof typeof NEEDS_HUMAN_CHOICES;
  * so `RECORD_GAPS` would be a button that does nothing — the failure this
  * module exists to fix, wearing the module's own clothes.
  */
+/** Fragment statuses that mean the research itself has actually happened. */
+const RESEARCHED_STATUSES = new Set([
+  'RUNNING',
+  'VALIDATING',
+  'ACCEPTED',
+  'BLOCKED',
+  'REJECTED',
+  'NEEDS_HUMAN',
+]);
+
 export interface PacketShape {
   /** Fragments proposed and not yet approved — what `approvePlan` acts on. */
   awaitingApproval: number;
-  /** Fragments past the plan — what a filed report could be made of. */
+  /**
+   * Fragments the research has actually reached — what a filed report is of.
+   *
+   * `QUEUED` is deliberately neither. An approved fragment nobody has started
+   * is not a plan waiting for a decision and it is not research either, so
+   * offering to "record what could not be settled" for it would file a report
+   * about work that has not begun. That is the same harm as offering it for a
+   * `PLANNED` fragment, one status along, and the compiled path made it
+   * reachable: a plan the envelope approves moves straight to `QUEUED`.
+   */
   researched: number;
 }
 
@@ -145,9 +164,14 @@ export interface PacketShape {
  * under a person's name.
  */
 export async function packetShape(orchestrationId: string): Promise<PacketShape> {
-  const fragments = await currentFragments(orchestrationId);
-  const awaitingApproval = fragments.filter((fragment) => fragment.status === 'PLANNED').length;
-  return { awaitingApproval, researched: fragments.length - awaitingApproval };
+  return shapeOf(await currentFragments(orchestrationId));
+}
+
+function shapeOf(fragments: readonly ResearchFragment[]): PacketShape {
+  return {
+    awaitingApproval: fragments.filter((fragment) => fragment.status === 'PLANNED').length,
+    researched: fragments.filter((fragment) => RESEARCHED_STATUSES.has(fragment.status)).length,
+  };
 }
 
 export function choicesFor(shape: PacketShape): HumanRequestChoice[] {
@@ -297,11 +321,14 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
      * *which* answers can do anything.
      */
     const fragments = await currentFragments(orchestration.id);
-    const awaiting = fragments.filter((fragment) => fragment.status === 'PLANNED');
-    const shape: PacketShape = {
-      awaitingApproval: awaiting.length,
-      researched: fragments.length - awaiting.length,
-    };
+    // Sorted by key, because the card's words are compared before they are
+    // rewritten and `currentFragments` orders by `fragment_index` alone — two
+    // fragments sharing an index would otherwise read back in either order and
+    // the offer would look changed on every tick.
+    const awaiting = fragments
+      .filter((fragment) => fragment.status === 'PLANNED')
+      .sort((a, b) => a.fragmentKey.localeCompare(b.fragmentKey));
+    const shape = shapeOf(fragments);
     const hasEvidence = fragments.length > 0;
 
     /*

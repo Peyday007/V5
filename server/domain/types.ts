@@ -3785,7 +3785,6 @@ export const COMPLETION_CONTRACTS = [
   // priority with `judge()`. Brain asks its own archive first and never asks
   // the worker whether the project already answers the question; see
   // `services/russell/planning.ts`.
-  'RUSSELL_PLAN_V1',
 ] as const;
 export type CompletionContract = (typeof COMPLETION_CONTRACTS)[number];
 

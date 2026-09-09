@@ -27,13 +27,22 @@
 import type {
   Layer,
   Project,
+  ResearchFragment,
   ResearchOrchestration,
   ResearchRun,
 } from '../../domain/types.ts';
 import { getProject } from '../../repos/projects.ts';
 import { listLayers } from '../../repos/layers.ts';
 import { createRun } from '../../repos/runs.ts';
-import { createOrchestration, getOrchestration, updateOrchestration } from '../../repos/research.ts';
+import {
+  createFragments,
+  createOrchestration,
+  getOrchestration,
+  listFragments,
+  updateOrchestration,
+  type CreateFragmentInput,
+} from '../../repos/research.ts';
+import { coverProposal } from './coverageGate.ts';
 import { runTypeForNewPacket } from '../runArtifacts.ts';
 import { inventoryProject } from '../reconcile/plan.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
@@ -233,7 +242,54 @@ export interface StartPacketInput {
    * one.
    */
   unresolvedGap?: { policy: 'RECORD_GAPS'; authorizedBy: string } | undefined;
+  /**
+   * A decomposition the caller already has, placed instead of asked for.
+   *
+   * Absent is the original behaviour and is still how Step 9's and Step 10's
+   * packets run: `advancePacket` finds no fragments and queues a `RESEARCH_PLAN`
+   * work item for a worker to propose them.
+   *
+   * Present means the packet is planned before it advances, so no planning item
+   * is ever queued and the packet arrives directly at the approval gate. That is
+   * what removing the worker from Russell's planning actually requires:
+   * compiling the mission and then still asking a worker for the fragments would
+   * have left the decomposition exactly where `test-placeholder-fragment` came
+   * from.
+   *
+   * It changes nothing downstream. The fragments are written `PLANNED` through
+   * the same repository call a worker's proposal goes through, they are charged
+   * to the same reservation, and the approval envelope judges them exactly as it
+   * would judge a worker's.
+   */
+  plan?: PlannedFragmentInput[] | undefined;
+  /**
+   * Run once, after the orchestration exists and before the plan is placed.
+   *
+   * It exists for one ordering that is otherwise impossible to get right from
+   * outside. `createFragments` charges the fragments to the standing authority
+   * of whichever Russell mission points at the orchestration, and a caller
+   * cannot point its mission at an orchestration whose id it has not been given
+   * yet — so a plan placed inside this call would be charged to nothing, and
+   * the reservation rows a person is shown as "used so far" would silently stop
+   * being written. Removing a stopping rule is not the same as removing the
+   * evidence, and this is what keeps the two apart.
+   *
+   * Anything it throws propagates. A caller that could not attach its own row
+   * must not have a packet running underneath it.
+   */
+  attach?: ((orchestrationId: string) => Promise<void>) | undefined;
 }
+
+/**
+ * One fragment as a caller supplies it: everything except where it lives.
+ *
+ * The orchestration, project and layer are filled in here, because they do not
+ * exist until this function has created them.
+ */
+export type PlannedFragmentInput = Omit<
+  CreateFragmentInput,
+  'orchestrationId' | 'projectId' | 'layerId' | 'fragmentIndex'
+>;
 
 export interface StartPacketResult {
   project: Project;
@@ -338,6 +394,10 @@ export async function startPacket(input: StartPacketInput): Promise<StartPacketR
     });
   }
 
+  if (input.attach) await input.attach(orchestration.id);
+
+  if (input.plan && input.plan.length > 0) await placePlan(orchestration, input.plan);
+
   const advanced = await advancePacket(orchestration.id);
   // Re-read, so the caller is handed the row as it now is rather than as it was
   // a write ago. The policy above is part of the packet's identity.
@@ -352,6 +412,66 @@ export async function startPacket(input: StartPacketInput): Promise<StartPacketR
     archive,
     claimants: await countClaimants(project.id, advanced),
   };
+}
+
+/**
+ * Place a decomposition the caller compiled, with the rows a proposal produces.
+ *
+ * Deliberately not just `createFragments`. A worker's proposal goes through
+ * `coverProposal`, which writes the boundary contract, one requirement per
+ * fragment and the archive's coverage decision about each — and everything
+ * downstream reads those. `assessPacket`'s mandatory-coverage check reads the
+ * requirements; a packet with none passes it having checked nothing, which is
+ * the silent weakening invariant 20 exists to prevent. So a compiled plan
+ * writes exactly the same rows through exactly the same function.
+ *
+ * The fragments are created whatever the coverage decision says. The archive
+ * was already asked, before any of this existed, by the judgment that produced
+ * the specification; this second and finer read is recorded beside the
+ * requirement rather than used to cancel work the first one authorized.
+ *
+ * Idempotent by fragment key: `coverProposal` skips a requirement whose key it
+ * already wrote, and this returns early when the packet already has fragments.
+ */
+export async function placePlan(
+  orchestration: ResearchOrchestration,
+  plan: PlannedFragmentInput[],
+): Promise<ResearchFragment[]> {
+  if (plan.length === 0) return [];
+  const already = await listFragments(orchestration.id);
+  if (already.length > 0) return already;
+
+  const coverage = await coverProposal({
+    orchestration,
+    proposed: plan.map((fragment) => ({
+      key: fragment.fragmentKey,
+      question: fragment.question,
+      geography: fragment.geography ?? null,
+      timeframe: fragment.timeframe ?? null,
+      population: fragment.population ?? null,
+      definitions: fragment.definitions ?? null,
+      requiredEvidence: fragment.requiredEvidence,
+      completionCriteria: fragment.completionCriteria,
+      whyItMatters: fragment.whyItMatters ?? null,
+    })),
+  });
+  const requirementByKey = new Map(
+    coverage.decisions.map((decision) => [decision.fragmentKey, decision.requirementId]),
+  );
+
+  return await createFragments(
+    plan.map((fragment, index) => {
+      const requirementId = requirementByKey.get(fragment.fragmentKey);
+      return {
+        ...fragment,
+        orchestrationId: orchestration.id,
+        projectId: orchestration.projectId,
+        layerId: orchestration.layerId,
+        fragmentIndex: index,
+        requirementIds: requirementId ? [requirementId] : [],
+      };
+    }),
+  );
 }
 
 /** How many connected workers could actually claim what was just queued. */

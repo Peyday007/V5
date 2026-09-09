@@ -16,6 +16,7 @@ import { createUser, createWorker } from '../server/repos/identity.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import { getCandidate, recordJudgment } from '../server/repos/russellCandidates.ts';
+import { judgeCandidate } from '../server/services/russell/planning.ts';
 import { createGoal, listGoals, listReservations } from '../server/repos/russellAuthority.ts';
 import { authorityFor } from '../server/services/russell/authority.ts';
 import {
@@ -956,7 +957,11 @@ describe('the loop keeps going without anybody watching', () => {
     const conversation = await ownedConversation('Fragments');
     const mission = await parkedMission(conversation.id, 'two questions only', {
       workPolicy: 'CAPPED',
-      maxFragments: 2,
+      // Three, because the launch itself now places one: a compiled mission
+      // arrives with its decomposition rather than asking a worker for it, and
+      // that fragment is charged like any other. Two of the three are this
+      // test's own.
+      maxFragments: 3,
     });
 
     const base = {
@@ -978,18 +983,22 @@ describe('the loop keeps going without anybody watching', () => {
     const brief = (index: number, key: string) =>
       ({ ...base, fragmentIndex: index, fragmentKey: key, question: `What about ${key}?` });
 
+    // One is already spent: the compiled launch placed and charged the
+    // packet's own question. So the grant of three leaves two.
+    expect((await authorityFor({ projectId })).grant!.spend.maxFragments.used).toBe(1);
+
     // Inside the allowance.
-    await createFragments([brief(0, 'coverage'), brief(1, 'terms')] as unknown as Parameters<
+    await createFragments([brief(1, 'coverage'), brief(2, 'terms')] as unknown as Parameters<
       typeof createFragments
     >[0]);
-    expect((await authorityFor({ projectId })).grant!.spend.maxFragments.used).toBe(2);
+    expect((await authorityFor({ projectId })).grant!.spend.maxFragments.used).toBe(3);
 
     // Beyond it, refused — and nothing half-created.
     await expect(
-      createFragments([brief(2, 'cadence')] as unknown as Parameters<typeof createFragments>[0]),
-    ).rejects.toThrow(/12|2 fragment|in total/i);
-    expect(await currentFragments(mission.orchestrationId!)).toHaveLength(2);
-    expect((await authorityFor({ projectId })).grant!.spend.maxFragments.used).toBe(2);
+      createFragments([brief(3, 'cadence')] as unknown as Parameters<typeof createFragments>[0]),
+    ).rejects.toThrow(/3 fragment|in total/i);
+    expect(await currentFragments(mission.orchestrationId!)).toHaveLength(3);
+    expect((await authorityFor({ projectId })).grant!.spend.maxFragments.used).toBe(3);
 
     /*
      * A repair is the same question with a different search strategy, so it
@@ -998,9 +1007,9 @@ describe('the loop keeps going without anybody watching', () => {
      * allowance the owner set per question.
      */
     await createFragments([
-      { ...brief(0, 'coverage'), attempt: 2 },
+      { ...brief(1, 'coverage'), attempt: 2 },
     ] as unknown as Parameters<typeof createFragments>[0]);
-    expect((await authorityFor({ projectId })).grant!.spend.maxFragments.used).toBe(2);
+    expect((await authorityFor({ projectId })).grant!.spend.maxFragments.used).toBe(3);
   });
 
   it('lets an uncapped grant break a packet down as finely as the evidence needs', async () => {
@@ -1034,16 +1043,18 @@ describe('the loop keeps going without anybody watching', () => {
     };
     const briefs = Array.from({ length: 20 }, (_, index) => ({
       ...base,
-      fragmentIndex: index,
+      fragmentIndex: index + 1,
       fragmentKey: `question-${index}`,
       question: `What about question ${index}?`,
     }));
 
     await createFragments(briefs as unknown as Parameters<typeof createFragments>[0]);
-    expect(await currentFragments(mission.orchestrationId!)).toHaveLength(20);
-    // Counted, all twenty, with nothing to replenish.
+    // Twenty-one: the compiled launch placed the packet's own question, and
+    // these twenty are on top of it.
+    expect(await currentFragments(mission.orchestrationId!)).toHaveLength(21);
+    // Counted, all of them, with nothing to replenish.
     const view = await authorityFor({ projectId });
-    expect(view.grant!.spend.maxFragments.used).toBe(20);
+    expect(view.grant!.spend.maxFragments.used).toBe(21);
     expect(view.grant!.spend.maxFragments.limit).toBeNull();
   });
 
@@ -1426,6 +1437,7 @@ describe('the loop keeps going without anybody watching', () => {
      */
     const conversation = await ownedConversation('Nothing to record');
     const mission = await parkedMission(conversation.id);
+    await withNoResearchAtAll(mission.orchestrationId!);
 
     await updateOrchestration(mission.orchestrationId!, {
       status: 'NEEDS_HUMAN',
@@ -1474,6 +1486,7 @@ describe('the loop keeps going without anybody watching', () => {
      */
     const conversation = await ownedConversation('Already parked');
     const mission = await parkedMission(conversation.id);
+    await withNoResearchAtAll(mission.orchestrationId!);
 
     await updateOrchestration(mission.orchestrationId!, {
       status: 'NEEDS_HUMAN',
@@ -1563,6 +1576,9 @@ describe('the loop keeps going without anybody watching', () => {
     });
 
     const resumed = await tick('instance-a');
+    // Nothing refused: an answer recorded as acted-on that was not is the
+    // failure this whole path exists to prevent, so the report is checked too.
+    expect(resumed.unresolvedAnswers).toEqual([]);
     expect(resumed.resumed).toContain(request.id);
     expect((await getHumanRequest(request.id))!.state).toBe('RESUMED');
 
@@ -2454,24 +2470,42 @@ async function parkedMission(
     conversationId,
     visibility: 'PRIVATE',
   });
+
+  /*
+   * Launched from the compiled specification, not from one written here.
+   *
+   * A hand-written specification is exactly what the loop's recovery step now
+   * looks for: it asks the compiler what this idea's specification is and
+   * retires any mission that ran on a different one, because that is how a
+   * mission the retired worker-planning subsystem specified is identified from
+   * rows alone. A fixture that invented its own would be retired on the first
+   * tick, and every test built on it would be testing the recovery rather than
+   * whatever it meant to test.
+   */
+  await judgeCandidate(captured.candidate!.id);
+  const judged = (await getCandidate(captured.candidate!.id))!;
+  const spec = judged.judgment['missionSpec'] as Record<string, unknown>;
   const launched = await launch({
-    projectId,
-    layerId,
+    ...(spec as unknown as Omit<Parameters<typeof launch>[0], 'candidateId'>),
     candidateId: captured.candidate!.id,
-    conversationId,
-    visibility: 'PRIVATE',
-    title: 'County permit data availability',
-    assignment: 'Which Michigan counties publish building permit data, and on what terms?',
-    objective: 'Settle the coverage position.',
-    whyNow: 'The layer names coverage as open.',
-    acceptableSources: ['county government portals'],
-    excludedSources: [],
-    evidence: ['a named portal per county'],
-    startedBy: { kind: 'PERSON', id: userId },
-    envelopeId: 'RUSSELL_STATE_LICENSING_V1',
-    authorizedBy: userId,
   });
   return launched.mission!;
+}
+
+/**
+ * A packet holding nothing at all.
+ *
+ * A compiled launch places its decomposition at creation, so every packet now
+ * starts with one `PLANNED` fragment. The state these tests are about — a
+ * planning item that finished without recording anything — is therefore no
+ * longer reachable through the ordinary path, which is the point of the
+ * replacement. It is still reachable as *data*: rows written before that was
+ * true, and the production packet `orc_e1afa97f566d4b468373` is one. So the
+ * tests construct it explicitly rather than relying on a path that can no
+ * longer produce it.
+ */
+async function withNoResearchAtAll(orchestrationId: string) {
+  await getDb().run(`DELETE FROM research_fragments WHERE orchestration_id = ?`, [orchestrationId]);
 }
 
 /**

@@ -904,6 +904,17 @@ export async function applyTurn(binId: string): Promise<ApplyTurnResult> {
     conversationId: conversation.id,
     owner,
     askedText: asked?.content ?? null,
+    /*
+     * The person's own message, carried onto the idea it produced.
+     *
+     * `russell_candidates.source_message_id` has existed since the table did
+     * and nothing ever wrote it — the column was there, the repository accepted
+     * it, and the one caller omitted it. That was invisible until the mission
+     * compiler went looking for "the person's original request" and silently
+     * got null every time, falling back to the worker's restatement of the
+     * question rather than the question.
+     */
+    askedMessageId: asked?.id ?? null,
   });
   await recordProduced(messageId, applied.produced);
 
@@ -951,6 +962,8 @@ async function applyValidated(input: {
   owner: Principal;
   /** What the person said, which is what the capture gate judges. */
   askedText: string | null;
+  /** The id of that message, so the idea can point back at it. */
+  askedMessageId?: string | null;
 }): Promise<{
   produced: Record<string, unknown>;
   candidateId: string | null;
@@ -1028,6 +1041,9 @@ async function applyValidated(input: {
         // private however public the project is.
         visibility: conversation.visibility,
         conversationId,
+        // The primary text this idea came from. Everything downstream that
+        // wants what somebody actually asked reads it through here.
+        sourceMessageId: input.askedMessageId ?? null,
         // The worker's claim that this repeats something already open. It is
         // carried, not obeyed: `capture` re-resolves it in scope and holds the
         // two statements to `SEMANTIC_MERGE_FLOOR` before merging anything.

@@ -37,6 +37,7 @@ import { createHash } from 'node:crypto';
 import { createBin, getBin } from '../../repos/bins.ts';
 import { getLayer } from '../../repos/layers.ts';
 import {
+  countMissionsForCandidate,
   getMission,
   latestMissionForCandidate,
   specificationsTried,
@@ -50,7 +51,10 @@ import {
   releaseReservation,
   reserve,
 } from '../../repos/russellAuthority.ts';
-import { startPacket } from '../research/startPacket.ts';
+import { placePlan, startPacket } from '../research/startPacket.ts';
+import { advancePacket } from '../research/packetRunner.ts';
+import { getOrchestration, listFragments } from '../../repos/research.ts';
+import type { PlannedFragment } from './compiler.ts';
 import {
   separationCapacity,
   separationShortfall,
@@ -88,6 +92,16 @@ export interface LaunchInput {
   acceptableSources: string[];
   excludedSources: string[];
   evidence: string[];
+  /**
+   * The decomposition, compiled with the specification.
+   *
+   * Present means the packet arrives planned and `startPacket` places these as
+   * its fragments; absent means it queues a `RESEARCH_PLAN` work item and a
+   * worker proposes them, which is still how Step 9's and Step 10's packets
+   * work. Russell's always carry one, because the planning a worker did here is
+   * the subsystem that was replaced.
+   */
+  plan?: PlannedFragment[];
   /** Who asked. Carried into the packet's own audit row, never used to authorize. */
   startedBy: { kind: 'PERSON' | 'BRAIN'; id: string };
   /**
@@ -116,6 +130,15 @@ export interface LaunchOutcome {
    * person can move, and it must reach one.
    */
   refusedBy?: 'IN_TOTAL' | 'AT_ONCE';
+  /**
+   * A named refusal the loop acts on rather than a sentence it matches.
+   *
+   * `ALREADY_RESEARCHED` is the one that needs an answering transition: the
+   * idea's only specification has been researched and did not produce a report,
+   * so nothing further will happen to it and leaving it `QUEUED` would be a
+   * silent stall on every tick for ever.
+   */
+  kind?: 'ALREADY_RESEARCHED';
 }
 
 /**
@@ -141,12 +164,23 @@ export interface LaunchOutcome {
 export const MAX_MISSION_ATTEMPTS = 3;
 
 /**
+ * A backstop on how many mission rows one idea may accumulate, and nothing else.
+ *
+ * The real bound is one mission per specification, above. This exists so that a
+ * defect that somehow produced a new specification on every tick could not
+ * write rows for ever, and it is deliberately generous: reaching it means
+ * something is wrong with the compiler rather than with the idea, and the
+ * refusal says so instead of implying a judgement about the work.
+ */
+export const MAX_MISSION_ROWS = 8;
+
+/**
  * What "the same specification" means, in one place.
  *
  * Objective and reason-now together: what a mission was launched to establish
- * and why it was worth doing then. `applyPlan` compares a re-plan's proposal on
- * exactly this, so the plan that would be refused here is parked *there*
- * instead of leaving an idea launchable-looking and unlaunchable for ever. Two
+ * and why it was worth doing then. The loop compares a candidate's compiled
+ * specification against this to tell a mission the retired planning subsystem
+ * wrote from one this build produces, and `launch()` refuses a repeat. Two
  * callers deciding "already researched" by two rules is how they come to
  * disagree, so there is one rule and both import it.
  */
@@ -256,12 +290,38 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
   } else {
     const tried = await specificationsTried(input.candidateId);
     const spec = specificationKey(input.objective, input.whyNow);
+    /*
+     * One mission per specification, and that is now the whole of the ceiling.
+     *
+     * §15 forbids a repair that repeats a strategy an earlier attempt already
+     * tried. With a compiled specification there is exactly one specification
+     * per idea, so "already researched" and "out of attempts" became the same
+     * sentence — and the count they used to share was doing harm rather than
+     * work. Production's idea had three mission rows against
+     * `MAX_MISSION_ATTEMPTS` of three, every one of them a placeholder the
+     * retired planning subsystem wrote; counting them would have left a real
+     * specification with nowhere to go because of defects in the thing that
+     * produced them.
+     *
+     * So specifications no compiler produces neither count nor block. What
+     * legitimately yields a second attempt at an idea is the compiler changing,
+     * which is a reviewed code change, or the idea's own text changing, which
+     * is a person's. `MAX_MISSION_ROWS` is underneath both as a runaway guard
+     * and nothing else — it is not an evidence rule and it is not a budget.
+     */
     if (tried.includes(spec)) {
-      return refuse('this repeats a specification that has already been researched');
-    }
-    if (tried.length >= MAX_MISSION_ATTEMPTS) {
       return refuse(
-        `this idea has been researched ${MAX_MISSION_ATTEMPTS} times without producing a report`,
+        'this specification has already been researched',
+        undefined,
+        'ALREADY_RESEARCHED',
+      );
+    }
+    const rows = await countMissionsForCandidate(input.candidateId);
+    if (rows >= MAX_MISSION_ROWS) {
+      return refuse(
+        `this idea already has ${rows} mission rows, which is the runaway guard rather than a ` +
+          'judgement about the work',
+        'IN_TOTAL',
       );
     }
     attempt = tried.length + 1;
@@ -337,9 +397,22 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
   return { ok: true, mission: completed.mission, reason: 'launched', replayed: !created };
 }
 
-function refuse(reason: string, refusedBy?: 'IN_TOTAL' | 'AT_ONCE'): LaunchOutcome {
-  return { ok: false, mission: null, reason, replayed: false, ...(refusedBy ? { refusedBy } : {}) };
+function refuse(
+  reason: string,
+  refusedBy?: 'IN_TOTAL' | 'AT_ONCE',
+  kind?: 'ALREADY_RESEARCHED',
+): LaunchOutcome {
+  return {
+    ok: false,
+    mission: null,
+    reason,
+    replayed: false,
+    ...(refusedBy ? { refusedBy } : {}),
+    ...(kind ? { kind } : {}),
+  };
 }
+
+
 
 /**
  * Finish whatever of the launch is not yet done.
@@ -362,6 +435,7 @@ async function completeLaunch(
       layerId: input.layerId,
       title: input.title,
       assignment: input.assignment,
+      ...(input.plan ? { plan: input.plan } : {}),
       /*
        * AUTO_WITHIN_ENVELOPE rather than GOAL_BUDGET, deliberately.
        *
@@ -383,9 +457,52 @@ async function completeLaunch(
         authorizedBy: input.authorizedBy,
       },
       startedBy: input.startedBy,
+      /*
+       * The mission points at the orchestration before the plan is placed.
+       *
+       * `createFragments` charges the fragments to the standing authority of
+       * whichever Russell mission points at the orchestration. Linking after
+       * the fragments existed would charge them to nothing, and the reservation
+       * rows the owner is shown as spend would quietly stop being written for
+       * every compiled packet.
+       */
+      attach: async (orchestrationId: string) => {
+        await linkMission({ missionId: current.id, orchestrationId });
+      },
     });
-    await linkMission({ missionId: current.id, orchestrationId: started.orchestration.id });
     current = (await getMission(current.id))!;
+  }
+
+  /*
+   * A plan that was promised and is not there yet.
+   *
+   * The ordinary path places it inside `startPacket`. This is the crash window:
+   * the orchestration was created, the process died before the fragments were
+   * written, and the packet now looks unplanned — so the next advance would
+   * queue a `RESEARCH_PLAN` work item and a worker would propose the
+   * decomposition, which is the subsystem this replaced. Re-entering finishes
+   * it instead, and does nothing at all on the ordinary path.
+   */
+  if (input.plan && input.plan.length > 0 && current.orchestrationId) {
+    /*
+     * Asked before anything is done, and that ordering is the whole guard.
+     *
+     * `launch()` is re-entered on every tick while a mission is live, so this
+     * block runs constantly. An earlier version called `placePlan`
+     * unconditionally and advanced when the counts lined up — and `placePlan`
+     * returns the fragments that are already there, so on the ordinary path it
+     * advanced the packet again on every pass. That is not harmless: an advance
+     * runs the approval gate, so a fragment a person had not approved yet was
+     * approved by a replay of a launch that had already happened.
+     */
+    const existing = await listFragments(current.orchestrationId);
+    if (existing.length === 0) {
+      const orchestration = await getOrchestration(current.orchestrationId);
+      if (orchestration) {
+        await placePlan(orchestration, input.plan);
+        await advancePacket(orchestration.id);
+      }
+    }
   }
 
   if (!current.binId) {

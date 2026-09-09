@@ -52,7 +52,7 @@ import type { ResearchFragment, ResearchOrchestration } from '../../domain/types
  * Recorded on every automatic approval, because "Brain approved this" is only
  * auditable if you can tell which rules it applied.
  */
-export const ENVELOPE_VALIDATOR_VERSION = '2026-09-08.1';
+export const ENVELOPE_VALIDATOR_VERSION = '2026-09-09.1';
 
 /** The exact assignment the Step 10 envelope authorizes, and nothing else. */
 export const MICHIGAN_LICENSING_ASSIGNMENT = `Determine whether, under Michigan law, a success-fee intermediary who arranges
@@ -97,12 +97,44 @@ search that failed. A statutory question is settled by one directly inspected
 primary source; it does not need two, and it is not settled by two secondary
 ones.`;
 
-export interface ApprovalEnvelope {
+/**
+ * How an envelope pins the assignment it authorizes.
+ *
+ * Two shapes, and a packet must satisfy exactly one of them.
+ *
+ * `assignmentSha256` is one exact text. It is right for an acceptance packet
+ * whose question was written once and authorized once.
+ *
+ * `assignmentTemplate` is a text with `{PLACEHOLDER}` fills. Every literal word
+ * around the fills is pinned — the scope, the evidence standard, the completion
+ * standard and the exclusions — and only the fills may vary. It is what a
+ * standing authorization needs, because the question comes from the person and
+ * the rules come from the envelope.
+ *
+ * **The template form is also a repair.** `RUSSELL_STATE_LICENSING_V1` set
+ * `assignmentSha256: sha256(STATE_LICENSING_ASSIGNMENT_TEMPLATE)` with a comment
+ * saying the digest was "checked against the template's shape rather than one
+ * string" — and `planFitsEnvelope` hashed the *substituted* assignment, so the
+ * two could never match and that envelope could never have approved anything.
+ * The comment described this mechanism; it just did not exist yet.
+ */
+export type AssignmentPin =
+  | { assignmentSha256: string; assignmentTemplate?: undefined }
+  | { assignmentTemplate: string; assignmentSha256?: undefined };
+
+export type ApprovalEnvelope = AssignmentPin & {
   id: string;
   /** What the operator authorized, in their words, for the audit row. */
   authorization: string;
-  /** The assignment text this envelope authorizes, pinned by digest. */
-  assignmentSha256: string;
+  /**
+   * The geography this envelope authorizes, in the words a refusal should use.
+   *
+   * The checks below used to say "which is not Michigan" in a function that
+   * takes any envelope, which was true of the only envelope that existed when
+   * it was written and is a lie in every other one. A refusal that names the
+   * wrong jurisdiction is worse than one that names none.
+   */
+  jurisdiction: string;
   /**
    * How many fragments the plan may propose, or `null` for as many as the
    * evidence needs.
@@ -144,10 +176,66 @@ export interface ApprovalEnvelope {
    * has to remember to set, so a restart cannot un-spend it.
    */
   oneUse?: boolean;
-}
+};
 
 function sha256(text: string): string {
   return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+/**
+ * Is this assignment the envelope's template with its placeholders filled?
+ *
+ * Deterministic, total and side-effect free, like everything else here. It
+ * splits the template on `{PLACEHOLDER}` and requires the literal segments to
+ * appear in the assignment, in order, anchored at both ends, with a non-empty
+ * fill between each pair. So every pinned word survives verbatim and only the
+ * fills vary — which is exactly as strong as a digest for everything the
+ * envelope actually controls, and no stronger.
+ *
+ * Two refusals worth naming. A template with two adjacent placeholders has an
+ * empty literal between them and could be satisfied by almost anything, so it
+ * is refused as unmatchable rather than treated as permissive. And a fill of
+ * zero characters is refused, because an assignment that dropped the question
+ * is not the assignment that was authorized.
+ */
+export function assignmentFitsTemplate(assignment: string, template: string): boolean {
+  const segments = template.split(/\{[A-Z_]+\}/);
+  if (segments.length === 1) return assignment === template;
+
+  let cursor = 0;
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index]!;
+    const first = index === 0;
+    const last = index === segments.length - 1;
+
+    if (!first && !last && segment === '') return false;
+
+    if (first) {
+      if (!assignment.startsWith(segment)) return false;
+      cursor = segment.length;
+      continue;
+    }
+
+    if (last) {
+      if (segment === '') return assignment.length > cursor;
+      if (!assignment.endsWith(segment)) return false;
+      const at = assignment.length - segment.length;
+      return at > cursor;
+    }
+
+    const at = assignment.indexOf(segment, cursor);
+    if (at <= cursor) return false;
+    cursor = at + segment.length;
+  }
+  return true;
+}
+
+/** Fill one template. The only writer of an assignment an envelope will accept. */
+export function fillAssignmentTemplate(
+  template: string,
+  fills: Readonly<Record<string, string>>,
+): string {
+  return template.replace(/\{([A-Z_]+)\}/g, (whole, name: string) => fills[name] ?? whole);
 }
 
 /**
@@ -178,7 +266,115 @@ export const STEP11_AUDIT_INDEPENDENCE_ASSIGNMENT =
   'In Delaware, under 6 Del. C. \u00a718-1107 as in force during 2026, what annual tax must a ' +
   'domestic limited liability company pay, and when is that tax due?';
 
+/**
+ * The standing Deal Dispatch public-records assignment.
+ *
+ * Two fills and nothing else: the question the person asked, and the
+ * jurisdiction it is about. Every other word — what counts as a source, what
+ * settles a part of the question, what is out of scope — is fixed here, in
+ * code, and is what the operator authorized. A compiler may fill the two; it
+ * cannot touch the rest, and `assignmentFitsTemplate` is what makes that true
+ * of the row rather than of the intention.
+ *
+ * It asserts nothing about the world. It says what must be established and from
+ * what, which is the whole of what a specification is allowed to do.
+ */
+export const PUBLIC_RECORDS_ASSIGNMENT_TEMPLATE = `Answer this question from official public records, and from nothing else:
+
+{QUESTION}
+
+Jurisdiction: {JURISDICTION}. Every finding must be about this jurisdiction; a finding
+from anywhere else is out of scope and does not answer this.
+
+Evidence standard: official published sources only — the county or municipal office that
+holds the record (register of deeds, clerk, recorder, assessor, equalization, treasurer),
+its published schedules, fee tables, portals and notices; the state statute or
+administrative rule that governs it; and published guidance from the state department or
+bureau responsible for it. A vendor page, a title-company article, a law-firm note or a
+news summary may be used to locate an official source and may not support a claim on its
+own.
+
+Completion standard: each part of the question answered from a quoted official source,
+identified by its URL and by the office that publishes it, and carrying the date it was
+published or last updated — or explicitly recorded as unresolved, naming the offices
+searched and what was not found. Where offices differ, report the difference per office
+rather than averaging them into a single figure.
+
+Out of scope: any other jurisdiction; anything requiring a paid subscription, a paid API
+or a purchased record; anything requiring contact with a person or an office; publishing,
+filing or submitting anything anywhere. This is read-only research into what is already
+published.`;
+
 export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Object.freeze({
+  /**
+   * The standing authorization Russell's compiled missions run under.
+   *
+   * This is the envelope that replaced a hard-coded one. Every Russell mission
+   * used to name `RUSSELL_STATE_LICENSING_V1` — an acceptance envelope frozen to
+   * one licensing question about Florida and California, with Michigan in its
+   * `forbiddenScope`. So a real idea from a real conversation could not be
+   * approved by the only envelope it was allowed to name, whatever its plan
+   * said, and the packet parked every time.
+   *
+   * What makes this one safe is unchanged from §16 and is worth restating,
+   * because it is a standing authorization rather than a one-packet one:
+   *
+   *   - it lives here, in code, and a packet names it by id. The compiler that
+   *     writes a plan cannot supply the limits that plan is judged against;
+   *   - it approves; it does not exempt. The evidence gate, the verification
+   *     pass, the synthesis check and all three audit roles are untouched;
+   *   - it is scoped to one project by slug, so it cannot approve work
+   *     somewhere else however exactly the assignment matches;
+   *   - and it authorizes reading published records and nothing else. No
+   *     spending, no paid API, no contact with anybody, no publishing, no
+   *     external effect of any kind.
+   */
+  RUSSELL_PUBLIC_RECORDS_V1: Object.freeze({
+    id: 'RUSSELL_PUBLIC_RECORDS_V1',
+    authorization:
+      'The operator authorized standing research on Deal Dispatch into questions answerable ' +
+      'from official Michigan state, county and municipal public records: read-only, primary ' +
+      'sources only, no paid API and no purchased records, no contact with any person or ' +
+      'office, no publishing and no external effect.',
+    assignmentTemplate: PUBLIC_RECORDS_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'Michigan',
+    projectSlug: 'deal-dispatch',
+    // As many bounded questions as the gaps require. Every condition below
+    // applies to each of them, so a broader decomposition is more to refuse
+    // rather than more room to hide in.
+    maxFragments: null,
+    geography: /\bmichigan\b|\bmi\b/i,
+    // Every other state, and the federal layer. A Michigan county's name is
+    // matched by none of these — the list is state names on word boundaries.
+    forbiddenScope:
+      /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|minnesota|mississippi|missouri|montana|nebraska|nevada|ohio|oklahoma|oregon|pennsylvania|tennessee|texas|utah|vermont|virginia|washington|wisconsin|wyoming|new york|new jersey|north carolina|south carolina|west virginia|rhode island|new hampshire|new mexico|north dakota|south dakota)\b/i,
+    allowedSourceTypes:
+      /(register of deeds|recorder|county clerk|city clerk|township clerk|village clerk|assessor|equalization|treasurer|county|municipal|statut|\bmcl\b|public act|administrative code|administrative rule|state of michigan|michigan department|department of|bureau of|lara|secretary of state|legislature|\.gov|official|primary|government|public record|open data|portal|fee schedule|recording office)/i,
+    /*
+     * Phrases that describe an action, never words that appear in the subject.
+     *
+     * This list had `publish` in it, and the tests caught what that means for a
+     * public-records envelope: the fragment "establish which counties publish
+     * permit data" was refused as describing an action outside reading, as was
+     * every completion criterion asking for the date a source was published.
+     * The check refused precisely the work it exists to permit — and a check
+     * that does that is one somebody eventually switches off. `\bpay\b` would
+     * have done the same to "how long after the buyer pays is the deed
+     * recorded".
+     *
+     * So what is forbidden here is Brain *doing* something: buying access,
+     * contacting somebody, filing something. The prohibition on publishing is
+     * not weakened by leaving the word out — it is carried by the assignment's
+     * own out-of-scope clause, which is pinned by the template above, and by
+     * the standing authority's `ALWAYS_PROHIBITED` and `max_external_spend` of
+     * zero. Three statements of it; none of them a substring match on a
+     * subject.
+     */
+    forbiddenActions:
+      /\b(purchase|paid api|api key|subscription fee|subscribe to|pay for access|paywall bypass|telephone call|phone call|call the|email the|write to the|contact the|submit a request to|file a (?:complaint|request|petition)|register with|apply for a|post to|press release|publish (?:a|our|the report|this report))\b/i,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
   /**
    * The Step 11 audit-independence acceptance. One packet, once.
    *
@@ -199,6 +395,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'Step 11 acceptance project, as one-use, in the instruction that defined this envelope. ' +
       'The planner is not approving itself.',
     assignmentSha256: sha256(STEP11_AUDIT_INDEPENDENCE_ASSIGNMENT),
+    jurisdiction: 'Delaware',
     projectSlug: 'step-11-acceptance',
     oneUse: true,
     maxFragments: 1,
@@ -256,9 +453,12 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'The operator authorized Step 12A acceptance research into the state licensing gap the ' +
       'Deal Dispatch Monetization Logic layer names as open, one bounded fragment per state, ' +
       'primary statutory sources only, no spend and no external effect.',
-    // The assignment is composed per state from a frozen template, so the
-    // digest is checked against the template's shape rather than one string.
-    assignmentSha256: sha256(STATE_LICENSING_ASSIGNMENT_TEMPLATE),
+    // Composed per state from a frozen template, so what is pinned is the
+    // template. This used to be `assignmentSha256: sha256(TEMPLATE)` with a
+    // comment claiming exactly this behaviour, and `planFitsEnvelope` hashed
+    // the substituted assignment — so no packet could ever have matched it.
+    assignmentTemplate: STATE_LICENSING_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'Florida or California',
     projectSlug: 'deal-dispatch',
     // As many bounded questions as the gaps require. The scope conditions
     // below are what bound this packet, and they apply to every one of them.
@@ -281,6 +481,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'The operator authorized this exact topic, scope, source restriction and execution in ' +
       'advance, for one packet, as the Step 10 real-research acceptance.',
     assignmentSha256: sha256(MICHIGAN_LICENSING_ASSIGNMENT),
+    jurisdiction: 'Michigan',
     maxFragments: 4,
     geography: /michigan|\bmi\b/i,
     forbiddenScope:
@@ -397,14 +598,24 @@ export function planFitsEnvelope(input: {
   const { envelope, orchestration, fragments } = input;
   const reasons: string[] = [];
 
-  // The assignment itself, pinned. A packet whose text drifted by one word is
-  // not the packet that was authorized, whatever its title says.
-  const actual = sha256(orchestration.assignment);
-  if (actual !== envelope.assignmentSha256) {
+  // The assignment itself, pinned — by digest when the envelope authorizes one
+  // exact text, and by template when it authorizes a shape. A packet whose
+  // pinned words drifted is not the packet that was authorized, whatever its
+  // title says.
+  const assignmentMatches =
+    envelope.assignmentTemplate !== undefined
+      ? assignmentFitsTemplate(orchestration.assignment, envelope.assignmentTemplate)
+      : sha256(orchestration.assignment) === envelope.assignmentSha256;
+  if (!assignmentMatches) {
     reasons.push(
-      'The assignment is not the text this envelope authorizes. The envelope pins an exact ' +
-        'assignment by digest, so any change to the question, the scope or the evidence ' +
-        'standard needs a person.',
+      envelope.assignmentTemplate !== undefined
+        ? 'The assignment is not this envelope\'s authorized assignment with its question ' +
+          'filled in. Everything except the question is fixed in code — the scope, the ' +
+          'evidence standard, the completion standard and the exclusions — and changing any ' +
+          'of it needs a person.'
+        : 'The assignment is not the text this envelope authorizes. The envelope pins an exact ' +
+          'assignment by digest, so any change to the question, the scope or the evidence ' +
+          'standard needs a person.',
     );
   }
 
@@ -445,10 +656,13 @@ export function planFitsEnvelope(input: {
 
     const geography = fragment.geography ?? '';
     if (!envelope.geography.test(geography)) {
-      reasons.push(`${where} declares geography "${geography || '(none)'}", which is not Michigan.`);
+      reasons.push(
+        `${where} declares geography "${geography || '(none)'}", which is not ` +
+          `${envelope.jurisdiction}.`,
+      );
     }
     if (envelope.forbiddenScope.test(prose) || envelope.forbiddenScope.test(geography)) {
-      reasons.push(`${where} reaches outside Michigan.`);
+      reasons.push(`${where} reaches outside ${envelope.jurisdiction}.`);
     }
     if (envelope.forbiddenActions.test(prose)) {
       reasons.push(
@@ -485,7 +699,8 @@ export function planFitsEnvelope(input: {
     checked: {
       fragments: fragments.length,
       maxFragments: envelope.maxFragments,
-      assignmentMatches: actual === envelope.assignmentSha256,
+      assignmentMatches,
+      pinnedBy: envelope.assignmentTemplate !== undefined ? 'TEMPLATE' : 'DIGEST',
       geographies: fragments.map((f) => f.geography ?? null),
     },
   };

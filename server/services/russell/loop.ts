@@ -61,13 +61,24 @@ import {
   getMission,
   linkMission,
   listAnsweredRequests,
+  latestMissionForCandidate,
   markResumed,
+  openRequestFor,
   renewLiveMissionReservations,
   setNextMission,
+  transitionMission,
+  withdrawRequest,
 } from '../../repos/russellMissions.ts';
-import { getOrchestration } from '../../repos/research.ts';
+import { currentFragments, getOrchestration } from '../../repos/research.ts';
+import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
+import { getProject } from '../../repos/projects.ts';
+import { recordEvent } from '../../repos/events.ts';
 import { listAuditsByProject } from '../../repos/audits.ts';
-import { createCandidate } from '../../repos/russellCandidates.ts';
+import {
+  createCandidate,
+  getCandidate,
+  recordJudgment,
+} from '../../repos/russellCandidates.ts';
 import { getDb } from '../../db/database.ts';
 import { completeProbe, listExpiredProbes } from '../../repos/russellProbes.ts';
 import { openProbe, runProbe } from './probe.ts';
@@ -75,11 +86,12 @@ import { GENERAL_LIGHT_PROBE_V1 } from './probeEnvelope.ts';
 import { outcomeOf, writeBack } from './writeback.ts';
 import { launch, repairLaunches, type LaunchInput } from './launch.ts';
 import { applyTurn } from './turn.ts';
-import { applyPlan, judgeCandidate } from './planning.ts';
-import { MAX_MISSION_ATTEMPTS } from './launch.ts';
+import { askArchive, judgeCandidate } from './planning.ts';
+import { compileMission } from './compiler.ts';
+import { specificationKey } from './launch.ts';
 import { parkStoppedMissions, reopenAnswered, resumeAnsweredRequest } from './needsHuman.ts';
 import { parseJson } from '../../repos/util.ts';
-import type { RussellMission, RussellVisibility } from '../../domain/types.ts';
+import type { RussellCandidate, RussellMission, RussellVisibility } from '../../domain/types.ts';
 
 /** How often the loop wakes when nothing else has woken it. */
 export const RUSSELL_TICK_MS = 30_000;
@@ -96,14 +108,26 @@ export interface TickReport {
   probed: string[];
   /** Turn bins whose proposal was applied and whose pending turn now reads. */
   answered: string[];
-  /** Plan bins whose worker observations became a judgment this tick. */
-  judged: string[];
+  /**
+   * Missions retired because they ran on a specification this build no longer
+   * produces, each with the idea it was recompiled for.
+   *
+   * Recovery, not repair: the row keeps its state and its reason, and the idea
+   * is not charged an attempt for a defect in the planning that created it.
+   */
+  recovered: { missionId: string; candidateId: string }[];
   /**
    * Ideas the project's own archive already answered, judged and parked without
    * anything being dispatched. §13's default outcome, and the cheapest one.
    */
   answeredByArchive: string[];
-  /** Ideas the archive did not answer, now with a worker reading them. */
+  /**
+   * Ideas the archive did not answer, judged and specified this tick.
+   *
+   * It used to mean "now with a worker reading them", because judging an idea
+   * dispatched a planning bin. There is no bin: the specification is compiled
+   * in the same call, so this is the list of ideas that got one.
+   */
   planning: string[];
   launched: string[];
   /**
@@ -161,7 +185,7 @@ const EMPTY: TickReport = {
   skipped: null,
   generation: null,
   wroteBack: [],
-  judged: [],
+  recovered: [],
   answeredByArchive: [],
   planning: [],
   resumed: [],
@@ -198,7 +222,7 @@ export async function tick(owner: string): Promise<TickReport> {
     ran: true,
     generation: claim.generation,
     wroteBack: [],
-    judged: [],
+    recovered: [],
     answeredByArchive: [],
     planning: [],
     resumed: [],
@@ -319,17 +343,30 @@ export async function tick(owner: string): Promise<TickReport> {
     }
 
     /*
-     * 1c. Take the plans workers have finished.
+     * 1c. Recover an idea whose mission came from the retired planning subsystem.
      *
-     * Before judging new candidates, so a plan that landed this tick becomes a
-     * judgment this tick rather than next. `applyPlan` is guarded on the
-     * candidate not already carrying a priority, so a redelivered bin judges
-     * once — the queue is at-least-once and this is the effect that must not
-     * repeat.
+     * There used to be a step here that took the plans workers had finished. It
+     * is gone with the bin: a specification is compiled in `judgeCandidate` now,
+     * inside this tick, so there is nothing outstanding to collect.
+     *
+     * What is left is the rows that subsystem produced. Four missions in
+     * production were launched from placeholder specifications a worker wrote,
+     * and they are defects rather than attempts at the idea. This finds them by
+     * asking the compiler what the idea's specification *is* and comparing —
+     * no flag, no column, no list of ids — retires the mission with its own
+     * reason preserved, and recompiles. §5 holds throughout: every row and
+     * every reason stays, and `launch()` counts specifications rather than
+     * rows, so recovering costs the idea nothing.
      */
-    for (const binId of await finishedPlanBins(cycle.maxEventsPerCycle)) {
-      const applied = await applyPlan(binId);
-      if (applied.ok && !applied.alreadyJudged) report.judged.push(binId);
+    for (const stale of await retiredPlanning(cycle.maxLaunchesPerCycle)) {
+      const retired = await retirePlanningDefect(stale);
+      if (!retired) continue;
+      report.recovered.push({ missionId: stale.missionId, candidateId: stale.candidateId });
+      const outcome = await judgeCandidate(stale.candidateId, {
+        afterRetiredPlanning: { missionId: stale.missionId, reason: stale.reason },
+      });
+      if (outcome.answeredByArchive) report.answeredByArchive.push(stale.candidateId);
+      else if (outcome.ok) report.planning.push(stale.candidateId);
     }
 
     /*
@@ -350,37 +387,7 @@ export async function tick(owner: string): Promise<TickReport> {
     for (const candidate of await unjudged(cycle.maxLaunchesPerCycle)) {
       const outcome = await judgeCandidate(candidate.id);
       if (outcome.answeredByArchive) report.answeredByArchive.push(candidate.id);
-      else if (outcome.binId) report.planning.push(candidate.id);
-    }
-
-    /*
-     * 1d-ii. Re-plan an idea whose run produced nothing.
-     *
-     * The gap this closes: a mission's key was the candidate and the grant, so
-     * an idea got exactly one mission for ever. When that one ended without a
-     * report the idea stayed `QUEUED` and the loop re-found the same dead row
-     * on every tick — for ever, with nothing to show a person and no way back.
-     *
-     * A redo is not a retry. §15: a retry repeats the same search; a repair is
-     * planned from what failed. So the failed run's own recorded reason goes to
-     * a worker with the question, and the judgment it produces supersedes the
-     * specification that led nowhere — which matters most in the case this was
-     * written for, where that specification is the placeholder §54.2 recorded
-     * and `PLAN_MINIMUMS` would now refuse outright.
-     *
-     * `launch()` derives the attempt from the rows and stops at
-     * `MAX_MISSION_ATTEMPTS`, so nothing here needs to count.
-     */
-    for (const spent of await redoable(cycle.maxLaunchesPerCycle)) {
-      const outcome = await judgeCandidate(spent.candidateId, {
-        afterFailedMission: {
-          missionId: spent.missionId,
-          attempt: spent.attempt,
-          reason: spent.reason,
-        },
-      });
-      if (outcome.answeredByArchive) report.answeredByArchive.push(spent.candidateId);
-      else if (outcome.binId) report.planning.push(spent.candidateId);
+      else if (outcome.ok) report.planning.push(candidate.id);
     }
 
     /*
@@ -401,7 +408,7 @@ export async function tick(owner: string): Promise<TickReport> {
     for (const settled of await probedAwaitingDecision(cycle.maxLaunchesPerCycle)) {
       const outcome = await judgeCandidate(settled.candidateId, { afterProbe: settled.probe });
       if (outcome.answeredByArchive) report.answeredByArchive.push(settled.candidateId);
-      else if (outcome.binId) report.planning.push(settled.candidateId);
+      else if (outcome.ok) report.planning.push(settled.candidateId);
     }
 
     /*
@@ -534,6 +541,25 @@ export async function tick(owner: string): Promise<TickReport> {
             });
           }
         }
+      } else if (!outcome.ok && outcome.kind === 'ALREADY_RESEARCHED') {
+        /*
+         * The answering transition for an idea that has nowhere left to go.
+         *
+         * There used to be a redo step here: a mission that produced nothing
+         * sent its idea back to a worker for a different specification. With a
+         * compiled specification there is no different one to write, so a redo
+         * would be the same search twice — which is exactly what §15 forbids
+         * and exactly what production did, three times, in four minutes.
+         *
+         * So the idea is parked with the run's own recorded reason instead of
+         * sitting `QUEUED` while `launch()` refuses it every thirty seconds in
+         * silence. `PARKED` has a person's override as its way back, and a
+         * compiler change legitimately produces a new specification, which is
+         * the other way out. Neither of them is a button somebody has to press
+         * to keep the loop honest.
+         */
+        const parked = await parkResearchedIdea(entry.candidateId, outcome.reason);
+        if (parked) report.parked.push({ candidateId: entry.candidateId, reason: parked });
       } else if (!outcome.ok && outcome.refusedBy === 'IN_TOTAL') {
         /*
          * A wall, not a queue, and the difference decides whether a person
@@ -776,13 +802,29 @@ async function followOnsToCreate(limit: number): Promise<
     visibility: string;
     conversation_id: string | null;
     judgment: string;
+    orchestration_id: string | null;
+    title: string;
+    is_follow_on: number;
   }>(
-    `SELECT m.id, m.project_id, m.visibility, m.conversation_id, c.judgment
+    /*
+     * `c.follow_on_of_mission_id IS NULL` bounds the chain to one generation.
+     *
+     * It did not need to before: the follow-on was a field a worker declared on
+     * the plan, and the second plan simply declared none. A derived follow-on
+     * has no such stopping point of its own — a question the report could not
+     * settle would produce an idea, whose report could not settle it either,
+     * for ever — so the bound is stated here instead of being an accident of
+     * what a model happened to write.
+     */
+    `SELECT m.id, m.project_id, m.visibility, m.conversation_id, c.judgment,
+            m.orchestration_id, m.objective AS title,
+            CASE WHEN c.follow_on_of_mission_id IS NULL THEN 0 ELSE 1 END AS is_follow_on
        FROM russell_missions m
        JOIN russell_candidates c ON c.id = m.candidate_id
       WHERE m.state = 'DONE'
         AND m.writeback_at IS NOT NULL
         AND m.next_mission_id IS NULL
+        AND c.follow_on_of_mission_id IS NULL
         AND NOT EXISTS (
           SELECT 1 FROM russell_candidates f WHERE f.follow_on_of_mission_id = m.id
         )
@@ -801,17 +843,27 @@ async function followOnsToCreate(limit: number): Promise<
   for (const row of rows) {
     const judgment = parseJson<Record<string, unknown>>(row.judgment, {});
     const spec = judgment['missionSpec'];
-    if (!spec || typeof spec !== 'object') continue;
-    const declared = (spec as Record<string, unknown>)['followOn'];
-    if (!declared || typeof declared !== 'object') continue;
-    const body = declared as Record<string, unknown>;
-    const title = typeof body['title'] === 'string' ? body['title'].trim() : '';
-    const question = typeof body['question'] === 'string' ? body['question'].trim() : '';
-    const whyNow = typeof body['whyNow'] === 'string' ? body['whyNow'].trim() : '';
-    // Re-checked on the way out as well as on the way in. The row was written
-    // by a validator, and it is still a stored value that something else could
-    // have edited; a follow-on with no question is not one.
-    if (!title || !question || !whyNow) continue;
+    const declared =
+      spec && typeof spec === 'object'
+        ? (spec as Record<string, unknown>)['followOn']
+        : null;
+
+    /*
+     * Declared if the plan declared one; derived from the packet otherwise.
+     *
+     * A worker's plan could name the question finishing it would leave open,
+     * because a reader of the question can see that. A compiled specification
+     * cannot and does not — inventing one would be Brain buying research
+     * nobody asked for — so for a compiled mission the follow-on comes from
+     * what the finished packet *recorded* as unresolved, which is a fact about
+     * the run rather than a prediction about it.
+     */
+    const followOn =
+      declared && typeof declared === 'object'
+        ? readDeclared(declared as Record<string, unknown>)
+        : await unresolvedFollowOn(row.orchestration_id, row.title);
+    if (!followOn) continue;
+    const { title, question, whyNow } = followOn;
     out.push({
       missionId: row.id,
       projectId: row.project_id,
@@ -821,6 +873,95 @@ async function followOnsToCreate(limit: number): Promise<
     });
   }
   return out;
+}
+
+/** A follow-on a plan declared, re-checked on the way out as well as in. */
+function readDeclared(
+  body: Record<string, unknown>,
+): { title: string; question: string; whyNow: string } | null {
+  const title = typeof body['title'] === 'string' ? body['title'].trim() : '';
+  const question = typeof body['question'] === 'string' ? body['question'].trim() : '';
+  const whyNow = typeof body['whyNow'] === 'string' ? body['whyNow'].trim() : '';
+  // The row was written by a validator and is still a stored value something
+  // else could have edited; a follow-on with no question is not one.
+  return title && question && whyNow ? { title, question, whyNow } : null;
+}
+
+/**
+ * The question a finished packet recorded that it could not settle.
+ *
+ * Read from the fragments the run actually blocked on, with the reason the run
+ * actually recorded — never from prose about the report and never invented. A
+ * packet that settled everything it asked produces nothing here, which is the
+ * common case and the correct one: §13 applies to a follow-on exactly as it
+ * does to a first question, and the cheapest follow-on is the one that never
+ * exists.
+ *
+ * It is still only an *idea*. It is judged against the archive the parent has
+ * just changed, compiled, and refused if the archive now answers it.
+ */
+async function unresolvedFollowOn(
+  orchestrationId: string | null,
+  parentObjective: string,
+): Promise<{ title: string; question: string; whyNow: string } | null> {
+  if (!orchestrationId) return null;
+  const orchestration = await getOrchestration(orchestrationId);
+  /*
+   * The packet's own terminal status is the gate, and only one of them means
+   * this.
+   *
+   * `COMPLETE_WITH_GAPS` is the state a packet reaches when a person authorized
+   * it to file with what it could not settle named in the report. A `COMPLETE`
+   * packet settled what it asked and leaves nothing open, so it produces no
+   * follow-on — which is the common case and the correct one.
+   *
+   * Read from the status rather than from live fragment rows, and that is a
+   * correction. The first version looked for a `BLOCKED` fragment, and by the
+   * time a packet is terminal a blocked fragment has usually been repaired into
+   * a newer attempt — so `currentFragments` shows the repair, not the failure,
+   * and the follow-on never fired. The status is what the packet concluded;
+   * the fragments are how it got there.
+   */
+  if (!orchestration || orchestration.status !== 'COMPLETE_WITH_GAPS') return null;
+
+  /*
+   * Which requirement the report did not answer, by the same rule
+   * `assessPacket` uses to decide whether the packet covers its goal.
+   *
+   * A requirement is answered when the archive settled it — `SATISFIED` — or
+   * when a fragment carrying its id reached `ACCEPTED`, which means it cleared
+   * all seven gate conditions. Anything else in a packet that filed with gaps
+   * is a question the report says it did not settle.
+   *
+   * Two different rules for "answered" in one codebase is how they come to
+   * disagree, so this is the same one, and `NOT_REQUIRED` and `OWNED_ELSEWHERE`
+   * are excluded here for the reason they are excluded there: they are not
+   * research's job.
+   */
+  const requirements = await listRequirements(orchestrationId);
+  const coverage = await listCoverage(orchestrationId);
+  const byRequirement = new Map(coverage.map((entry) => [entry.requirementId, entry.status]));
+  const answered = new Set(
+    (await currentFragments(orchestrationId))
+      .filter((fragment) => fragment.status === 'ACCEPTED')
+      .flatMap((fragment) => fragment.requirementIds),
+  );
+  const open = requirements.find((requirement) => {
+    if (requirement.necessity !== 'MANDATORY') return false;
+    if (requirement.kind === 'OTHER_LAYER' || requirement.kind === 'IRRELEVANT') return false;
+    if (answered.has(requirement.id)) return false;
+    const status = byRequirement.get(requirement.id);
+    return status !== 'SATISFIED' && status !== 'NOT_REQUIRED' && status !== 'OWNED_ELSEWHERE';
+  });
+  if (!open) return null;
+
+  return {
+    title: `Unsettled: ${open.statement.slice(0, 120)}`,
+    question: open.statement,
+    whyNow:
+      `The report filed for "${parentObjective.slice(0, 120)}" records this as unresolved rather ` +
+      'than answered, so it is still open.',
+  };
 }
 
 /**
@@ -867,84 +1008,157 @@ async function answeredTurnBins(limit: number): Promise<string[]> {
 }
 
 /**
- * Plan bins a worker has finished, whose idea is still unjudged.
+ * Missions launched from a specification this build no longer produces.
  *
- * Joined on the candidate rather than on the bin alone, so a plan already
- * applied is not looked at again — the same shape as `answeredTurnBins`, and
- * read from rows rather than from an event because a bin event is best-effort
- * by design.
+ * There is no flag for this and there is deliberately no list of ids. The
+ * compiler is deterministic, so the question "was this mission specified by the
+ * subsystem that is gone" is decidable by asking it what the idea's
+ * specification *is* and comparing. A mission whose objective and reason match
+ * the compiler's output is a legitimate attempt whatever went wrong with it;
+ * one that does not could not have come from here.
+ *
+ * Four conditions before the compiler is asked, so the expensive half runs on
+ * almost nothing:
+ *
+ *   - the mission is `FAILED`, `CANCELLED` or `NEEDS_HUMAN`. A live mission is
+ *     not interrupted, and `DONE` is answered;
+ *   - it filed no document, so nothing was learned and nothing is lost;
+ *   - it is the newest for that candidate, so recovery happens once;
+ *   - the candidate is still `QUEUED` and carries no person's override, because
+ *     a decision somebody made is not re-taken.
  */
-async function finishedPlanBins(limit: number): Promise<string[]> {
-  /*
-   * Three shapes of plan key, and three different candidate states to match.
-   *
-   * A first pass is keyed `russell:plan:<candidateId>` and belongs to an idea
-   * with no priority yet. A post-probe pass is keyed
-   * `russell:plan:<candidateId>:probed:<probeId>` and belongs to an idea whose
-   * only verdict so far is `EXPLORE` — the one priority a second pass may
-   * supersede. A redo is keyed `russell:plan:<candidateId>:redo:<missionId>`
-   * and belongs to an idea still `QUEUED` whose newest mission is that one.
-   *
-   * **The redo arm did not exist, and that is the whole of why production
-   * stalled.** 09a591a added the redo key, the manifest that carries the
-   * failed run's reason, and the `applyPlan` branch that supersedes the dead
-   * specification — and then left the only query that hands a finished plan to
-   * `applyPlan` matching two shapes out of three. So `bin_fdc116329a2843289dcd`
-   * reached `COMPLETE` at 03:36Z on 2026-09-09 carrying a worker's real
-   * re-plan, nothing ever opened it, `nextLaunchable` kept reading the
-   * specification that had already failed three times, and `launch()` refused
-   * it every thirty seconds exactly as 6afeaaa had just taught it to. Three
-   * correct mechanisms in a row, and the chain was still dead, because the one
-   * between them selected nothing. §24's sentence at a fourth altitude: a
-   * mechanism nothing calls is not a mechanism.
-   *
-   * The redo arm's guard is `m.rowid = MAX(rowid) for that candidate` — the
-   * same condition `redoable()` uses to decide there is a redo to plan at all.
-   * It is what makes the arm stop matching: the moment the re-planned attempt
-   * launches, the mission this bin was planned from is no longer the newest,
-   * and the bin is never looked at again. A flag would have said the same
-   * thing and could disagree with the rows; this cannot.
-   *
-   * Written as one query with three joins rather than a `LIKE`, so the
-   * candidate id is still matched exactly. `LIKE 'russell:plan:' || c.id ||
-   * '%'` would also match a candidate whose id is a prefix of another one's,
-   * which is not possible today and is not a property worth depending on.
-   *
-   * `applyPlan` re-checks each arm's condition when it opens the bin, because
-   * this query and that call are not one statement.
-   */
-  const rows = await getDb().all<{ id: string }>(
-    `SELECT b.id FROM bins b
-       JOIN russell_candidates c
-         ON b.created_by_id = 'russell:plan:' || c.id
-      WHERE b.completion_contract = 'RUSSELL_PLAN_V1'
-        AND b.state IN ('COMPLETE','FAILED','CANCELLED')
-        AND c.priority IS NULL
-        AND c.state <> 'MERGED'
-     UNION
-     SELECT b.id FROM bins b
-       JOIN russell_probes p
-         ON b.created_by_id = 'russell:plan:' || p.candidate_id || ':probed:' || p.id
-       JOIN russell_candidates c ON c.id = p.candidate_id
-      WHERE b.completion_contract = 'RUSSELL_PLAN_V1'
-        AND b.state IN ('COMPLETE','FAILED','CANCELLED')
-        AND c.priority = 'EXPLORE'
-        AND c.state = 'CAPTURED'
-     UNION
-     SELECT b.id FROM bins b
-       JOIN russell_missions m
-         ON b.created_by_id = 'russell:plan:' || m.candidate_id || ':redo:' || m.id
+async function retiredPlanning(limit: number): Promise<
+  { candidateId: string; missionId: string; reason: string }[]
+> {
+  const rows = await getDb().all<{
+    candidate_id: string;
+    id: string;
+    objective: string;
+    why_now: string;
+    state: string;
+    terminal_reason: string | null;
+    waiting_on: string | null;
+  }>(
+    `SELECT m.candidate_id, m.id, m.objective, m.why_now, m.state, m.terminal_reason, m.waiting_on
+       FROM russell_missions m
        JOIN russell_candidates c ON c.id = m.candidate_id
-      WHERE b.completion_contract = 'RUSSELL_PLAN_V1'
-        AND b.state IN ('COMPLETE','FAILED','CANCELLED')
+      WHERE m.state IN ('FAILED','CANCELLED','NEEDS_HUMAN')
+        AND m.document_id IS NULL
         AND c.state = 'QUEUED'
+        AND c.override_user_id IS NULL
         AND m.rowid = (
               SELECT MAX(m2.rowid) FROM russell_missions m2
                WHERE m2.candidate_id = m.candidate_id)
+      ORDER BY m.updated_at, m.rowid
       LIMIT ?`,
     [Math.max(1, limit)],
   );
-  return rows.map((row) => row.id);
+
+  const out: { candidateId: string; missionId: string; reason: string }[] = [];
+  for (const row of rows) {
+    const compiled = await compiledSpecificationFor(row.candidate_id);
+    // Unknown is not "retired". A candidate the compiler refuses has no
+    // specification to compare against, and guessing would retire a mission on
+    // the strength of not being able to tell.
+    if (!compiled) continue;
+    if (specificationKey(row.objective, row.why_now) === compiled) continue;
+    out.push({
+      candidateId: row.candidate_id,
+      missionId: row.id,
+      reason:
+        row.terminal_reason?.trim() ||
+        row.waiting_on?.trim() ||
+        'the run ended without recording a reason',
+    });
+  }
+  return out;
+}
+
+/** What the compiler says this idea's specification is, or null if it refuses. */
+async function compiledSpecificationFor(candidateId: string): Promise<string | null> {
+  const candidate = await getCandidate(candidateId);
+  if (!candidate?.projectId) return null;
+  const project = await getProject(candidate.projectId);
+  if (!project) return null;
+  const compiled = await compileMission({
+    candidate,
+    project,
+    // The archive count appears in `whyNow`, so it has to be the same number
+    // the judgment pass will use. `askArchive` is the one that produces it.
+    archive: await archiveCounts(candidate),
+  });
+  if (!compiled.ok) return null;
+  return specificationKey(compiled.mission.spec.objective, compiled.mission.spec.whyNow);
+}
+
+async function archiveCounts(
+  candidate: RussellCandidate,
+): Promise<{ claimsConsidered: number; contradicting: string[] }> {
+  const archive = await askArchive(candidate);
+  return { claimsConsidered: archive.claimsConsidered, contradicting: archive.contradicting };
+}
+
+/**
+ * End a mission that ran on a specification this build no longer produces.
+ *
+ * `FAILED`, guarded on the state it was read in, carrying the packet's or the
+ * mission's own words plus one sentence saying what happened to it — so the row
+ * still reads as the run it was, and the recovery is legible beside it rather
+ * than instead of it. Any open Needs You request about it is withdrawn, because
+ * a question about a retired mission is not a decision anybody should be asked
+ * to make.
+ *
+ * Returns false when the mission moved underneath, which is an ordinary lost
+ * race rather than an error.
+ */
+async function retirePlanningDefect(input: {
+  candidateId: string;
+  missionId: string;
+  reason: string;
+}): Promise<boolean> {
+  const mission = await getMission(input.missionId);
+  if (!mission) return false;
+  const already = mission.state === 'FAILED' || mission.state === 'CANCELLED';
+
+  if (!already) {
+    const moved = await transitionMission({
+      missionId: mission.id,
+      from: mission.state,
+      to: 'FAILED',
+      terminalReason:
+        `${input.reason} — and the specification it ran on was written by the worker-planning ` +
+        'subsystem this Brain has retired, so it is superseded by a compiled one rather than ' +
+        'counted as an attempt at the idea.',
+    });
+    if (!moved) return false;
+  }
+
+  const open = await openRequestFor(mission.id);
+  if (open) {
+    await withdrawRequest({
+      requestId: open.id,
+      reason:
+        'Withdrawn: this asked about a mission whose specification was written by the retired ' +
+        'worker-planning subsystem. The idea has been specified again by Brain, so there is ' +
+        'nothing here for you to decide.',
+    });
+  }
+
+  await recordEvent({
+    projectId: mission.projectId,
+    entityType: 'RUSSELL_MISSION',
+    entityId: mission.id,
+    eventType: 'RUSSELL_MISSION_FAILED',
+    payload: {
+      orchestrationId: mission.orchestrationId,
+      reason: input.reason,
+      retiredPlanning: true,
+      surface: 'RUSSELL',
+    },
+  });
+  // A mission that was already terminal is still a recovery: what mattered was
+  // reaching the idea, and it has been reached.
+  return true;
 }
 
 /**
@@ -955,22 +1169,18 @@ async function finishedPlanBins(limit: number): Promise<string[]> {
  * canonical carries the judgment — and so is one with no project, which there
  * is nothing to judge against.
  *
- * The `NOT EXISTS` is the same shape as `exploring()`'s and exists for the same
- * reason: a candidate whose plan bin is still out there must not be offered
- * again every thirty seconds. `judgeCandidate` is idempotent and would return
- * the existing bin, so this is throughput and honesty rather than safety — a
- * tick that reported the same idea as newly dispatched on every pass would be
- * describing work it did not do.
+ * There used to be a `NOT EXISTS` here excluding a candidate whose planning bin
+ * was still out with a worker, because judging meant dispatching one and an
+ * at-least-once loop must not dispatch twice. Judging is synchronous now, so
+ * there is nothing outstanding to wait for — and the clause had become a trap:
+ * a candidate carrying a *completed* plan bin from the retired subsystem would
+ * have been excluded from being judged for ever, which is the opposite of what
+ * it was written to do.
  */
 async function unjudged(limit: number): Promise<{ id: string }[]> {
   return getDb().all<{ id: string }>(
     `SELECT c.id FROM russell_candidates c
       WHERE c.priority IS NULL AND c.state <> 'MERGED' AND c.project_id IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM bins b
-           WHERE b.created_by_id = 'russell:plan:' || c.id
-             AND b.state NOT IN ('CANCELLED','FAILED')
-        )
       ORDER BY c.created_at, c.rowid
       LIMIT ?`,
     [Math.max(1, limit)],
@@ -978,65 +1188,31 @@ async function unjudged(limit: number): Promise<{ id: string }[]> {
 }
 
 /**
- * Ideas whose latest mission ended without producing a report.
+ * Park an idea whose only specification has been researched and produced nothing.
  *
- * Four conditions, and each one is doing work:
- *
- *   - the mission is `FAILED` or `CANCELLED`. `DONE` is answered and
- *     `NEEDS_HUMAN` is a person's decision that has not been made yet;
- *   - it filed no document, so nothing was learned and re-asking is not §13's
- *     waste;
- *   - it is the newest attempt for that candidate, so a redo is planned from
- *     the run that actually just ended;
- *   - it is below the ceiling, checked here as well as in `launch()` so a
- *     spent idea does not spend a planning bin discovering it.
- *
- * And no live plan bin for this same mission, which is what makes the step
- * idempotent: the tick runs every thirty seconds and a re-plan takes minutes.
+ * The reason is the run's own words when it recorded any, and Brain's sentence
+ * about the state otherwise — never an invented account of why the research
+ * failed. Guarded on `QUEUED`, so a person who moved it in the meantime wins.
  */
-async function redoable(limit: number): Promise<
-  { candidateId: string; missionId: string; attempt: number; reason: string }[]
-> {
-  const rows = await getDb().all<{
-    candidate_id: string;
-    id: string;
-    attempt: number;
-    terminal_reason: string | null;
-  }>(
-    `SELECT m.candidate_id, m.id, m.attempt, m.terminal_reason
-       FROM russell_missions m
-       JOIN russell_candidates c ON c.id = m.candidate_id
-      WHERE m.state IN ('FAILED','CANCELLED')
-        AND m.document_id IS NULL
-        AND c.state = 'QUEUED'
-        -- The ceiling counts specifications, not rows, for the reason
-        -- launch() records: production spent all three attempts on one
-        -- placeholder in four minutes because the launcher raced the re-plan.
-        -- Counting rows here would leave the idea permanently unredoable
-        -- after exactly that accident, which is the state this query has to
-        -- be able to get out of.
-        -- The derived table is aliased because Postgres requires it; SQLite
-        -- does not care, and one statement has to be right on both.
-        AND (SELECT COUNT(*) FROM (
-               SELECT DISTINCT m3.objective, m3.why_now FROM russell_missions m3
-                WHERE m3.candidate_id = m.candidate_id) AS approaches) < ?
-        AND m.rowid = (
-              SELECT MAX(m2.rowid) FROM russell_missions m2
-               WHERE m2.candidate_id = m.candidate_id)
-        AND NOT EXISTS (
-              SELECT 1 FROM bins b
-               WHERE b.created_by_id = 'russell:plan:' || m.candidate_id || ':redo:' || m.id
-                 AND b.state NOT IN ('CANCELLED','FAILED'))
-      ORDER BY m.updated_at, m.rowid
-      LIMIT ?`,
-    [MAX_MISSION_ATTEMPTS, Math.max(1, limit)],
-  );
-  return rows.map((row) => ({
-    candidateId: row.candidate_id,
-    missionId: row.id,
-    attempt: row.attempt,
-    reason: row.terminal_reason ?? 'the run ended without recording a reason',
-  }));
+async function parkResearchedIdea(candidateId: string, refusal: string): Promise<string | null> {
+  const candidate = await getCandidate(candidateId);
+  if (!candidate || candidate.state !== 'QUEUED') return null;
+  const previous = await latestMissionForCandidate(candidateId);
+  const why = previous?.terminalReason?.trim() || previous?.waitingOn?.trim() || refusal;
+  const reason = `Researched once and it produced no report: ${why}`;
+  const recorded = await recordJudgment({
+    candidateId,
+    state: 'PARKED',
+    priority: 'PARKED',
+    reason,
+    judgment: {
+      ...candidate.judgment,
+      researchedWithoutReport: { missionId: previous?.id ?? null, reason: why },
+    },
+    supporting: candidate.supporting,
+    contradicting: candidate.contradicting,
+  });
+  return recorded ? reason : null;
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;

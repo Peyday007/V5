@@ -221,6 +221,15 @@ export async function latestMissionForCandidate(
   return rows[0] ? mapMission(rows[0]) : null;
 }
 
+/** How many mission rows one idea has. The runaway guard's only reader. */
+export async function countMissionsForCandidate(candidateId: string): Promise<number> {
+  const rows = await getDb().all<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM russell_missions WHERE candidate_id = ?',
+    [candidateId],
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function listMissions(input: {
   projectId: string;
   states?: MissionState[];

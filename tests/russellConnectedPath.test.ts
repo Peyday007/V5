@@ -19,28 +19,39 @@ import { createUser, grantMembership } from '../server/repos/identity.ts';
 import { addMessage, createConversation, listTurns } from '../server/repos/russellConversations.ts';
 import { applyTurn, beginTurn, retryTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
 import { shouldCapture } from '../server/services/russell/judgment.ts';
+import { judgeCandidate } from '../server/services/russell/planning.ts';
 import {
-  applyPlan,
-  judgeCandidate,
-  PLAN_MINIMUMS,
-  PLAN_UNIT_KEY,
-  validatePlan,
-} from '../server/services/russell/planning.ts';
-import { getCandidate, listCandidates, recordJudgment } from '../server/repos/russellCandidates.ts';
+  getApprovalEnvelope,
+  planFitsEnvelope,
+} from '../server/services/research/approvalEnvelope.ts';
+import {
+  getCandidate,
+  listCandidates,
+  overrideJudgment,
+  recordJudgment,
+} from '../server/repos/russellCandidates.ts';
 import { putBinUnitResult, getBin, assignNextBin, createBin } from '../server/repos/bins.ts';
 import { requestCompletion } from '../server/services/bins/service.ts';
 import { createWorker } from '../server/repos/identity.ts';
 import { evaluateContract, hashUnitValue } from '../server/services/bins/contracts.ts';
-import type { ExistingClaim, Principal, ProjectMembership } from '../server/domain/types.ts';
+import type {
+  ExistingClaim,
+  Principal,
+  ProjectMembership,
+  ResearchFragment,
+  ResearchOrchestration,
+} from '../server/domain/types.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import { tick as runCycle } from '../server/services/russell/loop.ts';
 import {
+  askHuman,
+  getHumanRequest,
   getMission,
   launchMission,
   listMissions,
   transitionMission,
 } from '../server/repos/russellMissions.ts';
-import { launch, MAX_MISSION_ATTEMPTS } from '../server/services/russell/launch.ts';
+import { launch } from '../server/services/russell/launch.ts';
 import { createGoal } from '../server/repos/russellAuthority.ts';
 
 let projectId = '';
@@ -146,18 +157,6 @@ async function workerCompletesTurn(binId: string, proposal: Record<string, unkno
   return workerCompletesBin(binId, TURN_UNIT_KEY, proposal);
 }
 
-/**
- * A worker taking a planning bin the whole way: assigned, submitted, completed.
- *
- * The loop selects on `bins.state`, so a unit result alone leaves the bin READY
- * and nothing downstream ever sees it. Driving the real assign → submit →
- * complete path is the difference between testing the functions and testing the
- * wiring.
- */
-async function workerCompletesPlan(binId: string, plan: Record<string, unknown>): Promise<string> {
-  return workerCompletesBin(binId, PLAN_UNIT_KEY, plan);
-}
-
 async function workerCompletesBin(
   binId: string,
   unitKey: string,
@@ -191,32 +190,6 @@ async function workerCompletesBin(
   return finished.state ?? 'UNKNOWN';
 }
 
-/** A worker answering a planning bin, the same way. */
-async function workerPlans(binId: string, plan: Record<string, unknown>): Promise<void> {
-  await putBinUnitResult({
-    binId,
-    unitKey: PLAN_UNIT_KEY,
-    value: JSON.stringify(plan),
-    contentHash: `h${Math.random().toString(36).slice(2, 10)}`,
-    leaseId: null,
-    leaseGeneration: null,
-    submittedBy: 'wkr_plan',
-  });
-}
-
-const GOOD_PLAN = {
-  observations: { cheapToReduce: true, expectedValue: 70, blockedBy: null },
-  mission: {
-    title: 'Michigan permit data availability',
-    objective: 'Establish which Michigan counties publish permit data and on what terms.',
-    assignment: 'Identify the counties, the publication route, the licence and the update cadence.',
-    whyNow: 'Discovery design would otherwise rest on an assumption about availability.',
-    acceptableSources: ['county open-data portals', 'state statute'],
-    excludedSources: ['vendor marketing'],
-    evidence: ['a canonical URL per county', 'the licence terms as published'],
-  },
-};
-
 /** Capture an idea through the real turn path, and return it. */
 async function captureAnIdea(statement: string): Promise<string> {
   const conversation = await createConversation({
@@ -249,8 +222,8 @@ async function captureAnIdea(statement: string): Promise<string> {
   return applied.candidateId!;
 }
 
-describe('the path from a captured idea to judged work', () => {
-  it('judges a captured idea, and the judgment is what the loop selects on', async () => {
+describe('the path from a captured idea to compiled work', () => {
+  it('judges a captured idea and compiles its specification, in one call', async () => {
     await authorize();
     const candidateId = await captureAnIdea(
       'We should find out whether Michigan counties publish permit data we can consume.',
@@ -263,304 +236,154 @@ describe('the path from a captured idea to judged work', () => {
 
     const outcome = await judgeCandidate(candidateId);
     expect(outcome.ok).toBe(true);
-    // Nothing in the archive answers it, so a worker is asked — and asking is
-    // a bin, not an inference.
     expect(outcome.answeredByArchive).toBe(false);
-    expect(outcome.binId).not.toBeNull();
-
-    const bin = (await getBin(outcome.binId!))!;
-    expect(bin.completionContract).toBe('RUSSELL_PLAN_V1');
-    expect(bin.workloadClass).toBe('RUSSELL_PLAN');
-    // And the manifest states the rules it will be judged against, rather than
-    // enforcing rules nobody was told.
-    const manifest = JSON.stringify(bin.manifest);
-    expect(manifest).toContain('cheapToReduce');
-    expect(manifest).toContain('expectedValue');
-    expect(manifest).toContain('an unrecognised one refuses the whole plan');
-
-    // Still unjudged: a bin is a question, not an answer.
-    const during = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
-    expect(during.priority).toBeNull();
-
-    await workerPlans(outcome.binId!, GOOD_PLAN);
-    expect((await evaluateContract((await getBin(outcome.binId!))!)).satisfied).toBe(true);
-
-    const applied = await applyPlan(outcome.binId!);
-    expect(applied.ok).toBe(true);
-    expect(applied.alreadyJudged).toBe(false);
-
-    const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
-    // `cheapToReduce` is what `judge()` turns into EXPLORE, and EXPLORE plus
-    // CAPTURED is exactly what `exploring()` selects — so the bounded look is
-    // now reachable where before it never could be.
-    expect(after.priority).toBe('EXPLORE');
-    expect(after.state).toBe('CAPTURED');
-    expect(after.reason).toMatch(/cheap to reduce/);
-  });
-
-  it('refuses a plan that is placeholder text rather than a specification', async () => {
     /*
-     * The production failure of 2026-09-07, and the most expensive one this
-     * run found.
+     * No bin, and that is the change.
      *
-     * The judgment pass for S12A-ACC-2 returned a mission specification whose
-     * title, objective, assignment and reason were the word "test". Every
-     * field was a non-empty string within its maximum, so `validatePlan`
-     * accepted it; Brain reserved a mission and twelve fragments against the
-     * owner's standing authority, created an orchestration and a bin titled
-     * `test`, and fired the fleet at it. The worker read the manifest and
-     * released it three times — "This packet's own manifest is corrupted
-     * placeholder content" — the planning item failed, and the packet parked.
-     *
-     * Everything downstream behaved correctly. What was missing was the check
-     * that the thing being spent on is an assignment at all: every field had a
-     * maximum and none had a minimum.
-     *
-     * §12 already holds this rule for a provider — placeholder content "is
-     * refused for staged research outright". It was applied to a provider's
-     * output and not to a worker's plan.
+     * This used to dispatch a `RUSSELL_PLAN` bin and wait for a worker to write
+     * the specification. Three times in production that worker answered with a
+     * padded placeholder — `{title: 'test', …}`, then `"test placeholder title
+     * long enough"` — and Brain refused all three correctly and got nowhere.
+     * The specification is compiled here instead, so there is nothing
+     * outstanding to point at.
      */
-    await authorize();
-
-    // The exact shape that reached production.
-    const asShipped = validatePlan({
-      raw: {
-        observations: { cheapToReduce: false, expectedValue: 50, blockedBy: null },
-        mission: {
-          title: 'test',
-          objective: 'test',
-          assignment: 'test',
-          whyNow: 'test',
-          acceptableSources: ['test'],
-          excludedSources: ['test'],
-          evidence: ['test'],
-        },
-      },
-    });
-    expect(asShipped.ok).toBe(false);
-    if (!asShipped.ok) expect(asShipped.reason).toMatch(/placeholder/i);
-
-    // A placeholder anywhere refuses the whole plan, not just the field.
-    for (const field of ['title', 'objective', 'assignment', 'whyNow'] as const) {
-      const one = validatePlan({
-        raw: {
-          observations: { cheapToReduce: false, expectedValue: 50, blockedBy: null },
-          mission: { ...GOOD_PLAN.mission, [field]: 'TBD' },
-        },
-      });
-      expect(one.ok, `a placeholder ${field} was accepted`).toBe(false);
-    }
-
-    // Too short is refused with the number, so a worker can tell by how much.
-    const short = validatePlan({
-      raw: {
-        observations: { cheapToReduce: false, expectedValue: 50, blockedBy: null },
-        mission: { ...GOOD_PLAN.mission, assignment: 'Find out about permits.' },
-      },
-    });
-    expect(short.ok).toBe(false);
-    if (!short.ok) {
-      expect(short.reason).toContain(String(PLAN_MINIMUMS.assignment));
-      expect(short.reason).toContain('assignment');
-    }
-
-    /*
-     * And a real word that merely contains a placeholder is fine. Whole-field
-     * matching, never substring — §8's rule about enums, at a different
-     * boundary. "Latest test results" is a title somebody wrote.
-     */
-    const contains = validatePlan({
-      raw: {
-        observations: { cheapToReduce: false, expectedValue: 50, blockedBy: null },
-        mission: { ...GOOD_PLAN.mission, title: 'Latest test results for permit portals' },
-      },
-    });
-    expect(contains.ok).toBe(true);
-
-    // The good plan still passes, so the floor did not become a wall.
-    expect(validatePlan({ raw: GOOD_PLAN }).ok).toBe(true);
-  });
-
-  it('refuses a placeholder plan at completion, not after the bin is closed', async () => {
-    /*
-     * The correction to where mutation 18 put the floor.
-     *
-     * It went into `validatePlan`, which `applyPlan` calls — *after* the bin is
-     * COMPLETE. A refused plan therefore left the candidate at `priority =
-     * NULL` beside a completed bin, and `unjudged()` excludes any candidate
-     * whose plan bin is not CANCELLED or FAILED. The idea became permanently
-     * unselectable: no priority, no probe, no mission, no second attempt, and
-     * nothing anywhere saying so. The floor stopped Brain spending on a
-     * placeholder and started it losing the idea instead.
-     *
-     * So the same rule runs in the completion contract, where the worker is
-     * still in session and still has attempts — the way `RESEARCH_PACKET_V1`
-     * refused the placeholder packet three times on 2026-09-07.
-     */
-    await authorize();
-    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
-    const outcome = await judgeCandidate(candidateId);
-
-    await workerPlans(outcome.binId!, {
-      observations: { cheapToReduce: false, expectedValue: 50, blockedBy: null },
-      mission: {
-        title: 'test',
-        objective: 'test',
-        assignment: 'test',
-        whyNow: 'test',
-        acceptableSources: ['test'],
-        excludedSources: ['test'],
-        evidence: ['test'],
-      },
-    });
-
-    const verdict = await evaluateContract((await getBin(outcome.binId!))!);
-    expect(verdict.satisfied, 'a placeholder plan satisfied the completion contract').toBe(false);
-    // RETRY, not HUMAN: the worker can still write a real specification, and
-    // putting a person in front of that would be a queue for something that
-    // only needed asking again.
-    expect(verdict.disposition).toBe('RETRY');
-    expect(verdict.reasons.join(' ')).toMatch(/placeholder/i);
-
-    // The idea is untouched and still selectable, which is the property the
-    // stranding broke.
-    const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
-    expect(after.priority).toBeNull();
-    expect(after.state).toBe('CAPTURED');
-
-    /*
-     * That the floor is a floor rather than a wall is asserted where a good
-     * plan is already submitted — "judges an idea a worker planned" evaluates
-     * the same contract on GOOD_PLAN and gets `satisfied`. Re-submitting onto
-     * this bin would need a second lease and would be testing the queue, not
-     * the contract.
-     */
-  });
-
-  it('tells the worker about the floor rather than enforcing it silently', async () => {
-    /*
-     * The rule this file has now needed four times: a rule enforced against
-     * somebody who was never told it is a trap rather than a rule. The
-     * manifest stated every maximum and no minimum.
-     */
-    await authorize();
-    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
-    const outcome = await judgeCandidate(candidateId);
-    const manifest = JSON.stringify((await getBin(outcome.binId!))!.manifest);
-
-    for (const [field, floor] of Object.entries(PLAN_MINIMUMS)) {
-      expect(manifest, `the manifest never states the ${field} minimum`).toContain(
-        `mission.${field} is from ${floor} to`,
-      );
-    }
-    expect(manifest).toMatch(/placeholder/i);
-    // And what to do instead of filling the fields in with nothing.
-    expect(manifest).toContain('observations.blockedBy');
-  });
-
-  it('does not let a worker decide whether the archive already answers it', async () => {
-    await authorize();
-    const candidateId = await captureAnIdea('We should check whether the fee schedule changed.');
-    const outcome = await judgeCandidate(candidateId);
-
-    // A plan that tries to smuggle in the one input Brain reserves for itself.
-    const smuggled = validatePlan({
-      raw: {
-        observations: { cheapToReduce: true, expectedValue: 70, blockedBy: null, alreadyAnswered: true },
-        mission: GOOD_PLAN.mission,
-      },
-    });
-    expect(smuggled.ok).toBe(false);
-    if (!smuggled.ok) expect(smuggled.reason).toMatch(/not part of the contract/);
-
-    // And the accepted shape has no route to it either: the field is set from
-    // Brain's own coverage check on the way in, never from the submission.
-    await workerPlans(outcome.binId!, GOOD_PLAN);
-    await applyPlan(outcome.binId!);
-    const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
-    expect(after.judgment?.['alreadyAnswered']).toBe(false);
-    expect(after.judgment?.['decidedBy']).toBe('WORKER_OBSERVATIONS');
-  });
-
-  it('records a mission specification only when the verdict could launch one', async () => {
-    await authorize();
-    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
-    const outcome = await judgeCandidate(candidateId);
-    // Not cheap to reduce, and valuable: `judge()` queues it rather than
-    // sending it for a cheap look.
-    await workerPlans(outcome.binId!, {
-      observations: { cheapToReduce: false, expectedValue: 85, blockedBy: null },
-      mission: GOOD_PLAN.mission,
-    });
-    const applied = await applyPlan(outcome.binId!);
-    expect(applied.priority).toBe('MUST_DO');
+    expect(outcome.binId).toBeNull();
+    expect(outcome.launchable).toBe(true);
+    expect(await getDb().all(`SELECT id FROM bins WHERE kind = 'RUSSELL_PLAN'`, [])).toHaveLength(0);
 
     const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
     expect(after.state).toBe('QUEUED');
-    // Authorized, so a launchable specification is written — under the key
-    // `nextLaunchable` reads, completed with the layer, the visibility, the
-    // approver and the envelope named rather than supplied.
-    expect(applied.launchable).toBe(true);
-    const spec = after.judgment?.['missionSpec'] as Record<string, unknown>;
-    expect(spec).toBeTruthy();
-    expect(spec['envelopeId']).toBe('RUSSELL_STATE_LICENSING_V1');
+    expect(after.judgment?.['decidedBy']).toBe('COMPILER');
+    // Neither semantic observation was made, and the judgment says so rather
+    // than storing a `false` and a `0` that read as findings.
+    expect(after.judgment?.['cheapToReduceAssessed']).toBe('NOT_ASSESSED');
+    expect(after.judgment?.['expectedValueAssessed']).toBe('NOT_ASSESSED');
+  });
+
+  it('specifies the work from the person\'s own question, not from a summary of it', async () => {
+    await authorize();
+    const asked =
+      'When a property changes hands, how quickly does the county register show it, and is ' +
+      'there a lag between the closing and the record appearing?';
+    const candidateId = await captureAnIdea(asked);
+    await judgeCandidate(candidateId);
+
+    const spec = specOf(
+      (await listCandidates({ projectId })).find((c) => c.id === candidateId)!,
+    );
+    // The assignment quotes what the person actually sent. A candidate's
+    // statement is a worker's restatement of it; the message is the primary
+    // text and is what the mission is about.
+    expect(String(spec['assignment'])).toContain(asked);
+    expect(String(spec['objective'])).toContain('official Michigan public records');
+    // And it asserts nothing about the world: every sentence in it is either
+    // the question or a rule the envelope fixed.
+    expect(String(spec['whyNow'])).toMatch(/does not answer this/);
+  });
+
+  it('names the project\'s own envelope rather than one for another question', async () => {
+    /*
+     * The defect this replaced. `missionSpecFor` wrote the literal string
+     * `RUSSELL_STATE_LICENSING_V1` on every Russell mission in every project —
+     * an acceptance envelope for a licensing question about Florida and
+     * California, which lists Michigan in its own `forbiddenScope`. So a real
+     * Deal Dispatch idea was measured against limits for a different question
+     * about a different place, and was refused every time.
+     */
+    await authorize();
+    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
+    await judgeCandidate(candidateId);
+
+    const spec = specOf((await listCandidates({ projectId })).find((c) => c.id === candidateId)!);
+    expect(spec['envelopeId']).toBe('RUSSELL_PUBLIC_RECORDS_V1');
     expect(spec['authorizedBy']).toBe(userId);
     expect(spec['layerId']).toBeTruthy();
-    expect(spec['title']).toBe(GOOD_PLAN.mission.title);
+  });
+
+  it('compiles a plan the envelope actually accepts', async () => {
+    /*
+     * The property everything downstream depends on, checked against the real
+     * validator rather than described.
+     */
+    await authorize();
+    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
+    await judgeCandidate(candidateId);
+    const spec = specOf((await listCandidates({ projectId })).find((c) => c.id === candidateId)!);
+    const envelope = getApprovalEnvelope(String(spec['envelopeId']))!;
+
+    const fragments = (spec['plan'] as Record<string, unknown>[]).map((fragment) => ({
+      ...(fragment as unknown as ResearchFragment),
+      fragmentKey: String(fragment['fragmentKey']),
+    })) as unknown as ResearchFragment[];
+
+    const verdict = planFitsEnvelope({
+      envelope,
+      orchestration: {
+        assignment: String(spec['assignment']),
+        fixture: false,
+        unresolvedGapPolicy: null,
+      } as unknown as ResearchOrchestration,
+      fragments,
+    });
+    expect(verdict.fits, verdict.reasons.join(' ')).toBe(true);
+    expect(verdict.checked['pinnedBy']).toBe('TEMPLATE');
+  });
+
+  it('refuses a question about a jurisdiction the authorization does not cover', async () => {
+    // Not quietly re-scoped to somewhere Brain is allowed to look, which would
+    // answer a different question from the one somebody asked.
+    await authorize();
+    const candidateId = await captureAnIdea(
+      'We should find out how quickly Ohio counties publish deed transfers.',
+    );
+    const outcome = await judgeCandidate(candidateId);
+    expect(outcome.ok).toBe(true);
+    expect(outcome.priority).toBe('PARKED');
+
+    const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+    expect(after.state).toBe('PARKED');
+    expect(after.reason).toMatch(/Ohio/);
+    expect(after.reason).toMatch(/Michigan/);
+    // Parked with the reason rather than left unjudged: a person can act on a
+    // refusal they can see, and "nothing has happened yet" is a different
+    // state with a different remedy.
+    expect(after.judgment?.['refusal']).toBeTruthy();
+    expect(after.judgment?.['missionSpec']).toBeUndefined();
   });
 
   it('keeps a park out of the launch queue even though the work was specified', async () => {
     await authorize();
+    await getDb().run(`UPDATE russell_goals SET state = 'REVOKED' WHERE project_id = ?`, [
+      projectId,
+    ]);
     const candidateId = await captureAnIdea('We should add permit data once the ingest lands.');
     const outcome = await judgeCandidate(candidateId);
-    await workerPlans(outcome.binId!, {
-      observations: { cheapToReduce: false, expectedValue: 60, blockedBy: 'the ingest pipeline' },
-      mission: GOOD_PLAN.mission,
-    });
-    const applied = await applyPlan(outcome.binId!);
-    expect(applied.priority).toBe('PARKED');
+    expect(outcome.priority).toBe('PARKED');
 
     const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
     expect(after.state).toBe('PARKED');
-    expect(after.reason).toMatch(/depends on the ingest pipeline/);
-    // The worker's specification is kept — it was real work — but not under the
-    // key `nextLaunchable` reads, so a park cannot become launchable by having
-    // its state changed by hand.
+    // The compiled specification is kept — it is free to recompute and useful
+    // to read — but not under the key `nextLaunchable` reads, so a park cannot
+    // become launchable by having its state changed by hand.
     expect(after.judgment?.['missionSpec']).toBeUndefined();
     expect(after.judgment?.['proposedMission']).toBeTruthy();
   });
 });
 
+/** The compiled specification a judged candidate carries. */
+function specOf(candidate: { judgment: Record<string, unknown> }): Record<string, unknown> {
+  return candidate.judgment['missionSpec'] as Record<string, unknown>;
+}
+
 describe('delivering the same work twice', () => {
-  it('judges once when a plan bin is applied twice', async () => {
-    const candidateId = await captureAnIdea('We should find out what the counties publish.');
-    const outcome = await judgeCandidate(candidateId);
-    await workerPlans(outcome.binId!, GOOD_PLAN);
-
-    const first = await applyPlan(outcome.binId!);
-    const second = await applyPlan(outcome.binId!);
-    expect(first.alreadyJudged).toBe(false);
-    expect(second.alreadyJudged).toBe(true);
-
-    const rows = await getDb().all<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM russell_candidates WHERE id = ? AND priority IS NOT NULL`,
-      [candidateId],
-    );
-    expect(Number(rows[0]!.n)).toBe(1);
-  });
-
-  it('asks for one plan however many times a candidate is judged', async () => {
-    const candidateId = await captureAnIdea('We should look at the publication cadence.');
+  it('judges once however many times a candidate is judged', async () => {
+    await authorize();
+    const candidateId = await captureAnIdea('We should check the publication cadence.');
     const a = await judgeCandidate(candidateId);
     const b = await judgeCandidate(candidateId);
-    // The second finds the first bin rather than making another. An
-    // at-least-once loop must not spend two activations on one question.
-    expect(b.binId).toBe(a.binId);
-    const bins = await getDb().all<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM bins WHERE created_by_id = ?`,
-      [`russell:plan:${candidateId}`],
-    );
-    expect(Number(bins[0]!.n)).toBe(1);
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(false);
+    expect(b.reason).toMatch(/already judged/);
   });
 
   it('captures once when a turn bin is applied twice', async () => {
@@ -712,9 +535,9 @@ describe('the archive answers first, and spends nothing when it can', () => {
        * answered" when the archive does not answer it — so the fallback pins
        * that a worker was asked rather than the question being closed.
        */
-      expect(outcome.binId).not.toBeNull();
+      expect(outcome.answeredByArchive).toBe(false);
       const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
-      expect(after.priority).toBeNull();
+      expect(after.state).not.toBe('REJECTED');
     }
   });
 
@@ -723,21 +546,24 @@ describe('the archive answers first, and spends nothing when it can', () => {
     // No claims at all is the ordinary empty-archive case, and it must lead to
     // asking rather than to closing the question.
     const outcome = await judgeCandidate(candidateId, { claims: [] });
+    // Specified rather than closed: an empty archive is "unknown", and the
+    // question goes on to be judged rather than marked answered.
     expect(outcome.answeredByArchive).toBe(false);
-    expect(outcome.binId).not.toBeNull();
+    expect((await getCandidate(candidateId))!.state).not.toBe('REJECTED');
   });
 });
 
-describe('the existing loop selects and advances what was judged', () => {
+describe('the loop selects, compiles and launches on its own', () => {
   /**
    * The claim that reading alone cannot support.
    *
-   * Every other test here calls `judgeCandidate` and `applyPlan` directly,
-   * which proves the functions and not the wiring. These drive `runCycle` —
-   * the real tick, with its own claim, fence and cursor — and assert that it
-   * finds the work by itself.
+   * These drive `runCycle` — the real tick, with its own claim, fence and
+   * cursor — and assert that it finds the work by itself. That distinction is
+   * the whole reason this file exists: the previous version's redo tests called
+   * `applyPlan` directly and passed while production's chain was dead, because
+   * the loop's own selector matched two plan-key shapes out of three.
    */
-  it('judges a captured idea on its own, and asks a worker without being told to', async () => {
+  it('judges and specifies a captured idea on its own, with no bin and no worker', async () => {
     await authorize();
     const candidateId = await captureAnIdea(
       'We should find out which counties publish permit data.',
@@ -748,83 +574,44 @@ describe('the existing loop selects and advances what was judged', () => {
     // The candidate was found by the loop's own selector, not handed to it.
     expect(tick.planning).toContain(candidateId);
 
-    const bins = await getDb().all<{ id: string }>(
-      `SELECT id FROM bins WHERE created_by_id = ?`,
-      [`russell:plan:${candidateId}`],
-    );
-    expect(bins).toHaveLength(1);
+    // Nothing was dispatched to write it. This is the subsystem that is gone.
+    expect(await getDb().all(`SELECT id FROM bins WHERE kind = 'RUSSELL_PLAN'`, [])).toHaveLength(0);
 
-    // And a second tick does not ask again: an at-least-once loop must not
-    // spend two activations on one question.
+    const judged = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+    expect(judged.state).toBe('QUEUED');
+    expect(judged.judgment?.['missionSpec']).toBeTruthy();
+
+    // And a second tick does not judge it again.
     const again = await runCycle('test-owner');
     expect(again.planning).not.toContain(candidateId);
   });
 
-  it('turns a finished plan into a judgment, then opens the bounded look', async () => {
-    await authorize();
-    const candidateId = await captureAnIdea('We should check the publication cadence.');
-    await runCycle('test-owner');
-    const binId = (
-      await getDb().all<{ id: string }>(`SELECT id FROM bins WHERE created_by_id = ?`, [
-        `russell:plan:${candidateId}`,
-      ])
-    )[0]!.id;
-    expect(await workerCompletesPlan(binId, GOOD_PLAN)).toBe('COMPLETE');
-
-    // One tick: the plan becomes a judgment, and the same tick's probe step
-    // picks up what that judgment made eligible.
-    const tick = await runCycle('test-owner');
-    expect(tick.judged).toContain(binId);
-
-    const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
-    expect(after.priority).toBe('EXPLORE');
-
-    // `exploring()` selects EXPLORE + CAPTURED with no probe yet — which is
-    // exactly what the judgment produced, so the cheap look now happens.
-    const probed = tick.probed.length > 0 ? tick : await runCycle('test-owner');
-    expect(probed.probed.length).toBeGreaterThan(0);
-    const probes = await getDb().all<{ candidate_id: string }>(
-      `SELECT candidate_id FROM russell_probes`,
-      [],
-    );
-    expect(probes.map((p) => p.candidate_id)).toContain(candidateId);
-  });
-
-  it('launches a mission from a queued judgment, through the loop', async () => {
+  it('launches a mission from a compiled judgment, through the loop', async () => {
     await authorize();
     const candidateId = await captureAnIdea('We should establish the licence terms in full.');
-    await runCycle('test-owner');
-    const binId = (
-      await getDb().all<{ id: string }>(`SELECT id FROM bins WHERE created_by_id = ?`, [
-        `russell:plan:${candidateId}`,
-      ])
-    )[0]!.id;
-    // Not cheap to reduce and highly valuable: `judge()` queues it for a packet
-    // rather than a look.
-    await workerCompletesPlan(binId, {
-      observations: { cheapToReduce: false, expectedValue: 85, blockedBy: null },
-      mission: GOOD_PLAN.mission,
-    });
 
-    /*
-     * The judgment and the launch can land in the same tick or in consecutive
-     * ones, depending on where in the tick the plan was consumed. Both are
-     * correct, so the assertion is over the outcome rather than the timing —
-     * a test that pinned the tick would be pinning an implementation detail.
-     */
+    // Tick one compiles and queues; tick two launches. Both are the loop's own
+    // selectors, with nothing handed to them.
     await runCycle('test-owner');
     const judged = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
     expect(judged.state).toBe('QUEUED');
+    const spec = judged.judgment?.['missionSpec'] as Record<string, unknown>;
+    expect(spec).toBeTruthy();
 
-    // The launch step reads `judgment.missionSpec`, which nothing wrote before
-    // this repair.
     const launchTick = await runCycle('test-owner');
     const missions = await listMissions({ projectId });
     const mine = missions.find((mission) => mission.candidateId === candidateId);
 
     if (mine) {
-      expect(mine.objective).toBe(GOOD_PLAN.mission.objective);
+      expect(mine.objective).toBe(spec['objective']);
       expect(mine.projectId).toBe(projectId);
+      // The packet arrived planned: no `RESEARCH_PLAN` work item was ever
+      // queued, because the decomposition travelled with the specification.
+      const items = await getDb().all<{ work_type: string }>(
+        `SELECT work_type FROM work_items WHERE orchestration_id = ?`,
+        [mine.orchestrationId],
+      );
+      expect(items.map((item) => item.work_type)).not.toContain('RESEARCH_PLAN');
     } else {
       /*
        * A launch can be refused for reasons that are facts about the fleet
@@ -839,26 +626,15 @@ describe('the existing loop selects and advances what was judged', () => {
 
   it('leaves an unauthorized project parked with a reason a person can act on', async () => {
     // No `authorize()`: this is a project where nobody has said what Russell
-    // may do. Before this repair such an idea was judged QUEUED with no
-    // launchable specification and waited forever.
+    // may do.
     const candidateId = await captureAnIdea('We should research the permit licence terms.');
-    await runCycle('test-owner');
-    const binId = (
-      await getDb().all<{ id: string }>(`SELECT id FROM bins WHERE created_by_id = ?`, [
-        `russell:plan:${candidateId}`,
-      ])
-    )[0]!.id;
-    await workerCompletesPlan(binId, {
-      observations: { cheapToReduce: false, expectedValue: 90, blockedBy: null },
-      mission: GOOD_PLAN.mission,
-    });
     await runCycle('test-owner');
 
     const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
     expect(after.priority).toBe('PARKED');
     expect(after.state).toBe('PARKED');
     expect(after.reason).toMatch(/no standing authority/);
-    // Parked, not launchable, and not lost: the worker's specification is kept.
+    // Parked, not launchable, and not lost: the compiled specification is kept.
     expect(after.judgment?.['missionSpec']).toBeUndefined();
     expect(after.judgment?.['proposedMission']).toBeTruthy();
     expect(await listMissions({ projectId })).toHaveLength(0);
@@ -1016,16 +792,6 @@ describe('authority decides whether a judged idea can become work', () => {
   it('parks with an actionable reason when nobody has authorized research', async () => {
     const candidateId = await captureAnIdea('We should research what the counties publish.');
     await runCycle('test-owner');
-    const binId = (
-      await getDb().all<{ id: string }>(`SELECT id FROM bins WHERE created_by_id = ?`, [
-        `russell:plan:${candidateId}`,
-      ])
-    )[0]!.id;
-    await workerCompletesPlan(binId, {
-      observations: { cheapToReduce: false, expectedValue: 90, blockedBy: null },
-      mission: GOOD_PLAN.mission,
-    });
-    await runCycle('test-owner');
 
     const parked = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
     expect(parked.priority).toBe('PARKED');
@@ -1036,22 +802,25 @@ describe('authority decides whether a judged idea can become work', () => {
   it('runs the same idea to a mission once a person grants the authority', async () => {
     const candidateId = await captureAnIdea('We should research the publication licence terms.');
     await runCycle('test-owner');
-    const binId = (
-      await getDb().all<{ id: string }>(`SELECT id FROM bins WHERE created_by_id = ?`, [
-        `russell:plan:${candidateId}`,
-      ])
-    )[0]!.id;
+    // Parked: nobody has authorized research here yet.
+    expect(
+      (await listCandidates({ projectId })).find((c) => c.id === candidateId)!.state,
+    ).toBe('PARKED');
 
-    // The grant a person makes on the console, through the same repository
-    // function that route calls.
+    // The grant a person makes, through the same repository function that route
+    // calls — and then a person's override puts the parked idea back in play,
+    // which is `PARKED`'s documented way out.
     await authorize();
-
-    await workerCompletesPlan(binId, {
-      observations: { cheapToReduce: false, expectedValue: 90, blockedBy: null },
-      mission: GOOD_PLAN.mission,
+    await overrideJudgment({
+      candidateId,
+      actorUserId: userId,
+      priority: 'MUST_DO',
+      state: 'CAPTURED',
+      reason: 'the authority now exists, so this can be judged again',
     });
-    await runCycle('test-owner');
+    await getDb().run(`UPDATE russell_candidates SET priority = NULL WHERE id = ?`, [candidateId]);
 
+    await runCycle('test-owner');
     const judged = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
     expect(judged.state).toBe('QUEUED');
     expect(judged.judgment?.['missionSpec']).toBeTruthy();
@@ -1060,7 +829,9 @@ describe('authority decides whether a judged idea can become work', () => {
     const missions = await listMissions({ projectId });
     const mine = missions.find((mission) => mission.candidateId === candidateId);
     if (mine) {
-      expect(mine.objective).toBe(GOOD_PLAN.mission.objective);
+      expect(mine.objective).toBe(
+        (judged.judgment?.['missionSpec'] as Record<string, unknown>)['objective'],
+      );
     } else {
       // A park for a fleet capability this fixture cannot supply is a justified
       // outcome, not a failure — but it must be one of those two, never silence.
@@ -1069,6 +840,7 @@ describe('authority decides whether a judged idea can become work', () => {
     }
   });
 });
+
 
 describe('a turn with no source message', () => {
   it('captures nothing and says the link is broken, rather than treating it as permission', async () => {
@@ -1145,83 +917,49 @@ describe('a turn with no source message', () => {
     expect(await listCandidates({ projectId })).toHaveLength(0);
   });
 });
-
 /**
- * An idea may be researched more than once.
+ * One specification per idea, and a defect is not an attempt.
  *
- * The defect these pin: a mission's idempotency key was
- * `russell:mission:<candidate>:<goal>` and `launchMission` inserts
- * `ON CONFLICT DO NOTHING`, so a candidate got exactly **one** mission for the
- * life of its grant. Once that run ended without a report — cancelled by its
- * owner, failed, or parked having produced nothing — the idea could never be
- * researched again. The loop went on selecting it as QUEUED on every tick and
- * went on re-finding the same dead row, for ever.
+ * These replace the redo tests. The redo existed because a worker wrote the
+ * specification, so a run that produced nothing could be answered by asking for
+ * a different one. With a compiled specification there is exactly one per idea,
+ * so §15's rule — no repair repeats a strategy an earlier attempt already
+ * tried — and "there is nothing else to try" became the same sentence.
  *
- * In production that is precisely what happened: on 2026-09-08 the only queued
- * idea in Deal Dispatch was attached to a packet holding zero fragments, and no
- * research, filing, writeback or follow-on could occur for it however the fleet
- * behaved. It is §24's missing answering transition at a fourth altitude, and
- * the remedy is §5's: a redo is a new row with a parent, an incremented
- * attempt and a reason, never an edit of the one that failed.
+ * What is left is two obligations, and both are here. A specification the
+ * retired subsystem wrote must not count against the idea, because it is a
+ * defect rather than an attempt; and an idea whose one specification has been
+ * researched and produced nothing must stop visibly rather than be refused in
+ * silence on every tick for ever.
  */
-describe('a run that produced nothing is not the end of the idea', () => {
-  /**
-   * Launch a mission for a candidate through the real path.
-   *
-   * `nth` varies the **specification**, because that is what the ceiling now
-   * counts. A caller that passes the same one twice is asking for a repeat and
-   * must be refused, which is the point several of these make.
-   */
-  async function launchFor(candidateId: string, nth = 1) {
-    const outcome = await launch({
+describe('one specification per idea, and a defect is not an attempt', () => {
+  const COMPILED = {
+    objective: 'Establish, from official Michigan public records, the compiled question.',
+    whyNow: 'Russell checked the archive and it does not answer this.',
+  };
+
+  async function launchWith(candidateId: string, spec: { objective: string; whyNow: string }) {
+    return launch({
       projectId,
       layerId,
       candidateId,
       visibility: 'PRIVATE',
       title: 'Michigan permit data availability',
       assignment: 'Identify the counties, the publication route, the licence and the cadence.',
-      objective: `Establish which Michigan counties publish permit data, approach ${nth}.`,
-      whyNow: 'Discovery design would otherwise rest on an assumption about availability.',
+      objective: spec.objective,
+      whyNow: spec.whyNow,
       acceptableSources: ['county open-data portals'],
       excludedSources: ['vendor marketing'],
       evidence: ['a canonical URL per county'],
       startedBy: { kind: 'PERSON', id: userId },
-      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      envelopeId: 'RUSSELL_PUBLIC_RECORDS_V1',
       authorizedBy: userId,
     });
-    return outcome;
   }
 
   // The file's own grant helper. Two active grants on one project would make
   // `checkAuthority`'s choice an accident of ordering, which §24 refuses.
   beforeEach(authorize);
-
-  /**
-   * A mission row that has already failed, without the packet behind it.
-   *
-   * The re-plan tests are about the planning pass, and a full `launch()` would
-   * leave a research bin READY that `assignNextBin` offers ahead of the plan
-   * bin under test. What the redo reads is the mission row, so that is what
-   * this makes.
-   */
-  async function failedMissionFor(candidateId: string) {
-    const { mission } = await launchMission({
-      projectId,
-      layerId,
-      visibility: 'PRIVATE',
-      objective: 'Establish which Michigan counties publish permit data.',
-      whyNow: 'Discovery design would otherwise rest on an assumption.',
-      idempotencyKey: `russell:mission:${candidateId}:test`,
-      candidateId,
-    });
-    await transitionMission({
-      missionId: mission.id,
-      from: 'PLANNED',
-      to: 'FAILED',
-      terminalReason: 'a planning work item finished without recording anything',
-    });
-    return mission;
-  }
 
   async function queuedIdea(): Promise<string> {
     const candidateId = await captureAnIdea('We should establish the permit publication terms.');
@@ -1240,29 +978,22 @@ describe('a run that produced nothing is not the end of the idea', () => {
 
   it('keeps the first attempt replaying while it is still alive', async () => {
     /*
-     * The property the fixed key was protecting, and which must survive.
      * A tick runs every thirty seconds; a mission runs for minutes. Relaunching
      * the same candidate must return the same mission rather than a second one.
      */
     const candidateId = await queuedIdea();
-    const first = await launchFor(candidateId);
-    expect(first.ok).toBe(true);
+    const first = await launchWith(candidateId, COMPILED);
+    expect(first.ok, first.reason).toBe(true);
 
-    const again = await launchFor(candidateId);
+    const again = await launchWith(candidateId, COMPILED);
     expect(again.ok).toBe(true);
     expect(again.mission!.id).toBe(first.mission!.id);
-    expect(again.mission!.attempt).toBe(1);
     expect(await listMissions({ projectId })).toHaveLength(1);
   });
 
-  it('gives the idea a second mission once the first has failed, and keeps the first', async () => {
+  it('refuses the same specification once it has been researched, and names the refusal', async () => {
     const candidateId = await queuedIdea();
-    const first = await launchFor(candidateId);
-    expect(first.mission!.attempt).toBe(1);
-    // A first attempt keeps exactly the key it has always had, so every row
-    // written before migration 033 is unaffected.
-    expect(first.mission!.idempotencyKey).not.toMatch(/:2$/);
-
+    const first = await launchWith(candidateId, COMPILED);
     await transitionMission({
       missionId: first.mission!.id,
       from: first.mission!.state,
@@ -1270,363 +1001,209 @@ describe('a run that produced nothing is not the end of the idea', () => {
       terminalReason: 'the packet finished without recording anything',
     });
 
-    const second = await launchFor(candidateId, 2);
-    expect(second.ok).toBe(true);
-    expect(second.mission!.id).not.toBe(first.mission!.id);
-    expect(second.mission!.attempt).toBe(2);
-    expect(second.mission!.supersedesMissionId).toBe(first.mission!.id);
+    const repeat = await launchWith(candidateId, COMPILED);
+    expect(repeat.ok).toBe(false);
+    expect(repeat.reason).toMatch(/already been researched/i);
+    // Named rather than matched on prose, because the loop acts on it.
+    expect(repeat.kind).toBe('ALREADY_RESEARCHED');
+    expect(await listMissions({ projectId })).toHaveLength(1);
 
-    // Nothing was rewritten: the failed row keeps its state and its reason.
+    // §5: the failed row keeps its state and its reason.
     const kept = (await getMission(first.mission!.id))!;
     expect(kept.state).toBe('FAILED');
     expect(kept.terminalReason).toMatch(/without recording anything/i);
-    expect(await listMissions({ projectId })).toHaveLength(2);
   });
 
-  it('refuses to research the same specification twice, however the redo got there', async () => {
+  it('does not count specifications the retired subsystem wrote', async () => {
     /*
-     * The defect production found four minutes after 09a591a deployed, and
-     * the reason the ceiling now counts specifications rather than rows.
-     *
-     * `redoable()` creates a re-plan bin asynchronously. `nextLaunchable()` in
-     * the same tick still sees the candidate QUEUED carrying its **old**
-     * `missionSpec` and calls `launch()` — so before this, the redo launched
-     * the specification that had just failed. `rcn_85f9689b461c4972a1ba` was
-     * researched three times between 00:51:29Z and 00:55:58Z on 2026-09-09
-     * under one specification, the §54.2 placeholder whose every field is the
-     * word `test`, and its ceiling was spent on one approach repeated.
-     *
-     * §15 already forbids exactly that: a retry is not a repair, and no repair
-     * may repeat a strategy an earlier attempt already tried. So the same
-     * specification is refused, and the redo simply waits for its re-plan.
+     * Production's exact shape: three mission rows carrying two placeholder
+     * specifications the worker-planning subsystem produced. Rebuilt through
+     * the repository, because that is the existing data the replacement has to
+     * be able to move.
      */
     const candidateId = await queuedIdea();
-    const first = await launchFor(candidateId, 1);
-    expect(first.ok).toBe(true);
+    for (const [index, junk] of ['test', 'test placeholder title long enough'].entries()) {
+      const { mission } = await launchMission({
+        projectId,
+        layerId,
+        visibility: 'PRIVATE',
+        objective: junk,
+        whyNow: junk,
+        idempotencyKey: `russell:mission:${candidateId}:legacy:${index}`,
+        candidateId,
+        attempt: index + 1,
+      });
+      await transitionMission({
+        missionId: mission.id,
+        from: 'PLANNED',
+        to: 'FAILED',
+        terminalReason: 'the packet finished without recording anything',
+      });
+    }
+    expect(await listMissions({ projectId })).toHaveLength(2);
+
+    // The compiled specification launches, because neither placeholder is it.
+    const real = await launchWith(candidateId, COMPILED);
+    expect(real.ok, real.reason).toBe(true);
+    expect(real.mission!.supersedesMissionId).toBeTruthy();
+  });
+
+  it('the loop retires a mission the retired subsystem specified, and recompiles the idea', async () => {
+    /*
+     * Recovery through `runCycle`, which is the caller production uses. The
+     * mission is `NEEDS_HUMAN` with an open request, exactly as
+     * `rms_b37b8fe4688c46e0a48d` and `rhr_acbf51e190924d99b5a3` were: parked
+     * because the envelope refused a plan whose fragment was called
+     * `test-placeholder-fragment`.
+     */
+    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
+
+    /*
+     * The placeholder mission goes in first, so it is the idea's newest — which
+     * is production's shape and is what the recovery selects on. Judging comes
+     * afterwards, from the loop.
+     */
+    const { mission } = await launchMission({
+      projectId,
+      layerId,
+      visibility: 'PRIVATE',
+      objective: 'test placeholder title long enough',
+      whyNow: 'test placeholder reason long enough to pass the floor',
+      idempotencyKey: `russell:mission:${candidateId}:legacy`,
+      candidateId,
+    });
     await transitionMission({
-      missionId: first.mission!.id,
-      from: first.mission!.state,
-      to: 'FAILED',
-      terminalReason: 'the packet finished without recording anything',
+      missionId: mission.id,
+      from: 'PLANNED',
+      to: 'NEEDS_HUMAN',
+      waitingOn: 'The proposed plan falls outside the preauthorized envelope.',
+    });
+    const { request } = await askHuman({
+      projectId,
+      missionId: mission.id,
+      authorityNeeded: 'Deciding whether to authorize research Brain was not preauthorized to start.',
+      whyNotRussell: 'The plan falls outside the limits set in code before it existed.',
+      recommendation: null,
+      choices: [{ key: 'STOP', label: 'Stop this work', consequence: 'The mission ends.' }],
+      urgency: 'BLOCKING',
+      resumeKey: `russell:needs-human:${mission.id}:legacy`,
     });
 
-    // The launcher racing its own re-plan: same specification, again.
-    const repeat = await launchFor(candidateId, 1);
-    expect(repeat.ok).toBe(false);
-    expect(repeat.reason).toMatch(/repeats a specification/i);
-    expect(await listMissions({ projectId })).toHaveLength(1);
+    // The idea has to be queued for the recovery to consider it, exactly as
+    // production's was: `launch()` puts it there and the placeholder mission
+    // above is what it ran.
+    await recordJudgment({
+      candidateId,
+      state: 'QUEUED',
+      priority: 'MUST_DO',
+      confidence: null,
+      reason: 'the coverage layer depends on it',
+      judgment: { missionSpec: { title: 'Permit data' } },
+      supporting: [],
+      contradicting: [],
+    });
 
-    // And the ceiling was not spent by the attempt that was refused: a
-    // genuinely different approach still launches.
-    const different = await launchFor(candidateId, 2);
-    expect(different.ok).toBe(true);
-    expect(different.mission!.attempt).toBe(2);
+    const tick = await runCycle('test-owner');
+    expect(tick.recovered.map((entry) => entry.missionId)).toContain(mission.id);
+
+    // The row keeps its history and says what happened to it.
+    const retired = (await getMission(mission.id))!;
+    expect(retired.state).toBe('FAILED');
+    expect(retired.terminalReason).toMatch(/retired/i);
+    expect(retired.terminalReason).toMatch(/outside the preauthorized envelope/i);
+    // And the question about it is withdrawn rather than left for a person.
+    expect((await getHumanRequest(request.id))!.state).toBe('WITHDRAWN');
+
+    // The idea is queued again, on a compiled specification, and it cost
+    // nothing: `launch()` counts specifications, and a placeholder is not one.
+    const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+    expect(after.state).toBe('QUEUED');
+    const spec = after.judgment?.['missionSpec'] as Record<string, unknown>;
+    expect(spec).toBeTruthy();
+    expect(String(spec['objective'])).not.toMatch(/placeholder/i);
+    expect(after.judgment?.['supersededRetiredPlanning']).toBeTruthy();
   });
 
-  it('counts specifications, so three rows of one approach do not exhaust the idea', async () => {
-    /*
-     * Production's exact shape: three mission rows, one specification. Rebuilt
-     * here through the repository rather than the launcher, because the
-     * launcher is what now refuses to create it — this is the *existing* data
-     * the fix has to be able to move.
-     */
-    const candidateId = await queuedIdea();
-    for (let i = 0; i < 3; i += 1) {
-      const { mission } = await launchMission({
-        projectId,
-        layerId,
-        visibility: 'PRIVATE',
-        objective: 'test',
-        whyNow: 'test',
-        idempotencyKey: `russell:mission:${candidateId}:legacy:${i}`,
-        candidateId,
-        attempt: i + 1,
-      });
-      await transitionMission({
-        missionId: mission.id,
-        from: 'PLANNED',
-        to: 'FAILED',
-        terminalReason: 'the packet finished without recording anything',
-      });
-    }
-    expect(await listMissions({ projectId })).toHaveLength(3);
+  it('does not retire a mission whose specification is the compiled one', async () => {
+    // The guard that keeps recovery from eating legitimate failures. A mission
+    // that ran on the specification the compiler produces is an attempt at the
+    // idea, whatever went wrong with it.
+    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
+    await runCycle('test-owner');
+    const judged = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+    const spec = judged.judgment?.['missionSpec'] as Record<string, unknown>;
 
-    // One approach tried, so a real one is still allowed — and is attempt 2.
-    const real = await launchFor(candidateId, 1);
-    expect(real.ok, real.reason).toBe(true);
-    expect(real.mission!.attempt).toBe(2);
+    const { mission } = await launchMission({
+      projectId,
+      layerId,
+      visibility: 'PRIVATE',
+      objective: String(spec['objective']),
+      whyNow: String(spec['whyNow']),
+      idempotencyKey: `russell:mission:${candidateId}:compiled`,
+      candidateId,
+    });
+    await transitionMission({
+      missionId: mission.id,
+      from: 'PLANNED',
+      to: 'FAILED',
+      terminalReason: 'the sources could not be reached',
+    });
+
+    const tick = await runCycle('test-owner');
+    expect(tick.recovered.map((entry) => entry.missionId)).not.toContain(mission.id);
+    expect((await getMission(mission.id))!.terminalReason).toBe('the sources could not be reached');
   });
 
-  it('the loop re-plans an idea whose rows say three attempts but whose approaches say one', async () => {
+  it('parks an idea whose only specification has been researched and produced nothing', async () => {
     /*
-     * The other half of the same correction, at the loop.
-     *
-     * `redoable()` gated on the stored `attempt` column, which production had
-     * already advanced to 3. Counting rows there would have left the idea
-     * permanently unredoable after exactly the accident the fix exists to
-     * undo — so it counts distinct specifications too, and this is the state
-     * it has to be able to move.
+     * §24's answering transition, and the reason the redo step is gone rather
+     * than merely unused. Without this the candidate stays `QUEUED`, `launch()`
+     * refuses it every thirty seconds, and a person watching sees an idea that
+     * says it is queued and never moves.
      */
-    const candidateId = await queuedIdea();
-    for (let i = 0; i < 3; i += 1) {
-      const { mission } = await launchMission({
-        projectId,
-        layerId,
-        visibility: 'PRIVATE',
-        objective: 'test',
-        whyNow: 'test',
-        idempotencyKey: `russell:mission:${candidateId}:legacy:${i}`,
-        candidateId,
-        attempt: i + 1,
-      });
-      await transitionMission({
-        missionId: mission.id,
-        from: 'PLANNED',
-        to: 'FAILED',
-        terminalReason: 'the packet finished without recording anything',
-      });
-    }
+    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
+    await runCycle('test-owner');
+    const judged = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+    const spec = judged.judgment?.['missionSpec'] as Record<string, unknown>;
 
-    const report = await runCycle('instance-a');
-    // A re-plan was asked for, rather than the idea being left for dead.
-    expect(report.planning).toContain(candidateId);
+    const { mission } = await launchMission({
+      projectId,
+      layerId,
+      visibility: 'PRIVATE',
+      objective: String(spec['objective']),
+      whyNow: String(spec['whyNow']),
+      idempotencyKey: `russell:mission:${candidateId}:compiled`,
+      candidateId,
+    });
+    await transitionMission({
+      missionId: mission.id,
+      from: 'PLANNED',
+      to: 'FAILED',
+      terminalReason: 'no official source could be located for any part of the question',
+    });
+
+    const tick = await runCycle('test-owner');
+    const parked = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
+    expect(parked.state).toBe('PARKED');
+    // The run's own words, not an invented account of why it failed.
+    expect(parked.reason).toMatch(/no official source could be located/);
+    expect(tick.parked.map((entry) => entry.candidateId)).toContain(candidateId);
   });
 
   it('does not redo an idea that was actually answered', async () => {
     // §13: researching a question the project already answers is the waste the
     // whole coverage check exists to prevent. A DONE mission answered it.
     const candidateId = await queuedIdea();
-    const first = await launchFor(candidateId);
+    const first = await launchWith(candidateId, COMPILED);
     await transitionMission({
       missionId: first.mission!.id,
       from: first.mission!.state,
       to: 'DONE',
     });
 
-    const again = await launchFor(candidateId);
+    const again = await launchWith(candidateId, COMPILED);
     expect(again.ok).toBe(false);
     expect(again.reason).toMatch(/already been researched/i);
     expect(await listMissions({ projectId })).toHaveLength(1);
-  });
-
-  it('stops at the ceiling rather than trying for ever', async () => {
-    const candidateId = await queuedIdea();
-    let last = await launchFor(candidateId, 1);
-    for (let attempt = 1; attempt < MAX_MISSION_ATTEMPTS; attempt += 1) {
-      expect(last.mission!.attempt).toBe(attempt);
-      await transitionMission({
-        missionId: last.mission!.id,
-        from: last.mission!.state,
-        to: 'FAILED',
-        terminalReason: 'produced nothing',
-      });
-      last = await launchFor(candidateId, attempt + 1);
-      expect(last.ok).toBe(true);
-    }
-    expect(last.mission!.attempt).toBe(MAX_MISSION_ATTEMPTS);
-
-    await transitionMission({
-      missionId: last.mission!.id,
-      from: last.mission!.state,
-      to: 'FAILED',
-      terminalReason: 'produced nothing',
-    });
-    const refused = await launchFor(candidateId, MAX_MISSION_ATTEMPTS + 1);
-    expect(refused.ok).toBe(false);
-    // The refusal names the count, so an idea that stopped says why.
-    expect(refused.reason).toMatch(new RegExp(`${MAX_MISSION_ATTEMPTS} times`));
-    expect(await listMissions({ projectId })).toHaveLength(MAX_MISSION_ATTEMPTS);
-  });
-
-  it('re-plans rather than relaunching the specification that failed', async () => {
-    /*
-     * §15 at this altitude: a retry repeats the same search, a repair is
-     * planned from what failed. The candidate's stored `missionSpec` is the
-     * very thing being replaced — in production it is the placeholder
-     * `PLAN_MINIMUMS` would now refuse outright — so a redo asks for a new one
-     * and the failed run's own reason goes with the question.
-     */
-    const candidateId = await queuedIdea();
-    const first = await failedMissionFor(candidateId);
-
-    const outcome = await judgeCandidate(candidateId, {
-      afterFailedMission: {
-        missionId: first.id,
-        attempt: 1,
-        reason: 'a planning work item finished without recording anything',
-      },
-    });
-    expect(outcome.binId).not.toBeNull();
-
-    // The failed run reaches the worker, so it is not asked to guess.
-    const bin = (await getBin(outcome.binId!))!;
-    const manifest = JSON.stringify(bin.manifest);
-    expect(manifest).toMatch(/RESEARCHED BEFORE AND PRODUCED NOTHING/);
-    expect(manifest).toMatch(/finished without recording anything/);
-
-    await workerCompletesPlan(outcome.binId!, GOOD_PLAN);
-    const applied = await applyPlan(outcome.binId!);
-    expect(applied.ok).toBe(true);
-
-    // The specification is the new one, not the placeholder.
-    const judged = (await getCandidate(candidateId))!;
-    const spec = (judged.judgment as Record<string, unknown>)['missionSpec'] as
-      | Record<string, unknown>
-      | undefined;
-    expect(spec?.['title']).toBe(GOOD_PLAN.mission.title);
-  });
-
-  /**
-   * The idea in production's exact shape: `QUEUED`, carrying the very
-   * specification its last mission failed on.
-   *
-   * `queuedIdea()` stores a stub, which is enough for the tests about
-   * `launch()` alone. These two are about the loop, so the candidate has to
-   * carry what `nextLaunchable` will actually read and `launch` will actually
-   * refuse.
-   */
-  const FAILED_SPEC = {
-    objective: 'Establish which Michigan counties publish permit data.',
-    whyNow: 'Discovery design would otherwise rest on an assumption.',
-  };
-
-  async function ideaCarryingItsFailedSpec(): Promise<{ candidateId: string; missionId: string }> {
-    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
-    const mission = await failedMissionFor(candidateId);
-    await recordJudgment({
-      candidateId,
-      state: 'QUEUED',
-      priority: 'MUST_DO',
-      confidence: null,
-      reason: 'it decides whether the coverage layer can be automated',
-      judgment: {
-        missionSpec: {
-          projectId,
-          layerId,
-          visibility: 'PRIVATE',
-          title: 'Permit data',
-          assignment: 'Identify the counties and the terms.',
-          ...FAILED_SPEC,
-          startedBy: { kind: 'BRAIN', id: `russell:plan:${candidateId}` },
-          envelopeId: 'RUSSELL_STATE_LICENSING_V1',
-          authorizedBy: userId,
-        },
-      },
-      supporting: [],
-      contradicting: [],
-    });
-    return { candidateId, missionId: mission.id };
-  }
-
-  it('the loop takes a finished re-plan and launches the new specification', async () => {
-    /*
-     * The regression this file existed to catch and did not.
-     *
-     * Every other redo test above calls `applyPlan` directly. Production does
-     * not: the loop's `finishedPlanBins` is the only thing that ever hands a
-     * finished plan to `applyPlan`, and it matched the first-pass key and the
-     * post-probe key and **not** the redo key. So 09a591a's re-plan,
-     * 6afeaaa's specification ceiling and `applyPlan`'s redo branch were all
-     * correct and all unreachable, and `bin_fdc116329a2843289dcd` sat COMPLETE
-     * from 03:36Z on 2026-09-09 carrying a worker's real plan that nothing
-     * ever opened. A test that calls the middle of a chain proves the middle
-     * of a chain.
-     *
-     * So this one drives `runCycle` on both sides of the worker, which is the
-     * caller production uses and the only one that could have failed.
-     */
-    const { candidateId, missionId } = await ideaCarryingItsFailedSpec();
-
-    // Tick one: the redo is planned, and the dead specification is refused
-    // rather than launched a second time.
-    const planned = await runCycle('test-owner');
-    expect(planned.planning).toContain(candidateId);
-    expect(planned.launched).toHaveLength(0);
-    expect(await listMissions({ projectId })).toHaveLength(1);
-
-    // The worker answers it. `judgeCandidate` is idempotent by key, so asking
-    // again returns the bin the tick created rather than a second one.
-    const again = await judgeCandidate(candidateId, {
-      afterFailedMission: { missionId, attempt: 1, reason: 'produced nothing' },
-    });
-    expect(again.binId).not.toBeNull();
-    const bin = (await getBin(again.binId!))!;
-    expect(bin.createdById).toBe(`russell:plan:${candidateId}:redo:${missionId}`);
-    await workerCompletesPlan(again.binId!, GOOD_PLAN);
-
-    // Tick two: applied and launched, in one pass, by the loop.
-    const launched = await runCycle('test-owner');
-    expect(launched.judged).toContain(again.binId!);
-    expect(launched.launched).toHaveLength(1);
-
-    const missions = await listMissions({ projectId });
-    expect(missions).toHaveLength(2);
-    const second = (await getMission(launched.launched[0]!))!;
-    expect(second.attempt).toBe(2);
-    expect(second.supersedesMissionId).toBe(missionId);
-    // The new specification, not the one that failed.
-    expect(second.objective).toBe(GOOD_PLAN.mission.objective);
-    expect(second.objective).not.toBe(FAILED_SPEC.objective);
-    // And the failed row is untouched: §5, lineage is never destroyed.
-    expect((await getMission(missionId))!.state).toBe('FAILED');
-  });
-
-  it('parks an idea whose re-plan produced the approach that already failed', async () => {
-    /*
-     * The other half of making the arm above safe.
-     *
-     * The redo arm matches a `QUEUED` idea whose newest mission is the one this
-     * bin was planned from, and stops matching when the re-planned attempt
-     * launches. If the re-plan reproduces the specification that already
-     * failed, nothing launches — `launch()` refuses it, correctly — so the arm
-     * would hand the same bin back on every tick for ever, with a person
-     * seeing an idea that says it is queued and never moves.
-     *
-     * §15's second half is the answer: when the ladder runs out the honest
-     * outcome is unresolved, recorded as such. So Brain parks it, in words,
-     * and `PARKED` has a documented way back.
-     */
-    const { candidateId, missionId } = await ideaCarryingItsFailedSpec();
-    await runCycle('test-owner');
-    const again = await judgeCandidate(candidateId, {
-      afterFailedMission: { missionId, attempt: 1, reason: 'produced nothing' },
-    });
-    await workerCompletesPlan(again.binId!, {
-      observations: { cheapToReduce: false, expectedValue: 70, blockedBy: null },
-      mission: { ...GOOD_PLAN.mission, ...FAILED_SPEC },
-    });
-
-    const applied = await runCycle('test-owner');
-    expect(applied.launched).toHaveLength(0);
-    expect(await listMissions({ projectId })).toHaveLength(1);
-
-    const parked = (await getCandidate(candidateId))!;
-    expect(parked.state).toBe('PARKED');
-    expect(parked.priority).toBe('PARKED');
-    expect(parked.reason).toMatch(/already been researched/i);
-    // The worker's plan is kept beside it — somebody paid for it.
-    expect((parked.judgment as Record<string, unknown>)['proposedMission']).toBeTruthy();
-
-    // And it is not asked again on the next tick: the arm no longer matches.
-    const next = await runCycle('test-owner');
-    expect(next.judged).not.toContain(again.binId!);
-    expect(next.planning).not.toContain(candidateId);
-  });
-
-  it('does not send a redone idea back for a cheap look it has already had a mission for', async () => {
-    // `GOOD_PLAN` says cheapToReduce: true. On a first pass that is honest and
-    // sends the idea to EXPLORE. On a redo it would put a question that has
-    // already had a full mission spent on it back at the start of the queue.
-    const candidateId = await queuedIdea();
-    const first = await failedMissionFor(candidateId);
-
-    const outcome = await judgeCandidate(candidateId, {
-      afterFailedMission: { missionId: first.id, attempt: 1, reason: 'produced nothing' },
-    });
-    await workerCompletesPlan(outcome.binId!, GOOD_PLAN);
-    await applyPlan(outcome.binId!);
-
-    const judged = (await getCandidate(candidateId))!;
-    expect(judged.priority).not.toBe('EXPLORE');
   });
 });
