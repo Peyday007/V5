@@ -53,7 +53,6 @@ import {
 } from '../../repos/bins.ts';
 import { getOrchestration } from '../../repos/research.ts';
 import { recordWorkerArrival } from '../../repos/fleet.ts';
-import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
 import { auditAdmission, lineageForWorker } from '../research/auditAdmission.ts';
 import {
   claimWork,
@@ -636,11 +635,13 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
  * be told what the row already says. Worse, it would be a loop: refuse, park,
  * reopen, refuse.
  *
- * It reads the packet's status only. It does not re-judge the verdict, the
- * evidence or the gaps — `RESEARCH_PACKET_V1` does that, at execution time, and
- * this must not become a second opinion about whether a packet is finished.
- * The statuses it accepts are exactly the runner's own terminal set, asked of
- * `TERMINAL_ORCHESTRATION` rather than restated here.
+ * It does not re-judge the verdict, the evidence or the gaps, and it must never
+ * become a second opinion about whether a packet is finished. It asks
+ * `evaluateContract` — the same evaluator the completion path runs — and
+ * refuses only what that answers `HUMAN` to. An earlier version asked whether
+ * the packet was terminal instead, which is a *proxy* for that question and
+ * gets it wrong for a packet that has legitimately gone back to work; see the
+ * comment at the check itself.
  */
 export async function reopenParkedBin(input: {
   binId: string;
@@ -670,21 +671,50 @@ export async function reopenParkedBin(input: {
         reason: `Orchestration ${orchestrationId} does not exist.`,
       };
     }
-    if (!TERMINAL_ORCHESTRATION.has(orchestration.status)) {
-      return {
-        ok: false,
-        refusal: 'WRONG_STATE',
-        reason:
-          `Packet ${orchestrationId} is ${orchestration.status}, which is not terminal. Reopening ` +
-          'this bin would spend an activation to be refused by the same contract for the same ' +
-          'reason. Finish the packet first.',
-      };
-    }
+
+    /*
+     * The question is "would this bin park again immediately", and it is asked
+     * of the contract rather than approximated.
+     *
+     * This used to require the packet to be **terminal**, on the reasoning that
+     * reopening otherwise "would spend an activation to be refused by the same
+     * contract for the same reason". The reasoning was right and the proxy was
+     * wrong, in the one direction that matters: `RESEARCH_PACKET_V1` refuses a
+     * *running* packet with `RETRY`, which is the ordinary in-progress answer
+     * and leaves the bin working — only a packet that has gone terminal without
+     * filing, or one waiting for approval, refuses with `HUMAN` and parks it.
+     *
+     * An `OTHER_LAYER` handoff is exactly the case the proxy got wrong. The bin
+     * parked because the packet was `NEEDS_HUMAN`; routing the document to the
+     * layer that owns it resolved that and put the packet back to `AUDITING`.
+     * So the escalation is answered and the packet is legitimately not
+     * terminal — and the old guard refused, leaving a bin that says "waiting
+     * for a person" which no person could resolve. §24's own sentence, at a
+     * third altitude, and the remedy is the same: an escalation needs an
+     * answering transition, and it must be guarded rather than absent.
+     *
+     * Asking `evaluateContract` is strictly narrower than the old rule *and*
+     * strictly more accurate: `AWAITING_APPROVAL`, a failed packet, a cancelled
+     * one and a packet that filed nothing all still refuse, by name, with the
+     * contract's own words.
+     */
+    const verdict = await evaluateContract(bin);
     evidence['orchestrationId'] = orchestrationId;
     evidence['orchestrationStatus'] = orchestration.status;
     evidence['documentId'] = orchestration.documentId;
     evidence['auditId'] = orchestration.auditId;
     evidence['verdict'] = orchestration.verdict;
+    evidence['contractDisposition'] = verdict.disposition;
+    if (verdict.disposition === 'HUMAN') {
+      return {
+        ok: false,
+        refusal: 'WRONG_STATE',
+        reason:
+          `Packet ${orchestrationId} is ${orchestration.status}, and its completion contract ` +
+          `still answers HUMAN: ${verdict.reasons.join(' ')} Reopening would spend an activation ` +
+          'to be refused for the same reason.',
+      };
+    }
   }
 
   return await reopenNeedsHumanBin({

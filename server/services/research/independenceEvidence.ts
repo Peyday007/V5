@@ -299,7 +299,7 @@ export async function auditIndependenceEvidence(
           AND executor_account_id IS NOT NULL
           AND executor_session_ref IS NOT NULL
           AND executor_session_ref <> ''${scoped}
-        ORDER BY orchestration_id, ordinal`,
+        ORDER BY orchestration_id, ordinal, completed_at, rowid`,
       [
         ROLE_ORDINALS.PRIMARY,
         ROLE_ORDINALS.ADVERSARIAL,
@@ -310,7 +310,17 @@ export async function auditIndependenceEvidence(
     const byOrchestration = new Map<string, Map<number, LineageRow>>();
     for (const pass of passes) {
       const set = byOrchestration.get(pass.orchestration_id) ?? new Map<number, LineageRow>();
-      // Latest wins on a re-run; ordering above makes that deterministic.
+      /*
+       * Latest wins on a re-run, and the ordering above is what makes that
+       * true rather than merely intended. It used to end at `ordinal`, which
+       * orders nothing between two passes of the same role — so a packet
+       * re-audited after an `OTHER_LAYER` handoff had two PRIMARY rows and
+       * which one survived was whatever order the database happened to
+       * return. That is not a tie this gate may resolve by luck: pairing an
+       * old PRIMARY with a new JUDGE, or the reverse, decides the
+       * judge-after-both-arguments condition, so the gate could report PASS
+       * and BLOCKED on identical rows. `completed_at` then `rowid` orders it.
+       */
       set.set(pass.ordinal, pass);
       byOrchestration.set(pass.orchestration_id, set);
     }

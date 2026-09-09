@@ -33,7 +33,20 @@ import {
   updateFragment,
   updateOrchestration,
 } from '../server/repos/research.ts';
-import { enqueueWork, getWorkItem, listWorkItems } from '../server/repos/workQueue.ts';
+import {
+  enqueueWork,
+  getWorkItem,
+  getWorkItemRow,
+  listWorkItems,
+  listWorkItemsForOrchestration,
+} from '../server/repos/workQueue.ts';
+import { auditAdmission } from '../server/services/research/auditAdmission.ts';
+import {
+  createBin,
+  getBin,
+  listBinEvents,
+  terminateUnleasedBin,
+} from '../server/repos/bins.ts';
 import { advancePacket } from '../server/services/research/packetRunner.ts';
 import {
   askHuman,
@@ -404,8 +417,16 @@ describe('the rest of the path, after the routing', () => {
       completedAt: new Date().toISOString(),
     });
 
-    // Round one: three completed passes, exactly as the real packet had.
-    for (const ordinal of [5, 6, 7]) {
+    /*
+     * Round one: three completed passes, exactly as the real packet had —
+     * including the execution lineage, which is not decoration here. The
+     * separation matrix and the judge's wait are both decided from these
+     * columns, so a fixture that left them null would make every cross-round
+     * comparison refuse for "unrecorded lineage" and prove nothing about the
+     * rule under test.
+     */
+    const roundOne = { PRIMARY: 5, ADVERSARIAL: 6, JUDGE: 7 } as const;
+    for (const [role, ordinal] of Object.entries(roundOne)) {
       const pass = await startPass({
         orchestrationId: orchestration.id,
         passKey: 'AUDIT',
@@ -414,6 +435,10 @@ describe('the rest of the path, after the routing', () => {
         model: 'wkr-1',
         prompt: `audit pass ${ordinal}`,
         promptSha256: 'x'.repeat(64),
+        executorWorkerId: 'wkr_round_one',
+        executorRoutineId: 'frt_round_one',
+        executorAccountId: 'fac_round_one',
+        executorSessionRef: `oat_round_one_${role.toLowerCase()}`,
       });
       await finishPass(pass.id, { status: 'COMPLETE', rawResponse: '{}' });
     }
@@ -462,6 +487,54 @@ describe('the rest of the path, after the routing', () => {
       ],
     });
 
+    /*
+     * The bin, parked exactly as production's was.
+     *
+     * `RESEARCH_PACKET_V1` refuses a packet sitting at `NEEDS_HUMAN` with the
+     * disposition `HUMAN`, and a `HUMAN` refusal terminalizes the bin. So the
+     * real chain had three parks, not two — and the bin is the one that
+     * decides whether a worker is ever sent. A fixture without it routes a
+     * document into a project where nothing was ever waiting.
+     */
+    const bin = await createBin({
+      projectId: fixture.project.id,
+      layerId: worldModel.id,
+      kind: 'RESEARCH_PACKET',
+      title: 'County property tax assessment roll access',
+      objective: 'Research it, file it, and have it audited.',
+      manifest: {
+        objective: 'Research it, file it, and have it audited.',
+        why: 'The archive does not answer it.',
+        lineage: {
+          projectId: fixture.project.id,
+          layerId: worldModel.id,
+          goal: null,
+          orchestrationId: orchestration.id,
+        },
+        units: [],
+        acceptableSources: ['county register of deeds or recording office'],
+        excludedSources: ['vendor or software marketing pages'],
+        evidence: ['a quoted official statement of terms'],
+        outputs: ['a filed report'],
+        authorizedActions: ['read official public records'],
+        prohibitedActions: ['any spend'],
+        budgetUnits: 1,
+        retry: { maxAttempts: 3, backoffSeconds: 30 },
+        stoppingConditions: ['the packet is terminal'],
+      },
+      completionContract: 'RESEARCH_PACKET_V1',
+      orchestrationId: orchestration.id,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+    });
+    await terminateUnleasedBin(
+      bin.id,
+      bin.leaseGeneration,
+      'NEEDS_HUMAN',
+      'The packet is NEEDS_HUMAN, which is not a state it files a report in.',
+    );
+
     const { mission } = await launchMission({
       projectId: fixture.project.id,
       layerId: worldModel.id,
@@ -470,7 +543,7 @@ describe('the rest of the path, after the routing', () => {
       whyNow: "The project's own archive does not answer this.",
       idempotencyKey: `handoff-test-${orchestration.id}`,
     });
-    await linkMission({ missionId: mission.id, orchestrationId: orchestration.id });
+    await linkMission({ missionId: mission.id, orchestrationId: orchestration.id, binId: bin.id });
     await transitionMission({
       missionId: mission.id,
       from: 'PLANNED',
@@ -492,7 +565,15 @@ describe('the rest of the path, after the routing', () => {
       resumeKey: `handoff-park-${orchestration.id}`,
     });
 
-    return { document, orchestration, audit: audit.audit, mission, staleItemId: stale.id };
+    return {
+      document,
+      orchestration,
+      audit: audit.audit,
+      mission,
+      staleItemId: stale.id,
+      roundOne,
+      binId: bin.id,
+    };
   }
 
   it('reopens the audit in the new layer instead of faulting out on the old round', async () => {
@@ -528,6 +609,54 @@ describe('the rest of the path, after the routing', () => {
     );
     expect(primaries).toHaveLength(1);
     expect(primaries[0]!.payload['role']).toBe('PRIMARY');
+  });
+
+  it('puts the packet\u2019s bin back to work, so a worker is actually sent', async () => {
+    /*
+     * The third park, and the only one nothing answered.
+     *
+     * The document routed, the packet reopened, the mission left NEEDS_HUMAN
+     * and the person\u2019s request was withdrawn with a truthful message \u2014 and the
+     * bin stayed terminal, so the reopened round\u2019s first audit item sat queued
+     * and claimable with nobody ever sent for it. Worse than stuck: the person
+     * had already been told there was nothing left for them to decide.
+     */
+    const { mission, binId } = await packetInTheWrongLayer();
+    expect((await getBin(binId))!.state).toBe('NEEDS_HUMAN');
+    const parked = (await getBin(binId))!;
+
+    const report = await tick('test-owner');
+    expect(report.binReopenRefused).toHaveLength(0);
+
+    const bin = (await getBin(binId))!;
+    expect(bin.state).toBe('READY');
+    // Answered, not erased: §5 and the reopen\u2019s own contract.
+    expect(bin.attemptCount).toBe(parked.attemptCount);
+    expect(bin.leaseGeneration).toBeGreaterThan(parked.leaseGeneration);
+    expect((await getMission(mission.id))!.state).toBe('RUNNING');
+
+    // And it is Brain that answered it, on the routing, recorded as itself.
+    const reopened = (await listBinEvents(binId, 100)).filter(
+      (event) => event.eventType === 'BIN_REOPENED',
+    );
+    expect(reopened).toHaveLength(1);
+    expect(reopened[0]!.reason).toMatch(/layer that owns this work/);
+  });
+
+  it('leaves a bin parked for a reason the routing did not resolve', async () => {
+    // The guard is narrower, not absent. A packet that has genuinely finished
+    // and failed still answers HUMAN, so reopening would spend an activation to
+    // be refused for the same reason — and the routing is still correct, since
+    // the document belongs to Discovery Logic whatever became of the packet.
+    const { orchestration, binId } = await packetInTheWrongLayer();
+    await updateOrchestration(orchestration.id, {
+      status: 'FAILED',
+      failureReason: 'Nothing left to try.',
+    });
+
+    const report = await tick('test-owner');
+    expect((await getBin(binId))!.state).toBe('NEEDS_HUMAN');
+    expect(report.binReopenRefused.map((entry) => entry.binId)).toContain(binId);
   });
 
   it('reaches an accepted terminal outcome and writes back exactly once', async () => {
@@ -604,5 +733,154 @@ describe('the rest of the path, after the routing', () => {
     const report = await tick('test-owner');
     expect(report.followOns.filter((entry) => entry.missionId === mission.id)).toHaveLength(0);
     expect((await getMission(mission.id))!.nextMissionId).toBeNull();
+  });
+
+  /*
+   * The round boundary has four readers, and a boundary three of them apply is
+   * worse than none.
+   *
+   * `auditBriefFor` and `packetRunner` were scoped when the handoff was built.
+   * `auditAdmission` was not, and it is the one that decides *who may take a
+   * role* — so the previous round's completed arguments were still satisfying
+   * the judge's wait. Nothing produced a JUDGE item early, because the runner
+   * enqueues the roles in order, which is exactly why this needed a test rather
+   * than a reading: the weakened control was invisible behind a correct one.
+   */
+  describe('a re-audited packet is judged on its own round', () => {
+    /** The lineage an arriving worker brings, all of it server-derived. */
+    const arriving = {
+      workerId: 'wkr_round_two',
+      routineId: 'frt_round_two',
+      accountId: 'fac_round_two',
+      sessionRef: 'oat_round_two_judge',
+    };
+
+    it('refuses a judge whose arguments belong to the round before the handoff', async () => {
+      const { orchestration } = await packetInTheWrongLayer();
+      await tick('test-owner');
+
+      const item = await enqueueWork({
+        projectId: fixture.project.id,
+        workType: 'RESEARCH_AUDIT',
+        payload: { role: 'JUDGE' },
+        createdByType: 'SYSTEM',
+        requiredScopes: ['queue:claim'],
+        orchestrationId: orchestration.id,
+      });
+      const row = (await getWorkItemRow(item.id))!;
+
+      const verdict = await auditAdmission(arriving)(row);
+      expect(verdict.ok).toBe(false);
+      expect(verdict.reason).toContain('may not begin until');
+      // Both arguments, because this round has produced neither.
+      expect(verdict.reason).toContain('PRIMARY and ADVERSARIAL');
+    });
+
+    it('admits the judge once this round has produced both arguments', async () => {
+      const { orchestration } = await packetInTheWrongLayer();
+      await tick('test-owner');
+
+      for (const [role, ordinal] of [
+        ['primary', 5],
+        ['adversarial', 6],
+      ] as const) {
+        const pass = await startPass({
+          orchestrationId: orchestration.id,
+          passKey: 'AUDIT',
+          ordinal,
+          provider: 'WORKER',
+          model: 'wkr-2',
+          prompt: `round two ${role}`,
+          promptSha256: 'y'.repeat(64),
+          executorWorkerId: 'wkr_round_two',
+          executorRoutineId: 'frt_round_two',
+          executorAccountId: 'fac_round_two',
+          executorSessionRef: `oat_round_two_${role}`,
+        });
+        await finishPass(pass.id, { status: 'COMPLETE', rawResponse: '{}' });
+      }
+
+      const item = await enqueueWork({
+        projectId: fixture.project.id,
+        workType: 'RESEARCH_AUDIT',
+        payload: { role: 'JUDGE' },
+        createdByType: 'SYSTEM',
+        requiredScopes: ['queue:claim'],
+        orchestrationId: orchestration.id,
+      });
+      const verdict = await auditAdmission(arriving)((await getWorkItemRow(item.id))!);
+      expect(verdict.ok).toBe(true);
+    });
+
+    it('still refuses a judge that argued in this round', async () => {
+      // The floor itself, unchanged: scoping decides *which* passes are
+      // compared and never whether the comparison happens.
+      const { orchestration } = await packetInTheWrongLayer();
+      await tick('test-owner');
+
+      for (const [role, ordinal] of [
+        ['primary', 5],
+        ['adversarial', 6],
+      ] as const) {
+        const pass = await startPass({
+          orchestrationId: orchestration.id,
+          passKey: 'AUDIT',
+          ordinal,
+          provider: 'WORKER',
+          model: 'wkr-2',
+          prompt: `round two ${role}`,
+          promptSha256: 'y'.repeat(64),
+          executorWorkerId: 'wkr_round_two',
+          executorRoutineId: 'frt_round_two',
+          executorAccountId: 'fac_round_two',
+          executorSessionRef: `oat_round_two_${role}`,
+        });
+        await finishPass(pass.id, { status: 'COMPLETE', rawResponse: '{}' });
+      }
+
+      const item = await enqueueWork({
+        projectId: fixture.project.id,
+        workType: 'RESEARCH_AUDIT',
+        payload: { role: 'JUDGE' },
+        createdByType: 'SYSTEM',
+        requiredScopes: ['queue:claim'],
+        orchestrationId: orchestration.id,
+      });
+      const verdict = await auditAdmission({
+        ...arriving,
+        sessionRef: 'oat_round_two_adversarial',
+      })((await getWorkItemRow(item.id))!);
+      expect(verdict.ok).toBe(false);
+      expect(verdict.reason).toContain('same session');
+      // The refusal names the pair and the dimension and never the credential.
+      expect(verdict.reason).not.toContain('oat_round_two_adversarial');
+    });
+
+    it('does not refuse this round for sharing a session with the last one', async () => {
+      /*
+       * A session that attacked the document under the World Model's criteria
+       * is not reviewing its own work when it writes the primary audit under
+       * Discovery Logic's — the round it argued in has been superseded and
+       * nothing is judging it. Refusing anyway is stricter than the rule, and
+       * stricter in the wrong direction: it withholds a surface on the strength
+       * of a verdict that no longer stands.
+       */
+      const { orchestration } = await packetInTheWrongLayer();
+      await tick('test-owner');
+      // The tick reopens the round; the runner is what enqueues its first role.
+      await advancePacket(orchestration.id);
+
+      const items = (await listWorkItemsForOrchestration(orchestration.id)).filter(
+        (item) => item.workType === 'RESEARCH_AUDIT' && item.state === 'QUEUED',
+      );
+      expect(items).toHaveLength(1);
+      expect(items[0]!.payload['role']).toBe('PRIMARY');
+
+      const verdict = await auditAdmission({
+        ...arriving,
+        sessionRef: 'oat_round_one_adversarial',
+      })((await getWorkItemRow(items[0]!.id))!);
+      expect(verdict.ok).toBe(true);
+    });
   });
 });

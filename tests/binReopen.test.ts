@@ -487,7 +487,22 @@ describe('what a reopen refuses', () => {
 
 /* ========================================================================= */
 
-describe("a research bin is only reopened once its packet has actually moved", () => {
+describe("a research bin is only reopened once its contract would let it work", () => {
+  /*
+   * The rule used to be "the packet must be terminal", which is a *proxy* for
+   * the question that matters — would this bin park again immediately — and it
+   * answers it wrongly in one direction. `RESEARCH_PACKET_V1` refuses a
+   * *running* packet with `RETRY`, which leaves the bin working; only a packet
+   * that went terminal without filing, or one waiting for approval, refuses
+   * with `HUMAN` and parks it. So a packet legitimately back at work — an
+   * `OTHER_LAYER` handoff does exactly that — was refused a reopen it should
+   * have had, leaving a bin that says "waiting for a person" which no person
+   * could resolve.
+   *
+   * The guard now asks `evaluateContract`, the same evaluator the completion
+   * path runs. Everything these tests refused before is still refused, in the
+   * contract's own words rather than a paraphrase of the row.
+   */
   it('reopens when the packet is terminal, and records what it read', async () => {
     // Parked while the packet was NEEDS_HUMAN, then the packet advanced —
     // which is exactly the production sequence.
@@ -505,17 +520,46 @@ describe("a research bin is only reopened once its packet has actually moved", (
     });
   });
 
-  it('refuses while the packet is still not terminal', async () => {
-    // Otherwise the remedy for "the contract refused because the packet was not
-    // terminal" is to spend an activation being told so again.
+  it('refuses while the contract still answers HUMAN, in its own words', async () => {
+    // The condition the bin escalated on is unchanged, so the remedy for "the
+    // contract refused" would be to spend an activation being told so again.
     const { binId } = await parkBin();
 
     const outcome = await reopenParkedBin({ binId, operator: OPERATOR, reason: REASON });
     expect(outcome.ok).toBe(false);
     if (outcome.ok) throw new Error('unreachable');
     expect(outcome.refusal).toBe('WRONG_STATE');
-    expect(outcome.reason).toMatch(/not terminal/i);
+    expect(outcome.reason).toMatch(/still answers HUMAN/i);
+    // The contract's own reason, not a paraphrase of the status column.
+    expect(outcome.reason).toMatch(/not a state it files a report in/i);
     expect((await getBin(binId))!.state).toBe('NEEDS_HUMAN');
     expect((await listBinEvents(binId)).some((e) => e.eventType === 'BIN_REOPENED')).toBe(false);
+  });
+
+  it('reopens a packet that has gone back to work, which the old proxy refused', async () => {
+    /*
+     * The `OTHER_LAYER` case, at this level. The bin parked because the packet
+     * was NEEDS_HUMAN; routing the document resolved that and put the packet
+     * back to AUDITING. The packet is now *not* terminal and the reopen is
+     * exactly right — the contract answers RETRY, so the bin works rather than
+     * parking again.
+     */
+    const { binId, orchestrationId } = await parkBin();
+    await updateOrchestration(orchestrationId, {
+      status: 'AUDITING',
+      completedAt: null,
+      failureReason: null,
+    });
+
+    const outcome = await reopenParkedBin({ binId, operator: OPERATOR, reason: REASON });
+    if (!outcome.ok) throw new Error(`expected a reopen, got ${outcome.refusal}: ${outcome.reason}`);
+    expect((await getBin(binId))!.state).toBe('READY');
+
+    const event = (await listBinEvents(binId)).find((e) => e.eventType === 'BIN_REOPENED')!;
+    expect((event.measures as Record<string, unknown>)['resolutionEvidence']).toMatchObject({
+      orchestrationId,
+      orchestrationStatus: 'AUDITING',
+      contractDisposition: 'RETRY',
+    });
   });
 });

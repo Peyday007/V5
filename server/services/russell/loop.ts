@@ -84,7 +84,8 @@ import { cancelWork, listWorkItems } from '../../repos/workQueue.ts';
 import { completeProbe, listExpiredProbes } from '../../repos/russellProbes.ts';
 import { openProbe, runProbe } from './probe.ts';
 import { GENERAL_LIGHT_PROBE_V1 } from './probeEnvelope.ts';
-import { reconcileBins } from '../bins/service.ts';
+import { reconcileBins, reopenParkedBin } from '../bins/service.ts';
+import { getBin } from '../../repos/bins.ts';
 import {
   handoffCandidates,
   routeAuditedDocument,
@@ -171,6 +172,8 @@ export interface TickReport {
    * different remedies — and the second is the one a person is actually for.
    */
   handoffRefused: { auditId: string; refusal: string }[];
+  /** A routed packet whose bin could not be put back to work, and why. */
+  binReopenRefused: { binId: string; refusal: string }[];
   /**
    * Bins that had run out of assignments with nobody holding them, turned into
    * one decision with the reason attached.
@@ -236,6 +239,7 @@ const EMPTY: TickReport = {
   awaitingFiling: [],
   handedOff: [],
   handoffRefused: [],
+  binReopenRefused: [],
   escalatedBins: [],
   followOns: [],
   linkedNext: [],
@@ -276,6 +280,7 @@ export async function tick(owner: string): Promise<TickReport> {
     awaitingFiling: [],
     handedOff: [],
     handoffRefused: [],
+    binReopenRefused: [],
     escalatedBins: [],
     followOns: [],
     linkedNext: [],
@@ -444,7 +449,8 @@ export async function tick(owner: string): Promise<TickReport> {
         toLayerId: routed.toLayerId!,
         canonicalName: routed.canonicalName!,
       });
-      await reopenAuditRound(routed);
+      const stuck = await reopenAuditRound(routed);
+      if (stuck) report.binReopenRefused.push(stuck);
     }
 
     /*
@@ -1228,8 +1234,10 @@ async function archiveCounts(
  * moves: a packet that is auditing has not completed and has not failed, and
  * leaving either set would make the next reader believe a stale thing.
  */
-async function reopenAuditRound(routed: HandoffOutcome): Promise<void> {
-  if (!routed.documentId || !routed.toLayerId) return;
+async function reopenAuditRound(
+  routed: HandoffOutcome,
+): Promise<{ binId: string; refusal: string } | null> {
+  if (!routed.documentId || !routed.toLayerId) return null;
   const mission = await missionForDocument(routed.documentId);
 
   if (mission?.orchestrationId) {
@@ -1288,7 +1296,50 @@ async function reopenAuditRound(routed: HandoffOutcome): Promise<void> {
     }
   }
 
+  /*
+   * And the bin, which is the thing that actually gets a worker sent.
+   *
+   * This was the third park in one chain and the only one nothing answered.
+   * The bin escalated to `NEEDS_HUMAN` because `RESEARCH_PACKET_V1` refused a
+   * packet sitting at `NEEDS_HUMAN` — correct at the time. Routing the document
+   * resolved exactly that condition, and the packet and the mission were both
+   * put back to work above; the bin was left parked, and a parked bin is not
+   * dispatchable, so the reopened round's first audit item sat queued and
+   * claimable with nobody ever sent for it.
+   *
+   * §24's sentence a third time: a state that says "waiting for a person" which
+   * that person cannot resolve is not waiting, it is stuck. Here it was worse
+   * than stuck — the person had already been told, truthfully, that there was
+   * nothing left for them to decide.
+   *
+   * Brain answers it, because Brain is what resolved the condition. Through the
+   * same guarded transition an operator uses and with nothing weakened: one
+   * source state, a compare-and-swap on the generation, the fence, the budget
+   * check, and a `BIN_REOPENED` row naming who answered it and on what
+   * evidence. A bin that is not parked, or whose contract still answers
+   * `HUMAN`, is left exactly where it is.
+   */
+  if (mission?.binId) {
+    const bin = await getBin(mission.binId);
+    if (bin?.state === 'NEEDS_HUMAN') {
+      const reopened = await reopenParkedBin({
+        binId: bin.id,
+        operator: 'russell:other-layer-handoff',
+        reason:
+          `The audit named the layer that owns this work, so Brain filed the document there as ` +
+          `${routed.canonicalName ?? 'its own layer name'} and the audit is running again under ` +
+          'that layer. The condition this bin escalated on — a packet waiting for a person — is ' +
+          'resolved, and nothing about its attempts or its history is reset.',
+      });
+      if (!reopened.ok) {
+        if (mission.projectId) await recomputeProject(mission.projectId);
+        return { binId: bin.id, refusal: reopened.refusal ?? 'REFUSED' };
+      }
+    }
+  }
+
   if (mission?.projectId) await recomputeProject(mission.projectId);
+  return null;
 }
 
 /** The Russell mission that filed this document, if one did. */

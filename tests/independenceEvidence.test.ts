@@ -159,6 +159,113 @@ async function authenticShape(): Promise<Shape> {
   };
 }
 
+describe('a packet audited more than once is judged on one round', () => {
+  /*
+   * An `OTHER_LAYER` handoff reopens the audit, and the previous round's three
+   * passes stay exactly where they were written — §5 forbids destroying them
+   * and `auditRound.ts` scopes them out by timestamp instead.
+   *
+   * That leaves this gate reading six audit passes for one packet, and the map
+   * it builds keeps one row per ordinal. Which row survived used to be whatever
+   * order the database returned: `ORDER BY orchestration_id, ordinal` orders
+   * nothing between two passes of the same role. Pairing the old primary with
+   * the new judge and pairing the new primary with the old judge give opposite
+   * answers to JUDGE_RAN_LAST, so the gate could report PASS and BLOCKED on
+   * identical rows depending on the backend and the plan. Latest wins, now
+   * ordered rather than hoped for.
+   */
+  it('reads the newest pass per role, so a half re-audited packet is not accepted', async () => {
+    const shape = await authenticShape();
+    expect((await auditIndependenceEvidence([shape.orchestrationId])).verdict).toBe('PASS');
+
+    // Round two, after a handoff: the primary has run and nothing else has.
+    const reopened = await startPass({
+      orchestrationId: shape.orchestrationId,
+      passKey: 'AUDIT',
+      ordinal: 5,
+      provider: 'WORKER',
+      prompt: 'audit, in the layer that owns the work',
+      promptSha256: 'z'.repeat(64),
+      executorWorkerId: shape.workerA,
+      executorAccountId: shape.accountA,
+      executorSessionRef: shape.credentialA,
+    });
+    await finishPass(reopened.id, { status: 'COMPLETE' });
+    // Explicitly later than round one's judge, which is the fact under test.
+    await getDb().run('UPDATE research_passes SET completed_at = ? WHERE id = ?', [
+      new Date(Date.now() + 60_000).toISOString(),
+      reopened.id,
+    ]);
+
+    const evidence = await auditIndependenceEvidence([shape.orchestrationId]);
+    expect(evidence.verdict).toBe('BLOCKED');
+    expect(evidence.missing).toMatch(/JUDGE_RAN_LAST/);
+  });
+
+  it('returns to PASS once this round has produced all three roles', async () => {
+    const shape = await authenticShape();
+    const later = (minutes: number): string => new Date(Date.now() + minutes * 60_000).toISOString();
+
+    const roles: [number, string, string, string, number][] = [
+      [5, shape.workerA, shape.accountA, shape.credentialA, 1],
+      [6, shape.workerB, shape.accountB, shape.credentialB, 2],
+      [7, shape.workerA, shape.accountA, shape.credentialJudge, 3],
+    ];
+    for (const [ordinal, workerId, accountId, sessionRef, minutes] of roles) {
+      const pass = await startPass({
+        orchestrationId: shape.orchestrationId,
+        passKey: 'AUDIT',
+        ordinal,
+        provider: 'WORKER',
+        prompt: 'round two',
+        promptSha256: 'z'.repeat(64),
+        executorWorkerId: workerId,
+        executorAccountId: accountId,
+        executorSessionRef: sessionRef,
+      });
+      await finishPass(pass.id, { status: 'COMPLETE' });
+      await getDb().run('UPDATE research_passes SET completed_at = ? WHERE id = ?', [
+        later(minutes),
+        pass.id,
+      ]);
+    }
+
+    const evidence = await auditIndependenceEvidence([shape.orchestrationId]);
+    expect(evidence.missing).toBeNull();
+    expect(evidence.verdict).toBe('PASS');
+  });
+
+  it('leaves every pass of the previous round exactly where it was', async () => {
+    // The boundary is a timestamp and never a deletion, so the record of an
+    // audit that really happened survives the round that superseded it.
+    const shape = await authenticShape();
+    const before = await getDb().all<{ total: number }>(
+      "SELECT COUNT(*) AS total FROM research_passes WHERE orchestration_id = ? AND pass_key = 'AUDIT'",
+      [shape.orchestrationId],
+    );
+    expect(Number(before[0]?.total ?? 0)).toBe(3);
+
+    const reopened = await startPass({
+      orchestrationId: shape.orchestrationId,
+      passKey: 'AUDIT',
+      ordinal: 5,
+      provider: 'WORKER',
+      prompt: 'round two primary',
+      promptSha256: 'z'.repeat(64),
+      executorWorkerId: shape.workerA,
+      executorAccountId: shape.accountA,
+      executorSessionRef: shape.credentialA,
+    });
+    await finishPass(reopened.id, { status: 'COMPLETE' });
+
+    const after = await getDb().all<{ total: number }>(
+      "SELECT COUNT(*) AS total FROM research_passes WHERE orchestration_id = ? AND pass_key = 'AUDIT'",
+      [shape.orchestrationId],
+    );
+    expect(Number(after[0]?.total ?? 0)).toBe(4);
+  });
+});
+
 describe('A11 passes only on authentic production lineage', () => {
   it('is BLOCKED in an empty Brain, naming the operational fact and not a person', async () => {
     const evidence = await auditIndependenceEvidence();

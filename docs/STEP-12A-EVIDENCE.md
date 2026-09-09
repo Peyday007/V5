@@ -7060,3 +7060,127 @@ Typecheck clean. SQLite **1840 passed / 74 files**. Postgres **1865 passed / 75
 files, 0 failures**. Build clean. No migration — `DOCUMENT_HANDED_OFF` is a new
 `EventType`, and `project_events.event_type` carries no CHECK constraint, so the
 schema is unchanged on both chains.
+
+---
+
+## 74. The round boundary had four readers and three of them applied it — 2026-09-09
+
+§73 made the audit round a timestamp rather than a mutation, so a document that
+moved layers is re-audited without cancelling or superseding a single completed
+pass. Walking the rest of the path found the cost of introducing a new scoping
+rule and applying it in only some of the places that read passes.
+
+Three readers had it. `auditBriefFor` scopes `earlierAuditRole`, so the
+adversarial role attacks *this* round's findings and the judge weighs *this*
+round's arguments. `packetRunner` scopes `auditRoleSubmitted` and the work-item
+lookups, so which roles are outstanding is asked of this round.
+
+**`auditAdmission` did not, and it is the reader that decides who may take a
+role.** Two consequences, in opposite directions.
+
+The first is a weakened control. `auditEligibility` refuses `JUDGE` until
+`PRIMARY` and `ADVERSARIAL` have a `COMPLETE` pass — that is what makes a judge
+a judge rather than a third opinion. It read every pass of the packet, so after
+a handoff the *previous* round's completed arguments satisfied it. A judge could
+be admitted to a round that had produced nothing for it to weigh.
+
+Nothing produced a `JUDGE` item early, because the runner enqueues the roles in
+order and it *was* scoped — which is exactly why this needed a test rather than
+a reading. A control weakened behind a correct one is invisible until the
+correct one moves.
+
+The second is a refusal that is not the rule. The separation matrix compared
+this round's roles against sessions that argued about a layer the document has
+since left, so a surface could be withheld on the strength of a verdict that no
+longer stands. Stricter than the rule is still wrong, and it costs capacity on a
+small fleet.
+
+The remedy is one module with the rule in it. `services/research/auditRound.ts`
+holds `auditRoundStartedAt` and `passesInCurrentRound`; `auditBrief.ts`
+re-exports the first rather than renaming it out from under its two importers.
+Only `AUDIT` passes are filtered — the plan, the fragments, the verification and
+the synthesis did not move layers, and dropping them would make a re-audited
+packet look like one that had never done any research.
+
+**The floor itself did not move.** Three distinct authenticated sessions, every
+pair, unchanged; `AUDIT_SEPARATION_MINIMUM` is untouched. Scoping decides *which*
+passes are compared and never whether the comparison happens — a judge that
+argued in *this* round is still refused, and the refusal still names the pair and
+the dimension and never the credential.
+
+### A tie the A11 gate was resolving by luck
+
+`independenceEvidence` keeps one row per ordinal and its own comment said
+"latest wins on a re-run; ordering above makes that deterministic". The ordering
+was `ORDER BY orchestration_id, ordinal`, which orders nothing between two passes
+of the same role — so with round one and round two both present, which row
+survived was whatever the backend returned.
+
+That is not a tie this gate may leave open. Pairing the old primary with the new
+judge and pairing the new primary with the old judge give **opposite** answers to
+`JUDGE_RAN_LAST`, so A11 could report `PASS` and `BLOCKED` on identical rows.
+`ORDER BY orchestration_id, ordinal, completed_at, rowid` makes the comment true.
+A half re-audited packet is now deterministically `BLOCKED` on `JUDGE_RAN_LAST`,
+and returns to `PASS` when this round has produced all three roles.
+
+### The same rule at the storage boundary
+
+`brain_submit_audit` refuses a judge until both arguments exist, and it read
+every pass of the packet — so the previous round's satisfied it. After a handoff
+a judge could therefore store a verdict over a round that had produced one
+argument and nothing answering it, having read (correctly, from `auditBriefFor`)
+only that one. Scoped now, with the claim path refusing it as well: two
+refusals, for the reason the file already gave — a lease can expire and be
+retaken, so eligible at claim time is not eligible at submit time.
+
+**What this did *not* turn out to be is worth recording, because my first
+version of this section said otherwise.** I wrote that the recorded audit "would
+have been assembled from the previous round's findings". It would not:
+`earlierAuditRole` returns the *last* matching pass, and the last one is this
+round's. The selection was right — by row insertion order, which is not a
+property a stored verdict should rest on, but right. The defect is the refusal
+above, and the correction is here rather than quietly rewritten.
+
+### The third park, which nothing answered
+
+Walking the live chain found the one that mattered most, and reading alone had
+not: **the bin was still `NEEDS_HUMAN`.**
+
+`RESEARCH_PACKET_V1` refuses a packet sitting at `NEEDS_HUMAN` with the
+disposition `HUMAN`, and a `HUMAN` refusal terminalizes the bin. So the chain had
+three parks. The handoff answered the packet's and the mission's, withdrew the
+person's request with a truthful message — and left the bin terminal. A parked
+bin is not dispatchable, so the reopened round's first audit item sat `QUEUED`
+and claimable with nobody ever sent for it. Worse than stuck: the person had
+already been told, truthfully, that there was nothing left for them to decide.
+
+Brain answers it, because Brain is what resolved the condition, through the same
+guarded transition an operator uses: one source state, a compare-and-swap on the
+generation, the fence, the budget check, and a `BIN_REOPENED` row naming who
+answered it and on what evidence. Nothing is reset — attempts, refusals, unit
+results and every event stay exactly where they are.
+
+`reopenParkedBin` refused it, and that guard is the more interesting half. It
+required the packet to be **terminal**, on the reasoning that reopening
+otherwise "would spend an activation to be refused by the same contract for the
+same reason". The reasoning is right and the proxy is wrong in the one direction
+that matters: the contract refuses a *running* packet with `RETRY`, which leaves
+the bin working, and only a packet that has gone terminal without filing — or
+one waiting for approval — refuses with `HUMAN` and parks it. So the guard now
+asks `evaluateContract`, the same evaluator the completion path runs, and
+refuses exactly what that answers `HUMAN` to. Strictly narrower than the old rule
+and strictly more accurate: `AWAITING_APPROVAL`, a failed packet, a cancelled one
+and a packet that filed nothing all still refuse, in the contract's own words.
+
+### Verification
+
+Eleven tests. Four on the admission boundary, three on the A11 gate, two on the
+bin (reopened by the routing with its attempts and history intact and a
+`BIN_REOPENED` row; and left parked when the packet has genuinely failed), and
+two on the storage boundary. Reverting the admission scoping alone fails two;
+reverting the storage scoping alone fails one; reverting the bin reopen alone
+fails one. The end-to-end two-round test passes either way and says so in its
+own comment rather than posing as a caught defect.
+
+No migration. No evidence gate, envelope, authority, ceiling or fleet setting
+changed.

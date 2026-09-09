@@ -37,6 +37,7 @@ import {
   lineageFromPasses,
 } from '../server/services/research/independence.ts';
 import {
+  cancelWork,
   claimWork,
   completeWork,
   enqueueWork,
@@ -47,7 +48,7 @@ import {
 import { getProjectBySlug } from '../server/repos/projects.ts';
 import { getDocument } from '../server/repos/documents.ts';
 import { listAuditsByProject } from '../server/repos/audits.ts';
-import { listEvents } from '../server/repos/events.ts';
+import { listEvents, recordEvent } from '../server/repos/events.ts';
 import { parseAdversarialPass } from '../server/services/audit/schema.ts';
 import { readObject } from '../server/services/storage.ts';
 import {
@@ -2893,6 +2894,219 @@ describe('the audit passes', () => {
     expect(audits[0]!.verdict).toBe('MORE_RESEARCH');
     // The structured record, not prose. Invariant 11.
     expect(audits[0]!.gaps.length).toBeGreaterThan(0);
+  });
+
+  it('judges the round it is in, not the round before an OTHER_LAYER handoff', async () => {
+    /*
+     * The defect this pins was invisible from every direction that mattered.
+     *
+     * §24's handoff re-audits a document that moved layers, and the round
+     * boundary is a timestamp rather than a mutation, so the previous round's
+     * three passes stay exactly where they were written. This walks the whole
+     * of that: two complete rounds through the real tools, and the second
+     * round's audit must carry the second round's argument.
+     *
+     * It passes with the storage path unscoped, and that is worth saying rather
+     * than dressing the test up as a caught defect: `earlierAuditRole` takes
+     * the last matching pass, and the last one is this round's. What the
+     * scoping buys is that being true *by the rule* instead of by insertion
+     * order — and the guard below, which is not accidentally correct.
+     */
+    const orchestration = await filedPacket();
+    const fleet = await auditFleet();
+
+    const roundOneAttack = 'One statute section is being read as settling a question about compensation.';
+    const roundTwoAttack = 'The sourcing terms are quoted from a page that post-dates the assignment.';
+
+    async function runRound(adversarialAttack: string): Promise<void> {
+      await as(fleet.primary, async () => {
+        const item = await claimNext('RESEARCH_AUDIT');
+        await call('brain_submit_audit', { ...proof(item), primary: PRIMARY });
+        await call('brain_complete_work', { ...proof(item), summary: 'primary in' });
+      });
+      await as(fleet.adversarial, async () => {
+        const item = await claimNext('RESEARCH_AUDIT');
+        await call('brain_submit_audit', {
+          ...proof(item),
+          adversarial: {
+            ...ADVERSARIAL,
+            attacks: [{ ...ADVERSARIAL.attacks[0]!, attack: adversarialAttack }],
+          },
+        });
+        await call('brain_complete_work', { ...proof(item), summary: 'adversarial in' });
+      });
+      const judgeItem = await as(fleet.judge, () => claimNext('RESEARCH_AUDIT'));
+      await as(fleet.judge, () =>
+        call('brain_submit_audit', { ...proof(judgeItem), judge: judge() }));
+    }
+
+    await runRound(roundOneAttack);
+    const first = await listAuditsByProject(orchestration.projectId);
+    expect(first).toHaveLength(1);
+
+    /*
+     * The handoff, with the two clocks placed unambiguously either side of the
+     * boundary. Round one is backdated rather than the event being nudged
+     * forward, because the boundary is compared with `>` and two rows written
+     * in the same millisecond would decide the test by luck.
+     */
+    await getDb().run(
+      "UPDATE research_passes SET completed_at = ?, started_at = ? WHERE orchestration_id = ? AND pass_key = 'AUDIT'",
+      [
+        new Date(Date.now() - 120_000).toISOString(),
+        new Date(Date.now() - 121_000).toISOString(),
+        orchestration.id,
+      ],
+    );
+    // The round's work items too. In production they were genuinely created
+    // before the handoff; here everything happens inside a millisecond, and the
+    // runner asks the same boundary of them — "was an item for this role ever
+    // created *in this round*" — so leaving them on the near side would make
+    // the reopened packet fault out exactly as it did before the scoping.
+    await getDb().run(
+      "UPDATE work_items SET created_at = ? WHERE orchestration_id = ? AND work_type = 'RESEARCH_AUDIT'",
+      [new Date(Date.now() - 120_000).toISOString(), orchestration.id],
+    );
+    await recordEvent({
+      projectId: orchestration.projectId,
+      layerId: orchestration.layerId,
+      entityType: 'DOCUMENT',
+      entityId: orchestration.documentId ?? orchestration.id,
+      eventType: 'DOCUMENT_HANDED_OFF',
+      payload: { orchestrationId: orchestration.id },
+    });
+    await getDb().run(
+      "UPDATE project_events SET created_at = ? WHERE event_type = 'DOCUMENT_HANDED_OFF'",
+      [new Date(Date.now() - 60_000).toISOString()],
+    );
+    await updateOrchestration(orchestration.id, {
+      status: 'AUDITING',
+      currentPass: 'AUDIT',
+      completedAt: null,
+      failureReason: null,
+    });
+    // The tick reopens the round; the runner is what enqueues its first role.
+    await advancePacket(orchestration.id);
+
+    await runRound(roundTwoAttack);
+
+    const audits = await listAuditsByProject(orchestration.projectId);
+    expect(audits).toHaveLength(2);
+    const second = audits.find((audit) => audit.id !== first[0]!.id)!;
+    expect(second).toBeDefined();
+
+    const attacks = second.findings
+      .filter((finding) => finding.findingType === 'ADVERSARIAL_FINDING')
+      .map((finding) => finding.content);
+    expect(attacks).toContain(roundTwoAttack);
+    expect(attacks).not.toContain(roundOneAttack);
+  });
+
+  it('refuses a judge whose only arguments are the round before the handoff', async () => {
+    /*
+     * The second entrance, tested by bypassing the first — which is the only
+     * way a second entrance can be tested at all, and the codebase's own
+     * reason for having one: "a lease can expire and be retaken, so eligible at
+     * claim time is not eligible at submit time", and "a guard on one entrance
+     * is not a guard".
+     *
+     * `brain_submit_audit` refuses a judge until the primary and adversarial
+     * passes exist. Unscoped, the *previous* round's passes satisfy that — so a
+     * judge could store a verdict over a round that had produced one argument
+     * and no answer to it. The claim path now refuses this too, and both
+     * refusals are wanted: this one is the one that guards storage.
+     */
+    const orchestration = await filedPacket();
+    const fleet = await auditFleet();
+
+    await as(fleet.primary, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), primary: PRIMARY });
+      await call('brain_complete_work', { ...proof(item), summary: 'primary in' });
+    });
+    await as(fleet.adversarial, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), adversarial: ADVERSARIAL });
+      await call('brain_complete_work', { ...proof(item), summary: 'adversarial in' });
+    });
+    await as(fleet.judge, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), judge: judge() });
+    });
+    expect(await listAuditsByProject(orchestration.projectId)).toHaveLength(1);
+
+    // The handoff, with round one unambiguously behind the boundary.
+    await getDb().run(
+      "UPDATE research_passes SET completed_at = ?, started_at = ? WHERE orchestration_id = ? AND pass_key = 'AUDIT'",
+      [
+        new Date(Date.now() - 120_000).toISOString(),
+        new Date(Date.now() - 121_000).toISOString(),
+        orchestration.id,
+      ],
+    );
+    await getDb().run(
+      "UPDATE work_items SET created_at = ? WHERE orchestration_id = ? AND work_type = 'RESEARCH_AUDIT'",
+      [new Date(Date.now() - 120_000).toISOString(), orchestration.id],
+    );
+    await recordEvent({
+      projectId: orchestration.projectId,
+      layerId: orchestration.layerId,
+      entityType: 'DOCUMENT',
+      entityId: orchestration.documentId ?? orchestration.id,
+      eventType: 'DOCUMENT_HANDED_OFF',
+      payload: { orchestrationId: orchestration.id },
+    });
+    await getDb().run(
+      "UPDATE project_events SET created_at = ? WHERE event_type = 'DOCUMENT_HANDED_OFF'",
+      [new Date(Date.now() - 60_000).toISOString()],
+    );
+    await updateOrchestration(orchestration.id, {
+      status: 'AUDITING',
+      currentPass: 'AUDIT',
+      completedAt: null,
+      failureReason: null,
+    });
+    await advancePacket(orchestration.id);
+
+    // This round produces its primary and stops there. Nothing has attacked it.
+    await as(fleet.primary, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), primary: PRIMARY });
+      await call('brain_complete_work', { ...proof(item), summary: 'primary in' });
+    });
+
+    /*
+     * The adversarial item the runner queued is withdrawn, so this round really
+     * has one argument and no answer to it — and a JUDGE item is put in its
+     * place, claimed with the admission hook deliberately omitted.
+     */
+    for (const queued of await listWorkItems(project.id, { limit: 200 })) {
+      if (queued.orchestrationId !== orchestration.id) continue;
+      if (queued.workType !== 'RESEARCH_AUDIT' || queued.state !== 'QUEUED') continue;
+      await cancelWork(queued.id, 'withdrawn by the test, to reach the judge on its own');
+    }
+    await enqueueWork({
+      projectId: orchestration.projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: orchestration.id,
+    });
+    const [claimed] = await claimWork({
+      workerId: fleet.judge.workerId,
+      credentialId: fleet.judge.credentialId,
+      scopes: [{ projectId: project.id, scopes: FULL }],
+      workTypes: ['RESEARCH_AUDIT'],
+    });
+    expect(claimed).toBeDefined();
+
+    const refused = await as(fleet.judge, () =>
+      refusal('brain_submit_audit', { ...proof(claimed!), judge: judge() }));
+    expect(refused.message).toMatch(/before the primary and adversarial passes/);
+
+    // And nothing was stored: the first round's audit is still the only one.
+    expect(await listAuditsByProject(orchestration.projectId)).toHaveLength(1);
   });
 
   it('records the execution lineage, and it shows one worker doing all three roles', async () => {

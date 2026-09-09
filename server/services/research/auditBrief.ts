@@ -52,9 +52,16 @@ import {
   buildJudgePrompt,
 } from '../audit/prompts.ts';
 import { listPasses } from '../../repos/research.ts';
-import { getDb } from '../../db/database.ts';
-import { parseJson } from '../../repos/util.ts';
+import { auditRoundStartedAt } from './auditRound.ts';
 import type { ResearchOrchestration } from '../../domain/types.ts';
+
+/*
+ * Re-exported rather than moved silently: `packetRunner` and the Russell loop
+ * already read the round boundary from this module, and a rename that left them
+ * importing nothing is exactly the failure mode §24 calls "a mechanism nothing
+ * calls". The rule itself lives in `auditRound.ts`, with its four readers.
+ */
+export { auditRoundStartedAt } from './auditRound.ts';
 
 export class AuditBriefUnavailable extends Error {
   constructor(message: string) {
@@ -80,41 +87,6 @@ export interface AuditBrief {
   layerName: string;
   /** Proof of exactly what the auditor is reading. */
   manifest: unknown;
-}
-
-/**
- * When this packet's current audit round began.
- *
- * A packet is audited once, normally, and then this is null and every pass
- * counts. It is not null after an `OTHER_LAYER` handoff, because a document
- * that has moved layers was judged against the criteria of a layer it has since
- * left — so that judgment is history rather than the packet's current one, and
- * the roles must run again in the layer that now owns the work.
- *
- * **The boundary is a timestamp, not a mutation.** The alternative was to
- * cancel or supersede the completed passes so the role lookup stopped finding
- * them, and that would have destroyed the record of an audit that really
- * happened — three real sessions, three real verdicts — to make a bookkeeping
- * lookup come out differently. §5 is unambiguous: a failed run is never
- * overwritten and neither is a superseded one. Every pass stays exactly as it
- * was written; which round it belongs to is decided by comparing its clock to
- * the handoff's.
- *
- * Read from `project_events`, which is append-only, so the boundary cannot be
- * moved backwards to re-admit a pass that has been superseded.
- */
-export async function auditRoundStartedAt(orchestrationId: string): Promise<string | null> {
-  const rows = await getDb().all<{ created_at: string; payload: string }>(
-    `SELECT created_at, payload FROM project_events
-      WHERE event_type = 'DOCUMENT_HANDED_OFF'
-      ORDER BY created_at DESC, rowid DESC
-      LIMIT 50`,
-  );
-  for (const row of rows) {
-    const payload = parseJson<Record<string, unknown>>(row.payload, {});
-    if (payload['orchestrationId'] === orchestrationId) return row.created_at;
-  }
-  return null;
 }
 
 /**

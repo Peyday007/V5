@@ -61,13 +61,16 @@ import {
 import { recordAuditPasses } from '../services/audit/pipeline.ts';
 import { lineageForWorker, missionRequiredTier } from '../services/research/auditAdmission.ts';
 import { auditMatrixVerdict } from '../services/research/auditEligibility.ts';
-import { listPasses } from '../repos/research.ts';
 import {
   auditBriefFor,
   AuditBriefUnavailable,
   earlierAuditRole,
   ROLE_PASS_ORDINAL,
 } from '../services/research/auditBrief.ts';
+import {
+  auditRoundStartedAt,
+  passesInCurrentRound,
+} from '../services/research/auditRound.ts';
 import { recomputeProject } from '../services/stateEngine.ts';
 import { AUDIT_ROLES, type AuditRole } from '../services/queue/workTypes.ts';
 import { assignmentFor } from '../services/research/assignment.ts';
@@ -1973,8 +1976,30 @@ const submitAuditTool: McpTool = {
           };
         }
 
-        const primaryRaw = await earlierAuditRole(orchestration.id, 'PRIMARY');
-        const adversarialRaw = await earlierAuditRole(orchestration.id, 'ADVERSARIAL');
+        /*
+         * This round's arguments, and only this round's.
+         *
+         * The refusal immediately below is what makes a judge a judge: it may
+         * not record a verdict until both arguments exist. Unscoped, the
+         * *previous* round's passes satisfy it — so after an `OTHER_LAYER`
+         * handoff a judge could store a verdict over a round that had produced
+         * one argument and nothing answering it, having read (correctly, from
+         * `auditBriefFor`) only that one.
+         *
+         * The claim path refuses this too, and both refusals are wanted for the
+         * reason this file already gives: a lease can expire and be retaken, so
+         * eligible at claim time is not eligible at submit time, and this is
+         * the guard that stands where state actually moves.
+         *
+         * It also stops the *selection* being right by accident. Unscoped,
+         * `earlierAuditRole` returns the last matching pass and the last one
+         * happens to be this round's — correct until somebody changes an
+         * ORDER BY, which is not a property to leave a stored verdict resting
+         * on.
+         */
+        const round = await auditRoundStartedAt(orchestration.id);
+        const primaryRaw = await earlierAuditRole(orchestration.id, 'PRIMARY', round);
+        const adversarialRaw = await earlierAuditRole(orchestration.id, 'ADVERSARIAL', round);
         if (!primaryRaw || !adversarialRaw) {
           throw new TerminalEffectFailure(
             'NOT_AUTHORIZED',
@@ -2005,7 +2030,12 @@ const submitAuditTool: McpTool = {
          * closed: "we could not tell" must not read the same as "we checked".
          */
         const matrix = auditMatrixVerdict(
-          await listPasses(orchestration.id),
+          // Scoped for the same reason, and to the same round: the separation
+          // being proved is between the three sessions that produced *this*
+          // verdict. It happened to pick them anyway, by insertion order —
+          // which is the kind of correctness that stops being true the first
+          // time somebody changes an ORDER BY.
+          await passesInCurrentRound(orchestration.id),
           // The mission's own declared tier, read from a server row. Enforced
           // here as well as at admission, because a lease can expire and be
           // retaken — a packet must not be stored under a weaker separation

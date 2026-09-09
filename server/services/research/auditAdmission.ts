@@ -19,7 +19,7 @@
  */
 import { getDb } from '../../db/database.ts';
 import { listRoutines } from '../../repos/fleet.ts';
-import { listPasses } from '../../repos/research.ts';
+import { passesInCurrentRound } from './auditRound.ts';
 import { parseJson } from '../../repos/util.ts';
 import { AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { auditEligibility, type ExecutorLineage } from './auditEligibility.ts';
@@ -100,10 +100,23 @@ export function auditAdmission(executor: ExecutorLineage) {
      */
     const requiredTier = await missionRequiredTier(item.orchestration_id);
 
+    /*
+     * The *current* round's passes, which after an `OTHER_LAYER` handoff is not
+     * the same set as the packet's.
+     *
+     * Two things would otherwise be decided against a verdict that no longer
+     * stands. The judge's wait — "JUDGE may not begin until PRIMARY and
+     * ADVERSARIAL have completed" — would be satisfied by the previous round's
+     * arguments, admitting a judge with nothing of this round's to weigh. And
+     * the separation matrix would compare this round's roles against sessions
+     * that argued about a layer the document has since left, which is stricter
+     * than the rule and stricter in the wrong direction: it refuses a surface
+     * for sharing a session with an argument nobody is judging.
+     */
     const verdict = auditEligibility({
       role: role as AuditRole,
       executor,
-      passes: await listPasses(item.orchestration_id),
+      passes: await passesInCurrentRound(item.orchestration_id),
       ...(requiredTier ? { requiredTier } : {}),
     });
     if (verdict.eligible) return { ok: true };
@@ -190,9 +203,12 @@ export async function rankSurfacesFor(input: {
   role: AuditRole;
   requiredTier?: SeparationTier;
 }): Promise<RankedSurface[]> {
+  // Scoped to the current round for the same reason the admission check is:
+  // the allocator would otherwise rank surfaces against a superseded round's
+  // lineage, and refuse the one this round most obviously wants.
   const [routines, passes] = await Promise.all([
     listRoutines(),
-    listPasses(input.orchestrationId),
+    passesInCurrentRound(input.orchestrationId),
   ]);
   const { audits } = lineageFromPasses(passes);
 
