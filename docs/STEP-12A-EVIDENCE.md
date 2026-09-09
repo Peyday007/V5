@@ -6827,7 +6827,58 @@ The reasons it records are `auditEligibility`'s own, which its contract already
 guarantees name the pair and the dimension and never a value — and a test
 asserts the credential does not appear in the row.
 
+### What the deployment then found, which was neither of them
+
+`c5b3e53` deployed at 12:16:35Z, and the credit fired in production immediately:
+four `BIN_ATTEMPT_CREDITED` rows at 12:08:41Z — one per completed work item, on
+the packet's first advance under the new code. The mechanism works live and it
+is exactly-once by construction.
+
+But no `BIN_ITEM_WITHHELD` row appeared, because after the deploy **no worker
+was assigned the bin at all**. Every tick wrote the same pair instead:
+
+```
+DISPATCH_UNROUTED   ACCOUNT_TARGETS_REACHED
+DISPATCH_DEFERRED   ACCOUNT_TARGETS_REACHED
+```
+
+and `fleet explain-route --ref bin_75bea12e15534ba4b93f` named it exactly:
+
+```
+considered rtn_c7bcec972bd44afa91d7  routine at target 1/1
+considered rtn_e6886570b3274430887a  routine QUARANTINED
+decision   ACCOUNT_TARGETS_REACHED
+reason     Every capable surface is at its configured target. Raise an account
+           or Routine target, or wait for an activation to finish.
+```
+
+One healthy Routine, its target 1, its single slot held by an in-flight
+activation; the second Routine quarantined; the two verification Routines not
+routable for want of a secret. So the fleet could start one session at a time,
+and a packet whose remaining work is **two audit roles that must run in two
+distinct sessions** was serialised behind a thirty-minute in-flight window.
+
+That is an operational fact with an operational remedy, and Step 11 built the
+remedy as rows: `fleet set-target --scope ROUTINE --ref
+trig_01CBLu5oCZziEwznw5q9xU7g --target 2`, carrying an actor and the reason.
+No deployment, no code change, and nothing about the evidence gate, the
+verification pass, the three audit roles, the approval envelope or the
+prohibitions moved. The router's own answer changed with it:
+
+```
+considered rtn_c7bcec972bd44afa91d7  selected
+decision   ROUTED
+reason     Selected V1 on primary: 1/2 on the Routine, 1/2 on the account.
+```
+
+**Two is not a capacity guess.** §22 measured the recommended operating ceiling
+at ten concurrent bins on one Routine; two is far below it, and it is the
+smallest number that lets an audit's roles overlap at all rather than queue
+one per window.
+
 ### Verified
 
 Typecheck clean. SQLite **1824 passed / 73 files**. Postgres **1849 passed / 74
-files, 0 failures**. Build clean. No migration.
+files, 0 failures**, run twice — the first run reported one unhandled error at
+teardown with exit code 0, and the second run reproduced no error at all; both
+runs passed every test. Build clean. No migration.
