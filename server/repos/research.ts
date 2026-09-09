@@ -331,6 +331,15 @@ export async function getOrchestrationLineage(id: string): Promise<ResearchOrche
 }
 
 export interface UpdateOrchestrationInput {
+  /**
+   * Which layer this packet belongs to.
+   *
+   * Settable because an `OTHER_LAYER` handoff moves a filed document to the
+   * layer its audit says owns it, and a packet whose layer did not follow its
+   * document would build the next audit's context from the criteria of a layer
+   * the document has left — the same mistake, one round later.
+   */
+  layerId?: string;
   status?: OrchestrationStatus;
   currentPass?: ResearchPassKey | null;
   reportText?: string | null;
@@ -360,6 +369,7 @@ export async function updateOrchestration(
   patch: UpdateOrchestrationInput,
 ): Promise<ResearchOrchestration | null> {
   const { clause, values } = buildUpdate({
+    layer_id: patch.layerId,
     status: patch.status,
     current_pass: patch.currentPass,
     report_text: patch.reportText,

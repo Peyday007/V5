@@ -52,6 +52,8 @@ import {
   buildJudgePrompt,
 } from '../audit/prompts.ts';
 import { listPasses } from '../../repos/research.ts';
+import { getDb } from '../../db/database.ts';
+import { parseJson } from '../../repos/util.ts';
 import type { ResearchOrchestration } from '../../domain/types.ts';
 
 export class AuditBriefUnavailable extends Error {
@@ -81,20 +83,61 @@ export interface AuditBrief {
 }
 
 /**
+ * When this packet's current audit round began.
+ *
+ * A packet is audited once, normally, and then this is null and every pass
+ * counts. It is not null after an `OTHER_LAYER` handoff, because a document
+ * that has moved layers was judged against the criteria of a layer it has since
+ * left — so that judgment is history rather than the packet's current one, and
+ * the roles must run again in the layer that now owns the work.
+ *
+ * **The boundary is a timestamp, not a mutation.** The alternative was to
+ * cancel or supersede the completed passes so the role lookup stopped finding
+ * them, and that would have destroyed the record of an audit that really
+ * happened — three real sessions, three real verdicts — to make a bookkeeping
+ * lookup come out differently. §5 is unambiguous: a failed run is never
+ * overwritten and neither is a superseded one. Every pass stays exactly as it
+ * was written; which round it belongs to is decided by comparing its clock to
+ * the handoff's.
+ *
+ * Read from `project_events`, which is append-only, so the boundary cannot be
+ * moved backwards to re-admit a pass that has been superseded.
+ */
+export async function auditRoundStartedAt(orchestrationId: string): Promise<string | null> {
+  const rows = await getDb().all<{ created_at: string; payload: string }>(
+    `SELECT created_at, payload FROM project_events
+      WHERE event_type = 'DOCUMENT_HANDED_OFF'
+      ORDER BY created_at DESC, rowid DESC
+      LIMIT 50`,
+  );
+  for (const row of rows) {
+    const payload = parseJson<Record<string, unknown>>(row.payload, {});
+    if (payload['orchestrationId'] === orchestrationId) return row.created_at;
+  }
+  return null;
+}
+
+/**
  * The raw output an earlier audit role already submitted, or null.
  *
  * Read from `research_passes` rather than held in memory, which is what lets
  * the judge run in a different process, hours later, after a restart — the
  * property the in-process pipeline gets for free and this one has to earn.
+ *
+ * `since` scopes the answer to the current audit round. A pass completed before
+ * the packet's document was handed to another layer is not this round's, so it
+ * does not satisfy the role — see `auditRoundStartedAt`.
  */
 export async function earlierAuditRole(
   orchestrationId: string,
   role: AuditRole,
+  since?: string | null,
 ): Promise<string | null> {
   const passes = await listPasses(orchestrationId);
   const match = passes
     .filter((pass) => pass.passKey === 'AUDIT' && pass.ordinal === ROLE_PASS_ORDINAL[role])
     .filter((pass) => pass.status === 'COMPLETE')
+    .filter((pass) => !since || (pass.completedAt ?? pass.startedAt) > since)
     .at(-1);
   return match?.rawResponse ?? null;
 }
@@ -131,11 +174,17 @@ export async function auditBriefFor(input: {
 
   let prompt: string;
   const dependsOnRoles: AuditRole[] = [];
+  /*
+   * Scoped to the round, so a re-audit after a handoff attacks and judges *this*
+   * round's arguments. Reading the previous round's primary pass here would
+   * hand the adversarial role findings about a layer the document has left.
+   */
+  const since = await auditRoundStartedAt(orchestration.id);
 
   if (role === 'PRIMARY') {
     prompt = buildPrimaryPrompt(context);
   } else if (role === 'ADVERSARIAL') {
-    const primary = await earlierAuditRole(orchestration.id, 'PRIMARY');
+    const primary = await earlierAuditRole(orchestration.id, 'PRIMARY', since);
     if (!primary) {
       throw new AuditBriefUnavailable(
         'The primary audit pass has not been completed, so there is nothing to attack.',
@@ -144,8 +193,8 @@ export async function auditBriefFor(input: {
     dependsOnRoles.push('PRIMARY');
     prompt = buildAdversarialPrompt(context, primary);
   } else {
-    const primary = await earlierAuditRole(orchestration.id, 'PRIMARY');
-    const adversarial = await earlierAuditRole(orchestration.id, 'ADVERSARIAL');
+    const primary = await earlierAuditRole(orchestration.id, 'PRIMARY', since);
+    const adversarial = await earlierAuditRole(orchestration.id, 'ADVERSARIAL', since);
     if (!primary || !adversarial) {
       throw new AuditBriefUnavailable(
         'The judge cannot run until both the primary and adversarial passes have been completed.',

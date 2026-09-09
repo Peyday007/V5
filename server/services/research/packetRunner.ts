@@ -64,7 +64,7 @@ import {
   updateFragment,
   updateOrchestration,
 } from '../../repos/research.ts';
-import { earlierAuditRole } from './auditBrief.ts';
+import { auditRoundStartedAt, earlierAuditRole } from './auditBrief.ts';
 import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
 import { listCoverage, overrideCoverage, upsertCoverage } from '../../repos/reconciliation.ts';
 import { binForOrchestration, creditBinAttempt } from '../../repos/bins.ts';
@@ -1639,11 +1639,29 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
   // found and the judge weighs both, so running them together would produce
   // three independent opinions rather than one argument — which is a different
   // and much weaker thing than the pipeline this reuses.
+  /*
+   * Scoped to the current audit round, and that scoping is load-bearing.
+   *
+   * Without it an `OTHER_LAYER` handoff would route the document, reopen the
+   * audit, and then land straight back where it started: the roles read as
+   * outstanding again (their passes belong to the previous round), but the
+   * *work items* from that round still exist, so `alreadyCreated` would be true
+   * and the packet would fault out to `NEEDS_HUMAN` claiming a worker had
+   * finished without recording anything — which is untrue and is the exact park
+   * the handoff exists to clear.
+   *
+   * One rule, three readers: whether a role has submitted, whether its item is
+   * still out, and whether one was ever created are all asked of the same round.
+   */
+  const auditRoundFrom = await auditRoundStartedAt(orchestration.id);
+  const inThisRound = (item: WorkItem): boolean =>
+    !auditRoundFrom || item.createdAt > auditRoundFrom;
+
   for (const role of AUDIT_ROLES) {
     const submitted = await auditRoleSubmitted(orchestration, role);
     if (submitted) continue;
     const auditItem = (item: WorkItem): boolean =>
-      item.workType === 'RESEARCH_AUDIT' && item.payload['role'] === role;
+      item.workType === 'RESEARCH_AUDIT' && item.payload['role'] === role && inThisRound(item);
     if (stillRunning(items, auditItem)) {
       return {
         orchestrationId,
@@ -1756,7 +1774,12 @@ async function auditRoleSubmitted(
   orchestration: ResearchOrchestration,
   role: AuditRole,
 ): Promise<boolean> {
-  return (await earlierAuditRole(orchestration.id, role)) !== null;
+  // Scoped to the current round. After an OTHER_LAYER handoff the previous
+  // round's passes are history — they judged a document against a layer it has
+  // since left — so the roles are outstanding again and the runner enqueues
+  // them. Nothing about those passes is altered to make that true.
+  const since = await auditRoundStartedAt(orchestration.id);
+  return (await earlierAuditRole(orchestration.id, role, since)) !== null;
 }
 
 /**

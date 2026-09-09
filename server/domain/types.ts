@@ -263,6 +263,16 @@ export const EVENT_TYPES = [
   'RUSSELL_AUTHORITY_GRANTED',
   'RUSSELL_AUTHORITY_REVOKED',
   'RUSSELL_AUTHORITY_RAISED',
+
+  // A document routed to the layer its own audit said owns it.
+  //
+  // Project history rather than audit telemetry: which layer a document belongs
+  // to is a fact about the project, and "why is this filed here" is a question
+  // somebody will ask long after the audit that answered it has scrolled away.
+  // The payload carries the audit, the gap, both layers, both names and the
+  // version of the rule that decided, because a document that changed layers
+  // with no row saying why is indistinguishable from one edited by hand.
+  'DOCUMENT_HANDED_OFF',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

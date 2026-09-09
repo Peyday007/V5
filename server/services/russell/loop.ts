@@ -69,7 +69,7 @@ import {
   transitionMission,
   withdrawRequest,
 } from '../../repos/russellMissions.ts';
-import { currentFragments, getOrchestration } from '../../repos/research.ts';
+import { currentFragments, getOrchestration, updateOrchestration } from '../../repos/research.ts';
 import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
 import { getProject } from '../../repos/projects.ts';
 import { recordEvent } from '../../repos/events.ts';
@@ -80,10 +80,18 @@ import {
   recordJudgment,
 } from '../../repos/russellCandidates.ts';
 import { getDb } from '../../db/database.ts';
+import { cancelWork, listWorkItems } from '../../repos/workQueue.ts';
 import { completeProbe, listExpiredProbes } from '../../repos/russellProbes.ts';
 import { openProbe, runProbe } from './probe.ts';
 import { GENERAL_LIGHT_PROBE_V1 } from './probeEnvelope.ts';
 import { reconcileBins } from '../bins/service.ts';
+import {
+  handoffCandidates,
+  routeAuditedDocument,
+  type HandoffOutcome,
+} from '../audit/handoff.ts';
+import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
+import { recomputeProject } from '../stateEngine.ts';
 import { outcomeOf, writeBack } from './writeback.ts';
 import { launch, repairLaunches, type LaunchInput } from './launch.ts';
 import { applyTurn } from './turn.ts';
@@ -145,6 +153,24 @@ export interface TickReport {
    * spent on a sentence assembled from the row.
    */
   awaitingFiling: string[];
+  /**
+   * Documents routed to the layer their own audit said owns them, and the
+   * packets re-opened to be judged there.
+   *
+   * The consumer OTHER_LAYER never had. A classification whose whole meaning is
+   * "a different layer owns this" was recorded faithfully and read by nothing,
+   * so a mis-filed document stayed mis-filed and its packet asked a person a
+   * question the rows had already answered.
+   */
+  handedOff: { auditId: string; documentId: string; toLayerId: string; canonicalName: string }[];
+  /**
+   * Audits that named an owner Brain would not act on, with the word for why.
+   *
+   * Reported rather than silent, because "no handoff happened" and "a handoff
+   * was refused because two layers were named" are different facts with
+   * different remedies — and the second is the one a person is actually for.
+   */
+  handoffRefused: { auditId: string; refusal: string }[];
   /**
    * Bins that had run out of assignments with nobody holding them, turned into
    * one decision with the reason attached.
@@ -208,6 +234,8 @@ const EMPTY: TickReport = {
   launched: [],
   parked: [],
   awaitingFiling: [],
+  handedOff: [],
+  handoffRefused: [],
   escalatedBins: [],
   followOns: [],
   linkedNext: [],
@@ -246,6 +274,8 @@ export async function tick(owner: string): Promise<TickReport> {
     launched: [],
     parked: [],
     awaitingFiling: [],
+    handedOff: [],
+    handoffRefused: [],
     escalatedBins: [],
     followOns: [],
     linkedNext: [],
@@ -382,6 +412,39 @@ export async function tick(owner: string): Promise<TickReport> {
       });
       if (outcome.answeredByArchive) report.answeredByArchive.push(stale.candidateId);
       else if (outcome.ok) report.planning.push(stale.candidateId);
+    }
+
+    /*
+     * 1c-ii. Act on a handoff the audit already decided.
+     *
+     * `OTHER_LAYER` means one thing — a different layer owns this — and until
+     * now nothing did anything with it. The judge named the owner, `schema.ts`
+     * refused the classification without one, `toGapInputs` resolved it to a
+     * real layer id, and then the fact sat in `audit_gaps` while the document
+     * stayed where it was and its packet asked a person where to file it.
+     *
+     * Routing is deterministic and it is not a judgment about the research:
+     * `decideHandoff` is a pure function over gap rows and the project's own
+     * layer list, and it refuses — by name, leaving the park exactly as it is —
+     * on anything that is not exactly one resolvable owner.
+     *
+     * Selected from rows rather than from a queue, so this reaches an audit
+     * recorded before this code existed as readily as one recorded a second
+     * ago, and performing the routing is what stops it being selected again.
+     */
+    for (const auditId of await handoffCandidates(cycle.maxLaunchesPerCycle)) {
+      const routed = await routeAuditedDocument({ auditId });
+      if (!routed.ok) {
+        if (routed.refusal) report.handoffRefused.push({ auditId, refusal: routed.refusal });
+        continue;
+      }
+      report.handedOff.push({
+        auditId,
+        documentId: routed.documentId!,
+        toLayerId: routed.toLayerId!,
+        canonicalName: routed.canonicalName!,
+      });
+      await reopenAuditRound(routed);
     }
 
     /*
@@ -1146,6 +1209,102 @@ async function archiveCounts(
  * Returns false when the mission moved underneath, which is an ordinary lost
  * race rather than an error.
  */
+/**
+ * Put the packet back in front of the audit, in the layer that now owns it.
+ *
+ * The first audit judged this document against a layer it has since left, so
+ * its verdict is history rather than the packet's current answer. Nothing about
+ * that verdict is rewritten and no pass is touched: `auditRoundStartedAt` reads
+ * the handoff event and scopes the role lookup by time, so the three roles
+ * become outstanding again and the runner enqueues a fresh `PRIMARY` on its own.
+ *
+ * What this does is the small amount of state that cannot be derived: the
+ * packet says it is auditing again, the mission stops saying it is waiting for
+ * a person, and the request that asked where to file the document is withdrawn
+ * — because the routing answered it. Leaving it open would be asking somebody
+ * to decide something Brain has already decided from their own rows.
+ *
+ * `completedAt` and `failureReason` are cleared for the same reason the status
+ * moves: a packet that is auditing has not completed and has not failed, and
+ * leaving either set would make the next reader believe a stale thing.
+ */
+async function reopenAuditRound(routed: HandoffOutcome): Promise<void> {
+  if (!routed.documentId || !routed.toLayerId) return;
+  const mission = await missionForDocument(routed.documentId);
+
+  if (mission?.orchestrationId) {
+    const packet = await getOrchestration(mission.orchestrationId);
+    if (packet && !TERMINAL_ORCHESTRATION.has(packet.status)) {
+      /*
+       * The previous round's audit items are withdrawn, not left to drain.
+       *
+       * They ask for an audit of a document against a layer it has left. A
+       * worker still holding one would be briefed from current rows and so
+       * would produce a *correct* pass — but for a role this round is already
+       * enqueueing, which is two passes for one role and one wasted activation.
+       * Cancelling is not destroying: the row keeps its id, its attempts and
+       * its history, and gains the reason it stopped.
+       */
+      for (const item of await listWorkItems(packet.projectId, { limit: 500 })) {
+        if (item.orchestrationId !== packet.id) continue;
+        if (item.workType !== 'RESEARCH_AUDIT') continue;
+        if (item.state !== 'QUEUED' && item.state !== 'LEASED') continue;
+        await cancelWork(
+          item.id,
+          'The audited document was handed to the layer that owns it, so this asked for an ' +
+            'audit against a layer it has left. The audit is running again in the new layer.',
+        );
+      }
+      await updateOrchestration(packet.id, {
+        status: 'AUDITING',
+        currentPass: 'AUDIT',
+        completedAt: null,
+        failureReason: null,
+      });
+    }
+  }
+
+  if (mission) {
+    if (mission.layerId !== routed.toLayerId) {
+      await linkMission({ missionId: mission.id, layerId: routed.toLayerId });
+    }
+    if (mission.state === 'NEEDS_HUMAN') {
+      await transitionMission({
+        missionId: mission.id,
+        from: 'NEEDS_HUMAN',
+        to: 'RUNNING',
+        waitingOn: null,
+      });
+    }
+    const open = await openRequestFor(mission.id);
+    if (open) {
+      await withdrawRequest({
+        requestId: open.id,
+        reason:
+          'Withdrawn: the audit named the layer that owns this work, so Brain filed it there ' +
+          `as ${routed.canonicalName}. It is being judged again under that layer, and there is ` +
+          'nothing here for you to decide.',
+      });
+    }
+  }
+
+  if (mission?.projectId) await recomputeProject(mission.projectId);
+}
+
+/** The Russell mission that filed this document, if one did. */
+async function missionForDocument(documentId: string): Promise<RussellMission | null> {
+  const row = await getDb().get<{ id: string }>(
+    `SELECT m.id AS id
+       FROM russell_missions m
+       JOIN research_orchestrations o ON o.id = m.orchestration_id
+      WHERE o.document_id = ?
+      ORDER BY m.created_at DESC, m.rowid DESC
+      LIMIT 1`,
+    [documentId],
+  );
+  return row ? await getMission(row.id) : null;
+}
+
 async function retirePlanningDefect(input: {
   candidateId: string;
   missionId: string;

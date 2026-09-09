@@ -6944,3 +6944,119 @@ decision any worker or any automation may make on their behalf.
 
 **Every earlier stop in this chain was a defect wearing a park.** This one is a
 park.
+
+## 73. `OTHER_LAYER` has a consumer — 2026-09-09
+
+§72 ended at a park, and called it a person's. It was not.
+
+The judge's first gap was `[OTHER_LAYER]` naming **Discovery Logic**, and
+`OTHER_LAYER` is not an opinion that needs interpreting — it is a routing
+instruction with a named destination, which `auditProfile.ts` has always spelled
+out: *"The issue is real but a different layer owns it. Record the handoff; do
+not open research in this layer for it."*
+
+Brain recorded that handoff perfectly. `schema.ts` refuses the classification
+unless the judge names an `owning_layer`; `toGapInputs` resolves that name
+against the project's real layers and stores the id; `recordAuditPasses` writes
+an `OTHER_LAYER_HANDOFF` finding beside it. **And nothing read any of it.** The
+fact sat in `audit_gaps` with no consequence, so a mis-filed document stayed
+mis-filed, and a person was asked where to file something their own rows already
+answered. §24 at a fifth altitude: a mechanism nothing calls is not a mechanism.
+
+The second gap follows from the first. `[FOUNDATIONAL_GAP] World Model layer has
+no substantive conceptual content` is a true statement about the World Model —
+and it was reached by auditing, under the World Model's criteria, a document
+about how opportunities are sourced. Route the document and the observation
+stops being this packet's business.
+
+### The decision is a pure function, and it refuses more than it accepts
+
+`decideHandoff` takes gap rows and the project's own layer list and returns one
+answer. No clock, no database, no prose parsed. It routes on **exactly one
+resolvable owner** and otherwise refuses by name:
+
+```
+NO_OTHER_LAYER_GAP        nothing asked for a handoff
+NO_OWNING_LAYER_NAMED     the gap named no destination
+OWNING_LAYER_UNKNOWN      no layer of this project has that name
+AMBIGUOUS_OWNERS          two different layers named — or one real and one that
+                          resolves to nothing, because the unresolvable name may
+                          be the right answer, misspelt
+ALREADY_IN_OWNING_LAYER   nothing to do
+```
+
+Two gaps naming the *same* layer are one destination and route fine. Every
+refusal leaves the park exactly where it was, which is what "ask a person only
+when the rows do not settle it" means in practice.
+
+### What moves, and what does not
+
+`documents.layer_id`, and the three names §4 derives from (layer, version) —
+because a document filed under Discovery Logic that still calls itself "World
+Model v1B" is the naming lie that rule exists to prevent. The version is kept
+when it is free in the destination and otherwise taken from the same expansion
+policy every other document uses.
+
+Nothing else. Same document id, same bytes, same `storage_key`, same file hash,
+same extraction runs, same claims, same citations, same audit row, same gaps,
+same verdict. **No copy, no supersession, no re-research.** The bytes
+deliberately stay where Brain wrote them: a storage key records what happened,
+and moving an object in a bucket so a path reads tidily is an external effect
+performed for cosmetics.
+
+The packet and the mission follow their document, and `DOCUMENT_HANDED_OFF`
+records the audit, the gap, both layers, both names and the decider version —
+because a document that changed layers with no row saying why is
+indistinguishable from one somebody edited by hand.
+
+### The re-audit, without destroying the audit
+
+The first verdict judged this document against a layer it has since left, so it
+is history rather than the packet's current answer, and the roles must run again
+where the work now lives.
+
+The obvious way to do that was to cancel or supersede the three completed passes
+so the role lookup stopped finding them — and that would have destroyed the
+record of an audit that really happened, three real sessions and three real
+verdicts, to make a bookkeeping lookup come out differently. So **the round
+boundary is a timestamp, not a mutation**: `auditRoundStartedAt` reads the
+handoff event, and `earlierAuditRole` ignores passes older than it. Every pass
+stays exactly as written.
+
+### The blocker that walk found
+
+Round one's `RESEARCH_AUDIT` *work items* still exist after a handoff, and
+`alreadyCreated` matched them — so the reopened packet would have faulted
+straight out to `NEEDS_HUMAN` claiming a worker "finished without recording
+anything", which is untrue and is precisely the park the handoff exists to
+clear. The whole mechanism would have been a no-op that landed back where it
+started.
+
+One rule, three readers: whether a role has submitted, whether its item is still
+out, and whether one was ever created are now all asked of the same round. The
+open items from the previous round are cancelled with their reason rather than
+left to drain, because they ask for an audit against a layer the document has
+left. Reverting that scoping alone turns the reopen test from `AUDITING` back
+into `NEEDS_HUMAN`.
+
+### The tests
+
+`tests/otherLayerHandoff.test.ts`, sixteen of them, and none calls the routing
+function: they start from a document filed under the wrong layer with an audit
+that names one owner, and the tick has to find it. Seven pure-decision cases
+cover every refusal. The last three walk the rest of requirement 8 — corrected
+ownership on document, packet and mission; the park cleared and its request
+withdrawn; a fresh `PRIMARY` enqueued rather than a fault-out; an accepted
+terminal outcome; **two ticks and exactly one writeback**; and no follow-on when
+the packet settled what it asked, which is the correct number rather than an
+absence.
+
+Reverting the tick step alone fails four; reverting the round scoping alone
+fails the reopen.
+
+### Verified
+
+Typecheck clean. SQLite **1840 passed / 74 files**. Postgres **1865 passed / 75
+files, 0 failures**. Build clean. No migration — `DOCUMENT_HANDED_OFF` is a new
+`EventType`, and `project_events.event_type` carries no CHECK constraint, so the
+schema is unchanged on both chains.

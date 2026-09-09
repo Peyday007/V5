@@ -255,9 +255,21 @@ export async function linkMission(input: {
   binId?: string | null;
   documentId?: string | null;
   auditId?: string | null;
+  /**
+   * Which layer this mission's work belongs to.
+   *
+   * Settable because an `OTHER_LAYER` handoff moves the filed document, and a
+   * mission still naming the old layer would report the work under a heading
+   * its own audit said was wrong.
+   */
+  layerId?: string;
 }): Promise<boolean> {
   const sets: string[] = [];
   const params: (string | null)[] = [];
+  if (input.layerId !== undefined) {
+    sets.push('layer_id = ?');
+    params.push(input.layerId);
+  }
   if (input.orchestrationId !== undefined) {
     sets.push('orchestration_id = ?');
     params.push(input.orchestrationId);
