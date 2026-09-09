@@ -33,11 +33,13 @@
  * checks the *standing authority*, which is a different question. Both are
  * required and neither substitutes for the other.
  */
+import { createHash } from 'node:crypto';
 import { createBin, getBin } from '../../repos/bins.ts';
 import { getLayer } from '../../repos/layers.ts';
 import {
   getMission,
   latestMissionForCandidate,
+  specificationsTried,
   launchMission as insertMission,
   linkMission,
   transitionMission,
@@ -138,6 +140,11 @@ export interface LaunchOutcome {
  */
 export const MAX_MISSION_ATTEMPTS = 3;
 
+/** A short, stable id for one specification, for use inside an idempotency key. */
+function specKey(spec: string): string {
+  return createHash('sha256').update(spec, 'utf8').digest('hex').slice(0, 12);
+}
+
 export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
   const candidate = await getCandidate(input.candidateId);
   if (!candidate) return refuse('no such candidate');
@@ -184,36 +191,79 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
    *
    * The attempt is **derived here from the rows**, never passed in, so a caller
    * cannot choose to spend a second mission and a retry of the same tick cannot
-   * become a second one:
+   * become a second one.
    *
-   *   - no previous mission        -> attempt 1, and the key is exactly what it
-   *                                   has always been, so every row written
-   *                                   before migration 033 keeps its identity;
-   *   - a previous one still live  -> the *same* attempt, so this replays and
-   *                                   returns that mission, which is today's
-   *                                   behaviour and the reason a tick is safe
-   *                                   to repeat;
-   *   - a previous one that ended  -> the next attempt, up to the ceiling.
+   * **What counts is a specification, not a row**, and that correction is
+   * recorded rather than quietly applied. The first version of this counted
+   * `attempt` on the previous mission, and production showed why that is
+   * wrong within four minutes of deployment. `redoable()` creates a re-plan
+   * bin asynchronously; `nextLaunchable()` in the same tick still saw the
+   * candidate QUEUED carrying its **old** `missionSpec` and launched from it.
+   * So `rcn_85f9689b461c4972a1ba` was researched three times between 00:51:29
+   * and 00:55:58 on 2026-09-09 under one specification — the §54.2 placeholder,
+   * whose every field is the word `test` — and the ceiling was spent on one
+   * approach repeated, with nothing learned and nothing filed.
+   *
+   * §15 already says what that is: *a retry is not a repair*, and no repair may
+   * repeat a strategy an earlier attempt already tried. So the ceiling counts
+   * **distinct specifications**, and a specification already tried is refused
+   * outright rather than launched. A redo therefore waits — silently and
+   * correctly — until its re-plan lands and produces a specification that is
+   * genuinely different, which is exactly the behaviour §15 asks for.
+   *
+   *   - no previous mission        -> the key is exactly what it has always
+   *                                   been, so every row written before
+   *                                   migration 033 keeps its identity;
+   *   - a previous one still live  -> replay that row on its own key, which is
+   *                                   what makes a repeated tick safe;
+   *   - a specification tried      -> refused, however many rows exist;
+   *   - a genuinely new one        -> a new mission, up to the ceiling.
    *
    * A mission that reached `DONE` is not redone: the idea was answered, and
    * answering it again is the waste §13 exists to prevent.
    */
   const previous = await latestMissionForCandidate(input.candidateId);
-  const spent =
-    previous !== null && (previous.state === 'FAILED' || previous.state === 'CANCELLED');
   if (previous?.state === 'DONE') {
     return refuse('that idea has already been researched');
   }
-  const attempt = spent ? previous.attempt + 1 : (previous?.attempt ?? 1);
-  if (attempt > MAX_MISSION_ATTEMPTS) {
-    return refuse(
-      `this idea has been researched ${MAX_MISSION_ATTEMPTS} times without producing a report`,
-    );
+
+  let key: string;
+  let attempt: number;
+  let supersedes: string | null = null;
+  // `DONE` returned above, so what is left is live or spent.
+  const live =
+    previous !== null && previous.state !== 'FAILED' && previous.state !== 'CANCELLED';
+
+  if (live && previous) {
+    // Its own key, so this replays the row that exists rather than deriving a
+    // key that might no longer match how that row was made.
+    key = previous.idempotencyKey;
+    attempt = previous.attempt;
+  } else {
+    const tried = await specificationsTried(input.candidateId);
+    const spec = `${input.objective}\n${input.whyNow}`;
+    if (tried.includes(spec)) {
+      return refuse('this repeats a specification that has already been researched');
+    }
+    if (tried.length >= MAX_MISSION_ATTEMPTS) {
+      return refuse(
+        `this idea has been researched ${MAX_MISSION_ATTEMPTS} times without producing a report`,
+      );
+    }
+    attempt = tried.length + 1;
+    /*
+     * A new specification gets a key derived from it. The first one keeps the
+     * plain key it has always had, so nothing already written is re-identified;
+     * every later one is keyed by its own content, which is what an idempotency
+     * key is for — the same specification twice is the same mission, and a
+     * different one is a different mission.
+     */
+    key =
+      tried.length === 0
+        ? `russell:mission:${input.candidateId}:${authority.goal.id}`
+        : `russell:mission:${input.candidateId}:${authority.goal.id}:${specKey(spec)}`;
+    supersedes = previous?.id ?? null;
   }
-  const key =
-    attempt === 1
-      ? `russell:mission:${input.candidateId}:${authority.goal.id}`
-      : `russell:mission:${input.candidateId}:${authority.goal.id}:${attempt}`;
 
   const reservation = await reserve({
     goalId: authority.goal.id,
@@ -239,7 +289,7 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
     attempt,
     // The row this replaces, so "why was this researched twice" is one join
     // rather than a guess from timestamps. Null on a first attempt.
-    supersedesMissionId: spent ? previous.id : null,
+    supersedesMissionId: supersedes,
   });
 
   const completed = await completeLaunch(mission, input);

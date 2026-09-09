@@ -6044,3 +6044,97 @@ into one, and the floor alone cannot recognise a rewording". Those two pairs are
 exactly what the claim is there to decide. Their scores are pinned, so anybody
 later tempted to raise the floor until they fail will see the seven rewordings
 fail with them.
+
+## 65. The redo raced its own re-plan — 2026-09-09
+
+`09a591a` deployed at 00:58:04Z and did exactly what it was written to do. Read
+from production at 03:06Z, two hours and 250 ticks later:
+
+| Row | Before | After |
+| --- | --- | --- |
+| `rms_8e96b5f246464c069451` | `NEEDS_HUMAN` | **`FAILED`** |
+| `rhr_b63a5478249e4b508803` | `OPEN` | **`WITHDRAWN`** |
+| `rcn_85f9689b461c4972a1ba` | QUEUED, unlaunchable | QUEUED, two redos launched |
+
+The already-parked mission was retired, its obsolete request was taken back, and
+the idea became retryable — all without anybody clicking anything.
+
+**And then it burned the whole ceiling in four minutes.**
+
+```
+rms_8e96b5f246464c069451  FAILED   orch=orc_e1afa97f566d4b468373  doc=—
+rms_91f7bda7a9964066b269  FAILED   orch=orc_0c0186f1a58d47d6a1d7  doc=—
+rms_49ae5e29a42a49ffad71  FAILED   orch=orc_41bf77371d9c48d6bd2f  doc=—
+```
+
+`bin_5983b975c17f402aa8b5` ready 00:51:29Z, `bin_cabae3f673a044ee951b` ready
+00:53:29Z. Both carry **`title: test`** — the §54.2 placeholder, whose every
+field is the word `test`.
+
+### The broken edge
+
+`redoable()` creates a re-plan bin **asynchronously**. `nextLaunchable()` in the
+same tick still sees the candidate `QUEUED` carrying its **old** `missionSpec`
+and calls `launch()`, which happily allocated the next attempt. So the redo
+relaunched the specification that had just failed — three times, under one
+approach, learning nothing.
+
+That is the defect §15 names outright: *a retry is not a repair*, and no repair
+may repeat a strategy an earlier attempt already tried. The repair in `09a591a`
+built the re-plan and the retry and never made the retry **wait** for it.
+
+**The fleet was not the problem.** `DISPATCH_ROUTED` 0.2s after intent,
+`DISPATCH_SENT` 1.7s, `BIN_ASSIGNED` 11s, worker `wkr_1cdd82cfb2a54faf8edd`
+claimed and worked it. Dispatch, routing, project access and the worker are all
+healthy; every packet died on its own assignment.
+
+### The repair: the ceiling counts specifications, not rows
+
+A *specification* is `objective` + `why_now` — what a mission was launched to
+do. Two missions carrying the same pair are one approach tried twice, however
+many rows exist.
+
+- **`launch()`** refuses a specification already researched, so a redo that
+  races its re-plan waits instead of spending an attempt. A genuinely new one
+  launches, keyed by its own content: the first keeps the plain key it has
+  always had, later ones are `…:<sha256[0:12]>`, which is what an idempotency
+  key is for — the same specification is the same mission, a different one is a
+  different mission.
+- **`redoable()`** counts the same way. Gating on the stored `attempt` column
+  would have left this idea permanently unredoable after exactly the accident
+  the fix exists to undo.
+- No migration. The columns already hold it, and a hash backfilled from those
+  same two strings would only be a slower way to ask the question. The limit is
+  stated in the code: two attempts whose objective and why-now match count as
+  one approach even if their assignments differ, which errs toward refusing a
+  repeat.
+
+Production's three rows are therefore **one** approach tried, so a real
+specification is attempt 2 of 3 — not a reset, a correct count.
+
+### Downstream edges inspected in the same pass
+
+Per the execution contract, before deploying one connection at a time:
+
+| Edge | Production caller | Persisted state |
+| --- | --- | --- |
+| filed artifact → mission | `linkFiledWork` (loop 1) | `russell_missions.document_id`, `audit_id` |
+| mission → writeback | `writeBack` / `claimWriteback` | `writeback_at`, once-only |
+| writeback → follow-on | `followOnsToCreate` (loop 1a-ii) | candidate with `follow_on_of_mission_id` |
+
+All three have real callers reading Brain's own rows rather than a worker's
+prose. `missionsAwaitingWriteback` deliberately runs while the mission is still
+live, and an accepted packet with nothing filed yet is left for a later tick so
+the once-only writeback is never spent on a placeholder.
+
+### Verified
+
+Typecheck clean. SQLite **1819 passed / 73 files**. Postgres **1844 passed / 74
+files, 0 failures** — which caught one portability defect in this change before
+it shipped: `SELECT COUNT(*) FROM (SELECT DISTINCT …)` needs a derived-table
+alias in Postgres and not in SQLite, and one statement has to be right on both.
+
+Three new tests pin the behaviour, including production's exact shape — three
+mission rows under one specification, rebuilt through the repository because the
+launcher now refuses to create it, which is the existing data the fix has to be
+able to move.

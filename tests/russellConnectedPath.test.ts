@@ -1165,8 +1165,14 @@ describe('a turn with no source message', () => {
  * attempt and a reason, never an edit of the one that failed.
  */
 describe('a run that produced nothing is not the end of the idea', () => {
-  /** Launch a mission for a candidate through the real path, and return it. */
-  async function launchFor(candidateId: string) {
+  /**
+   * Launch a mission for a candidate through the real path.
+   *
+   * `nth` varies the **specification**, because that is what the ceiling now
+   * counts. A caller that passes the same one twice is asking for a repeat and
+   * must be refused, which is the point several of these make.
+   */
+  async function launchFor(candidateId: string, nth = 1) {
     const outcome = await launch({
       projectId,
       layerId,
@@ -1174,7 +1180,7 @@ describe('a run that produced nothing is not the end of the idea', () => {
       visibility: 'PRIVATE',
       title: 'Michigan permit data availability',
       assignment: 'Identify the counties, the publication route, the licence and the cadence.',
-      objective: 'Establish which Michigan counties publish permit data and on what terms.',
+      objective: `Establish which Michigan counties publish permit data, approach ${nth}.`,
       whyNow: 'Discovery design would otherwise rest on an assumption about availability.',
       acceptableSources: ['county open-data portals'],
       excludedSources: ['vendor marketing'],
@@ -1264,7 +1270,7 @@ describe('a run that produced nothing is not the end of the idea', () => {
       terminalReason: 'the packet finished without recording anything',
     });
 
-    const second = await launchFor(candidateId);
+    const second = await launchFor(candidateId, 2);
     expect(second.ok).toBe(true);
     expect(second.mission!.id).not.toBe(first.mission!.id);
     expect(second.mission!.attempt).toBe(2);
@@ -1275,6 +1281,115 @@ describe('a run that produced nothing is not the end of the idea', () => {
     expect(kept.state).toBe('FAILED');
     expect(kept.terminalReason).toMatch(/without recording anything/i);
     expect(await listMissions({ projectId })).toHaveLength(2);
+  });
+
+  it('refuses to research the same specification twice, however the redo got there', async () => {
+    /*
+     * The defect production found four minutes after 09a591a deployed, and
+     * the reason the ceiling now counts specifications rather than rows.
+     *
+     * `redoable()` creates a re-plan bin asynchronously. `nextLaunchable()` in
+     * the same tick still sees the candidate QUEUED carrying its **old**
+     * `missionSpec` and calls `launch()` — so before this, the redo launched
+     * the specification that had just failed. `rcn_85f9689b461c4972a1ba` was
+     * researched three times between 00:51:29Z and 00:55:58Z on 2026-09-09
+     * under one specification, the §54.2 placeholder whose every field is the
+     * word `test`, and its ceiling was spent on one approach repeated.
+     *
+     * §15 already forbids exactly that: a retry is not a repair, and no repair
+     * may repeat a strategy an earlier attempt already tried. So the same
+     * specification is refused, and the redo simply waits for its re-plan.
+     */
+    const candidateId = await queuedIdea();
+    const first = await launchFor(candidateId, 1);
+    expect(first.ok).toBe(true);
+    await transitionMission({
+      missionId: first.mission!.id,
+      from: first.mission!.state,
+      to: 'FAILED',
+      terminalReason: 'the packet finished without recording anything',
+    });
+
+    // The launcher racing its own re-plan: same specification, again.
+    const repeat = await launchFor(candidateId, 1);
+    expect(repeat.ok).toBe(false);
+    expect(repeat.reason).toMatch(/repeats a specification/i);
+    expect(await listMissions({ projectId })).toHaveLength(1);
+
+    // And the ceiling was not spent by the attempt that was refused: a
+    // genuinely different approach still launches.
+    const different = await launchFor(candidateId, 2);
+    expect(different.ok).toBe(true);
+    expect(different.mission!.attempt).toBe(2);
+  });
+
+  it('counts specifications, so three rows of one approach do not exhaust the idea', async () => {
+    /*
+     * Production's exact shape: three mission rows, one specification. Rebuilt
+     * here through the repository rather than the launcher, because the
+     * launcher is what now refuses to create it — this is the *existing* data
+     * the fix has to be able to move.
+     */
+    const candidateId = await queuedIdea();
+    for (let i = 0; i < 3; i += 1) {
+      const { mission } = await launchMission({
+        projectId,
+        layerId,
+        visibility: 'PRIVATE',
+        objective: 'test',
+        whyNow: 'test',
+        idempotencyKey: `russell:mission:${candidateId}:legacy:${i}`,
+        candidateId,
+        attempt: i + 1,
+      });
+      await transitionMission({
+        missionId: mission.id,
+        from: 'PLANNED',
+        to: 'FAILED',
+        terminalReason: 'the packet finished without recording anything',
+      });
+    }
+    expect(await listMissions({ projectId })).toHaveLength(3);
+
+    // One approach tried, so a real one is still allowed — and is attempt 2.
+    const real = await launchFor(candidateId, 1);
+    expect(real.ok, real.reason).toBe(true);
+    expect(real.mission!.attempt).toBe(2);
+  });
+
+  it('the loop re-plans an idea whose rows say three attempts but whose approaches say one', async () => {
+    /*
+     * The other half of the same correction, at the loop.
+     *
+     * `redoable()` gated on the stored `attempt` column, which production had
+     * already advanced to 3. Counting rows there would have left the idea
+     * permanently unredoable after exactly the accident the fix exists to
+     * undo — so it counts distinct specifications too, and this is the state
+     * it has to be able to move.
+     */
+    const candidateId = await queuedIdea();
+    for (let i = 0; i < 3; i += 1) {
+      const { mission } = await launchMission({
+        projectId,
+        layerId,
+        visibility: 'PRIVATE',
+        objective: 'test',
+        whyNow: 'test',
+        idempotencyKey: `russell:mission:${candidateId}:legacy:${i}`,
+        candidateId,
+        attempt: i + 1,
+      });
+      await transitionMission({
+        missionId: mission.id,
+        from: 'PLANNED',
+        to: 'FAILED',
+        terminalReason: 'the packet finished without recording anything',
+      });
+    }
+
+    const report = await runCycle('instance-a');
+    // A re-plan was asked for, rather than the idea being left for dead.
+    expect(report.planning).toContain(candidateId);
   });
 
   it('does not redo an idea that was actually answered', async () => {
@@ -1296,7 +1411,7 @@ describe('a run that produced nothing is not the end of the idea', () => {
 
   it('stops at the ceiling rather than trying for ever', async () => {
     const candidateId = await queuedIdea();
-    let last = await launchFor(candidateId);
+    let last = await launchFor(candidateId, 1);
     for (let attempt = 1; attempt < MAX_MISSION_ATTEMPTS; attempt += 1) {
       expect(last.mission!.attempt).toBe(attempt);
       await transitionMission({
@@ -1305,7 +1420,7 @@ describe('a run that produced nothing is not the end of the idea', () => {
         to: 'FAILED',
         terminalReason: 'produced nothing',
       });
-      last = await launchFor(candidateId);
+      last = await launchFor(candidateId, attempt + 1);
       expect(last.ok).toBe(true);
     }
     expect(last.mission!.attempt).toBe(MAX_MISSION_ATTEMPTS);
@@ -1316,7 +1431,7 @@ describe('a run that produced nothing is not the end of the idea', () => {
       to: 'FAILED',
       terminalReason: 'produced nothing',
     });
-    const refused = await launchFor(candidateId);
+    const refused = await launchFor(candidateId, MAX_MISSION_ATTEMPTS + 1);
     expect(refused.ok).toBe(false);
     // The refusal names the count, so an idea that stopped says why.
     expect(refused.reason).toMatch(new RegExp(`${MAX_MISSION_ATTEMPTS} times`));

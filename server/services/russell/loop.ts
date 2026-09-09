@@ -977,9 +977,19 @@ async function redoable(limit: number): Promise<
       WHERE m.state IN ('FAILED','CANCELLED')
         AND m.document_id IS NULL
         AND c.state = 'QUEUED'
-        AND m.attempt < ?
-        AND m.attempt = (
-              SELECT MAX(m2.attempt) FROM russell_missions m2
+        -- The ceiling counts specifications, not rows, for the reason
+        -- launch() records: production spent all three attempts on one
+        -- placeholder in four minutes because the launcher raced the re-plan.
+        -- Counting rows here would leave the idea permanently unredoable
+        -- after exactly that accident, which is the state this query has to
+        -- be able to get out of.
+        -- The derived table is aliased because Postgres requires it; SQLite
+        -- does not care, and one statement has to be right on both.
+        AND (SELECT COUNT(*) FROM (
+               SELECT DISTINCT m3.objective, m3.why_now FROM russell_missions m3
+                WHERE m3.candidate_id = m.candidate_id) AS approaches) < ?
+        AND m.rowid = (
+              SELECT MAX(m2.rowid) FROM russell_missions m2
                WHERE m2.candidate_id = m.candidate_id)
         AND NOT EXISTS (
               SELECT 1 FROM bins b

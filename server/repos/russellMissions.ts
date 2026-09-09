@@ -109,6 +109,28 @@ export function groupOf(mission: RussellMission): MissionGroup {
   }
 }
 
+/**
+ * The specifications this idea has already been researched under.
+ *
+ * A *specification*, not a row: `objective` and `why_now` are what a mission
+ * was launched to do, and two missions carrying the same pair are the same
+ * approach tried twice however many rows there are.
+ *
+ * Read from the mission table rather than fingerprinted into a new column,
+ * because the columns already hold it and a migration that backfills a hash
+ * from those same two strings would only be a slower way of asking this
+ * question. The limit is honest and worth stating: two attempts whose
+ * objective and why-now match are treated as one approach even if their
+ * assignments differ, which errs toward refusing a repeat.
+ */
+export async function specificationsTried(candidateId: string): Promise<string[]> {
+  const rows = await getDb().all<{ objective: string; why_now: string }>(
+    `SELECT DISTINCT objective, why_now FROM russell_missions WHERE candidate_id = ?`,
+    [candidateId],
+  );
+  return rows.map((row) => `${row.objective}\n${row.why_now}`);
+}
+
 export async function launchMission(input: {
   projectId: string;
   layerId?: string | null;
