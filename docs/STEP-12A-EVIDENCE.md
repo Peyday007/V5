@@ -6882,3 +6882,65 @@ Typecheck clean. SQLite **1824 passed / 73 files**. Postgres **1849 passed / 74
 files, 0 failures**, run twice — the first run reported one unhandled error at
 teardown with exit code 0, and the second run reproduced no error at all; both
 runs passed every test. Build clean. No migration.
+
+## 72. The whole transition, and the verdict it earned — 2026-09-09
+
+`orc_d636b91950734d4f9b38`, from a person's message to a judged document, with
+nothing supplied by hand at any step.
+
+```
+AUDIT PASSES  3
+  COMPLETE  worker=wkr_1cdd82cfb2a54faf8edd  session=oat_12a46659f18a4d2189a1  10:42:23.566Z  PRIMARY
+  COMPLETE  worker=wkr_1cdd82cfb2a54faf8edd  session=oat_62cf10677c304d11a5a7  12:00:47.099Z  ADVERSARIAL
+  COMPLETE  worker=wkr_1cdd82cfb2a54faf8edd  session=oat_329417aa2ea8408b85a1  12:57:57.848Z  JUDGE
+  distinct sessions   3
+  predicted (future:) 0
+
+audits 1
+  aud_fa00b082361f49bca42b   MORE_RESEARCH   2 gap(s)
+    0 [OTHER_LAYER]      Michigan county property-tax assessment-roll access findings
+                         belong to Discovery Logic
+    1 [FOUNDATIONAL_GAP] World Model layer has no substantive conceptual content in
+                         either filed document
+
+status  NEEDS_HUMAN
+```
+
+**Three completed audit passes in three distinct authenticated sessions, the
+judge stamped after both arguments, and no predicted `future:` session.** That
+is the independence floor met with real credentials rather than with a label —
+and it settles the question §71 left open: session references *do* differ per
+activation (`oat_12a4…`, `oat_62cf…`, `oat_3294…`), so the admission rule was
+never what withheld the work. The fleet target was.
+
+### The verdict is the system working, not the system failing
+
+The judge did not rubber-stamp a report the pipeline had already accepted. It
+read the filed document and refused to advance, for two reasons a person would
+recognise: the county-records research is **Discovery Logic's subject, not the
+World Model's**, and the World Model layer has no conceptual content in either
+of its documents — `World Model v1` is a 289-byte cloud-persistence test
+artifact.
+
+Both are correct. And the refusal is exactly §8's rule in force: *an advancing
+verdict is refused outright while a foundational gap is open.* The research was
+sound — seven accepted claims, seven citations that all resolve, a ledger
+present in the stored bytes — and it was filed under the wrong heading. That is
+a finding, and it is the kind of finding only a genuinely independent audit
+produces.
+
+### Where it stops, and why that is a person's
+
+`rms_2f53d1629a4348b2be53` is `NEEDS_HUMAN` with `rhr_11217308448b492796b4`
+OPEN. There is no writeback and no follow-on, and there should not be: `outcomeOf`
+returns null for a packet that has not reached a terminal state, so the mission
+is deliberately left alone for the transition that §24 gives it.
+
+The decision waiting is which layer this research belongs to and whether to file
+its gaps as they stand. That is a judgment about the shape of the person's own
+project, not an operational fact Brain can derive — and `answerHumanRequest`
+takes the answering person from the authenticated principal, so it is not a
+decision any worker or any automation may make on their behalf.
+
+**Every earlier stop in this chain was a defect wearing a park.** This one is a
+park.
