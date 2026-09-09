@@ -23,7 +23,14 @@
  * evaluates the bin's contract against durable rows and returns the verdict. A
  * worker saying it finished is an input to nothing.
  */
-import type { Bin, BinManifest, ClaimedWork, Principal, WorkerScope } from '../../domain/types.ts';
+import type {
+  Bin,
+  BinManifest,
+  ClaimedWork,
+  Principal,
+  WorkerScope,
+  WorkItem,
+} from '../../domain/types.ts';
 import {
   assignNextBin,
   checkpointBin,
@@ -48,7 +55,12 @@ import { getOrchestration } from '../../repos/research.ts';
 import { recordWorkerArrival } from '../../repos/fleet.ts';
 import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
 import { auditAdmission, lineageForWorker } from '../research/auditAdmission.ts';
-import { claimWork, listWorkItemsForBin, type ClaimScope } from '../../repos/workQueue.ts';
+import {
+  claimWork,
+  getWorkItemRow,
+  listWorkItemsForBin,
+  type ClaimScope,
+} from '../../repos/workQueue.ts';
 import { evaluateContract, hashUnitValue, type ContractVerdict } from './contracts.ts';
 
 /* ------------------------------------------------------------------------- */
@@ -246,7 +258,73 @@ export async function nextItemInBin(input: {
 
   const items = await listWorkItemsForBin(confinementFor(bin));
   const open = items.filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
+  if (open.length > 0) await recordWithheld(bin, input, open);
   return { held: true, item: null, binHasOpenWork: open.length > 0 };
+}
+
+/**
+ * Why a worker holding a bin with open work was handed nothing.
+ *
+ * This branch used to record nothing at all, and production is what showed
+ * that mattered. `bin_75bea12e15534ba4b93f` had a `RESEARCH_AUDIT` item
+ * `QUEUED` and `claimable now`, workers were dispatched at it and took it,
+ * and every one of them was handed nothing and went away. From the outside
+ * that is indistinguishable from a worker that never arrived, from a
+ * dispatcher that never fired, and from an item nobody wants — three
+ * different faults with three different remedies, and no way to tell which.
+ *
+ * The refusal a *caller* sees is deliberately uninformative, and stays so.
+ * This is Brain's own ledger, which is where the reason belongs: §23 makes an
+ * audit admission refusal indistinguishable from losing a race **to the
+ * worker**, not to the operator reading rows afterwards.
+ *
+ * What it may say is bounded by what `auditEligibility` already guarantees
+ * about its own `reasons` — they name the pair and the dimension and never a
+ * value, because the session dimension is a credential identifier. Nothing
+ * here adds to that: no credential, no payload, no item content.
+ *
+ * Never throws, and bounded to a handful of items: a diagnostic that could
+ * fail a drain would be worse than the blindness it cures.
+ */
+async function recordWithheld(
+  bin: Bin,
+  input: { workerId: string; principal: Principal; proof: BinProof },
+  open: WorkItem[],
+): Promise<void> {
+  try {
+    const admit = auditAdmission(
+      await lineageForWorker({
+        workerId: input.workerId,
+        credentialId: input.principal.credentialId,
+      }),
+    );
+    const reasons: string[] = [];
+    for (const item of open.slice(0, 5)) {
+      const row = await getWorkItemRow(item.id);
+      if (!row) continue;
+      const verdict = await admit(row);
+      if (!verdict.ok && verdict.reason) reasons.push(`${item.workType}: ${verdict.reason}`);
+    }
+    await recordBinEvent({
+      eventType: 'BIN_ITEM_WITHHELD',
+      binId: bin.id,
+      projectId: bin.projectId,
+      orchestrationId: bin.orchestrationId,
+      workerId: input.workerId,
+      leaseId: input.proof.leaseId,
+      leaseGeneration: input.proof.leaseGeneration,
+      measures: { openItems: open.length, refusedItems: reasons.length },
+      outcome: reasons.length > 0 ? 'REFUSED_BY_ADMISSION' : 'NOT_CLAIMABLE',
+      reason:
+        reasons.length > 0
+          ? reasons.join(' | ')
+          : 'The bin has open work that this worker could not claim, and the admission rule did ' +
+            'not refuse it — so the item was not claimable for another reason: not yet available, ' +
+            'held by another lease, or out of scope.',
+    });
+  } catch {
+    // Deliberately swallowed, for the reason recordBinEvent swallows its own.
+  }
 }
 
 /* ------------------------------------------------------------------------- */

@@ -24,6 +24,7 @@
  *      body field. A worker saying it is a worker is not evidence that it is
  *      that worker.
  */
+import { createHash } from 'node:crypto';
 import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
@@ -53,6 +54,11 @@ import type {
  * reclaimed early or late rather than a lease with two owners — because
  * ownership is decided by the generation swap and not by the clock.
  */
+/** A stable id for a fact, so two callers naming the same fact collide. */
+function sha256Hex(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
 export function binNow(): string {
   return nowIso();
 }
@@ -551,6 +557,101 @@ export async function regrantBinAttempts(input: {
     });
   }
   return { bin, raised: result.changes === 1 };
+}
+
+/**
+ * An assignment that produced work is credited back.
+ *
+ * ---------------------------------------------------------------------------
+ * What the attempt budget is actually for
+ * ---------------------------------------------------------------------------
+ *
+ * `isDispatchable` says it in its own comment: a bin out of attempts must not
+ * earn an activation, because "firing at it spends the routine's limited budget
+ * to start a worker that will be handed nothing." The budget exists to stop
+ * Brain bouncing workers off work that is not moving. It was never meant to
+ * measure how *long* a piece of work legitimately is.
+ *
+ * For a research packet those are wildly different numbers, and the difference
+ * is not incidental — it is forced by another rule in this same codebase.
+ * `auditEligibility` requires the three audit roles to run in three distinct
+ * sessions, so a packet cannot finish in fewer than three activations after its
+ * research is done, however well everything goes. A packet that also has a
+ * fragment, a verification and a synthesis needs six at the very least, and a
+ * repaired or multi-fragment one needs many more. `step10.ts`'s regrant command
+ * had already written this down — "a long research packet is inherently many
+ * assignments: four fragments, their verifications, a synthesis and three audit
+ * roles" — and raised a real bin's ceiling to 100 for exactly that reason,
+ * while `launch()` went on creating Russell's mission bins with five.
+ *
+ * Production found it, as a silent stall rather than a refusal:
+ * `bin_75bea12e15534ba4b93f` reached `5/5` having filed its document and
+ * completed the primary audit, with the adversarial and judge roles still
+ * queued and claimable. Nothing was wrong with the packet, nothing was retried,
+ * nothing escalated, and no further activation could ever be fired at it.
+ *
+ * ---------------------------------------------------------------------------
+ * So the budget counts assignments that achieved nothing
+ * ---------------------------------------------------------------------------
+ *
+ * One credit per completed work item, which turns `attempt_count` from a
+ * lifetime allowance into a stall counter: five *consecutive* fruitless
+ * assignments still exhaust a bin, and a bin that is visibly progressing is
+ * never retired for the length of its own work. A larger constant would only
+ * move the number at which the same silent stall happens.
+ *
+ * Exactly once, and the arbiter is the database rather than a read. The event
+ * id is derived from the bin and the item, so every equivalent caller — a
+ * replayed completion, a second observer, a boot sweep re-deriving the same
+ * facts from rows — collides on the primary key and credits nothing. That is
+ * §20's `INSERT ... ON CONFLICT DO NOTHING` at a smaller scale and for the
+ * identical reason: a `SELECT` first would leave a window, and the window is
+ * where the duplicate lives.
+ *
+ * It can never credit more than was spent: an attempt is only ever added by an
+ * assignment, a completed item required one, and the decrement floors at zero.
+ */
+export async function creditBinAttempt(input: {
+  binId: string;
+  /** What was achieved. One credit per key, for the life of the bin. */
+  key: string;
+  orchestrationId?: string | null;
+  workItemId?: string | null;
+}): Promise<boolean> {
+  const id = `bev_credit_${sha256Hex(`${input.binId}\u0000${input.key}`).slice(0, 32)}`;
+  const at = binNow();
+  let inserted: number;
+  try {
+    const result = await getDb().run(
+      `INSERT INTO bin_events (id, event_type, at, bin_id, orchestration_id, work_item_id,
+         measures, outcome, reason, is_proxy)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+       ON CONFLICT DO NOTHING`,
+      [
+        id,
+        'BIN_ATTEMPT_CREDITED',
+        at,
+        input.binId,
+        input.orchestrationId ?? null,
+        input.workItemId ?? null,
+        toJson({ key: input.key }),
+        'CREDITED',
+        'An assignment that completed a work item is not an assignment that achieved nothing.',
+      ],
+    );
+    inserted = result.changes;
+  } catch {
+    // A telemetry table must never fail the work it observes. Nothing is
+    // credited, which is the safe direction: the bin keeps the attempt.
+    return false;
+  }
+  if (inserted !== 1) return false;
+  const updated = await getDb().run(
+    `UPDATE bins SET attempt_count = attempt_count - 1, updated_at = ?
+      WHERE id = ? AND attempt_count > 0`,
+    [at, input.binId],
+  );
+  return updated.changes === 1;
 }
 
 /** Why a reopen was refused, or that it happened. */

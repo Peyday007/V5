@@ -83,6 +83,7 @@ import { getDb } from '../../db/database.ts';
 import { completeProbe, listExpiredProbes } from '../../repos/russellProbes.ts';
 import { openProbe, runProbe } from './probe.ts';
 import { GENERAL_LIGHT_PROBE_V1 } from './probeEnvelope.ts';
+import { reconcileBins } from '../bins/service.ts';
 import { outcomeOf, writeBack } from './writeback.ts';
 import { launch, repairLaunches, type LaunchInput } from './launch.ts';
 import { applyTurn } from './turn.ts';
@@ -145,6 +146,18 @@ export interface TickReport {
    */
   awaitingFiling: string[];
   /**
+   * Bins that had run out of assignments with nobody holding them, turned into
+   * one decision with the reason attached.
+   *
+   * `reconcileBins` has always been able to do this and nothing in the running
+   * server ever called it — it was reachable only from the operator script. So
+   * an exhausted bin sat `READY`, undispatchable and unescalated, and the
+   * packet under it waited for a worker that could never be sent. §24 again: a
+   * mechanism nothing calls is not a mechanism, and this is the producer it
+   * was missing.
+   */
+  escalatedBins: { binId: string; reason: string }[];
+  /**
    * Follow-on ideas created from a mission that finished and filed.
    *
    * An idea, not a mission. It is judged against the archive on a later step
@@ -195,6 +208,7 @@ const EMPTY: TickReport = {
   launched: [],
   parked: [],
   awaitingFiling: [],
+  escalatedBins: [],
   followOns: [],
   linkedNext: [],
   needsHuman: [],
@@ -232,6 +246,7 @@ export async function tick(owner: string): Promise<TickReport> {
     launched: [],
     parked: [],
     awaitingFiling: [],
+    escalatedBins: [],
     followOns: [],
     linkedNext: [],
     needsHuman: [],
@@ -585,6 +600,24 @@ export async function tick(owner: string): Promise<TickReport> {
       }
     }
 
+    /*
+     * Last: every nonterminal bin must have claimable work, live work, a
+     * bounded retry, or one decision a person can actually take.
+     *
+     * `reconcileBins` is that rule and it had no caller outside the operator
+     * script, which is how production reached a bin sitting `READY` at 5/5
+     * with its packet's remaining audit roles queued and claimable: not
+     * dispatchable, so no worker; not terminal, so no report; and nothing
+     * anywhere looking. Conservative by construction — it only ever escalates,
+     * never completes — so putting it on the tick adds a producer for an
+     * existing escalation rather than a new decision.
+     */
+    const reconciled = await reconcileBins();
+    report.escalatedBins = reconciled.details.map((detail) => ({
+      binId: detail.binId,
+      reason: detail.reason,
+    }));
+
     await completeCycle({ owner, generation: claim.generation, cursorAt: cycleNow() });
     return report;
   } catch (error) {
@@ -668,14 +701,16 @@ async function missionsAwaitingWriteback(limit: number): Promise<RussellMission[
  * The next candidates that could become missions, best first.
  *
  * A candidate is launchable only if it already carries a complete mission
- * specification, put there by whatever authorized path promoted it. The loop
- * does not compose one: inventing an assignment, a source list and an evidence
- * bar for work nobody specified is exactly the kind of autonomy that has no
- * accountable author, and a mission whose scope Russell wrote for itself is a
- * mission nobody approved the shape of.
+ * specification, and the loop still does not compose one here. It is compiled
+ * at the moment the idea is judged, by `compileMission`, from the candidate,
+ * the person's own message, the archive's answer and the limits of the envelope
+ * the project's standing authorization names — deterministically and in code,
+ * so the specification has an accountable author and cannot widen its own
+ * scope. Reading it back at launch time and composing it at launch time are
+ * different things, and only the first happens below.
  *
- * So an unspecified candidate simply is not eligible here, and stays queued
- * until a turn or an operator gives it one.
+ * So an unjudged candidate simply is not eligible here, and stays queued until
+ * the judgment pass compiles one.
  */
 async function nextLaunchable(limit: number): Promise<
   {

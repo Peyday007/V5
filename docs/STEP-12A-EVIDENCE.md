@@ -6666,3 +6666,168 @@ to fix — a specification faithful to a summary rather than to the question. Th
 instruction's standing direction is to continue operating the chain until it
 reaches filed evidence, and it cannot while the question it carries is one no
 worker can answer.
+
+## 71. The packet filed. Then the budget ran out on the work going well — 2026-09-09
+
+`5a88927` deployed at 10:33:44Z. The recovery ran again, exactly as designed:
+`rms_684c676e930a47eeb29b` was retired because the specification it ran on was
+no longer the one the compiler produces, `rhr_841b25c4349f4a01b1d5` was
+withdrawn, and `rms_2f53d1629a4348b2be53` launched from a specification built
+from the person's own message. The idea was charged nothing for either.
+
+And then the chain did the thing it had never done.
+
+```
+orc_d636b91950734d4f9b38
+  title       County property tax assessment roll access: bulk download or API,
+              and terms
+  approval    RUSSELL_PUBLIC_RECORDS_V1 — authorized by usr_14439966398243339341
+              at 2026-09-09T10:26:44.929Z
+  status      AUDITING  ·  pass AUDIT
+
+frg official-record   ACCEPTED   attempt 1/2   integrity PASS   sufficiency SUFFICIENT
+  lanes       declared [official_source, office_variation]
+  claims      9 stored, 7 accepted, 0 untagged
+  tagged      official_source x6, office_variation x1
+  rejected    1 x "A URL was given but no supporting passage or locator"
+
+work items  RESEARCH_FRAGMENT SUCCEEDED · RESEARCH_VERIFY SUCCEEDED
+            RESEARCH_SYNTHESIZE SUCCEEDED · RESEARCH_AUDIT SUCCEEDED (PRIMARY)
+            RESEARCH_AUDIT QUEUED (ADVERSARIAL)
+
+document    World Model v1B — doc_99d4a5b97ffa4d7cb015
+            SUPABASE · 16884 bytes · exists true · head size 16884
+            ledger 7/7 cited claim ids present in the stored bytes
+            extraction READY · 16666 chars · 1/1 page
+```
+
+A compiled specification cleared the seven evidence conditions, one claim was
+rejected by the gate for exactly the reason the gate exists, the verification
+pass and the synthesis check ran, and a report was filed **with its ledger
+inside it** — seven cited claim ids, every one present in the stored bytes and
+resolving to accepted evidence. That is the first filed, ledger-backed report
+this chain has produced from an idea a person raised in conversation.
+
+### Then it stopped, silently, and the reason was a number
+
+`bin_75bea12e15534ba4b93f` read `attempts 5/5`, `READY`, `arrived no worker has
+checked in`. Nothing had failed. Nothing was retried. The `RESEARCH_AUDIT`
+item for the adversarial role sat `QUEUED attempt 0/2` and `claimable now 1`,
+and no worker would ever be sent for it.
+
+**The budget had been spent on the work going well.** `isDispatchable` says
+what the attempt budget is for in its own comment — a bin no worker may take
+must not earn an activation, because firing at it spends the routine's limited
+fire budget for nothing. That is a stall guard. `launch()` was using it as a
+lifetime allowance, at five.
+
+Five cannot work, and it is forced rather than unlucky.
+`auditEligibility` requires the three audit roles to run in **three distinct
+sessions**, so a packet needs at least three activations after its research is
+finished, however well everything goes. Add a fragment, a verification and a
+synthesis and the floor is six. `step10.ts`'s `regrant` command had already
+written the arithmetic down —
+
+> a long research packet is inherently many assignments: four fragments, their
+> verifications, a synthesis and three audit roles, across sessions that each
+> end when their allowance does
+
+— and raised a different bin's ceiling to a hundred on the strength of it. The
+launcher never learned it.
+
+### So the budget counts assignments that achieved nothing
+
+`creditBinAttempt` gives the bin one assignment back for each work item its
+packet actually completed. `attempt_count` stops being a lifetime allowance and
+becomes a stall counter: five *consecutive* fruitless assignments still exhaust
+a bin, and a bin that is visibly progressing is never retired for the length of
+its own work. A larger constant would only move the number at which the same
+silent stall happens.
+
+Exactly once, and the database is the arbiter. The event id is derived from the
+bin and the item, so a replayed completion, a second observer and a boot sweep
+re-deriving the same facts all collide on the primary key and credit nothing —
+§20's `INSERT ... ON CONFLICT DO NOTHING` at a smaller scale, for the identical
+reason. It can never credit more than was spent: an attempt is only added by an
+assignment, a completed item required one, and the decrement floors at zero.
+
+`creditPacketProgress` calls it from `advancePacket` rather than from a
+completion hook, and that is deliberate three times over: an item can be
+completed through the MCP tool or the HTTP route and a guard on one entrance is
+not a guard; a credit lost to a crash between the completion and the hook would
+shorten the budget for ever; and `advancePacket` is already the funnel every one
+of those paths — and the boot sweep — runs through.
+
+### And an exhausted bin must not be silent
+
+`reconcileBins` has always been able to turn an exhausted, unleased,
+non-terminal bin into one decision with its reason attached. **Nothing in the
+running server ever called it.** It was reachable only from the operator
+script, which is how production reached a bin that was not dispatchable, not
+terminal, and not escalated — invisible in all three directions at once. It is
+now the last step of the Russell tick. Conservative by construction: it only
+ever escalates, never completes, so this adds the producer an existing
+escalation was missing rather than a new decision. §24, at a fourth altitude.
+
+### A stock reason code that was not true, recorded rather than tidied away
+
+The live bin was recovered with the existing operator action —
+`regrant bin_75bea12e15534ba4b93f 100`, `raised=true attempts=5/100 was=5/5`,
+which raises the ceiling and leaves the count and every event exactly where they
+are. That call took the default reason code, `platform-defect`, whose stored
+text describes a queue-confinement bug and a plan tool that told workers to
+wait. **Neither is true of this bin**, and that command's own comment says why
+it matters: "An audit row that records the wrong cause is worse than one that
+records none, because it is the row somebody will believe later." A third code,
+`budget-too-small`, now names this cause accurately. The inaccurate row stands,
+with this paragraph as its correction.
+
+### What the tests are
+
+`tests/bins.test.ts` gains four, driven through `advancePacket` rather than
+through the repository function, so they exercise the funnel production uses:
+a two-attempt bin exhausted by two assignments that each completed an item is
+credited back to zero; a completed item is credited exactly once however many
+times the derivation re-runs; completions with no assignments credit nothing,
+so a completion cannot mint budget; and — the inversion — two assignments that
+achieved nothing still exhaust a two-attempt bin. Reverting the credit alone
+fails the first two and leaves the last two passing.
+
+### And then the budget was not the only thing holding it
+
+The bin was recovered to `5/100` at 11:10:29Z and became dispatchable again.
+Brain fired: generation 4 to 10, `attempts 5/7`. **Two workers took the bin and
+were handed nothing**, and the adversarial item stayed `QUEUED attempt 0/2`.
+
+That is a second, separate fault, and the first thing to say about it is that I
+could not tell what it was from the rows — because there were none.
+`nextItemInBin` returns `binHasOpenWork: true` and records nothing at all when
+a holder claims no item. From the outside, a worker refused by the admission
+rule, a worker that never arrived, a dispatcher that never fired and an item
+nobody may take are one observation: silence. Three of those have different
+remedies.
+
+The candidates are: the audit admission refusing the claim, because
+`auditEligibility` requires the adversarial role to run in a session distinct
+from the primary's `oat_12a46659f18a4d2189a1`; or the worker session arriving
+and doing nothing. Reading the code does not settle it — `missionRequiredTier`
+returns null for a compiled Russell mission, so the floor is `SESSION`;
+`credentialId` is the access-token row id and `cf8` reads `rotated=195
+used=195 roots=0`, so a new session ought to present a new credential. On that
+reading the claim should be admitted, and it is not.
+
+**So this deployment does not guess.** `recordWithheld` writes a
+`BIN_ITEM_WITHHELD` row naming which of the two it is: `REFUSED_BY_ADMISSION`
+with the eligibility rule's own reason, or `NOT_CLAIMABLE` when the admission
+rule refused nothing and the item was simply not takeable — not yet available,
+held elsewhere, or out of scope. What the *worker* is told is unchanged and
+stays uninformative: §23 makes an admission refusal indistinguishable from
+losing a race **to the worker**, not to the operator reading rows afterwards.
+The reasons it records are `auditEligibility`'s own, which its contract already
+guarantees name the pair and the dimension and never a value — and a test
+asserts the credential does not appear in the row.
+
+### Verified
+
+Typecheck clean. SQLite **1824 passed / 73 files**. Postgres **1849 passed / 74
+files, 0 failures**. Build clean. No migration.

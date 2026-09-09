@@ -67,6 +67,7 @@ import {
 import { earlierAuditRole } from './auditBrief.ts';
 import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
 import { listCoverage, overrideCoverage, upsertCoverage } from '../../repos/reconciliation.ts';
+import { binForOrchestration, creditBinAttempt } from '../../repos/bins.ts';
 import { cancelWork, enqueueWork, listWorkItems } from '../../repos/workQueue.ts';
 import { workType, AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { recordEvent } from '../../repos/events.ts';
@@ -916,6 +917,50 @@ const GATE_CONDITION_HINTS: [GateCondition, string][] = [
  * the kind it is about to create before creating any.
  */
 /**
+ * Give the packet's bin back one assignment per work item it actually completed.
+ *
+ * The rule lives in `creditBinAttempt`; this is the packet's side of it, and it
+ * is written as a re-derivation from rows rather than as a hook on the
+ * completion path. Three reasons, all of which this codebase has needed before:
+ * a work item can be completed through the MCP tool or the HTTP route, and a
+ * guard on one entrance is not a guard; a credit lost to a crash between the
+ * completion and the hook would silently shorten the bin's budget for ever; and
+ * `advancePacket` is already the one funnel every one of those paths runs
+ * through, including the boot sweep.
+ *
+ * Re-deriving is safe precisely because the credit is exactly-once at the
+ * database: walking the same ten completed items on every tick writes nothing
+ * after the first pass.
+ *
+ * Never throws. A bin's budget is an operational convenience; the packet's own
+ * progress is the fact, and a counter that could fail a completion would make
+ * the accounting more important than the work.
+ */
+async function creditPacketProgress(orchestrationId: string): Promise<void> {
+  try {
+    const orchestration = await getOrchestration(orchestrationId);
+    if (!orchestration) return;
+    const bin = await binForOrchestration(orchestrationId);
+    // No bin, or nothing to give back. The common case on most ticks.
+    if (!bin || bin.attemptCount <= 0) return;
+
+    const items = (await listWorkItems(orchestration.projectId, { limit: 500 })).filter(
+      (item) => item.orchestrationId === orchestrationId && item.state === 'SUCCEEDED',
+    );
+    for (const item of items) {
+      await creditBinAttempt({
+        binId: bin.id,
+        key: item.id,
+        orchestrationId,
+        workItemId: item.id,
+      });
+    }
+  } catch (error) {
+    console.error('[brain] could not credit the packet bin its completed work:', error);
+  }
+}
+
+/**
  * Every advance, with the one thing that must be true when it returns.
  *
  * **A non-terminal packet may never sit with an empty queue and no reason.**
@@ -933,6 +978,11 @@ const GATE_CONDITION_HINTS: [GateCondition, string][] = [
  * enforced at some exits is a rule with a hole at the others.
  */
 export async function advancePacket(orchestrationId: string): Promise<AdvanceResult> {
+  // Before anything else: an assignment that completed an item is not an
+  // assignment that achieved nothing. Derived from rows and exactly-once by
+  // construction, so it reaches the same answer from a completion, an
+  // approval, a repair or a boot sweep — see `creditBinAttempt`.
+  await creditPacketProgress(orchestrationId);
   const result = await advanceOnce(orchestrationId);
   if (TERMINAL_ORCHESTRATION.has(result.status)) return result;
 

@@ -205,6 +205,22 @@ export async function getWorkItem(id: string): Promise<WorkItem | null> {
   return row ? mapWorkItem(row) : null;
 }
 
+/**
+ * The raw row, for the one caller that needs the shape the queue's own
+ * `admit` hook is written against rather than the view type.
+ *
+ * Deliberately not a second way to read an item: `getWorkItem` stays the
+ * reader for everything that displays or reasons about one. This exists
+ * because `admit` is handed a `WorkItemRow` by `claimWork`, so anything asking
+ * that same question outside a claim — a diagnostic recording *why* a holder
+ * was handed nothing — has to ask it about the same shape, or it is answering
+ * a different question from the one the claim asked.
+ */
+export async function getWorkItemRow(id: string): Promise<WorkItemRow | null> {
+  const row = await getDb().get<WorkItemRow>('SELECT * FROM work_items WHERE id = ?', [id]);
+  return row ?? null;
+}
+
 export async function listWorkItems(
   projectId: string,
   options: { states?: WorkItemState[]; limit?: number } = {},

@@ -885,6 +885,22 @@ async function main(): Promise<void> {
         'Attempts spent on an execution-surface failure — the worker could reach Brain and not ' +
         'the sources — which the operator has since corrected and a SURFACE_PROBE_V1 bin has ' +
         'evidenced. Not spent on the packet failing.',
+      /*
+       * The third code, and the one this command's own comment predicted.
+       *
+       * A research packet is inherently many assignments and `launch()` created
+       * Russell's mission bins with five, so a packet that filed its document
+       * and completed its primary audit ran out of budget with the adversarial
+       * and judge roles still queued — while `auditEligibility` requires those
+       * two to run in sessions of their own, which is two more assignments
+       * whatever happens. The attempts measure the length of legitimate work
+       * rather than anything going wrong, and `creditBinAttempt` is the fix
+       * that makes this code rare rather than routine.
+       */
+      'budget-too-small':
+        'Attempts spent on ordinary progress rather than on failure — the bin completed work ' +
+        'items on them, and the budget was sized below what this packet legitimately needs, ' +
+        'including one session per audit role. Not spent on the packet failing.',
     };
     const code = arg(2) ?? 'platform-defect';
     const reason = REASONS[code];

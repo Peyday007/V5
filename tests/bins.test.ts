@@ -46,7 +46,8 @@ import {
   terminateUnleasedBin,
   type BinProof,
 } from '../server/repos/bins.ts';
-import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
+import { claimWork, completeWork, enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
+import { advancePacket } from '../server/services/research/packetRunner.ts';
 import {
   evaluateContract,
   hashUnitValue,
@@ -1415,6 +1416,265 @@ describe('an assignment budget a platform fault spent', () => {
     const outcome = await regrantBinAttempts({ binId, maxAttempts: 25, reason: 'too late' });
     expect(outcome.raised).toBe(false);
     expect(outcome.bin?.state).toBe('COMPLETE');
+  });
+});
+
+describe('a bin holder handed nothing says why, in Brain\'s own ledger', () => {
+  /*
+   * The blindness production actually had.
+   *
+   * `bin_75bea12e15534ba4b93f` had a `RESEARCH_AUDIT` item QUEUED and
+   * claimable. Workers were fired at it, took it, were handed nothing, and
+   * went away — twice, with the bin's assignment count advancing each time and
+   * not one row saying what had happened. From the outside that is
+   * indistinguishable from a worker that never arrived, a dispatcher that
+   * never fired, and an item nobody wants; three faults, three remedies, and
+   * no way to choose between them.
+   *
+   * What the *worker* is told is unchanged and stays uninformative — §23 makes
+   * an admission refusal look like losing a race, deliberately. This is the
+   * operator's side of the same event.
+   */
+  it('records the admission refusal that withheld an audit item', async () => {
+    const layerId = (await listLayers(projectA))[0]!.id;
+    const run = await createRun({
+      projectId: projectA,
+      layerId,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'a bounded public-records question',
+    });
+    const orchestration = await createOrchestration({
+      projectId: projectA,
+      layerId,
+      runId: run.id,
+      title: 'a bounded public-records question',
+      assignment: 'the official sources that answer it',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    const bin = await createBin({
+      projectId: projectA,
+      kind: 'RESEARCH_PACKET',
+      title: 'one real research packet',
+      objective: 'drain it',
+      manifest: { ...unitsManifest(projectA, 0), units: [] },
+      completionContract: 'RESEARCH_PACKET_V1',
+      orchestrationId: orchestration.id,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+    });
+
+    // A judge with nothing to judge: refused by the rule that says the judge
+    // waits until both arguments are settled. Any admission refusal would do —
+    // this one needs no fleet fixtures to arrange.
+    await enqueueWork({
+      projectId: projectA,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: orchestration.id,
+    });
+
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const next = await nextItemInBin({
+      principal: principalFor(workerOne, [projectA]),
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+    // The worker learns only that there is open work it did not get.
+    expect(next).toMatchObject({ held: true, item: null, binHasOpenWork: true });
+
+    const withheld = (await listBinEvents(bin.id, 100)).find(
+      (event) => event.eventType === 'BIN_ITEM_WITHHELD',
+    );
+    expect(withheld?.outcome).toBe('REFUSED_BY_ADMISSION');
+    expect(withheld?.reason).toMatch(/JUDGE may not begin/);
+    // Never the credential, and never anything the caller sent.
+    expect(withheld?.reason ?? '').not.toContain(`cred-${workerOne}`);
+  });
+
+  it('says so plainly when the admission rule did not refuse anything', async () => {
+    const binId = await makeBin(projectA, { units: 0 });
+    await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which: 'not yet' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      binId,
+      availableAt: '2999-01-01T00:00:00.000Z',
+    });
+
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    await nextItemInBin({
+      principal: principalFor(workerOne, [projectA]),
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+
+    const withheld = (await listBinEvents(binId, 100)).find(
+      (event) => event.eventType === 'BIN_ITEM_WITHHELD',
+    );
+    // The distinction that matters: "refused" and "not claimable yet" are
+    // different faults, and reporting the second as the first would send an
+    // operator looking at the audit rule for a scheduling delay.
+    expect(withheld?.outcome).toBe('NOT_CLAIMABLE');
+  });
+});
+
+describe('an assignment budget the work itself spent', () => {
+  /*
+   * The stall production actually reached, and the reason no earlier test
+   * could have found it.
+   *
+   * `bin_75bea12e15534ba4b93f` filed its document, passed verification and
+   * synthesis and completed its primary audit — and then sat at `5/5`, READY,
+   * with `RESEARCH_AUDIT` items queued and claimable that no worker would ever
+   * be sent for. Nothing failed. The budget had simply been spent on the work
+   * going well.
+   *
+   * It is forced rather than unlucky. `auditEligibility` requires the three
+   * audit roles to run in three distinct sessions, so a packet needs at least
+   * three activations after its research is done, whatever happens — and
+   * `launch()` created the bin with five. `step10.ts`'s regrant command had
+   * already written the arithmetic down and raised a different bin to a
+   * hundred; the launcher never learned it.
+   *
+   * So the budget counts assignments that achieved nothing. These tests are
+   * that rule and its inversion: a bin that is progressing is never retired
+   * for the length of its own work, and a bin that is bouncing still is.
+   */
+  async function packetWithBin(maxAttempts: number): Promise<{
+    binId: string;
+    orchestrationId: string;
+  }> {
+    const layerId = (await listLayers(projectA))[0]!.id;
+    const run = await createRun({
+      projectId: projectA,
+      layerId,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'a bounded public-records question',
+    });
+    const orchestration = await createOrchestration({
+      projectId: projectA,
+      layerId,
+      runId: run.id,
+      title: 'a bounded public-records question',
+      assignment: 'the official sources that answer it',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    await updateOrchestration(orchestration.id, { status: 'RESEARCHING' });
+    const bin = await createBin({
+      projectId: projectA,
+      kind: 'RESEARCH_PACKET',
+      title: 'one real research packet',
+      objective: 'drain it',
+      manifest: { ...unitsManifest(projectA, 0), units: [] },
+      completionContract: 'RESEARCH_PACKET_V1',
+      orchestrationId: orchestration.id,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+      maxAttempts,
+    });
+    return { binId: bin.id, orchestrationId: orchestration.id };
+  }
+
+  /** One item of the packet's work, done by a worker, through the queue. */
+  async function workerCompletes(orchestrationId: string, which: string): Promise<void> {
+    await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    const [claim] = await claimWork({
+      workerId: workerOne,
+      scopes: [{ projectId: projectA, scopes: ['queue:claim'] }],
+    });
+    if (!claim) throw new Error('the worker should have been given the packet item');
+    const done = await completeWork({
+      workItemId: claim.workItemId,
+      leaseId: claim.leaseId,
+      leaseGeneration: claim.leaseGeneration,
+      workerId: workerOne,
+    });
+    expect(done.ok).toBe(true);
+  }
+
+  it('gives the bin its assignment back for every item the packet completed', async () => {
+    const { binId, orchestrationId } = await packetWithBin(2);
+
+    // Two activations, two completed items: exactly the shape production was
+    // in when it stalled, only smaller.
+    const first = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    await workerCompletes(orchestrationId, 'the fragment');
+    await releaseBin(proofFrom(first, workerOne), 'the session ended');
+    await assignNextBin({ workerId: workerOne, projectIds: [projectA] });
+    await workerCompletes(orchestrationId, 'the primary audit');
+
+    const spent = (await getBin(binId))!;
+    expect(spent.attemptCount).toBe(2);
+    expect(isDispatchable(spent)).toBe(false);
+
+    await advancePacket(orchestrationId);
+
+    const credited = (await getBin(binId))!;
+    expect(credited.attemptCount).toBe(0);
+    // Which is the whole point: the adversarial and judge roles can now be
+    // sent for, in sessions of their own.
+    expect(credited.maxAttempts).toBe(2);
+  });
+
+  it('credits each completed item exactly once, however often it re-derives', async () => {
+    const { binId, orchestrationId } = await packetWithBin(3);
+    await assignNextBin({ workerId: workerOne, projectIds: [projectA] });
+    await workerCompletes(orchestrationId, 'the fragment');
+
+    await advancePacket(orchestrationId);
+    const once = (await getBin(binId))!.attemptCount;
+    await advancePacket(orchestrationId);
+    await advancePacket(orchestrationId);
+    expect((await getBin(binId))!.attemptCount).toBe(once);
+
+    const credits = (await listBinEvents(binId, 100)).filter(
+      (event) => event.eventType === 'BIN_ATTEMPT_CREDITED',
+    );
+    expect(credits).toHaveLength(1);
+  });
+
+  it('never credits below zero, so a completion cannot mint budget', async () => {
+    const { binId, orchestrationId } = await packetWithBin(3);
+    // Three completions and no assignment at all. The bin never spent
+    // anything, so there is nothing to give back.
+    await workerCompletes(orchestrationId, 'one');
+    await workerCompletes(orchestrationId, 'two');
+    await workerCompletes(orchestrationId, 'three');
+    await advancePacket(orchestrationId);
+    expect((await getBin(binId))!.attemptCount).toBe(0);
+  });
+
+  it('still exhausts a bin whose assignments achieve nothing', async () => {
+    // The inversion. Two activations, no completed work: this is the bouncing
+    // the budget exists to stop, and it must still stop it.
+    const { binId, orchestrationId } = await packetWithBin(2);
+    const one = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    await releaseBin(proofFrom(one, workerOne), 'nothing to do');
+    await assignNextBin({ workerId: workerOne, projectIds: [projectA] });
+
+    await advancePacket(orchestrationId);
+    const bin = (await getBin(binId))!;
+    expect(bin.attemptCount).toBe(2);
+    expect(isDispatchable(bin)).toBe(false);
   });
 });
 
