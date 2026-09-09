@@ -37,6 +37,7 @@ import { createBin, getBin } from '../../repos/bins.ts';
 import { getLayer } from '../../repos/layers.ts';
 import {
   getMission,
+  latestMissionForCandidate,
   launchMission as insertMission,
   linkMission,
   transitionMission,
@@ -123,6 +124,20 @@ export interface LaunchOutcome {
  * success, and the difference matters to the person reading why nothing
  * happened.
  */
+/**
+ * How many times one idea may be researched before Brain stops trying.
+ *
+ * Three, matching `MAX_FRAGMENT_ATTEMPTS` and the turn retry ceiling, because
+ * the reasoning is identical: a second try is a repair and a third is the last
+ * evidence that the approach is wrong rather than the run unlucky. Beyond it
+ * the refusal names the count, so a person reading the idea sees why it
+ * stopped rather than an idea that quietly went nowhere.
+ *
+ * It is the protection against a redo loop. Nothing else bounds it: the grant
+ * is uncapped by design, and concurrency only decides how many run at once.
+ */
+export const MAX_MISSION_ATTEMPTS = 3;
+
 export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
   const candidate = await getCandidate(input.candidateId);
   if (!candidate) return refuse('no such candidate');
@@ -155,12 +170,50 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
   }
 
   /*
-   * The key is derived from what is being done — the candidate and the grant —
-   * and from nothing about the attempt doing it. A key that changed on retry
-   * would not be an idempotency key, and one that included the mission id would
-   * be circular.
+   * The key is derived from what is being done — the candidate, the grant, and
+   * which try this is.
+   *
+   * It used to be the candidate and the grant alone, and that was one word too
+   * few. `launchMission` inserts `ON CONFLICT (idempotency_key) DO NOTHING`, so
+   * a fixed key meant a candidate got exactly **one** mission for the life of
+   * its grant: once that mission ended — cancelled by its owner, failed, or
+   * parked having produced nothing — the idea could never be researched again.
+   * The loop went on selecting it as QUEUED every tick and went on re-finding
+   * the same dead row. One bad packet retired an idea permanently, which is
+   * §24's missing answering transition at a fourth altitude.
+   *
+   * The attempt is **derived here from the rows**, never passed in, so a caller
+   * cannot choose to spend a second mission and a retry of the same tick cannot
+   * become a second one:
+   *
+   *   - no previous mission        -> attempt 1, and the key is exactly what it
+   *                                   has always been, so every row written
+   *                                   before migration 033 keeps its identity;
+   *   - a previous one still live  -> the *same* attempt, so this replays and
+   *                                   returns that mission, which is today's
+   *                                   behaviour and the reason a tick is safe
+   *                                   to repeat;
+   *   - a previous one that ended  -> the next attempt, up to the ceiling.
+   *
+   * A mission that reached `DONE` is not redone: the idea was answered, and
+   * answering it again is the waste §13 exists to prevent.
    */
-  const key = `russell:mission:${input.candidateId}:${authority.goal.id}`;
+  const previous = await latestMissionForCandidate(input.candidateId);
+  const spent =
+    previous !== null && (previous.state === 'FAILED' || previous.state === 'CANCELLED');
+  if (previous?.state === 'DONE') {
+    return refuse('that idea has already been researched');
+  }
+  const attempt = spent ? previous.attempt + 1 : (previous?.attempt ?? 1);
+  if (attempt > MAX_MISSION_ATTEMPTS) {
+    return refuse(
+      `this idea has been researched ${MAX_MISSION_ATTEMPTS} times without producing a report`,
+    );
+  }
+  const key =
+    attempt === 1
+      ? `russell:mission:${input.candidateId}:${authority.goal.id}`
+      : `russell:mission:${input.candidateId}:${authority.goal.id}:${attempt}`;
 
   const reservation = await reserve({
     goalId: authority.goal.id,
@@ -183,6 +236,10 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
     probeId: input.probeId ?? null,
     goalId: authority.goal.id,
     reservationId: reservation.reservation.id,
+    attempt,
+    // The row this replaces, so "why was this researched twice" is one join
+    // rather than a guess from timestamps. Null on a first attempt.
+    supersedesMissionId: spent ? previous.id : null,
   });
 
   const completed = await completeLaunch(mission, input);

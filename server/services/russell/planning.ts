@@ -68,6 +68,14 @@ export const PLAN_CREATED_BY = 'russell:plan:';
 export const PLAN_AFTER_PROBE = ':probed:';
 
 /**
+ * The separator marking a third planning pass, after a run that produced
+ * nothing. Same shape and same reason as the post-probe one: `planTarget`
+ * recovers the candidate by taking everything before whichever marker it
+ * finds, so one parse still reads every kind of plan bin.
+ */
+export const PLAN_AFTER_FAILURE = ':redo:';
+
+/**
  * Bounds on what a worker may say, enforced exactly.
  *
  * Stated on the manifest as well as enforced here — the lesson this seam has
@@ -577,6 +585,23 @@ export async function judgeCandidate(
      * question, and the judgment it produces supersedes the `EXPLORE`.
      */
     afterProbe?: { probeId: string; outcome: string; explanation: string };
+    /**
+     * The run that produced nothing, now that it has ended.
+     *
+     * A redo must not relaunch the specification that failed. This one's
+     * `missionSpec` is the very thing being replaced — and in the case this
+     * was written for it is the placeholder specification of §54.2, which
+     * `PLAN_MINIMUMS` would now refuse outright. Reusing it would spend a
+     * second mission to reach the same dead end.
+     *
+     * So a redo is a third planning pass, exactly parallel to the post-probe
+     * one: the archive is asked again, the failed run's recorded reason goes to
+     * the worker with the question, and the judgment it produces supersedes the
+     * one that led nowhere. The failed mission keeps its row, its reason and
+     * its packet — §5 — and the new specification is judged by today's floor
+     * rather than the one in force when the first was written.
+     */
+    afterFailedMission?: { missionId: string; attempt: number; reason: string };
   } = {},
 ): Promise<JudgeOutcome> {
   const candidate = await getCandidate(candidateId);
@@ -594,6 +619,15 @@ export async function judgeCandidate(
   if (options.afterProbe) {
     if (candidate.priority !== 'EXPLORE' || candidate.state !== 'CAPTURED') {
       return outcome(false, 'this idea is not waiting on a cheap look');
+    }
+  } else if (options.afterFailedMission) {
+    /*
+     * Queued and launched, and the run it was launched for is over. Anything
+     * else is a decision somebody made — a park, a rejection, an override —
+     * and a failed mission beside it is not a reason to re-take it.
+     */
+    if (candidate.state !== 'QUEUED') {
+      return outcome(false, 'this idea is not queued for research');
     }
   } else if (candidate.priority) {
     return outcome(false, 'already judged');
@@ -635,7 +669,9 @@ export async function judgeCandidate(
   // the first pass's completed bin does not read as this one already running.
   const createdById = options.afterProbe
     ? `${PLAN_CREATED_BY}${candidate.id}${PLAN_AFTER_PROBE}${options.afterProbe.probeId}`
-    : `${PLAN_CREATED_BY}${candidate.id}`;
+    : options.afterFailedMission
+      ? `${PLAN_CREATED_BY}${candidate.id}${PLAN_AFTER_FAILURE}${options.afterFailedMission.missionId}`
+      : `${PLAN_CREATED_BY}${candidate.id}`;
   const existing = await getDb().all<{ id: string; state: string }>(
     `SELECT id, state FROM bins WHERE created_by_id = ?`,
     [createdById],
@@ -651,7 +687,12 @@ export async function judgeCandidate(
     title: 'Judge one idea and specify the work',
     objective: 'Say what a bounded look or a research packet would have to establish.',
     rationale: 'Russell captured an idea and the archive does not already answer it.',
-    manifest: planManifest(candidate, archive, options.afterProbe ?? null),
+    manifest: planManifest(
+      candidate,
+      archive,
+      options.afterProbe ?? null,
+      options.afterFailedMission ?? null,
+    ),
     completionContract: PLAN_CONTRACT,
     createdByType: 'SYSTEM',
     createdById,
@@ -672,6 +713,7 @@ function planManifest(
   candidate: RussellCandidate,
   archive: ArchiveAnswer,
   afterProbe: { probeId: string; outcome: string; explanation: string } | null,
+  afterFailedMission: { missionId: string; attempt: number; reason: string } | null,
 ): BinManifest {
   // How many of the project's own claims the archive check weighed. Carried in
   // the "why" rather than a field of its own, so a worker reading the bin knows
@@ -708,6 +750,24 @@ function planManifest(
             ? [
                 `A BOUNDED LOOK HAS ALREADY BEEN TAKEN. Its verdict: ${afterProbe.outcome}.`,
                 `What it found: ${afterProbe.explanation}`,
+              ]
+            : []),
+          /*
+           * What the last try did, when there was one.
+           *
+           * §15's rule at this altitude: a repair that repeats a strategy an
+           * earlier attempt already tried is not a repair. The reason is the
+           * packet's own recorded words, so this is a fact about the run
+           * rather than a summary of it, and it is offered as something to
+           * avoid repeating rather than as an instruction.
+           */
+          ...(afterFailedMission
+            ? [
+                `THIS IDEA HAS BEEN RESEARCHED BEFORE AND PRODUCED NOTHING. ` +
+                  `That was attempt ${afterFailedMission.attempt}.`,
+                `Why it ended: ${afterFailedMission.reason}`,
+                'Write a specification that would not fail the same way. If the question ' +
+                  'cannot be researched as asked, say so in whyNow rather than restating it.',
               ]
             : []),
         ].join('\n'),
@@ -836,6 +896,22 @@ export async function applyPlan(binId: string): Promise<ApplyPlanResult> {
         launchable: false,
       };
     }
+  } else if (target.redo) {
+    /*
+     * A redo replaces the specification of an idea that is still queued for
+     * research. If a person has parked, rejected or overridden it since the
+     * plan was dispatched, that decision stands — the same rule the post-probe
+     * pass applies, for the same reason.
+     */
+    if (candidate.state !== 'QUEUED') {
+      return {
+        ok: true,
+        reason: 'this idea is no longer queued for research',
+        alreadyJudged: true,
+        priority: candidate.priority,
+        launchable: false,
+      };
+    }
   } else if (candidate.priority) {
     return { ok: true, reason: 'already judged', alreadyJudged: true, priority: candidate.priority, launchable: false };
   }
@@ -896,7 +972,16 @@ export async function applyPlan(binId: string): Promise<ApplyPlanResult> {
      * happened. So it decides this input from its own state, and the manifest
      * says so rather than leaving the override silent.
      */
-    cheapToReduce: target.afterProbe ? false : validated.observations.cheapToReduce,
+    /*
+     * False on a second or third pass, whichever kind it is.
+     *
+     * The post-probe reason is below. A redo is the same shape: the idea has
+     * already had a full mission spent on it, so answering "a cheap look would
+     * settle this" sends a question that has *already been researched* back to
+     * the beginning of the queue, and the redo step would find it again.
+     */
+    cheapToReduce:
+      target.afterProbe || target.redo ? false : validated.observations.cheapToReduce,
     expectedValue: validated.observations.expectedValue,
     blockedBy: authority.blockedBy ?? validated.observations.blockedBy,
   };
@@ -949,15 +1034,24 @@ export async function applyPlan(binId: string): Promise<ApplyPlanResult> {
  */
 function planTarget(
   createdById: string | null,
-): { candidateId: string; afterProbe: boolean } | null {
+): { candidateId: string; afterProbe: boolean; redo: boolean } | null {
   if (!createdById || !createdById.startsWith(PLAN_CREATED_BY)) return null;
   const rest = createdById.slice(PLAN_CREATED_BY.length);
-  const marker = rest.indexOf(PLAN_AFTER_PROBE);
-  if (marker === -1) return rest ? { candidateId: rest, afterProbe: false } : null;
-  const candidateId = rest.slice(0, marker);
-  const probeId = rest.slice(marker + PLAN_AFTER_PROBE.length);
-  if (!candidateId || !probeId) return null;
-  return { candidateId, afterProbe: true };
+  for (const marker of [PLAN_AFTER_PROBE, PLAN_AFTER_FAILURE]) {
+    const at = rest.indexOf(marker);
+    if (at === -1) continue;
+    const candidateId = rest.slice(0, at);
+    const suffix = rest.slice(at + marker.length);
+    // Both halves must be present. A truncated key is not a plan, and half of
+    // one is not a candidate id.
+    if (!candidateId || !suffix) return null;
+    return {
+      candidateId,
+      afterProbe: marker === PLAN_AFTER_PROBE,
+      redo: marker === PLAN_AFTER_FAILURE,
+    };
+  }
+  return rest ? { candidateId: rest, afterProbe: false, redo: false } : null;
 }
 
 function planResult(ok: boolean, reason: string): ApplyPlanResult {

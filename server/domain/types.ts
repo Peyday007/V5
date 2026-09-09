@@ -243,6 +243,15 @@ export const EVENT_TYPES = [
   // which is best-effort by design and may be swallowed.
   'RUSSELL_MISSION_WRITEBACK',
 
+  // A run that produced nothing, and the try that replaces it.
+  //
+  // Both are project history rather than bin telemetry: "this idea was
+  // researched twice and here is why" is a question about the project, and the
+  // failed row's reason is the only place the second attempt's justification
+  // lives. `bin_events` is best-effort by design and may be swallowed.
+  'RUSSELL_MISSION_FAILED',
+  'RUSSELL_MISSION_REDONE',
+
   // A person deciding what Russell may spend on its own, and withdrawing it.
   //
   // In the project's own append-only history rather than only in
@@ -4402,6 +4411,8 @@ export interface RussellMissionRow {
   next_mission_id: string | null;
   terminal_reason: string | null;
   idempotency_key: string;
+  attempt?: number | null;
+  supersedes_mission_id?: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -4669,6 +4680,10 @@ export interface RussellMission {
   nextMissionId: string | null;
   terminalReason: string | null;
   idempotencyKey: string;
+  /** Which try this is. 1 for a first mission; a redo increments it. */
+  attempt: number;
+  /** The mission this one was launched to replace, when it is a redo. */
+  supersedesMissionId: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;

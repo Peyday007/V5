@@ -76,6 +76,7 @@ import { outcomeOf, writeBack } from './writeback.ts';
 import { launch, repairLaunches, type LaunchInput } from './launch.ts';
 import { applyTurn } from './turn.ts';
 import { applyPlan, judgeCandidate } from './planning.ts';
+import { MAX_MISSION_ATTEMPTS } from './launch.ts';
 import { parkStoppedMissions, reopenAnswered, resumeAnsweredRequest } from './needsHuman.ts';
 import { parseJson } from '../../repos/util.ts';
 import type { RussellMission, RussellVisibility } from '../../domain/types.ts';
@@ -350,6 +351,36 @@ export async function tick(owner: string): Promise<TickReport> {
       const outcome = await judgeCandidate(candidate.id);
       if (outcome.answeredByArchive) report.answeredByArchive.push(candidate.id);
       else if (outcome.binId) report.planning.push(candidate.id);
+    }
+
+    /*
+     * 1d-ii. Re-plan an idea whose run produced nothing.
+     *
+     * The gap this closes: a mission's key was the candidate and the grant, so
+     * an idea got exactly one mission for ever. When that one ended without a
+     * report the idea stayed `QUEUED` and the loop re-found the same dead row
+     * on every tick — for ever, with nothing to show a person and no way back.
+     *
+     * A redo is not a retry. §15: a retry repeats the same search; a repair is
+     * planned from what failed. So the failed run's own recorded reason goes to
+     * a worker with the question, and the judgment it produces supersedes the
+     * specification that led nowhere — which matters most in the case this was
+     * written for, where that specification is the placeholder §54.2 recorded
+     * and `PLAN_MINIMUMS` would now refuse outright.
+     *
+     * `launch()` derives the attempt from the rows and stops at
+     * `MAX_MISSION_ATTEMPTS`, so nothing here needs to count.
+     */
+    for (const spent of await redoable(cycle.maxLaunchesPerCycle)) {
+      const outcome = await judgeCandidate(spent.candidateId, {
+        afterFailedMission: {
+          missionId: spent.missionId,
+          attempt: spent.attempt,
+          reason: spent.reason,
+        },
+      });
+      if (outcome.answeredByArchive) report.answeredByArchive.push(spent.candidateId);
+      else if (outcome.binId) report.planning.push(spent.candidateId);
     }
 
     /*
@@ -912,6 +943,58 @@ async function unjudged(limit: number): Promise<{ id: string }[]> {
       LIMIT ?`,
     [Math.max(1, limit)],
   );
+}
+
+/**
+ * Ideas whose latest mission ended without producing a report.
+ *
+ * Four conditions, and each one is doing work:
+ *
+ *   - the mission is `FAILED` or `CANCELLED`. `DONE` is answered and
+ *     `NEEDS_HUMAN` is a person's decision that has not been made yet;
+ *   - it filed no document, so nothing was learned and re-asking is not §13's
+ *     waste;
+ *   - it is the newest attempt for that candidate, so a redo is planned from
+ *     the run that actually just ended;
+ *   - it is below the ceiling, checked here as well as in `launch()` so a
+ *     spent idea does not spend a planning bin discovering it.
+ *
+ * And no live plan bin for this same mission, which is what makes the step
+ * idempotent: the tick runs every thirty seconds and a re-plan takes minutes.
+ */
+async function redoable(limit: number): Promise<
+  { candidateId: string; missionId: string; attempt: number; reason: string }[]
+> {
+  const rows = await getDb().all<{
+    candidate_id: string;
+    id: string;
+    attempt: number;
+    terminal_reason: string | null;
+  }>(
+    `SELECT m.candidate_id, m.id, m.attempt, m.terminal_reason
+       FROM russell_missions m
+       JOIN russell_candidates c ON c.id = m.candidate_id
+      WHERE m.state IN ('FAILED','CANCELLED')
+        AND m.document_id IS NULL
+        AND c.state = 'QUEUED'
+        AND m.attempt < ?
+        AND m.attempt = (
+              SELECT MAX(m2.attempt) FROM russell_missions m2
+               WHERE m2.candidate_id = m.candidate_id)
+        AND NOT EXISTS (
+              SELECT 1 FROM bins b
+               WHERE b.created_by_id = 'russell:plan:' || m.candidate_id || ':redo:' || m.id
+                 AND b.state NOT IN ('CANCELLED','FAILED'))
+      ORDER BY m.updated_at, m.rowid
+      LIMIT ?`,
+    [MAX_MISSION_ATTEMPTS, Math.max(1, limit)],
+  );
+  return rows.map((row) => ({
+    candidateId: row.candidate_id,
+    missionId: row.id,
+    attempt: row.attempt,
+    reason: row.terminal_reason ?? 'the run ended without recording a reason',
+  }));
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;

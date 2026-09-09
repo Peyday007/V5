@@ -5920,3 +5920,127 @@ faults rather than harness ones:
 Both are stated here with their evidence rather than half-fixed in a change
 about something else. Neither is required to stop the observed fault, which the
 harness cleanup removes at its source.
+
+## 63. An idea could be researched exactly once — 2026-09-08
+
+The owner changed the priority: stop asking for specially worded messages, and
+advance the durable work. That instruction had a precondition nobody had found,
+and finding it is what this section records.
+
+### The defect, in one sentence
+
+**A mission's idempotency key was `russell:mission:<candidate>:<goal>` and never
+changed, so once an idea's mission ended without a report — cancelled, failed,
+or parked having produced nothing — that idea could never be researched again,
+and no filing, writeback or follow-on could follow for it however the fleet
+behaved.**
+
+`launchMission` inserts `ON CONFLICT (idempotency_key) DO NOTHING`. The loop
+selected the candidate as `QUEUED` on every tick, `launch()` computed the same
+key, the insert did nothing, and the same dead row came back. Every thirty
+seconds, for ever.
+
+Production had exactly this: `rcn_85f9689b461c4972a1ba`, the only queued idea in
+Deal Dispatch, attached to `rms_8e96b5f246464c069451` whose packet held zero
+fragments. Nothing the fleet did could have moved it.
+
+It is §24's own rule at a fourth altitude. Every escalation must have an
+answering transition, and *"that run produced nothing"* had none — not a retry,
+not a redo, not even a way to record the idea as finished with.
+
+### Why it looked like a person's decision, and was not
+
+The packet parked at `NEEDS_HUMAN` and opened a Needs You request. But
+`choicesFor` correctly offers exactly one answer to a packet with no evidence —
+`STOP` — because there is no report to file and no question to declare out of
+scope.
+
+**A decision with one option is not a decision.** It is a failed run wearing an
+escalation's clothes, and it held the idea until somebody pressed the only
+button there was. Pressing it would not have released the idea either.
+
+So a packet that stops with no fragments and no claims now **fails**, with the
+packet's own recorded words as the terminal reason and a
+`RUSSELL_MISSION_FAILED` row in the project's history. The genuine two-option
+park — `RECORD_GAPS` against `STOP`, where a person really is choosing what the
+project will rely on — is untouched.
+
+The earlier reasoning in `needsHuman.ts` said Brain "will not quietly abandon
+work you authorized, and it will not re-run something that failed before it
+started". While a mission was a candidate's only ever mission that was right.
+It is recorded rather than replaced, because what changed is the world it was
+written for.
+
+### The remedy is the one this codebase already uses
+
+§5: *a failed run is never overwritten, edited or deleted; a redo creates a new
+run with a parent, an incremented attempt number and a reason.* A mission redo
+is that, exactly.
+
+| | |
+| --- | --- |
+| Migration | **033** / **024** — `attempt` (default 1) and `supersedes_mission_id` |
+| Key | unchanged at attempt 1, so every row written before 033 keeps its identity; `:<attempt>` appended from 2 |
+| Attempt | derived in `launch()` from the rows, never passed in, so a caller cannot spend a mission and a repeated tick cannot become a second one |
+| Live run | same attempt, so it still replays — the property the fixed key was protecting |
+| `DONE` | never redone; §13's waste is researching what the project already answers |
+| Ceiling | `MAX_MISSION_ATTEMPTS = 3`, matching `MAX_FRAGMENT_ATTEMPTS` and the turn limit; the refusal names the count |
+
+**A redo re-plans.** §15: a retry repeats the same search, a repair is planned
+from what failed. The candidate's stored `missionSpec` is the thing being
+replaced — in production it is the placeholder §54.2 recorded, which
+`PLAN_MINIMUMS` would now refuse outright — so `judgeCandidate` gained a third
+pass, `afterFailedMission`, parallel to the post-probe one: the archive is asked
+again, the failed run's own reason goes to the worker with the question, and the
+judgment produced supersedes the one that led nowhere. `cheapToReduce` is forced
+false on a redo for the same reason it is after a probe: an idea that has had a
+full mission spent on it must not be sent back to the start of the queue.
+
+### Evidence
+
+`tests/russellConnectedPath.test.ts`, six cases: a live first attempt still
+replays; a failed one yields attempt 2 with `supersedesMissionId` set and the
+first row keeping its state and reason; a `DONE` mission refuses a redo; the
+ceiling stops at three and names the count; a redo's plan bin carries the failed
+run's reason to the worker and the new specification replaces the placeholder;
+and a redone idea is not sent back for a cheap look.
+
+`tests/russellNervousSystem.test.ts`: an empty packet fails rather than parking,
+carries the packet's words, opens no request, and writes the project-history row.
+
+### What did not change
+
+Concurrency, the uncapped work policy, every fleet setting, the evidence gate,
+the verification pass, the three audit roles, the approval envelope's scope
+conditions, `max_external_spend` at 0. A redo is a second mission, so it takes a
+second reservation — counted, as everything is.
+
+## 64. Repeat phrasing, tested automatically — 2026-09-08
+
+> "Test repeat phrasing and other conversational variations automatically.
+> Distinguish automated evidence from live evidence, but do not make me the
+> manual test harness."
+
+`tests/russellPhrasingVariations.test.ts` is that matrix: seven rewordings of one
+question — reordered, past tense, plainer register, abbreviated, longer with an
+aside, punctuation and case, question form — and four questions that are not it.
+
+**It is automated evidence and never live evidence.** It exercises
+`clearsFloor`, the guard `capture` applies. It does not exercise a worker's
+`duplicateOf` claim, which only a model produces. The live merge stays what it
+is: one real pair, on 2026-09-08, reported at the strength §56.4 set.
+
+Writing it found something worth recording. Two questions that share almost
+every content word with the original and differ in the one that carries the
+meaning — *restaurant inspection* for *building permit*, *what does it cost* for
+*who publishes it* — score **0.71** and **0.50** against a floor of 0.34, and
+clear it.
+
+**That is the design working rather than a defect**, and the test now says so
+explicitly instead of asserting it away. §24: the floor "is a guard, never the
+decision, and it only ever *refuses*" — a merge needs the worker's claim as
+well, because "the claim alone would let a confident model fold unrelated ideas
+into one, and the floor alone cannot recognise a rewording". Those two pairs are
+exactly what the claim is there to decide. Their scores are pinned, so anybody
+later tempted to raise the floor until they fail will see the seven rewordings
+fail with them.

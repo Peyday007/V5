@@ -36,6 +36,7 @@ import {
 } from '../../repos/russellMissions.ts';
 import { getUser } from '../../repos/identity.ts';
 import { getDb } from '../../db/database.ts';
+import { recordEvent } from '../../repos/events.ts';
 import { authorizeUnresolvedGaps } from '../research/gapPolicy.ts';
 import { advancePacket } from '../research/packetRunner.ts';
 import type {
@@ -161,6 +162,56 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
      */
     const hasEvidence = (await currentFragments(orchestration.id)).length > 0;
 
+    /*
+     * A decision with one option is not a decision.
+     *
+     * A packet holding no fragments and no claims has nothing to file and no
+     * questions to declare out of scope, so `choicesFor` correctly offers a
+     * single answer: STOP. Parking on that asks a person to press the only
+     * button there is, and then waits — indefinitely, blocking the idea —
+     * until they do. That is not an escalation, it is a failed run wearing an
+     * escalation's clothes, and the person it interrupts learns nothing by
+     * being interrupted.
+     *
+     * **The earlier reasoning here is recorded rather than quietly replaced.**
+     * It said Brain "will not quietly abandon work you authorized, and it will
+     * not re-run something that failed before it started" — and while a
+     * mission was a candidate's only ever mission, that was right: failing it
+     * silently would have retired the idea for good. Migration 033 makes a
+     * redo a real, bounded, recorded transition, so the choice is no longer
+     * between a person's button and oblivion. Failing is now the honest
+     * outcome: the run produced nothing, it says so in the packet's own words,
+     * the row keeps its reason, and `redoable()` may offer the idea a second
+     * try that a person never had to ask for.
+     *
+     * Nothing is abandoned quietly. The mission is FAILED with the packet's
+     * recorded reason, and the attempt ceiling in `loop.ts` is what stops a
+     * question nobody can answer from being asked for ever.
+     */
+    if (!hasEvidence) {
+      const failed = await transitionMission({
+        missionId: mission.id,
+        from: mission.state,
+        to: 'FAILED',
+        terminalReason: waitingOn,
+      });
+      if (failed) {
+        await recordEvent({
+          projectId: mission.projectId,
+          entityType: 'RUSSELL_MISSION',
+          entityId: mission.id,
+          eventType: 'RUSSELL_MISSION_FAILED',
+          payload: {
+            orchestrationId: orchestration.id,
+            reason: waitingOn,
+            producedNothing: true,
+            surface: 'RUSSELL',
+          },
+        });
+      }
+      continue;
+    }
+
     const moved = await transitionMission({
       missionId: mission.id,
       from: mission.state,
@@ -177,18 +228,15 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       missionId: mission.id,
       candidateId: mission.candidateId,
       conversationId: mission.conversationId,
-      authorityNeeded: hasEvidence
-        ? 'Deciding whether this project accepts a report with unresolved questions in it, ' +
-          'rather than an answer. Brain may not make that call for you.'
-        : 'Deciding what happens to a mission that never produced any research. Brain will ' +
-          'not quietly abandon work you authorized, and it will not re-run something that ' +
-          'failed before it started.',
-      whyNotRussell: hasEvidence
-        ? 'The evidence bar was not met and the repair ladder is spent. Lowering the bar or ' +
-          'declaring the remaining questions out of scope is a decision about what the ' +
-          'project is willing to rely on.'
-        : 'This packet holds no fragments and no claims, so there is nothing to file and ' +
-          'nothing to lower a bar for. Whether the question is still worth asking is yours.',
+      // Only the evidence case reaches here now, so these are statements
+      // rather than a branch. A packet that produced nothing failed above.
+      authorityNeeded:
+        'Deciding whether this project accepts a report with unresolved questions in it, ' +
+        'rather than an answer. Brain may not make that call for you.',
+      whyNotRussell:
+        'The evidence bar was not met and the repair ladder is spent. Lowering the bar or ' +
+        'declaring the remaining questions out of scope is a decision about what the ' +
+        'project is willing to rely on.',
       recommendation: null,
       /*
        * Only the answers that can act on this packet.

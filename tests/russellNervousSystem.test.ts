@@ -1401,19 +1401,27 @@ describe('the loop keeps going without anybody watching', () => {
     expect((await authorityFor({ projectId })).grant!.spend.maxMissions.used).toBe(1);
   });
 
-  it('does not offer to record gaps on a packet that holds none', async () => {
+  it('fails a packet that produced nothing rather than asking a person to press the only button', async () => {
     /*
-     * The production shape, on 2026-09-07.
+     * The production shape, on 2026-09-07, and the correction to how it was
+     * first handled.
      *
      * `orc_e1afa97f566d4b468373` parked with zero fragments and zero claims:
      * its planning item finished without recording anything, so there was no
-     * plan, no research and no unresolved question. A person opening Needs You
-     * was shown "The evidence bar was not met and the repair ladder is spent"
-     * — neither of which had happened — above an offer to record gaps that did
-     * not exist.
+     * plan, no research and no unresolved question. The first fix made the
+     * park honest — `choicesFor` offered only STOP, and the explanation stopped
+     * claiming a repair ladder had been spent.
      *
-     * Both halves are asserted here: the explanation follows the packet, and
-     * the only answer offered is one that can act on it.
+     * **That was still one button and a wait.** A decision with exactly one
+     * possible answer is not a decision; it is a failed run holding an idea
+     * hostage until somebody clicks. In production it held the only queued
+     * idea for a day, and pressing the button would not have released it
+     * either, because a mission's key was fixed per candidate.
+     *
+     * So a packet with no evidence now fails, in the packet's own words, and
+     * the idea becomes redoable. Nothing is abandoned quietly: the row keeps
+     * its reason, the project's history records it, and the attempt ceiling is
+     * what stops a question nobody can answer being asked for ever.
      */
     const conversation = await ownedConversation('Nothing to record');
     const mission = await parkedMission(conversation.id);
@@ -1425,38 +1433,27 @@ describe('the loop keeps going without anybody watching', () => {
         'continue on its own.',
     });
 
-    const parked = await tick('instance-a');
-    expect(parked.needsHuman.map((entry) => entry.missionId)).toContain(mission.id);
+    const ticked = await tick('instance-a');
+    // Not parked: there was nothing to decide.
+    expect(ticked.needsHuman.map((entry) => entry.missionId)).not.toContain(mission.id);
 
-    const request = (await listOpenRequests(projectId)).find(
-      (entry) => entry.missionId === mission.id,
-    )!;
-    expect(request).toBeDefined();
+    const failed = (await getMission(mission.id))!;
+    expect(failed.state).toBe('FAILED');
+    // The packet's own words, carried verbatim rather than summarised.
+    expect(failed.terminalReason).toMatch(/finished without recording anything/i);
 
-    // Only the answer that can do something.
-    expect(request.choices.map((choice) => choice.key)).toEqual([NEEDS_HUMAN_CHOICES.STOP.key]);
-    expect(request.choices.map((choice) => choice.key)).not.toContain(
-      NEEDS_HUMAN_CHOICES.RECORD_GAPS.key,
-    );
-    // And an explanation that matches the stop rather than asserting a
-    // different one.
-    expect(request.whyNotRussell).not.toMatch(/repair ladder/i);
-    expect(request.whyNotRussell).toMatch(/no fragments/i);
-    // The packet's own reason is still carried verbatim.
-    expect(request.missionId).toBe(mission.id);
+    // And no request was opened, so nobody is told they are needed.
+    expect(
+      (await listOpenRequests(projectId)).filter((entry) => entry.missionId === mission.id),
+    ).toHaveLength(0);
 
-    // Stopping is a real answering transition on the same mission.
-    await answerHumanRequest({
-      requestId: request.id,
-      actorUserId: userId,
-      choice: NEEDS_HUMAN_CHOICES.STOP.key,
-    });
-    const after = await tick('instance-a');
-    expect(after.resumed).toContain(request.id);
-    const same = (await getMission(mission.id))!;
-    expect(same.id).toBe(mission.id);
-    expect(same.state).toBe('CANCELLED');
-    expect(await listMissions({ projectId })).toHaveLength(1);
+    // It is on the project's own history, not only in bin telemetry.
+    const events = await listEvents(projectId, 100);
+    expect(
+      events.some(
+        (event) => event.eventType === 'RUSSELL_MISSION_FAILED' && event.entityId === mission.id,
+      ),
+    ).toBe(true);
   });
 
   it('refuses to record gaps on an empty packet even when the request offers it', async () => {

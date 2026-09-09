@@ -26,23 +26,31 @@ import {
   PLAN_UNIT_KEY,
   validatePlan,
 } from '../server/services/russell/planning.ts';
-import { listCandidates } from '../server/repos/russellCandidates.ts';
+import { getCandidate, listCandidates, recordJudgment } from '../server/repos/russellCandidates.ts';
 import { putBinUnitResult, getBin, assignNextBin, createBin } from '../server/repos/bins.ts';
 import { requestCompletion } from '../server/services/bins/service.ts';
 import { createWorker } from '../server/repos/identity.ts';
 import { evaluateContract, hashUnitValue } from '../server/services/bins/contracts.ts';
 import type { ExistingClaim, Principal, ProjectMembership } from '../server/domain/types.ts';
 import { listLayers } from '../server/repos/layers.ts';
-import { createGoal } from '../server/repos/russellAuthority.ts';
 import { tick as runCycle } from '../server/services/russell/loop.ts';
-import { listMissions } from '../server/repos/russellMissions.ts';
+import {
+  getMission,
+  launchMission,
+  listMissions,
+  transitionMission,
+} from '../server/repos/russellMissions.ts';
+import { launch, MAX_MISSION_ATTEMPTS } from '../server/services/russell/launch.ts';
+import { createGoal } from '../server/repos/russellAuthority.ts';
 
 let projectId = '';
 let userId = '';
+let layerId = '';
 
 beforeEach(async () => {
   const fixture = await freshProject();
   projectId = fixture.project.id;
+  layerId = fixture.layers[0]!.id;
   const user = await createUser({
     email: `path-${Math.random().toString(36).slice(2, 10)}@example.test`,
     displayName: 'Test person',
@@ -1135,5 +1143,238 @@ describe('a turn with no source message', () => {
     // Distinguishable from a gate that ran and refused, which is the whole
     // reason it is named rather than folded into the ordinary decline.
     expect(await listCandidates({ projectId })).toHaveLength(0);
+  });
+});
+
+/**
+ * An idea may be researched more than once.
+ *
+ * The defect these pin: a mission's idempotency key was
+ * `russell:mission:<candidate>:<goal>` and `launchMission` inserts
+ * `ON CONFLICT DO NOTHING`, so a candidate got exactly **one** mission for the
+ * life of its grant. Once that run ended without a report — cancelled by its
+ * owner, failed, or parked having produced nothing — the idea could never be
+ * researched again. The loop went on selecting it as QUEUED on every tick and
+ * went on re-finding the same dead row, for ever.
+ *
+ * In production that is precisely what happened: on 2026-09-08 the only queued
+ * idea in Deal Dispatch was attached to a packet holding zero fragments, and no
+ * research, filing, writeback or follow-on could occur for it however the fleet
+ * behaved. It is §24's missing answering transition at a fourth altitude, and
+ * the remedy is §5's: a redo is a new row with a parent, an incremented
+ * attempt and a reason, never an edit of the one that failed.
+ */
+describe('a run that produced nothing is not the end of the idea', () => {
+  /** Launch a mission for a candidate through the real path, and return it. */
+  async function launchFor(candidateId: string) {
+    const outcome = await launch({
+      projectId,
+      layerId,
+      candidateId,
+      visibility: 'PRIVATE',
+      title: 'Michigan permit data availability',
+      assignment: 'Identify the counties, the publication route, the licence and the cadence.',
+      objective: 'Establish which Michigan counties publish permit data and on what terms.',
+      whyNow: 'Discovery design would otherwise rest on an assumption about availability.',
+      acceptableSources: ['county open-data portals'],
+      excludedSources: ['vendor marketing'],
+      evidence: ['a canonical URL per county'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    return outcome;
+  }
+
+  // The file's own grant helper. Two active grants on one project would make
+  // `checkAuthority`'s choice an accident of ordering, which §24 refuses.
+  beforeEach(authorize);
+
+  /**
+   * A mission row that has already failed, without the packet behind it.
+   *
+   * The re-plan tests are about the planning pass, and a full `launch()` would
+   * leave a research bin READY that `assignNextBin` offers ahead of the plan
+   * bin under test. What the redo reads is the mission row, so that is what
+   * this makes.
+   */
+  async function failedMissionFor(candidateId: string) {
+    const { mission } = await launchMission({
+      projectId,
+      layerId,
+      visibility: 'PRIVATE',
+      objective: 'Establish which Michigan counties publish permit data.',
+      whyNow: 'Discovery design would otherwise rest on an assumption.',
+      idempotencyKey: `russell:mission:${candidateId}:test`,
+      candidateId,
+    });
+    await transitionMission({
+      missionId: mission.id,
+      from: 'PLANNED',
+      to: 'FAILED',
+      terminalReason: 'a planning work item finished without recording anything',
+    });
+    return mission;
+  }
+
+  async function queuedIdea(): Promise<string> {
+    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
+    await recordJudgment({
+      candidateId,
+      state: 'QUEUED',
+      priority: 'MUST_DO',
+      confidence: null,
+      reason: 'it decides whether the coverage layer can be automated',
+      judgment: { missionSpec: { title: 'Permit data' } },
+      supporting: [],
+      contradicting: [],
+    });
+    return candidateId;
+  }
+
+  it('keeps the first attempt replaying while it is still alive', async () => {
+    /*
+     * The property the fixed key was protecting, and which must survive.
+     * A tick runs every thirty seconds; a mission runs for minutes. Relaunching
+     * the same candidate must return the same mission rather than a second one.
+     */
+    const candidateId = await queuedIdea();
+    const first = await launchFor(candidateId);
+    expect(first.ok).toBe(true);
+
+    const again = await launchFor(candidateId);
+    expect(again.ok).toBe(true);
+    expect(again.mission!.id).toBe(first.mission!.id);
+    expect(again.mission!.attempt).toBe(1);
+    expect(await listMissions({ projectId })).toHaveLength(1);
+  });
+
+  it('gives the idea a second mission once the first has failed, and keeps the first', async () => {
+    const candidateId = await queuedIdea();
+    const first = await launchFor(candidateId);
+    expect(first.mission!.attempt).toBe(1);
+    // A first attempt keeps exactly the key it has always had, so every row
+    // written before migration 033 is unaffected.
+    expect(first.mission!.idempotencyKey).not.toMatch(/:2$/);
+
+    await transitionMission({
+      missionId: first.mission!.id,
+      from: first.mission!.state,
+      to: 'FAILED',
+      terminalReason: 'the packet finished without recording anything',
+    });
+
+    const second = await launchFor(candidateId);
+    expect(second.ok).toBe(true);
+    expect(second.mission!.id).not.toBe(first.mission!.id);
+    expect(second.mission!.attempt).toBe(2);
+    expect(second.mission!.supersedesMissionId).toBe(first.mission!.id);
+
+    // Nothing was rewritten: the failed row keeps its state and its reason.
+    const kept = (await getMission(first.mission!.id))!;
+    expect(kept.state).toBe('FAILED');
+    expect(kept.terminalReason).toMatch(/without recording anything/i);
+    expect(await listMissions({ projectId })).toHaveLength(2);
+  });
+
+  it('does not redo an idea that was actually answered', async () => {
+    // §13: researching a question the project already answers is the waste the
+    // whole coverage check exists to prevent. A DONE mission answered it.
+    const candidateId = await queuedIdea();
+    const first = await launchFor(candidateId);
+    await transitionMission({
+      missionId: first.mission!.id,
+      from: first.mission!.state,
+      to: 'DONE',
+    });
+
+    const again = await launchFor(candidateId);
+    expect(again.ok).toBe(false);
+    expect(again.reason).toMatch(/already been researched/i);
+    expect(await listMissions({ projectId })).toHaveLength(1);
+  });
+
+  it('stops at the ceiling rather than trying for ever', async () => {
+    const candidateId = await queuedIdea();
+    let last = await launchFor(candidateId);
+    for (let attempt = 1; attempt < MAX_MISSION_ATTEMPTS; attempt += 1) {
+      expect(last.mission!.attempt).toBe(attempt);
+      await transitionMission({
+        missionId: last.mission!.id,
+        from: last.mission!.state,
+        to: 'FAILED',
+        terminalReason: 'produced nothing',
+      });
+      last = await launchFor(candidateId);
+      expect(last.ok).toBe(true);
+    }
+    expect(last.mission!.attempt).toBe(MAX_MISSION_ATTEMPTS);
+
+    await transitionMission({
+      missionId: last.mission!.id,
+      from: last.mission!.state,
+      to: 'FAILED',
+      terminalReason: 'produced nothing',
+    });
+    const refused = await launchFor(candidateId);
+    expect(refused.ok).toBe(false);
+    // The refusal names the count, so an idea that stopped says why.
+    expect(refused.reason).toMatch(new RegExp(`${MAX_MISSION_ATTEMPTS} times`));
+    expect(await listMissions({ projectId })).toHaveLength(MAX_MISSION_ATTEMPTS);
+  });
+
+  it('re-plans rather than relaunching the specification that failed', async () => {
+    /*
+     * §15 at this altitude: a retry repeats the same search, a repair is
+     * planned from what failed. The candidate's stored `missionSpec` is the
+     * very thing being replaced — in production it is the placeholder
+     * `PLAN_MINIMUMS` would now refuse outright — so a redo asks for a new one
+     * and the failed run's own reason goes with the question.
+     */
+    const candidateId = await queuedIdea();
+    const first = await failedMissionFor(candidateId);
+
+    const outcome = await judgeCandidate(candidateId, {
+      afterFailedMission: {
+        missionId: first.id,
+        attempt: 1,
+        reason: 'a planning work item finished without recording anything',
+      },
+    });
+    expect(outcome.binId).not.toBeNull();
+
+    // The failed run reaches the worker, so it is not asked to guess.
+    const bin = (await getBin(outcome.binId!))!;
+    const manifest = JSON.stringify(bin.manifest);
+    expect(manifest).toMatch(/RESEARCHED BEFORE AND PRODUCED NOTHING/);
+    expect(manifest).toMatch(/finished without recording anything/);
+
+    await workerCompletesPlan(outcome.binId!, GOOD_PLAN);
+    const applied = await applyPlan(outcome.binId!);
+    expect(applied.ok).toBe(true);
+
+    // The specification is the new one, not the placeholder.
+    const judged = (await getCandidate(candidateId))!;
+    const spec = (judged.judgment as Record<string, unknown>)['missionSpec'] as
+      | Record<string, unknown>
+      | undefined;
+    expect(spec?.['title']).toBe(GOOD_PLAN.mission.title);
+  });
+
+  it('does not send a redone idea back for a cheap look it has already had a mission for', async () => {
+    // `GOOD_PLAN` says cheapToReduce: true. On a first pass that is honest and
+    // sends the idea to EXPLORE. On a redo it would put a question that has
+    // already had a full mission spent on it back at the start of the queue.
+    const candidateId = await queuedIdea();
+    const first = await failedMissionFor(candidateId);
+
+    const outcome = await judgeCandidate(candidateId, {
+      afterFailedMission: { missionId: first.id, attempt: 1, reason: 'produced nothing' },
+    });
+    await workerCompletesPlan(outcome.binId!, GOOD_PLAN);
+    await applyPlan(outcome.binId!);
+
+    const judged = (await getCandidate(candidateId))!;
+    expect(judged.priority).not.toBe('EXPLORE');
   });
 });

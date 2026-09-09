@@ -72,6 +72,10 @@ function mapMission(row: RussellMissionRow): RussellMission {
     nextMissionId: row.next_mission_id,
     terminalReason: row.terminal_reason,
     idempotencyKey: row.idempotency_key,
+    // Defaulted rather than asserted: every row written before migration 033
+    // is a first attempt, and saying so is cheaper than a backfill.
+    attempt: row.attempt ?? 1,
+    supersedesMissionId: row.supersedes_mission_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
@@ -117,6 +121,10 @@ export async function launchMission(input: {
   probeId?: string | null;
   goalId?: string | null;
   reservationId?: string | null;
+  /** Which try this is. Omitted means 1, which is every historical row. */
+  attempt?: number;
+  /** The mission this replaces, when it is a redo. */
+  supersedesMissionId?: string | null;
 }): Promise<{ mission: RussellMission; created: boolean }> {
   const id = newId('rms');
   const at = nowIso();
@@ -125,9 +133,9 @@ export async function launchMission(input: {
        (id, project_id, layer_id, visibility, candidate_id, conversation_id, probe_id,
         goal_id, reservation_id, objective, why_now, state, waiting_on, orchestration_id,
         bin_id, document_id, audit_id, writeback_at, next_mission_id, terminal_reason,
-        idempotency_key, created_at, updated_at, completed_at)
+        idempotency_key, attempt, supersedes_mission_id, created_at, updated_at, completed_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PLANNED', NULL, NULL,
-             NULL, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, NULL)
+             NULL, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, NULL)
      ON CONFLICT (idempotency_key) DO NOTHING`,
     [
       id,
@@ -142,6 +150,8 @@ export async function launchMission(input: {
       input.objective,
       input.whyNow,
       input.idempotencyKey,
+      Math.max(1, input.attempt ?? 1),
+      input.supersedesMissionId ?? null,
       at,
       at,
     ],
@@ -167,6 +177,24 @@ export async function getMissionByOrchestration(
   const rows = await getDb().all<RussellMissionRow>(
     'SELECT * FROM russell_missions WHERE orchestration_id = ? ORDER BY created_at, rowid LIMIT 1',
     [orchestrationId],
+  );
+  return rows[0] ? mapMission(rows[0]) : null;
+}
+
+/**
+ * The most recent mission for one idea, whatever state it is in.
+ *
+ * Ordered by `attempt` rather than by time, because attempt is what decides the
+ * next key and a clock is not a sequence. Null is the ordinary answer for an
+ * idea nothing has launched yet.
+ */
+export async function latestMissionForCandidate(
+  candidateId: string,
+): Promise<RussellMission | null> {
+  const rows = await getDb().all<RussellMissionRow>(
+    `SELECT * FROM russell_missions WHERE candidate_id = ?
+      ORDER BY attempt DESC, rowid DESC LIMIT 1`,
+    [candidateId],
   );
   return rows[0] ? mapMission(rows[0]) : null;
 }
