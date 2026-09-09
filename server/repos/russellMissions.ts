@@ -709,6 +709,32 @@ export async function answerHumanRequest(input: {
  * Nothing here can reopen a `RESUMED` request: an answer that was carried out
  * stays carried out.
  */
+/**
+ * Take back a question that was never a question.
+ *
+ * `WITHDRAWN` has been in the schema since 027 with nothing to write it. This
+ * is what it is for: a request opened against a packet that turned out to hold
+ * no evidence offered exactly one answer, and a request whose only answer is
+ * the one Brain would take anyway is not a decision to put in front of a
+ * person. Withdrawing says so on the row rather than deleting it, so "I was
+ * asked this and then I was not" stays readable.
+ *
+ * Guarded on `OPEN`: a request somebody has already answered is theirs, and
+ * this must never reach back through a decision that was made.
+ */
+export async function withdrawRequest(input: {
+  requestId: string;
+  reason: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE russell_human_requests
+        SET state = 'WITHDRAWN', why_not_russell = ?, updated_at = ?
+      WHERE id = ? AND state = 'OPEN'`,
+    [input.reason.slice(0, 1_000), nowIso(), input.requestId],
+  );
+  return result.changes === 1;
+}
+
 export async function reopenRequest(input: {
   requestId: string;
   choices: HumanRequestChoice[];

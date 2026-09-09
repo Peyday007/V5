@@ -1456,6 +1456,64 @@ describe('the loop keeps going without anybody watching', () => {
     ).toBe(true);
   });
 
+  it('takes back a park that was already open before the rule existed', async () => {
+    /*
+     * The row that motivated the rule, and the half a fix at the moment of
+     * parking cannot reach.
+     *
+     * Production had `rms_8e96b5f246464c069451` sitting at `NEEDS_HUMAN` with
+     * an OPEN request offering one answer, from before an empty packet failed
+     * instead of parking. `parkStoppedMissions` selected only live states, so
+     * the new rule would never have run on it and the only queued idea in the
+     * project would have stayed blocked for ever.
+     *
+     * So the sweep includes `NEEDS_HUMAN`, and a park with nothing to decide is
+     * withdrawn rather than left in somebody's Needs You. Withdrawn, not
+     * deleted: "I was asked this and then I was not" stays readable.
+     */
+    const conversation = await ownedConversation('Already parked');
+    const mission = await parkedMission(conversation.id);
+
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'A planning work item finished without recording anything.',
+    });
+
+    // Park it the way the old code did, so this starts from the real shape.
+    await transitionMission({
+      missionId: mission.id,
+      from: (await getMission(mission.id))!.state,
+      to: 'NEEDS_HUMAN',
+      waitingOn: 'A planning work item finished without recording anything.',
+    });
+    const { request } = await askHuman({
+      projectId,
+      visibility: 'PRIVATE',
+      missionId: mission.id,
+      candidateId: null,
+      conversationId: conversation.id,
+      authorityNeeded: 'Deciding what happens to a mission that never produced any research.',
+      whyNotRussell: 'This packet holds no fragments and no claims.',
+      recommendation: null,
+      choices: [NEEDS_HUMAN_CHOICES.STOP],
+      urgency: 'BLOCKING',
+      resumeKey: `russell:needs-human:${mission.id}:${mission.orchestrationId}`,
+    });
+    expect(
+      (await listOpenRequests(projectId)).some((entry) => entry.id === request.id),
+    ).toBe(true);
+
+    await tick('instance-a');
+
+    // The mission is failed, and the question is off the person's list.
+    expect((await getMission(mission.id))!.state).toBe('FAILED');
+    expect(
+      (await listOpenRequests(projectId)).some((entry) => entry.id === request.id),
+    ).toBe(false);
+    // Withdrawn rather than answered: nobody decided anything.
+    expect((await getHumanRequest(request.id))!.state).toBe('WITHDRAWN');
+  });
+
   it('refuses to record gaps on an empty packet even when the request offers it', async () => {
     /*
      * The guard at the transition, not only at the offer.
@@ -1504,7 +1562,17 @@ describe('the loop keeps going without anybody watching', () => {
     const orchestration = await getOrchestration(mission.orchestrationId!);
     expect(orchestration!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
     expect(orchestration!.unresolvedGapAuthorizedBy).toBeNull();
-    expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
+    /*
+     * And the mission does not sit there waiting to be asked again.
+     *
+     * The packet now holds no research at all, which is the same judgement the
+     * offer filter makes, applied to the mission rather than only to the
+     * answer: there is nothing to record gaps about and nothing to file, so
+     * the run failed. The person's decision was not quietly carried out — the
+     * assertions above are that nothing was authorized in their name — and the
+     * idea goes back for another attempt rather than being retired.
+     */
+    expect((await getMission(mission.id))!.state).toBe('FAILED');
 
     /*
      * And the decision came *back*, rather than staying answered.

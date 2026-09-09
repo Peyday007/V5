@@ -31,8 +31,10 @@ import { currentFragments, getOrchestration } from '../../repos/research.ts';
 import {
   askHuman,
   getMission,
+  listOpenRequests,
   reopenRequest,
   transitionMission,
+  withdrawRequest,
 } from '../../repos/russellMissions.ts';
 import { getUser } from '../../repos/identity.ts';
 import { getDb } from '../../db/database.ts';
@@ -111,8 +113,23 @@ export interface ParkResult {
  */
 export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> {
   const rows = await getDb().all<{ id: string }>(
+    /*
+     * `NEEDS_HUMAN` is in the selection, and it is not a mistake.
+     *
+     * The rule below — a packet with no evidence has nothing to decide, so it
+     * fails rather than parking — only fires at the moment of parking, and
+     * production already had a mission sitting parked from before it existed:
+     * `rms_8e96b5f246464c069451`, holding the only queued idea in the project
+     * behind a request offering one answer. A fix that cannot reach the row
+     * that motivated it is half a fix.
+     *
+     * Including the state is safe because the branch below is the only thing
+     * that acts on it: a parked mission whose packet *does* hold evidence is a
+     * real decision, `transitionMission` is guarded on the state it read, and
+     * re-parking one would be a no-op anyway.
+     */
     `SELECT id FROM russell_missions
-      WHERE state IN ('PLANNED','LAUNCHING','RUNNING','WAITING')
+      WHERE state IN ('PLANNED','LAUNCHING','RUNNING','WAITING','NEEDS_HUMAN')
         AND orchestration_id IS NOT NULL
       ORDER BY updated_at, rowid
       LIMIT ?`,
@@ -196,6 +213,26 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
         terminalReason: waitingOn,
       });
       if (failed) {
+        /*
+         * Take back the question, if one was already asked.
+         *
+         * A request opened before this rule existed is still sitting in
+         * somebody's Needs You offering a single button. Withdrawing it is
+         * honest — it was never a decision — and it is guarded on `OPEN`, so
+         * an answer somebody actually gave is never reached back through.
+         */
+        for (const open of await listOpenRequests(mission.projectId)) {
+          if (open.missionId !== mission.id) continue;
+          await withdrawRequest({
+            requestId: open.id,
+            reason:
+              'Withdrawn: this packet produced no research, so the only answer it could ' +
+              'offer was to stop — which is what Brain does with a run that produced ' +
+              'nothing. The idea goes back for another attempt instead.',
+          });
+        }
+      }
+      if (failed) {
         await recordEvent({
           projectId: mission.projectId,
           entityType: 'RUSSELL_MISSION',
@@ -211,6 +248,14 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       }
       continue;
     }
+
+    /*
+     * Already parked, and it has evidence: a real decision, waiting for a real
+     * answer. Nothing to do — and re-parking would be worse than a no-op,
+     * because `transitionMission` from NEEDS_HUMAN to NEEDS_HUMAN succeeds and
+     * would report a fresh park on every tick.
+     */
+    if (mission.state === 'NEEDS_HUMAN') continue;
 
     const moved = await transitionMission({
       missionId: mission.id,
