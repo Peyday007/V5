@@ -1476,6 +1476,143 @@ describe('a run that produced nothing is not the end of the idea', () => {
     expect(spec?.['title']).toBe(GOOD_PLAN.mission.title);
   });
 
+  /**
+   * The idea in production's exact shape: `QUEUED`, carrying the very
+   * specification its last mission failed on.
+   *
+   * `queuedIdea()` stores a stub, which is enough for the tests about
+   * `launch()` alone. These two are about the loop, so the candidate has to
+   * carry what `nextLaunchable` will actually read and `launch` will actually
+   * refuse.
+   */
+  const FAILED_SPEC = {
+    objective: 'Establish which Michigan counties publish permit data.',
+    whyNow: 'Discovery design would otherwise rest on an assumption.',
+  };
+
+  async function ideaCarryingItsFailedSpec(): Promise<{ candidateId: string; missionId: string }> {
+    const candidateId = await captureAnIdea('We should establish the permit publication terms.');
+    const mission = await failedMissionFor(candidateId);
+    await recordJudgment({
+      candidateId,
+      state: 'QUEUED',
+      priority: 'MUST_DO',
+      confidence: null,
+      reason: 'it decides whether the coverage layer can be automated',
+      judgment: {
+        missionSpec: {
+          projectId,
+          layerId,
+          visibility: 'PRIVATE',
+          title: 'Permit data',
+          assignment: 'Identify the counties and the terms.',
+          ...FAILED_SPEC,
+          startedBy: { kind: 'BRAIN', id: `russell:plan:${candidateId}` },
+          envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+          authorizedBy: userId,
+        },
+      },
+      supporting: [],
+      contradicting: [],
+    });
+    return { candidateId, missionId: mission.id };
+  }
+
+  it('the loop takes a finished re-plan and launches the new specification', async () => {
+    /*
+     * The regression this file existed to catch and did not.
+     *
+     * Every other redo test above calls `applyPlan` directly. Production does
+     * not: the loop's `finishedPlanBins` is the only thing that ever hands a
+     * finished plan to `applyPlan`, and it matched the first-pass key and the
+     * post-probe key and **not** the redo key. So 09a591a's re-plan,
+     * 6afeaaa's specification ceiling and `applyPlan`'s redo branch were all
+     * correct and all unreachable, and `bin_fdc116329a2843289dcd` sat COMPLETE
+     * from 03:36Z on 2026-09-09 carrying a worker's real plan that nothing
+     * ever opened. A test that calls the middle of a chain proves the middle
+     * of a chain.
+     *
+     * So this one drives `runCycle` on both sides of the worker, which is the
+     * caller production uses and the only one that could have failed.
+     */
+    const { candidateId, missionId } = await ideaCarryingItsFailedSpec();
+
+    // Tick one: the redo is planned, and the dead specification is refused
+    // rather than launched a second time.
+    const planned = await runCycle('test-owner');
+    expect(planned.planning).toContain(candidateId);
+    expect(planned.launched).toHaveLength(0);
+    expect(await listMissions({ projectId })).toHaveLength(1);
+
+    // The worker answers it. `judgeCandidate` is idempotent by key, so asking
+    // again returns the bin the tick created rather than a second one.
+    const again = await judgeCandidate(candidateId, {
+      afterFailedMission: { missionId, attempt: 1, reason: 'produced nothing' },
+    });
+    expect(again.binId).not.toBeNull();
+    const bin = (await getBin(again.binId!))!;
+    expect(bin.createdById).toBe(`russell:plan:${candidateId}:redo:${missionId}`);
+    await workerCompletesPlan(again.binId!, GOOD_PLAN);
+
+    // Tick two: applied and launched, in one pass, by the loop.
+    const launched = await runCycle('test-owner');
+    expect(launched.judged).toContain(again.binId!);
+    expect(launched.launched).toHaveLength(1);
+
+    const missions = await listMissions({ projectId });
+    expect(missions).toHaveLength(2);
+    const second = (await getMission(launched.launched[0]!))!;
+    expect(second.attempt).toBe(2);
+    expect(second.supersedesMissionId).toBe(missionId);
+    // The new specification, not the one that failed.
+    expect(second.objective).toBe(GOOD_PLAN.mission.objective);
+    expect(second.objective).not.toBe(FAILED_SPEC.objective);
+    // And the failed row is untouched: §5, lineage is never destroyed.
+    expect((await getMission(missionId))!.state).toBe('FAILED');
+  });
+
+  it('parks an idea whose re-plan produced the approach that already failed', async () => {
+    /*
+     * The other half of making the arm above safe.
+     *
+     * The redo arm matches a `QUEUED` idea whose newest mission is the one this
+     * bin was planned from, and stops matching when the re-planned attempt
+     * launches. If the re-plan reproduces the specification that already
+     * failed, nothing launches — `launch()` refuses it, correctly — so the arm
+     * would hand the same bin back on every tick for ever, with a person
+     * seeing an idea that says it is queued and never moves.
+     *
+     * §15's second half is the answer: when the ladder runs out the honest
+     * outcome is unresolved, recorded as such. So Brain parks it, in words,
+     * and `PARKED` has a documented way back.
+     */
+    const { candidateId, missionId } = await ideaCarryingItsFailedSpec();
+    await runCycle('test-owner');
+    const again = await judgeCandidate(candidateId, {
+      afterFailedMission: { missionId, attempt: 1, reason: 'produced nothing' },
+    });
+    await workerCompletesPlan(again.binId!, {
+      observations: { cheapToReduce: false, expectedValue: 70, blockedBy: null },
+      mission: { ...GOOD_PLAN.mission, ...FAILED_SPEC },
+    });
+
+    const applied = await runCycle('test-owner');
+    expect(applied.launched).toHaveLength(0);
+    expect(await listMissions({ projectId })).toHaveLength(1);
+
+    const parked = (await getCandidate(candidateId))!;
+    expect(parked.state).toBe('PARKED');
+    expect(parked.priority).toBe('PARKED');
+    expect(parked.reason).toMatch(/already been researched/i);
+    // The worker's plan is kept beside it — somebody paid for it.
+    expect((parked.judgment as Record<string, unknown>)['proposedMission']).toBeTruthy();
+
+    // And it is not asked again on the next tick: the arm no longer matches.
+    const next = await runCycle('test-owner');
+    expect(next.judged).not.toContain(again.binId!);
+    expect(next.planning).not.toContain(candidateId);
+  });
+
   it('does not send a redone idea back for a cheap look it has already had a mission for', async () => {
     // `GOOD_PLAN` says cheapToReduce: true. On a first pass that is honest and
     // sends the idea to EXPLORE. On a redo it would put a question that has

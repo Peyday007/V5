@@ -6138,3 +6138,107 @@ Three new tests pin the behaviour, including production's exact shape — three
 mission rows under one specification, rebuilt through the repository because the
 launcher now refuses to create it, which is the existing data the fix has to be
 able to move.
+
+---
+
+## 66. Three correct mechanisms and a dead chain — 2026-09-09
+
+`6afeaaa` deployed at 03:45:16Z. Nine minutes and eighteen ticks later the
+production chain had not moved: three missions, all `FAILED`, candidate
+`rcn_85f9689b461c4972a1ba` still `QUEUED`, `spent mission rows 3 · committed 3`,
+loop `RUNNING` with no error at generation 14314.
+
+### What the rows said
+
+`in-flight` at 03:51:21Z named one bin and it was the whole answer:
+
+```
+stale  2026-09-09T03:36:54.608Z  age 867s  deal-dispatch  RUSSELL_PLAN
+       bin bin_fdc116329a2843289dcd  COMPLETE  gen 0  attempts 1/2
+       routine rtn_c7bcec972bd44afa91d7  session session_013tUAGRRtsGo7LTAwxpiAC7
+```
+
+`trace` on it:
+
+```
+BIN_READY               03:36:43.695Z
+DISPATCH_INTENT         03:36:53.411Z
+DISPATCH_ROUTED         03:36:53.570Z  Selected V1 on primary: 0/1 Routine, 0/2 account
+DISPATCH_SENT           03:36:54.639Z  session_013tUAGRRtsGo7LTAwxpiAC7
+BIN_ASSIGNED            03:37:09.349Z  wkr_1cdd82cfb2a54faf8edd
+BIN_UNIT_SUBMITTED      03:37:59.480Z  STORED
+BIN_COMPLETION_REFUSED  03:38:03.293Z  The plan was not valid JSON.
+BIN_UNIT_SUBMITTED      03:38:30.569Z  CORRECTED
+BIN_COMPLETION_ACCEPTED 03:38:35.005Z
+BIN_TERMINAL            03:38:35.053Z  RUSSELL_PLAN_V1 v1 evaluated true.
+UNITS  plan  0165c57e2184dabd  by wkr_1cdd82cfb2a54faf8edd
+```
+
+Everything worked. Brain fired 10.9 seconds after the bin was ready, a real
+worker arrived 15 seconds later, wrote a plan, was refused for malformed JSON,
+**corrected it**, and had it accepted by the contract — which runs `validatePlan`
+itself, so what is sitting in that unit is a plan Brain has already agreed is a
+plan. And then nothing opened it, for twenty-two minutes and counting.
+
+### The broken edge
+
+`finishedPlanBins` in `loop.ts` is the only thing that ever hands a finished
+plan to `applyPlan`. It matched two key shapes:
+
+- `russell:plan:<candidateId>` — the first pass, `priority IS NULL`
+- `russell:plan:<candidateId>:probed:<probeId>` — the post-probe pass
+
+`09a591a` introduced a third, `russell:plan:<candidateId>:redo:<missionId>`,
+together with the manifest that carries the failed run's reason and the
+`applyPlan` branch that supersedes the dead specification. It did not add the
+arm. So the re-plan was dispatched, worked, validated and stored, and the
+selector between the worker and the applier returned nothing — `nextLaunchable`
+kept reading the specification that had already failed three times and
+`launch()` refused it every thirty seconds, exactly as `6afeaaa` had just
+taught it to.
+
+Three correct mechanisms in a row and a dead chain, because the one between them
+selected nothing. §24's sentence at a fourth altitude: **a mechanism nothing
+calls is not a mechanism.**
+
+### Why the test suite did not catch it
+
+Every redo test in `russellConnectedPath.test.ts` called `applyPlan(binId)`
+directly. That proves the applier. Production does not call the applier; the
+loop does. This is the execution contract's third return condition —
+*production fails at an edge the production-shaped regression test claimed to
+traverse using the same callers* — and the remedy is the boundary, not another
+patch: the redo tests now drive `runCycle` on both sides of the worker.
+
+Reverting the arm alone fails the new test with
+`expected [] to include 'bin_…'`, so it reproduces the production defect rather
+than describing it.
+
+### The repair, and the second half that makes it safe
+
+The arm's guard is `m.rowid = MAX(rowid) for that candidate` — the same
+condition `redoable()` uses to decide there is a redo to plan at all. That is
+what makes it stop: the moment the re-planned attempt launches, the mission the
+bin was planned from is no longer the newest and the bin is never looked at
+again. A flag would say the same thing and could disagree with the rows.
+
+But one case would never launch: a re-plan that reproduces the specification
+that already failed. `launch()` refuses it — correctly, §15 — leaving an idea
+that reads `QUEUED` and never moves while the arm hands the same bin back for
+ever. Silently stuck, which §24 forbids. So `applyPlan` says §15's second half
+out loud: the idea is **parked** with what happened, the worker's plan is kept
+beside it as `proposedMission` because somebody paid for it, and `PARKED` has a
+person's override as its way back. Both callers compare on one exported
+`specificationKey`, so they cannot drift into two meanings of "already
+researched".
+
+The invalid-plan version of the same trap does not exist: `RUSSELL_PLAN_V1`
+runs `validatePlan` at submission, so a plan Brain would refuse never reaches
+`COMPLETE` — it is refused inside the worker's own session with its attempts
+intact.
+
+### Verified
+
+Typecheck clean. SQLite **1821 passed / 73 files**. Postgres **1846 passed / 74
+files, 0 failures** — the three-arm `UNION` with a `rowid` correlated subquery
+is portable across both.

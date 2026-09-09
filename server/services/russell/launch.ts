@@ -140,6 +140,20 @@ export interface LaunchOutcome {
  */
 export const MAX_MISSION_ATTEMPTS = 3;
 
+/**
+ * What "the same specification" means, in one place.
+ *
+ * Objective and reason-now together: what a mission was launched to establish
+ * and why it was worth doing then. `applyPlan` compares a re-plan's proposal on
+ * exactly this, so the plan that would be refused here is parked *there*
+ * instead of leaving an idea launchable-looking and unlaunchable for ever. Two
+ * callers deciding "already researched" by two rules is how they come to
+ * disagree, so there is one rule and both import it.
+ */
+export function specificationKey(objective: string, whyNow: string): string {
+  return `${objective}\n${whyNow}`;
+}
+
 /** A short, stable id for one specification, for use inside an idempotency key. */
 function specKey(spec: string): string {
   return createHash('sha256').update(spec, 'utf8').digest('hex').slice(0, 12);
@@ -241,7 +255,7 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
     attempt = previous.attempt;
   } else {
     const tried = await specificationsTried(input.candidateId);
-    const spec = `${input.objective}\n${input.whyNow}`;
+    const spec = specificationKey(input.objective, input.whyNow);
     if (tried.includes(spec)) {
       return refuse('this repeats a specification that has already been researched');
     }

@@ -876,21 +876,42 @@ async function answeredTurnBins(limit: number): Promise<string[]> {
  */
 async function finishedPlanBins(limit: number): Promise<string[]> {
   /*
-   * Two shapes of plan key, and two different candidate states to match.
+   * Three shapes of plan key, and three different candidate states to match.
    *
    * A first pass is keyed `russell:plan:<candidateId>` and belongs to an idea
    * with no priority yet. A post-probe pass is keyed
    * `russell:plan:<candidateId>:probed:<probeId>` and belongs to an idea whose
    * only verdict so far is `EXPLORE` — the one priority a second pass may
-   * supersede.
+   * supersede. A redo is keyed `russell:plan:<candidateId>:redo:<missionId>`
+   * and belongs to an idea still `QUEUED` whose newest mission is that one.
    *
-   * Written as one query with two joins rather than a `LIKE`, so the candidate
-   * id is still matched exactly. `LIKE 'russell:plan:' || c.id || '%'` would
-   * also match a candidate whose id is a prefix of another one's, which is not
-   * possible today and is not a property worth depending on.
+   * **The redo arm did not exist, and that is the whole of why production
+   * stalled.** 09a591a added the redo key, the manifest that carries the
+   * failed run's reason, and the `applyPlan` branch that supersedes the dead
+   * specification — and then left the only query that hands a finished plan to
+   * `applyPlan` matching two shapes out of three. So `bin_fdc116329a2843289dcd`
+   * reached `COMPLETE` at 03:36Z on 2026-09-09 carrying a worker's real
+   * re-plan, nothing ever opened it, `nextLaunchable` kept reading the
+   * specification that had already failed three times, and `launch()` refused
+   * it every thirty seconds exactly as 6afeaaa had just taught it to. Three
+   * correct mechanisms in a row, and the chain was still dead, because the one
+   * between them selected nothing. §24's sentence at a fourth altitude: a
+   * mechanism nothing calls is not a mechanism.
    *
-   * `applyPlan` re-checks both conditions when it opens the bin, because this
-   * query and that call are not one statement.
+   * The redo arm's guard is `m.rowid = MAX(rowid) for that candidate` — the
+   * same condition `redoable()` uses to decide there is a redo to plan at all.
+   * It is what makes the arm stop matching: the moment the re-planned attempt
+   * launches, the mission this bin was planned from is no longer the newest,
+   * and the bin is never looked at again. A flag would have said the same
+   * thing and could disagree with the rows; this cannot.
+   *
+   * Written as one query with three joins rather than a `LIKE`, so the
+   * candidate id is still matched exactly. `LIKE 'russell:plan:' || c.id ||
+   * '%'` would also match a candidate whose id is a prefix of another one's,
+   * which is not possible today and is not a property worth depending on.
+   *
+   * `applyPlan` re-checks each arm's condition when it opens the bin, because
+   * this query and that call are not one statement.
    */
   const rows = await getDb().all<{ id: string }>(
     `SELECT b.id FROM bins b
@@ -909,6 +930,17 @@ async function finishedPlanBins(limit: number): Promise<string[]> {
         AND b.state IN ('COMPLETE','FAILED','CANCELLED')
         AND c.priority = 'EXPLORE'
         AND c.state = 'CAPTURED'
+     UNION
+     SELECT b.id FROM bins b
+       JOIN russell_missions m
+         ON b.created_by_id = 'russell:plan:' || m.candidate_id || ':redo:' || m.id
+       JOIN russell_candidates c ON c.id = m.candidate_id
+      WHERE b.completion_contract = 'RUSSELL_PLAN_V1'
+        AND b.state IN ('COMPLETE','FAILED','CANCELLED')
+        AND c.state = 'QUEUED'
+        AND m.rowid = (
+              SELECT MAX(m2.rowid) FROM russell_missions m2
+               WHERE m2.candidate_id = m.candidate_id)
       LIMIT ?`,
     [Math.max(1, limit)],
   );

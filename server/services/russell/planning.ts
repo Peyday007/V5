@@ -47,7 +47,8 @@ import { getDb } from '../../db/database.ts';
 import { parseJson } from '../../repos/util.ts';
 import { coverBeforeWork } from './coverage.ts';
 import { judge, type JudgmentInputs } from './judgment.ts';
-import { RESEARCH_WORK_CLASS } from './launch.ts';
+import { RESEARCH_WORK_CLASS, specificationKey } from './launch.ts';
+import { specificationsTried } from '../../repos/russellMissions.ts';
 import type { BinManifest, ExistingClaim, RussellCandidate } from '../../domain/types.ts';
 
 /** The one unit a planning bin asks for. */
@@ -931,6 +932,47 @@ export async function applyPlan(binId: string): Promise<ApplyPlanResult> {
      * project events, so this is visible without reading a model's output.
      */
     return { ok: false, reason: validated.reason, alreadyJudged: false, priority: null, launchable: false };
+  }
+
+  /*
+   * A repair that repeats the strategy that just failed is not a repair.
+   *
+   * §15 is explicit about both halves: no repair may reuse a search an earlier
+   * attempt already tried, and when the ladder runs out the honest outcome is
+   * "unresolved", recorded as such. `launch()` enforces the first half by
+   * refusing the specification — but a refusal there leaves the idea `QUEUED`
+   * with a launchable judgment nothing will ever launch, and this bin still
+   * the newest mission's re-plan, so the arm above would hand it back on every
+   * tick for ever. Silently stuck, which §24 forbids at every altitude.
+   *
+   * So Brain says the second half out loud. The idea is parked with what
+   * actually happened, the worker's plan is kept beside it as `proposedMission`
+   * because somebody paid for it, and `PARKED` is a state with a documented way
+   * back to `QUEUED` — a person's override — rather than a bin.
+   *
+   * Compared on the same key `launch()` refuses on, from the same helper, so
+   * the two can never disagree about what "already researched" means.
+   */
+  if (target.redo) {
+    const tried = await specificationsTried(candidate.id);
+    if (tried.includes(specificationKey(validated.spec.objective, validated.spec.whyNow))) {
+      const reason = 'planning this again produced the approach that has already been researched';
+      const parked = await recordJudgment({
+        candidateId: candidate.id,
+        state: 'PARKED',
+        // `PARKED` / `PARKED`, the same pair `judge()` writes for every other
+        // park. A parked idea still labelled `WORTH_DOING` would read to every
+        // projection as work waiting to start.
+        priority: 'PARKED',
+        reason,
+        judgment: {
+          decidedBy: 'WORKER_OBSERVATIONS',
+          redoOfMissionId: bin.createdById?.slice(bin.createdById.indexOf(PLAN_AFTER_FAILURE) + PLAN_AFTER_FAILURE.length) ?? null,
+          proposedMission: validated.spec,
+        },
+      });
+      return { ok: parked, reason, alreadyJudged: false, priority: 'PARKED', launchable: false };
+    }
   }
 
   // Brain's own answer, taken again rather than trusted from the bin: the
