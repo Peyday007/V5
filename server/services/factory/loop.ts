@@ -923,7 +923,27 @@ async function actOnVerdict(
 ): Promise<TickReport> {
   const gating = await gatingFindings(campaign.id);
 
-  if (verdict === 'PASS' && gating.length === 0) {
+  /*
+   * What decides completion is the reviewer's own severity, not the word it
+   * chose for the verdict.
+   *
+   * A reviewer is told that MINOR means a nit, and a good one will always find
+   * one — so requiring the literal verdict PASS makes a campaign that can never
+   * finish, which is §24's "waiting for something nobody can answer" at yet
+   * another altitude. Nothing here is the factory grading itself: BLOCKER and
+   * MAJOR are the reviewer's judgement, an open one of either still stops the
+   * campaign dead, and every remaining MINOR is carried into the artifact as a
+   * recorded limitation rather than quietly closed.
+   */
+  if (gating.length === 0 && verdict !== 'BLOCKED') {
+    const remaining = (await listFindings(campaign.id)).filter(
+      (finding) => finding.state === 'OPEN' || finding.state === 'REPAIR_QUEUED',
+    );
+    if (remaining.length > 0) {
+      report.notes.push(
+        `${remaining.length} non-gating finding(s) carried forward as recorded limitations`,
+      );
+    }
     return await advance(report, campaign, 'VERIFYING', 'final verification on the merged tree');
   }
 
