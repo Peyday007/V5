@@ -166,7 +166,6 @@ async function main(): Promise<void> {
         changeRequestId: changeRequest.id,
         projectId: changeRequest.projectId,
         baseSha: changeRequest.baseSha,
-        integrationBranch: `factory/campaign/${changeRequest.submissionKey.slice(0, 12)}`,
         laneTarget: INITIAL_LANE_TARGET,
         laneTargetReason: 'initial',
       });

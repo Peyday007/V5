@@ -93,7 +93,6 @@ describe('campaign briefing', () => {
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/projections',
       laneTarget: 3,
       laneTargetReason: 'initial',
     });

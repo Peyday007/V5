@@ -228,7 +228,6 @@ factoryRouter.post(
       changeRequestId: approved.id,
       projectId: approved.projectId,
       baseSha: approved.baseSha,
-      integrationBranch: `factory/campaign/${approved.submissionKey.slice(0, 12)}`,
       laneTarget: INITIAL_LANE_TARGET,
       laneTargetReason: 'initial',
     });

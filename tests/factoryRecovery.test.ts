@@ -72,7 +72,6 @@ async function makeCampaign(changeRequest: FactoryChangeRequest, laneTarget = 2)
     changeRequestId: changeRequest.id,
     projectId: fixture.project.id,
     baseSha: changeRequest.baseSha,
-    integrationBranch: `factory/${changeRequest.id}/integration`,
     laneTarget,
     laneTargetReason: 'initial',
   });

@@ -459,9 +459,22 @@ export interface EnsureCampaignInput {
   changeRequestId: string;
   projectId: string;
   baseSha: string;
-  integrationBranch: string;
   laneTarget: number;
   laneTargetReason: string;
+}
+
+/**
+ * A campaign's integration branch, from the campaign's own id.
+ *
+ * Derived here rather than chosen by a caller, because a caller chose one and it
+ * collided: the first version truncated the submission key to twelve characters,
+ * so `factory-recovery-drill` and `factory-recovery-drill-2` both became
+ * `factory/campaign/factory-reco` — and the second campaign's first tick failed
+ * with git refusing to check out a branch another worktree already held. A name
+ * that can collide is a name that will, and the id cannot.
+ */
+export function integrationBranchFor(campaignId: string): string {
+  return `factory/campaign/${campaignId}`;
 }
 
 /**
@@ -492,7 +505,7 @@ export async function ensureCampaign(
       input.changeRequestId,
       input.projectId,
       input.baseSha,
-      input.integrationBranch,
+      integrationBranchFor(id),
       input.laneTarget,
       input.laneTargetReason,
       at,

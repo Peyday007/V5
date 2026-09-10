@@ -74,7 +74,6 @@ describe('the pull request', () => {
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/pr-render',
       laneTarget: 1,
       laneTargetReason: 'initial',
     });

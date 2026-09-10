@@ -86,7 +86,6 @@ async function completeCampaign(): Promise<string> {
     changeRequestId: changeRequest.id,
     projectId: fixture.project.id,
     baseSha: changeRequest.baseSha,
-    integrationBranch: 'factory/campaign/writeback',
     laneTarget: 1,
     laneTargetReason: 'initial',
   });
@@ -227,7 +226,6 @@ describe('recordCampaignOutcome', () => {
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/unfinished',
       laneTarget: 1,
       laneTargetReason: 'initial',
     });

@@ -128,7 +128,6 @@ describe('driving a campaign to COMPLETE through the loop', () => {
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: headSha,
-      integrationBranch: 'factory/campaign/wiring-complete',
       laneTarget: 1,
       laneTargetReason: 'initial',
     });
@@ -207,7 +206,6 @@ describe('the tick actually runs recovery, not merely imports the module', () =>
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: headSha,
-      integrationBranch: 'factory/campaign/wiring-recovery',
       laneTarget: 1,
       laneTargetReason: 'initial',
     });
@@ -364,7 +362,6 @@ describe('the briefing, throughput and pull-request routes actually answer, not 
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: headSha,
-      integrationBranch: 'factory/campaign/wiring-http',
       laneTarget: 1,
       laneTargetReason: 'initial',
     });

@@ -163,7 +163,6 @@ describe('the contract', () => {
       changeRequestId: first.changeRequest.id,
       projectId: fixture.project.id,
       baseSha: first.changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/x',
       laneTarget: 3,
       laneTargetReason: 'initial',
     });
@@ -171,13 +170,15 @@ describe('the contract', () => {
       changeRequestId: second.changeRequest.id,
       projectId: fixture.project.id,
       baseSha: second.changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/x',
       laneTarget: 3,
       laneTargetReason: 'initial',
     });
     expect(one.created).toBe(true);
     expect(two.created).toBe(false);
     expect(two.campaign.id).toBe(one.campaign.id);
+    // The branch comes from the campaign's own id, so two campaigns can never
+    // collide on one — which they did when it was a truncated submission key.
+    expect(one.campaign.integrationBranch).toBe(`factory/campaign/${one.campaign.id}`);
   });
 
   it('refuses to approve an objective whose success is undefined', async () => {
@@ -298,7 +299,6 @@ describe('the planner', () => {
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/plan',
       laneTarget: 3,
       laneTargetReason: 'initial',
     });
@@ -381,7 +381,6 @@ describe('claiming', () => {
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/claim',
       laneTarget: 3,
       laneTargetReason: 'initial',
     });
@@ -556,7 +555,6 @@ describe('checkpoints', () => {
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/ck',
       laneTarget: 1,
       laneTargetReason: 'initial',
     });
@@ -625,7 +623,6 @@ describe('ownership and integration', () => {
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/integrate',
       laneTarget: 1,
       laneTargetReason: 'initial',
     });
@@ -693,7 +690,6 @@ describe('ownership and integration', () => {
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/merge',
       laneTarget: 1,
       laneTargetReason: 'initial',
     });
@@ -1003,7 +999,6 @@ describe('repairs', () => {
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/repairs',
       laneTarget: 2,
       laneTargetReason: 'initial',
     });
@@ -1074,7 +1069,6 @@ describe('recovery', () => {
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/orphan',
       laneTarget: 2,
       laneTargetReason: 'initial',
     });
@@ -1180,7 +1174,6 @@ describe('cycles', () => {
       changeRequestId: changeRequest.id,
       projectId: fixture.project.id,
       baseSha: changeRequest.baseSha,
-      integrationBranch: 'factory/campaign/cycle',
       laneTarget: 1,
       laneTargetReason: 'initial',
     });

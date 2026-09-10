@@ -58,7 +58,6 @@ async function buildCampaign(): Promise<FactoryCampaign> {
     changeRequestId: changeRequest.id,
     projectId: fixture.project.id,
     baseSha: changeRequest.baseSha,
-    integrationBranch: 'factory/campaign/view',
     laneTarget: 3,
     laneTargetReason: 'initial',
   });

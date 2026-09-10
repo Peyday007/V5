@@ -316,7 +316,6 @@ describe('throughputReport against real rows', () => {
         changeRequestId: changeRequest.id,
         projectId: fixture.project.id,
         baseSha: changeRequest.baseSha,
-        integrationBranch: 'factory/campaign/throughput-test',
         laneTarget: 4,
         laneTargetReason: 'initial',
       });
