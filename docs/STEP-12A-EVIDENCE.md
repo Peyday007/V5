@@ -7539,3 +7539,44 @@ here: the completed packet still shows two `RESEARCH_AUDIT` items `LEASED` (one
 at `attempt 9/2`), and its single requirement reads `coverage MISSING` while the
 packet is `COMPLETE` and its fragment `ACCEPTED`. Neither affects the filed
 document, the audit, the claims or the knowledge above.
+
+### The acceptance reading after it
+
+Run 34444177468, against `0058eb0`, reading production rows:
+
+```
+STEP 12A — composed: 17/21 PASS · 0 FAIL · 0 BLOCKED · 4 NOT_RUN · 1 DEFERRED (of 22 gates)
+A12_WRITEBACK   PASS   1 missions written back in the frozen acceptance chain
+A19_DELIVERY    PASS   35/35 mutations, each verified before and after a real restart;
+                       the deployed application tree is the one this acceptance read
+```
+
+Nothing FAILED and nothing is BLOCKED. The four `NOT_RUN` gates are each a
+scenario step that has not happened rather than a control that is broken, and
+the reporter says which in its own words:
+
+- `A07_PROBE_BOUNDS` — `0 of 1 probes completed inside their bounds in the
+  frozen acceptance chain`. The chain holds no probe; the idea was judged
+  worth doing rather than worth a cheap look first.
+- `A11_INDEPENDENT_AUDIT` — `no packet has recorded all three audit roles with
+  complete lineage`. Three roles did run in three distinct authenticated
+  sessions (`oat_e26611e232664dea9a7c`, `oat_8d3f654e8027455da69a`,
+  `oat_24b3e6e8b292454f9d3d`, none predicted), and the judge's submission
+  passed the live separation matrix — that is what let the verdict be stored
+  at all. The gate additionally requires `executor_account_id` on each pass,
+  and every pass in production carries a worker and a session with that column
+  empty, so its lineage query matches nothing. It is an evidence-completeness
+  fact about what was recorded, not an audit that did not happen, and it is
+  outside this correction.
+- `A13_AUTO_NEXT` — `0 of 1 automatic follow-on launches`. The packet settled
+  what it asked and the owner's instruction for this correction was explicit
+  that no follow-on was to be manufactured to satisfy the frozen scenario.
+- `A14_HUMAN_RESUME` — `no human decision has been carried out on a mission
+  that then continued`. All four Needs You requests in this chain are
+  `WITHDRAWN`, because Brain resolved the conditions they asked about — the
+  handoff answered the filing question the person had been asked. There was no
+  decision left for a person to make, which is the right outcome and not this
+  gate's.
+
+`A22_FAST_CHAT_ROUTING` remains `DEFERRED` by the owner and outside the
+denominator.
