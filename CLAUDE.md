@@ -898,6 +898,21 @@ a value the claimant does not supply.**
   the failure streak alone, so an account at its ceiling is never quarantined for
   being busy. Only failures and no-shows quarantine, and never a refusal however
   many arrive.
+
+  **The same sentence is true one level down, about bins, and it was not.**
+  `assignNextBin` charged a bin an attempt in the very statement that handed it
+  over, so a session refused by the audit independence guard still cost the bin
+  one of its assignments. In production one bin spent seventy-one of a hundred
+  that way — on arrivals Brain itself refused — and retired with its audit a
+  single role from done. **Eligibility is asked before the accounting now**,
+  through an injected `admit` hook exactly like `claimWork`'s, and a refusal
+  skips the candidate as cheaply as losing the compare-and-swap does: no
+  attempt, no lease, no generation. `bin_session_refusals` remembers the pairing
+  so the same session is not offered the same bin on a loop, and
+  `bins.dispatch_not_before` defers the *fire* — deliberately absent from
+  `DISPATCHABLE_SQL`, so the assigner ignores it and a fresh eligible session is
+  still handed the bin the moment it asks. None of it is a ceiling: nothing is
+  ever refused because of those rows, and the independence floor is untouched.
 - **Audit independence is execution lineage, not a role name.**
   `research_passes` records which worker, Routine, account and session produced
   each pass, and `services/research/independence.ts` checks the recorded lineage.

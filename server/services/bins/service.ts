@@ -37,6 +37,7 @@ import {
   confinementFor,
   countBinEvents,
   finishBin,
+  creditRefusedAssignments,
   getBin,
   heartbeatBin,
   listBins,
@@ -125,6 +126,68 @@ export type CheckInResult =
  * immediately and exits. If this were slow, the at-least-once trigger would be
  * expensive rather than merely redundant.
  */
+/**
+ * May this worker be handed this bin at all?
+ *
+ * The same admission rule `nextItemInBin` and the MCP claim path already use,
+ * asked one boundary earlier — at the moment the bin is *assigned*, which is
+ * the moment its attempt is charged.
+ *
+ * Three deliberate narrownesses:
+ *
+ *   - **Only work that is claimable right now counts.** A bin whose items are
+ *     all held by a live worker is not refused; that is somebody else's lease
+ *     running, not this session being ineligible, and the takeover path exists
+ *     for it.
+ *   - **A drained bin is never refused.** No open work means the holder should
+ *     be asking for completion, and a bin that could not be assigned could
+ *     never be completed either.
+ *   - **One admissible item is enough.** `auditAdmission` returns ok for every
+ *     work type that is not a research audit, so this can only ever refuse a
+ *     bin whose entire remaining work is audit roles this session may not take.
+ *
+ * It refuses, never decides *what* the worker gets: the item is still chosen by
+ * `claimWork` under the same hook, so this cannot let anything through that the
+ * later guard would refuse.
+ */
+export async function binAdmission(input: {
+  workerId: string;
+  principal: Principal;
+}): Promise<(bin: Bin) => Promise<{ ok: boolean; reason?: string }>> {
+  const admit = auditAdmission(
+    await lineageForWorker({
+      workerId: input.workerId,
+      credentialId: input.principal.credentialId,
+    }),
+  );
+  return async (bin: Bin): Promise<{ ok: boolean; reason?: string }> => {
+    const now = new Date().toISOString();
+    const items = await listWorkItemsForBin(confinementFor(bin));
+    const claimable = items.filter(
+      (item) =>
+        item.state === 'QUEUED' ||
+        (item.state === 'LEASED' && item.leaseExpiresAt !== null && item.leaseExpiresAt <= now),
+    );
+    if (claimable.length === 0) return { ok: true };
+
+    const reasons: string[] = [];
+    for (const item of claimable) {
+      const row = await getWorkItemRow(item.id);
+      if (!row) return { ok: true }; // Unreadable is not ineligible.
+      const verdict = await admit(row);
+      if (verdict.ok) return { ok: true };
+      if (verdict.reason) reasons.push(`${item.workType}: ${verdict.reason}`);
+    }
+    return {
+      ok: false,
+      reason:
+        reasons.length > 0
+          ? reasons.join(' ')
+          : 'No item this bin still has open is admissible for this session.',
+    };
+  };
+}
+
 export async function checkIn(input: {
   principal: Principal;
   workerId: string;
@@ -151,6 +214,13 @@ export async function checkIn(input: {
     projectIds: scopes.map((scope) => scope.projectId),
     sessionRef: input.sessionRef ?? null,
     leaseMs: input.leaseMs,
+    /*
+     * Asked before the assignment charges an attempt. A bin whose only open
+     * work this session may not take is skipped, costs the bin nothing, and
+     * earns a recorded refusal plus a fire backoff — so the next arrival is a
+     * fresh session rather than the same one a second later.
+     */
+    admit: await binAdmission({ workerId: input.workerId, principal: input.principal }),
   });
   if (!assigned) return { assigned: false, reason: 'NO_READY_BINS' };
 
@@ -563,6 +633,51 @@ export interface ReconcileReport {
  * stalled bin reported as finished.
  */
 export async function reconcileBins(projectId?: string): Promise<ReconcileReport> {
+  /*
+   * Correct the accounting before judging the bin by it.
+   *
+   * A bin charged for assignments Brain refused itself was being measured
+   * against a number that overstated what it had spent — and in production that
+   * number is what retired it. So the credit runs first, over parked bins too:
+   * the bin at 100/100 was parked *because* of the miscount, and a pass that
+   * only looked at live bins could never reach the one the defect stranded.
+   *
+   * `creditRefusedAssignments` is derived from append-only events and is
+   * idempotent per generation, so this is safe to run on every tick for ever.
+   */
+  const chargeable = await listBins({
+    projectId,
+    states: ['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN'],
+    limit: 500,
+  });
+  for (const bin of chargeable) {
+    const credited = await creditRefusedAssignments(bin.id);
+    if (credited === 0) continue;
+
+    /*
+     * And the answering transition. §24: a state that says "waiting for a
+     * person" which that person cannot resolve is not waiting, it is stuck —
+     * and this one was worse, because the condition it escalated on was
+     * Brain's own arithmetic. Having corrected it, Brain answers the park it
+     * caused, through the same guarded transition an operator uses. A bin
+     * parked for any other reason is untouched: this needs the credit to have
+     * actually moved the number, and `reopenParkedBin` still refuses anything
+     * whose contract answers HUMAN.
+     */
+    if (bin.state !== 'NEEDS_HUMAN') continue;
+    const now = await getBin(bin.id);
+    if (!now || now.state !== 'NEEDS_HUMAN' || now.attemptCount >= now.maxAttempts) continue;
+    await reopenParkedBin({
+      binId: now.id,
+      operator: 'brain:admission-accounting',
+      reason:
+        `${credited} assignment(s) were charged to this bin for arrivals Brain's own audit ` +
+        'independence guard refused. Those are not attempts the bin spent, they have been ' +
+        'credited back from the recorded events, and the budget that escalated it is no longer ' +
+        'exhausted. Nothing was reset: every refusal keeps its row.',
+    });
+  }
+
   const bins = await listBins({
     projectId,
     states: ['DRAFT', 'READY', 'LEASED'],

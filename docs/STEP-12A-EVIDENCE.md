@@ -7184,3 +7184,103 @@ own comment rather than posing as a caught defect.
 
 No migration. No evidence gate, envelope, authority, ceiling or fleet setting
 changed.
+
+---
+
+## 75. An assignment Brain refuses itself is not an attempt the bin spent — 2026-09-10
+
+§74 got the audit round right and left the chain running one role per hour
+against a bin that was quietly bleeding its budget. Then it stopped:
+
+```
+bin_75bea12e15534ba4b93f  NEEDS_HUMAN  attempts 100/100
+```
+
+Between 21:32 and 23:47 the bin burned 71 assignments. Every one of them was the
+same event: the fleet's Routine arrived on the session that had already
+performed a role in that audit round, `auditAdmission` correctly withheld the
+work, the worker released — and the bin had already been charged.
+
+I first reported this as fleet capacity with two remedies, one of them binding a
+second account, and put the choice to the product owner. That was wrong, and the
+correction is recorded rather than quietly applied: **repeatedly assigning a bin
+to a session that cannot take its work is incorrect scheduling, and charging the
+bin for it is incorrect accounting.** Neither is a shortage of workers. A fleet
+of ten would have made the same defect ten times faster.
+
+### Eligibility before accounting
+
+`assignNextBin` had `attempt_count = attempt_count + 1` inside the
+compare-and-swap that hands the bin over, and nothing had asked whether this
+worker could take the bin's work. The nearest question was one boundary later,
+when the holder requested an *item* — by which point the attempt was spent.
+
+So the repository gained the hook §23 already established for `claimWork`, and
+for the same reason: the question reads work items, execution lineage and the
+audit round, and the repository must not learn any of that. `binAdmission`
+supplies it from the service, over the same `auditAdmission` the claim path
+uses. A refusal skips the candidate exactly as losing the race does — no
+attempt, no lease, no generation, no history.
+
+It can only ever refuse a bin whose entire claimable remainder is audit roles
+this session may not take: `auditAdmission` returns ok for every other work
+type, a drained bin is never refused (it needs completing), and one admissible
+item is enough.
+
+### Remembering the refusal, and not spinning on it
+
+Two rows, both pure backoff and neither a ceiling:
+
+- `bin_session_refusals` (bin, session) counts every refusal, keeps the first
+  one, and carries Brain's own reason — the pair and the dimension, never the
+  credential. It is a pre-filter, not the authority: the live check still
+  decides, so an expired row costs one re-check rather than a wrong answer.
+- `bins.dispatch_not_before` defers the next *fire*. It is deliberately not part
+  of `DISPATCHABLE_SQL`, so `assignNextBin` never reads it — a fresh eligible
+  session arriving for any reason is handed the bin immediately, and only the
+  starting of new activations waits.
+
+The loop that would otherwise replace the old one is the cheap path: a
+pre-filtered skip costs nothing, so without pushing the fire backoff out there
+too, the dispatcher would fire, be skipped for free, and fire again next tick
+for ever. Both refusal paths defer it.
+
+### Recovering the bin the defect stranded
+
+The same rule applied backwards, derived entirely from append-only events: an
+assignment qualifies for a credit when its generation recorded a
+`BIN_ITEM_WITHHELD` refused by admission and recorded no `BIN_ITEM_CLAIMED`.
+That is precisely "the worker arrived, Brain handed it nothing, and it was
+Brain's own guard that said no". A generation that claimed something keeps its
+attempt however it ended, because it did get the chance.
+
+`creditRefusedAssignments` runs from `reconcileBins`, over parked bins as well —
+the stranded bin was parked *because* of the miscount, so a pass that only
+looked at live bins could never reach it. It is idempotent per generation
+through `creditBinAttempt`'s deterministic id, so it can run on every tick for
+ever. And the park gets its answering transition: Brain corrected the arithmetic
+that caused the escalation, so Brain answers it, through the same guarded
+`reopenParkedBin` an operator uses, which still refuses anything whose contract
+says `HUMAN`. Nothing is reset: every one of the 71 refusals keeps its row.
+
+### Verification
+
+Nine tests in `tests/admissionAccounting.test.ts`, all driven through the real
+`checkIn` → `nextItemInBin` → `completeWork` path with one worker and three
+authenticated sessions — production's shape exactly.
+
+Session A performs PRIMARY. Twelve further check-ins from A are refused and cost
+the bin nothing. The refusal is recorded, counted, and backed off further each
+time. The bin stops being fireable while A is the only session Brain has seen —
+and a fresh session asking in that same instant is handed it. B takes
+ADVERSARIAL, C takes JUDGE, three distinct sessions, three assignments for three
+roles. Reverting the hook alone fails five of the nine.
+
+The recovery is tested from the stranded shape: 71 refused generations plus one
+that claimed something, at 100/100 and parked. It credits exactly 71, reopens
+the bin, keeps all 72 withheld events, and credits nothing further however many
+times it runs.
+
+Migrations 034/025. No evidence gate, envelope, authority or fleet setting
+changed, and the three-distinct-session floor is untouched — this changes who is
+*offered* work, never who is allowed to do it.

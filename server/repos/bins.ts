@@ -139,6 +139,7 @@ export function mapBin(row: BinRow): Bin {
     budgetUnits: row.budget_units,
     attemptCount: row.attempt_count,
     maxAttempts: row.max_attempts,
+    dispatchNotBefore: row.dispatch_not_before ?? null,
     leaseGeneration: row.lease_generation,
     leaseId: row.lease_id,
     workerId: row.worker_id,
@@ -617,6 +618,15 @@ export async function creditBinAttempt(input: {
   key: string;
   orchestrationId?: string | null;
   workItemId?: string | null;
+  /**
+   * Why the attempt is being given back, in Brain's own words.
+   *
+   * There are two reasons and they are different facts: an assignment that
+   * completed a work item achieved something, and an assignment Brain refused
+   * itself never got the chance to. Recording them identically would leave the
+   * ledger unable to say which.
+   */
+  reason?: string;
 }): Promise<boolean> {
   const id = `bev_credit_${sha256Hex(`${input.binId}\u0000${input.key}`).slice(0, 32)}`;
   const at = binNow();
@@ -636,7 +646,8 @@ export async function creditBinAttempt(input: {
         input.workItemId ?? null,
         toJson({ key: input.key }),
         'CREDITED',
-        'An assignment that completed a work item is not an assignment that achieved nothing.',
+        input.reason ??
+          'An assignment that completed a work item is not an assignment that achieved nothing.',
       ],
     );
     inserted = result.changes;
@@ -652,6 +663,56 @@ export async function creditBinAttempt(input: {
     [at, input.binId],
   );
   return updated.changes === 1;
+}
+
+/**
+ * Give back the attempts that were charged for assignments Brain refused.
+ *
+ * The forward fix stops this happening: `assignNextBin` asks the admission hook
+ * before the swap that charges the attempt, so a refused session is skipped for
+ * free. This is the same rule applied backwards, to bins that were charged
+ * before it existed — and it is derived entirely from `bin_events`, which is
+ * append-only, so nothing is reset, rewritten or deleted.
+ *
+ * An assignment qualifies when its generation recorded a `BIN_ITEM_WITHHELD`
+ * refused by admission and recorded no `BIN_ITEM_CLAIMED`. That is precisely
+ * "the worker arrived, Brain handed it nothing, and it was Brain's own guard
+ * that said no" — the seventy-one in production. A generation that claimed
+ * something is left alone however it ended, because it did get the chance.
+ *
+ * Exactly once per generation, through `creditBinAttempt`'s deterministic id:
+ * running it on every tick for ever credits the same assignment once.
+ */
+export async function creditRefusedAssignments(binId: string): Promise<number> {
+  const rows = await getDb().all<{ lease_generation: number }>(
+    `SELECT DISTINCT w.lease_generation AS lease_generation
+       FROM bin_events w
+      WHERE w.bin_id = ?
+        AND w.event_type = 'BIN_ITEM_WITHHELD'
+        AND w.outcome = 'REFUSED_BY_ADMISSION'
+        AND w.lease_generation IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM bin_events c
+           WHERE c.bin_id = w.bin_id
+             AND c.event_type = 'BIN_ITEM_CLAIMED'
+             AND c.lease_generation = w.lease_generation
+        )`,
+    [binId],
+  );
+
+  let credited = 0;
+  for (const row of rows) {
+    const ok = await creditBinAttempt({
+      binId,
+      key: `admission-refusal:${row.lease_generation}`,
+      reason:
+        'An assignment Brain refused itself is not an attempt the bin spent. The session that ' +
+        'arrived had already performed a role in this audit round, so the independence guard ' +
+        'withheld the work — correctly, and at no cost to the bin.',
+    });
+    if (ok) credited += 1;
+  }
+  return credited;
 }
 
 /** Why a reopen was refused, or that it happened. */
@@ -740,7 +801,10 @@ export async function reopenNeedsHumanBin(input: {
             lease_generation = lease_generation + 1,
             lease_id = NULL, worker_id = NULL, lease_expires_at = NULL,
             leased_at = NULL, heartbeat_at = NULL,
-            terminal_reason = NULL, completed_at = NULL
+            terminal_reason = NULL, completed_at = NULL,
+            -- The escalation has been answered, so the backoff that preceded it
+            -- is history too. Nothing about the refusals themselves is touched.
+            dispatch_not_before = NULL
       WHERE id = ? AND state = 'NEEDS_HUMAN' AND lease_generation = ?`,
     [at, at, input.binId, input.leaseGeneration],
   );
@@ -820,6 +884,185 @@ export async function markBinReady(id: string): Promise<Bin | null> {
 /* Assignment — the compare-and-swap                                          */
 /* ------------------------------------------------------------------------- */
 
+/* ------------------------------------------------------------------------- */
+/* Admission refusals, and the backoff they earn                              */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * How long before a refused session is worth asking about this bin again.
+ *
+ * Not a ceiling and not a quota: nothing is ever refused *because* of these
+ * numbers, and no work is lost when they elapse. They decide only how often
+ * Brain re-asks a question whose answer it has just been given, and the last
+ * value repeats for ever, so a permanently ineligible pairing settles at one
+ * check every half hour rather than one every ten seconds.
+ */
+const REFUSAL_BACKOFF_MS = [60_000, 120_000, 300_000, 900_000, 1_800_000] as const;
+
+export function refusalBackoffMs(refusals: number): number {
+  const index = Math.min(Math.max(1, refusals), REFUSAL_BACKOFF_MS.length) - 1;
+  return REFUSAL_BACKOFF_MS[index]!;
+}
+
+export interface BinSessionRefusal {
+  binId: string;
+  sessionRef: string;
+  firstAt: string;
+  lastAt: string;
+  refusals: number;
+  retryAt: string;
+  reason: string;
+}
+
+/** Every session this bin has refused, newest refusal first. Read-only. */
+export async function listSessionRefusals(binId: string): Promise<BinSessionRefusal[]> {
+  const rows = await getDb().all<{
+    bin_id: string;
+    session_ref: string;
+    first_at: string;
+    last_at: string;
+    refusals: number;
+    retry_at: string;
+    reason: string;
+  }>(
+    `SELECT * FROM bin_session_refusals WHERE bin_id = ? ORDER BY last_at DESC, session_ref`,
+    [binId],
+  );
+  return rows.map((row) => ({
+    binId: row.bin_id,
+    sessionRef: row.session_ref,
+    firstAt: row.first_at,
+    lastAt: row.last_at,
+    refusals: row.refusals,
+    retryAt: row.retry_at,
+    reason: row.reason,
+  }));
+}
+
+/**
+ * Is this session inside the backoff this bin already gave it?
+ *
+ * A pre-filter and never the authority. The live admission check still runs
+ * whenever this says no, and it is what actually decides — so an expired row
+ * costs one re-check rather than a wrong answer, and a session that has become
+ * eligible is never held out longer than the backoff.
+ */
+async function insideRefusalBackoff(
+  binId: string,
+  sessionRef: string,
+  now: string,
+): Promise<string | null> {
+  const row = await getDb().get<{ retry_at: string }>(
+    'SELECT retry_at FROM bin_session_refusals WHERE bin_id = ? AND session_ref = ?',
+    [binId, sessionRef],
+  );
+  if (!row || row.retry_at <= now) return null;
+  return row.retry_at;
+}
+
+/**
+ * Do not spend a fire on this bin before `until`.
+ *
+ * Only ever moves the point forward, so two callers racing settle on the later
+ * one and neither can shorten a backoff the other set. Read by the dispatcher's
+ * `FIREABLE_SQL` and by nothing else — the assigner does not consult it, so the
+ * bin stays instantly available to any eligible session that turns up.
+ */
+async function deferFire(binId: string, until: string): Promise<void> {
+  await getDb().run(
+    `UPDATE bins
+        SET dispatch_not_before = ?, updated_at = ?
+      WHERE id = ? AND (dispatch_not_before IS NULL OR dispatch_not_before < ?)`,
+    [until, binNow(), binId, until],
+  );
+}
+
+/**
+ * Write down that this bin refused this session, and when to ask again.
+ *
+ * Append-in-place: the row keeps its first refusal, counts every one since, and
+ * carries Brain's own reason. §5 — the history of a refusal is the evidence
+ * that the guard did its job, and collapsing it would leave seventy-one
+ * refusals looking like one.
+ *
+ * The bin's fire backoff moves with it. Deliberately the *first* step of the
+ * ladder rather than the session's current one: a bin must stop being fired at
+ * on a tight loop, and must not become hard to reach for a session that could
+ * take it.
+ */
+export async function recordSessionRefusal(input: {
+  binId: string;
+  sessionRef: string;
+  reason: string;
+  projectId?: string | null;
+  orchestrationId?: string | null;
+  workerId?: string | null;
+}): Promise<BinSessionRefusal> {
+  const db = getDb();
+  const now = binNow();
+  const existing = await db.get<{ refusals: number; first_at: string }>(
+    'SELECT refusals, first_at FROM bin_session_refusals WHERE bin_id = ? AND session_ref = ?',
+    [input.binId, input.sessionRef],
+  );
+  const refusals = (existing?.refusals ?? 0) + 1;
+  const retryAt = plusMs(now, refusalBackoffMs(refusals));
+  const reason = bounded(input.reason, MAX_REASON_CHARS) ?? 'refused by admission';
+
+  if (existing) {
+    await db.run(
+      `UPDATE bin_session_refusals
+          SET last_at = ?, refusals = ?, retry_at = ?, reason = ?
+        WHERE bin_id = ? AND session_ref = ?`,
+      [now, refusals, retryAt, reason, input.binId, input.sessionRef],
+    );
+  } else {
+    await db.run(
+      `INSERT INTO bin_session_refusals
+         (bin_id, session_ref, first_at, last_at, refusals, retry_at, reason)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT DO NOTHING`,
+      [input.binId, input.sessionRef, now, now, refusals, retryAt, reason],
+    );
+  }
+
+  /*
+   * And stop spending fires on it until then.
+   *
+   * The same instant as the session's own retry point, because in a fleet whose
+   * arriving session is not knowable in advance, firing earlier produces the
+   * refused session again. It costs nothing: the assigner ignores this column,
+   * so a session that *can* take the bin is handed it the moment it asks.
+   */
+  await deferFire(input.binId, retryAt);
+
+  /*
+   * The ledger entry. `BIN_ITEM_WITHHELD` records that a *holder* was handed
+   * nothing; this records that a bin was never handed over at all, which is a
+   * different fact with a different remedy and was previously invisible.
+   */
+  await recordBinEvent({
+    eventType: 'BIN_ASSIGNMENT_REFUSED',
+    binId: input.binId,
+    projectId: input.projectId ?? null,
+    orchestrationId: input.orchestrationId ?? null,
+    workerId: input.workerId ?? null,
+    sessionRef: input.sessionRef,
+    outcome: 'REFUSED_BY_ADMISSION',
+    reason,
+    measures: { refusals, retryAt, attemptsCharged: 0 },
+  });
+
+  return {
+    binId: input.binId,
+    sessionRef: input.sessionRef,
+    firstAt: existing?.first_at ?? now,
+    lastAt: now,
+    refusals,
+    retryAt,
+    reason,
+  };
+}
+
 export interface AssignBinInput {
   /** From the authenticated principal. Never from anything the caller sent. */
   workerId: string;
@@ -829,6 +1072,20 @@ export interface AssignBinInput {
   /** The provider's own session identity, for telemetry only. Never authority. */
   sessionRef?: string | null;
   leaseMs?: number;
+  /**
+   * May this worker be given this bin at all — asked *before* the swap that
+   * charges it an attempt.
+   *
+   * Injected for the reason §23 gives for `claimWork`'s hook: the question is a
+   * service-layer one (it reads work items, execution lineage and the audit
+   * round) and the repository must not learn any of that. It is optional, so
+   * every existing caller behaves exactly as before.
+   *
+   * A refusal here is Brain refusing itself. It consumes no attempt, no lease,
+   * no generation and no history — the candidate is simply skipped, exactly as
+   * losing the compare-and-swap skips it.
+   */
+  admit?: (bin: Bin) => Promise<{ ok: boolean; reason?: string }>;
 }
 
 export interface AssignedBin {
@@ -885,8 +1142,28 @@ export const DISPATCHABLE_SQL =
   "((state = 'READY' OR (state = 'LEASED' AND lease_expires_at <= ?))" +
   ' AND attempt_count < max_attempts)';
 
+/**
+ * The dispatcher's extra question, on top of `DISPATCHABLE_SQL`.
+ *
+ * "May the assigner hand this out" and "may Brain spend a fire on it right
+ * now" are different questions, and conflating them is what produced a tight
+ * loop in production: a bin whose only work the arriving session could not take
+ * stayed perfectly assignable — which is correct, another session could take it
+ * — and the dispatcher therefore fired for it again every tick.
+ *
+ * So the backoff lives here and nowhere else. `assignNextBin` never reads it,
+ * which is the whole point: a fresh eligible session arriving for any reason is
+ * handed the bin immediately, and only the *starting* of new activations waits.
+ *
+ * One `?`, bound to now, matching `DISPATCHABLE_SQL`'s shape.
+ */
+export const FIREABLE_SQL = '(dispatch_not_before IS NULL OR dispatch_not_before <= ?)';
+
 /** The same question asked of a row already in memory. */
 export function isDispatchable(bin: Bin, now: string = binNow()): boolean {
+  // The fire backoff, asked of the dispatcher's own readers only. See
+  // `FIREABLE_SQL`.
+  if (bin.dispatchNotBefore !== null && bin.dispatchNotBefore > now) return false;
   // Out of attempts is out of work. A bin the assigner will refuse must not
   // earn an activation: firing at it spends the routine's limited budget to
   // start a worker that will be handed nothing. `reconcileBins` is what turns
@@ -903,12 +1180,13 @@ export function isDispatchable(bin: Bin, now: string = binNow()): boolean {
  * them. Bounded: the dispatcher reads a page, not the world.
  */
 export async function listDispatchableBins(limit = 200): Promise<Bin[]> {
+  const now = binNow();
   const rows = await getDb().all<BinRow>(
     `SELECT * FROM bins
-      WHERE ${DISPATCHABLE_SQL}
+      WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL}
       ORDER BY priority DESC, created_at, rowid
       LIMIT ?`,
-    [binNow(), Math.min(500, Math.max(1, limit))],
+    [now, now, Math.min(500, Math.max(1, limit))],
   );
   return rows.map(mapBin);
 }
@@ -937,6 +1215,52 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
     if (candidates.length === 0) return null;
 
     for (const row of candidates) {
+      /*
+       * Eligibility first, accounting second. This ordering is the whole fix.
+       *
+       * `attempt_count = attempt_count + 1` lives in the swap below, so asking
+       * afterwards — or asking at the *next* boundary, when the worker requests
+       * an item — meant a bin was charged for every arrival Brain then refused
+       * itself. Production spent seventy-one of one bin's hundred assignments
+       * that way, on a session that had already performed a role in the audit
+       * round and could not correctly be given another.
+       *
+       * Asked here, a refusal is indistinguishable from losing the race: the
+       * candidate is skipped and nothing about the bin changes except the
+       * refusal Brain writes down about itself.
+       */
+      if (input.admit) {
+        const sessionRef = input.sessionRef ?? null;
+        if (sessionRef) {
+          const backoff = await insideRefusalBackoff(row.id, sessionRef, now);
+          if (backoff) {
+            /*
+             * Skipped without re-asking — and the fire backoff is pushed out
+             * again, because this branch is exactly where a loop would live
+             * otherwise: the pre-filter is cheap, so without this the
+             * dispatcher would fire, be skipped for free, and fire again on the
+             * next tick for ever.
+             */
+            await deferFire(row.id, backoff);
+            continue;
+          }
+        }
+        const verdict = await input.admit(mapBin(row));
+        if (!verdict.ok) {
+          if (sessionRef) {
+            await recordSessionRefusal({
+              binId: row.id,
+              sessionRef,
+              reason: verdict.reason ?? 'No open item in this bin is admissible for this session.',
+              projectId: row.project_id,
+              orchestrationId: row.orchestration_id,
+              workerId: input.workerId,
+            });
+          }
+          continue;
+        }
+      }
+
       const leaseId = newId('bls');
       const at = binNow();
       const expires = plusMs(at, leaseMs);
@@ -959,6 +1283,9 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
                 lease_expires_at = ?,
                 lease_renewals = 0,
                 attempt_count = attempt_count + 1,
+                -- Somebody eligible took it, so the fire backoff has done its
+                -- job and must not outlive the condition that set it.
+                dispatch_not_before = NULL,
                 updated_at = ?
           WHERE id = ?
             AND lease_generation = ?

@@ -3863,6 +3863,7 @@ export interface BinRow {
   budget_units: number | null;
   attempt_count: number;
   max_attempts: number;
+  dispatch_not_before: string | null;
   lease_generation: number;
   lease_id: string | null;
   worker_id: string | null;
@@ -3912,6 +3913,15 @@ export interface Bin {
   budgetUnits: number | null;
   attemptCount: number;
   maxAttempts: number;
+  /**
+   * When Brain may next spend a *fire* on this bin, or null for now.
+   *
+   * Set when an arriving session was refused by an admission guard, so the
+   * dispatcher stops starting activations that cannot take the work. It is
+   * deliberately not part of `DISPATCHABLE_SQL`: the assigner ignores it, so a
+   * fresh eligible session arriving for any reason still gets the bin at once.
+   */
+  dispatchNotBefore: string | null;
   /** The fencing token. Advances on every assignment and every cancellation. */
   leaseGeneration: number;
   leaseId: string | null;
