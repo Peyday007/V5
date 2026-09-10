@@ -288,7 +288,35 @@ export async function ensureWorktree(
     ? ['worktree', 'add', options.path, options.branch]
     : ['worktree', 'add', '-b', options.branch, options.path, options.baseSha];
   await gitOrThrow(repoRoot, args);
+  prepareWorktree(repoRoot, options.path);
   return { path: options.path, branch: options.branch, baseSha: options.baseSha };
+}
+
+/**
+ * Make a fresh worktree able to run the repository's own commands.
+ *
+ * A git worktree contains tracked files only, so a JavaScript project's
+ * `node_modules` is absent from every one of them — and a unit whose verification
+ * is `npm run typecheck` would fail for a reason that has nothing to do with its
+ * change. Installing per worktree would cost minutes and gigabytes per lane, so
+ * the dependency tree is linked rather than copied.
+ *
+ * A symlink rather than a copy is also the honest arrangement: the worktree is
+ * execution scratch, and what a worker is allowed to change is its tracked files.
+ * Nothing in a campaign ever writes to the linked tree.
+ */
+export function prepareWorktree(repoRoot: string, worktreePath: string): void {
+  const source = path.join(repoRoot, 'node_modules');
+  const target = path.join(worktreePath, 'node_modules');
+  if (!fs.existsSync(source)) return;
+  if (fs.existsSync(target)) return;
+  try {
+    fs.symlinkSync(source, target, 'junction');
+  } catch {
+    // A platform or permission that refuses the link leaves the worktree without
+    // dependencies, which its verification commands will report plainly. Better
+    // than a half-copied tree that fails in a way nobody can read.
+  }
 }
 
 export async function listWorktrees(
