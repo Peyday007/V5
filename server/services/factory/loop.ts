@@ -79,7 +79,7 @@ import {
 } from './repair.ts';
 import { assembleDeliverable } from './assemble.ts';
 import { planCampaign } from './architect.ts';
-import { recoverCampaign } from './recovery.ts';
+import { recoverAll, recoverCampaign, type RecoveryReport } from './recovery.ts';
 import { listCampaignsPendingOutcome, recordCampaignOutcome } from './writeback.ts';
 
 export interface TickOptions {
@@ -140,6 +140,25 @@ const DEFAULT_MAX_REVIEW_ROUNDS = 4;
  */
 const HELD_TICK_WAIT_MS = 20_000;
 const MAX_HELD_TICKS = 60;
+
+/** The one sentence a recovery report becomes on a tick's notes, or nothing if it found no mess to clean up. */
+function describeRecovery(recovery: RecoveryReport): string | null {
+  if (
+    recovery.sessionsClosed === 0 &&
+    recovery.leasesReclaimed === 0 &&
+    recovery.worktreesPruned === 0 &&
+    !recovery.stateRederived
+  ) {
+    return null;
+  }
+  return (
+    `recovery: ${recovery.sessionsClosed} session(s) closed, ${recovery.leasesReclaimed} lease(s) reclaimed, ` +
+    `${recovery.worktreesPruned} worktree(s) pruned` +
+    (recovery.stateRederived
+      ? `; state re-derived ${recovery.stateRederived.from} -> ${recovery.stateRederived.to}`
+      : '')
+  );
+}
 
 /* ------------------------------------------------------------------------- */
 /* The tick                                                                   */
@@ -231,20 +250,8 @@ async function runTick(
   // a tick that should try to make progress.
   try {
     const recovery = await recoverCampaign(campaignId, { repoRoot });
-    if (
-      recovery.sessionsClosed > 0 ||
-      recovery.leasesReclaimed > 0 ||
-      recovery.worktreesPruned > 0 ||
-      recovery.stateRederived
-    ) {
-      notes.push(
-        `recovery: ${recovery.sessionsClosed} session(s) closed, ${recovery.leasesReclaimed} lease(s) reclaimed, ` +
-          `${recovery.worktreesPruned} worktree(s) pruned` +
-          (recovery.stateRederived
-            ? `; state re-derived ${recovery.stateRederived.from} -> ${recovery.stateRederived.to}`
-            : ''),
-      );
-    }
+    const note = describeRecovery(recovery);
+    if (note) notes.push(note);
   } catch (error: unknown) {
     const detail = error instanceof Error ? error.message : String(error);
     notes.push(`recovery failed: ${detail.slice(0, 300)}`);
@@ -1291,6 +1298,25 @@ export async function runCampaign(
  * calls: `tickCampaign` still recovers it (see the terminal-state branch in
  * `runTick`), but only if something hands it that campaign's id. This is
  * that something. What a scheduled dispatcher would call.
+ *
+ * Before any campaign is individually ticked, `recoverAll` runs once across
+ * every live campaign — a dead process's mess (a `RUNNING` session with no
+ * live lease, an expired unit lease, an undisposed worktree, a campaign state
+ * describing a stage nothing underneath it supports) is cleared for the whole
+ * batch up front, rather than rediscovered one campaign at a time as the loop
+ * below happens to reach each in turn. `recoverAll` claims and releases each
+ * campaign's own tick around its recovery, so it can never race a dispatcher
+ * that is genuinely mid-tick on that campaign elsewhere — it simply leaves
+ * that one for its own tick to recover, exactly as before. This is additional
+ * to, not instead of, the per-campaign recovery `runTick` still carries for a
+ * campaign ticked on its own (the caller most tests use, and what
+ * `tests/factoryWiring.test.ts` pins): running both is safe because recovery
+ * is idempotent, and the second pass costs nothing when the first already
+ * found everything — it is what turns a `recovery:` note here into a report
+ * of what the bulk pass did rather than a duplicate of it. A bulk-pass
+ * failure is swallowed rather than thrown: it must never take an
+ * otherwise-healthy batch down with it, since each campaign's own tick still
+ * carries its guarded recovery as a fallback.
  */
 export async function tickAllCampaigns(options: TickOptions = {}): Promise<TickReport[]> {
   const { listLiveCampaigns } = await import('../../repos/factory.ts');
@@ -1298,9 +1324,25 @@ export async function tickAllCampaigns(options: TickOptions = {}): Promise<TickR
     listLiveCampaigns(),
     listCampaignsPendingOutcome(),
   ]);
+
+  const repoRoot = options.repoRoot ?? FACTORY_DEFAULT_REPO_ROOT;
+  const bulkRecoveryNotes = new Map<string, string>();
+  try {
+    for (const recovery of await recoverAll({ repoRoot })) {
+      const note = describeRecovery(recovery);
+      if (note) bulkRecoveryNotes.set(recovery.campaignId, note);
+    }
+  } catch {
+    // Left empty on purpose: an unrecovered batch still ticks, and each
+    // campaign's own tick still runs `recoverCampaign` for itself.
+  }
+
   const reports: TickReport[] = [];
   for (const campaign of [...live, ...pendingOutcome]) {
-    reports.push(await tickCampaign(campaign.id, options));
+    const report = await tickCampaign(campaign.id, options);
+    const bulkNote = bulkRecoveryNotes.get(campaign.id);
+    if (bulkNote && !report.tickHeld) report.notes.push(bulkNote);
+    reports.push(report);
   }
   return reports;
 }
