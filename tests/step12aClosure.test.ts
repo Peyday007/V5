@@ -44,7 +44,14 @@ import {
 } from '../server/repos/bins.ts';
 import { checkIn } from '../server/services/bins/service.ts';
 import { createRun } from '../server/repos/runs.ts';
-import { createOrchestration, updateOrchestration } from '../server/repos/research.ts';
+import {
+  createOrchestration,
+  updateOrchestration,
+  startPass,
+  finishPass,
+  getPass,
+} from '../server/repos/research.ts';
+import { recoverExecutionLineage } from '../server/services/dispatch/lineageRecovery.ts';
 import { enqueueWork, getWorkItem, claimWork } from '../server/repos/workQueue.ts';
 import { reconcileTerminalPackets } from '../server/services/research/packetRunner.ts';
 import type { ExistingClaim, Principal } from '../server/domain/types.ts';
@@ -341,20 +348,13 @@ describe('the executing account is observed from the dispatch that fired the ses
     };
   }
 
-  it('records the account from the fire, where the binding alone cannot say', async () => {
-    const { workerId, routineId, accountId } = await twoRoutinesOneWorker();
-
-    // Two bindings, so the static lookup is ambiguous and fails closed. That is
-    // correct and it is exactly why every production pass had a null account.
-    const beforeArrival = await lineageForWorker({ workerId, credentialId: 'oat_never_seen' });
-    expect(beforeArrival.accountId).toBeNull();
-    expect(beforeArrival.routineId).toBeNull();
-
+  /** A ready bin Brain has fired one named Routine for. */
+  async function firedBin(routineId: string, accountId: string, title: string) {
     const bin = await createBin({
       projectId,
       layerId,
       kind: 'DETERMINISTIC_CHECK',
-      title: 'A bin to be fired for',
+      title,
       objective: 'Arrive and take it.',
       manifest: {
         objective: 'Arrive and take it.',
@@ -376,12 +376,46 @@ describe('the executing account is observed from the dispatch that fired the ses
       createdById: 'test',
       ready: true,
     });
-
-    // Brain fires one Routine for this bin, at this generation.
     await ensureDispatchIntent(bin);
-    const dispatch = (await listDispatchesForBin(bin.id))[0]!;
+    const dispatch = (await listDispatchesForBin(bin.id)).find((entry) => entry.state !== 'SENT')!;
     await markDispatchRoutine(dispatch.id, routineId);
     await markDispatchSent(dispatch.id, { routineRef: 'V1', routineId, accountId });
+    return bin;
+  }
+
+  /** Somewhere for a pass to belong. The packet's contents are not the subject. */
+  async function packetShell(): Promise<string> {
+    const run = await createRun({
+      projectId,
+      layerId,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'anything',
+    });
+    const orchestration = await createOrchestration({
+      projectId,
+      layerId,
+      runId: run.id,
+      title: 'A packet whose passes need an account',
+      assignment: 'the lineage is the subject, not the research',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    return orchestration.id;
+  }
+
+  it('records the account from the fire, where the binding alone cannot say', async () => {
+    const { workerId, routineId, accountId } = await twoRoutinesOneWorker();
+
+    // Two bindings, so the static lookup is ambiguous and fails closed. That is
+    // correct and it is exactly why every production pass had a null account.
+    const beforeArrival = await lineageForWorker({ workerId, credentialId: 'oat_never_seen' });
+    expect(beforeArrival.accountId).toBeNull();
+    expect(beforeArrival.routineId).toBeNull();
+
+    // Brain fires one Routine for this bin, at this generation.
+    const bin = await firedBin(routineId, accountId, 'A bin to be fired for');
 
     const credentialId = 'oat_closure_session';
     const result = await checkIn({
@@ -405,6 +439,137 @@ describe('the executing account is observed from the dispatch that fired the ses
     // re-pointed by a later bin it happens to take.
     const again = await getWorkerSession(credentialId);
     expect(again?.observedAt).toBe(observed?.observedAt);
+  });
+
+  /**
+   * The same fact, for a session that arrived before anything was observing.
+   *
+   * `worker_sessions` only observes forwards, so every audit pass this Brain
+   * wrote before it existed carries a null account — on genuinely independent
+   * audits as much as anything else. The rows that prove which surface fired
+   * the session are still there, and this is the recovery over them.
+   *
+   * The observation is *deleted* rather than never made, because that is the
+   * production shape: the fire, the arrival and the pass all really happened,
+   * and only the row that records the pairing is missing.
+   */
+  it('recovers a past session from the dispatch, and never over a recorded value', async () => {
+    const { workerId, routineId, accountId } = await twoRoutinesOneWorker();
+    const credentialId = 'oat_history_session';
+
+    const bin = await firedBin(routineId, accountId, 'A bin fired before anything observed');
+    expect((await checkIn({ principal: principalFor(workerId, credentialId), workerId })).assigned).toBe(true);
+
+    // The history: the pairing was never written down.
+    await getDb().run('DELETE FROM worker_sessions WHERE session_ref = ?', [credentialId]);
+    expect(await getWorkerSession(credentialId)).toBeNull();
+    expect(bin.id).toBeTruthy();
+
+    const orchestration = await packetShell();
+    const blank = await startPass({
+      orchestrationId: orchestration,
+      passKey: 'AUDIT',
+      ordinal: 5,
+      provider: 'WORKER',
+      prompt: 'the primary argument',
+      promptSha256: 'c'.repeat(64),
+      executorWorkerId: workerId,
+      executorSessionRef: credentialId,
+    });
+    await finishPass(blank.id, { status: 'COMPLETE' });
+    expect((await getPass(blank.id))?.executorAccountId ?? null).toBeNull();
+
+    // A pass that already names an account — a different one, so a silent
+    // overwrite would be visible rather than indistinguishable from a fill.
+    const recorded = await startPass({
+      orchestrationId: orchestration,
+      passKey: 'AUDIT',
+      ordinal: 6,
+      provider: 'WORKER',
+      prompt: 'the adversarial argument',
+      promptSha256: 'd'.repeat(64),
+      executorWorkerId: workerId,
+      executorSessionRef: credentialId,
+      executorAccountId: 'acct_recorded_already',
+      executorRoutineId: 'rtn_recorded_already',
+    });
+    await finishPass(recorded.id, { status: 'COMPLETE' });
+
+    const recovery = await recoverExecutionLineage();
+    expect(recovery.sessions.map((entry) => entry.sessionRef)).toEqual([credentialId]);
+    expect(recovery.sessions[0]?.accountId).toBe(accountId);
+    expect(recovery.passes.map((entry) => entry.passId)).toEqual([blank.id]);
+    expect(recovery.unresolved).toHaveLength(0);
+
+    const filled = await getPass(blank.id);
+    expect(filled?.executorAccountId).toBe(accountId);
+    expect(filled?.executorRoutineId).toBe(routineId);
+
+    // §5 at a column: what was already recorded is what it still says.
+    const untouched = await getPass(recorded.id);
+    expect(untouched?.executorAccountId).toBe('acct_recorded_already');
+    expect(untouched?.executorRoutineId).toBe('rtn_recorded_already');
+
+    // And it settles: nothing left to recover, so nothing is recovered again.
+    const second = await recoverExecutionLineage();
+    expect(second.sessions).toHaveLength(0);
+    expect(second.passes).toHaveLength(0);
+  });
+
+  it('refuses a session two Routines could have started', async () => {
+    const worker = await createWorker({
+      name: 'ambiguous-worker',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    const one = await createAccount({ name: 'primary' });
+    const two = await createAccount({ name: 'friend-2' });
+    const v1 = await createRoutine({
+      accountId: one.id,
+      routineRef: 'V1',
+      name: 'V1',
+      tokenSecretName: 'V1_SECRET',
+      tokenDigest: 'a'.repeat(64),
+    });
+    const v2 = await createRoutine({
+      accountId: two.id,
+      routineRef: 'V2',
+      name: 'V2',
+      tokenSecretName: 'V2_SECRET',
+      tokenDigest: 'b'.repeat(64),
+    });
+    await bindRoutineWorker(v1.id, worker.id);
+    await bindRoutineWorker(v2.id, worker.id);
+
+    const credentialId = 'oat_ambiguous_session';
+    await firedBin(v1.id, one.id, 'Fired by V1');
+    expect((await checkIn({ principal: principalFor(worker.id, credentialId), workerId: worker.id })).assigned).toBe(true);
+    await firedBin(v2.id, two.id, 'Fired by V2');
+    expect((await checkIn({ principal: principalFor(worker.id, credentialId), workerId: worker.id })).assigned).toBe(true);
+    await getDb().run('DELETE FROM worker_sessions WHERE session_ref = ?', [credentialId]);
+
+    const orchestration = await packetShell();
+    const pass = await startPass({
+      orchestrationId: orchestration,
+      passKey: 'AUDIT',
+      ordinal: 5,
+      provider: 'WORKER',
+      prompt: 'the primary argument',
+      promptSha256: 'e'.repeat(64),
+      executorWorkerId: worker.id,
+      executorSessionRef: credentialId,
+    });
+    await finishPass(pass.id, { status: 'COMPLETE' });
+
+    const recovery = await recoverExecutionLineage();
+    expect(recovery.sessions).toHaveLength(0);
+    expect(recovery.passes).toHaveLength(0);
+    expect(recovery.unresolved).toHaveLength(1);
+    expect(recovery.unresolved[0]?.sessionRef).toBe(credentialId);
+    expect(recovery.unresolved[0]?.reason).toContain('2 Routines');
+
+    // Unresolved means unchanged, not defaulted to whichever came first.
+    expect((await getPass(pass.id))?.executorAccountId ?? null).toBeNull();
   });
 });
 

@@ -83,6 +83,7 @@ import {
   getConversation,
   getMessage,
 } from '../server/repos/russellConversations.ts';
+import { getCandidate } from '../server/repos/russellCandidates.ts';
 import { beginTurn } from '../server/services/russell/turn.ts';
 import { describeFireTarget } from '../server/services/dispatch/fire.ts';
 import {
@@ -623,6 +624,125 @@ async function main(): Promise<void> {
       console.log(`      ${claim.claim.replace(/\s+/g, ' ').slice(0, 150)}`);
     }
     console.log('STEP10: OK archive-shape read-only');
+    return;
+  }
+
+  /*
+   * Why one idea ended where it did — the judgment, not the words around it.
+   *
+   * `turn-trace` prints a candidate's state and priority, and neither of those
+   * says *which branch decided it*. Four different things produce
+   * `priority = PARKED` — the archive already answered it, the compiler could
+   * not specify it, a standing authority is missing, or the research produced
+   * no report — and they have four different remedies. Guessing between them
+   * from a state name is exactly the "diagnose from a label" habit this harness
+   * exists to replace.
+   *
+   * **It prints no title, no statement and no mission specification.** The
+   * judgment JSON holds a compiled specification built from somebody's own
+   * message, so the whole object is never dumped: what is printed is the
+   * decision — the branch, the stored reason, the boolean and id inputs, and
+   * the *lengths* of anything textual. Ids, states, reasons Brain itself wrote,
+   * and times, which is §24's boundary and the same one `turn-trace` keeps.
+   */
+  if (command === 'candidate') {
+    const candidateId = arg(0);
+    if (!candidateId) {
+      console.log('STEP10: FAIL candidate needs a candidate id');
+      process.exitCode = 1;
+      return;
+    }
+    const candidate = await getCandidate(candidateId);
+    if (!candidate) {
+      console.log(`STEP10: OK candidate ${candidateId} found=false`);
+      return;
+    }
+    console.log(`CANDIDATE ${candidate.id}`);
+    console.log(`  conversation   ${candidate.conversationId ?? '—'}`);
+    console.log(`  project        ${candidate.projectId ?? '—'}`);
+    console.log(`  state          ${candidate.state}`);
+    console.log(`  priority       ${candidate.priority ?? '—'}`);
+    console.log(`  canonical      ${candidate.canonicalCandidateId ?? '—'}`);
+    console.log(`  title/stmt     ${candidate.title.length}/${candidate.statement.length} chars`);
+    console.log(`  reason         ${candidate.reason ?? '—'}`);
+    console.log(`  supporting     ${candidate.supporting.join(' ') || '—'}`);
+    console.log(`  contradicting  ${candidate.contradicting.join(' ') || '—'}`);
+    console.log(
+      `  override       ${candidate.overrideUserId ? `${candidate.overrideAt} by a person` : '—'}` +
+        (candidate.overrideReason ? `  (${candidate.overrideReason.length} chars)` : ''),
+    );
+    console.log(`  follow-on of   ${candidate.followOnOfMissionId ?? '—'}`);
+
+    /*
+     * The judgment, field by field, with anything textual reduced to a length.
+     * A whitelist rather than a redaction list: a field added later is printed
+     * as a length until somebody decides it is safe, which fails the right way.
+     */
+    const judgment = (candidate.judgment ?? {}) as Record<string, unknown>;
+    console.log('  judgment');
+    for (const key of Object.keys(judgment).sort()) {
+      const value = judgment[key];
+      if (value === null || value === undefined) {
+        console.log(`    ${key.padEnd(26)} —`);
+      } else if (typeof value === 'boolean' || typeof value === 'number') {
+        console.log(`    ${key.padEnd(26)} ${value}`);
+      } else if (typeof value === 'string') {
+        const safe = /^[A-Z0-9_]+$/.test(value) || value.length <= 200;
+        console.log(`    ${key.padEnd(26)} ${safe ? value : `${value.length} chars`}`);
+      } else if (Array.isArray(value)) {
+        const ids = value.every((entry) => typeof entry === 'string' && /^[a-z]{2,4}_[0-9a-f]{12,}$/.test(entry));
+        console.log(`    ${key.padEnd(26)} ${ids ? value.join(' ') : `${value.length} entries`}`);
+      } else {
+        console.log(`    ${key.padEnd(26)} object(${Object.keys(value as object).length} keys)`);
+      }
+    }
+
+    const probes = await getDb().all<{
+      id: string;
+      state: string;
+      outcome: string | null;
+      max_lookups: number;
+      lookups_used: number;
+      deadline_at: string;
+      created_at: string;
+      completed_at: string | null;
+      reservation_id: string | null;
+      sources: number;
+    }>(
+      `SELECT id, state, outcome, max_lookups, lookups_used, deadline_at,
+              created_at, completed_at, reservation_id,
+              LENGTH(allowed_sources) AS sources
+         FROM russell_probes WHERE candidate_id = ? ORDER BY created_at, rowid`,
+      [candidate.id],
+    );
+    console.log(`  probes ${probes.length}`);
+    for (const probe of probes) {
+      console.log(
+        `    ${probe.created_at}  ${probe.state.padEnd(10)} outcome ${probe.outcome ?? '—'} ` +
+          `lookups ${probe.lookups_used}/${probe.max_lookups} reservation ${probe.reservation_id ?? '—'}`,
+      );
+      console.log(`        deadline ${probe.deadline_at}  completed ${probe.completed_at ?? '—'}  ${probe.id}`);
+    }
+
+    const missions = await getDb().all<{
+      id: string;
+      state: string;
+      orchestration_id: string | null;
+      next_mission_id: string | null;
+      created_at: string;
+    }>(
+      `SELECT id, state, orchestration_id, next_mission_id, created_at
+         FROM russell_missions WHERE candidate_id = ? ORDER BY created_at, rowid`,
+      [candidate.id],
+    );
+    console.log(`  missions ${missions.length}`);
+    for (const mission of missions) {
+      console.log(
+        `    ${mission.created_at}  ${mission.state.padEnd(12)} orchestration ${mission.orchestration_id ?? '—'} ` +
+          `follow-on ${mission.next_mission_id ?? '—'}  ${mission.id}`,
+      );
+    }
+    console.log(`STEP10: OK candidate ${candidate.id} state=${candidate.state} priority=${candidate.priority ?? '—'}`);
     return;
   }
 

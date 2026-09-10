@@ -91,6 +91,7 @@ import {
 } from '../audit/handoff.ts';
 import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
 import { reconcileTerminalPackets } from '../research/packetRunner.ts';
+import { recoverExecutionLineage } from '../dispatch/lineageRecovery.ts';
 import { recomputeProject } from '../stateEngine.ts';
 import {
   alignMissionLinks,
@@ -208,6 +209,18 @@ export interface TickReport {
    */
   linksUnreconciled: { missionId: string; refusal: string }[];
   /**
+   * Audit passes whose executing account was recovered from the routing rows.
+   *
+   * `worker_sessions` only observes forward, so every activation that arrived
+   * before it existed left `research_passes.executor_account_id` null — on
+   * genuinely independent audits as much as anything else. Recovered here only
+   * where the dispatch Brain sent establishes it, never from the static
+   * binding, and never over a value already recorded.
+   */
+  lineageRecovered: { passId: string; accountId: string }[];
+  /** Sessions the routing rows could not settle, with the word for why. */
+  lineageUnresolved: { sessionRef: string; reason: string }[];
+  /**
    * Terminal packets that still held claimable work, and how much was retired.
    *
    * A finished packet with a `QUEUED` or `LEASED` item is work a worker can
@@ -272,6 +285,8 @@ const EMPTY: TickReport = {
   escalatedBins: [],
   linksReconciled: [],
   linksUnreconciled: [],
+  lineageRecovered: [],
+  lineageUnresolved: [],
   retiredPacketWork: [],
   followOns: [],
   linkedNext: [],
@@ -315,6 +330,8 @@ export async function tick(owner: string): Promise<TickReport> {
     binReopenRefused: [],
     escalatedBins: [],
     linksReconciled: [],
+    lineageRecovered: [],
+    lineageUnresolved: [],
     linksUnreconciled: [],
     retiredPacketWork: [],
     followOns: [],
@@ -462,6 +479,27 @@ export async function tick(owner: string): Promise<TickReport> {
     for (const entry of await reconcileTerminalPackets(cycle.maxEventsPerCycle)) {
       report.retiredPacketWork.push(entry);
     }
+
+    /*
+     * 1a-v. Recover the surface a past audit session came from.
+     *
+     * `A11_INDEPENDENT_AUDIT` reads `research_passes.executor_account_id`, and
+     * every row this Brain had ever written was null: the account was resolved
+     * from the static worker -> Routine binding, and production binds two
+     * Routines under two accounts to one worker identity, which is ambiguous
+     * and fails closed. The observation that answers it — which fire produced
+     * this session — is written at arrival now, and only forwards.
+     *
+     * So the history is recovered from the rows that already prove it, and only
+     * from those: the dispatch Brain sent, at a generation the lease has
+     * superseded. Nothing is inferred from how the fleet is wired, a session
+     * fired by more than one Routine is left unresolved, and no recovered value
+     * ever replaces a recorded one. Beside the other reconciliations for the
+     * same reason they are here.
+     */
+    const lineage = await recoverExecutionLineage(cycle.maxEventsPerCycle);
+    report.lineageRecovered.push(...lineage.passes);
+    report.lineageUnresolved.push(...lineage.unresolved);
 
     // 1b. Apply the answers workers have sent back.
     //
