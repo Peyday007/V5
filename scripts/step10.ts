@@ -315,6 +315,42 @@ const ACCEPTANCE_SCENARIOS = {
       'and nothing behind it cites a source anyone can look at. Go and see whether that holds ' +
       'for Michigan under the rule in force now, and record what you find.',
   },
+  /*
+   * The same request a third time, against the repaired archive check.
+   *
+   * `S12A-ACC-9` got one step further again: the capture gate recognised it and
+   * an idea was created. Then `judgeCandidate` read the archive at
+   * `ARCHIVE_HOLDS_NOTHING_TO_CHECK` and queued a full packet — for a question
+   * `scenario-check` had predicted `PRESENT_BUT_UNVERIFIED` against the short
+   * form of the very same sentence.
+   *
+   * The cause is length, and it is structural rather than a wording accident:
+   * `relevance` is `hits / wanted.size`, so a requirement's score falls as its
+   * vocabulary grows. The worker wrote a 454-character statement over a
+   * ~380-character message, and neither long form can reach the floor against a
+   * claim sentence however exactly it is about the same subject. Brain was
+   * therefore reading the question in two forms and never in the short one it
+   * had written itself.
+   *
+   * Repaired at the boundary rather than in the scorer: `askArchive` now asks
+   * about the candidate's **title** as well. Nothing about `relevance` moves,
+   * so no other caller changes, and a probe still requires a real unverified or
+   * stale claim row.
+   *
+   * The text is unchanged from ACC-8 and ACC-9 on purpose. What changed is
+   * Brain, for the third time, at a third boundary.
+   */
+  'S12A-ACC-10': {
+    purpose: 'a bounded cheap look, against the archive check repaired for length',
+    statement:
+      'check the Michigan line of the five-state success-fee brokerage licensure summary ' +
+      'against the current rule',
+    question:
+      'Please check something for me rather than answering it from what we already wrote down. ' +
+      'Our five-state licensure summary says success-fee business brokerage needs a licence, ' +
+      'and nothing behind it cites a source anyone can look at. Go and see whether that holds ' +
+      'for Michigan under the rule in force now, and record what you find.',
+  },
   'S12A-ACC-6': {
     purpose: "a question the public record does not answer, and the person's decision that follows",
     statement:

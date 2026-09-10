@@ -150,13 +150,44 @@ export interface ArchiveAnswer {
  * specification faithful to a summary is not faithful to the question, and
  * neither is a coverage verdict.
  *
- * The two verdicts are combined **asymmetrically, on purpose**:
+ * **The candidate's own title is asked about too, and that is a second
+ * correction of the same shape.** `relevance` is `hits / wanted.size`: the
+ * denominator is the *requirement's* vocabulary, so a longer requirement scores
+ * lower against the identical claim. That is right for the requirements
+ * `coverBeforeWork` was built for — a compiler writes one bounded, term-dense
+ * declaration per fragment — and it is wrong for the two texts this function
+ * feeds it, both of which are free prose. A four-hundred-character statement
+ * carries forty distinct terms and a claim sentence carries fifteen, so a
+ * perfect subject match cannot reach the floor at all: the check answers
+ * `MISSING` because the question was asked at length, not because the archive
+ * is silent.
  *
- *   - `fullyAnswered` requires *both* to say answered. Rejecting an idea stops
- *     work a person asked for, so it takes the conservative reading.
+ * Production said so exactly. `S12A-ACC-9` asked about a claim the archive
+ * holds unsupported, and the worker wrote a 454-character statement; the
+ * archive read `ARCHIVE_HOLDS_NOTHING_TO_CHECK` and Brain spent a packet on a
+ * question its own scenario-check had predicted `PRESENT_BUT_UNVERIFIED`
+ * against the short form of the very same sentence.
+ *
+ * The defect is at this boundary rather than in the scorer, and the remedy is
+ * the one already established here: **ask about the question in every form
+ * Brain holds it**, rather than tuning what "about" means. The title is the
+ * third form and the only short one — written by the same pass that wrote the
+ * statement, stored in the same row, and the only one whose vocabulary is dense
+ * enough to be recognised by a claim. Nothing about `relevance` moves, so no
+ * other caller changes.
+ *
+ * The verdicts are combined **asymmetrically, on purpose**:
+ *
+ *   - `fullyAnswered` requires *every* reading to say answered. Rejecting an
+ *     idea stops work a person asked for, so it takes the conservative reading,
+ *     and a third reading can only make it harder to reject.
  *   - `contradicting` and `unverified` take the union. Both lead only to a
  *     bounded look, which spends nothing a mission would, so the cheaper
  *     mistake is the one worth making.
+ *
+ * Neither direction lowers a bar. A probe still happens only where a real
+ * `PRESENT_BUT_UNVERIFIED` or `STALE` claim row exists, which is the rule
+ * `judgeCandidate` states and this function does not touch.
  *
  * A project with no layers, or one whose claims cannot be read, returns
  * `fullyAnswered: false` with nothing supporting: **not answered** is the
@@ -189,16 +220,22 @@ export async function askArchive(
   try {
     const asked = await personsRequest(candidate);
     /*
-     * Two requirements, and the second one only when it says something the
-     * first does not. A message identical to the statement would double every
-     * count for nothing.
+     * Three readings of one question, and each only when it says something the
+     * others do not. A title identical to the statement, or a message identical
+     * to either, would double every count for nothing.
      */
-    const requirements = [
-      { key: `candidate:${candidate.id}`, statement: candidate.statement },
-      ...(asked && asked.trim() !== candidate.statement.trim()
-        ? [{ key: `candidate:${candidate.id}:asked`, statement: asked }]
-        : []),
-    ];
+    const readings: { key: string; statement: string }[] = [];
+    const seen = new Set<string>();
+    const add = (key: string, text: string | null | undefined): void => {
+      const trimmed = (text ?? '').trim();
+      if (trimmed.length === 0 || seen.has(trimmed)) return;
+      seen.add(trimmed);
+      readings.push({ key: `candidate:${candidate.id}${key}`, statement: trimmed });
+    };
+    add('', candidate.statement);
+    add(':titled', candidate.title);
+    add(':asked', asked);
+    const requirements = readings;
     const coverage = await coverBeforeWork({
       projectId: candidate.projectId,
       layerId: layer.id,

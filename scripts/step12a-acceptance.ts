@@ -297,6 +297,26 @@ export const ACCEPTANCE_SUITE = [
     purpose: 'a bounded cheap look, asked as work, against the repaired capture gate',
     conversationTitle: 'S12A-ACC-9',
   },
+  /*
+   * The same request, against the archive check ACC-9 found.
+   *
+   * ACC-9 got one step further again: the gate recognised it and an idea was
+   * created. Then the archive read `ARCHIVE_HOLDS_NOTHING_TO_CHECK` and a full
+   * packet was queued — for the question `scenario-check` predicted
+   * `PRESENT_BUT_UNVERIFIED` against the short form of that same sentence.
+   *
+   * `relevance` is `hits / wanted.size`, so a longer requirement scores lower
+   * against the identical claim: the 454-character statement and the
+   * ~380-character message are both prose and neither can reach the floor.
+   * That is a defect, it is repaired at the boundary — `askArchive` asks about
+   * the candidate's title too, and `relevance` is untouched — and the question
+   * is unchanged again. What changed is Brain.
+   */
+  {
+    scenarioId: 'S12A-ACC-10',
+    purpose: 'a bounded cheap look, against the archive check repaired for length',
+    conversationTitle: 'S12A-ACC-10',
+  },
 ] as const;
 
 /**

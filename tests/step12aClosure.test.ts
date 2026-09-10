@@ -220,6 +220,63 @@ describe('a cheap look comes first only when the archive holds something to chec
     expect(judged.judgment?.['cheapToReduceAssessed']).toBe('ARCHIVE_HOLDS_UNVERIFIED_OR_STALE');
   });
 
+  it('recognises the subject however long the words a worker chose were', async () => {
+    /*
+     * The same defect one turn further on, and the reason it survived the fix
+     * above.
+     *
+     * `relevance` is `hits / wanted.size`, so the denominator is the
+     * *requirement's* vocabulary: a longer requirement scores lower against the
+     * identical claim. Reading the person's message as well as the statement
+     * does not help when both are prose — in production `S12A-ACC-9` produced a
+     * 454-character statement over a ~380-character message, the archive read
+     * `ARCHIVE_HOLDS_NOTHING_TO_CHECK`, and Brain spent a packet on the exact
+     * question its own scenario-check had predicted `PRESENT_BUT_UNVERIFIED`
+     * against the short form of that sentence.
+     *
+     * Both texts here say what the archive's unchecked claim says. Neither can
+     * reach the floor. The title can, and is the only short form Brain holds.
+     */
+    await authorize();
+    const conversation = await createConversation({
+      ownerUserId: userId,
+      title: 'A long thread',
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    const asked = await addMessage({
+      conversationId: conversation.id,
+      role: 'USER',
+      content:
+        'Please check something for me rather than answering it from what we already wrote ' +
+        'down somewhere. Quite a while ago we noted that a single statewide index of Michigan ' +
+        'township assessing offices exists, and as far as anyone here can tell nothing behind ' +
+        'that note cites a source that a person could actually go and open for themselves. Go ' +
+        'and see whether it holds under whatever arrangement is in force now, and record what ' +
+        'you find so that the next person does not have to ask again.',
+    });
+    const captured = await capture({
+      title: 'Statewide assessing-office index',
+      statement:
+        'Establish, against a source a reader can open, whether the note we made some time ago ' +
+        'about a single statewide index of Michigan township assessing offices is something ' +
+        'that actually exists today or merely something somebody assumed at the time, and ' +
+        'record what was found either way so the question does not have to be asked again by ' +
+        'whoever picks this up next.',
+      projectId,
+      visibility: 'PRIVATE',
+      conversationId: conversation.id,
+      sourceMessageId: asked.id,
+    });
+    const candidateId = captured.candidate!.id;
+
+    await judgeCandidate(candidateId, { claims: [unverifiedClaim()] });
+
+    const judged = (await getCandidate(candidateId))!;
+    expect(judged.judgment?.['cheapToReduceAssessed']).toBe('ARCHIVE_HOLDS_UNVERIFIED_OR_STALE');
+    expect(judged.priority).toBe('EXPLORE');
+  });
+
   it('opens one probe through the loop, settles it, and does not open a second', async () => {
     await authorize();
     scriptedFetch('<html><body>Michigan assessor directory</body></html>');
