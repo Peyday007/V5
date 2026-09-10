@@ -107,7 +107,12 @@ import { applyTurn } from './turn.ts';
 import { askArchive, judgeCandidate } from './planning.ts';
 import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
-import { parkStoppedMissions, reopenAnswered, resumeAnsweredRequest } from './needsHuman.ts';
+import {
+  concludeAbandonedParks,
+  parkStoppedMissions,
+  reopenAnswered,
+  resumeAnsweredRequest,
+} from './needsHuman.ts';
 import { parseJson } from '../../repos/util.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
@@ -233,6 +238,7 @@ export interface TickReport {
    * a packet that had already finished, so nothing ever cleared it.
    */
   retiredPacketWork: { orchestrationId: string; retired: number }[];
+  abandonedParks: { orchestrationId: string; missionId: string; missionState: string }[];
   /**
    * Follow-on ideas created from a mission that finished and filed.
    *
@@ -293,6 +299,7 @@ const EMPTY: TickReport = {
   lineageRecovered: [],
   lineageUnresolved: [],
   retiredPacketWork: [],
+  abandonedParks: [],
   followOns: [],
   linkedNext: [],
   needsHuman: [],
@@ -339,6 +346,7 @@ export async function tick(owner: string): Promise<TickReport> {
     lineageUnresolved: [],
     linksUnreconciled: [],
     retiredPacketWork: [],
+    abandonedParks: [],
     followOns: [],
     linkedNext: [],
     needsHuman: [],
@@ -463,6 +471,27 @@ export async function tick(owner: string): Promise<TickReport> {
       } else if (!outcome.ok) {
         report.linksUnreconciled.push({ missionId, refusal: outcome.refusal ?? 'refused' });
       }
+    }
+
+    /*
+     * 1a-iii-b. Finish a park whose mission has already gone.
+     *
+     * Before the terminal sweep, and that ordering is the point: the sweep
+     * retires work on a packet that is *terminal*, and a packet stranded at
+     * `NEEDS_HUMAN` is exactly the one that never becomes terminal. Concluding
+     * it here means the sweep two steps down finds it in the same pass and
+     * takes its outstanding work off the queue.
+     *
+     * A mission that goes terminal *later* in this same tick — `parkStopped`
+     * runs further down — is picked up on the next one, ten seconds later.
+     * That is the ordinary cost of deriving this from rows instead of catching
+     * the moment, and it is the trade this codebase has taken three times now:
+     * a sweep that reads the world is late by one pass and reaches every row,
+     * where a hook at the moment is immediate and reaches only the entrance it
+     * was written on.
+     */
+    for (const entry of await concludeAbandonedParks(cycle.maxEventsPerCycle)) {
+      report.abandonedParks.push(entry);
     }
 
     /*
