@@ -8056,3 +8056,125 @@ One thing beside it *was* wrong: `unsupportedAction` returns null for
 nothing about a refusal — while the stored record said `effect: "UNSUPPORTED"`.
 Establishing that nothing had been refused took reading three functions. The
 label now comes from the same predicate that decides what the person is told.
+
+
+## 80. The follow-on route a compiled mission can never take — 2026-09-10
+
+Found by walking the A13 journey against the compiler rather than against the
+test, and it is the sixth instance of the same shape.
+
+`unresolvedFollowOn` looks for a MANDATORY requirement that no `ACCEPTED`
+fragment carries. `compileMission` produces **exactly one fragment per idea** —
+deliberately, because a decomposition is a judgement a compiler has no way to
+make — so a compiled packet has one fragment and one requirement. And a packet
+only reaches `COMPLETE_WITH_GAPS` with that fragment `ACCEPTED`, because
+`advancePacket` refuses to synthesize one where nothing cleared its evidence
+gate. Its requirement is therefore answered, the search finds nothing, and the
+route can never fire for any mission this Brain creates.
+
+It was invisible for the usual reason: `tests/russellIntegrationPass.test.ts`
+built a packet with a blocked fragment carrying an open requirement — a shape
+the compiler cannot produce — and then wrote `COMPLETE_WITH_GAPS` onto the
+orchestration by hand.
+
+**`COMPLETE_WITH_GAPS` does not mean a fragment failed.** `outcomeFor` says
+exactly what it means: the judge returned a non-advancing verdict, no fragment
+could be repaired, and a person had authorized the packet to file short. So
+what is outstanding is what the *judge* named — and that is a row rather than
+prose. `audit_gaps` is the validated structured output §8 allows to reach
+state, and it already carries a classification, a bounded `research_question`
+and an `expected_contribution`.
+
+Narrow by construction, and each clause is a refusal:
+
+- only `FOUNDATIONAL_GAP` and `TARGETED_RESEARCH_GAP` — the two
+  classifications the domain already declares may legitimately keep research
+  open;
+- only with a question the judge actually wrote, because a finding with no
+  bounded question is a finding, and composing one from its prose is the thing
+  this derivation has never done;
+- `OTHER_LAYER` excluded, because §22's handoff owns it;
+- the requirement route runs first and still wins, so a multi-fragment packet
+  behaves exactly as before.
+
+The audit is read from the mission's own `audit_id`, which `linkFiledWork` has
+already corrected to the newest audit of the packet's run (§76) — so the
+follow-on cites the verdict actually performed on the filed report.
+
+### And the first fix proved itself in production
+
+`bin_dcb7564ba5e840b3aac3` before the release:
+
+```
+  bin_dcb7564ba5e840b3aac3  NEEDS_HUMAN  gen 12 attempts 0/5 refusals 2
+  terminal The bin used all 5 attempts without satisfying RESEARCH_PACKET_V1 v1.
+```
+
+and eleven minutes after it:
+
+```
+  bin_dcb7564ba5e840b3aac3  LEASED  gen 16 attempts 2/5 refusals 2
+  worker wkr_1cdd82cfb2a54faf8edd  leased 2026-09-10T13:11:23.709Z
+```
+
+Brain answered its own park from the rows, the dispatcher fired, a worker
+arrived and took the bin. The packet that had been stopped for three hours —
+with `S12A-ACC-6` queued behind its concurrency slot — is moving again, and
+nothing was reset: the refusals, the attempts and the events all keep their
+rows.
+
+
+## 81. The role that was argued three times — 2026-09-10
+
+The bin reopen (§79) put a worker back on `orc_91818deaa92a4172aa4e` within
+eleven minutes, and the next reading said what had actually been wrong all
+along:
+
+```
+EVIDENCE
+  passes      9
+      audit role ordinal 5 COMPLETE 2026-09-10T09:40:39.318Z
+      audit role ordinal 6 COMPLETE 2026-09-10T10:40:04.029Z
+      audit role ordinal 6 COMPLETE 2026-09-10T13:01:19.451Z
+      audit role ordinal 6 COMPLETE 2026-09-10T13:14:02.645Z
+  audits      0
+      RESEARCH_AUDIT wki_b284f55456f54224958e LEASED attempt 4/2
+      RESEARCH_AUDIT wki_fea936e2f954410ab0b2 QUEUED attempt 0/2
+```
+
+Three ADVERSARIAL passes, one item, no verdict. `brain_submit_audit` records
+the pass and stops — "the first two roles record and stop" is deliberate and
+right — so the *item* is finished by the worker's own `brain_complete_work`. A
+session that submits and then runs out of time leaves the item leased with its
+work already done; the lease lapses; the next arrival reads the brief, sees the
+adversarial role outstanding, and argues it again. The judge was withheld
+throughout and correctly so: `auditEligibility` requires both arguments
+*settled*, and settled is a fact about the item rather than about the pass.
+
+Two things had to change and one had to be corrected.
+
+**`finishRecordedAuditRoles`** retires an audit item whose role already has a
+completed pass in the current round. In the packet runner rather than in the
+tool, because finishing somebody's item inside `brain_submit_audit` makes the
+worker's own completion fail its ownership proof — the queue is right to refuse
+that and the contract is right to ask for it. `cancelWork` rather than
+`completeWork`, for the reason the `OTHER_LAYER` handoff already uses it: no
+lease need be current, the fencing generation advances so a late completion
+matches nothing, and the row keeps its id, attempts and history.
+
+**`brain_submit_audit` now advances the packet** after every role rather than
+only after the judge's. Nothing was calling it: the first two roles recorded and
+stopped, so the packet moved only when the worker completed its own item.
+
+**And neither retires anything under a live lease.** That guard was missing from
+`retireTerminalWork` too, and adding the advance exposed it: a packet goes
+terminal the instant the judge's verdict is recorded, and the judge is still
+holding its own item at that instant. Retiring it there made a compliant
+worker's next call fail with *"this lease is no longer current"* — five suite
+tests said so immediately. The condition both reconciliations exist for is an
+**expired** lease on work that is claimable again for a settled question, and it
+was simply never written down.
+
+The test for it walks the compliant path first — submit, lease still live,
+nothing touched — then lapses the lease and asserts the retirement, so both
+halves are pinned rather than only the one that was broken.

@@ -282,6 +282,21 @@ export const ACCEPTANCE_SUITE = [
     purpose: 'a bounded cheap look, asked as work to be done rather than as a question to answer',
     conversationTitle: 'S12A-ACC-8',
   },
+  /*
+   * The same request, against the gate ACC-8 found.
+   *
+   * ACC-8 got one step further than ACC-7: the worker read it as a request for
+   * work and proposed `CAPTURE_CANDIDATE`. Brain's own `shouldCapture` declined
+   * it — its marker list held every hedged form of asking and not the plain one
+   * — so the chain ended with no idea and Brain's own reason recorded against
+   * it. That is a defect, it is repaired narrowly at the gate, and the question
+   * is deliberately unchanged: what changed is Brain.
+   */
+  {
+    scenarioId: 'S12A-ACC-9',
+    purpose: 'a bounded cheap look, asked as work, against the repaired capture gate',
+    conversationTitle: 'S12A-ACC-9',
+  },
 ] as const;
 
 /**

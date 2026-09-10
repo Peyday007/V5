@@ -286,6 +286,35 @@ const ACCEPTANCE_SCENARIOS = {
       'and nothing behind it cites a source anyone can look at. Go and see whether that holds ' +
       'for Michigan under the rule in force now, and record what you find.',
   },
+  /*
+   * The same request again, against the repaired capture gate.
+   *
+   * `S12A-ACC-8` got one step further than `S12A-ACC-7`: the worker read it as
+   * a request for work and proposed `CAPTURE_CANDIDATE`. **Brain's own gate
+   * declined it** — `{"captureDeclined":true,"gateReason":"nothing here
+   * proposes work"}` — because `shouldCapture`'s marker list held every hedged
+   * form of asking ("should we", "worth checking", "look into") and not the
+   * plain one, and the message has no question mark.
+   *
+   * That is a defect and it is repaired at the gate, narrowly: the verb has to
+   * be asked of somebody or followed by the thing to establish, so a past-tense
+   * report and a bare "please look at this" still decline. Rewording the
+   * question to hit an existing keyword was the alternative and would have been
+   * gaming the list rather than fixing it.
+   *
+   * The text is unchanged from ACC-8 on purpose. What changed is Brain.
+   */
+  'S12A-ACC-9': {
+    purpose: 'a bounded cheap look, asked as work, against the repaired capture gate',
+    statement:
+      'check the Michigan line of the five-state success-fee brokerage licensure summary ' +
+      'against the current rule',
+    question:
+      'Please check something for me rather than answering it from what we already wrote down. ' +
+      'Our five-state licensure summary says success-fee business brokerage needs a licence, ' +
+      'and nothing behind it cites a source anyone can look at. Go and see whether that holds ' +
+      'for Michigan under the rule in force now, and record what you find.',
+  },
   'S12A-ACC-6': {
     purpose: "a question the public record does not answer, and the person's decision that follows",
     statement:

@@ -1232,6 +1232,30 @@ rules.
   counters are the bound, and a packet whose items are spent goes terminal by
   itself.
 
+- **`COMPLETE_WITH_GAPS` is a verdict about the report, not a fragment that
+  failed** — the judge asked for more, nothing could be repaired, and a person
+  authorized filing short. So the question such a packet leaves behind is the
+  one the *judge* named, read from `audit_gaps`: a classification the domain
+  already says may keep research open, and a bounded question the judge
+  actually wrote. A finding with no question stated is a finding, and composing
+  one from its prose is exactly the model-prose-as-state §8 forbids. The
+  requirement route still runs first; it simply cannot fire for a compiled
+  mission, because the compiler makes one fragment per idea and a packet that
+  files at all has that fragment accepted.
+
+- **A work item is finished by its owner, and reconciled only once its owner is
+  gone.** An audit item hands out one role and the pass is that role's whole
+  output, so an item still leased after its pass is recorded is a role that will
+  be argued again the moment the lease lapses — production argued one three
+  times while the judge waited, correctly, for both arguments to be *settled*.
+  Brain retires such an item from its own rows, in the packet runner and never
+  in the tool: finishing somebody's item inside `brain_submit_audit` makes their
+  own `brain_complete_work` fail its ownership proof, and the queue is right to
+  refuse that. Neither that reconciliation nor the terminal-packet one may touch
+  an item whose lease is still live — the condition they exist for is an
+  *expired* lease on work claimable again for a settled question, and a packet
+  goes terminal while its judge is still holding the item it just used.
+
 - **Acceptance is a small declared suite, not one overloaded chain.** One
   conversation was right while the acceptance was one journey, and stopped
   being right the moment that journey succeeded — because a cheap look taken

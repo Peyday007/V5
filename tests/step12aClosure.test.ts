@@ -693,13 +693,37 @@ describe('a packet that has finished holds nothing a worker can be sent for', ()
     const first = await reconcileTerminalPackets(10);
     expect(first.map((entry) => entry.orchestrationId)).toContain(orchestration.id);
 
-    for (const id of [queued.id, held.id]) {
-      const item = (await getWorkItem(id))!;
-      expect(item.state).toBe('CANCELLED');
-      // Cancelled with the reason, not deleted: the row keeps its id, its
-      // attempts and its history.
-      expect(item.cancelledReason).toContain('concluded');
-    }
+    // Whichever one nobody is holding is retired at once.
+    const leasedId = claimed![0]!.workItemId;
+    const freeId = leasedId === queued.id ? held.id : queued.id;
+    const retiredFree = (await getWorkItem(freeId))!;
+    expect(retiredFree.state).toBe('CANCELLED');
+    // Cancelled with the reason, not deleted: the row keeps its id, its
+    // attempts and its history.
+    expect(retiredFree.cancelledReason).toContain('concluded');
+
+    /*
+     * The held one is left exactly where it is, and that is the correction.
+     *
+     * A packet goes terminal the moment the judge's verdict is recorded, and
+     * the judge is still holding its own item at that instant — the contract
+     * asks it to complete that item next. Retiring under a live lease made
+     * that completion fail its ownership proof, which is a compliant worker
+     * being told it did something wrong. The condition this reconciliation is
+     * *for* is an expired lease: work claimable again for a settled question.
+     */
+    expect((await getWorkItem(leasedId))!.state).toBe('LEASED');
+
+    // And when the session is gone, it is retired like the other.
+    await getDb().run(`UPDATE work_items SET lease_expires_at = ? WHERE id = ?`, [
+      new Date(Date.now() - 60_000).toISOString(),
+      leasedId,
+    ]);
+    const second = await reconcileTerminalPackets(10);
+    expect(second.map((entry) => entry.orchestrationId)).toContain(orchestration.id);
+    const retiredHeld = (await getWorkItem(leasedId))!;
+    expect(retiredHeld.state).toBe('CANCELLED');
+    expect(retiredHeld.cancelledReason).toContain('concluded');
 
     // Idempotent by the state it produces: nothing left to select.
     expect(await reconcileTerminalPackets(10)).toHaveLength(0);

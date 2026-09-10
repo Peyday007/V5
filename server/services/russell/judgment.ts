@@ -51,6 +51,25 @@ const PROPOSAL_MARKERS = [
   /\bwhat about\b/i,
   /\bidea:/i,
   /\bworth (?:doing|checking|looking)\b/i,
+  /*
+   * Asking for it directly, which the list had every hedged form of and not
+   * the plain one.
+   *
+   * It held "worth checking" but not "check", and "look into" but not "see
+   * whether" — so a person writing *"Please check something for me … Go and
+   * see whether that holds for Michigan"* was declined with "nothing here
+   * proposes work". Production did exactly that on 2026-09-10, and a direct
+   * request to check something is the clearest proposal of work there is.
+   *
+   * Deliberately narrow, because this list's failure mode should stay
+   * *missing* a candidate rather than inventing one: the verb has to be asked
+   * of somebody, or followed by the thing to be established. "I checked it
+   * yesterday" matches neither — the word boundary excludes "checked" — and
+   * "please look at this file" matches neither, because bare `look` is not in
+   * the second alternation.
+   */
+  /\b(?:please|can you|could you|would you)\s+(?:go\s+(?:and\s+)?)?(?:check|verify|confirm|look\s+(?:into|up)|find\s+out|see)\b/i,
+  /\b(?:check|verify|confirm|find\s+out|look\s+up|see)\s+(?:whether|if)\b/i,
 ];
 
 /** Openers that mark a genuine unresolved question about the work. */

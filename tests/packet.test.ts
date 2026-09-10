@@ -2851,6 +2851,62 @@ describe('the audit passes', () => {
     expect(await listAuditsByProject(orchestration.projectId)).toHaveLength(0);
   });
 
+  it('finishes the audit item itself, so a redelivery cannot argue the same role twice', async () => {
+    /*
+     * The production loop this closes.
+     *
+     * `orc_91818deaa92a4172aa4e` recorded ADVERSARIAL passes at 10:40, 13:01
+     * and 13:14 while its work item sat `LEASED attempt 4/2`. Each arriving
+     * session read the brief, saw the adversarial role outstanding, argued it
+     * again, submitted — and ended without completing the item. The judge was
+     * withheld for three hours, correctly: `auditEligibility` requires both
+     * arguments *settled*, and settled is a fact about the item.
+     *
+     * A `RESEARCH_AUDIT` item hands out exactly one role and the pass is that
+     * role's entire output, so Brain finishes it. The worker's own completion
+     * still works and is still what the contract asks for — it simply finds
+     * the item already succeeded, which is what `brain_complete_work` is
+     * documented to do on a redelivery.
+     */
+    const orchestration = await filedPacket();
+    const fleet = await auditFleet();
+
+    const item = await as(fleet.primary, async () => {
+      const claimed = await claimNext('RESEARCH_AUDIT');
+      // Submit only. No completion, which is exactly what the session that
+      // ran out of time in production did.
+      await call('brain_submit_audit', { ...proof(claimed), primary: PRIMARY });
+      return claimed;
+    });
+
+    /*
+     * While the lease is live nothing is touched, because the contract asks
+     * that session to complete its own item and Brain retiring it underneath
+     * would make that call fail its ownership proof.
+     */
+    expect((await getWorkItem(item.workItemId))?.state).toBe('LEASED');
+
+    // The session is gone: the lease lapses, and the item is claimable again —
+    // which is the exact moment the repeat became possible.
+    await getDb().run(`UPDATE work_items SET lease_expires_at = ? WHERE id = ?`, [
+      new Date(Date.now() - 60_000).toISOString(),
+      item.workItemId,
+    ]);
+    await advancePacket(orchestration.id);
+
+    const finished = await getWorkItem(item.workItemId);
+    expect(finished?.state).toBe('CANCELLED');
+    expect(finished?.resultSummary ?? finished?.failureCategory ?? '').toBeDefined();
+
+    // The next role is now reachable, which is the thing that was not.
+    const next = await as(fleet.adversarial, () => claimNext('RESEARCH_AUDIT'));
+    expect(next.workItemId).not.toBe(item.workItemId);
+    expect((next.payload as { role?: string }).role).toBe('ADVERSARIAL');
+
+    // Still nothing decided: two roles recorded is not a verdict.
+    expect(await listAuditsByProject(orchestration.projectId)).toHaveLength(0);
+  });
+
   it('refuses a role\'s findings submitted against another role\'s item', async () => {
     const orchestration = await filedPacket();
     const primary = await claimNext('RESEARCH_AUDIT');
