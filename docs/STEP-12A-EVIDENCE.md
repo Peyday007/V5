@@ -8543,3 +8543,71 @@ terms, which is `S12A-ACC-4`'s live question and a different one.
 Six attempts, six distinct boundaries, three defects and three correct refusals.
 Every one of them found by walking the journey rather than by reading the code,
 and none of them the same mistake twice.
+
+## 87. The park with one button, and the card that argued with itself — 2026-09-10
+
+`S12A-ACC-6` is the declared scenario for *"a question the public record does
+not answer, and the person's decision that follows"*. It reached a park, and the
+park could not be that decision.
+
+```
+  orc_bf57174a711e42c0a18b   status NEEDS_HUMAN   gap policy not authorized
+  failure  No fragment cleared its evidence gate, so there is nothing to synthesize.
+  FRAGMENTS (1)
+    official-record  BLOCKED  attempt 1/2   claims 0 (0 accepted)
+      accepts [county register of deeds … michigan statute or administrative rule …]
+      because  Domain mismatch between the question and the fragment's own evidence standard,
+               confirmed across…
+  EVIDENCE  claims 0 stored, 0 accepted   passes 0   audits 0
+```
+
+The question is about what comparable success-fee marketplaces realise net of
+refunds and clawbacks. The compiled fragment's acceptable sources are Michigan
+county recording and assessing offices, because `RUSSELL_PUBLIC_RECORDS_V1` is a
+public-records envelope. The worker reported the mismatch rather than inventing
+an answer, which is the evidence gate doing its job — **the question is outside
+what this project's standing envelope can research at all.**
+
+### Two defects fell out of it
+
+**One: a row is not a decision.** The park condition was
+`hasEvidence = fragments.length > 0` — a row count standing in for "there is
+something to decide". One fragment existed, so it parked; `choicesFor` with
+nothing accepted then offered exactly one answer, STOP. The module's own comment
+says what that is:
+
+> A decision with one option is not a decision… Parking on that asks a person to
+> press the only button there is, and then waits — indefinitely, blocking the
+> idea — until they do. That is not an escalation, it is a failed run wearing an
+> escalation's clothes.
+
+Every word applies here. The condition is now the offer itself —
+`choicesFor(shape).length > 1` — so the rule applies wherever it is true rather
+than wherever the proxy happened to agree with it. Nothing is abandoned quietly:
+the mission is `FAILED` with the packet's own words, `RUSSELL_MISSION_FAILED` is
+on the project's history, every refusal keeps its row and its reason, and
+`redoable()` may offer the idea another try.
+
+**Two: the card argued with itself.** `stopWords`' own branch for this shape says
+the honest answers are *"to stop it or to ask a narrower question"* — while the
+card offered only the first. And `reopenAnswered`, which exists precisely so a
+returning card offers only answers that can act, re-derived the **choices** and
+left the **words**: a request opened when the bar was nearly met could come back
+carrying only STOP and still explain that the bar was nearly met. Its own comment
+had already stated the principle — *"Deriving it rather than storing it once is
+the property the offer itself lacked"* — and derived half of it. The words now
+move with the choices, from the same shape and the same two functions the park
+uses.
+
+### What this does not do
+
+It does not close `A14_HUMAN_RESUME`, and could not have. `STOP` is recovery, not
+a resume, and the gate counts it separately and never as a pass — correctly. What
+it removes is a dead card that would have sat in Needs You blocking the idea, in
+front of the real decision when one arrives.
+
+**And it does not falsify a gap.** ACC-6's question is genuinely outside the
+standing envelope's reach; that is a fact about the envelope and the question,
+recorded as one. Widening the envelope to make the scenario succeed was
+available and was not taken — for the same reason ACC-5's jurisdiction refusal
+was left standing.

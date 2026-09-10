@@ -1469,6 +1469,51 @@ describe('the loop keeps going without anybody watching', () => {
     ).toBe(true);
   });
 
+  it('fails a packet whose fragments all refused, rather than parking on one button', async () => {
+    /*
+     * The row that separated the rule from the proxy standing in for it.
+     *
+     * On 2026-09-10 `orc_bf57174a711e42c0a18b` held **one** fragment, zero
+     * claims and nothing accepted: the compiler had specified county-records
+     * sources for a question about private marketplace economics, and the
+     * worker reported the domain mismatch rather than inventing an answer. The
+     * park condition was `fragments.length > 0` — a row count standing in for
+     * "there is something to decide" — so it parked, and `choicesFor` then
+     * offered exactly one answer while the card's own explanation said the
+     * honest answers were *"to stop it or to ask a narrower question"*.
+     *
+     * A row is not a decision. The condition is the offer.
+     */
+    const conversation = await ownedConversation('Every fragment refused');
+    const mission = await parkedMission(conversation.id);
+    await withEveryFragmentRefused(mission.orchestrationId!, layerId, projectId);
+
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason:
+        'No fragment cleared its evidence gate, so there is nothing to synthesize.',
+    });
+
+    const ticked = await tick('instance-a');
+    expect(ticked.needsHuman.map((entry) => entry.missionId)).not.toContain(mission.id);
+
+    const failed = (await getMission(mission.id))!;
+    expect(failed.state).toBe('FAILED');
+    // The packet's own words, so the run still reads as the run it was.
+    expect(failed.terminalReason).toMatch(/cleared its evidence gate/i);
+
+    // Nobody is asked to press the only button there is.
+    expect(
+      (await listOpenRequests(projectId)).filter((entry) => entry.missionId === mission.id),
+    ).toHaveLength(0);
+
+    // And every refusal is still on its row, not tidied away.
+    const fragments = await currentFragments(mission.orchestrationId!);
+    expect(fragments.length).toBeGreaterThan(0);
+    expect(fragments.every((fragment) => fragment.status === 'BLOCKED')).toBe(true);
+    expect(fragments.some((fragment) => /domain mismatch/i.test(fragment.blockedReason ?? ''))).toBe(true);
+  });
+
   it('takes back a park that was already open before the rule existed', async () => {
     /*
      * The row that motivated the rule, and the half a fix at the moment of
@@ -1800,33 +1845,46 @@ describe('the loop keeps going without anybody watching', () => {
      */
     const conversation = await ownedConversation('Nothing survived');
     const mission = await parkedMission(conversation.id);
-    await withPlan(mission.orchestrationId!, layerId, projectId);
-    for (const fragment of await currentFragments(mission.orchestrationId!)) {
-      await updateFragment(fragment.id, {
-        status: 'BLOCKED',
-        blockedReason: 'Every source on point was outside the authorized allowlist.',
-      });
-    }
+    await withEveryFragmentRefused(mission.orchestrationId!, layerId, projectId);
     await updateOrchestration(mission.orchestrationId!, {
       status: 'NEEDS_HUMAN',
       failureReason:
         'No fragment cleared its evidence gate, so there is nothing to synthesize.',
     });
 
-    await tick('instance-a');
-    const request = (await listOpenRequests(projectId)).find(
-      (entry) => entry.missionId === mission.id,
-    )!;
-    expect(request, 'the mission was not parked at all').toBeTruthy();
-    // Research happened, so this is not the empty-packet case — and still only
-    // one answer, because filing is not one of the things that can happen.
-    expect(request.choices.map((choice) => choice.key).sort()).toEqual(['STOP']);
-    // And the card says why, in words about this packet rather than the other
-    // stop's words about a bar that was nearly met.
-    expect(request.whyNotRussell).toMatch(/no report to file/i);
+    /*
+     * The card a person is actually looking at, opened the way an older
+     * version of this file opened it: carrying both answers.
+     *
+     * It has to be written by hand now, and that is the point rather than an
+     * inconvenience. This shape no longer *parks* — a packet with nothing
+     * accepted and no plan awaiting approval offers one answer, and a decision
+     * with one option is not a decision — so the only way it reaches somebody
+     * is a row that predates the rule. The row is what they see, so the row is
+     * what both guards have to hold against.
+     */
+    await transitionMission({
+      missionId: mission.id,
+      from: (await getMission(mission.id))!.state,
+      to: 'NEEDS_HUMAN',
+      waitingOn: 'No fragment cleared its evidence gate.',
+    });
+    const { request } = await askHuman({
+      projectId,
+      visibility: 'PRIVATE',
+      missionId: mission.id,
+      candidateId: null,
+      conversationId: conversation.id,
+      authorityNeeded: 'Deciding whether this project accepts a report with unresolved questions.',
+      whyNotRussell: 'The evidence bar was not met and the repair ladder is spent.',
+      recommendation: null,
+      choices: [NEEDS_HUMAN_CHOICES.RECORD_GAPS, NEEDS_HUMAN_CHOICES.STOP],
+      urgency: 'BLOCKING',
+      resumeKey: `russell:needs-human:${mission.id}:${mission.orchestrationId}`,
+    });
 
     /*
-     * The transition refuses it too. Answered by hand against the stored row,
+     * The transition refuses it. Answered by hand against the stored row,
      * which is what a stale card would produce.
      */
     await getDb().run(
@@ -1844,10 +1902,14 @@ describe('the loop keeps going without anybody watching', () => {
     expect(orchestration!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
     expect(orchestration!.unresolvedGapAuthorizedBy).toBeNull();
 
-    // And the decision came back rather than staying answered.
+    // And the decision came back rather than staying answered — narrowed to the
+    // answers that can still act, with the words this packet's stop deserves
+    // rather than the other stop's words about a bar that was nearly met.
     const reopened = (await getHumanRequest(request.id))!;
     expect(reopened.state).toBe('OPEN');
     expect(reopened.answeredChoice).toBeNull();
+    expect(reopened.choices.map((choice) => choice.key).sort()).toEqual(['STOP']);
+    expect(reopened.whyNotRussell).toMatch(/no report to file/i);
   });
 
   it('leaves an answer it cannot carry out visible, rather than marking it resumed', async () => {
@@ -2576,6 +2638,29 @@ async function parkedMission(
  */
 async function withNoResearchAtAll(orchestrationId: string) {
   await getDb().run(`DELETE FROM research_fragments WHERE orchestration_id = ?`, [orchestrationId]);
+}
+
+/**
+ * A packet that was researched and whose every fragment was refused.
+ *
+ * Rows exist, so the old `fragments.length > 0` proxy said "there is something
+ * to decide"; nothing was accepted, so `choicesFor` offered only STOP. That gap
+ * between the two is the whole of what this shape is for.
+ */
+async function withEveryFragmentRefused(
+  orchestrationId: string,
+  layerIdFor: string,
+  projectIdFor: string,
+) {
+  await withPlan(orchestrationId, layerIdFor, projectIdFor);
+  for (const fragment of await currentFragments(orchestrationId)) {
+    await updateFragment(fragment.id, {
+      status: 'BLOCKED',
+      blockedReason:
+        "Domain mismatch between the question and the fragment's own evidence standard, " +
+        'confirmed across every acceptable source class.',
+    });
+  }
 }
 
 /**

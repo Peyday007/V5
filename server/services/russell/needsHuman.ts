@@ -370,15 +370,34 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       .filter((fragment) => fragment.status === 'PLANNED')
       .sort((a, b) => a.fragmentKey.localeCompare(b.fragmentKey));
     const shape = shapeOf(fragments);
-    const hasEvidence = fragments.length > 0;
+    /*
+     * More than one thing a person could decide — asked of the offer itself,
+     * not of a proxy for it.
+     *
+     * This was `fragments.length > 0`, which is a *row* count standing in for
+     * "there is something to decide". Production produced the case that
+     * separates them: `orc_bf57174a711e42c0a18b` held one fragment, zero
+     * claims and nothing accepted — the compiler had specified county-records
+     * sources for a question about private marketplace economics, and the
+     * worker reported the domain mismatch rather than inventing an answer.
+     * One row existed, so the proxy said park; `choicesFor` then offered
+     * exactly one answer, and the card's own explanation said *"the honest
+     * answers here are to stop it or to ask a narrower question"* while
+     * offering only the first of those.
+     *
+     * So the condition is the offer. The rule below is unchanged and now
+     * applies wherever it is true rather than wherever the proxy happened to
+     * agree with it.
+     */
+    const decidable = choicesFor(shape).length > 1;
 
     /*
      * A decision with one option is not a decision.
      *
-     * A packet holding no fragments and no claims has nothing to file and no
-     * questions to declare out of scope, so `choicesFor` correctly offers a
-     * single answer: STOP. Parking on that asks a person to press the only
-     * button there is, and then waits — indefinitely, blocking the idea —
+     * A packet with nothing a person could choose between has nothing to file
+     * and no questions to declare out of scope, so `choicesFor` correctly
+     * offers a single answer: STOP. Parking on that asks a person to press the
+     * only button there is, and then waits — indefinitely, blocking the idea —
      * until they do. That is not an escalation, it is a failed run wearing an
      * escalation's clothes, and the person it interrupts learns nothing by
      * being interrupted.
@@ -398,7 +417,7 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
      * recorded reason, and the attempt ceiling in `loop.ts` is what stops a
      * question nobody can answer from being asked for ever.
      */
-    if (!hasEvidence) {
+    if (!decidable) {
       const failed = await transitionMission({
         missionId: mission.id,
         from: mission.state,
@@ -615,10 +634,28 @@ export async function reopenAnswered(
   const shape = orchestrationId
     ? await packetShape(orchestrationId)
     : { awaitingApproval: 0, accepted: 0, researched: 0 };
+  /*
+   * The words move with the choices, from the same shape and the same
+   * functions the park uses.
+   *
+   * This re-derived only the offer, and a card that offers one thing while
+   * explaining another is the defect `stopWords` was written for — arriving
+   * here by a different door. A reopen is precisely the moment the packet has
+   * moved underneath words that were composed for an earlier shape: a request
+   * opened when the bar was nearly met can come back with only STOP on it and
+   * still say the bar was nearly met.
+   */
+  const fragments = orchestrationId ? await currentFragments(orchestrationId) : [];
+  const awaiting = fragments
+    .filter((fragment) => fragment.status === 'PLANNED')
+    .sort((a, b) => a.fragmentKey.localeCompare(b.fragmentKey));
+  const words = stopWords(shape, awaiting, reason);
   return reopenRequest({
     requestId: request.id,
     choices: choicesFor(shape),
     recommendation: reason,
+    authorityNeeded: words.authorityNeeded,
+    whyNotRussell: words.whyNotRussell,
   });
 }
 
