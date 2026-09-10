@@ -106,6 +106,8 @@ import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
 import { parkStoppedMissions, reopenAnswered, resumeAnsweredRequest } from './needsHuman.ts';
 import { parseJson } from '../../repos/util.ts';
+import { getAudit } from '../../repos/audits.ts';
+import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { RussellCandidate, RussellMission, RussellVisibility } from '../../domain/types.ts';
 
 /** How often the loop wakes when nothing else has woken it. */
@@ -1012,6 +1014,7 @@ async function followOnsToCreate(limit: number): Promise<
     conversation_id: string | null;
     judgment: string;
     orchestration_id: string | null;
+    audit_id: string | null;
     title: string;
     is_follow_on: number;
   }>(
@@ -1026,7 +1029,7 @@ async function followOnsToCreate(limit: number): Promise<
      * what a model happened to write.
      */
     `SELECT m.id, m.project_id, m.visibility, m.conversation_id, c.judgment,
-            m.orchestration_id, m.objective AS title,
+            m.orchestration_id, m.audit_id, m.objective AS title,
             CASE WHEN c.follow_on_of_mission_id IS NULL THEN 0 ELSE 1 END AS is_follow_on
        FROM russell_missions m
        JOIN russell_candidates c ON c.id = m.candidate_id
@@ -1070,7 +1073,7 @@ async function followOnsToCreate(limit: number): Promise<
     const followOn =
       declared && typeof declared === 'object'
         ? readDeclared(declared as Record<string, unknown>)
-        : await unresolvedFollowOn(row.orchestration_id, row.title);
+        : await unresolvedFollowOn(row.orchestration_id, row.audit_id, row.title);
     if (!followOn) continue;
     const { title, question, whyNow } = followOn;
     out.push({
@@ -1111,6 +1114,15 @@ function readDeclared(
  */
 async function unresolvedFollowOn(
   orchestrationId: string | null,
+  /**
+   * The audit that judged this packet, from the mission's own corrected link.
+   *
+   * `linkFiledWork` sets it to the newest audit of the packet's run before the
+   * writeback, and `followOnsToCreate` only selects missions that have written
+   * back — so by the time this is asked, the column names the verdict actually
+   * performed on the filed report rather than a superseded one.
+   */
+  auditId: string | null,
   parentObjective: string,
 ): Promise<{ title: string; question: string; whyNow: string } | null> {
   if (!orchestrationId) return null;
@@ -1162,14 +1174,56 @@ async function unresolvedFollowOn(
     const status = byRequirement.get(requirement.id);
     return status !== 'SATISFIED' && status !== 'NOT_REQUIRED' && status !== 'OWNED_ELSEWHERE';
   });
-  if (!open) return null;
+  if (open) {
+    return {
+      title: `Unsettled: ${open.statement.slice(0, 120)}`,
+      question: open.statement,
+      whyNow:
+        `The report filed for "${parentObjective.slice(0, 120)}" records this as unresolved rather ` +
+        'than answered, so it is still open.',
+    };
+  }
 
+  /*
+   * Every requirement answered, and the judge still asked for more.
+   *
+   * That is not a contradiction and it is the shape a *compiled* mission
+   * actually reaches. `compileMission` produces exactly one fragment for one
+   * idea — deliberately, because a decomposition is a judgement a compiler
+   * cannot make — so a packet has one requirement, and a packet that got as far
+   * as `COMPLETE_WITH_GAPS` did so with that fragment `ACCEPTED`. Its
+   * requirement is therefore answered, the search above finds nothing, and the
+   * requirement route can never fire for a mission this Brain creates.
+   *
+   * `COMPLETE_WITH_GAPS` does not mean "a fragment failed". It means the judge
+   * returned a non-advancing verdict, no fragment could be repaired, and a
+   * person authorized the packet to file short — so what is outstanding is what
+   * the *judge* named, and that is a row rather than prose: `audit_gaps` is the
+   * validated structured output §8 allows to reach state, carrying the
+   * classification, the bounded question and what answering it would add.
+   *
+   * Only the two classifications that may legitimately keep research open, and
+   * only with a bounded question the judge actually wrote. A `FOUNDATIONAL_GAP`
+   * with no question stated is a finding, not a follow-on, and inventing one
+   * from its prose is the thing this function has never done.
+   */
+  if (!auditId) return null;
+  const audit = await getAudit(auditId);
+  if (!audit) return null;
+  const gap = audit.gaps.find(
+    (entry) =>
+      RESEARCH_JUSTIFYING_GAPS.includes(entry.classification) &&
+      (entry.researchQuestion ?? '').trim().length > 0,
+  );
+  if (!gap) return null;
   return {
-    title: `Unsettled: ${open.statement.slice(0, 120)}`,
-    question: open.statement,
+    title: `Unsettled: ${gap.title.slice(0, 120)}`,
+    question: gap.researchQuestion!.trim(),
     whyNow:
-      `The report filed for "${parentObjective.slice(0, 120)}" records this as unresolved rather ` +
-      'than answered, so it is still open.',
+      `The audit of "${parentObjective.slice(0, 120)}" recorded this as a ` +
+      `${gap.classification} the filed report does not settle` +
+      (gap.expectedContribution ? `: ${gap.expectedContribution.slice(0, 200)}` : '') +
+      '. The report was filed with it named rather than answered, so it is still open.',
   };
 }
 
