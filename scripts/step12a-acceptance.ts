@@ -200,6 +200,38 @@ export const ACCEPTANCE_SUITE = [
     purpose: "a question whose answer depends on a fact the public record does not hold: a genuine unresolved gap, a person's decision to file with it named, the same mission resuming, and the one follow-on that question leaves behind",
     conversationTitle: 'S12A-ACC-4',
   },
+  /*
+   * Two re-runs, and what each of them is a re-run of.
+   *
+   * `S12A-ACC-3` and `S12A-ACC-4` both ran and both produced something other
+   * than what they were declared for. Neither is deleted: they are part of the
+   * suite, they hold real work, and the record of what a scenario did is the
+   * only way to tell a re-run from a retry.
+   *
+   * `S12A-ACC-3` asked a question the archive holds an unchecked answer to —
+   * `scenario-check` confirmed `PRESENT_BUT_UNVERIFIED` before it was asked —
+   * and the judgment queued it outright anyway, because `askArchive` read only
+   * the *statement* a capture pass wrote rather than the question the person
+   * asked. That defect is repaired at its boundary; `S12A-ACC-5` is the same
+   * shape of question asked again against the repaired check.
+   *
+   * `S12A-ACC-4` asked what the written redistribution terms on the county
+   * feeds are, and the capture pass merged it into the completed idea — which
+   * had asked about bulk access *"and on what terms"*. That is the semantic
+   * dedupe working, not failing, so nothing about it is repaired: `S12A-ACC-6`
+   * asks a question about a different part of the business, which the archive
+   * cannot answer for a reason that has nothing to do with wording.
+   */
+  {
+    scenarioId: 'S12A-ACC-5',
+    purpose: 'a bounded cheap look, asked again once the archive check read the question rather than the summary of it',
+    conversationTitle: 'S12A-ACC-5',
+  },
+  {
+    scenarioId: 'S12A-ACC-6',
+    purpose: "a question whose answer is not in the public record at all: a genuine unresolved gap, a person's decision to file with it named, the same mission resuming, and the one follow-on it leaves behind",
+    conversationTitle: 'S12A-ACC-6',
+  },
 ] as const;
 
 /**

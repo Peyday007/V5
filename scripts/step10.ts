@@ -190,6 +190,47 @@ const ACCEPTANCE_SCENARIOS = {
       'APIs? We need to know what we are contractually allowed to store and pass on to our ' +
       'own users before we build anything on those feeds.',
   },
+  /*
+   * The two re-runs. What each is a re-run *of* is recorded in
+   * `ACCEPTANCE_SUITE`, beside the scenario it replaces.
+   */
+  'S12A-ACC-5': {
+    purpose: 'a bounded cheap look, against the repaired archive check',
+    statement:
+      'establish whether the five-state success-fee brokerage licensure summary is still current',
+    /*
+     * The other subject the archive holds an unchecked answer on:
+     * `exc_29c46282531b46358cdb`, an `UNSUPPORTED_ASSERTION` headed *"LICENSURE
+     * OF SUCCESS-FEE BUSINESS BROKERAGE — FIVE STATES (law in force as at
+     * 2026)"*, with no source that can be checked. Whether that summary still
+     * holds outside California decides where Deal Dispatch may operate at all,
+     * and "is it still in force" is a presence question.
+     */
+    question:
+      'We have a five-state summary of success-fee business brokerage licensure written up as ' +
+      'law in force in 2026, and as far as I can tell nobody ever checked it against anything. ' +
+      'Outside California, is that summary still current, or has one of those states changed ' +
+      'its position since we wrote it down?',
+  },
+  'S12A-ACC-6': {
+    purpose: "a question the public record does not answer, and the person's decision that follows",
+    statement:
+      'establish the realised net take-rate of comparable success-fee marketplaces after refunds and clawbacks',
+    /*
+     * Deliberately about a different part of the business from anything the
+     * archive holds, so nothing here depends on wording: the answer is private
+     * financial data. Comparable marketplaces do not publish realised net
+     * take-rates after refunds and clawbacks, and the honest outcome is a named
+     * unresolved gap rather than an invented figure. **Nothing manufactures the
+     * gap** — the question is one Deal Dispatch's pricing actually turns on,
+     * and the research is free to settle it if a source exists.
+     */
+    question:
+      'Before we set our own pricing I want to know what comparable success-fee marketplaces ' +
+      'actually realise as a net take-rate once refunds, clawbacks and unpaid invoices are ' +
+      'taken out — not their headline rate. What do the comparable operators actually net, and ' +
+      'where is that published?',
+  },
 } as const;
 
 async function scope(): Promise<string> {

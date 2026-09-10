@@ -7750,3 +7750,48 @@ S12A-ACC-4   rcv_ec55c6c2832c41e9914e   rmsg_04fed616839f498483b5   dispatched
 
 Every candidate, judgment, probe, mission, park and follow-on after that point
 is the product's own.
+
+### What the first two scenarios actually did
+
+Neither produced what it was declared for, and both are worth recording rather
+than replacing quietly.
+
+**`S12A-ACC-3` launched a mission instead of taking a look.** The pre-check said
+`PRESENT_BUT_UNVERIFIED` for the question as the person wrote it — and again for
+the short statement predicted beside it — so the scenario was well-posed. Then
+the judgment queued the idea outright: `rcn_43838b1144c24c5785f8`
+`QUEUED / WORTH_DOING`, no probe, and mission `rms_bcc7d9cbf9c541ef8843` on
+packet `orc_91818deaa92a4172aa4e` already synthesising twelve minutes later.
+
+The cause is a boundary defect, not the scenario. `askArchive` built its one
+proposed requirement from `candidate.statement` — the short line the *capture
+pass* writes — and `relevance` is the fraction of a requirement's terms found in
+a claim. So the entire coverage verdict rested on the worker's choice of words:
+the same question read `PRESENT_BUT_UNVERIFIED` as the person asked it and
+`MISSING` as the worker summarised it, and Brain spent a research packet on
+something it already held an unchecked answer to.
+
+That is §24's own recorded lesson at a new boundary. Mutation 30 found the
+compiled fragment inheriting a worker's restatement — *"the counties Deal
+Dispatch cares about"* — and repaired it by falling back to the person's own
+message. The archive check needed the identical repair and had not had it. It
+now asks about both, and combines them **asymmetrically on purpose**:
+`fullyAnswered` needs both readings to agree, because rejecting an idea stops
+work a person asked for; `contradicting` and `unverified` take the union,
+because both lead only to a bounded look, which is the cheaper mistake.
+
+**`S12A-ACC-4` was merged, and that is the dedupe working.** Its idea
+`rcn_1fcb73e45c48434daa1e` was folded into `rcn_85f9689b461c4972a1ba` — the
+completed packet's own idea, which asked about bulk access *"and on what
+terms"*. A `SEMANTIC` merge onto a canonical idea, held to the floor, is exactly
+what P1 built. Nothing is repaired here; the question was too close to one the
+project had already researched.
+
+So two re-runs join the suite, each recorded against what it replaces.
+`S12A-ACC-5` asks the same *shape* of question against the repaired archive
+check, on the other subject the archive holds an unchecked answer to — the
+five-state success-fee licensure summary written up as law in force in 2026 with
+no source that can be checked. `S12A-ACC-6` moves to a different part of the
+business entirely, so nothing about it depends on wording: what comparable
+success-fee marketplaces actually net after refunds and clawbacks is private
+financial data, and the honest outcome is a named unresolved gap.

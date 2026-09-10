@@ -50,6 +50,7 @@ import { coverBeforeWork } from './coverage.ts';
 import {
   compileMission,
   MISSION_COMPILER_VERSION,
+  personsRequest,
   type CompiledMission,
 } from './compiler.ts';
 import { judge, type JudgmentInputs } from './judgment.ts';
@@ -124,13 +125,38 @@ export interface ArchiveAnswer {
 }
 
 /**
- * Ask the archive first.
+ * Ask the archive first — about what the person asked, not only about the
+ * summary of it.
  *
  * §13's rule at candidate scale: researching a requirement the project already
- * answers spends the allowance to learn something it knew. The candidate's own
+ * answers spends the allowance to learn something it knew. The candidate's
  * statement becomes one proposed requirement — in memory, never persisted,
  * which is what `coverBeforeWork` is built for — and the verdict decides
  * whether anything further is worth asking.
+ *
+ * **The person's own message is asked about too, and that is a correction.**
+ * This read only `candidate.statement`, which is the short line a capture pass
+ * writes; `relevance` is the fraction of a requirement's terms found in a
+ * claim, so the whole verdict rests on the *worker's choice of words*. It
+ * showed up immediately in production: the same question scored
+ * `PRESENT_BUT_UNVERIFIED` as the person wrote it and `MISSING` as the worker
+ * summarised it, so Brain spent a research packet on something it already held
+ * an unchecked answer to.
+ *
+ * That is §24's recorded lesson at a new boundary. Mutation 30 found the
+ * compiled fragment inheriting a worker's restatement — *"the counties Deal
+ * Dispatch cares about"* — and fixed it by falling back to the person's own
+ * message. The archive check needed the same fix and did not get it; a
+ * specification faithful to a summary is not faithful to the question, and
+ * neither is a coverage verdict.
+ *
+ * The two verdicts are combined **asymmetrically, on purpose**:
+ *
+ *   - `fullyAnswered` requires *both* to say answered. Rejecting an idea stops
+ *     work a person asked for, so it takes the conservative reading.
+ *   - `contradicting` and `unverified` take the union. Both lead only to a
+ *     bounded look, which spends nothing a mission would, so the cheaper
+ *     mistake is the one worth making.
  *
  * A project with no layers, or one whose claims cannot be read, returns
  * `fullyAnswered: false` with nothing supporting: **not answered** is the
@@ -161,31 +187,37 @@ export async function askArchive(
   const layer = layers[0];
   if (!layer) return unknown;
   try {
+    const asked = await personsRequest(candidate);
+    /*
+     * Two requirements, and the second one only when it says something the
+     * first does not. A message identical to the statement would double every
+     * count for nothing.
+     */
+    const requirements = [
+      { key: `candidate:${candidate.id}`, statement: candidate.statement },
+      ...(asked && asked.trim() !== candidate.statement.trim()
+        ? [{ key: `candidate:${candidate.id}:asked`, statement: asked }]
+        : []),
+    ];
     const coverage = await coverBeforeWork({
       projectId: candidate.projectId,
       layerId: layer.id,
-      requirements: [
-        {
-          key: `candidate:${candidate.id}`,
-          statement: candidate.statement,
-        },
-      ],
+      requirements,
       ...(claims ? { claims } : {}),
     });
+    const withStatus = (...wanted: string[]): string[] =>
+      coverage.verdicts
+        .filter((verdict) => wanted.includes(verdict.status))
+        .flatMap((verdict) => verdict.claimIds)
+        .slice(0, 20);
     return {
+      // Conservative: an idea is only "already answered" when every reading of
+      // the question says so. `coverBeforeWork` reports `fullyAnswered` for the
+      // whole set, which is exactly that.
       fullyAnswered: coverage.fullyAnswered,
       supporting: coverage.answered.flatMap((verdict) => verdict.claimIds).slice(0, 20),
-      contradicting: coverage.verdicts
-        .filter((verdict) => verdict.status === 'CONTRADICTED')
-        .flatMap((verdict) => verdict.claimIds)
-        .slice(0, 20),
-      unverified: coverage.verdicts
-        .filter(
-          (verdict) =>
-            verdict.status === 'PRESENT_BUT_UNVERIFIED' || verdict.status === 'STALE',
-        )
-        .flatMap((verdict) => verdict.claimIds)
-        .slice(0, 20),
+      contradicting: withStatus('CONTRADICTED'),
+      unverified: withStatus('PRESENT_BUT_UNVERIFIED', 'STALE'),
       claimsConsidered: coverage.claimsConsidered,
     };
   } catch {

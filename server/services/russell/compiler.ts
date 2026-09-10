@@ -474,7 +474,7 @@ function lowerFirst(text: string): string {
  * candidate's own statement is then the question, which is what it was always
  * meant to be a summary of.
  */
-async function personsRequest(candidate: RussellCandidate): Promise<string | null> {
+export async function personsRequest(candidate: RussellCandidate): Promise<string | null> {
   if (candidate.sourceMessageId) {
     const message = await getMessage(candidate.sourceMessageId);
     if (message?.role === 'USER' && message.content.trim()) return message.content;
