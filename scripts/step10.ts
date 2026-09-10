@@ -76,6 +76,7 @@ import { MAX_TURN_ATTEMPTS, ownerPrincipal, retryTurn } from '../server/services
 import { parseJson } from '../server/repos/util.ts';
 import { validateProposal } from '../server/services/russell/proposal.ts';
 import { coverBeforeWork } from '../server/services/russell/coverage.ts';
+import { recoverExecutionLineage } from '../server/services/dispatch/lineageRecovery.ts';
 import { projectClaims } from '../server/services/reconcile/coverage.ts';
 import { shouldCapture } from '../server/services/russell/judgment.ts';
 import {
@@ -1315,6 +1316,40 @@ async function main(): Promise<void> {
     console.log(`  orchestration  ${orchestration.id}  ${orchestration.status}`);
     console.log(`  bin            ${bin.id}  ${bin.state}`);
     console.log(`STEP10: OK audit-packet orchestration=${orchestration.id} bin=${bin.id}`);
+    return;
+  }
+
+  if (command === 'lineage') {
+    /*
+     * What the routing rows can and cannot establish about an audit's account.
+     *
+     * `recoverExecutionLineage` is already on the durable tick, so this runs
+     * nothing the Brain is not running anyway — it is here because the tick's
+     * report goes nowhere a person can read, and **the refusals are the part
+     * that matters**. "The attribution cannot be proven" has to be a recorded
+     * fact with the rows' own reason attached, not something inferred from a
+     * column still being null: those two look identical and lead to different
+     * actions. Recovering it is one; running another audit round is the other.
+     *
+     * Idempotent, and names no credential value — a session reference is an id
+     * of a row, which is what every other read here prints.
+     */
+    const report = await recoverExecutionLineage(50);
+    console.log('LINEAGE RECOVERY');
+    for (const session of report.sessions) {
+      console.log(`  observed    ${session.sessionRef}  routine=${session.routineId}  account=${session.accountId}`);
+    }
+    for (const pass of report.passes) {
+      console.log(`  attributed  pass ${pass.passId}  account=${pass.accountId}`);
+    }
+    for (const entry of report.unresolved) {
+      console.log(`  UNRESOLVED  ${entry.sessionRef}`);
+      console.log(`              ${entry.reason}`);
+    }
+    console.log(
+      `STEP10: OK lineage observed=${report.sessions.length} attributed=${report.passes.length} ` +
+        `unresolved=${report.unresolved.length}`,
+    );
     return;
   }
 
