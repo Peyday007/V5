@@ -84,7 +84,9 @@ import {
   getConversation,
   getMessage,
 } from '../server/repos/russellConversations.ts';
-import { getCandidate } from '../server/repos/russellCandidates.ts';
+import { getCandidate, listCandidates } from '../server/repos/russellCandidates.ts';
+import { listMissions, listOpenRequests } from '../server/repos/russellMissions.ts';
+import { listGoals, listReservations } from '../server/repos/russellAuthority.ts';
 import { beginTurn } from '../server/services/russell/turn.ts';
 import { describeFireTarget } from '../server/services/dispatch/fire.ts';
 import {
@@ -1354,6 +1356,76 @@ async function main(): Promise<void> {
     console.log(`  orchestration  ${orchestration.id}  ${orchestration.status}`);
     console.log(`  bin            ${bin.id}  ${bin.state}`);
     console.log(`STEP10: OK audit-packet orchestration=${orchestration.id} bin=${bin.id}`);
+    return;
+  }
+
+  if (command === 'russell-state') {
+    /*
+     * Every live Russell row for the connected project, in one read.
+     *
+     * Written because the questions that matter during a closure are all about
+     * how the rows relate — which idea became which mission, which mission
+     * holds which packet, what is waiting on a person, and what is holding the
+     * concurrency the next launch needs. Answering those one command at a time
+     * means a round trip per row and a picture assembled from readings taken
+     * minutes apart, which is how a stale premise gets acted on.
+     *
+     * Read-only and content-free: ids, enums, counts and timestamps. No
+     * conversation text, no statement, no card wording — §24's boundary, at the
+     * surface that most wants to cross it.
+     */
+    const project = await getProjectBySlug(DEAL_DISPATCH_SLUG);
+    if (!project) return refuseStep10('no Deal Dispatch project');
+
+    console.log('RUSSELL STATE');
+
+    const goals = (await listGoals(project.id)).filter((goal) => goal.state === 'ACTIVE');
+    for (const goal of goals) {
+      console.log(`  grant       ${goal.id}  policy ${goal.workPolicy}  maxConcurrent ${goal.maxConcurrent}`);
+      const held = (await listReservations(goal.id)).filter((entry) => entry.state === 'HELD');
+      console.log(`              held reservations ${held.length}`);
+      for (const entry of held) {
+        console.log(`                ${entry.id}  ${entry.kind}  amount ${entry.amount}  expires ${entry.expiresAt}`);
+      }
+    }
+
+    console.log('  MISSIONS');
+    // Every mission, including the finished ones: "did a follow-on happen" is
+    // exactly what A13 reads, and it reads it off a DONE row.
+    for (const mission of await listMissions({ projectId: project.id, limit: 60 })) {
+      const packet = mission.orchestrationId
+        ? await getOrchestration(mission.orchestrationId)
+        : null;
+      console.log(
+        `    ${mission.id}  ${mission.state}` +
+          `  packet ${mission.orchestrationId ?? '—'} ${packet?.status ?? '—'}` +
+          `  verdict ${packet?.verdict ?? '—'}` +
+          `  gapPolicy ${packet?.unresolvedGapPolicy ?? '—'}` +
+          `  next ${mission.nextMissionId ?? '—'}` +
+          `  writeback ${mission.writebackAt ? 'yes' : 'no'}`,
+      );
+    }
+
+    console.log('  OPEN DECISIONS');
+    const open = await listOpenRequests(project.id);
+    if (open.length === 0) console.log('    (none)');
+    for (const request of open) {
+      console.log(
+        `    ${request.id}  mission ${request.missionId ?? '—'}  urgency ${request.urgency}` +
+          `  choices [${request.choices.map((choice) => choice.key).join(' ')}]`,
+      );
+    }
+
+    console.log('  IDEAS');
+    for (const candidate of await listCandidates({ projectId: project.id, limit: 60 })) {
+      console.log(
+        `    ${candidate.id}  ${candidate.state}  ${candidate.priority ?? '—'}` +
+          `  canonical ${candidate.canonicalCandidateId ?? '—'}` +
+          `  followOnOf ${candidate.followOnOfMissionId ?? '—'}`,
+      );
+    }
+
+    console.log(`STEP10: OK russell-state project=${project.id}`);
     return;
   }
 
