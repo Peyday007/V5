@@ -63,11 +63,22 @@ function runSuite(env: Record<string, string>): Promise<RunOutcome> {
   });
 }
 
-/** Pull the counts out of vitest's own summary rather than recomputing them. */
-function countsFrom(tail: string): { files: number; tests: number } {
-  const files = /Test Files\s+(\d+) passed/.exec(tail);
-  const tests = /Tests\s+(\d+) passed/.exec(tail);
-  return { files: Number(files?.[1] ?? 0), tests: Number(tests?.[1] ?? 0) };
+/**
+ * Pull the counts out of vitest's own summary rather than recomputing them.
+ *
+ * Both shapes, because vitest prints `N passed` when everything passes and
+ * `N failed | M passed` when something does not — and the first version matched
+ * only the happy one, so a run with three failures recorded "0 tests in 0 files"
+ * and looked like a run that never happened rather than one that failed.
+ */
+function countsFrom(tail: string): { files: number; tests: number; failed: number } {
+  const files = /Test Files\s+(?:(\d+) failed \| )?(\d+) passed/.exec(tail);
+  const tests = /Tests\s+(?:(\d+) failed \| )?(\d+) passed/.exec(tail);
+  return {
+    files: Number(files?.[2] ?? 0),
+    tests: Number(tests?.[2] ?? 0),
+    failed: Number(tests?.[1] ?? 0),
+  };
 }
 
 /**
@@ -225,6 +236,7 @@ async function main(): Promise<void> {
       exitCode: sqlite.exitCode,
       files: sqliteCounts.files,
       tests: sqliteCounts.tests,
+      failed: sqliteCounts.failed,
     },
   });
   console.log(
@@ -245,6 +257,7 @@ async function main(): Promise<void> {
         exitCode: postgres.exitCode,
         files: postgresCounts.files,
         tests: postgresCounts.tests,
+        failed: postgresCounts.failed,
       },
     });
     console.log(
