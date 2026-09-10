@@ -819,7 +819,15 @@ export interface PutArtifactInput {
   text: string;
   /** A key the storage layer produced. Never a path built by hand. */
   storageKey?: string | null;
-  /** Keep the text on the row when it is small enough to be worth reading inline. */
+  /**
+   * How much text to keep on the row.
+   *
+   * Generous, because the alternative turned out to be worse than large rows: a
+   * worker log over the old limit was recorded with its hash, its size and its
+   * content *nowhere* — a row that says evidence existed and cannot produce it.
+   * Over the limit the tail is kept, with a marker, because the end of a worker's
+   * run is where its reply and its reason are.
+   */
   inlineLimit?: number;
 }
 
@@ -834,7 +842,11 @@ export async function putArtifact(input: PutArtifactInput): Promise<FactoryArtif
   const db = getDb();
   const sha256 = createHash('sha256').update(input.text).digest('hex');
   const byteSize = Buffer.byteLength(input.text, 'utf8');
-  const inlineLimit = input.inlineLimit ?? 16 * 1024;
+  const inlineLimit = input.inlineLimit ?? 256 * 1024;
+  const inline =
+    byteSize <= inlineLimit
+      ? input.text
+      : `[the first ${byteSize - inlineLimit} bytes are omitted; the tail is kept]\n${input.text.slice(-inlineLimit)}`;
   const id = newId('fat');
   await db.run(
     `INSERT INTO factory_artifacts (
@@ -851,7 +863,7 @@ export async function putArtifact(input: PutArtifactInput): Promise<FactoryArtif
       sha256,
       byteSize,
       input.storageKey ?? null,
-      byteSize <= inlineLimit ? input.text : null,
+      inline,
       factoryNow(),
     ],
   );
