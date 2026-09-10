@@ -283,6 +283,57 @@ collide, and the sweeper narrowing that had never landed. All three are in §2.
 
 ---
 
+## 3b. Production closure: reconciliation, the hosted control plane, and a second repository
+
+**The branch was reconciled with what production actually runs, not with what it
+ran this morning.** Two other objectives moved all day. Step 12A
+(`claude/zealous-hypatia-78a2yp`) deployed successfully at 22:09Z; Website
+Connection (`claude/blissful-tesla-a31dc1`) deployed at 22:14Z — its workflow run
+is marked failed, and reading the jobs shows the *deploy* step succeeded and a
+post-deploy site-preparation step did not, which is a different fact. So
+production is Website Connection's tree, which already carries Step 12A inside
+it. The factory branch merged that, then took the one ledger commit Step 12A had
+beyond it, and `git merge-base --is-ancestor` confirms both are fully contained.
+Nothing of either was rewritten: they are merges, and their commits keep their
+own history.
+
+The collision worth recording is the migration number. Both other branches had
+already taken `035`, and Website Connection `036`, so the factory's migration
+moved to `037` — behind them rather than in front, because theirs are applied in
+production and an applied migration is not editable. That renumbering made the
+pre-reconciliation local database unbootable (its `schema_migrations` recorded
+`035` as the factory's), which is why the bootstrap campaign's rows live in
+`data/backups/brain-prereconcile-e1880db.db` and the verification after this
+point runs on a database migrated from empty on the reconciled chain. The 24
+acceptance conditions were read from rows **before** the reconciliation, at
+`e1880db`; they are historical and are not re-derived from the current database.
+
+**The factory now knows which repository it is working in.** Migration 038 adds
+`repository_root` to the contract. Until then `repository` held the remote URL —
+right for a pull request, useless for `git worktree add` — and the local path came
+from whoever started the tick, defaulting to the Brain's own checkout. A tick that
+forgot the flag would plan, lease, diff and verify against the wrong repository
+with every row still looking correct. That is the difference between a factory
+that *can* target another repository and one that does so safely, and it was found
+by trying.
+
+**The hosted control plane is what ships, and it is deliberately not a worker.**
+The production image contains no `.git` (it is in `.dockerignore`: an image is
+pushed to a registry and pulled by machines nobody here controls) and no coding
+worker, because §22's rule is that the surface a worker runs on grants its own
+authority. So the deployed factory holds contracts, campaigns, units, sessions,
+reviews, findings, the ledger, the writeback and the two decisions that belong to
+a person — and refuses a submission it cannot pin, with a 422 naming the remedy
+rather than the 500 carrying a git error that it used to answer.
+
+`scripts/verify-hosted.ts` gained both halves of that: eleven checks on the
+factory's own boundary at the edge, and a beacon covering every row type a
+campaign produces — a campaign, three units including one holding a live hour-long
+lease, two sessions, a review with its verdict and independence tier, two findings
+in different states, a takeover on the ledger, and the writeback — left before the
+production restart the deploy pipeline performs and checked afterwards by a process
+that created none of it.
+
 ## 4. What is not proven
 
 **Every one of the twenty-four production-shaped conditions passes**, read from
