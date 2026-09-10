@@ -35,7 +35,7 @@ import {
   listSessions,
   listWorkers,
 } from '../server/repos/factoryFleet.ts';
-import { approveObjective, submitObjective } from '../server/services/factory/contract.ts';
+import { amendContract, approveObjective, submitObjective } from '../server/services/factory/contract.ts';
 import { capacity, probeFleet, readiness, register } from '../server/services/factory/registry.ts';
 import { INITIAL_LANE_TARGET } from '../server/services/factory/scheduler.ts';
 import { installPlan, validatePlan } from '../server/services/factory/planner.ts';
@@ -178,6 +178,68 @@ async function main(): Promise<void> {
       });
       process.stdout.write(
         `approved by ${user.email}\ncampaign ${campaign.id} ${created ? '(created)' : '(already existed)'}\n`,
+      );
+      break;
+    }
+
+    /*
+     * The amendment ledger, with an entrance.
+     *
+     * `amendContract` already existed, was already tested, and could be reached
+     * by nothing an operator runs — which is the shape this codebase keeps
+     * finding and keeps calling a defect rather than a gap. The case it is for is
+     * real and arrived immediately: a repository with no package.json derives no
+     * verification commands, so the contract starts with none, and the moment a
+     * campaign's first unit lands a test harness the commands have to be added or
+     * every later integration verifies nothing.
+     *
+     * Adding is all this can do to them. The service refuses a FACTORY actor on
+     * an immutable field and refuses a mutation scope that widens; this passes
+     * PERSON because an operator is typing it, and the reason is required because
+     * an amendment with no reason is a silent redefinition of success.
+     */
+    case 'amend': {
+      const changeRequestId =
+        flagString(flags, 'change-request') ?? fail('--change-request is required');
+      const field = flagString(flags, 'field') ?? fail('--field is required');
+      const reason = flagString(flags, 'reason') ?? fail('--reason is required');
+      const raw = flagString(flags, 'value') ?? fail('--value is required');
+      // A list for the list-shaped fields, a plain string for the rest. Parsed
+      // here rather than guessed inside the service.
+      const listFields = new Set([
+        'acceptance_conditions',
+        'non_goals',
+        'mutation_scope',
+        'verification_commands',
+      ]);
+      const newValue: unknown = listFields.has(field)
+        ? raw.trim().startsWith('[')
+          ? (JSON.parse(raw) as unknown)
+          : raw.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0)
+        : raw;
+      const campaign = await getCampaignByChangeRequest(changeRequestId);
+      const users = await listUsers();
+      const actorId = flagString(flags, 'user') ?? users[0]?.id ?? null;
+      const result = await amendContract({
+        changeRequestId,
+        campaignId: campaign?.id ?? null,
+        field,
+        newValue,
+        reason,
+        actorType: 'PERSON',
+        actorId,
+        affectedWork: (flagString(flags, 'affects') ?? '')
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter((entry) => entry.length > 0),
+      });
+      if (!result.ok) fail(result.reason);
+      process.stdout.write(
+        `amended ${field}\n` +
+          `from ${JSON.stringify(result.amendment.oldValue)}\n` +
+          `to   ${JSON.stringify(result.amendment.newValue)}\n` +
+          `reason ${result.amendment.reason}\n` +
+          `re-verification ${result.amendment.requiresReverification ? 'required' : 'not required'}\n`,
       );
       break;
     }
