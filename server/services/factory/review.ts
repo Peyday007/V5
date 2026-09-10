@@ -48,7 +48,7 @@ import {
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { REVIEW_FENCE, compileReviewAssignment } from './prompts.ts';
 import { executorFor } from './executors/index.ts';
-import { campaignWorkspace, ensureWorktree, git, gitOrThrow } from './git.ts';
+import { campaignWorkspace, ensureWorktree, git, gitOrThrow, mergeBase } from './git.ts';
 
 /** A reviewer reads. It does not write, and the allowance is how that is true. */
 export const REVIEWER_ALLOWED_TOOLS = [
@@ -355,12 +355,19 @@ export async function reviewCampaign(input: ReviewInput): Promise<ReviewOutcome>
     state: finding.state,
   }));
 
+  // What this campaign added, rather than everything that landed on the base
+  // branch since the pin. A campaign merges its base in whenever that branch
+  // moves, so the pinned base is the wrong end of the diff for a reviewer.
+  const effectiveBase =
+    (await mergeBase(input.repoRoot, changeRequest.baseBranch, input.reviewedSha)) ??
+    campaign.baseSha;
+
   const assignment = compileReviewAssignment({
     changeRequest,
     round: input.round,
     reviewedSha: input.reviewedSha,
-    baseSha: campaign.baseSha,
-    diffCommand: `git diff ${campaign.baseSha.slice(0, 12)}..${input.reviewedSha.slice(0, 12)}`,
+    baseSha: effectiveBase,
+    diffCommand: `git diff ${effectiveBase.slice(0, 12)}..${input.reviewedSha.slice(0, 12)}`,
     units: units
       .filter((unit) => unit.state === 'INTEGRATED')
       .map((unit) => ({
