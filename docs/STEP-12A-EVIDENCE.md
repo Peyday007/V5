@@ -7719,3 +7719,79 @@ Two assertions in `tests/packet.test.ts` were pinning that defect —
 answered one is untouched"*, and `every(status === 'MISSING')` under *"nothing
 narrowed"*, which is a claim about `NOT_REQUIRED`. Both now assert what their
 comments always said. **The assertions were wrong, not the code.**
+
+### The declared scenarios, started
+
+Both were checked read-only before anything was asked, and both are well-posed
+for what they are for:
+
+```
+S12A-ACC-3   PRESENT_BUT_UNVERIFIED   would explore true    (as statement: true)
+S12A-ACC-4   MISSING                  needs research true   (as statement: true)
+```
+
+`S12A-ACC-3` asks whether a business-only exemption from DRE broker licensure
+exists for success-fee intermediaries. The project wrote a provisional answer to
+that down and nothing checkable supports it, so the coverage verdict is
+`PRESENT_BUT_UNVERIFIED` and the ordinary judgment sends it for a bounded look
+rather than a packet. `S12A-ACC-4` asks for the written terms of use and
+redistribution rights on the county assessment feeds; the archive has nothing on
+it, so it becomes research — and the compliant audit on the completed packet
+already recorded that no such written terms were found, which is why the honest
+outcome is expected to be a named unresolved gap rather than an answer.
+
+Started 2026-09-10, each as one message from the project's own owner through
+`beginTurn` — the same service the HTTP route calls — and nothing else:
+
+```
+S12A-ACC-3   rcv_51552b1b674144df99cb   rmsg_73e60e5eee9e47959ce2   dispatched
+S12A-ACC-4   rcv_ec55c6c2832c41e9914e   rmsg_04fed616839f498483b5   dispatched
+```
+
+Every candidate, judgment, probe, mission, park and follow-on after that point
+is the product's own.
+
+### What the first two scenarios actually did
+
+Neither produced what it was declared for, and both are worth recording rather
+than replacing quietly.
+
+**`S12A-ACC-3` launched a mission instead of taking a look.** The pre-check said
+`PRESENT_BUT_UNVERIFIED` for the question as the person wrote it — and again for
+the short statement predicted beside it — so the scenario was well-posed. Then
+the judgment queued the idea outright: `rcn_43838b1144c24c5785f8`
+`QUEUED / WORTH_DOING`, no probe, and mission `rms_bcc7d9cbf9c541ef8843` on
+packet `orc_91818deaa92a4172aa4e` already synthesising twelve minutes later.
+
+The cause is a boundary defect, not the scenario. `askArchive` built its one
+proposed requirement from `candidate.statement` — the short line the *capture
+pass* writes — and `relevance` is the fraction of a requirement's terms found in
+a claim. So the entire coverage verdict rested on the worker's choice of words:
+the same question read `PRESENT_BUT_UNVERIFIED` as the person asked it and
+`MISSING` as the worker summarised it, and Brain spent a research packet on
+something it already held an unchecked answer to.
+
+That is §24's own recorded lesson at a new boundary. Mutation 30 found the
+compiled fragment inheriting a worker's restatement — *"the counties Deal
+Dispatch cares about"* — and repaired it by falling back to the person's own
+message. The archive check needed the identical repair and had not had it. It
+now asks about both, and combines them **asymmetrically on purpose**:
+`fullyAnswered` needs both readings to agree, because rejecting an idea stops
+work a person asked for; `contradicting` and `unverified` take the union,
+because both lead only to a bounded look, which is the cheaper mistake.
+
+**`S12A-ACC-4` was merged, and that is the dedupe working.** Its idea
+`rcn_1fcb73e45c48434daa1e` was folded into `rcn_85f9689b461c4972a1ba` — the
+completed packet's own idea, which asked about bulk access *"and on what
+terms"*. A `SEMANTIC` merge onto a canonical idea, held to the floor, is exactly
+what P1 built. Nothing is repaired here; the question was too close to one the
+project had already researched.
+
+So two re-runs join the suite, each recorded against what it replaces.
+`S12A-ACC-5` asks the same *shape* of question against the repaired archive
+check, on the other subject the archive holds an unchecked answer to — the
+five-state success-fee licensure summary written up as law in force in 2026 with
+no source that can be checked. `S12A-ACC-6` moves to a different part of the
+business entirely, so nothing about it depends on wording: what comparable
+success-fee marketplaces actually net after refunds and clawbacks is private
+financial data, and the honest outcome is a named unresolved gap.

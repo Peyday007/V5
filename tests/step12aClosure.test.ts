@@ -25,6 +25,7 @@ import { capture } from '../server/services/russell/judgment.ts';
 import { judgeCandidate } from '../server/services/russell/planning.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
 import { listProbesForCandidate, listObservations } from '../server/repos/russellProbes.ts';
+import { addMessage, createConversation } from '../server/repos/russellConversations.ts';
 import { tick } from '../server/services/russell/loop.ts';
 import { GENERAL_LIGHT_PROBE_V1 } from '../server/services/russell/probeEnvelope.ts';
 import {
@@ -165,6 +166,48 @@ describe('a cheap look comes first only when the archive holds something to chec
     expect(judged.priority).not.toBe('EXPLORE');
     expect(judged.state).toBe('QUEUED');
     expect(judged.judgment?.['cheapToReduceAssessed']).toBe('ARCHIVE_HOLDS_NOTHING_TO_CHECK');
+  });
+
+  it('reads the question the person asked, not only the summary a worker wrote', async () => {
+    /*
+     * The production defect, in one test.
+     *
+     * `relevance` is the fraction of a requirement's terms found in a claim, so
+     * a coverage verdict computed from `candidate.statement` alone rests on the
+     * worker's choice of words. Here the person's own message says what the
+     * archive's unchecked claim says and the statement does not — and before
+     * this, Brain spent a research packet on a question it already held an
+     * unchecked answer to.
+     */
+    await authorize();
+    const conversation = await createConversation({
+      ownerUserId: userId,
+      title: 'A thread',
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    const asked = await addMessage({
+      conversationId: conversation.id,
+      role: 'USER',
+      content:
+        'Does a single statewide index of Michigan township assessing offices exist, or did we ' +
+        'only ever assume one does?',
+    });
+    const captured = await capture({
+      title: 'The index question',
+      statement: 'check the assumption we made earlier',
+      projectId,
+      visibility: 'PRIVATE',
+      conversationId: conversation.id,
+      sourceMessageId: asked.id,
+    });
+    const candidateId = captured.candidate!.id;
+
+    await judgeCandidate(candidateId, { claims: [unverifiedClaim()] });
+
+    const judged = (await getCandidate(candidateId))!;
+    expect(judged.priority).toBe('EXPLORE');
+    expect(judged.judgment?.['cheapToReduceAssessed']).toBe('ARCHIVE_HOLDS_UNVERIFIED_OR_STALE');
   });
 
   it('opens one probe through the loop, settles it, and does not open a second', async () => {
