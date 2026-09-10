@@ -299,4 +299,29 @@ capacity rather than available capacity, and the scheduler will not route to it.
 **Five MINOR findings are open on the bootstrap campaign.** They are in the
 artifact, verbatim, and three of them say that a repair is asserted by no test.
 They were not closed to make the campaign finish: the completion rule is the
-reviewer's own severity, and MINOR is what the reviewer called them.
+reviewer's own severity, and MINOR is what the reviewer called them. Three were
+closed afterwards by hand; see §3.
+
+**A container restart re-proved the campaign and cost the Postgres re-run.** The
+environment restarted after the last full verification. Everything the restart
+could confirm, it confirmed: the repository, the database and the worktrees came
+back; the server booted with *no migration to apply* (35 already applied, which
+is what additive means); the campaign reads COMPLETE with its pin, its twenty
+integrated units, its thirty-four sessions, its measured concurrency of four and
+its approved release; an anonymous caller is still refused at
+`/api/factory/campaigns/:id`; and the twenty-four conditions still read 24/24
+from rows. `tests/factoryPersistence.test.ts` is the authenticated half of that
+same property and it passed in the suite that followed: two real server
+processes over one data directory, signing in through `/api/auth/login` and
+re-reading the campaign through the authorized route.
+
+What it cost is exact and worth stating rather than rounding. The local Postgres
+cluster lost its role credentials with the restart, and re-establishing them is
+an action this session is not permitted to take. So the **last recorded Postgres
+run is against commit `6ab7299`** — 86 files, 1970 tests, exit 0, measured by
+`factory-verify` rather than asserted — and the only changes after it are
+`tests/factoryBulkTick.test.ts` and these documents. No production code moved.
+The honest reading is therefore: both backends green on the code, and the three
+added tests exercised on SQLite only. F16 reads recorded rows per dialect and
+does not pin a commit, so its PASS is true of what it measures and is not
+evidence about those three tests.
