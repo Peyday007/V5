@@ -79,6 +79,8 @@ import {
 } from './repair.ts';
 import { assembleDeliverable } from './assemble.ts';
 import { planCampaign } from './architect.ts';
+import { recoverCampaign } from './recovery.ts';
+import { recordCampaignOutcome } from './writeback.ts';
 
 export interface TickOptions {
   repoRoot?: string;
@@ -212,6 +214,34 @@ async function runTick(
     });
   }
 
+  // A dead process may have left this campaign's sessions RUNNING, its unit
+  // leases stale, its worktrees undisposed, or its own recorded state
+  // describing a pipeline stage nothing underneath it still supports. Recovered
+  // before anything below schedules or dispatches, so neither ever acts on a
+  // picture of the campaign a dead process left behind. A recovery failure is
+  // recorded as a note rather than thrown — a tick that cannot recover is still
+  // a tick that should try to make progress.
+  try {
+    const recovery = await recoverCampaign(campaignId, { repoRoot });
+    if (
+      recovery.sessionsClosed > 0 ||
+      recovery.leasesReclaimed > 0 ||
+      recovery.worktreesPruned > 0 ||
+      recovery.stateRederived
+    ) {
+      notes.push(
+        `recovery: ${recovery.sessionsClosed} session(s) closed, ${recovery.leasesReclaimed} lease(s) reclaimed, ` +
+          `${recovery.worktreesPruned} worktree(s) pruned` +
+          (recovery.stateRederived
+            ? `; state re-derived ${recovery.stateRederived.from} -> ${recovery.stateRederived.to}`
+            : ''),
+      );
+    }
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : String(error);
+    notes.push(`recovery failed: ${detail.slice(0, 300)}`);
+  }
+
   // A dead dispatcher's sessions are still RUNNING, and `workerLoad` counts
   // them — so its lanes hold phantom capacity until somebody closes them. Done
   // first, because the scheduler's idea of what is free is read from these rows.
@@ -319,6 +349,18 @@ async function advance(
     evidenceClass: 'MEASURED',
     detail: { from: campaign.state, to, stageDetail },
   });
+  if (to === 'COMPLETE') {
+    // The rows already agree the campaign is finished — patched and eventled
+    // above — so this is what leaves that fact in Brain's own project history.
+    // Idempotent by itself; no second guard belongs here, and a writeback
+    // failure is a note, never a reason to undo the completion above.
+    try {
+      await recordCampaignOutcome(campaign.id);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      report.notes.push(`writeback failed: ${detail.slice(0, 300)}`);
+    }
+  }
   return { ...report, state: to, stage: stageDetail, progress: true };
 }
 
