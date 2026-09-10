@@ -1900,6 +1900,113 @@ export async function ensureDispatchIntent(bin: Bin): Promise<boolean> {
   return result.changes === 1;
 }
 
+/**
+ * A fire that nobody answered, and the bin it left with nothing coming for it.
+ *
+ * `services/dispatch/loop.ts` opens by saying why a fire is not sent at the
+ * moment a bin becomes READY: *"The bin would sit READY forever with nothing
+ * coming for it."* Production reached that state anyway, by a route the intent
+ * table makes unavoidable.
+ *
+ * An intent is one row per `(bin_id, lease_generation)` — a UNIQUE index says
+ * so — and `ensureDispatchIntent` is `ON CONFLICT DO NOTHING`, so a second row
+ * at the same generation is impossible. `claimDispatchIntent` selects only
+ * `PENDING` and `SENDING`, so a `SENT` one is never claimed again. And the
+ * generation advances only when a worker takes a lease. Put those together and
+ * a fired session that never arrives is terminal: no arrival, so no lease, so
+ * no new generation, so no new intent, so no second fire. Ever.
+ *
+ * `bin_99775b55ce7d40549287` is the row. Fired 2026-09-10T22:22:08Z, no worker
+ * checked in, `attempts 0/5`, `READY`, `gen 4`, fleet reporting
+ * `in flight 0 · 1 eligible now` forty minutes later. Capacity available, work
+ * waiting, and nothing that could connect them — with a filed report sitting
+ * one audit role short of a verdict.
+ *
+ * The remedy is the shape everything else here uses: derive it from rows. A
+ * `SENT` intent is a no-show when its bin is **still READY at the very
+ * generation that intent was created for** — a worker that arrived would have
+ * taken a lease and advanced it, so same generation means nothing has been
+ * handed out since — and when the fire is older than the in-flight window, so
+ * this can never race an activation Brain still believes is running. The window
+ * is passed in rather than read here, because `inFlightByRoutine` owns it and
+ * two places holding the same number is how they come to disagree.
+ *
+ * Bounded by the intent's own `max_attempts`, which was always there and had
+ * nothing that could reach it. At the ceiling the row becomes `ABANDONED` —
+ * the state the schema already defines as *attempts exhausted; recorded, never
+ * silently dropped* — because five fires that all went unanswered is a surface
+ * problem a person has to fix, and it must be legible rather than quiet.
+ *
+ * The swap is on `state = 'SENT'`, a value the claimant does not supply, so two
+ * dispatchers reopening at once produce one reopen. Nothing else is touched:
+ * the bin keeps its state, its generation and its refusals, and the intent
+ * keeps its `session_ref`, its attempt count and its history.
+ */
+export async function reopenNoShowDispatches(
+  staleAfterMs: number,
+  limit: number,
+): Promise<{ dispatchId: string; binId: string; outcome: 'REOPENED' | 'ABANDONED' }[]> {
+  const now = binNow();
+  const before = new Date(Date.parse(now) - Math.max(0, staleAfterMs)).toISOString();
+  const rows = await getDb().all<{
+    id: string;
+    bin_id: string;
+    project_id: string;
+    lease_generation: number;
+    attempt_count: number;
+    max_attempts: number;
+  }>(
+    `SELECT d.id AS id,
+            d.bin_id AS bin_id,
+            b.project_id AS project_id,
+            d.lease_generation AS lease_generation,
+            d.attempt_count AS attempt_count,
+            d.max_attempts AS max_attempts
+       FROM bin_dispatch d
+       JOIN bins b ON b.id = d.bin_id
+      WHERE d.state = 'SENT'
+        AND d.sent_at IS NOT NULL
+        AND d.sent_at <= ?
+        AND b.state = 'READY'
+        AND b.lease_generation = d.lease_generation
+      ORDER BY d.sent_at, d.rowid
+      LIMIT ?`,
+    [before, Math.max(1, limit)] as never[],
+  );
+
+  const out: { dispatchId: string; binId: string; outcome: 'REOPENED' | 'ABANDONED' }[] = [];
+  for (const row of rows) {
+    const exhausted = row.attempt_count >= row.max_attempts;
+    const result = await getDb().run(
+      exhausted
+        ? `UPDATE bin_dispatch SET state = 'ABANDONED', updated_at = ?,
+             last_error_kind = 'NO_SHOW',
+             last_error = 'Fired, and no worker ever claimed the bin. Attempts exhausted.'
+            WHERE id = ? AND state = 'SENT'`
+        : `UPDATE bin_dispatch SET state = 'PENDING', next_attempt_at = ?, updated_at = ?,
+             last_error_kind = 'NO_SHOW',
+             last_error = 'Fired, and no worker ever claimed the bin before the in-flight window closed.'
+            WHERE id = ? AND state = 'SENT'`,
+      (exhausted ? [now, row.id] : [now, now, row.id]) as never[],
+    );
+    if (result.changes !== 1) continue;
+    await recordBinEvent({
+      eventType: exhausted ? 'DISPATCH_ABANDONED' : 'DISPATCH_INTENT',
+      binId: row.bin_id,
+      projectId: row.project_id,
+      leaseGeneration: row.lease_generation,
+      outcome: exhausted ? 'ABANDONED' : 'PENDING',
+      measures: { noShow: true, attempt: row.attempt_count, maxAttempts: row.max_attempts },
+    });
+    out.push({
+      dispatchId: row.id,
+      binId: row.bin_id,
+      outcome: exhausted ? 'ABANDONED' : 'REOPENED',
+    });
+  }
+  return out;
+}
+
 export async function getDispatch(id: string): Promise<BinDispatch | null> {
   const row = await getDb().get<BinDispatchRow>(`SELECT * FROM bin_dispatch WHERE id = ?`, [id]);
   return row ? mapBinDispatch(row) : null;

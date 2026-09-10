@@ -1222,6 +1222,23 @@ rules.
   because a compiler that read intent would be the model judgment §8 keeps out of
   state. What changes in that case is the question, never the compiler.
 
+- **A fire nobody answers strands its bin for ever, because the intent table
+  cannot hold a second row for it.** `bin_dispatch` is `UNIQUE (bin_id,
+  lease_generation)` with `ensureDispatchIntent` as `ON CONFLICT DO NOTHING`;
+  `claimDispatchIntent` sees only `PENDING` and `SENDING`; and the generation
+  advances when a worker **takes a lease**. A session that never arrives takes
+  no lease, so no generation, so no intent, so no second fire — which is
+  verbatim the state `services/dispatch/loop.ts` opens by saying it exists to
+  prevent. `reopenNoShowDispatches` derives it: a `SENT` intent whose bin is
+  still `READY` **at the very generation that intent names** has had nothing
+  handed out since, and past `IN_FLIGHT_WINDOW_MS` it is reopenable — the same
+  constant `inFlightByRoutine` counts by, passed rather than restated, so
+  ceasing to count as an activation and becoming reopenable are one instant and
+  a double fire has no window to live in. It gives up out loud at
+  `max_attempts` rather than quietly: five unanswered fires is a surface problem
+  a person must fix, and a bin visibly out of attempts is worth more than one
+  silently waiting.
+
 - **A mission going terminal does not finish the packet it owned, and a park
   nobody will be asked about keeps its work claimable.** Seven production
   packets sat at `NEEDS_HUMAN` under a terminal mission, one of them holding a
