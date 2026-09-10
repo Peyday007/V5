@@ -209,6 +209,17 @@ runs the same script inside the container through `flyctl ssh`, the way
 authentication; `--admin` is the attribution, resolved against the database
 rather than trusted, because an audit row with no author answers nothing later.
 
+One thing about that workflow is worth writing down because it is not a
+property of this repository at all: **GitHub registers a `workflow_dispatch`
+workflow from the default branch**, so a new one is not dispatchable from a
+feature branch until it has landed on the default one, whatever ref you ask for.
+Until then the console is the only entrance, which is why the console's own
+wording carries the same warning the constant does. It is also why the wrong
+scope set has to be *detectable* rather than merely avoidable: the site's health
+check says `Connected … — it answered` only when the credential actually
+authorizes a read, so a site granted the research set reports `it did not
+answer` instead of appearing fine.
+
 **Neither the script nor the workflow issues a credential, and neither can print
 one.** That is the contract rather than caution. A credential is shown once,
 into one response, to somebody signed in; a workflow log is a log that outlives

@@ -334,6 +334,17 @@ are ordinary English. The first version of that rule read all four as states.
 | Brain build | clean |
 | Deal Dispatch build | clean |
 
+Re-run after the second reconciliation with the Step 12A branch — thirty-one
+further commits, no new migration on either chain, so nothing to renumber:
+
+| Suite | Result |
+|---|---|
+| Brain, SQLite | **1 969 passed**, 37 skipped, 0 failed |
+| Brain, Postgres | **1 994 passed**, 12 skipped, 0 failed, exit 0 |
+| Deal Dispatch | **993 passed**, 0 failed |
+| Brain build | clean |
+| Deal Dispatch build | clean |
+
 Three internal defects were found and repaired along the way: the new tables
 were missing the `seq` column Postgres needs; a test-teardown race made the
 Postgres run exit non-zero with every test passing; and the migration runner
