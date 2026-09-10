@@ -80,7 +80,7 @@ import {
 import { assembleDeliverable } from './assemble.ts';
 import { planCampaign } from './architect.ts';
 import { recoverCampaign } from './recovery.ts';
-import { recordCampaignOutcome } from './writeback.ts';
+import { listCampaignsPendingOutcome, recordCampaignOutcome } from './writeback.ts';
 
 export interface TickOptions {
   repoRoot?: string;
@@ -204,7 +204,15 @@ async function runTick(
     notes,
   };
 
-  if (campaign.state === 'COMPLETE' || campaign.state === 'CANCELLED') return report;
+  if (campaign.state === 'COMPLETE' || campaign.state === 'CANCELLED') {
+    // A terminal campaign has nothing left for the loop to move, but its
+    // writeback may not have landed yet — a crash or a swallowed error
+    // between the COMPLETE patch and the writeback insert leaves exactly
+    // this shape. Retried here so a tick on this campaign, however it was
+    // reached, is what closes that gap rather than walking past it forever.
+    await ensureWrittenBack(report, campaign);
+    return report;
+  }
 
   if (changeRequest.state !== 'APPROVED') {
     return await block(report, campaign, 'CONTRADICTORY_CONTRACT', {
@@ -353,15 +361,44 @@ async function advance(
     // The rows already agree the campaign is finished — patched and eventled
     // above — so this is what leaves that fact in Brain's own project history.
     // Idempotent by itself; no second guard belongs here, and a writeback
-    // failure is a note, never a reason to undo the completion above.
-    try {
-      await recordCampaignOutcome(campaign.id);
-    } catch (error: unknown) {
-      const detail = error instanceof Error ? error.message : String(error);
-      report.notes.push(`writeback failed: ${detail.slice(0, 300)}`);
-    }
+    // failure is a note, never a reason to undo the completion above. A
+    // failure here is not the end of it: `ensureWrittenBack` is what a later
+    // tick on this now-terminal campaign retries.
+    await ensureWrittenBack(report, { ...campaign, state: to });
   }
   return { ...report, state: to, stage: stageDetail, progress: true };
+}
+
+/**
+ * Write the campaign's Brain outcome if it has not landed yet, and leave a
+ * trace on the factory's own ledger when it does.
+ *
+ * `recordCampaignOutcome` is safe to call more than once — it reads before it
+ * inserts — so this never has to remember whether an earlier attempt (this
+ * tick's own COMPLETE transition, or a previous tick that died or threw
+ * between the patch and the insert) already got there. Called from both the
+ * transition that first reaches COMPLETE and from every later tick that
+ * finds a terminal campaign still missing one, so the two paths cannot drift
+ * apart about what "written back" means.
+ */
+async function ensureWrittenBack(report: TickReport, campaign: FactoryCampaign): Promise<void> {
+  try {
+    const result = await recordCampaignOutcome(campaign.id);
+    if (result.recorded) {
+      await recordFactoryEvent({
+        campaignId: campaign.id,
+        kind: FACTORY_EVENT_KINDS.writeback,
+        evidenceClass: 'MEASURED',
+        detail: { eventId: result.event?.id ?? null },
+      });
+      report.notes.push('writeback recorded');
+    } else if (result.reason && result.reason !== 'already recorded') {
+      report.notes.push(`writeback not recorded: ${result.reason}`);
+    }
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : String(error);
+    report.notes.push(`writeback failed: ${detail.slice(0, 300)}`);
+  }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1245,12 +1282,24 @@ export async function runCampaign(
   return { reports, final: await getCampaign(campaignId) };
 }
 
-/** Every live campaign, one tick each. What a scheduled dispatcher would call. */
+/**
+ * Every live campaign, one tick each — plus every terminal campaign still
+ * missing its Brain writeback, which `listLiveCampaigns` deliberately excludes
+ * because the loop itself has nothing left to move there. Without this second
+ * set, a campaign that reached COMPLETE with a failed or interrupted
+ * writeback would never be ticked again by anything a scheduled dispatcher
+ * calls: `tickCampaign` still recovers it (see the terminal-state branch in
+ * `runTick`), but only if something hands it that campaign's id. This is
+ * that something. What a scheduled dispatcher would call.
+ */
 export async function tickAllCampaigns(options: TickOptions = {}): Promise<TickReport[]> {
   const { listLiveCampaigns } = await import('../../repos/factory.ts');
-  const campaigns = await listLiveCampaigns();
+  const [live, pendingOutcome] = await Promise.all([
+    listLiveCampaigns(),
+    listCampaignsPendingOutcome(),
+  ]);
   const reports: TickReport[] = [];
-  for (const campaign of campaigns) {
+  for (const campaign of [...live, ...pendingOutcome]) {
     reports.push(await tickCampaign(campaign.id, options));
   }
   return reports;
