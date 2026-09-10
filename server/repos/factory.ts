@@ -915,6 +915,14 @@ export interface UnitClaimInput {
   sessionId?: string | null;
   /** What this worker is able to do. A unit whose role it cannot hold is skipped. */
   roles?: FactoryRole[];
+  /**
+   * Narrow the claim to units the caller already decided about.
+   *
+   * The scheduler chose a pairing; this is how the claim is attempted for *that*
+   * unit rather than for whatever happens to sort first. It is a filter over rows
+   * the caller could already see, so naming a unit is not a way to reach one.
+   */
+  unitIds?: string[];
   limit?: number;
   leaseMs?: number;
   /**
@@ -962,6 +970,10 @@ export async function claimUnits(input: UnitClaimInput): Promise<ClaimedUnit[]> 
     if (input.roles && input.roles.length > 0) {
       roleClause = ` AND role IN (${input.roles.map(() => '?').join(', ')})`;
       params.push(...input.roles);
+    }
+    if (input.unitIds && input.unitIds.length > 0) {
+      roleClause += ` AND id IN (${input.unitIds.map(() => '?').join(', ')})`;
+      params.push(...input.unitIds);
     }
 
     const candidates = await db.all<FactoryWorkUnitRow>(
