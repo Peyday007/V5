@@ -8386,3 +8386,80 @@ The consequence for closure is precise: **A13 and A14 are closed by the same
 single decision**, and neither can be closed without it. Everything up to that
 decision is autonomous; the decision itself is not, and manufacturing it would
 be exactly the falsification the assignment forbids.
+
+## 85. The recovery that starved on its own backlog — 2026-09-10
+
+`reconcileArguedAuditRoles` reached the packet and the judge ran. Five AUDIT
+passes on `orc_91818deaa92a4172aa4e`, all `COMPLETE`, `compliant=true`, every
+pair at `SESSION`:
+
+```
+  PRIMARY      COMPLETE  worker=wkr_1cdd82…  routine=—                account=—
+  ADVERSARIAL  COMPLETE  worker=wkr_1cdd82…  routine=rtn_c7bcec…      account=acct_70dda3…
+  ADVERSARIAL  COMPLETE  worker=wkr_1cdd82…  routine=rtn_c7bcec…      account=acct_70dda3…
+  ADVERSARIAL  COMPLETE  worker=wkr_1cdd82…  routine=rtn_c7bcec…      account=acct_70dda3…
+  JUDGE        COMPLETE  worker=wkr_1cdd82…  routine=rtn_c7bcec…      account=acct_70dda3…
+  applied  PRIMARY_ADVERSARIAL at SESSION / JUDGE_PRIMARY at SESSION / JUDGE_ADVERSARIAL at SESSION
+```
+
+`A11_INDEPENDENT_AUDIT` still could not pass, because `AUDIT_PASSES_RECORDED`
+requires an account on all three ordinals and PRIMARY had none — across many
+ticks of a recovery deployed specifically to fill it.
+
+`step10 lineage` is what turned that from an inference into a reading:
+
+```
+  STEP10: OK lineage observed=0 attributed=0 unresolved=50
+  UNRESOLVED  wcr_014623403985406bb4eb
+              no dispatch Brain sent names a Routine for any bin this session took or claimed work in
+  … forty-nine more, every one of them wcr_
+```
+
+Every entry is a Step 8-era **worker credential** session, from before bins
+existed, that no `bin_dispatch` ever produced. None of them can ever be
+resolved. And the PRIMARY session — an `oat_`, which sorts *before* `wcr_` — is
+not in the list at all, because it already has a `worker_sessions` row. It was
+observed. Only the pass was never filled in.
+
+### The defect
+
+A refusal writes nothing, so an unresolvable session is selected again on the
+next tick, for ever. On its own that is a cost. What made it a wall is that both
+pages were bounded **and ordered oldest-first**:
+
+```ts
+      ORDER BY p.executor_session_ref          // step 1: alphabetical
+      LIMIT ?
+
+      ORDER BY started_at, rowid               // step 2: oldest passes first
+      LIMIT ?
+```
+
+Fifty permanently-unresolvable rows sat at the front of a fifty-row page and
+consumed it every ten seconds. Step 2 was worse than step 1: it selected the
+oldest fifty *unattributed* passes and then looked each session up afterwards,
+so in production all fifty resolved to no observation, nothing was filled, and
+the newer pass whose session **was** observed sat behind them indefinitely.
+
+This is §24 at the recovery's own boundary: a mechanism that cannot reach the
+state it was written for. Its header claimed the opposite — *"idempotent and
+self-limiting… the ordinary steady state is two indexed reads that find
+nothing"* — which is true of a session the rows can settle and false of one they
+cannot.
+
+### The repair
+
+Both queries now select only rows a recovery could actually change:
+
+- the pass fill **joins** `worker_sessions` on session and worker, so a pass
+  whose session is not observed is not in the page at all; and
+- both take the **newest first**, so anything just written is examined on the
+  next tick whatever is behind it.
+
+The bound now limits *work* rather than *examinations*. The backlog is neither
+resolved nor pretended away — those fifty stay unresolvable and stay reported as
+such — it simply no longer spends the budget of the rows that can be settled.
+
+`tests/step12aClosure.test.ts` pins it with a page smaller than the backlog, and
+asserts the backlog is still there and still unattributed afterwards. Reverting
+either half fails it.

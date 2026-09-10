@@ -715,6 +715,74 @@ describe('the executing account is observed from the dispatch that fired the ses
   });
 
   /**
+   * The backlog must not spend the budget of the rows that can be settled.
+   *
+   * A refusal writes nothing, so a session the rows can never settle is
+   * selected again on every tick. On its own that is a cost; ordered
+   * oldest-first inside a bounded page it is a wall. Production had fifty
+   * Step 8-era `wcr_` sessions that no dispatch ever produced, they filled the
+   * page every ten seconds, and the pass this file exists to attribute — newer
+   * than all of them, with its session already observed — was never reached.
+   *
+   * The bound is small here so the shape is the test rather than the volume.
+   */
+  it('reaches a settleable pass past a backlog it can never settle', async () => {
+    const { workerId, routineId, accountId } = await twoRoutinesOneWorker();
+    const orchestration = await packetShell();
+
+    /*
+     * The wall: older passes, on sessions with no fire behind them at all.
+     * Alphabetically and chronologically ahead of the one that matters.
+     */
+    for (let index = 0; index < 3; index += 1) {
+      const stuck = await startPass({
+        orchestrationId: orchestration,
+        passKey: 'AUDIT',
+        ordinal: 5,
+        provider: 'WORKER',
+        prompt: `an old pass ${index}`,
+        promptSha256: String(index).repeat(64).slice(0, 64),
+        executorWorkerId: workerId,
+        executorSessionRef: `wcr_backlog_${index}`,
+      });
+      await finishPass(stuck.id, { status: 'COMPLETE' });
+    }
+
+    // And the one that can be settled: its session was really fired, really
+    // arrived, and is really observed. Only the pass carries no account.
+    const credentialId = 'oat_reachable_session';
+    const bin = await firedBin(routineId, accountId, 'A bin whose session is observed');
+    expect(bin.id).toBeTruthy();
+    expect((await checkIn({ principal: principalFor(workerId, credentialId), workerId })).assigned).toBe(true);
+    expect(await getWorkerSession(credentialId)).not.toBeNull();
+
+    const reachable = await startPass({
+      orchestrationId: orchestration,
+      passKey: 'AUDIT',
+      ordinal: 6,
+      provider: 'WORKER',
+      prompt: 'the pass that needs its account',
+      promptSha256: 'e'.repeat(64),
+      executorWorkerId: workerId,
+      executorSessionRef: credentialId,
+    });
+    await finishPass(reachable.id, { status: 'COMPLETE' });
+
+    // A page smaller than the backlog. Before this, that meant the backlog and
+    // nothing else, on every tick, for ever.
+    const recovery = await recoverExecutionLineage(2);
+    expect(recovery.passes.map((entry) => entry.passId)).toContain(reachable.id);
+    expect((await getPass(reachable.id))?.executorAccountId).toBe(accountId);
+
+    // The backlog is not resolved and is not pretended away.
+    const stillStuck = await getDb().all<{ total: number }>(
+      `SELECT COUNT(*) AS total FROM research_passes
+        WHERE executor_session_ref LIKE 'wcr_backlog_%' AND executor_account_id IS NULL`,
+    );
+    expect(Number(stillStuck[0]?.total ?? 0)).toBe(3);
+  });
+
+  /**
    * And for a session that has long since let go of everything.
    *
    * `bins.lease_credential_id` is current state: overwritten by the next

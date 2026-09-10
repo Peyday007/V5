@@ -76,9 +76,35 @@
  *     resolves to no credential, so it is excluded by name rather than by
  *     failing to match.
  *
- * It is idempotent and self-limiting: once a session is observed and a pass is
- * attributed, both queries stop returning them, so the ordinary steady state is
- * two indexed reads that find nothing.
+ * ---------------------------------------------------------------------------
+ * The bound selects work, not examinations
+ * ---------------------------------------------------------------------------
+ *
+ * This claimed to be "idempotent and self-limiting: once a session is observed
+ * and a pass is attributed, both queries stop returning them". That is true of
+ * a session the rows can settle and **false of one they cannot** — a refusal
+ * writes nothing, so an unresolvable session is selected again on the next tick,
+ * for ever.
+ *
+ * On its own that is only a cost. What made it a defect is that both pages were
+ * bounded *and ordered oldest-first*, so the backlog did not merely cost
+ * something, it **blocked**: production held fifty Step 8-era `wcr_` sessions
+ * that no `bin_dispatch` ever produced, they filled the page on every tick, and
+ * the newer pass this whole file exists to attribute was never reached. A
+ * mechanism that cannot reach the state it was written for — §24, at its own
+ * boundary this time.
+ *
+ * So both queries now select only rows a recovery could actually change:
+ *
+ *   - the pass fill **joins** `worker_sessions` rather than looking each row up
+ *     afterwards, so a pass whose session is not observed is not in the page at
+ *     all; and
+ *   - both take the **newest first**, so anything just written is examined on
+ *     the next tick whatever is behind it.
+ *
+ * The backlog is not resolved and is not pretended away: those sessions stay
+ * unresolvable and stay reported as such. They simply no longer consume the
+ * budget of the rows that can be settled.
  */
 import { getDb } from '../../db/database.ts';
 import { getRoutine, getWorkerSession, recordWorkerSession } from '../../repos/fleet.ts';
@@ -126,7 +152,16 @@ export async function recoverExecutionLineage(limit = 25): Promise<LineageRecove
         AND NOT EXISTS (
           SELECT 1 FROM worker_sessions s WHERE s.session_ref = p.executor_session_ref
         )
-      ORDER BY p.executor_session_ref
+      GROUP BY p.executor_session_ref, p.executor_worker_id
+      /*
+       * Newest first, by the most recent pass that refers to the session.
+       *
+       * Alphabetical order put a permanently unresolvable backlog at the front
+       * of a bounded page and kept it there. What a reader of this wants is the
+       * attribution that is missing *now*, and ordering by the work rather than
+       * by the id is what makes the page reach it.
+       */
+      ORDER BY MAX(p.started_at) DESC, p.executor_session_ref
       LIMIT ?`,
     [bounded],
   );
@@ -254,23 +289,37 @@ export async function recoverExecutionLineage(limit = 25): Promise<LineageRecove
     executor_session_ref: string;
     executor_routine_id: string | null;
   }>(
-    `SELECT id, executor_worker_id, executor_session_ref, executor_routine_id
-       FROM research_passes
-      WHERE executor_account_id IS NULL
-        AND executor_worker_id IS NOT NULL
-        AND executor_session_ref IS NOT NULL
-        AND executor_session_ref <> ''
-        AND executor_session_ref NOT LIKE 'future:%'
-      ORDER BY started_at, rowid
+    /*
+     * Only passes whose session is already observed, and newest first.
+     *
+     * The join is what stops the page being spent on rows nothing could
+     * change: this used to select the oldest fifty unattributed passes and
+     * then look each session up, and in production all fifty resolved to no
+     * observation at all, so the page never advanced and the pass that needed
+     * attributing sat behind them indefinitely.
+     *
+     * The worker still has to match, and that condition is here rather than
+     * afterwards for the same reason. A credential that resolves to a
+     * different worker than the pass recorded is a contradiction between two
+     * rows, and filling one in from the other would settle it by preference.
+     */
+    `SELECT p.id, p.executor_worker_id, p.executor_session_ref, p.executor_routine_id,
+            s.account_id AS observed_account_id, s.routine_id AS observed_routine_id
+       FROM research_passes p
+       JOIN worker_sessions s ON s.session_ref = p.executor_session_ref
+                             AND s.worker_id = p.executor_worker_id
+      WHERE p.executor_account_id IS NULL
+        AND p.executor_worker_id IS NOT NULL
+        AND p.executor_session_ref IS NOT NULL
+        AND p.executor_session_ref <> ''
+        AND p.executor_session_ref NOT LIKE 'future:%'
+      ORDER BY p.started_at DESC, p.rowid DESC
       LIMIT ?`,
     [bounded],
   );
 
   for (const pass of passes) {
     const observed = await getWorkerSession(pass.executor_session_ref);
-    // The worker has to match. A credential that resolves to a different worker
-    // than the pass recorded is a contradiction between two rows, and filling
-    // one in from the other would settle it by preference.
     if (!observed || observed.workerId !== pass.executor_worker_id) continue;
     const result = await getDb().run(
       `UPDATE research_passes
