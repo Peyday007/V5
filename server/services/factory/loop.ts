@@ -397,6 +397,64 @@ function schedulable(unit: FactoryWorkUnit): SchedulableUnit {
 }
 
 /**
+ * One merge at a time, started the moment a lane lands.
+ *
+ * Integration has to be continuous to be worth anything: waiting until every
+ * lane finished before finding out whether their components connect is how a
+ * campaign discovers an interface mismatch after six units were built on it.
+ * But two merges racing into one branch is how a campaign ends up with a tree
+ * nobody ran the tests on — so the work is serialised through this chain rather
+ * than through the end of the tick.
+ *
+ * An in-process chain is enough *because* the campaign tick is claimed: one
+ * dispatcher holds it, and the database guards (`markIntegrated` only from
+ * IMPLEMENTED, and the already-merged check) are what protect the branch from a
+ * second process regardless.
+ */
+function integrationQueue(
+  campaign: FactoryCampaign,
+  changeRequest: FactoryChangeRequest,
+  repoRoot: string,
+): {
+  enqueue(unitId: string): void;
+  drain(): Promise<{ integrated: number; rejected: number; notes: string[] }>;
+} {
+  let chain: Promise<void> = Promise.resolve();
+  let integrated = 0;
+  let rejected = 0;
+  const notes: string[] = [];
+
+  return {
+    enqueue(unitId: string): void {
+      chain = chain.then(async () => {
+        const unit = await getUnit(unitId);
+        if (!unit || unit.state !== 'IMPLEMENTED') return;
+        // The campaign is re-read every time: each merge moves the integration
+        // sha, and the next unit must be verified against the tree that exists.
+        const fresh = (await getCampaign(campaign.id)) ?? campaign;
+        const result = await integrateUnit({
+          repoRoot,
+          campaign: fresh,
+          changeRequest,
+          unit,
+        });
+        if (result.outcome === 'MERGED' || result.outcome === 'ALREADY_MERGED') {
+          integrated += 1;
+          notes.push(`${unit.unitKey}: ${result.reason}`);
+        } else {
+          rejected += 1;
+          notes.push(`${unit.unitKey} rejected: ${result.reason}`);
+        }
+      });
+    },
+    async drain(): Promise<{ integrated: number; rejected: number; notes: string[] }> {
+      await chain;
+      return { integrated, rejected, notes };
+    },
+  };
+}
+
+/**
  * Build the scheduler's input, then act on its decision.
  *
  * The snapshot is recorded before anything is dispatched, which is what makes
@@ -408,7 +466,13 @@ export async function scheduleAndDispatch(
   changeRequest: FactoryChangeRequest,
   repoRoot: string,
   options: TickOptions,
-): Promise<{ decision: SchedulerDecision; dispatched: number; notes: string[] }> {
+): Promise<{
+  decision: SchedulerDecision;
+  dispatched: number;
+  integrated: number;
+  rejected: number;
+  notes: string[];
+}> {
   const notes: string[] = [];
   const at = factoryNow();
   const units = await listUnits(campaign.id);
@@ -490,6 +554,7 @@ export async function scheduleAndDispatch(
 
   const ceiling = Math.max(1, options.maxDispatch ?? decision.laneTarget);
   const assignments = decision.assignments.slice(0, ceiling);
+  const queue = integrationQueue(campaign, changeRequest, repoRoot);
 
   // Every lane at once. The claim inside each is the exclusion, so two lanes that
   // both wanted a unit cannot both have it, and the loser is not an error.
@@ -522,7 +587,7 @@ export async function scheduleAndDispatch(
         ? (await listFindings(campaign.id)).find((f) => f.id === unit.repairsFindingId) ?? null
         : null;
 
-      await executeUnit({
+      const outcome = await executeUnit({
         repoRoot,
         campaign,
         changeRequest,
@@ -533,11 +598,23 @@ export async function scheduleAndDispatch(
         finding,
         timeoutMs: options.unitTimeoutMs,
       });
+      // Integrate this lane now rather than at the end of the tick. The queue
+      // serialises the merges; it does not wait for the other lanes.
+      if (outcome.outcome === 'IMPLEMENTED') queue.enqueue(taken.unit.id);
       return true;
     }),
   );
 
-  return { decision, dispatched: results.filter(Boolean).length, notes };
+  const integration = await queue.drain();
+  notes.push(...integration.notes);
+
+  return {
+    decision,
+    dispatched: results.filter(Boolean).length,
+    integrated: integration.integrated,
+    rejected: integration.rejected,
+    notes,
+  };
 }
 
 /**
@@ -606,10 +683,12 @@ async function executionStage(
   report.dispatched = dispatch.dispatched;
   report.notes.push(...dispatch.notes);
 
-  const integration = await integrateWaiting(campaign, changeRequest, repoRoot);
-  report.integrated = integration.integrated;
-  report.rejected = integration.rejected;
-  report.notes.push(...integration.notes);
+  // Anything a previous tick left implemented, or that a lane produced after its
+  // own integration ran. The dispatch queue has already merged what it could.
+  const leftovers = await integrateWaiting(campaign, changeRequest, repoRoot);
+  report.integrated = dispatch.integrated + leftovers.integrated;
+  report.rejected = dispatch.rejected + leftovers.rejected;
+  report.notes.push(...leftovers.notes);
 
   await reconcileRepairs(campaign.id);
   await promoteReadyUnits(campaign.id);
@@ -618,7 +697,7 @@ async function executionStage(
   const stillOutstanding = after.filter((unit) =>
     ['BLOCKED', 'READY', 'LEASED', 'IMPLEMENTED'].includes(unit.state),
   );
-  report.progress = dispatch.dispatched > 0 || integration.integrated > 0 || integration.rejected > 0;
+  report.progress = dispatch.dispatched > 0 || report.integrated > 0 || report.rejected > 0;
 
   if (stillOutstanding.length === 0) {
     return await advance(report, campaign, 'REVIEWING', 'independent review against the contract');
