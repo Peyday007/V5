@@ -652,17 +652,32 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
   });
   for (const bin of chargeable) {
     const credited = await creditRefusedAssignments(bin.id);
-    if (credited === 0) continue;
 
     /*
      * And the answering transition. §24: a state that says "waiting for a
      * person" which that person cannot resolve is not waiting, it is stuck —
      * and this one was worse, because the condition it escalated on was
      * Brain's own arithmetic. Having corrected it, Brain answers the park it
-     * caused, through the same guarded transition an operator uses. A bin
-     * parked for any other reason is untouched: this needs the credit to have
-     * actually moved the number, and `reopenParkedBin` still refuses anything
-     * whose contract answers HUMAN.
+     * caused, through the same guarded transition an operator uses.
+     *
+     * **Derived from the bin's current budget, not from this pass having
+     * moved it**, and that is a correction. It used to return early on
+     * `credited === 0`, so the reopen could only ever happen in the same pass
+     * as the credit — and if the two came apart for any reason, the bin was
+     * left parked for ever with a full budget and a resolved condition, which
+     * is the exact defect the reopen exists to answer.
+     *
+     * Production had one: `bin_dcb7564ba5e840b3aac3` sat at `NEEDS_HUMAN`
+     * reading *"used all 5 attempts"* with `attempts 0/5`, while its packet was
+     * `AUDITING` with two claimable audit items and nothing anywhere able to
+     * send a worker for them. Deriving the condition from rows reaches it; the
+     * moment does not.
+     *
+     * It cannot loop and it adds no ceiling. The bin becomes dispatchable
+     * again, spends its attempts the ordinary way if the work still cannot be
+     * finished, parks again with the budget genuinely exhausted, and is then
+     * not selected — because `attemptCount >= maxAttempts` is the guard. And
+     * `reopenParkedBin` still refuses anything whose contract answers HUMAN.
      */
     if (bin.state !== 'NEEDS_HUMAN') continue;
     const now = await getBin(bin.id);
@@ -671,10 +686,14 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
       binId: now.id,
       operator: 'brain:admission-accounting',
       reason:
-        `${credited} assignment(s) were charged to this bin for arrivals Brain's own audit ` +
-        'independence guard refused. Those are not attempts the bin spent, they have been ' +
-        'credited back from the recorded events, and the budget that escalated it is no longer ' +
-        'exhausted. Nothing was reset: every refusal keeps its row.',
+        (credited > 0
+          ? `${credited} assignment(s) were charged to this bin for arrivals Brain's own audit ` +
+            'independence guard refused. Those are not attempts the bin spent, and they have ' +
+            'been credited back from the recorded events. '
+          : 'This bin escalated on an exhausted assignment budget that is no longer exhausted: ' +
+            `${now.attemptCount} of ${now.maxAttempts} are spent. `) +
+        'The condition it stopped on is resolved, so there is nothing here for a person to ' +
+        'decide. Nothing was reset: every refusal and every attempt keeps its row.',
     });
   }
 

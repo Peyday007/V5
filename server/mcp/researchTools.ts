@@ -1972,7 +1972,7 @@ const submitAuditTool: McpTool = {
           return {
             resultRef: passId,
             resultSummary: `${role} pass recorded`,
-            value: { role, recorded: true, advancesState: false },
+            value: { role, recorded: true, advancesState: false, passId },
           };
         }
 
@@ -2109,6 +2109,25 @@ const submitAuditTool: McpTool = {
       },
     );
 
+    /*
+     * And let the packet see the role that just finished.
+     *
+     * `advancePacket` is what turns a recorded pass into the next role, and
+     * nothing else was calling it here: the first two roles "record and stop",
+     * so the packet only moved when the worker went on to complete its own
+     * item. A session that submitted and then ran out of time left the item
+     * leased with its pass already recorded, and every later arrival argued the
+     * same role again — three ADVERSARIAL passes on
+     * `orc_91818deaa92a4172aa4e` while the judge was withheld, correctly,
+     * because `auditEligibility` requires both arguments *settled* and settled
+     * is a fact about the item.
+     *
+     * The advance closes it from Brain's own rows rather than from an
+     * ownership proof, which is where that decision belongs: see
+     * `finishRecordedAuditRoles`.
+     */
+    await advancePacketAfterAudit(item.orchestrationId);
+
     return {
       projectId: item.projectId,
       value: outcome.value,
@@ -2117,6 +2136,23 @@ const submitAuditTool: McpTool = {
     };
   },
 };
+
+/**
+ * Let the packet see the role that just finished.
+ *
+ * The same call `brain_complete_work` makes, and swallowing its failure for the
+ * same reason: the pass and the completion are the facts, and an advance that
+ * throws must not turn a recorded audit into an error the worker retries.
+ */
+async function advancePacketAfterAudit(orchestrationId: string | null): Promise<void> {
+  if (!orchestrationId) return;
+  try {
+    const { advancePacket } = await import('../services/research/packetRunner.ts');
+    await advancePacket(orchestrationId);
+  } catch (error) {
+    console.error('[brain] could not advance the packet after an audit role:', error);
+  }
+}
 
 /** In the order a packet performs them, which is the order they are served in. */
 export const RESEARCH_TOOLS: readonly McpTool[] = [

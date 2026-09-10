@@ -511,6 +511,75 @@ describe('the bin the defect already stranded', () => {
     expect(credits).toHaveLength(71);
   });
 
+  it('answers a park whose budget was already credited by an earlier pass', async () => {
+    /*
+     * The production shape this exists for, and it is the same lesson at a
+     * smaller scale: derive the condition from rows, not from catching the
+     * moment.
+     *
+     * `bin_dcb7564ba5e840b3aac3` sat at `NEEDS_HUMAN` reading *"used all 5
+     * attempts"* with `attempts 0/5` — the credit had happened, the condition
+     * it escalated on was gone, and the packet underneath was `AUDITING` with
+     * two claimable audit items and nothing anywhere able to send a worker for
+     * them. The reopen returned early on `credited === 0`, so it could only
+     * fire in the same pass as the credit; once the two came apart the bin was
+     * parked for ever with a full budget.
+     *
+     * Simulated the way it actually happened: credit the attempts, then park
+     * it again, so the next pass credits nothing.
+     */
+    await stranded(71);
+    await reconcileBins(fixture.project.id);
+    const credited = (await getBin(binId))!;
+    expect(credited.attemptCount).toBeLessThan(credited.maxAttempts);
+
+    // Parked again with the budget already credited — so the next pass has
+    // nothing to credit and, before this, nothing to do.
+    await terminateUnleasedBin(
+      binId,
+      credited.leaseGeneration,
+      'NEEDS_HUMAN',
+      'The bin used all 100 attempts without satisfying RESEARCH_PACKET_V1 v1.',
+    );
+    expect((await getBin(binId))!.state).toBe('NEEDS_HUMAN');
+
+    await reconcileBins(fixture.project.id);
+
+    const answered = (await getBin(binId))!;
+    expect(answered.state).toBe('READY');
+    // Nothing was reset: the credited count is exactly what it was.
+    expect(answered.attemptCount).toBe(credited.attemptCount);
+    const reopened = (await listBinEvents(binId, 500)).filter(
+      (event) => event.eventType === 'BIN_REOPENED',
+    );
+    expect(reopened).toHaveLength(2);
+    // The second one names the condition it actually answered, which is not
+    // the credit — that already happened — but the budget being free.
+    expect(reopened.map((event) => event.reason ?? '').join(' | ')).toMatch(
+      /no longer exhausted/i,
+    );
+  });
+
+  it('leaves a park alone while the budget really is exhausted', async () => {
+    /*
+     * The other half, and the reason this cannot loop: the guard is the bin's
+     * own budget. A bin that genuinely spent its attempts stays parked, however
+     * often the reconciliation runs.
+     */
+    await stranded(0);
+    const parked = (await getBin(binId))!;
+    expect(parked.state).toBe('NEEDS_HUMAN');
+    expect(parked.attemptCount).toBe(parked.maxAttempts);
+
+    await reconcileBins(fixture.project.id);
+    await reconcileBins(fixture.project.id);
+
+    expect((await getBin(binId))!.state).toBe('NEEDS_HUMAN');
+    expect(
+      (await listBinEvents(binId, 500)).filter((event) => event.eventType === 'BIN_REOPENED'),
+    ).toHaveLength(0);
+  });
+
   it('credits each refusal once, however many times it runs', async () => {
     await stranded(71);
     await reconcileBins(fixture.project.id);

@@ -1202,6 +1202,121 @@ rules.
   guard. It changes no evidence: nothing there accepts, rejects or re-judges a
   claim.
 
+- **An attribution that only observes forwards leaves history unreadable, and
+  the remedy is rows rather than another run.** `worker_sessions` records which
+  fire produced a session at the moment that session arrives, which is the right
+  place and the wrong direction for everything already written: every audit pass
+  from before it carries no account, and a gate reading those rows cannot tell a
+  missing attribution from a missing audit. The recovery is
+  `services/dispatch/lineageRecovery.ts` and it is only honest because of what
+  it refuses — it walks the credential to the bin to the dispatch Brain sent to
+  the Routine's account, never the static worker binding; a session two Routines
+  could have started is left unresolved and said to be; a dispatch at or above
+  the lease's own generation belongs to a later assignment; and every write is
+  guarded on the column still being null, so a recovered value can never replace
+  a recorded one. §5 at a column.
+
+- **The compiler runs before the judgment, so an idea Brain cannot specify is
+  never assessed for whether a cheap look would settle it.** That ordering is
+  right — a bounded look is not a remedy for an unspecifiable question — and it
+  means the probe path is reachable only for questions the standing envelope can
+  carry. A question naming a jurisdiction outside it is refused there and parks,
+  even when it names that jurisdiction to *exclude* it: `jurisdictionFor` matches
+  state names and must not start inferring intent from the words around them,
+  because a compiler that read intent would be the model judgment §8 keeps out of
+  state. What changes in that case is the question, never the compiler.
+
+- **A packet's work reaches a worker inside a bin, so a live packet whose bin
+  cannot deliver is a packet nothing can be sent for.** Two ways in: a bin
+  parked at `NEEDS_HUMAN` on a condition that has since been resolved, and a
+  bin that legitimately *completed* before its packet was put back to work by a
+  handoff. Neither shows in any state column — the queue says the items are
+  claimable and every row reads as healthy — so `packet-report` prints the bin
+  and says so in words. The remedies are the ones already there: the guarded
+  reopen for the first, the launch's own bin for the second, with the spent bin
+  keeping its row. Both are derived from the bin's *current* budget and state
+  rather than from catching the moment a condition changed, which is the third
+  time that has been the difference between a fix that reaches production and
+  one that does not. Neither adds a ceiling: the work items' own attempt
+  counters are the bound, and a packet whose items are spent goes terminal by
+  itself.
+
+- **`COMPLETE_WITH_GAPS` is a verdict about the report, not a fragment that
+  failed** — the judge asked for more, nothing could be repaired, and a person
+  authorized filing short. So the question such a packet leaves behind is the
+  one the *judge* named, read from `audit_gaps`: a classification the domain
+  already says may keep research open, and a bounded question the judge
+  actually wrote. A finding with no question stated is a finding, and composing
+  one from its prose is exactly the model-prose-as-state §8 forbids. The
+  requirement route still runs first; it simply cannot fire for a compiled
+  mission, because the compiler makes one fragment per idea and a packet that
+  files at all has that fragment accepted.
+
+- **A work item is finished by its owner, and reconciled only once its owner is
+  gone.** An audit item hands out one role and the pass is that role's whole
+  output, so an item still leased after its pass is recorded is a role that will
+  be argued again the moment the lease lapses — production argued one three
+  times while the judge waited, correctly, for both arguments to be *settled*.
+  Brain retires such an item from its own rows, in the packet runner and never
+  in the tool: finishing somebody's item inside `brain_submit_audit` makes their
+  own `brain_complete_work` fail its ownership proof, and the queue is right to
+  refuse that. Neither that reconciliation nor the terminal-packet one may touch
+  an item whose lease is still live — the condition they exist for is an
+  *expired* lease on work claimable again for a settled question, and a packet
+  goes terminal while its judge is still holding the item it just used.
+
+- **The capture gate held every hedged way of asking for work and not the plain
+  one.** `should we`, `worth checking` and `look into` were markers; *"Please
+  check something for me… Go and see whether that holds"* was not, and had no
+  question mark either, so Brain declined a direct request with "nothing here
+  proposes work". The widening is narrow by construction — the verb is asked of
+  somebody, or followed by the thing to establish — because the list's failure
+  mode must stay *missing* a candidate rather than inventing one: a past-tense
+  report and a bare "please look at this" still decline. Rewording the question
+  to hit an existing keyword was the alternative and would have been gaming the
+  list rather than fixing it.
+
+- **A coverage score whose denominator is the question measures how the question
+  was asked.** `relevance` is `hits / wanted.size` over the *requirement's*
+  vocabulary, so a longer requirement scores lower against the identical claim.
+  That is right for what `coverBeforeWork` was built for — the compiler writes
+  one bounded, term-dense declaration per fragment — and wrong for the free
+  prose `askArchive` feeds it: a 454-character statement carries forty terms
+  against a claim sentence's fifteen, so a perfect subject match cannot reach
+  the floor and the archive reads `MISSING` because the question was asked at
+  length. §13 then fails in the expensive direction, spending the allowance to
+  learn what the project had already written down. **The remedy is to ask about
+  the question in every form Brain holds it, never to tune what "about" means**
+  — the candidate's title is the third reading and the only short one, and
+  `relevance` is untouched, so no other caller changes. Neither direction lowers
+  a bar: `fullyAnswered` needs every reading to agree, `unverified` is a union,
+  and a probe still requires a real unverified or stale claim row.
+
+- **A row is not a decision, and a card must not argue with itself.** The park
+  condition was `fragments.length > 0` — a row count standing in for "there is
+  something to decide" — so a packet holding one refused fragment, no claims and
+  nothing accepted parked, and `choicesFor` then offered exactly one answer while
+  the card's own explanation said the honest answers were *"to stop it or to ask
+  a narrower question"*. **The condition is the offer**: park only where more
+  than one thing can be chosen between, which is the module's own rule applied
+  where it is true rather than where a proxy agreed with it. Nothing is
+  abandoned quietly — the mission is `FAILED` with the packet's own words, the
+  event is on the project's history, every refusal keeps its row and its reason,
+  and `redoable()` may offer another try. The same defect lived one door along:
+  `reopenAnswered` re-derived the **choices** and left the **words**, so a
+  request opened when the bar was nearly met could come back carrying only STOP
+  and still explain that the bar was nearly met. The words move with the
+  choices, from the same shape and the same functions.
+
+- **`A13_AUTO_NEXT` is downstream of `A14_HUMAN_RESUME`, and that is the rules
+  holding rather than a gap.** The compiler declares no follow-on, so a compiled
+  mission's only route is `unresolvedFollowOn`, which requires
+  `COMPLETE_WITH_GAPS`, which requires `unresolved_gap_policy = 'RECORD_GAPS'`,
+  which only `recordGaps` writes — the RECORD_GAPS answer to a Needs You
+  request. A follow-on therefore exists only for a packet that filed short, and
+  filing short is a decision the domain reserves to a person. One decision
+  closes both conditions, and neither can be closed without it.
+
 - **Acceptance is a small declared suite, not one overloaded chain.** One
   conversation was right while the acceptance was one journey, and stopped
   being right the moment that journey succeeded — because a cheap look taken
@@ -1668,6 +1783,10 @@ data/                   database, documents, backups, runtime state (gitignored)
 - `import type` for type-only imports (`verbatimModuleSyntax` is on).
 - `strict` and `noUncheckedIndexedAccess` are on.
 - SQLite parameters are positional `?` only, so both drivers behave identically.
+- **An `ORDER BY` must be sayable in both dialects.** Postgres refuses an
+  expression that is not in the select list of a `SELECT DISTINCT`, so name the
+  aggregate and order by the alias — `SELECT DISTINCT … ORDER BY MAX(x)` passes
+  the SQLite suite and throws on the database production runs.
 - Booleans are `0`/`1` in the database and real booleans in view types; repositories are
   the only place the two representations meet.
 - Timestamps are ISO-8601 UTC strings.

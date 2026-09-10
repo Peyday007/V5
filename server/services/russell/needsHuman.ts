@@ -139,6 +139,21 @@ export interface PacketShape {
   /** Fragments proposed and not yet approved — what `approvePlan` acts on. */
   awaitingApproval: number;
   /**
+   * Fragments that cleared all seven evidence conditions — what a report is
+   * *made of*, as distinct from what the run touched.
+   *
+   * `RECORD_GAPS` files the report with its unresolved questions named beside
+   * what was established, and a packet where nothing cleared has no "beside".
+   * `advancePacket` says so itself: with no accepted fragment it stops at
+   * `NEEDS_HUMAN` with *no fragment cleared its evidence gate*, whatever the
+   * gap authorization says — so offering the choice would produce a decision
+   * recorded in a person's name that parks the packet again on the next tick,
+   * for ever. That is the failure this module exists to fix, wearing the
+   * module's own clothes for the second time, one status further along than
+   * the first.
+   */
+  accepted: number;
+  /**
    * Fragments the research has actually reached — what a filed report is of.
    *
    * `QUEUED` is deliberately neither. An approved fragment nobody has started
@@ -170,6 +185,7 @@ export async function packetShape(orchestrationId: string): Promise<PacketShape>
 function shapeOf(fragments: readonly ResearchFragment[]): PacketShape {
   return {
     awaitingApproval: fragments.filter((fragment) => fragment.status === 'PLANNED').length,
+    accepted: fragments.filter((fragment) => fragment.status === 'ACCEPTED').length,
     researched: fragments.filter((fragment) => RESEARCHED_STATUSES.has(fragment.status)).length,
   };
 }
@@ -177,7 +193,10 @@ function shapeOf(fragments: readonly ResearchFragment[]): PacketShape {
 export function choicesFor(shape: PacketShape): HumanRequestChoice[] {
   return [
     ...(shape.awaitingApproval > 0 ? [NEEDS_HUMAN_CHOICES.APPROVE_PLAN] : []),
-    ...(shape.researched > 0 ? [NEEDS_HUMAN_CHOICES.RECORD_GAPS] : []),
+    // Research happened *and* something survived it. Both, because the two
+    // numbers answer different questions and only the second one decides
+    // whether filing is possible.
+    ...(shape.researched > 0 && shape.accepted > 0 ? [NEEDS_HUMAN_CHOICES.RECORD_GAPS] : []),
     NEEDS_HUMAN_CHOICES.STOP,
   ];
 }
@@ -223,6 +242,28 @@ function stopWords(
         `The plan asks to establish ${asks}. ${packetReason} ` +
         'Nothing has been researched yet, so this is a decision about whether to start rather ' +
         'than about what to do with what was found.',
+    };
+  }
+  if (shape.accepted === 0) {
+    /*
+     * Researched, and none of it survived the gate.
+     *
+     * A different stop from the one below and it must read differently, for
+     * the reason this function exists: the sentence under it says the choice
+     * is whether to accept a report with unresolved questions in it, and here
+     * there is no report to accept. Everything the run established was
+     * refused, so the honest description is that and the honest answer is to
+     * stop it or to ask a narrower question.
+     */
+    return {
+      authorityNeeded:
+        'Deciding what to do about research that established nothing it could stand behind. ' +
+        'Brain may not decide this for you, because narrowing the question or abandoning it ' +
+        'is a decision about what the project is trying to find out.',
+      whyNotRussell:
+        'Every fragment was refused at its evidence gate and the repair ladder is spent, so ' +
+        'there is no report to file with the unresolved questions named in it — there is ' +
+        'nothing beside them. Each refusal keeps its recorded reason.',
     };
   }
   return {
@@ -329,15 +370,34 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       .filter((fragment) => fragment.status === 'PLANNED')
       .sort((a, b) => a.fragmentKey.localeCompare(b.fragmentKey));
     const shape = shapeOf(fragments);
-    const hasEvidence = fragments.length > 0;
+    /*
+     * More than one thing a person could decide — asked of the offer itself,
+     * not of a proxy for it.
+     *
+     * This was `fragments.length > 0`, which is a *row* count standing in for
+     * "there is something to decide". Production produced the case that
+     * separates them: `orc_bf57174a711e42c0a18b` held one fragment, zero
+     * claims and nothing accepted — the compiler had specified county-records
+     * sources for a question about private marketplace economics, and the
+     * worker reported the domain mismatch rather than inventing an answer.
+     * One row existed, so the proxy said park; `choicesFor` then offered
+     * exactly one answer, and the card's own explanation said *"the honest
+     * answers here are to stop it or to ask a narrower question"* while
+     * offering only the first of those.
+     *
+     * So the condition is the offer. The rule below is unchanged and now
+     * applies wherever it is true rather than wherever the proxy happened to
+     * agree with it.
+     */
+    const decidable = choicesFor(shape).length > 1;
 
     /*
      * A decision with one option is not a decision.
      *
-     * A packet holding no fragments and no claims has nothing to file and no
-     * questions to declare out of scope, so `choicesFor` correctly offers a
-     * single answer: STOP. Parking on that asks a person to press the only
-     * button there is, and then waits — indefinitely, blocking the idea —
+     * A packet with nothing a person could choose between has nothing to file
+     * and no questions to declare out of scope, so `choicesFor` correctly
+     * offers a single answer: STOP. Parking on that asks a person to press the
+     * only button there is, and then waits — indefinitely, blocking the idea —
      * until they do. That is not an escalation, it is a failed run wearing an
      * escalation's clothes, and the person it interrupts learns nothing by
      * being interrupted.
@@ -357,7 +417,7 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
      * recorded reason, and the attempt ceiling in `loop.ts` is what stops a
      * question nobody can answer from being asked for ever.
      */
-    if (!hasEvidence) {
+    if (!decidable) {
       const failed = await transitionMission({
         missionId: mission.id,
         from: mission.state,
@@ -573,11 +633,29 @@ export async function reopenAnswered(
   const orchestrationId = mission?.orchestrationId ?? null;
   const shape = orchestrationId
     ? await packetShape(orchestrationId)
-    : { awaitingApproval: 0, researched: 0 };
+    : { awaitingApproval: 0, accepted: 0, researched: 0 };
+  /*
+   * The words move with the choices, from the same shape and the same
+   * functions the park uses.
+   *
+   * This re-derived only the offer, and a card that offers one thing while
+   * explaining another is the defect `stopWords` was written for — arriving
+   * here by a different door. A reopen is precisely the moment the packet has
+   * moved underneath words that were composed for an earlier shape: a request
+   * opened when the bar was nearly met can come back with only STOP on it and
+   * still say the bar was nearly met.
+   */
+  const fragments = orchestrationId ? await currentFragments(orchestrationId) : [];
+  const awaiting = fragments
+    .filter((fragment) => fragment.status === 'PLANNED')
+    .sort((a, b) => a.fragmentKey.localeCompare(b.fragmentKey));
+  const words = stopWords(shape, awaiting, reason);
   return reopenRequest({
     requestId: request.id,
     choices: choicesFor(shape),
     recommendation: reason,
+    authorityNeeded: words.authorityNeeded,
+    whyNotRussell: words.whyNotRussell,
   });
 }
 
@@ -704,12 +782,37 @@ async function recordGaps(
    * Left OPEN rather than settled, and the reason is said plainly, so the
    * decision stays visible instead of being marked answered and dropped.
    */
-  if ((await currentFragments(mission.orchestrationId)).length === 0) {
+  const fragments = await currentFragments(mission.orchestrationId);
+  if (fragments.length === 0) {
     return {
       ok: false,
       reason:
         'this packet holds no fragments, so there are no unresolved questions to record — ' +
         'the honest answers here are to stop it or to ask again',
+      missionId: mission.id,
+      settled: false,
+    };
+  }
+  /*
+   * And something has to have survived its gate.
+   *
+   * The same guard one status along, and the same reasoning. `advancePacket`
+   * refuses to synthesize a packet with no accepted fragment and parks it again
+   * at `NEEDS_HUMAN` — so authorizing unresolved gaps here would record a
+   * person's decision, move the mission back to `RUNNING`, and have the next
+   * tick park it on the identical reason. A decision that is recorded and then
+   * has no effect is worse than one that was never offered, which is why the
+   * offer no longer includes it and why the transition refuses it too: a
+   * request opened before this was true still carries both choices on its row,
+   * and the row is what a person sees.
+   */
+  if (!fragments.some((fragment) => fragment.status === 'ACCEPTED')) {
+    return {
+      ok: false,
+      reason:
+        'nothing in this packet cleared its evidence gate, so there is no report to file with ' +
+        'the unresolved questions named in it — the honest answers here are to stop it or to ' +
+        'ask a narrower question',
       missionId: mission.id,
       settled: false,
     };

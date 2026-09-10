@@ -189,6 +189,16 @@ export const ACCEPTANCE_SUITE = [
     scenarioId: 'S12A-ACC-2',
     purpose: 'the completed research journey: capture, judgment, mission, packet, filed and audited report, one writeback',
     conversationId: 'rcv_02d5312e9d41465a9e0f',
+    /**
+     * The chain the frozen deduplication condition belongs to.
+     *
+     * `A05`'s falsifier — *"a second canonical candidate fails it"* — is a
+     * property of the chain the reworded question was sent into, and of no
+     * other. Five chains have five canonical ideas with nothing wrong, so the
+     * gate is told which one it is about rather than counting the suite. Exactly
+     * one scenario may carry this, and the gate says so when none does.
+     */
+    provesDedupe: true,
   },
   {
     scenarioId: 'S12A-ACC-3',
@@ -232,6 +242,100 @@ export const ACCEPTANCE_SUITE = [
     purpose: "a question whose answer is not in the public record at all: a genuine unresolved gap, a person's decision to file with it named, the same mission resuming, and the one follow-on it leaves behind",
     conversationTitle: 'S12A-ACC-6',
   },
+  /*
+   * The third attempt at the look, and the second thing that stopped it.
+   *
+   * `S12A-ACC-5` never reached the repaired archive check. It said *"outside
+   * California"*, the compiler's jurisdiction match saw the state name, the
+   * standing authorization covers Michigan, and the idea was parked before
+   * anything was asked of the archive at all. The compiler cannot tell "about
+   * California" from "outside California", and refusing is the safe direction,
+   * so nothing about that is repaired — the question is.
+   *
+   * Reading the archive decided the subject rather than inventing one. Sixteen
+   * claims carry no checkable source, in two families: success-fee licensure
+   * and county assessment data. The suite already has a live idea on the
+   * second, so this is the first, narrowed to the only jurisdiction the
+   * envelope authorizes.
+   */
+  {
+    scenarioId: 'S12A-ACC-7',
+    purpose: 'a bounded cheap look, asked about the one jurisdiction the standing authorization covers',
+    conversationTitle: 'S12A-ACC-7',
+  },
+  /*
+   * The same subject, asked as work rather than as a question.
+   *
+   * `S12A-ACC-7` was well-posed and stopped one step earlier than any attempt
+   * before it: `scenario-check` read `PRESENT_BUT_UNVERIFIED` for both the
+   * question and the predicted statement, and the worker answered the message
+   * instead of capturing an idea from it — `ANSWER_ONLY`, so `shouldCapture`
+   * never ran and the judgment had nothing to judge.
+   *
+   * That is not a defect and is not repaired. Which action a message calls for
+   * is the worker's reading of it; Brain validates that reading and may not
+   * manufacture a proposal the model did not make. What a person controls is
+   * whether they ask a question or ask for the work, so this asks for the work.
+   */
+  {
+    scenarioId: 'S12A-ACC-8',
+    purpose: 'a bounded cheap look, asked as work to be done rather than as a question to answer',
+    conversationTitle: 'S12A-ACC-8',
+  },
+  /*
+   * The same request, against the gate ACC-8 found.
+   *
+   * ACC-8 got one step further than ACC-7: the worker read it as a request for
+   * work and proposed `CAPTURE_CANDIDATE`. Brain's own `shouldCapture` declined
+   * it — its marker list held every hedged form of asking and not the plain one
+   * — so the chain ended with no idea and Brain's own reason recorded against
+   * it. That is a defect, it is repaired narrowly at the gate, and the question
+   * is deliberately unchanged: what changed is Brain.
+   */
+  {
+    scenarioId: 'S12A-ACC-9',
+    purpose: 'a bounded cheap look, asked as work, against the repaired capture gate',
+    conversationTitle: 'S12A-ACC-9',
+  },
+  /*
+   * The same request, against the archive check ACC-9 found.
+   *
+   * ACC-9 got one step further again: the gate recognised it and an idea was
+   * created. Then the archive read `ARCHIVE_HOLDS_NOTHING_TO_CHECK` and a full
+   * packet was queued — for the question `scenario-check` predicted
+   * `PRESENT_BUT_UNVERIFIED` against the short form of that same sentence.
+   *
+   * `relevance` is `hits / wanted.size`, so a longer requirement scores lower
+   * against the identical claim: the 454-character statement and the
+   * ~380-character message are both prose and neither can reach the floor.
+   * That is a defect, it is repaired at the boundary — `askArchive` asks about
+   * the candidate's title too, and `relevance` is untouched — and the question
+   * is unchanged again. What changed is Brain.
+   */
+  {
+    scenarioId: 'S12A-ACC-10',
+    purpose: 'a bounded cheap look, against the archive check repaired for length',
+    conversationTitle: 'S12A-ACC-10',
+  },
+  /*
+   * The same kind of request about a different unchecked claim.
+   *
+   * ACC-10 reached furthest of all of them and was then **merged** into ACC-9
+   * by `capture`'s semantic dedupe — the identical question, correctly
+   * recognised as already on the list. A merged candidate is never judged, so
+   * the repaired archive check was never reached. That is the rule working,
+   * not a defect, and it establishes that a re-run must differ where the dedupe
+   * looks while staying the same where the test looks: an `UNVERIFIED` archive
+   * claim with nothing behind it, whose subject is a presence question inside
+   * the envelope's jurisdiction.
+   *
+   * `exc_ea5e2781bb60440183c8` is that claim.
+   */
+  {
+    scenarioId: 'S12A-ACC-11',
+    purpose: 'a bounded cheap look, on a claim no other idea already covers',
+    conversationTitle: 'S12A-ACC-11',
+  },
 ] as const;
 
 /**
@@ -260,8 +364,15 @@ export const PREVIOUS_SCOPES = [
 interface Scope {
   /** Every declared conversation that actually resolved. */
   conversationIds: string[];
-  /** Which scenarios resolved, for the reader of the report. */
-  scenarios: { scenarioId: string; conversationId: string }[];
+  /**
+   * Which scenarios resolved, each with its *own* candidates.
+   *
+   * Kept per scenario as well as flattened, because one gate's falsifier is a
+   * property of a single chain rather than of the suite: `A05` says the
+   * reworded question must leave *one* canonical idea, and five chains have
+   * five canonical ideas without anything having gone wrong.
+   */
+  scenarios: { scenarioId: string; conversationId: string; candidateIds: string[] }[];
   candidateIds: string[];
   probeIds: string[];
   missionIds: string[];
@@ -309,19 +420,23 @@ async function anchorFor(entry: (typeof ACCEPTANCE_SUITE)[number]): Promise<stri
 }
 
 async function resolveScope(): Promise<Scope | null> {
-  const scenarios: { scenarioId: string; conversationId: string }[] = [];
+  const scenarios: { scenarioId: string; conversationId: string; candidateIds: string[] }[] = [];
   for (const entry of ACCEPTANCE_SUITE) {
     const conversationId = await anchorFor(entry);
-    if (conversationId) scenarios.push({ scenarioId: entry.scenarioId, conversationId });
+    if (!conversationId) continue;
+    scenarios.push({
+      scenarioId: entry.scenarioId,
+      conversationId,
+      candidateIds: await ids(
+        `SELECT id FROM russell_candidates WHERE conversation_id = ? ORDER BY created_at, rowid`,
+        [conversationId],
+      ),
+    });
   }
   if (scenarios.length === 0) return null;
   const conversationIds = scenarios.map((entry) => entry.conversationId);
 
-  const candidateIds = await ids(
-    `SELECT id FROM russell_candidates WHERE conversation_id IN (${inList(conversationIds)})
-      ORDER BY created_at, rowid`,
-    conversationIds,
-  );
+  const candidateIds = [...new Set(scenarios.flatMap((entry) => entry.candidateIds))];
   const probeIds = candidateIds.length
     ? await ids(
         `SELECT id FROM russell_probes WHERE candidate_id IN (${inList(candidateIds)})
@@ -533,32 +648,64 @@ export async function gates(): Promise<GateResult[]> {
    * The second is a FAIL rather than a NOT_RUN when it is wrong: two canonical
    * candidates is a thing that happened, not a thing that has not happened yet.
    */
-  const semanticMerges =
-    scope && scope.candidateIds.length
-      ? await count(
-          `SELECT COUNT(*) AS total FROM russell_candidate_merges
-            WHERE action = 'MERGE' AND method = 'SEMANTIC'
-              AND candidate_id IN (${inList(scope.candidateIds)})
-              AND canonical_id IN (${inList(scope.candidateIds)})`,
-          [...scope.candidateIds, ...scope.candidateIds],
-        )
-      : 0;
-  const canonicalInChain =
-    scope && scope.candidateIds.length
-      ? await count(
-          `SELECT COUNT(*) AS total FROM russell_candidates
-            WHERE id IN (${inList(scope.candidateIds)}) AND canonical_candidate_id IS NULL`,
-          scope.candidateIds,
-        )
-      : 0;
+  /*
+   * Both facts are asked **per scenario**, and that is a correction rather than
+   * a relaxation.
+   *
+   * "Exactly one canonical idea left" is the falsifier the frozen scenario
+   * names, and it is a property of *the chain the rewording happened in*. Asked
+   * across a suite it counts one canonical idea per scenario and fails on five
+   * chains that are each behaving correctly — which is what it did the first
+   * time the suite had more than one member.
+   *
+   * So a scenario satisfies this when the fold happened inside it and left one
+   * canonical idea there. A scenario where the fold happened and a second
+   * canonical idea survived is the falsifier, and still a FAIL.
+   */
+  const dedupeEntry = ACCEPTANCE_SUITE.find(
+    (entry) => 'provesDedupe' in entry && entry.provesDedupe,
+  );
+  const dedupeScope = dedupeEntry
+    ? (scope?.scenarios.find((row) => row.scenarioId === dedupeEntry.scenarioId) ?? null)
+    : null;
+  const dedupeIds = dedupeScope?.candidateIds ?? [];
+  const semanticMerges = dedupeIds.length
+    ? await count(
+        `SELECT COUNT(*) AS total FROM russell_candidate_merges
+          WHERE action = 'MERGE' AND method = 'SEMANTIC'
+            AND candidate_id IN (${inList(dedupeIds)})
+            AND canonical_id IN (${inList(dedupeIds)})`,
+        [...dedupeIds, ...dedupeIds],
+      )
+    : 0;
+  const canonicalInChain = dedupeIds.length
+    ? await count(
+        `SELECT COUNT(*) AS total FROM russell_candidates
+          WHERE id IN (${inList(dedupeIds)}) AND canonical_candidate_id IS NULL`,
+        dedupeIds,
+      )
+    : 0;
   results.push(
-    scope !== null && canonicalInChain > 1
+    dedupeScope === null
       ? {
           id: 'A05_DEDUPE',
-          verdict: 'FAIL',
-          detail: `${canonicalInChain} canonical ideas in the chain — the reworded question made a second one`,
+          verdict: 'NOT_RUN',
+          detail: dedupeEntry
+            ? `${dedupeEntry.scenarioId} has not been run, so the reworded question has no chain`
+            : 'no declared scenario carries the deduplication condition',
         }
-      : scoped('A05_DEDUPE', semanticMerges, 1, 'semantic merges onto the canonical idea'),
+      : canonicalInChain > 1
+        ? {
+            id: 'A05_DEDUPE',
+            verdict: 'FAIL',
+            detail: `${canonicalInChain} canonical ideas in ${dedupeScope.scenarioId} — the reworded question made a second one`,
+          }
+        : fromRows(
+            'A05_DEDUPE',
+            semanticMerges,
+            1,
+            `semantic merges onto the canonical idea in ${dedupeScope.scenarioId}`,
+          ),
   );
 
   /*

@@ -32,6 +32,7 @@ import {
   listClaimsForFragment,
   listPasses,
 } from '../server/repos/research.ts';
+import { binForOrchestration } from '../server/repos/bins.ts';
 import { listCoverage, listRequirements } from '../server/repos/reconciliation.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { objectExists, objectSize, readObject, storageKeyOf } from '../server/services/storage.ts';
@@ -67,6 +68,9 @@ function trim(value: string | null | undefined, width = 96): string {
   const flat = value.replace(/\s+/g, ' ').trim();
   return flat.length > width ? `${flat.slice(0, width - 1)}…` : flat;
 }
+
+/** Bin states from which no assignment can ever be made again. */
+const TERMINAL_BIN = new Set(['COMPLETE', 'FAILED', 'CANCELLED']);
 
 async function main(): Promise<void> {
   if (!process.env['BRAIN_DATABASE_POOL_SIZE']) process.env['BRAIN_DATABASE_POOL_SIZE'] = '2';
@@ -259,6 +263,42 @@ async function main(): Promise<void> {
         ` attempt ${item.attemptCount}/${item.maxAttempts}` +
         (item.workerId ? ` held by ${item.workerId}` : ''),
     );
+  }
+
+  /*
+   * And the bin the work is meant to be delivered through.
+   *
+   * A packet's claimable work reaches a worker inside a bin, and a bin is
+   * created once — at launch, guarded on the mission not already having one. So
+   * a bin that went terminal while its packet still held claimable items is a
+   * packet nothing can be sent for: the queue says two items are claimable, the
+   * fleet has nowhere to put them, and every report above this line reads as
+   * healthy. That is not visible from any other line here, which is why it is
+   * printed rather than inferred.
+   */
+  const bin = await binForOrchestration(packet.id);
+  console.log('');
+  console.log('BIN');
+  if (!bin) {
+    console.log('  none — no bin was ever created for this packet');
+  } else {
+    console.log(
+      `  ${bin.id}  ${bin.state}  gen ${bin.leaseGeneration}` +
+        ` attempts ${bin.attemptCount}/${bin.maxAttempts} refusals ${bin.refusalCount}`,
+    );
+    console.log(
+      `  worker ${bin.workerId ?? '—'}  leased ${bin.leasedAt ?? '—'}` +
+        `  expires ${bin.leaseExpiresAt ?? '—'}`,
+    );
+    console.log(`  ready ${bin.readyAt ?? '—'}  not before ${bin.dispatchNotBefore ?? '—'}`);
+    if (bin.terminalReason) console.log(`  terminal ${bin.terminalReason.slice(0, 200)}`);
+    const deliverable = live.length > 0 && TERMINAL_BIN.has(bin.state);
+    if (deliverable) {
+      console.log(
+        `  ** ${live.length} claimable item(s) and the bin is ${bin.state}: nothing can be` +
+          ' sent for this packet **',
+      );
+    }
   }
 
   const claims = await listClaims(packet.id);

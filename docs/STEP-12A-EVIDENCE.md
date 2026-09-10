@@ -7795,3 +7795,882 @@ no source that can be checked. `S12A-ACC-6` moves to a different part of the
 business entirely, so nothing about it depends on wording: what comparable
 success-fee marketplaces actually net after refunds and clawbacks is private
 financial data, and the honest outcome is a named unresolved gap.
+
+### The two re-runs, started
+
+```
+S12A-ACC-5   rcv_5d56e84a14504c73a26d   would explore true  (as statement PRESENT_BUT_UNVERIFIED)
+S12A-ACC-6   rcv_d4a8bd16430b47dc86ea   MISSING both ways, so it becomes research
+```
+
+`S12A-ACC-5` is the case the repair was for: its question reads `MISSING` and
+its statement reads `PRESENT_BUT_UNVERIFIED`, so the union rule sends it for a
+look while the statement-only rule would have queued it outright. `S12A-ACC-6`
+reads `MISSING` both ways, which is the honest answer for a question about
+private financial data.
+
+The archive had grown from 31 claims to 46 by then, because `S12A-ACC-3`'s
+mission had already filed.
+
+## 78. Attribution recovered, and the two things that stopped a look — 2026-09-10
+
+The closure batch's second release. Four things in it, and the two production
+readings that decided what it had to contain.
+
+### The reading that settled A11
+
+`audit-lineage orc_91818deaa92a4172aa4e`, on the ACC-3 packet, run against the
+first closure release:
+
+```
+STEP11 AUDIT LINEAGE
+  PRIMARY      COMPLETE  worker=wkr_1cdd82cfb2a54faf8edd  routine=—                        account=—                        session=oat_c3f5790caf014795a72c
+  ADVERSARIAL  COMPLETE  worker=wkr_1cdd82cfb2a54faf8edd  routine=rtn_c7bcec972bd44afa91d7  account=acct_70dda3fae2e1428e944b  session=oat_6c28e53cebe94e689492
+  applied      PRIMARY_ADVERSARIAL at SESSION
+STEP10: OK audit-lineage compliant=true passes=2
+```
+
+Two facts in three lines. The `worker_sessions` observation works — the
+adversarial pass, whose session arrived after the first closure release, names
+its Routine and its account. And it only works forwards: the primary pass, whose
+session arrived before, names neither, and no future audit round can change
+that. `A11_INDEPENDENT_AUDIT` requires `executor_account_id` on all three roles
+of one packet, so on those rows it cannot distinguish a missing attribution from
+a missing audit.
+
+The assignment allows exactly two answers to that: recover the attribution where
+append-only dispatch, assignment, authentication or routing rows establish it
+deterministically, or run another audit round after the fix. Both are being
+done, and the recovery is the one that reaches history.
+
+`services/dispatch/lineageRecovery.ts` walks one chain and only that chain:
+
+```
+research_passes.executor_session_ref
+  = bins.lease_credential_id            the credential that took the bin
+  -> bin_dispatch (SENT, routine_id)    the fire that produced it
+  -> fleet_routines.account_id          the account that Routine is under
+```
+
+Every link is a row Brain wrote at the time. It is deliberately **not** the
+static worker → Routine binding, which is the thing that could not answer this:
+one worker bound to two Routines under two accounts has two candidates, and
+choosing is the guess the whole mechanism exists to avoid. So the refusals are:
+a session whose bins were fired by more than one Routine is left unresolved and
+reported as unresolved; a Routine with no account is refused one link down; a
+dispatch at or above the lease's own generation belongs to a later assignment
+and is excluded; a predicted `future:` session is excluded by name; and every
+write is guarded on the column still being null, so a recovered value can never
+replace a recorded one. It is idempotent and self-limiting — once a session is
+observed and a pass attributed, neither query returns them again.
+
+The live arm alone was not enough, and production said so within the hour.
+`audit-lineage` after the release still read `routine=— account=—` on the
+primary pass: `bins.lease_credential_id` is current state, cleared on release
+and on completion, so for a bin that has finished the live arm finds nothing.
+`work_leases` is append-only by design — *"a failed attempt is evidence, not
+something to tidy away"* — so the durable arm walks the claim to the work item,
+the item to its bin, the bin to the `BIN_ASSIGNED` that claim followed, and
+that arrival to the fire it superseded. `BIN_ASSIGNED` and not any arrival: a
+`BIN_TAKEOVER` session took an expired lease, and the fire at that generation
+was the previous owner's, which is the refusal `creditDispatchArrival` already
+makes live.
+
+Four tests, three of which bite. The recovery test deletes the observation for a
+session that really was fired, really did arrive and really did produce a pass,
+which is production's exact shape; it asserts the blank pass is filled from the
+dispatch, that a pass already naming a *different* account keeps it, and that a
+second run recovers nothing. The ambiguity test fires two Routines under two
+accounts for two bins the same credential takes, and asserts the recovery
+refuses, says "2 Routines", and leaves the column null.
+
+### The two things that stopped a bounded look
+
+`turn-trace` over the whole project: **probes 0**. Not one probe has ever run in
+this Brain, and the two scenarios declared for one each failed differently.
+
+`S12A-ACC-3` launched a mission. Cause and repair are in §77: `askArchive` read
+the worker's summary rather than the person's question.
+
+`S12A-ACC-5` never reached the repaired check at all. `candidate
+rcn_d7bbaf012ce447aabc6b` — the new diagnostic, on the deployed Brain — says
+which branch decided it, in the words Brain itself stored:
+
+```
+  state          PARKED
+  priority       PARKED
+  reason         Brain could not specify this: this work is about California — the
+                 question says so — and the standing authorization for this project
+                 covers Michigan. Authorising research in California is a decision
+                 for a person
+  judgment
+    decidedBy                  COMPILER
+    compilerVersion            2026-09-09.1
+    claimsConsidered           46
+  probes 0
+  missions 0
+```
+
+The question said *"Outside California, is that summary still current"*;
+`jurisdictionFor` matches US state names in the question, found `california`,
+and the standing authorization for this project covers Michigan. The archive
+was never asked — `claimsConsidered` is recorded because `askArchive` runs
+first, but its verdict never reached `judge()`, because the compiler refused in
+between. The compiler cannot tell "about California" from "outside
+California", and it must not try — a compiler that inferred intent from
+surrounding words would be the model judgment §24 keeps out of it. Refusing is
+the safe direction, so the question changes and the compiler does not.
+
+That is worth stating as a rule, because it is the second time an ordering has
+decided an outcome nobody chose: **the compiler runs before the judgment, so an
+idea Brain cannot specify is never assessed for whether a cheap look would
+settle it.** That ordering is correct — a look is not a remedy for an
+unspecifiable question — and it means the probe path is only reachable for
+questions the envelope can carry.
+
+`archive-shape` then settled which questions those are, from rows rather than
+from imagination. Forty-six claims, sixteen with no checkable source, in exactly
+two families: success-fee licensure and county assessment data. A live idea
+already exists on the second. So `S12A-ACC-7` is the first, narrowed to the one
+jurisdiction the envelope authorizes — `exc_29c46282531b46358cdb`, an
+`UNSUPPORTED_ASSERTION` headed "LICENSURE OF SUCCESS-FEE BUSINESS BROKERAGE —
+FIVE STATES (law in force as at 2026)" with nothing behind it, asked about
+Michigan.
+
+### A05, per chain rather than per suite
+
+Widening acceptance to a declared suite made `A05_DEDUPE` fail on five chains
+that were each behaving correctly: its falsifier is *"a second canonical
+candidate"*, which is a property of the chain the rewording was sent into and of
+no other, and five chains have five canonical ideas. The scenario that carries
+the condition now declares it (`provesDedupe`), the scope keeps each scenario's
+own candidates as well as the flattened set, and the gate reads that one chain.
+The falsifier is preserved exactly — more than one canonical idea *there* is
+still `FAIL` rather than `NOT_RUN`, because two canonical ideas is a thing that
+happened — and a suite with no scenario carrying the condition says so rather
+than passing on an empty set.
+
+### `step10 candidate`, read-only
+
+Four branches produce `priority = PARKED` — the archive already answered it, the
+compiler could not specify it, no standing authority covers it, the research
+produced no report — and they have four different remedies, none of which a
+state name distinguishes. Diagnosing ACC-5 from `turn-trace` alone was not
+possible. The new command prints the branch, the stored reason and the boolean
+and id inputs, and reduces anything textual to a length: §24's rule that this
+harness must not become a transcript reader, kept at a new command rather than
+restated.
+
+### Verification
+
+Typecheck clean. SQLite 1875 passed / 25 skipped across 77 files. Postgres 1900
+passed across 77 files, exit 0. Client build clean. Migration from an empty
+database applied 35 in order; restart against that populated database read
+"up to date (35 already applied)".
+
+
+## 79. Two ways a packet ends up with nowhere to send a worker — 2026-09-10
+
+The whole system stopped for three hours and every state column read as
+healthy. `orc_91818deaa92a4172aa4e` — `S12A-ACC-3`'s packet — sat `AUDITING`
+with its report filed, one fragment `ACCEPTED`, its requirement `SATISFIED`,
+two `RESEARCH_AUDIT` items claimable, and two of its three audit passes
+complete. Behind it `S12A-ACC-6` was `QUEUED` with no mission, because
+concurrency is one and this mission was holding it.
+
+Nothing deployed could say why, which is the first finding: a packet's work
+reaches a worker inside a **bin**, and no report printed the bin. So
+`packet-report` now does, and the answer was one line:
+
+```
+BIN
+  bin_dcb7564ba5e840b3aac3  NEEDS_HUMAN  gen 12 attempts 0/5 refusals 2
+  ready 2026-09-10T10:45:37.123Z
+  terminal The bin used all 5 attempts without satisfying RESEARCH_PACKET_V1 v1.
+           Outstanding: The packet is AUDITING, which is not a state it files a
+           report in.
+```
+
+**Parked for using all five attempts, with none of them spent.** The five were
+charged for arrivals Brain's own audit-independence guard refused —
+§75's defect — and `creditRefusedAssignments` had already credited every one
+of them back. The condition the bin escalated on was gone. Nothing reopened
+it, because `reconcileBins` returned early on `credited === 0`: the reopen
+could only ever fire in the *same pass* as the credit, and once the two came
+apart the bin stayed parked with a full budget for ever.
+
+That is §24's sentence at a fourth altitude, and the correction is the one
+this codebase keeps arriving at: **derive the condition from rows, not from
+catching the moment.** The reopen is now guarded on the bin's own budget —
+`attemptCount < maxAttempts` — so it reaches a park credited an hour ago, and
+a bin that genuinely spent its attempts stays parked however often the
+reconciliation runs. That is also why it cannot loop: the bin becomes
+dispatchable, spends its attempts the ordinary way if the work still cannot
+be finished, parks again with the budget really exhausted, and is not
+selected. No ceiling was added.
+
+### The second way, found by reading rather than by waiting
+
+`reopenAuditRound` answers exactly one state of this — a bin parked at
+`NEEDS_HUMAN` — and says nothing about a bin that **completed**. A bin reaches
+`COMPLETE` when `RESEARCH_PACKET_V1` is satisfied, and the packet can be put
+back to work afterwards: an `OTHER_LAYER` handoff reopens the audit round and
+`advancePacket` queues its items. Terminal is forever, so those items sit
+claimable with nobody ever sent for them — the same stranding, reached by a
+path nothing was watching.
+
+`repairLaunches` could not reach it either: it selects `bin_id IS NULL`, and
+this mission's `bin_id` is perfectly set. So the condition became the property
+rather than the state — *can this bin still deliver work* — and the remedy is
+the bin the launch already knows how to build. The mission's pointer moves to
+a bin that can be assigned; the spent bin keeps its row, its attempts, its
+events and its `created_by_id`. Packets waiting for a person
+(`AWAITING_APPROVAL`, `NEEDS_HUMAN`) are excluded by name: each already has its
+own answering transition, and a new bin there would send a worker to be told
+the same thing again.
+
+The bound is the work items' own attempt counters, unchanged. A packet whose
+items are spent goes terminal by itself and stops qualifying.
+
+Both fixes were checked by putting the old code back: reverting the
+`credited === 0` early return fails the new reconciliation test, and reverting
+the `!current.binId` guard fails the new recovery test.
+
+### And what the seventh look scenario established
+
+`S12A-ACC-7` was the best-posed of the three: `scenario-check` read
+`PRESENT_BUT_UNVERIFIED` for both the person's question and the predicted
+statement. It stopped one step earlier than any attempt before it — the worker
+**answered** the message rather than capturing an idea from it
+(`{"accepted":"ANSWER_ONLY","effect":"UNSUPPORTED"}`), so `shouldCapture` never
+ran and the judgment had nothing to judge.
+
+Nothing about that is repaired. Which of the closed set of actions a message
+calls for is the worker's reading of the message; Brain validates that reading
+rather than overriding it, and §8 cuts both ways — Brain may not manufacture a
+proposal the model did not make. What a person controls is whether they ask a
+question or ask for the work, so `S12A-ACC-8` asks for the work.
+
+One thing beside it *was* wrong: `unsupportedAction` returns null for
+`ANSWER_ONLY`, so the message settled `COMPLETE` and the person was told
+nothing about a refusal — while the stored record said `effect: "UNSUPPORTED"`.
+Establishing that nothing had been refused took reading three functions. The
+label now comes from the same predicate that decides what the person is told.
+
+
+## 80. The follow-on route a compiled mission can never take — 2026-09-10
+
+Found by walking the A13 journey against the compiler rather than against the
+test, and it is the sixth instance of the same shape.
+
+`unresolvedFollowOn` looks for a MANDATORY requirement that no `ACCEPTED`
+fragment carries. `compileMission` produces **exactly one fragment per idea** —
+deliberately, because a decomposition is a judgement a compiler has no way to
+make — so a compiled packet has one fragment and one requirement. And a packet
+only reaches `COMPLETE_WITH_GAPS` with that fragment `ACCEPTED`, because
+`advancePacket` refuses to synthesize one where nothing cleared its evidence
+gate. Its requirement is therefore answered, the search finds nothing, and the
+route can never fire for any mission this Brain creates.
+
+It was invisible for the usual reason: `tests/russellIntegrationPass.test.ts`
+built a packet with a blocked fragment carrying an open requirement — a shape
+the compiler cannot produce — and then wrote `COMPLETE_WITH_GAPS` onto the
+orchestration by hand.
+
+**`COMPLETE_WITH_GAPS` does not mean a fragment failed.** `outcomeFor` says
+exactly what it means: the judge returned a non-advancing verdict, no fragment
+could be repaired, and a person had authorized the packet to file short. So
+what is outstanding is what the *judge* named — and that is a row rather than
+prose. `audit_gaps` is the validated structured output §8 allows to reach
+state, and it already carries a classification, a bounded `research_question`
+and an `expected_contribution`.
+
+Narrow by construction, and each clause is a refusal:
+
+- only `FOUNDATIONAL_GAP` and `TARGETED_RESEARCH_GAP` — the two
+  classifications the domain already declares may legitimately keep research
+  open;
+- only with a question the judge actually wrote, because a finding with no
+  bounded question is a finding, and composing one from its prose is the thing
+  this derivation has never done;
+- `OTHER_LAYER` excluded, because §22's handoff owns it;
+- the requirement route runs first and still wins, so a multi-fragment packet
+  behaves exactly as before.
+
+The audit is read from the mission's own `audit_id`, which `linkFiledWork` has
+already corrected to the newest audit of the packet's run (§76) — so the
+follow-on cites the verdict actually performed on the filed report.
+
+### And the first fix proved itself in production
+
+`bin_dcb7564ba5e840b3aac3` before the release:
+
+```
+  bin_dcb7564ba5e840b3aac3  NEEDS_HUMAN  gen 12 attempts 0/5 refusals 2
+  terminal The bin used all 5 attempts without satisfying RESEARCH_PACKET_V1 v1.
+```
+
+and eleven minutes after it:
+
+```
+  bin_dcb7564ba5e840b3aac3  LEASED  gen 16 attempts 2/5 refusals 2
+  worker wkr_1cdd82cfb2a54faf8edd  leased 2026-09-10T13:11:23.709Z
+```
+
+Brain answered its own park from the rows, the dispatcher fired, a worker
+arrived and took the bin. The packet that had been stopped for three hours —
+with `S12A-ACC-6` queued behind its concurrency slot — is moving again, and
+nothing was reset: the refusals, the attempts and the events all keep their
+rows.
+
+
+## 81. The role that was argued three times — 2026-09-10
+
+The bin reopen (§79) put a worker back on `orc_91818deaa92a4172aa4e` within
+eleven minutes, and the next reading said what had actually been wrong all
+along:
+
+```
+EVIDENCE
+  passes      9
+      audit role ordinal 5 COMPLETE 2026-09-10T09:40:39.318Z
+      audit role ordinal 6 COMPLETE 2026-09-10T10:40:04.029Z
+      audit role ordinal 6 COMPLETE 2026-09-10T13:01:19.451Z
+      audit role ordinal 6 COMPLETE 2026-09-10T13:14:02.645Z
+  audits      0
+      RESEARCH_AUDIT wki_b284f55456f54224958e LEASED attempt 4/2
+      RESEARCH_AUDIT wki_fea936e2f954410ab0b2 QUEUED attempt 0/2
+```
+
+Three ADVERSARIAL passes, one item, no verdict. `brain_submit_audit` records
+the pass and stops — "the first two roles record and stop" is deliberate and
+right — so the *item* is finished by the worker's own `brain_complete_work`. A
+session that submits and then runs out of time leaves the item leased with its
+work already done; the lease lapses; the next arrival reads the brief, sees the
+adversarial role outstanding, and argues it again. The judge was withheld
+throughout and correctly so: `auditEligibility` requires both arguments
+*settled*, and settled is a fact about the item rather than about the pass.
+
+Two things had to change and one had to be corrected.
+
+**`finishRecordedAuditRoles`** retires an audit item whose role already has a
+completed pass in the current round. In the packet runner rather than in the
+tool, because finishing somebody's item inside `brain_submit_audit` makes the
+worker's own completion fail its ownership proof — the queue is right to refuse
+that and the contract is right to ask for it. `cancelWork` rather than
+`completeWork`, for the reason the `OTHER_LAYER` handoff already uses it: no
+lease need be current, the fencing generation advances so a late completion
+matches nothing, and the row keeps its id, attempts and history.
+
+**`brain_submit_audit` now advances the packet** after every role rather than
+only after the judge's. Nothing was calling it: the first two roles recorded and
+stopped, so the packet moved only when the worker completed its own item.
+
+**And neither retires anything under a live lease.** That guard was missing from
+`retireTerminalWork` too, and adding the advance exposed it: a packet goes
+terminal the instant the judge's verdict is recorded, and the judge is still
+holding its own item at that instant. Retiring it there made a compliant
+worker's next call fail with *"this lease is no longer current"* — five suite
+tests said so immediately. The condition both reconciliations exist for is an
+**expired** lease on work that is claimable again for a settled question, and it
+was simply never written down.
+
+The test for it walks the compliant path first — submit, lease still live,
+nothing touched — then lapses the lease and asserts the retirement, so both
+halves are pinned rather than only the one that was broken.
+
+
+## 82. The request the capture gate did not recognise as one — 2026-09-10
+
+`S12A-ACC-8` got one step further than `S12A-ACC-7`. The worker read the
+message as a request for work and proposed `CAPTURE_CANDIDATE` — and **Brain's
+own gate declined it**:
+
+```
+  2026-09-10T13:10:28.658Z  RUSSELL COMPLETE   614 chars  conv rcv_c180700291e14c6c85db
+      produced: {"captureDeclined":true,"gateReason":"nothing here proposes work"}
+    candidates 0
+```
+
+The message was *"Please check something for me rather than answering it from
+what we already wrote down… Go and see whether that holds for Michigan under the
+rule in force now, and record what you find."*
+
+`shouldCapture`'s marker list held every hedged form of asking — `should we`,
+`worth checking`, `look into` — and not the plain one. There is no question
+mark, so the question markers do not fire either, and the honest reading of the
+rule as written is "nothing here proposes work".
+
+That is a defect: a direct request to check something is the clearest proposal
+of work there is. Rewording the scenario to hit an existing keyword was the
+alternative, and it would have been gaming the list rather than fixing it.
+
+The widening is deliberately narrow, because the list's documented failure mode
+— *missing* a candidate rather than inventing one — is worth keeping. The verb
+must be asked of somebody (`please|can you|could you|would you` + check, verify,
+confirm, look into, look up, find out, see) or followed by the thing to
+establish (`check|verify|confirm|find out|look up|see` + `whether|if`). So a
+past-tense report (*"I checked it yesterday"*), a request that proposes nothing
+to establish (*"Please look at the attached file"*) and ordinary conversation
+all still decline, and the test pins each of those beside the two that now
+capture.
+
+`S12A-ACC-9` asks the identical question against the repaired gate. The text is
+unchanged on purpose: what changed is Brain.
+
+### The three look scenarios, and what each established
+
+Worth stating together, because the sequence is the evidence:
+
+| | stopped at | cause | disposition |
+|---|---|---|---|
+| ACC-3 | judgment | `askArchive` read the worker's summary, not the person's question | repaired (§77) |
+| ACC-5 | compiler | the question named a jurisdiction outside the envelope, to exclude it | question changed, compiler untouched (§78) |
+| ACC-7 | the worker | it answered the message rather than capturing an idea from it | not a defect; §8 cuts both ways |
+| ACC-8 | Brain's capture gate | the marker list had no plain request | repaired here |
+
+Four distinct failures at four distinct boundaries, none of them the same
+mistake twice, and three of the four were defects nothing else would have found.
+
+## 83. The archive check that could not recognise a long question — 2026-09-10
+
+`S12A-ACC-9` got one step further again. The repaired capture gate recognised
+the request, an idea was created, and the judgment read it:
+
+```
+  candidate rcn_9646b600bac14e90a930  QUEUED  priority WORTH_DOING
+    title/stmt                 87/454 chars
+    cheapToReduce              false
+    cheapToReduceAssessed      ARCHIVE_HOLDS_NOTHING_TO_CHECK
+    claimsConsidered           46
+    unverifiedClaimIds         (empty)
+  missions 1
+    2026-09-10T14:25:47.135Z  RUNNING  orchestration orc_164bbf76e40b4fa88bd1
+```
+
+So Brain queued a full research packet. Its own `scenario-check`, run nine
+minutes later against the same archive, predicted the opposite:
+
+```
+  S12A-ACC-9
+    status             MISSING            (the person's message)
+    as statement       PRESENT_BUT_UNVERIFIED (would explore true)
+```
+
+Both readings are of the same subject and the same archive. What separates them
+is length.
+
+### The cause
+
+`relevance` in `services/reconcile/coverage.ts` is `hits / wanted.size`, where
+`wanted` is the **requirement's** vocabulary:
+
+```ts
+const wanted = terms(`${requirement.statement} ${laneWords}`);
+if (wanted.size === 0) return 0;
+const found = terms(claim.claim);
+let hits = 0;
+for (const word of wanted) if (found.has(word)) hits += 1;
+return hits / wanted.size;
+```
+
+The denominator grows with the requirement and the numerator cannot exceed the
+claim's own vocabulary. A claim sentence carries roughly fifteen distinct terms;
+the 454-character statement carries about forty. A *perfect* subject match
+therefore scores at most ~0.375 and realistically well under the
+`RELEVANCE_FLOOR` of 0.3 — so no claim is even considered, and the verdict is
+`MISSING` because the question was asked at length rather than because the
+archive is silent.
+
+That is right for what `coverBeforeWork` was built for. The compiler writes one
+bounded, term-dense declaration per fragment, and against those the measure asks
+exactly the right thing: how much of this requirement's vocabulary does the
+claim actually use. It is wrong for the two texts `askArchive` feeds it, both of
+which are free prose — a person's message and a worker's paraphrase of it.
+
+§13 therefore failed in the expensive direction: Brain spent the allowance to
+learn something it had already written down, which is the precise waste the
+archive check exists to prevent.
+
+### The repair
+
+At the boundary, not in the scorer. `askArchive` already asked about the
+question in two forms — §77 added the person's own message beside the statement,
+for a neighbouring reason — and the remedy here is the same move rather than a
+new one: **ask about the question in every form Brain holds it.**
+
+The candidate's **title** is the third form and the only short one. It is
+written by the same pass that wrote the statement, stored in the same row, and
+its vocabulary is dense enough for a claim to be recognised against it. The
+three readings are deduplicated by their own text, so an idea whose title is its
+statement costs nothing.
+
+`relevance` is untouched, so no other caller changes. Neither direction of the
+combination lowers a bar:
+
+- `fullyAnswered` requires **every** reading to agree, so a third reading can
+  only make rejecting an idea harder.
+- `unverified` is a **union**, and a probe still requires a real
+  `PRESENT_BUT_UNVERIFIED` or `STALE` claim row — the rule `judgeCandidate`
+  states, which this does not touch.
+
+### What was not done
+
+Changing `relevance` to a containment measure — `hits / min(|wanted|, |found|)`
+— was the obvious alternative and was not taken. It would change every coverage
+verdict in the system, including the packet planner's own gap analysis, to fix a
+failure that only occurs where a caller feeds it prose. The scorer's property is
+correct for the requirements it was built for; the mismatch is at one caller,
+and that is where it is fixed.
+
+`ACC-9`'s idea is **not** re-judged. It launched a real mission on a real
+question and a decision is not re-taken because something happened beside it.
+`S12A-ACC-10` asks the identical text against the repaired check.
+
+### The four look scenarios
+
+| | stopped at | cause | disposition |
+|---|---|---|---|
+| ACC-3 | judgment | `askArchive` read the worker's summary, not the person's question | repaired (§77) |
+| ACC-5 | compiler | the question named a jurisdiction outside the envelope, to exclude it | question changed, compiler untouched (§78) |
+| ACC-7 | the worker | it answered the message rather than capturing an idea from it | not a defect; §8 cuts both ways |
+| ACC-8 | Brain's capture gate | the marker list had no plain request | repaired (§82) |
+| ACC-9 | the archive check | a long requirement cannot reach the relevance floor | repaired here |
+
+Five attempts, five distinct boundaries, four defects — none of them the same
+mistake twice, and every one of them found by walking the journey rather than by
+reading the code.
+
+## 84. Why A13 cannot close before A14 — 2026-09-10
+
+Recorded as a structural finding rather than as a defect, because it is three
+deliberate rules meeting.
+
+`A13_AUTO_NEXT` counts missions carrying `next_mission_id`. That column is
+written in exactly one place — `loop.ts`, after a follow-on candidate has been
+launched — and a follow-on candidate is created in exactly one place,
+`followOnsToCreate`, from one of two sources:
+
+- **a declared follow-on**, read from `judgment.missionSpec.followOn`; or
+- **a derived one**, from `unresolvedFollowOn`.
+
+The compiler writes `followOn: null` unconditionally (`compiler.ts:446`) —
+inventing one would be Brain buying research nobody asked for — so for every
+mission this Brain creates, only the derived route exists.
+
+`unresolvedFollowOn` returns null unless the packet's status is
+`COMPLETE_WITH_GAPS`. That status is reachable only through `outcomeFor` when
+`unresolvedGapPolicy === 'RECORD_GAPS'`, and that column is written only by
+`authorizeUnresolvedGaps`, whose only caller is `recordGaps` in
+`needsHuman.ts` — the RECORD_GAPS answer to a Needs You request. No Russell
+caller passes `unresolvedGap` to `startPacket`.
+
+So the chain is closed:
+
+```
+  a person answers RECORD_GAPS
+    -> orchestration.unresolved_gap_authorized_by / unresolved_gap_policy
+    -> outcomeFor -> COMPLETE_WITH_GAPS
+    -> writeback  -> unresolvedFollowOn reads the judge's own audit_gaps row
+    -> a follow-on candidate -> judged -> launched
+    -> setNextMission on the parent   =  A13
+```
+
+This is not a gap in the mechanism. It is the assignment's own
+ACCEPTANCE-SCENARIO RULE holding: *a packet that truthfully finishes without
+gaps must not produce a follow-on.* A follow-on exists only for a packet that
+filed short, and filing short is a decision the domain reserves to a person
+(invariant 20, and §24's "Brain may not decide this for you").
+
+The consequence for closure is precise: **A13 and A14 are closed by the same
+single decision**, and neither can be closed without it. Everything up to that
+decision is autonomous; the decision itself is not, and manufacturing it would
+be exactly the falsification the assignment forbids.
+
+## 85. The recovery that starved on its own backlog — 2026-09-10
+
+`reconcileArguedAuditRoles` reached the packet and the judge ran. Five AUDIT
+passes on `orc_91818deaa92a4172aa4e`, all `COMPLETE`, `compliant=true`, every
+pair at `SESSION`:
+
+```
+  PRIMARY      COMPLETE  worker=wkr_1cdd82…  routine=—                account=—
+  ADVERSARIAL  COMPLETE  worker=wkr_1cdd82…  routine=rtn_c7bcec…      account=acct_70dda3…
+  ADVERSARIAL  COMPLETE  worker=wkr_1cdd82…  routine=rtn_c7bcec…      account=acct_70dda3…
+  ADVERSARIAL  COMPLETE  worker=wkr_1cdd82…  routine=rtn_c7bcec…      account=acct_70dda3…
+  JUDGE        COMPLETE  worker=wkr_1cdd82…  routine=rtn_c7bcec…      account=acct_70dda3…
+  applied  PRIMARY_ADVERSARIAL at SESSION / JUDGE_PRIMARY at SESSION / JUDGE_ADVERSARIAL at SESSION
+```
+
+`A11_INDEPENDENT_AUDIT` still could not pass, because `AUDIT_PASSES_RECORDED`
+requires an account on all three ordinals and PRIMARY had none — across many
+ticks of a recovery deployed specifically to fill it.
+
+`step10 lineage` is what turned that from an inference into a reading:
+
+```
+  STEP10: OK lineage observed=0 attributed=0 unresolved=50
+  UNRESOLVED  wcr_014623403985406bb4eb
+              no dispatch Brain sent names a Routine for any bin this session took or claimed work in
+  … forty-nine more, every one of them wcr_
+```
+
+Every entry is a Step 8-era **worker credential** session, from before bins
+existed, that no `bin_dispatch` ever produced. None of them can ever be
+resolved. And the PRIMARY session — an `oat_`, which sorts *before* `wcr_` — is
+not in the list at all, because it already has a `worker_sessions` row. It was
+observed. Only the pass was never filled in.
+
+### The defect
+
+A refusal writes nothing, so an unresolvable session is selected again on the
+next tick, for ever. On its own that is a cost. What made it a wall is that both
+pages were bounded **and ordered oldest-first**:
+
+```ts
+      ORDER BY p.executor_session_ref          // step 1: alphabetical
+      LIMIT ?
+
+      ORDER BY started_at, rowid               // step 2: oldest passes first
+      LIMIT ?
+```
+
+Fifty permanently-unresolvable rows sat at the front of a fifty-row page and
+consumed it every ten seconds. Step 2 was worse than step 1: it selected the
+oldest fifty *unattributed* passes and then looked each session up afterwards,
+so in production all fifty resolved to no observation, nothing was filled, and
+the newer pass whose session **was** observed sat behind them indefinitely.
+
+This is §24 at the recovery's own boundary: a mechanism that cannot reach the
+state it was written for. Its header claimed the opposite — *"idempotent and
+self-limiting… the ordinary steady state is two indexed reads that find
+nothing"* — which is true of a session the rows can settle and false of one they
+cannot.
+
+### The repair
+
+Both queries now select only rows a recovery could actually change:
+
+- the pass fill **joins** `worker_sessions` on session and worker, so a pass
+  whose session is not observed is not in the page at all; and
+- both take the **newest first**, so anything just written is examined on the
+  next tick whatever is behind it.
+
+The bound now limits *work* rather than *examinations*. The backlog is neither
+resolved nor pretended away — those fifty stay unresolvable and stay reported as
+such — it simply no longer spends the budget of the rows that can be settled.
+
+`tests/step12aClosure.test.ts` pins it with a page smaller than the backlog, and
+asserts the backlog is still there and still unattributed afterwards. Reverting
+either half fails it.
+
+### The ordering that compiled and did not run — 2026-09-10
+
+§85's newest-first ordering passed typecheck, passed the whole SQLite suite, and
+threw six failures on Postgres:
+
+```
+  SELECT DISTINCT p.executor_session_ref … ORDER BY MAX(p.started_at) DESC
+```
+
+Postgres refuses an `ORDER BY` expression that is not in the select list of a
+`SELECT DISTINCT`. `GROUP BY` already did what the `DISTINCT` was there for, so
+the fix is to drop it, name the aggregate in the select list, and order by the
+alias — one statement meaning the same thing on both backends.
+
+It is worth recording because of *when* it was caught. The full Postgres suite
+had been green forty minutes earlier, on the tree before this change; the SQLite
+suite was green on the tree after it. Only running the second backend against
+the *changed* tree found it, which is the whole reason `CLAUDE.md` asks for both
+— and the deploy carrying it was cancelled mid-flight rather than allowed to put
+a query that throws every ten seconds onto the database production runs.
+
+## 86. The look scenario Brain refused as a repeat — 2026-09-10
+
+`S12A-ACC-10` reached further than any attempt before it. The capture gate
+recognised the request, an idea was created — and then:
+
+```
+  CANDIDATE LINKS
+    by source message  1
+      rcn_91276e5fa2794ea2be08  MERGED  priority —  canonical rcn_9646b600bac14e90a930
+    merges touching it 1
+      SEMANTIC  rcn_91276e… (conv rcv_1e84cc…) -> rcn_9646b6… (conv rcv_e181c5…)
+```
+
+The text was unchanged from ACC-8 and ACC-9 **on purpose**, three times over,
+and the third time the project had already recorded that this question is on the
+list. `capture`'s semantic dedupe merged the new idea into ACC-9's canonical
+one — §24's rule working exactly as written, and a merge nothing here should
+undo.
+
+A merged candidate is never judged, so the repaired archive check was never
+reached. Nothing about this is a defect and nothing about it is repaired.
+
+**What it establishes is a constraint on re-runs.** A scenario re-run has to
+differ where the dedupe looks — in the question — while staying the same where
+the test looks: an `UNVERIFIED` archive claim the project holds with nothing
+behind it, whose subject is a *presence* question, inside the standing
+envelope's jurisdiction. Rewording ACC-10 to slip under the merge floor would
+have been gaming the dedupe exactly as rewording ACC-8 would have gamed the
+capture list.
+
+`archive-shape` names sixteen such claims. `S12A-ACC-11` takes a different one:
+
+```
+  exc_ea5e2781bb60440183c8  doc=doc_99d4a5b97ffa4d7cb015
+      type=NEGATIVE_EXISTENCE  state=UNVERIFIED  superseded=no
+      While the MGF does store a statewide parcel layer, this data is for
+      internal use only and is not available in the Open Data Portal.
+```
+
+Michigan, so the compiler's envelope carries it; `NEGATIVE_EXISTENCE` with no
+page anyone can open behind it, so a bounded look is the right instrument; and
+about a state-level layer's *availability* rather than the county feeds' licence
+terms, which is `S12A-ACC-4`'s live question and a different one.
+
+### The look scenarios, complete
+
+| | stopped at | cause | disposition |
+|---|---|---|---|
+| ACC-3 | judgment | `askArchive` read the worker's summary, not the person's question | repaired (§77) |
+| ACC-5 | compiler | the question named a jurisdiction outside the envelope, to exclude it | question changed, compiler untouched (§78) |
+| ACC-7 | the worker | it answered the message rather than capturing an idea from it | not a defect; §8 cuts both ways |
+| ACC-8 | Brain's capture gate | the marker list had no plain request | repaired (§82) |
+| ACC-9 | the archive check | a long requirement cannot reach the relevance floor | repaired (§83) |
+| ACC-10 | the semantic dedupe | the identical question, already on the list | not a defect; the rule working |
+
+Six attempts, six distinct boundaries, three defects and three correct refusals.
+Every one of them found by walking the journey rather than by reading the code,
+and none of them the same mistake twice.
+
+## 87. The park with one button, and the card that argued with itself — 2026-09-10
+
+`S12A-ACC-6` is the declared scenario for *"a question the public record does
+not answer, and the person's decision that follows"*. It reached a park, and the
+park could not be that decision.
+
+```
+  orc_bf57174a711e42c0a18b   status NEEDS_HUMAN   gap policy not authorized
+  failure  No fragment cleared its evidence gate, so there is nothing to synthesize.
+  FRAGMENTS (1)
+    official-record  BLOCKED  attempt 1/2   claims 0 (0 accepted)
+      accepts [county register of deeds … michigan statute or administrative rule …]
+      because  Domain mismatch between the question and the fragment's own evidence standard,
+               confirmed across…
+  EVIDENCE  claims 0 stored, 0 accepted   passes 0   audits 0
+```
+
+The question is about what comparable success-fee marketplaces realise net of
+refunds and clawbacks. The compiled fragment's acceptable sources are Michigan
+county recording and assessing offices, because `RUSSELL_PUBLIC_RECORDS_V1` is a
+public-records envelope. The worker reported the mismatch rather than inventing
+an answer, which is the evidence gate doing its job — **the question is outside
+what this project's standing envelope can research at all.**
+
+### Two defects fell out of it
+
+**One: a row is not a decision.** The park condition was
+`hasEvidence = fragments.length > 0` — a row count standing in for "there is
+something to decide". One fragment existed, so it parked; `choicesFor` with
+nothing accepted then offered exactly one answer, STOP. The module's own comment
+says what that is:
+
+> A decision with one option is not a decision… Parking on that asks a person to
+> press the only button there is, and then waits — indefinitely, blocking the
+> idea — until they do. That is not an escalation, it is a failed run wearing an
+> escalation's clothes.
+
+Every word applies here. The condition is now the offer itself —
+`choicesFor(shape).length > 1` — so the rule applies wherever it is true rather
+than wherever the proxy happened to agree with it. Nothing is abandoned quietly:
+the mission is `FAILED` with the packet's own words, `RUSSELL_MISSION_FAILED` is
+on the project's history, every refusal keeps its row and its reason, and
+`redoable()` may offer the idea another try.
+
+**Two: the card argued with itself.** `stopWords`' own branch for this shape says
+the honest answers are *"to stop it or to ask a narrower question"* — while the
+card offered only the first. And `reopenAnswered`, which exists precisely so a
+returning card offers only answers that can act, re-derived the **choices** and
+left the **words**: a request opened when the bar was nearly met could come back
+carrying only STOP and still explain that the bar was nearly met. Its own comment
+had already stated the principle — *"Deriving it rather than storing it once is
+the property the offer itself lacked"* — and derived half of it. The words now
+move with the choices, from the same shape and the same two functions the park
+uses.
+
+### What this does not do
+
+It does not close `A14_HUMAN_RESUME`, and could not have. `STOP` is recovery, not
+a resume, and the gate counts it separately and never as a pass — correctly. What
+it removes is a dead card that would have sat in Needs You blocking the idea, in
+front of the real decision when one arrives.
+
+**And it does not falsify a gap.** ACC-6's question is genuinely outside the
+standing envelope's reach; that is a fact about the envelope and the question,
+recorded as one. Widening the envelope to make the scenario succeed was
+available and was not taken — for the same reason ACC-5's jurisdiction refusal
+was left standing.
+
+## 88. The decision that is genuinely a person's — 2026-09-10
+
+`orc_164bbf76e40b4fa88bd1`, the packet `S12A-ACC-9`'s idea launched, reached the
+one state everything else in this closure was clearing the way for:
+
+```
+  status      NEEDS_HUMAN   pass AUDIT
+  gap policy  not authorized
+  document    doc_2c4f89d5972b46e888f2       audit aud_4307d52632ee4907aa51  verdict PATCH
+  FRAGMENTS (1)
+    official-record  ACCEPTED  attempt 1/2  integrity PASS  sufficiency SUFFICIENT
+        claims 4 (3 accepted)
+  REQUIREMENTS (1)
+    official-record  MANDATORY  RESEARCH  coverage CONTRADICTED
+  EVIDENCE
+    claims 4 stored, 3 accepted        passes 6
+        audit role ordinal 5 COMPLETE 14:35:46Z
+        audit role ordinal 6 COMPLETE 15:21:47Z
+        audit role ordinal 7 COMPLETE 16:23:28Z
+    audits 1: aud_4307d52632ee4907aa51 PATCH 1 gap
+      0. [PATCH] Licensure conclusion declared 'confirmed' rests solely on a
+         non-official mirror, contrary to the assignment's evidence standard
+         MCL 339.2501(u)/(v) and MCL 339.2503 were read only from LawServer, a
+         private legal-publishing mirror, after legislature.mi.gov (503) and
+         michigan.gov…
+    citations 3 cited, 3 resolve to accepted evidence
+    document  World Model v1B · 10846 bytes · extraction READY · ledger 3/3
+```
+
+Everything in it is real and none of it was arranged. The research ran, three
+claims cleared the seven-condition gate, a report was filed with its ledger
+inside it and every citation resolving to accepted evidence, and three
+independent sessions audited it. The judge then returned **PATCH** — a
+non-advancing verdict — for a reason that is exactly the one §22 already
+recorded about this host: `legislature.mi.gov` answers **503** to automation, so
+the Michigan statute was read from a private mirror, and the assignment's own
+evidence standard says official sources.
+
+The fragment is `ACCEPTED`, so `shapeOf` gives `accepted > 0` and
+`researched > 0`, and `choicesFor` offers **RECORD_GAPS and STOP**. Two answers,
+both of which can act — a real decision, and the park is legitimate.
+
+**Brain cannot make it.** `recordGaps` requires `answered_by_user_id`, taken from
+the authenticated principal and never from a body field; `authorizeUnresolvedGaps`
+records the person by id and address; and `A14_HUMAN_RESUME` additionally
+requires `o.unresolved_gap_authorized_by = r.answered_by_user_id`, so nothing a
+script or a worker submits can satisfy it. That is invariant 20 and §24's *"Brain
+may not decide this for you"*, working exactly as written.
+
+**Nothing was falsified to produce it.** The gap is the judge's own, about a
+source that is genuinely unreachable; the alternative — widening the acceptable
+source class to make the mirror official — was available and was not taken, for
+the same reason §22 records not taking it the first time this host refused.
+
+And answering it closes **both** remaining conditions, because §84's chain runs
+from exactly here: RECORD_GAPS → `unresolved_gap_policy` → `COMPLETE_WITH_GAPS`
+→ writeback → `unresolvedFollowOn` reads the judge's own `audit_gaps` row → a
+follow-on candidate → launched → `setNextMission` on the parent = `A13_AUTO_NEXT`.
+
+**STOP would not.** It cancels the mission, and the gate counts a stop separately
+and never as a pass — correctly, because condition 17 asks for a park and a
+*resume*, not for recovery.

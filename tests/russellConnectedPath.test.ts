@@ -704,6 +704,46 @@ describe('the capture gate judges the question, not the restatement', () => {
     'as new applications are unestablished, and the pricing model presently assumes a single ' +
     'flat rate that no source has confirmed.';
 
+  /*
+   * And the request the gate did not recognise as one.
+   *
+   * The list held every hedged form — "should we", "worth checking", "look
+   * into" — and not the plain one. Production on 2026-09-10: a person wrote
+   * *"Please check something for me … Go and see whether that holds for
+   * Michigan under the rule in force now, and record what you find"*, the
+   * worker proposed `CAPTURE_CANDIDATE`, and Brain's own gate declined it with
+   * `{"captureDeclined":true,"gateReason":"nothing here proposes work"}` —
+   * because there is no question mark and no hedge.
+   *
+   * The widening is deliberately narrow. The verb has to be asked of somebody
+   * or followed by the thing to establish, so the list's documented failure
+   * mode — missing a candidate rather than inventing one — is preserved, and
+   * the negatives below are what keeps it honest.
+   */
+  it('captures a direct request to check something, and only a real one', () => {
+    const ASKED =
+      'Please check something for me rather than answering it from what we already wrote ' +
+      'down. Our five-state licensure summary says success-fee business brokerage needs a ' +
+      'licence, and nothing behind it cites a source anyone can look at. Go and see whether ' +
+      'that holds for Michigan under the rule in force now, and record what you find.';
+    expect(shouldCapture(ASKED).capture).toBe(true);
+    expect(shouldCapture(ASKED).reason).toBe('it proposes work');
+
+    // A second subject, so the fix is about the shape rather than the words.
+    const OTHER_ASK =
+      'Can you verify the fee schedule we wrote down against what the office publishes now, ' +
+      'and tell me if the renewal line is still right.';
+    expect(shouldCapture(OTHER_ASK).capture).toBe(true);
+
+    // And what it must still decline: a past-tense report, a request that
+    // proposes nothing to establish, and ordinary conversation.
+    expect(shouldCapture('I checked it yesterday and everything was where we left it.').capture)
+      .toBe(false);
+    expect(shouldCapture('Please look at the attached file when you get a chance.').capture)
+      .toBe(false);
+    expect(shouldCapture('Thanks, that all makes sense to me now.').capture).toBe(false);
+  });
+
   it('reproduces the defect: the statement alone would be refused', () => {
     // The gate, unchanged, applied to the wrong input. This is not a claim
     // about what the code now does — it is why the code had to change.
