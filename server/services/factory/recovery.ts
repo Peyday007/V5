@@ -37,7 +37,6 @@ import type {
   FactoryWorkUnit,
 } from '../../domain/factory.ts';
 import {
-  CAMPAIGN_TICK_LEASE_MS,
   factoryNow,
   getCampaign,
   listLiveCampaigns,
@@ -48,12 +47,30 @@ import {
 import { closeSession, listSessions, recordFactoryEvent } from '../../repos/factoryFleet.ts';
 import { campaignWorkspace, isDirty, listWorktrees, removeWorktree } from './git.ts';
 
+/**
+ * How long an unattached session — an ARCHITECT or REVIEWER pass, which has
+ * no unit lease to compare against — may run before recovery treats its
+ * process as gone.
+ *
+ * This must never be shorter than the longest such pass is actually allowed
+ * to run: `DEFAULT_REVIEW_TIMEOUT_MS` (review.ts) and `DEFAULT_UNIT_TIMEOUT_MS`
+ * (dispatch.ts) are both 25 minutes. `CAMPAIGN_TICK_LEASE_MS` (10 minutes) is
+ * the wrong number to reuse here even though it is also a duration on this
+ * campaign: it bounds how long one dispatcher may hold the *tick*, not how
+ * long a worker may hold a session, and a second dispatcher claiming the tick
+ * while the first is still mid-review must not read as the first one's
+ * process having died. Matches the bound `abandonOrphanedSessions`
+ * (repos/factoryFleet.ts) already uses for this same category of session, so
+ * the two mechanisms agree instead of racing each other on different clocks.
+ */
+export const UNATTACHED_SESSION_STALE_MS = 90 * 60 * 1000;
+
 export interface RecoveryOptions {
   /** The instant recovery reasons from. Defaults to the real clock. */
   now?: string;
   /** Where the repository lives. Worktree pruning is skipped without it. */
   repoRoot?: string;
-  /** How long an unattached session may run before it counts as stale. */
+  /** How long an unattached session may run before it counts as stale. Defaults to `UNATTACHED_SESSION_STALE_MS`. */
   staleAfterMs?: number;
 }
 
@@ -152,7 +169,7 @@ export async function recoverCampaign(
   if (!campaign) return emptyReport(campaignId);
 
   const now = options.now ?? factoryNow();
-  const staleAfterMs = options.staleAfterMs ?? CAMPAIGN_TICK_LEASE_MS;
+  const staleAfterMs = options.staleAfterMs ?? UNATTACHED_SESSION_STALE_MS;
 
   /* Step 1: close sessions a dead process left RUNNING. */
   const unitsBeforeSweep = await listUnits(campaignId);
