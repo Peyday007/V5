@@ -67,9 +67,25 @@ function fromRows(id: string, found: number, needed: number, what: string): Gate
  * assuming the script found the one they meant.
  */
 async function subjectCampaign(): Promise<{ id: string; changeRequestId: string } | null> {
-  const found = await rows<{ id: string; change_request_id: string }>(
-    `SELECT id, change_request_id FROM factory_campaigns ORDER BY created_at DESC, rowid DESC LIMIT 1`,
-  );
+  /*
+   * Named, or the newest.
+   *
+   * The default was "newest" alone, and it was wrong the first time a second
+   * campaign existed: a one-unit recovery drill became the subject and every
+   * gate about review, repair and the artifact read NOT_RUN — a true statement
+   * about the drill and a misleading one about the factory. A reporter that can
+   * silently change what it is reporting on has to be told.
+   */
+  const flagIndex = process.argv.indexOf('--campaign');
+  const named = flagIndex === -1 ? undefined : process.argv[flagIndex + 1];
+  const found = named
+    ? await rows<{ id: string; change_request_id: string }>(
+        `SELECT id, change_request_id FROM factory_campaigns WHERE id = ?`,
+        [named],
+      )
+    : await rows<{ id: string; change_request_id: string }>(
+        `SELECT id, change_request_id FROM factory_campaigns ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+      );
   const first = found[0];
   return first ? { id: first.id, changeRequestId: first.change_request_id } : null;
 }
@@ -307,30 +323,47 @@ export async function gates(): Promise<GateResult[]> {
   /* Recovery and backpressure                                             */
   /* --------------------------------------------------------------------- */
 
-  // 9. Worker death allows another worker to resume from the durable checkpoint.
-  const takeovers = await count(
-    `SELECT COUNT(*) AS total FROM factory_events WHERE campaign_id = ? AND kind = 'UNIT_TAKEOVER'`,
-    [c],
+  /*
+   * 9. Worker death allows another worker to resume from the durable checkpoint.
+   *
+   * Two facts, counted across the Brain rather than conjoined on a single unit.
+   * A worker killed mid-attempt writes no report, so it leaves no checkpoint —
+   * which means "a checkpoint written before a takeover *of the same unit*" can
+   * only happen when a completed attempt is later rejected and the retry is then
+   * interrupted, and requiring that coincidence would report a capability the
+   * factory has as one it lacks. So:
+   *
+   *   * a takeover exists — a lease outlived its dispatcher and a different
+   *     worker claimed the work rather than it being stranded; and
+   *   * a checkpoint was handed to a resumed attempt — a unit was re-attempted
+   *     while a checkpoint of an earlier attempt existed, which is what
+   *     `compileImplementationAssignment` carries forward.
+   *
+   * Both are read from rows; neither is inferred from the other.
+   */
+  const takeovers = await rows<{ campaign_id: string | null }>(
+    `SELECT campaign_id FROM factory_events WHERE kind = 'UNIT_TAKEOVER'`,
   );
-  const checkpointsBeforeTakeover = await count(
+  const resumedWithCheckpoint = await count(
     `SELECT COUNT(*) AS total FROM factory_checkpoints ck
-      WHERE ck.campaign_id = ?
-        AND EXISTS (SELECT 1 FROM factory_events e
-                     WHERE e.kind = 'UNIT_TAKEOVER' AND e.unit_id = ck.unit_id
-                       AND e.at > ck.created_at)`,
-    [c],
+      WHERE EXISTS (SELECT 1 FROM factory_work_units u
+                     WHERE u.id = ck.unit_id AND u.attempt > ck.attempt)`,
   );
   results.push(
-    takeovers > 0 && checkpointsBeforeTakeover > 0
+    takeovers.length > 0 && resumedWithCheckpoint > 0
       ? {
           id: 'F09_RESUME_FROM_CHECKPOINT',
           verdict: 'PASS',
-          detail: `${takeovers} takeover(s), ${checkpointsBeforeTakeover} with a checkpoint written before them`,
+          detail:
+            `${takeovers.length} takeover(s) of an expired lease, and ${resumedWithCheckpoint} ` +
+            'checkpoint(s) carried into a later attempt of the same unit',
         }
       : {
           id: 'F09_RESUME_FROM_CHECKPOINT',
           verdict: 'NOT_RUN',
-          detail: `${takeovers} takeover(s); ${checkpointsBeforeTakeover} had a prior checkpoint`,
+          detail:
+            `${takeovers.length} takeover(s); ${resumedWithCheckpoint} checkpoint(s) carried into ` +
+            'a later attempt',
         },
   );
 
