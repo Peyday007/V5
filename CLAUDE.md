@@ -1193,6 +1193,30 @@ rules.
   guard. It changes no evidence: nothing there accepts, rejects or re-judges a
   claim.
 
+- **An attribution that only observes forwards leaves history unreadable, and
+  the remedy is rows rather than another run.** `worker_sessions` records which
+  fire produced a session at the moment that session arrives, which is the right
+  place and the wrong direction for everything already written: every audit pass
+  from before it carries no account, and a gate reading those rows cannot tell a
+  missing attribution from a missing audit. The recovery is
+  `services/dispatch/lineageRecovery.ts` and it is only honest because of what
+  it refuses — it walks the credential to the bin to the dispatch Brain sent to
+  the Routine's account, never the static worker binding; a session two Routines
+  could have started is left unresolved and said to be; a dispatch at or above
+  the lease's own generation belongs to a later assignment; and every write is
+  guarded on the column still being null, so a recovered value can never replace
+  a recorded one. §5 at a column.
+
+- **The compiler runs before the judgment, so an idea Brain cannot specify is
+  never assessed for whether a cheap look would settle it.** That ordering is
+  right — a bounded look is not a remedy for an unspecifiable question — and it
+  means the probe path is reachable only for questions the standing envelope can
+  carry. A question naming a jurisdiction outside it is refused there and parks,
+  even when it names that jurisdiction to *exclude* it: `jurisdictionFor` matches
+  state names and must not start inferring intent from the words around them,
+  because a compiler that read intent would be the model judgment §8 keeps out of
+  state. What changes in that case is the question, never the compiler.
+
 - **Acceptance is a small declared suite, not one overloaded chain.** One
   conversation was right while the acceptance was one journey, and stopped
   being right the moment that journey succeeded — because a cheap look taken

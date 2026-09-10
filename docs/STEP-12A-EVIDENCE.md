@@ -7811,3 +7811,128 @@ private financial data.
 
 The archive had grown from 31 claims to 46 by then, because `S12A-ACC-3`'s
 mission had already filed.
+
+## 78. Attribution recovered, and the two things that stopped a look — 2026-09-10
+
+The closure batch's second release. Four things in it, and the two production
+readings that decided what it had to contain.
+
+### The reading that settled A11
+
+`audit-lineage orc_91818deaa92a4172aa4e`, on the ACC-3 packet, run against the
+first closure release:
+
+```
+STEP11 AUDIT LINEAGE
+  PRIMARY      COMPLETE  worker=wkr_1cdd82cfb2a54faf8edd  routine=—                        account=—                        session=oat_c3f5790caf014795a72c
+  ADVERSARIAL  COMPLETE  worker=wkr_1cdd82cfb2a54faf8edd  routine=rtn_c7bcec972bd44afa91d7  account=acct_70dda3fae2e1428e944b  session=oat_6c28e53cebe94e689492
+  applied      PRIMARY_ADVERSARIAL at SESSION
+STEP10: OK audit-lineage compliant=true passes=2
+```
+
+Two facts in three lines. The `worker_sessions` observation works — the
+adversarial pass, whose session arrived after the first closure release, names
+its Routine and its account. And it only works forwards: the primary pass, whose
+session arrived before, names neither, and no future audit round can change
+that. `A11_INDEPENDENT_AUDIT` requires `executor_account_id` on all three roles
+of one packet, so on those rows it cannot distinguish a missing attribution from
+a missing audit.
+
+The assignment allows exactly two answers to that: recover the attribution where
+append-only dispatch, assignment, authentication or routing rows establish it
+deterministically, or run another audit round after the fix. Both are being
+done, and the recovery is the one that reaches history.
+
+`services/dispatch/lineageRecovery.ts` walks one chain and only that chain:
+
+```
+research_passes.executor_session_ref
+  = bins.lease_credential_id            the credential that took the bin
+  -> bin_dispatch (SENT, routine_id)    the fire that produced it
+  -> fleet_routines.account_id          the account that Routine is under
+```
+
+Every link is a row Brain wrote at the time. It is deliberately **not** the
+static worker → Routine binding, which is the thing that could not answer this:
+one worker bound to two Routines under two accounts has two candidates, and
+choosing is the guess the whole mechanism exists to avoid. So the refusals are:
+a session whose bins were fired by more than one Routine is left unresolved and
+reported as unresolved; a Routine with no account is refused one link down; a
+dispatch at or above the lease's own generation belongs to a later assignment
+and is excluded; a predicted `future:` session is excluded by name; and every
+write is guarded on the column still being null, so a recovered value can never
+replace a recorded one. It is idempotent and self-limiting — once a session is
+observed and a pass attributed, neither query returns them again.
+
+Three tests, two of which bite. The recovery test deletes the observation for a
+session that really was fired, really did arrive and really did produce a pass,
+which is production's exact shape; it asserts the blank pass is filled from the
+dispatch, that a pass already naming a *different* account keeps it, and that a
+second run recovers nothing. The ambiguity test fires two Routines under two
+accounts for two bins the same credential takes, and asserts the recovery
+refuses, says "2 Routines", and leaves the column null.
+
+### The two things that stopped a bounded look
+
+`turn-trace` over the whole project: **probes 0**. Not one probe has ever run in
+this Brain, and the two scenarios declared for one each failed differently.
+
+`S12A-ACC-3` launched a mission. Cause and repair are in §77: `askArchive` read
+the worker's summary rather than the person's question.
+
+`S12A-ACC-5` never reached the repaired check at all. Its candidate
+`rcn_d7bbaf012ce447aabc6b` is `PARKED`, and the branch that parks before the
+archive is consulted is the compiler's. The question said *"Outside California,
+is that summary still current"*; `jurisdictionFor` matches US state names in the
+question, found `california`, and the standing authorization for this project
+covers Michigan. The compiler cannot tell "about California" from "outside
+California", and it must not try — a compiler that inferred intent from
+surrounding words would be the model judgment §24 keeps out of it. Refusing is
+the safe direction, so the question changes and the compiler does not.
+
+That is worth stating as a rule, because it is the second time an ordering has
+decided an outcome nobody chose: **the compiler runs before the judgment, so an
+idea Brain cannot specify is never assessed for whether a cheap look would
+settle it.** That ordering is correct — a look is not a remedy for an
+unspecifiable question — and it means the probe path is only reachable for
+questions the envelope can carry.
+
+`archive-shape` then settled which questions those are, from rows rather than
+from imagination. Forty-six claims, sixteen with no checkable source, in exactly
+two families: success-fee licensure and county assessment data. A live idea
+already exists on the second. So `S12A-ACC-7` is the first, narrowed to the one
+jurisdiction the envelope authorizes — `exc_29c46282531b46358cdb`, an
+`UNSUPPORTED_ASSERTION` headed "LICENSURE OF SUCCESS-FEE BUSINESS BROKERAGE —
+FIVE STATES (law in force as at 2026)" with nothing behind it, asked about
+Michigan.
+
+### A05, per chain rather than per suite
+
+Widening acceptance to a declared suite made `A05_DEDUPE` fail on five chains
+that were each behaving correctly: its falsifier is *"a second canonical
+candidate"*, which is a property of the chain the rewording was sent into and of
+no other, and five chains have five canonical ideas. The scenario that carries
+the condition now declares it (`provesDedupe`), the scope keeps each scenario's
+own candidates as well as the flattened set, and the gate reads that one chain.
+The falsifier is preserved exactly — more than one canonical idea *there* is
+still `FAIL` rather than `NOT_RUN`, because two canonical ideas is a thing that
+happened — and a suite with no scenario carrying the condition says so rather
+than passing on an empty set.
+
+### `step10 candidate`, read-only
+
+Four branches produce `priority = PARKED` — the archive already answered it, the
+compiler could not specify it, no standing authority covers it, the research
+produced no report — and they have four different remedies, none of which a
+state name distinguishes. Diagnosing ACC-5 from `turn-trace` alone was not
+possible. The new command prints the branch, the stored reason and the boolean
+and id inputs, and reduces anything textual to a length: §24's rule that this
+harness must not become a transcript reader, kept at a new command rather than
+restated.
+
+### Verification
+
+Typecheck clean. SQLite 1875 passed / 25 skipped across 77 files. Postgres 1900
+passed across 77 files, exit 0. Client build clean. Migration from an empty
+database applied 35 in order; restart against that populated database read
+"up to date (35 already applied)".
