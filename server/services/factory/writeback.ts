@@ -45,7 +45,8 @@ import {
   totalUnits,
 } from './campaignView.ts';
 import { getDb } from '../../db/database.ts';
-import { mapCampaign } from '../../repos/factory.ts';
+import { CAMPAIGN_TICK_LEASE_MS, mapCampaign } from '../../repos/factory.ts';
+import { failOperation, getOperation } from '../../repos/idempotency.ts';
 import type { FactoryCampaign, FactoryCampaignRow, FactoryCampaignState } from '../../domain/factory.ts';
 import {
   OperationConflict,
@@ -107,6 +108,44 @@ function outcomeIdempotencyKey(campaignId: string): string {
   return campaignId.replace(/_/g, '-');
 }
 
+/**
+ * How stale a `RESERVED` reservation with no `recover_after` must be before
+ * this module stops waiting for its executor and treats it as gone.
+ *
+ * The `execute` callback below is `recordEvent` plus one guarded `UPDATE`,
+ * both inside a single transaction — a live attempt settles in milliseconds,
+ * never minutes. A `RESERVED` row with `recover_after` still `NULL` this long
+ * after `reserved_at` cannot be a slow attempt; it can only be one a killed
+ * process never got to finish, because `beginAttemptOn`/`openAttempt`
+ * (`services/effects/engine.ts`) never set that column and its only writer,
+ * `failOperation`'s non-terminal path, runs from the executor's own catch
+ * block — unreachable by a process a signal already killed. Reusing
+ * `CAMPAIGN_TICK_LEASE_MS` rather than inventing a second duration is
+ * deliberate: it already answers the identical question — how long before a
+ * dispatcher working this campaign counts as gone — for this campaign's tick
+ * claim, and a crashed writeback attempt is the same kind of absence.
+ */
+const ABANDONED_RESERVATION_MS = CAMPAIGN_TICK_LEASE_MS;
+
+/**
+ * Was this reservation's executor killed before it could finish or fail?
+ *
+ * Re-reads the row rather than trusting the operation carried on a caught
+ * error: `runIdempotent` also raises `OperationInProgress` when this very
+ * caller won the take-over and then lost the race to `succeedOperation`
+ * against whoever reached `SUCCEEDED` first, and that operation is not
+ * abandoned — it is finished, by somebody else. Only a fresh read tells the
+ * two apart.
+ */
+async function isAbandonedReservation(operationId: string): Promise<boolean> {
+  const operation = await getOperation(operationId);
+  if (!operation) return false;
+  if (operation.state !== 'RESERVED' || operation.recoverAfter !== null) return false;
+  const reservedAtMs = new Date(operation.reservedAt).getTime();
+  if (!Number.isFinite(reservedAtMs)) return false;
+  return Date.now() - reservedAtMs > ABANDONED_RESERVATION_MS;
+}
+
 async function findRecordedOutcome(campaignId: string): Promise<ProjectEvent | null> {
   const events = await listEventsByEntity(ENTITY_TYPE, campaignId);
   return events.find((event) => event.eventType === FACTORY_CAMPAIGN_OUTCOME) ?? null;
@@ -138,10 +177,17 @@ export interface RecordCampaignOutcomeResult {
  * reservation runs `recordEvent` — inside the same transaction as its own
  * success record, so a crash between them leaves neither. Every other caller,
  * concurrent or redelivered, is told what already happened instead of being
- * allowed to repeat it.
+ * allowed to repeat it — except the one caller (this function, once, on the
+ * next tick) that finds the reservation is not in progress at all: its
+ * executor is gone and nobody else is coming back for it. That case is
+ * detected by `isAbandonedReservation` and closed by making the same
+ * `recover_after` write a live executor's own failure path would have made,
+ * so the take-over still runs through `takeOverOperation`'s compare-and-swap
+ * rather than anything this function does directly.
  */
 export async function recordCampaignOutcome(
   campaignId: string,
+  options: { retriedAfterRecovery?: boolean } = {},
 ): Promise<RecordCampaignOutcomeResult> {
   const view = await loadCampaignView(campaignId);
   if (!view) {
@@ -231,10 +277,27 @@ export async function recordCampaignOutcome(
       // already has (the lookup below finds it) — either way this call must
       // not insert a second row.
       const recorded = await findRecordedOutcome(campaign.id);
+      if (recorded) {
+        return { recorded: false, event: recorded, reason: 'already recorded' };
+      }
+
+      if (
+        error instanceof OperationInProgress &&
+        !options.retriedAfterRecovery &&
+        (await isAbandonedReservation(error.operation.id))
+      ) {
+        await failOperation(error.operation.id, {
+          category: 'ABANDONED',
+          terminal: false,
+          detail: 'no executor reached this reservation before it went stale',
+        });
+        return recordCampaignOutcome(campaignId, { retriedAfterRecovery: true });
+      }
+
       return {
         recorded: false,
-        event: recorded,
-        reason: recorded ? 'already recorded' : 'writeback already in progress elsewhere',
+        event: null,
+        reason: 'writeback already in progress elsewhere',
       };
     }
     throw error;
