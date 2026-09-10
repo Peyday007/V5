@@ -1,4 +1,4 @@
--- The Postgres half of migration 035. See that file for why.
+-- The Postgres half of migration 036. See that file for why.
 --
 -- Every table here carries `seq`, the identity column standing in for SQLite's
 -- `rowid`. It is not decoration: `dialect.ts` rewrites `rowid` to `seq` when a

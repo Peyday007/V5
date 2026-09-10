@@ -1,5 +1,13 @@
 -- Connecting a site to the Brain: the link, the refusals, and the storage reading.
 --
+-- Numbered 036 rather than 035, which this file briefly was. Step 12A's closure
+-- landed `035_worker_sessions.sql` on the same number while this was being
+-- written, and `loadMigrationFiles` refuses a duplicate version outright rather
+-- than applying one and skipping the other — which is why the collision was a
+-- boot failure with a sentence in it rather than a schema that silently missed
+-- half of itself. Renumbering was safe because this had not been applied to any
+-- deployment; 035 had.
+--
 -- ---------------------------------------------------------------------------
 -- Why a link table and not a new kind of record
 -- ---------------------------------------------------------------------------

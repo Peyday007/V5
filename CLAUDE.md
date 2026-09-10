@@ -1437,6 +1437,13 @@ derives.**
   is no per-idea approval. Storage is cheap relative to the business this Brain
   runs; the only thing worth building is the reading that stops it becoming a
   surprise.
+- **The migration number was 035 and is 036.** Step 12A's closure landed
+  `035_worker_sessions.sql` on the same number while this was being written, and
+  `loadMigrationFiles` refuses a duplicate version rather than applying one and
+  skipping the other — so the collision was a boot failure with a sentence in it
+  rather than a schema quietly missing half of itself. That is the whole reason
+  the numbering is checked at load time, and it is the only shared contract two
+  parallel workstreams on this repository actually have to reconcile.
 - **Running the suite against Postgres earned its place again.** The three new
   tables were created without `seq`, the identity column `dialect.ts` rewrites
   `rowid` to, and every cursor-ordered query failed on the cloud backend while

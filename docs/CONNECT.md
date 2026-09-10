@@ -199,7 +199,7 @@ host.
 The connector is additive on both sides and rolls back in either direction
 without touching anything that was already there.
 
-**Brain.** Migration `035` (SQLite) / `026` (Postgres) creates three tables and
+**Brain.** Migration `036` (SQLite) / `027` (Postgres) creates three tables and
 alters none. Deploying the previous image leaves them in place and unread;
 nothing else in Brain queries them. To remove them entirely:
 `DROP TABLE external_records, external_record_rejections, storage_readings;` —
