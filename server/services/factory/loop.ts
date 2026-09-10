@@ -380,13 +380,18 @@ async function advance(
  * Write the campaign's Brain outcome if it has not landed yet, and leave a
  * trace on the factory's own ledger when it does.
  *
- * `recordCampaignOutcome` is safe to call more than once — it reads before it
- * inserts — so this never has to remember whether an earlier attempt (this
- * tick's own COMPLETE transition, or a previous tick that died or threw
- * between the patch and the insert) already got there. Called from both the
- * transition that first reaches COMPLETE and from every later tick that
- * finds a terminal campaign still missing one, so the two paths cannot drift
- * apart about what "written back" means.
+ * `recordCampaignOutcome` is safe to call more than once — its idempotency
+ * reservation (`runIdempotent`, keyed off the campaign id) admits exactly
+ * one caller's insert, and every other caller — concurrent or redelivered —
+ * replays or waits rather than inserting a second row. The
+ * `listEventsByEntity` read inside it is only a fast path for the ordinary
+ * case, a campaign whose outcome already landed on an earlier tick; it is
+ * not what makes repeated calls safe. So this never has to remember whether
+ * an earlier attempt (this tick's own COMPLETE transition, or a previous
+ * tick that died or threw between the patch and the insert) already got
+ * there. Called from both the transition that first reaches COMPLETE and
+ * from every later tick that finds a terminal campaign still missing one, so
+ * the two paths cannot drift apart about what "written back" means.
  */
 async function ensureWrittenBack(report: TickReport, campaign: FactoryCampaign): Promise<void> {
   try {
