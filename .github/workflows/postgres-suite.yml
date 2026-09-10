@@ -36,11 +36,18 @@ name: Postgres suite
 #
 # `workflow_dispatch` can only be *called* for a workflow that already exists on
 # the default branch — the API answers 404 for one that lives on a feature branch,
-# however correct the file is. That makes the button useless for the case it is
-# most needed in: verifying the branch that introduces the workflow. A tag push
-# runs the workflow from the tagged tree itself, so `postgres-gate-<anything>`
-# names a commit and gets that commit's suite. It is deliberate in the way a
-# branch push is not: an ordinary commit does not spend twenty minutes.
+# however correct the file is. That makes the button useless for exactly the case
+# it is most needed in: verifying the branch that introduces the workflow.
+#
+# A push trigger runs the workflow from the pushed tree itself, so the branch that
+# adds this file is gated by it immediately. It is scoped to the branch that needs
+# it rather than to everything, because this suite takes the best part of twenty
+# minutes and most branches already have a cheaper answer. Once this reaches the
+# default branch the button works everywhere and the branch list below is the part
+# to delete.
+#
+# (A tag trigger would be tidier and is not available here: the environment this
+# was written in can push a branch and is refused a tag.)
 on:
   workflow_dispatch:
     inputs:
@@ -49,13 +56,15 @@ on:
         required: false
         default: 'the repository layer against the other backend'
   push:
-    tags:
-      - 'postgres-gate-*'
+    branches:
+      - 'claude/pensive-bell-dr81a4'
 
-# One at a time: two runs would share the cluster this job sets up.
+# One at a time, and the newest commit is the one worth the twenty minutes: a
+# push that supersedes the commit a run is verifying makes that run's answer
+# about a tree nobody is shipping.
 concurrency:
   group: postgres-suite-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   suite:
