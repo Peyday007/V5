@@ -126,7 +126,13 @@ async function makeProbe(
 
 /** A packet whose first fragment is blocked, with three stranded behind it. */
 async function blockedPacket(
-  over: { blockedReason?: string; attempt?: number; maxRepairs?: number } = {},
+  over: {
+    blockedReason?: string;
+    attempt?: number;
+    maxRepairs?: number;
+    /** When the fragments were blocked. Stated, never raced against the clock. */
+    blockedAt?: string;
+  } = {},
 ): Promise<string> {
   const run = await createRun({
     projectId,
@@ -191,7 +197,16 @@ async function blockedPacket(
   ] as unknown as Parameters<typeof createFragments>[0]);
 
   const fragments = await currentFragments(orchestration.id);
-  const at = new Date().toISOString();
+  /*
+   * Blocked a moment ago, not this instant.
+   *
+   * `provenReach` asks whether a probe reading is strictly *after* the block,
+   * which is exactly right about production — the surface changed, then
+   * somebody probed it — and is a coin toss in a fixture where both happen
+   * inside one millisecond on a fast runner. Backdating the block states the
+   * fact the test is actually about instead of relying on the clock ticking.
+   */
+  const at = over.blockedAt ?? new Date(Date.now() - 60_000).toISOString();
   for (const fragment of fragments) {
     await updateFragment(fragment.id, {
       status: 'BLOCKED',
@@ -430,8 +445,10 @@ describe('recovery requires evidence the surface actually changed', () => {
     // A probe from before the change proves the surface was open then, which is
     // exactly what was not true when the fragment failed.
     const probeBinId = await makeProbe({ 'https://a.example': 'RETRIEVED 200 ok' });
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    const orchestrationId = await blockedPacket();
+    // Blocked *after* that probe, said rather than slept for.
+    const orchestrationId = await blockedPacket({
+      blockedAt: new Date(Date.now() + 60_000).toISOString(),
+    });
 
     await expect(
       recoverFragmentAfterSurfaceChange({
