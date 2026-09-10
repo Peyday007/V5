@@ -37,11 +37,13 @@ import type {
   FactoryWorkUnit,
 } from '../../domain/factory.ts';
 import {
+  claimCampaignTick,
   factoryNow,
   getCampaign,
   listLiveCampaigns,
   listUnits,
   patchCampaign,
+  releaseCampaignTick,
   sweepExpiredUnitLeases,
 } from '../../repos/factory.ts';
 import { closeSession, listSessions, recordFactoryEvent } from '../../repos/factoryFleet.ts';
@@ -72,6 +74,12 @@ export interface RecoveryOptions {
   repoRoot?: string;
   /** How long an unattached session may run before it counts as stale. Defaults to `UNATTACHED_SESSION_STALE_MS`. */
   staleAfterMs?: number;
+  /**
+   * Who is running this recovery, recorded on the campaign's tick lease while
+   * `recoverAll` holds it. Meaningless to `recoverCampaign` called on its own,
+   * since that path never takes the tick claim itself.
+   */
+  owner?: string;
 }
 
 export interface RecoveryReport {
@@ -259,12 +267,33 @@ export async function recoverCampaign(
   };
 }
 
-/** Recover every campaign a tick would otherwise look at. Never calls the dispatcher or the scheduler. */
+/**
+ * Recover every campaign a tick would otherwise look at. Never calls the
+ * dispatcher or the scheduler.
+ *
+ * `recoverCampaign` mutates the same rows — units, sessions, the campaign's
+ * own state — a live tick is free to mutate at any moment, and its only
+ * previous caller (`runTick`) was safe only because it always ran after that
+ * campaign's own tick claim already excluded every other dispatcher. Calling
+ * it here, independently of any particular tick, is safe on the identical
+ * condition: each campaign's tick is claimed before it is recovered, and
+ * released immediately after. A campaign whose tick another dispatcher
+ * currently holds is left alone rather than recovered out from under it —
+ * that dispatcher's own tick already recovers it, right after claiming — so
+ * this can under-recover a live campaign and can never race one.
+ */
 export async function recoverAll(options: RecoveryOptions = {}): Promise<RecoveryReport[]> {
+  const owner = options.owner ?? `recover-all-${process.pid}`;
   const campaigns = await listLiveCampaigns();
   const reports: RecoveryReport[] = [];
   for (const campaign of campaigns) {
-    reports.push(await recoverCampaign(campaign.id, options));
+    const claim = await claimCampaignTick(campaign.id, owner);
+    if (!claim.ok) continue;
+    try {
+      reports.push(await recoverCampaign(campaign.id, options));
+    } finally {
+      await releaseCampaignTick(campaign.id, owner, claim.generation);
+    }
   }
   return reports;
 }
