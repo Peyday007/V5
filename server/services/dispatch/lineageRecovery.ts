@@ -18,15 +18,40 @@
  *     Which is this file.
  *
  * Nothing here infers, prefers or defaults. The chain is entirely rows Brain
- * wrote itself:
+ * wrote itself, and it is walked twice because one of the two links is live
+ * state and the other is history.
+ *
+ * **The live arm**, for a session still holding its bin:
  *
  *     research_passes.executor_session_ref
- *       = bins.lease_credential_id            (the credential that took the bin)
- *       -> bin_dispatch (SENT, routine_id)    (the fire that produced it)
- *       -> fleet_routines.account_id          (the account that Routine is under)
+ *       = bins.lease_credential_id            the credential that took the bin
+ *       -> bin_dispatch (SENT, routine_id)    the fire that produced it
+ *       -> fleet_routines.account_id          the account that Routine is under
  *
- * and every link is a fact Brain recorded at the time rather than a lookup over
- * how the fleet happens to be wired now. In particular it is **not** the static
+ * **The durable arm**, for every session that has since let go. `bins` is
+ * current state: `lease_credential_id` is overwritten on the next assignment
+ * and set to NULL on release and on completion, so for a finished bin the live
+ * arm finds nothing at all — which is most of history, and is exactly the case
+ * this file exists for.
+ *
+ *     research_passes.executor_session_ref
+ *       = work_leases.credential_id           append-only: who held this item
+ *       -> work_items.bin_id                  which bin the item was in
+ *       -> bin_events (BIN_ASSIGNED)          the arrival this claim followed
+ *       -> bin_dispatch at generation - 1     the fire that arrival superseded
+ *       -> fleet_routines.account_id
+ *
+ * `work_leases` is append-only by design — "a failed attempt is evidence, not
+ * something to tidy away" — so the second arm still answers months later.
+ *
+ * `BIN_ASSIGNED` rather than any arrival: a `BIN_TAKEOVER` session took an
+ * expired lease, so the fire at that generation was the *previous* owner's and
+ * crediting this session to it would attribute a session to a fire that did not
+ * produce it. `creditDispatchArrival` refuses a takeover for the same reason,
+ * and the same refusal is kept here rather than restated as an exception.
+ *
+ * Every link is a fact Brain recorded at the time rather than a lookup over how
+ * the fleet happens to be wired now. In particular it is **not** the static
  * worker -> Routine binding, which is the thing that could not answer this in
  * the first place: one worker identity bound to two Routines under two accounts
  * has two candidates, and choosing between them would be the guess this whole
@@ -36,9 +61,10 @@
  * What it refuses
  * ---------------------------------------------------------------------------
  *
- *   - **More than one Routine fired the bins a credential took.** Ambiguous, so
- *     nothing is written and the session is reported as unresolved. "We could
- *     not tell" must never read the same as "we checked".
+ *   - **More than one Routine fired the bins a credential took**, across both
+ *     arms together. Ambiguous, so nothing is written and the session is
+ *     reported as unresolved. "We could not tell" must never read the same as
+ *     "we checked".
  *   - **A Routine with no account.** Same rule, one link further down.
  *   - **A dispatch at or after the lease's own generation.** That intent was
  *     created for a *later* assignment, so it did not produce this session; the
@@ -125,13 +151,50 @@ export async function recoverExecutionLineage(limit = 25): Promise<LineageRecove
           AND d.state = 'SENT'
           AND d.routine_id IS NOT NULL
           AND d.lease_generation < b.lease_generation
-        ORDER BY d.lease_generation`,
-      [candidate.session_ref, candidate.worker_id],
+
+        UNION
+
+       /*
+        * The durable arm. work_leases keeps every claim this credential ever
+        * made, and the arrival it followed is the newest BIN_ASSIGNED for
+        * that bin, by that worker, at or before the claim — which is the same
+        * pairing creditDispatchArrival makes live, reconstructed from the
+        * events instead of from a column that has since been cleared.
+        *
+        * The generation arithmetic is that function's, unchanged: an
+        * assignment reads the dispatch at the generation it is about to
+        * supersede and then writes generation + 1, so the fire is at
+        * e.lease_generation - 1.
+        */
+       SELECT DISTINCT d.routine_id, d.bin_id, d.lease_generation
+         FROM work_leases wl
+         JOIN work_items wi ON wi.id = wl.work_item_id
+         JOIN bin_events e ON e.bin_id = wi.bin_id
+                          AND e.event_type = 'BIN_ASSIGNED'
+                          AND e.worker_id = wl.worker_id
+                          AND e.at <= wl.claimed_at
+         JOIN bin_dispatch d ON d.bin_id = e.bin_id
+                            AND d.lease_generation = e.lease_generation - 1
+                            AND d.state = 'SENT'
+                            AND d.routine_id IS NOT NULL
+        WHERE wl.credential_id = ?
+          AND wl.worker_id = ?
+          AND e.at = (
+            SELECT MAX(e2.at) FROM bin_events e2
+             WHERE e2.bin_id = e.bin_id
+               AND e2.event_type = 'BIN_ASSIGNED'
+               AND e2.worker_id = wl.worker_id
+               AND e2.at <= wl.claimed_at
+          )
+
+        ORDER BY 3`,
+      [candidate.session_ref, candidate.worker_id, candidate.session_ref, candidate.worker_id],
     );
     if (fires.length === 0) {
       report.unresolved.push({
         sessionRef: candidate.session_ref,
-        reason: 'no dispatch Brain sent names a Routine for any bin this session took',
+        reason:
+          'no dispatch Brain sent names a Routine for any bin this session took or claimed work in',
       });
       continue;
     }

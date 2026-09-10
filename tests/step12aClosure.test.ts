@@ -516,6 +516,65 @@ describe('the executing account is observed from the dispatch that fired the ses
     expect(second.passes).toHaveLength(0);
   });
 
+  /**
+   * And for a session that has long since let go of everything.
+   *
+   * `bins.lease_credential_id` is current state: overwritten by the next
+   * assignment and set to NULL on release and on completion. For a bin that
+   * finished — which is nearly all of history, and exactly what this recovery
+   * is for — the live arm finds nothing at all. `work_leases` is append-only by
+   * design, so the durable arm walks the claim to the bin, the bin to the
+   * arrival that claim followed, and the arrival to the fire it superseded.
+   */
+  it('recovers from the append-only claim when the bin no longer holds the credential', async () => {
+    const { workerId, routineId, accountId } = await twoRoutinesOneWorker();
+    const credentialId = 'oat_released_session';
+
+    const bin = await firedBin(routineId, accountId, 'A bin whose lease has since ended');
+    expect((await checkIn({ principal: principalFor(workerId, credentialId), workerId })).assigned).toBe(true);
+
+    const orchestration = await packetShell();
+    const item = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'PRIMARY' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: orchestration,
+      binId: bin.id,
+    });
+    const claimed = await claimWork({
+      workerId,
+      credentialId,
+      scopes: [{ projectId, scopes: ['queue:claim'] }],
+    });
+    expect(claimed.map((entry) => entry.workItemId)).toContain(item.id);
+
+    // The lease ends and the bin lets go of the credential — which is what
+    // `releaseWork`, `completeWork` and the next assignment all do to it.
+    await getDb().run('UPDATE bins SET lease_credential_id = NULL WHERE id = ?', [bin.id]);
+    await getDb().run('DELETE FROM worker_sessions WHERE session_ref = ?', [credentialId]);
+
+    const pass = await startPass({
+      orchestrationId: orchestration,
+      passKey: 'AUDIT',
+      ordinal: 5,
+      provider: 'WORKER',
+      prompt: 'the primary argument, long since finished',
+      promptSha256: 'f'.repeat(64),
+      executorWorkerId: workerId,
+      executorSessionRef: credentialId,
+    });
+    await finishPass(pass.id, { status: 'COMPLETE' });
+
+    const recovery = await recoverExecutionLineage();
+    expect(recovery.unresolved).toHaveLength(0);
+    expect(recovery.sessions.map((entry) => entry.sessionRef)).toEqual([credentialId]);
+    expect(recovery.sessions[0]?.accountId).toBe(accountId);
+    expect(recovery.sessions[0]?.routineId).toBe(routineId);
+    expect((await getPass(pass.id))?.executorAccountId).toBe(accountId);
+  });
+
   it('refuses a session two Routines could have started', async () => {
     const worker = await createWorker({
       name: 'ambiguous-worker',
