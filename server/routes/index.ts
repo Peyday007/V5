@@ -19,6 +19,7 @@ import { providersRouter } from './providers.ts';
 import { researchRouter } from './research.ts';
 import { runsRouter } from './runs.ts';
 import { russellRouter } from './russell.ts';
+import { factoryRouter } from './factory.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
@@ -53,6 +54,10 @@ export function createApiRouter(): Router {
   // `/projects/:id/...` ones inside it are Russell's views of a project rather
   // than the project router's.
   router.use('/russell', russellRouter);
+  // The Software Factory. Mounted at the root because its routes carry their own
+  // prefixes: some are project-scoped (/projects/:id/factory/...) and some
+  // address a campaign directly (/factory/campaigns/:id).
+  router.use(factoryRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);

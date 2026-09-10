@@ -26,7 +26,8 @@
     "authorize:gap-policy": "tsx scripts/authorize-gap-policy.ts",
     "report:packet": "tsx scripts/packet-report.ts",
     "verify:capability": "tsx scripts/verify-research-capability.ts",
-    "step12a:acceptance": "tsx --env-file-if-exists=.env scripts/step12a-acceptance.ts"
+    "step12a:acceptance": "tsx --env-file-if-exists=.env scripts/step12a-acceptance.ts",
+    "factory": "tsx --env-file-if-exists=.env scripts/factory.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

@@ -72,6 +72,7 @@ import {
 import { reviewCampaign } from './review.ts';
 import { gatingFindings, queueRepairs, reconcileRepairs } from './repair.ts';
 import { assembleDeliverable } from './assemble.ts';
+import { planCampaign } from './architect.ts';
 
 export interface TickOptions {
   repoRoot?: string;
@@ -305,13 +306,49 @@ async function planningStage(
     });
   }
 
-  const units = await listUnits(campaign.id);
+  let units = await listUnits(campaign.id);
   if (units.length === 0) {
-    return await block(report, campaign, 'DEPENDENCY_CYCLE', {
-      detail:
-        'The campaign has no work units. Install a validated plan before ticking: a graph with ' +
-        'no nodes is not a campaign waiting, it is a campaign that cannot move.',
+    // Nothing is planned yet. An architect decomposes the objective, and its plan
+    // is validated against the contract before a single row is written.
+    const snapshot = await capacity(changeRequest.repository);
+    const architectSlot = snapshot.slots.find(
+      (slot) => slot.freeSlots > 0 && slot.capabilities.includes('ARCHITECT'),
+    );
+    if (!architectSlot) {
+      return await block(report, campaign, 'NO_HEALTHY_EXECUTION_SURFACE', {
+        detail:
+          'The campaign has no work units and no free slot holds ARCHITECT. Register an ' +
+          'architect-capable worker, or install a validated plan directly.',
+      });
+    }
+    const architect = await getWorker(architectSlot.workerId);
+    if (!architect) {
+      return await block(report, campaign, 'NO_HEALTHY_EXECUTION_SURFACE', {
+        detail: 'The chosen architect vanished between the snapshot and the dispatch.',
+      });
+    }
+    const planned = await planCampaign({
+      repoRoot,
+      campaign,
+      changeRequest,
+      worker: architect,
+      model: architect.model,
+      timeoutMs: options.unitTimeoutMs,
     });
+    if (!planned.ok) {
+      report.notes.push(`planning refused: ${planned.reason}`);
+      // Not a blocker: a refused plan is a pass that can be re-run, and the
+      // campaign stays in PLANNING so the next tick tries again with a different
+      // architect or a different model.
+      report.progress = false;
+      return report;
+    }
+    report.notes.push(
+      `architect proposed ${planned.units} unit(s), ${planned.installed} installed` +
+        planned.warnings.map((warning) => `; ${warning}`).join(''),
+    );
+    units = await listUnits(campaign.id);
+    report.progress = true;
   }
 
   const cycle = await findDependencyCycle(campaign.id);

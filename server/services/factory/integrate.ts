@@ -83,16 +83,17 @@ export function matchesGlob(candidate: string, glob: string): boolean {
   let regex = '';
   for (let i = 0; i < pattern.length; i += 1) {
     const char = pattern[i];
-    if (char === '*') {
-      if (pattern[i + 1] === '*') {
-        // `a/**` also matches `a` itself, which is what a reader of the glob
-        // expects and what a directory-owning unit means by it.
-        regex += '.*';
-        i += 1;
-        if (pattern[i + 1] === '/') i += 1;
-      } else {
-        regex += '[^/]*';
-      }
+    if (char === '*' && pattern[i + 1] === '*') {
+      // `a/**` owns `a` itself as well as everything under it, which is what a
+      // reader of the glob expects and what a directory-owning unit means by it.
+      // So the separator in front of the `**` becomes part of the optional tail
+      // rather than something the path must contain.
+      if (regex.endsWith('/')) regex = `${regex.slice(0, -1)}(?:/.*)?`;
+      else regex += '.*';
+      i += 1;
+      if (pattern[i + 1] === '/') i += 1;
+    } else if (char === '*') {
+      regex += '[^/]*';
     } else if (char === '?') {
       regex += '[^/]';
     } else if (char && '\\^$.|+()[]{}'.includes(char)) {

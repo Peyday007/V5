@@ -532,11 +532,16 @@ function currentValue(changeRequest: FactoryChangeRequest, field: string): strin
  * narrowed when it actually reached somewhere new.
  */
 export function narrowsOrEqual(next: string[], current: string[]): boolean {
+  // A path that climbs or is absolute is outside every scope, including the one
+  // that says `**`. `**` means everything in the repository, not everything on
+  // the disk, and the difference is the whole of the containment guarantee.
+  if (next.some((glob) => glob.startsWith('/') || glob.split('/').includes('..'))) return false;
+
   const stem = (glob: string): string => {
     const star = glob.indexOf('*');
     return star === -1 ? glob : glob.slice(0, star);
   };
   const allowed = current.map(stem);
-  if (allowed.some((a) => a === '')) return true; // '**' allows everything
+  if (allowed.some((a) => a === '')) return true; // '**' allows everything in the tree
   return next.map(stem).every((n) => allowed.some((a) => n.startsWith(a)));
 }
