@@ -8231,3 +8231,158 @@ Worth stating together, because the sequence is the evidence:
 
 Four distinct failures at four distinct boundaries, none of them the same
 mistake twice, and three of the four were defects nothing else would have found.
+
+## 83. The archive check that could not recognise a long question — 2026-09-10
+
+`S12A-ACC-9` got one step further again. The repaired capture gate recognised
+the request, an idea was created, and the judgment read it:
+
+```
+  candidate rcn_9646b600bac14e90a930  QUEUED  priority WORTH_DOING
+    title/stmt                 87/454 chars
+    cheapToReduce              false
+    cheapToReduceAssessed      ARCHIVE_HOLDS_NOTHING_TO_CHECK
+    claimsConsidered           46
+    unverifiedClaimIds         (empty)
+  missions 1
+    2026-09-10T14:25:47.135Z  RUNNING  orchestration orc_164bbf76e40b4fa88bd1
+```
+
+So Brain queued a full research packet. Its own `scenario-check`, run nine
+minutes later against the same archive, predicted the opposite:
+
+```
+  S12A-ACC-9
+    status             MISSING            (the person's message)
+    as statement       PRESENT_BUT_UNVERIFIED (would explore true)
+```
+
+Both readings are of the same subject and the same archive. What separates them
+is length.
+
+### The cause
+
+`relevance` in `services/reconcile/coverage.ts` is `hits / wanted.size`, where
+`wanted` is the **requirement's** vocabulary:
+
+```ts
+const wanted = terms(`${requirement.statement} ${laneWords}`);
+if (wanted.size === 0) return 0;
+const found = terms(claim.claim);
+let hits = 0;
+for (const word of wanted) if (found.has(word)) hits += 1;
+return hits / wanted.size;
+```
+
+The denominator grows with the requirement and the numerator cannot exceed the
+claim's own vocabulary. A claim sentence carries roughly fifteen distinct terms;
+the 454-character statement carries about forty. A *perfect* subject match
+therefore scores at most ~0.375 and realistically well under the
+`RELEVANCE_FLOOR` of 0.3 — so no claim is even considered, and the verdict is
+`MISSING` because the question was asked at length rather than because the
+archive is silent.
+
+That is right for what `coverBeforeWork` was built for. The compiler writes one
+bounded, term-dense declaration per fragment, and against those the measure asks
+exactly the right thing: how much of this requirement's vocabulary does the
+claim actually use. It is wrong for the two texts `askArchive` feeds it, both of
+which are free prose — a person's message and a worker's paraphrase of it.
+
+§13 therefore failed in the expensive direction: Brain spent the allowance to
+learn something it had already written down, which is the precise waste the
+archive check exists to prevent.
+
+### The repair
+
+At the boundary, not in the scorer. `askArchive` already asked about the
+question in two forms — §77 added the person's own message beside the statement,
+for a neighbouring reason — and the remedy here is the same move rather than a
+new one: **ask about the question in every form Brain holds it.**
+
+The candidate's **title** is the third form and the only short one. It is
+written by the same pass that wrote the statement, stored in the same row, and
+its vocabulary is dense enough for a claim to be recognised against it. The
+three readings are deduplicated by their own text, so an idea whose title is its
+statement costs nothing.
+
+`relevance` is untouched, so no other caller changes. Neither direction of the
+combination lowers a bar:
+
+- `fullyAnswered` requires **every** reading to agree, so a third reading can
+  only make rejecting an idea harder.
+- `unverified` is a **union**, and a probe still requires a real
+  `PRESENT_BUT_UNVERIFIED` or `STALE` claim row — the rule `judgeCandidate`
+  states, which this does not touch.
+
+### What was not done
+
+Changing `relevance` to a containment measure — `hits / min(|wanted|, |found|)`
+— was the obvious alternative and was not taken. It would change every coverage
+verdict in the system, including the packet planner's own gap analysis, to fix a
+failure that only occurs where a caller feeds it prose. The scorer's property is
+correct for the requirements it was built for; the mismatch is at one caller,
+and that is where it is fixed.
+
+`ACC-9`'s idea is **not** re-judged. It launched a real mission on a real
+question and a decision is not re-taken because something happened beside it.
+`S12A-ACC-10` asks the identical text against the repaired check.
+
+### The four look scenarios
+
+| | stopped at | cause | disposition |
+|---|---|---|---|
+| ACC-3 | judgment | `askArchive` read the worker's summary, not the person's question | repaired (§77) |
+| ACC-5 | compiler | the question named a jurisdiction outside the envelope, to exclude it | question changed, compiler untouched (§78) |
+| ACC-7 | the worker | it answered the message rather than capturing an idea from it | not a defect; §8 cuts both ways |
+| ACC-8 | Brain's capture gate | the marker list had no plain request | repaired (§82) |
+| ACC-9 | the archive check | a long requirement cannot reach the relevance floor | repaired here |
+
+Five attempts, five distinct boundaries, four defects — none of them the same
+mistake twice, and every one of them found by walking the journey rather than by
+reading the code.
+
+## 84. Why A13 cannot close before A14 — 2026-09-10
+
+Recorded as a structural finding rather than as a defect, because it is three
+deliberate rules meeting.
+
+`A13_AUTO_NEXT` counts missions carrying `next_mission_id`. That column is
+written in exactly one place — `loop.ts`, after a follow-on candidate has been
+launched — and a follow-on candidate is created in exactly one place,
+`followOnsToCreate`, from one of two sources:
+
+- **a declared follow-on**, read from `judgment.missionSpec.followOn`; or
+- **a derived one**, from `unresolvedFollowOn`.
+
+The compiler writes `followOn: null` unconditionally (`compiler.ts:446`) —
+inventing one would be Brain buying research nobody asked for — so for every
+mission this Brain creates, only the derived route exists.
+
+`unresolvedFollowOn` returns null unless the packet's status is
+`COMPLETE_WITH_GAPS`. That status is reachable only through `outcomeFor` when
+`unresolvedGapPolicy === 'RECORD_GAPS'`, and that column is written only by
+`authorizeUnresolvedGaps`, whose only caller is `recordGaps` in
+`needsHuman.ts` — the RECORD_GAPS answer to a Needs You request. No Russell
+caller passes `unresolvedGap` to `startPacket`.
+
+So the chain is closed:
+
+```
+  a person answers RECORD_GAPS
+    -> orchestration.unresolved_gap_authorized_by / unresolved_gap_policy
+    -> outcomeFor -> COMPLETE_WITH_GAPS
+    -> writeback  -> unresolvedFollowOn reads the judge's own audit_gaps row
+    -> a follow-on candidate -> judged -> launched
+    -> setNextMission on the parent   =  A13
+```
+
+This is not a gap in the mechanism. It is the assignment's own
+ACCEPTANCE-SCENARIO RULE holding: *a packet that truthfully finishes without
+gaps must not produce a follow-on.* A follow-on exists only for a packet that
+filed short, and filing short is a decision the domain reserves to a person
+(invariant 20, and §24's "Brain may not decide this for you").
+
+The consequence for closure is precise: **A13 and A14 are closed by the same
+single decision**, and neither can be closed without it. Everything up to that
+decision is autonomous; the decision itself is not, and manufacturing it would
+be exactly the falsification the assignment forbids.

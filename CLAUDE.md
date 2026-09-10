@@ -1267,6 +1267,31 @@ rules.
   to hit an existing keyword was the alternative and would have been gaming the
   list rather than fixing it.
 
+- **A coverage score whose denominator is the question measures how the question
+  was asked.** `relevance` is `hits / wanted.size` over the *requirement's*
+  vocabulary, so a longer requirement scores lower against the identical claim.
+  That is right for what `coverBeforeWork` was built for — the compiler writes
+  one bounded, term-dense declaration per fragment — and wrong for the free
+  prose `askArchive` feeds it: a 454-character statement carries forty terms
+  against a claim sentence's fifteen, so a perfect subject match cannot reach
+  the floor and the archive reads `MISSING` because the question was asked at
+  length. §13 then fails in the expensive direction, spending the allowance to
+  learn what the project had already written down. **The remedy is to ask about
+  the question in every form Brain holds it, never to tune what "about" means**
+  — the candidate's title is the third reading and the only short one, and
+  `relevance` is untouched, so no other caller changes. Neither direction lowers
+  a bar: `fullyAnswered` needs every reading to agree, `unverified` is a union,
+  and a probe still requires a real unverified or stale claim row.
+
+- **`A13_AUTO_NEXT` is downstream of `A14_HUMAN_RESUME`, and that is the rules
+  holding rather than a gap.** The compiler declares no follow-on, so a compiled
+  mission's only route is `unresolvedFollowOn`, which requires
+  `COMPLETE_WITH_GAPS`, which requires `unresolved_gap_policy = 'RECORD_GAPS'`,
+  which only `recordGaps` writes — the RECORD_GAPS answer to a Needs You
+  request. A follow-on therefore exists only for a packet that filed short, and
+  filing short is a decision the domain reserves to a person. One decision
+  closes both conditions, and neither can be closed without it.
+
 - **Acceptance is a small declared suite, not one overloaded chain.** One
   conversation was right while the acceptance was one journey, and stopped
   being right the moment that journey succeeded — because a cheap look taken
