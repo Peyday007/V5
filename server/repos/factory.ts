@@ -1343,30 +1343,6 @@ export async function reopenUnit(
   return result.changes === 1;
 }
 
-/** Raise a unit's ceiling, for a reason that is not the unit's own insufficiency. */
-export async function raiseAttemptCeiling(unitId: string, to: number): Promise<boolean> {
-  const result = await getDb().run(
-    `UPDATE factory_work_units
-        SET max_attempts = ?, state = CASE WHEN state = 'FAILED' THEN 'READY' ELSE state END,
-            updated_at = ?
-      WHERE id = ? AND max_attempts < ?`,
-    [to, factoryNow(), unitId, to],
-  );
-  return result.changes === 1;
-}
-
-export async function cancelUnit(unitId: string, reason: string): Promise<boolean> {
-  const result = await getDb().run(
-    `UPDATE factory_work_units
-        SET state = 'CANCELLED',
-            lease_id = NULL, lease_worker_id = NULL, lease_expires_at = NULL,
-            failure_detail = ?, updated_at = ?
-      WHERE id = ? AND state NOT IN ('INTEGRATED','CANCELLED')`,
-    [bound(reason), factoryNow(), unitId],
-  );
-  return result.changes === 1;
-}
-
 /* ------------------------------------------------------------------------- */
 /* Checkpoints                                                                */
 /* ------------------------------------------------------------------------- */

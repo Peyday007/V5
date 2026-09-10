@@ -464,19 +464,6 @@ export async function abandonOrphanedSessions(maxUnattachedAgeMs = 90 * 60 * 100
   return attached.changes + unattached.changes;
 }
 
-/** Release a dead process's sessions, so a restart does not leave them RUNNING forever. */
-export async function abandonStaleSessions(olderThanIso: string): Promise<number> {
-  const at = factoryNow();
-  const result = await getDb().run(
-    `UPDATE factory_sessions
-        SET state = 'ABANDONED', exit_reason = 'No heartbeat; reclaimed on recovery.',
-            ended_at = ?, updated_at = ?
-      WHERE state = 'RUNNING' AND started_at <= ?`,
-    [at, at, olderThanIso],
-  );
-  return result.changes;
-}
-
 /* ------------------------------------------------------------------------- */
 /* Reviews and findings                                                       */
 /* ------------------------------------------------------------------------- */

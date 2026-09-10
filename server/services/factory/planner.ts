@@ -35,7 +35,6 @@ import {
   ensureUnit,
   findDependencyCycle,
   getUnitByKey,
-  listUnits,
   pathsOverlap,
   promoteReadyUnits,
   refreshDownstreamCounts,
@@ -389,17 +388,4 @@ export async function installPlan(
   }
 
   return { created, existing, promoted: promoted.length, cycle: null };
-}
-
-/**
- * A short description of the repository for the architect.
- *
- * Gathered by the factory rather than asked for, and deliberately small: an
- * architect that has to read the whole tree before proposing anything spends its
- * context on orientation instead of on the decomposition.
- */
-export async function repositoryNotes(campaignId: string): Promise<string> {
-  const units = await listUnits(campaignId);
-  if (units.length === 0) return '';
-  return units.map((unit) => `- ${unit.unitKey}: ${unit.title}`).join('\n');
 }

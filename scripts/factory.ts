@@ -39,7 +39,7 @@ import { approveObjective, submitObjective } from '../server/services/factory/co
 import { capacity, probeFleet, readiness, register } from '../server/services/factory/registry.ts';
 import { INITIAL_LANE_TARGET } from '../server/services/factory/scheduler.ts';
 import { installPlan, validatePlan } from '../server/services/factory/planner.ts';
-import { runCampaign, tickCampaign } from '../server/services/factory/loop.ts';
+import { runCampaign, tickAllCampaigns, tickCampaign } from '../server/services/factory/loop.ts';
 import { campaignMetrics } from '../server/services/factory/metrics.ts';
 import type { FactoryCapability, FactoryWorkerKind } from '../server/domain/factory.ts';
 
@@ -241,6 +241,24 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'tick-all': {
+      // One tick for every live campaign. What a scheduled dispatcher calls, and
+      // the reason this entry point exists at all.
+      const reports = await tickAllCampaigns({
+        owner: flagString(flags, 'owner') ?? `cli-all-${process.pid}`,
+      });
+      if (reports.length === 0) process.stdout.write('no live campaign\n');
+      for (const report of reports) {
+        process.stdout.write(
+          `${report.campaignId} ${report.state} — ${report.stage}; ` +
+            `dispatched ${report.dispatched}, integrated ${report.integrated}, ` +
+            `rejected ${report.rejected}\n` +
+            report.notes.map((note) => `    ${note}\n`).join(''),
+        );
+      }
+      break;
+    }
+
     case 'status': {
       const campaignId =
         flagString(flags, 'campaign') ??
@@ -299,7 +317,7 @@ async function main(): Promise<void> {
 
     default:
       process.stdout.write(
-        'commands: fleet, register, submit, approve, plan, run, tick, status, release\n',
+        'commands: fleet, register, submit, approve, plan, run, tick, tick-all, status, release\n',
       );
   }
 
