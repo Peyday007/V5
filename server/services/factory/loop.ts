@@ -851,9 +851,24 @@ async function reviewStage(
   }
 
   const snapshot = await capacity(changeRequest.repository);
-  const reviewerSlot = snapshot.slots.find(
+  /*
+   * Prefer a reviewer that has not worked on this campaign.
+   *
+   * The floor is session separation and it is enforced at the review itself, so
+   * any REVIEW-capable worker produces a valid review. But taking the first
+   * matching slot took the architect — which planned the work — and the campaign
+   * earned SESSION_SEPARATED when the fleet could have supplied
+   * WORKER_SEPARATED. The tier reported was truthful; the allocator was simply
+   * leaving a stronger one on the table.
+   */
+  const alreadyWorked = new Set(
+    (await implementingSessions(campaign.id)).map((session) => session.workerId),
+  );
+  const reviewCapable = snapshot.slots.filter(
     (slot) => slot.freeSlots > 0 && slot.capabilities.includes('REVIEW'),
   );
+  const reviewerSlot =
+    reviewCapable.find((slot) => !alreadyWorked.has(slot.workerId)) ?? reviewCapable[0];
   if (!reviewerSlot) {
     return await block(report, campaign, 'NO_ELIGIBLE_REVIEWER', {
       detail:
