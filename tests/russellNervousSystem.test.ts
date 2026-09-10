@@ -1780,6 +1780,76 @@ describe('the loop keeps going without anybody watching', () => {
     expect((await getMission(mission.id))!.state).toBe('CANCELLED');
   });
 
+  it('does not offer to file a report of a packet where nothing cleared its gate', async () => {
+    /*
+     * The same defect one status further along, and the one that would have
+     * stopped the whole journey in production.
+     *
+     * `RECORD_GAPS` files the report with its unresolved questions named
+     * *beside what was established*. A packet where every fragment was refused
+     * at its evidence gate has no beside: `advancePacket` stops it at
+     * `NEEDS_HUMAN` with *no fragment cleared its evidence gate* whatever the
+     * gap authorization says — so the offer would record a person's decision,
+     * move the mission back to `RUNNING`, and have the next tick park it again
+     * on the identical reason, for ever.
+     *
+     * Both halves are checked, because a request opened before this rule
+     * existed still carries both choices on its row and the row is what a
+     * person sees: the offer no longer includes it, and the transition refuses
+     * it too.
+     */
+    const conversation = await ownedConversation('Nothing survived');
+    const mission = await parkedMission(conversation.id);
+    await withPlan(mission.orchestrationId!, layerId, projectId);
+    for (const fragment of await currentFragments(mission.orchestrationId!)) {
+      await updateFragment(fragment.id, {
+        status: 'BLOCKED',
+        blockedReason: 'Every source on point was outside the authorized allowlist.',
+      });
+    }
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason:
+        'No fragment cleared its evidence gate, so there is nothing to synthesize.',
+    });
+
+    await tick('instance-a');
+    const request = (await listOpenRequests(projectId)).find(
+      (entry) => entry.missionId === mission.id,
+    )!;
+    expect(request, 'the mission was not parked at all').toBeTruthy();
+    // Research happened, so this is not the empty-packet case — and still only
+    // one answer, because filing is not one of the things that can happen.
+    expect(request.choices.map((choice) => choice.key).sort()).toEqual(['STOP']);
+    // And the card says why, in words about this packet rather than the other
+    // stop's words about a bar that was nearly met.
+    expect(request.whyNotRussell).toMatch(/no report to file/i);
+
+    /*
+     * The transition refuses it too. Answered by hand against the stored row,
+     * which is what a stale card would produce.
+     */
+    await getDb().run(
+      `UPDATE russell_human_requests
+          SET state = 'ANSWERED', answered_choice = 'RECORD_GAPS', answered_by_user_id = ?
+        WHERE id = ?`,
+      [userId, request.id],
+    );
+    const after = await tick('instance-a');
+    expect(after.resumed).not.toContain(request.id);
+    expect(after.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
+
+    // Nothing was authorized in anybody's name, and the packet did not move.
+    const orchestration = await getOrchestration(mission.orchestrationId!);
+    expect(orchestration!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
+    expect(orchestration!.unresolvedGapAuthorizedBy).toBeNull();
+
+    // And the decision came back rather than staying answered.
+    const reopened = (await getHumanRequest(request.id))!;
+    expect(reopened.state).toBe('OPEN');
+    expect(reopened.answeredChoice).toBeNull();
+  });
+
   it('leaves an answer it cannot carry out visible, rather than marking it resumed', async () => {
     /*
      * The failure mode this whole path exists to prevent, exercised directly.
@@ -2523,6 +2593,17 @@ async function withNoResearchAtAll(orchestrationId: string) {
  *
  * `BLOCKED` is the honest status for the stop these tests set up — the evidence
  * bar was not met and the repair ladder is spent.
+ *
+ * **And one fragment cleared, which is the other half of the shape and was
+ * missing.** A packet where *nothing* cleared cannot file a report with its
+ * unresolved questions named beside what was established, because there is
+ * nothing beside them: `advancePacket` stops such a packet at `NEEDS_HUMAN`
+ * with *no fragment cleared its evidence gate* whatever the gap authorization
+ * says. So a fixture that blocked everything and then asserted `RECORD_GAPS`
+ * was offered was asserting a button that could not finish the packet — the
+ * failure these tests are about, one status further along than the version
+ * they already fixed. The stop `RECORD_GAPS` is *for* is a mixed packet: some
+ * of the goal settled, some of it not.
  */
 async function withResearch(orchestrationId: string, layerIdFor: string, projectIdFor: string) {
   await withPlan(orchestrationId, layerIdFor, projectIdFor);
@@ -2531,6 +2612,31 @@ async function withResearch(orchestrationId: string, layerIdFor: string, project
       status: 'BLOCKED',
       blockedReason: 'The evidence bar was not met and the repair ladder is spent.',
     });
+  }
+  await createFragments([
+    {
+      orchestrationId,
+      projectId: projectIdFor,
+      layerId: layerIdFor,
+      fragmentIndex: 1,
+      fragmentKey: 'permit-terms',
+      question: 'On what terms may the permit data be redistributed?',
+      geography: 'Michigan',
+      requiredEvidence: [
+        { id: 'operative_definition', description: 'the published terms', necessity: 'REQUIRED' },
+      ],
+      acceptableSourceTypes: ['county government portals'],
+      excludedSourceTypes: ['vendor marketing'],
+      completionCriteria: ['the written terms, quoted'],
+      minIndependentSources: 1,
+      maxRepairs: 2,
+      dependsOn: [],
+      attempt: 1,
+    },
+  ] as unknown as Parameters<typeof createFragments>[0]);
+  for (const fragment of await currentFragments(orchestrationId)) {
+    if (fragment.fragmentKey !== 'permit-terms') continue;
+    await updateFragment(fragment.id, { status: 'ACCEPTED' });
   }
 }
 
