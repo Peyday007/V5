@@ -240,6 +240,24 @@ async function runTick(
     // this shape. Retried here so a tick on this campaign, however it was
     // reached, is what closes that gap rather than walking past it forever.
     await ensureWrittenBack(report, campaign);
+    /*
+     * And its checkouts are still on disk.
+     *
+     * `recoverCampaign` refuses to re-derive the state of a terminal campaign,
+     * so the only thing this reaches is the pruning step — which is the step a
+     * finished campaign needs and the one no caller could reach for it. Run on
+     * this entrance as well as through `recoverAll`, because a guard on one
+     * entrance is not a guard, and a person ticking a campaign that is over
+     * should not have to know which of the two retires its scratch.
+     */
+    try {
+      const retired = await recoverCampaign(campaignId, { repoRoot });
+      const note = describeRecovery(retired);
+      if (note) notes.push(note);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      notes.push(`recovery failed: ${detail.slice(0, 300)}`);
+    }
     return report;
   }
 

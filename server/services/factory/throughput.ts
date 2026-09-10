@@ -52,6 +52,26 @@ export interface ThroughputBreakdownEntry {
   /** Units attributed to this entry that merged on their first attempt. */
   unitsMerged: EvidenceNumber;
   unitsPerHour: EvidenceNumber;
+  /**
+   * Peak overlap of this entry's own sessions, swept by `computeMetrics`.
+   *
+   * Present on every entry because it is genuinely attributable: a session row
+   * carries the worker, the role and the account it ran under, so the sweep has
+   * everything it needs. A campaign-level peak alone cannot say whether four at
+   * once was four lanes on one account or one lane on four.
+   */
+  maxObservedConcurrency: EvidenceNumber;
+  /**
+   * Always `UNKNOWN`, and present rather than absent on purpose.
+   *
+   * Queue time is a property of a *unit* — how long it waited between becoming
+   * ready and being leased — and the worker that eventually took it did not
+   * exist as far as that interval is concerned. `campaignMetrics` therefore
+   * attributes queueing to the campaign and to nothing narrower, and the honest
+   * report of a figure nobody measured is the figure with `UNKNOWN` on it and a
+   * basis saying why, not a missing field a reader might mistake for zero.
+   */
+  queueTime: DurationBreakdown;
 }
 
 export interface ThroughputReport {
@@ -242,6 +262,43 @@ function entryDurationBreakdown(totalDurationMs: number, sessionCount: number, s
   };
 }
 
+/**
+ * Queue time for one entry: never measured, always said so.
+ *
+ * The shape matches the campaign-level breakdown exactly so a reader can put
+ * the two side by side, and every field carries the same reason: queueing
+ * happened to a unit before any of these subjects held it.
+ */
+function entryQueueTime(subject: string): DurationBreakdown {
+  const basis =
+    `campaignMetrics attributes queue time to a unit's wait between READY and LEASED, ` +
+    `which is not a property of ${subject}; no row attributes it this narrowly`;
+  return {
+    total: num(null, 'UNKNOWN', basis),
+    samples: num(null, 'UNKNOWN', basis),
+    average: num(null, 'UNKNOWN', basis),
+  };
+}
+
+/**
+ * This entry's own peak overlap, from `computeMetrics`' sweep.
+ *
+ * `MEASURED` when the subject ran at all, because the number is the result of
+ * sweeping real session intervals. A subject with no sessions reports `UNKNOWN`
+ * with a null value rather than zero, for the reason the campaign-level figure
+ * gives: the absence of a session is not a measurement of one.
+ */
+function entryConcurrency(peak: number, sessionCount: number, subject: string): EvidenceNumber {
+  if (sessionCount <= 0) {
+    return num(null, 'UNKNOWN', `no factory_sessions rows for ${subject} to sweep for overlap`);
+  }
+  return num(
+    peak,
+    'MEASURED',
+    `peak overlap of the factory_sessions start/end intervals belonging to ${subject}`,
+  );
+}
+
 function entryUnitsMerged(mergedCount: number | null, subject: string): EvidenceNumber {
   if (mergedCount === null) {
     return num(
@@ -286,6 +343,8 @@ function perWorkerBreakdown(metrics: CampaignMetrics): ThroughputBreakdownEntry[
       sessionDurations: entryDurationBreakdown(worker.totalDurationMs, worker.sessions, subject),
       unitsMerged: entryUnitsMerged(worker.firstPassMerged, subject),
       unitsPerHour: entryUnitsPerHour(worker.firstPassMerged, worker.totalDurationMs, subject),
+      maxObservedConcurrency: entryConcurrency(worker.maxConcurrency, worker.sessions, subject),
+      queueTime: entryQueueTime(subject),
     };
   });
 }
@@ -303,6 +362,8 @@ function perRoleBreakdown(metrics: CampaignMetrics): ThroughputBreakdownEntry[] 
       // its sessions happened to touch.
       unitsMerged: entryUnitsMerged(null, subject),
       unitsPerHour: entryUnitsPerHour(null, role.totalDurationMs, subject),
+      maxObservedConcurrency: entryConcurrency(role.maxConcurrency, role.sessions, subject),
+      queueTime: entryQueueTime(subject),
     };
   });
 }
@@ -342,6 +403,15 @@ function perAccountRefBreakdown(metrics: CampaignMetrics): ThroughputBreakdownEn
       sessionDurations: entryDurationBreakdown(agg.totalDurationMs, agg.sessions, subject),
       unitsMerged: entryUnitsMerged(agg.firstPassMerged, subject),
       unitsPerHour: entryUnitsPerHour(agg.firstPassMerged, agg.totalDurationMs, subject),
+      // From the sweep's own per-account map, never from the maximum of this
+      // account's workers' peaks: two workers each peaking at one, at the same
+      // moment, is an account peak of two.
+      maxObservedConcurrency: entryConcurrency(
+        metrics.maxConcurrencyByAccountRef[accountRef] ?? 0,
+        agg.sessions,
+        subject,
+      ),
+      queueTime: entryQueueTime(subject),
     };
   });
 }

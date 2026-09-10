@@ -41,6 +41,7 @@ import {
   factoryNow,
   getCampaign,
   listLiveCampaigns,
+  listTerminalCampaigns,
   listUnits,
   patchCampaign,
   releaseCampaignTick,
@@ -278,6 +279,47 @@ export async function recoverCampaign(
 }
 
 /**
+ * Finished campaigns that still have a checkout on disk.
+ *
+ * This module's own opening paragraph says a finished campaign "accumulates a
+ * full checkout per attempt forever unless something retires them" — and for a
+ * while nothing did. `runTick` returns for `COMPLETE` and `CANCELLED` before it
+ * reaches recovery, and `recoverAll` walked `listLiveCampaigns`, whose SQL
+ * excludes exactly those two states. Steps 1 to 3 handle a terminal campaign
+ * perfectly well and step 4 already refuses to touch one, so the gap was never
+ * the recovery: it was the caller set.
+ *
+ * Filtered by what is actually on disk rather than by a flag, which makes it
+ * self-limiting in the way a marker column would not be: once a campaign's
+ * worktrees are gone it stops appearing here, with nothing to record and nothing
+ * to forget to record. One `git worktree list` per tick is the whole cost, and
+ * it is skipped entirely when no repository root was supplied — without one,
+ * pruning is not a thing this function could do anyway.
+ */
+async function terminalCampaignsStillOnDisk(
+  options: RecoveryOptions,
+): Promise<FactoryCampaign[]> {
+  const repoRoot = options.repoRoot;
+  if (!repoRoot) return [];
+  let onDisk: string[];
+  try {
+    onDisk = (await listWorktrees(repoRoot)).map((worktree) => path.resolve(worktree.path));
+  } catch {
+    // A repository that cannot be listed is not a reason to skip the live
+    // campaigns this function is called alongside.
+    return [];
+  }
+  if (onDisk.length === 0) return [];
+  const terminal = await listTerminalCampaigns();
+  return terminal.filter((campaign) => {
+    const workspace = path.resolve(campaignWorkspace(campaign.id));
+    return onDisk.some(
+      (candidate) => candidate === workspace || candidate.startsWith(`${workspace}${path.sep}`),
+    );
+  });
+}
+
+/**
  * Recover every campaign a tick would otherwise look at. Never calls the
  * dispatcher or the scheduler.
  *
@@ -294,7 +336,7 @@ export async function recoverCampaign(
  */
 export async function recoverAll(options: RecoveryOptions = {}): Promise<RecoveryReport[]> {
   const owner = options.owner ?? `recover-all-${process.pid}`;
-  const campaigns = await listLiveCampaigns();
+  const campaigns = [...(await listLiveCampaigns()), ...(await terminalCampaignsStillOnDisk(options))];
   const reports: RecoveryReport[] = [];
   for (const campaign of campaigns) {
     const claim = await claimCampaignTick(campaign.id, owner);

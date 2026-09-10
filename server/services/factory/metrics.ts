@@ -67,6 +67,8 @@ export interface RoleMetrics {
   failed: number;
   rateLimited: number;
   totalDurationMs: number;
+  /** Peak overlap of *this role's* own session intervals. Swept, never declared. */
+  maxConcurrency: number;
 }
 
 export interface WorkerMetrics {
@@ -81,6 +83,8 @@ export interface WorkerMetrics {
   /** Of the units this worker implemented, how many were merged on the first attempt. */
   firstPassMerged: number;
   attemptsSpent: number;
+  /** Peak overlap of *this worker's* own session intervals. Swept, never declared. */
+  maxConcurrency: number;
 }
 
 export interface CampaignMetrics {
@@ -123,6 +127,14 @@ export interface CampaignMetrics {
    * has seen.
    */
   maxObservedConcurrency: number;
+  /**
+   * Peak overlap per account reference, swept from the same intervals.
+   *
+   * Keyed rather than folded into `byWorker`, because an account's peak is not
+   * a property of any one of its workers and must not be reconstructed as the
+   * maximum of theirs.
+   */
+  maxConcurrencyByAccountRef: Record<string, number>;
   concurrencyEvidence: 'MEASURED' | 'UNKNOWN';
   sessions: { total: number; finished: number; failed: number; rateLimited: number; abandoned: number };
   byWorker: WorkerMetrics[];
@@ -300,6 +312,7 @@ export function computeMetrics(input: MetricsInput): CampaignMetrics {
         totalDurationMs: 0,
         firstPassMerged: 0,
         attemptsSpent: 0,
+        maxConcurrency: 0,
       } satisfies WorkerMetrics);
     worker.sessions += 1;
     worker.totalDurationMs += session.durationMs ?? 0;
@@ -319,6 +332,7 @@ export function computeMetrics(input: MetricsInput): CampaignMetrics {
         failed: 0,
         rateLimited: 0,
         totalDurationMs: 0,
+        maxConcurrency: 0,
       } satisfies RoleMetrics);
     role.sessions += 1;
     role.totalDurationMs += session.durationMs ?? 0;
@@ -352,10 +366,44 @@ export function computeMetrics(input: MetricsInput): CampaignMetrics {
     }
   }
 
-  const intervals = sessions.map((session) => ({
+  const intervalOf = (session: FactorySession) => ({
     start: new Date(session.startedAt).getTime(),
     end: session.endedAt ? new Date(session.endedAt).getTime() : now,
-  }));
+  });
+  const intervals = sessions.map(intervalOf);
+
+  /*
+   * The same overlap sweep, per subject.
+   *
+   * A throughput report that gave a peak for the campaign and nothing per
+   * worker, role or account was reporting a number nobody could act on: "four
+   * at once" does not say whether that was four lanes on one account or one
+   * lane on four. It is attributable — the sessions carry the worker, the role
+   * and the account they ran under — so it is swept here, beside the campaign's
+   * own peak and from the identical intervals, rather than guessed downstream.
+   *
+   * An account's peak is emphatically *not* the maximum of its workers' peaks:
+   * two workers each peaking at one, at the same moment, is an account peak of
+   * two. So each subject gets its own sweep over its own sessions.
+   */
+  const overlapOfSessions = (subset: FactorySession[]): number =>
+    maxOverlap(subset.map(intervalOf));
+  for (const worker of byWorker.values()) {
+    worker.maxConcurrency = overlapOfSessions(
+      sessions.filter((session) => session.workerId === worker.workerId),
+    );
+  }
+  for (const role of byRole.values()) {
+    role.maxConcurrency = overlapOfSessions(
+      sessions.filter((session) => session.role === role.role),
+    );
+  }
+  const maxConcurrencyByAccountRef: Record<string, number> = {};
+  for (const accountRef of new Set(sessions.map((session) => session.accountRef))) {
+    maxConcurrencyByAccountRef[accountRef] = overlapOfSessions(
+      sessions.filter((session) => session.accountRef === accountRef),
+    );
+  }
 
   const firstEvent = events[0]?.at ?? sessions[0]?.startedAt ?? null;
   const lastEvent = events[events.length - 1]?.at ?? null;
@@ -407,6 +455,7 @@ export function computeMetrics(input: MetricsInput): CampaignMetrics {
     firstPassSuccessRate: merged > 0 ? firstPass / merged : null,
     repairCycles,
     maxObservedConcurrency: maxOverlap(intervals),
+    maxConcurrencyByAccountRef,
     concurrencyEvidence: sessions.length > 0 ? 'MEASURED' : 'UNKNOWN',
     sessions: {
       total: sessions.length,

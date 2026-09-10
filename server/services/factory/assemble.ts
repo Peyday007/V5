@@ -17,13 +17,14 @@ import type { FactoryCampaign, FactoryChangeRequest } from '../../domain/factory
 import {
   listFindings,
   listIntegrations,
-  listReviews,
   putArtifact,
   recordFactoryEvent,
 } from '../../repos/factoryFleet.ts';
 import { listUnits, patchCampaign } from '../../repos/factory.ts';
 import { FACTORY_EVENT_KINDS, campaignMetrics } from './metrics.ts';
 import { commitsBetween, diffStat, git, mergeBase } from './git.ts';
+import { latestReview, loadCampaignView } from './campaignView.ts';
+import { renderPullRequest } from './pullRequest.ts';
 
 export interface AssembleInput {
   repoRoot: string;
@@ -57,66 +58,47 @@ export async function assembleDeliverable(input: AssembleInput): Promise<Assembl
   const commits = await commitsBetween(repoRoot, base, head);
   const patch = await git(repoRoot, ['diff', diffRef], 300_000);
   const units = await listUnits(campaign.id);
-  const reviews = await listReviews(campaign.id);
   const findings = await listFindings(campaign.id);
   const integrations = await listIntegrations(campaign.id);
   const metrics = await campaignMetrics(campaign.id);
 
-  const lastReview = reviews[reviews.length - 1];
-  const openFindings = findings.filter((finding) => finding.state === 'OPEN');
-  const repaired = findings.filter((finding) => finding.state === 'REPAIRED');
-
-  const body = [
-    `## ${changeRequest.objective}`,
-    '',
-    changeRequest.expectedOutcome,
-    '',
-    '### Acceptance conditions',
-    ...changeRequest.acceptanceConditions.map(
-      (condition) =>
-        `- **${condition.id}** ${condition.statement}\n  _checked by:_ ${condition.verification}`,
-    ),
-    '',
-    '### What landed',
-    `Base \`${base.slice(0, 12)}\` → \`${head.slice(0, 12)}\` on \`${campaign.integrationBranch}\``,
-    `${commits.length} commit(s), ${stat.filesChanged} file(s), +${stat.insertions}/-${stat.deletions}`,
-    '',
-    ...units
-      .filter((unit) => unit.state === 'INTEGRATED')
-      .map((unit) => `- \`${unit.unitKey}\` — ${unit.title}`),
-    '',
-    '### Independent review',
-    lastReview
-      ? `Round ${lastReview.round}: **${lastReview.verdict}** (${lastReview.independence}).\n\n${lastReview.summary}`
-      : 'No review was recorded, which means this change has not been independently judged.',
-    '',
-    repaired.length > 0
-      ? `${repaired.length} review finding(s) were repaired and re-verified:\n` +
-        repaired.map((finding) => `- ${finding.findingKey}: ${finding.statement}`).join('\n')
-      : 'No review findings required repair.',
-    '',
-    openFindings.length > 0
-      ? `### Remaining limitations\n` +
-        openFindings
-          .map((finding) => `- **${finding.severity}** ${finding.statement}`)
-          .join('\n')
-      : '### Remaining limitations\nNone recorded.',
-    '',
-    '### Verification',
-    changeRequest.verificationCommands.length > 0
-      ? changeRequest.verificationCommands.map((command) => `- \`${command}\``).join('\n')
-      : '- (the repository declared no verification commands)',
-    `\nRan ${metrics.verification.ran} time(s) across the campaign; ${metrics.verification.failed} failure(s) were repaired or rolled back.`,
-    '',
-    '### How it was produced',
-    `${metrics.units.total} work unit(s), ${metrics.sessions.total} worker session(s), ` +
-      `maximum observed concurrency ${metrics.maxObservedConcurrency} (${metrics.concurrencyEvidence}).`,
-    `${integrations.filter((i) => i.outcome === 'MERGED').length} merge(s), ` +
-      `${integrations.filter((i) => i.outcome === 'REJECTED').length} rejection(s), ` +
-      `${integrations.filter((i) => i.outcome === 'CONFLICT').length} conflict(s).`,
-    '',
-    `Rollback: ${changeRequest.rollbackRequirement}`,
-  ].join('\n');
+  /*
+   * One renderer, two readers.
+   *
+   * This module used to hold its own body template. It produced a *different*
+   * document from `GET /factory/campaigns/:id/pull-request` over the identical
+   * rows — no status on the acceptance conditions, the last element of a
+   * newest-first review list rather than the newest, and only OPEN findings as
+   * limitations — so the stored artifact and the live route disagreed about the
+   * same campaign and nothing reconciled them. Rendering through
+   * `renderPullRequest` makes that impossible rather than merely unlikely: the
+   * only thing this module still contributes is the half a caller without a
+   * checkout cannot answer, and it contributes it as data.
+   */
+  const view = await loadCampaignView(campaign.id);
+  if (!view) {
+    throw new Error(
+      `Campaign ${campaign.id} cannot be rendered: its rows did not resolve into a view.`,
+    );
+  }
+  const { body } = renderPullRequest(view, {
+    base,
+    head,
+    commits: commits.length,
+    filesChanged: stat.filesChanged,
+    insertions: stat.insertions,
+    deletions: stat.deletions,
+    verificationCommands: changeRequest.verificationCommands,
+    verificationRan: metrics.verification.ran,
+    verificationFailed: metrics.verification.failed,
+    unitsTotal: metrics.units.total,
+    sessionsTotal: metrics.sessions.total,
+    maxObservedConcurrency: metrics.maxObservedConcurrency,
+    concurrencyEvidence: metrics.concurrencyEvidence,
+    merges: integrations.filter((i) => i.outcome === 'MERGED').length,
+    rejections: integrations.filter((i) => i.outcome === 'REJECTED').length,
+    conflicts: integrations.filter((i) => i.outcome === 'CONFLICT').length,
+  });
 
   await putArtifact({
     campaignId: campaign.id,
@@ -145,8 +127,10 @@ export async function assembleDeliverable(input: AssembleInput): Promise<Assembl
       filesChanged: stat.filesChanged,
       insertions: stat.insertions,
       deletions: stat.deletions,
-      openFindings: openFindings.length,
-      lastVerdict: lastReview?.verdict ?? null,
+      // Read from the same view the body was rendered from, so the ledger row
+      // and the artifact can never describe different campaigns.
+      openFindings: findings.filter((finding) => finding.state === 'OPEN').length,
+      lastVerdict: latestReview(view)?.verdict ?? null,
     },
   });
 

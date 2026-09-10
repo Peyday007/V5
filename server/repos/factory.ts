@@ -564,6 +564,24 @@ export async function listCampaigns(projectId: string): Promise<FactoryCampaign[
 }
 
 /** Campaigns a tick should look at: anything not finished. */
+/**
+ * The campaigns a tick has nothing left to move, newest first.
+ *
+ * The counterpart to `listLiveCampaigns`, and it exists for one job: a finished
+ * campaign still owns a checkout per attempt on disk, and the recovery that
+ * retires them was reachable from no caller that could see a terminal campaign.
+ * Listing them is not an invitation to tick them — `runTick` still returns early
+ * for both states — only to let recovery's pruning step reach work that is over.
+ */
+export async function listTerminalCampaigns(): Promise<FactoryCampaign[]> {
+  const rows = await getDb().all<FactoryCampaignRow>(
+    `SELECT * FROM factory_campaigns
+      WHERE state IN ('COMPLETE','CANCELLED')
+      ORDER BY finished_at DESC, rowid DESC`,
+  );
+  return rows.map(mapCampaign);
+}
+
 export async function listLiveCampaigns(): Promise<FactoryCampaign[]> {
   const rows = await getDb().all<FactoryCampaignRow>(
     `SELECT * FROM factory_campaigns
