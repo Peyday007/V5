@@ -4794,3 +4794,12 @@ export interface RussellCycle {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * The Software Factory's own contract.
+ *
+ * Re-exported here so `domain/types.ts` stays the one place above the database
+ * that describes a row, and kept in its own file because a type surface several
+ * parallel workers need to change at once is one two of them will collide in.
+ */
+export * from './factory.ts';
