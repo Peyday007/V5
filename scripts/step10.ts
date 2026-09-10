@@ -76,6 +76,7 @@ import { MAX_TURN_ATTEMPTS, ownerPrincipal, retryTurn } from '../server/services
 import { parseJson } from '../server/repos/util.ts';
 import { validateProposal } from '../server/services/russell/proposal.ts';
 import { coverBeforeWork } from '../server/services/russell/coverage.ts';
+import { projectClaims } from '../server/services/reconcile/coverage.ts';
 import { shouldCapture } from '../server/services/russell/judgment.ts';
 import {
   createConversation,
@@ -143,6 +144,16 @@ function refuseStep10(why: string): void {
 const ACCEPTANCE_SCENARIOS = {
   'S12A-ACC-3': {
     purpose: 'a bounded cheap look before any mission is created',
+    /**
+     * The short line a capture pass would write for this question.
+     *
+     * Declared beside the question because it, not the message, is what the
+     * archive is matched against — so this is what decides whether the scenario
+     * is well-posed. It is a prediction of the worker's wording rather than a
+     * substitute for it: the real statement is still the worker's.
+     */
+    statement:
+      'establish whether one statewide Michigan index of township assessing offices exists',
     question:
       'Is there a single statewide Michigan index that lists every city and township ' +
       'assessing office with its current contact route, or does that only exist county by ' +
@@ -151,6 +162,8 @@ const ACCEPTANCE_SCENARIOS = {
   },
   'S12A-ACC-4': {
     purpose: "a genuine unresolved gap and the person's decision that follows it",
+    statement:
+      'establish the written terms of use and redistribution rights for county assessment data feeds',
     question:
       'What are the written terms of use, licence and redistribution restrictions that apply ' +
       "to Wayne County's assessment CSV downloads and to Oakland's and Kent's parcel REST " +
@@ -506,6 +519,52 @@ async function main(): Promise<void> {
    * before asking is not choosing the evidence after seeing it — the questions
    * are fixed in this file either way, and nothing here changes a row.
    */
+  /*
+   * The shape of the project's own archive, as the coverage classifier sees it.
+   *
+   * Read-only and creates nothing. It exists because a scenario has to be
+   * *well-posed* before it is asked, and whether a bounded look is the right
+   * instrument for a question is a fact about the archive rather than about the
+   * question: `PRESENT_BUT_UNVERIFIED` means the project already wrote an
+   * answer down and nothing supports it, which is precisely when a presence
+   * check beats a research packet.
+   *
+   * It prints each claim's *shape* — which document, what type, whether it
+   * cites a source that can be checked, and its verification state — with a
+   * short excerpt so the subject is identifiable. `packet-report` already shows
+   * a project's own gap text to its operator; this is the same content at the
+   * same boundary, and there is no way to tell whether a question is well-posed
+   * without seeing what the archive is about.
+   */
+  if (command === 'archive-shape') {
+    const project = await getProjectBySlug(DEAL_DISPATCH_SLUG);
+    if (!project) {
+      console.log('STEP10: FAIL no Deal Dispatch project');
+      process.exitCode = 1;
+      return;
+    }
+    const claims = await projectClaims(project.id);
+    const unsourced = claims.filter(
+      (claim) =>
+        claim.sourceUrl === null ||
+        claim.claimType === 'UNSUPPORTED_ASSERTION' ||
+        claim.verificationState === 'UNVERIFIABLE' ||
+        claim.verificationState === 'REJECTED',
+    );
+    console.log(`  claims total       ${claims.length}`);
+    console.log(`  unchecked          ${unsourced.length}`);
+    console.log('');
+    for (const claim of unsourced) {
+      console.log(
+        `  ${claim.id}  doc=${claim.documentId} type=${claim.claimType} ` +
+          `state=${claim.verificationState} superseded=${claim.superseded ? 'yes' : 'no'}`,
+      );
+      console.log(`      ${claim.claim.replace(/\s+/g, ' ').slice(0, 150)}`);
+    }
+    console.log('STEP10: OK archive-shape read-only');
+    return;
+  }
+
   if (command === 'scenario-check') {
     const project = await getProjectBySlug(DEAL_DISPATCH_SLUG);
     if (!project) {
@@ -533,6 +592,25 @@ async function main(): Promise<void> {
       console.log(`    fully answered     ${coverage.fullyAnswered}`);
       console.log(`    needs research     ${verdict?.needsResearch ?? '—'}`);
       console.log(`    would explore      ${verdict?.status === 'PRESENT_BUT_UNVERIFIED' || verdict?.status === 'STALE'}`);
+
+      /*
+       * And against the *statement*, which is what actually gets matched.
+       *
+       * `askArchive` builds its one requirement from `candidate.statement` —
+       * the short line the capture pass writes — not from the person's whole
+       * message. Relevance is the fraction of the requirement's terms found in
+       * a claim, so a long message scores far lower than the statement it
+       * becomes: judging a scenario by the message alone would predict the
+       * wrong verdict, which is the mistake this line exists to stop.
+       */
+      const statement = declared.statement;
+      const asStatement = await coverBeforeWork({
+        projectId: project.id,
+        layerId: layer.id,
+        requirements: [{ key: `scenario:${key}:statement`, statement }],
+      });
+      const short = asStatement.verdicts[0];
+      console.log(`    as statement       ${short?.status ?? '—'} (would explore ${short?.status === 'PRESENT_BUT_UNVERIFIED' || short?.status === 'STALE'})`);
     }
     console.log('STEP10: OK scenario-check read-only');
     return;
