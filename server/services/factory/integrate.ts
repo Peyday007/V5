@@ -42,11 +42,13 @@ import {
   markIntegrated,
   patchCampaign,
   promoteReadyUnits,
+  refundAttempt,
   reopenUnit,
 } from '../../repos/factory.ts';
 import { recordFactoryEvent, recordIntegration } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import {
+  FACTORY_SCAFFOLDING,
   alreadyMerged,
   changedPaths,
   commitsBetween,
@@ -310,15 +312,33 @@ export async function integrateUnit(options: IntegrateOptions): Promise<Integrat
   const paths = await changedPaths(repoRoot, unitBase, branchSha);
   const ownership = checkOwnership(paths, unit.ownedPaths);
   if (!ownership.ok) {
+    // A rejection the factory caused is not an attempt the unit spent.
+    //
+    // The factory puts a dependency link in every worktree, and a commit that
+    // swept it in fails ownership for a path the worker never chose to touch.
+    // §23's sentence at a third altitude: the work is still redone, because the
+    // commit genuinely adds a path to the tree — but the unit is not walked
+    // toward exhaustion against the factory's own scaffolding.
+    const onlyScaffolding = ownership.outside.every((candidate) =>
+      FACTORY_SCAFFOLDING.some((scaffold) => candidate === scaffold || candidate.startsWith(`${scaffold}/`)),
+    );
     await reopenUnit(
       unit.id,
       'OUT_OF_SCOPE_MUTATION',
-      `The diff touched paths this unit does not own: ${ownership.outside.slice(0, 20).join(', ')}`,
+      onlyScaffolding
+        ? `The commit captured the factory's own scaffolding (${ownership.outside.join(', ')}), ` +
+            'which no unit owns. This is the factory\'s defect rather than the work\'s: redo the ' +
+            'unit exactly as specified.'
+        : `The diff touched paths this unit does not own: ${ownership.outside.slice(0, 20).join(', ')}`,
     );
+    if (onlyScaffolding) await refundAttempt(unit.id, unit.attempt);
     return await record(
       'REJECTED',
-      'The diff reaches outside the paths this unit owns, so it was rejected whole rather than ' +
-        'partially taken.',
+      onlyScaffolding
+        ? "The diff contains only the factory's own scaffolding outside the unit's ownership; " +
+            'rejected, and the attempt refunded because the unit did not cause it.'
+        : 'The diff reaches outside the paths this unit owns, so it was rejected whole rather ' +
+            'than partially taken.',
       { rejectedPaths: ownership.outside },
     );
   }

@@ -179,6 +179,76 @@ export async function queueRepairs(
 }
 
 /**
+ * A failing verification command is a defect, and defects become work.
+ *
+ * The final check runs on the whole merged tree, so it catches what no single
+ * unit could: two units that each passed and broke each other. When it fails,
+ * the campaign must not simply be re-reviewed — the previous review judged a
+ * tree that no longer passes, and re-reading its verdict would cycle forever
+ * without producing anything. Nor is a model asked for an opinion about it: an
+ * exit code is a fact the factory observed, so the finding is authored from the
+ * observation.
+ *
+ * Keyed by the command, so the same failing command produces one repair however
+ * many times the verification is run.
+ */
+export async function queueVerificationRepair(
+  campaign: FactoryCampaign,
+  changeRequest: FactoryChangeRequest,
+  failure: { command: string; exitCode: number; tail: string },
+): Promise<{ unitId: string; unitKey: string; created: boolean }> {
+  const slug = failure.command.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const unitKey = `repair-verification-${slug}`.slice(0, 60);
+  const units = await listUnits(campaign.id);
+  const ownedPaths = [...new Set(units.flatMap((unit) => unit.ownedPaths))];
+
+  const { unit, created } = await ensureUnit({
+    campaignId: campaign.id,
+    unitKey,
+    kind: 'REPAIR',
+    role: 'IMPLEMENTER',
+    title: `Repair: \`${failure.command}\` fails on the merged tree`,
+    objective:
+      `The campaign's own verification command \`${failure.command}\` exits ${failure.exitCode} ` +
+      'on the integration branch. Every unit passed its own checks, so this is something two ' +
+      'of them did to each other. Make the command pass.\n\nWhat it printed:\n\n' +
+      failure.tail.slice(-2000) +
+      '\n\nFix the cause. Do not weaken, skip or delete a test, and do not remove the command.',
+    acceptance: [
+      `\`${failure.command}\` exits 0 on the merged tree`,
+      'no test was weakened, skipped or deleted to achieve it',
+    ],
+    ownedPaths: ownedPaths.length > 0 ? ownedPaths : changeRequest.mutationScope,
+    requiredContext: [],
+    verification: [failure.command],
+    expectedArtifact: 'a commit that makes the command pass',
+    risk: 'HIGH',
+    criticalPath: true,
+    priority: 9,
+    modelClass: 'STRONGEST',
+    maxAttempts: 3,
+    state: 'READY',
+  });
+
+  if (created) {
+    await recordFactoryEvent({
+      campaignId: campaign.id,
+      unitId: unit.id,
+      kind: FACTORY_EVENT_KINDS.repairQueued,
+      evidenceClass: 'MEASURED',
+      detail: {
+        unitKey,
+        source: 'FINAL_VERIFICATION',
+        command: failure.command,
+        exitCode: failure.exitCode,
+      },
+    });
+  }
+  await promoteReadyUnits(campaign.id);
+  return { unitId: unit.id, unitKey, created };
+}
+
+/**
  * Close out the findings whose repair landed.
  *
  * A finding is REPAIRED when its unit is INTEGRATED — which means the repair's

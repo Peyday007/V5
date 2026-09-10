@@ -41,6 +41,15 @@ export interface CommandResult {
   timedOut: boolean;
 }
 
+/**
+ * Paths the factory creates inside a worktree, which are never part of a diff.
+ *
+ * Listed here rather than left to `.gitignore`, because the factory put them
+ * there: a guarantee about the factory's own scaffolding should not depend on a
+ * pattern in a file a campaign is allowed to change.
+ */
+export const FACTORY_SCAFFOLDING = ['node_modules'];
+
 /** Plenty for a test suite; bounded so a hung command cannot hold a lane forever. */
 export const DEFAULT_COMMAND_TIMEOUT_MS = 20 * 60 * 1000;
 const MAX_CAPTURED_BYTES = 2 * 1024 * 1024;
@@ -380,7 +389,11 @@ export async function commitAll(
   trailers: Record<string, string> = {},
 ): Promise<string | null> {
   if (!(await isDirty(worktreePath))) return null;
-  await gitOrThrow(worktreePath, ['add', '-A']);
+  // Everything except what the factory itself put there. The dependency link is
+  // the factory's own scaffolding, and a rescue commit that swept it in put a
+  // path no unit owns into every diff — which the integrator then correctly
+  // rejected, for a reason that was never the worker's.
+  await gitOrThrow(worktreePath, ['add', '-A', '--', '.', ...FACTORY_SCAFFOLDING.map((p) => `:(exclude)${p}`)]);
   const lines = [message, ''];
   for (const [key, value] of Object.entries(trailers)) lines.push(`${key}: ${value}`);
   const args = ['commit', '--no-verify', '-m', lines.join('\n')];
