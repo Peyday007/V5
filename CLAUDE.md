@@ -1283,6 +1283,22 @@ rules.
   a bar: `fullyAnswered` needs every reading to agree, `unverified` is a union,
   and a probe still requires a real unverified or stale claim row.
 
+- **A row is not a decision, and a card must not argue with itself.** The park
+  condition was `fragments.length > 0` — a row count standing in for "there is
+  something to decide" — so a packet holding one refused fragment, no claims and
+  nothing accepted parked, and `choicesFor` then offered exactly one answer while
+  the card's own explanation said the honest answers were *"to stop it or to ask
+  a narrower question"*. **The condition is the offer**: park only where more
+  than one thing can be chosen between, which is the module's own rule applied
+  where it is true rather than where a proxy agreed with it. Nothing is
+  abandoned quietly — the mission is `FAILED` with the packet's own words, the
+  event is on the project's history, every refusal keeps its row and its reason,
+  and `redoable()` may offer another try. The same defect lived one door along:
+  `reopenAnswered` re-derived the **choices** and left the **words**, so a
+  request opened when the bar was nearly met could come back carrying only STOP
+  and still explain that the bar was nearly met. The words move with the
+  choices, from the same shape and the same functions.
+
 - **`A13_AUTO_NEXT` is downstream of `A14_HUMAN_RESUME`, and that is the rules
   holding rather than a gap.** The compiler declares no follow-on, so a compiled
   mission's only route is `unresolvedFollowOn`, which requires
