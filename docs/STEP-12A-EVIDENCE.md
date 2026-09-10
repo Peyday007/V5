@@ -7487,3 +7487,55 @@ cannot produce them.
 
 No migration. No evidence gate, envelope, authority, ceiling or fleet setting
 changed, and the three-distinct-session separation floor is untouched.
+
+### What production did with it
+
+Deployed as run 34442326332 (`ff945de`), verified either side of a real
+restart. The loop's first tick on the new release reconciled the mission with
+nobody involved:
+
+```
+rms_2f53d1629a4348b2be53  ALIGNED
+  packet                     orc_d636b91950734d4f9b38 COMPLETE
+  layer  packet / mission    Qualification Logic / Qualification Logic
+  audit  packet / mission    aud_ebbd20b157c4406884cd / aud_ebbd20b157c4406884cd
+  doc    packet / mission    doc_99d4a5b97ffa4d7cb015 / doc_99d4a5b97ffa4d7cb015
+    audit in run             aud_fa00b082361f49bca42b MORE_RESEARCH 2026-09-09T12:57:58.838Z
+    audit in run             aud_ebbd20b157c4406884cd PASS          2026-09-10T02:40:13.828Z
+  knowledge rows             1
+      rkn_9115973323ff4f8fad2a  CONCLUSION layer=Qualification Logic
+                                audit=aud_ebbd20b157c4406884cd
+                                doc=doc_99d4a5b97ffa4d7cb015  superseded=no
+  reconciliations            1
+      2026-09-10T05:50:46.083Z  mission=rms_2f53d1629a4348b2be53
+        auditId: aud_fa00b082361f49bca42b -> aud_ebbd20b157c4406884cd
+```
+
+Read against what the correction had to preserve: **both audits are still
+there**, with their verdicts and their gaps; the single knowledge row keeps its
+id, is not superseded, and now cites the compliant `PASS` audit and the layer
+the document is filed in; `writeback_at` is still `2026-09-10T02:40:57.216Z`, so
+the writeback was not repeated; and the conversation is still seven turns, so no
+second response was produced. One field was corrected, because one field was
+wrong — the mission's layer had already been repointed by the handoff.
+
+The document behind it is `Qualification Logic v1B`, 16884 bytes present in the
+bucket, extraction `READY`, ledger `7/7` cited claim ids found in the stored
+bytes, 7 accepted claims of 9, citations `7 cited, 7 resolve to accepted
+evidence`.
+
+**And the shape that decided the rule is in those rows.** The compliant audit
+`aud_ebbd20b157c4406884cd` — recorded 02:40:13.828Z — itself carries an
+`[OTHER_LAYER] … owned by Qualification Logic` gap. So the routing to
+Qualification Logic was driven by that audit and therefore happened *after* it,
+after the 02:40:57 writeback, and against a packet already `COMPLETE`, which is
+not re-opened. A round-boundary derivation would have placed both audits before
+the current round and refused the one mission this correction exists for. That
+was checked from rows rather than assumed.
+
+Two observations outside this correction's scope, recorded rather than acted on
+because the instruction was explicit that no further work was to be manufactured
+here: the completed packet still shows two `RESEARCH_AUDIT` items `LEASED` (one
+at `attempt 9/2`), and its single requirement reads `coverage MISSING` while the
+packet is `COMPLETE` and its fragment `ACCEPTED`. Neither affects the filed
+document, the audit, the claims or the knowledge above.
