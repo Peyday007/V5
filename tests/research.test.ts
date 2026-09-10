@@ -1309,18 +1309,33 @@ describe('the job survives what happens to it', () => {
       assignment: 'Anything',
     });
 
+    /*
+     * The cancel is held, not fired and forgotten.
+     *
+     * `onProgress` is declared to return `void`, so anything it returns is
+     * discarded by the orchestrator — and an `async` callback therefore hands
+     * back a promise nobody owns. When the cancel outlived the run (which it
+     * does whenever the database is far enough away to make the write slow) it
+     * finished after this file's teardown had closed the connection, and
+     * surfaced as an unhandled rejection that failed the run while every test
+     * passed. Keeping the handle and awaiting it below is the whole fix: the
+     * test owns the work it started.
+     */
+    let cancelling: Promise<unknown> = Promise.resolve();
+
     // The handle is kept rather than awaited here: the assertion below is about
     // how it settles.
     const promise: Promise<unknown> = runOrchestration(orchestration.id, {
       provider: worker,
-      onProgress: async (progress) => {
+      onProgress: (progress) => {
         // Cancel as soon as the first fragment starts.
         if (progress.phase === 'RESEARCHING' && progress.index === 0) {
-          await cancelResearch(orchestration.id, 'Changed my mind.');
+          cancelling = cancelResearch(orchestration.id, 'Changed my mind.');
         }
       },
     });
     await expect(promise).rejects.toThrow(/cancelled/i);
+    await cancelling;
 
     const cancelled = (await getOrchestration(orchestration.id))!;
     expect(cancelled.status).toBe('CANCELLED');
