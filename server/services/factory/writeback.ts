@@ -25,7 +25,9 @@ import {
   openFindings,
   totalUnits,
 } from './campaignView.ts';
-import type { FactoryCampaignState } from '../../domain/factory.ts';
+import { getDb } from '../../db/database.ts';
+import { mapCampaign } from '../../repos/factory.ts';
+import type { FactoryCampaign, FactoryCampaignRow, FactoryCampaignState } from '../../domain/factory.ts';
 
 /**
  * `EventType` has no factory member. Adding one means editing the union in
@@ -120,4 +122,32 @@ export async function recordCampaignOutcome(
   });
 
   return { recorded: true, event };
+}
+
+/**
+ * Terminal campaigns whose Brain outcome has not landed yet.
+ *
+ * `recordCampaignOutcome`'s read-before-insert guard is what makes calling it
+ * a second time safe; the defect this closes is that nothing was ever calling
+ * it a second time. A crash between `patchCampaign(state: 'COMPLETE', ...)`
+ * and this module's own insert — or a caught error from the insert itself —
+ * leaves a campaign that is COMPLETE or CANCELLED, has a `finishedAt`, and
+ * carries no `FACTORY_CAMPAIGN_COMPLETED` row. `listLiveCampaigns` will never
+ * surface that campaign again, because by every other measure it is finished;
+ * this is the query that looks specifically for the one thing still missing,
+ * so a later tick can find it without re-reading every terminal campaign's
+ * event history one at a time.
+ */
+export async function listCampaignsPendingOutcome(): Promise<FactoryCampaign[]> {
+  const rows = await getDb().all<FactoryCampaignRow>(
+    `SELECT c.* FROM factory_campaigns c
+      LEFT JOIN project_events e
+        ON e.entity_type = ? AND e.entity_id = c.id AND e.event_type = ?
+      WHERE c.state IN ('COMPLETE', 'CANCELLED')
+        AND c.finished_at IS NOT NULL
+        AND e.id IS NULL
+      ORDER BY c.finished_at`,
+    [ENTITY_TYPE, FACTORY_CAMPAIGN_OUTCOME],
+  );
+  return rows.map(mapCampaign);
 }
