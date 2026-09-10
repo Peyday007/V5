@@ -34,8 +34,10 @@ import type {
   FactoryWorkUnit,
 } from '../../domain/factory.ts';
 import {
+  CAMPAIGN_TICK_HEARTBEAT_MS,
   claimCampaignTick,
   claimUnits,
+  extendCampaignTick,
   factoryNow,
   findDependencyCycle,
   getCampaign,
@@ -190,9 +192,17 @@ export async function tickCampaign(
     };
   }
 
+  // Hold the tick for as long as this dispatcher is actually working. An
+  // execution tick waits for its lanes, so without this the lease expires under a
+  // live dispatcher and a second one joins in — two dispatchers dispatching past
+  // the lane target and racing each other into the integration branch.
+  const keepTick = setInterval(() => {
+    void extendCampaignTick(campaignId, owner, claim.generation);
+  }, CAMPAIGN_TICK_HEARTBEAT_MS);
   try {
     return await runTick(campaignId, repoRoot, options);
   } finally {
+    clearInterval(keepTick);
     await releaseCampaignTick(campaignId, owner, claim.generation);
   }
 }

@@ -88,8 +88,23 @@ export function clampUnitLeaseMs(ms: number | undefined): number {
   return Math.min(MAX_UNIT_LEASE_MS, Math.max(MIN_UNIT_LEASE_MS, Math.floor(ms)));
 }
 
-/** A campaign tick's lease. Short: a tick is seconds of work, not minutes. */
-export const CAMPAIGN_TICK_LEASE_MS = 10 * 60 * 1000;
+/**
+ * A campaign tick's lease, and how often a live dispatcher renews it.
+ *
+ * Short *and* renewed, which the first version was neither. It was a flat ten
+ * minutes with no renewal, and that is wrong in both directions at once: an
+ * execution tick waits for its lanes and can run far longer than ten minutes, so
+ * the lease expired under a working dispatcher and let a second one in to
+ * dispatch beyond the lane target and race it into the integration branch — and
+ * a dispatcher that *died* held its campaign for the full ten minutes, which is
+ * five times longer than the unit leases it was holding.
+ *
+ * Two minutes, renewed every fifteen seconds while the tick is actually running,
+ * makes both cases right: a live dispatcher keeps the tick for as long as it
+ * works, and a dead one loses it in about two minutes.
+ */
+export const CAMPAIGN_TICK_LEASE_MS = 2 * 60 * 1000;
+export const CAMPAIGN_TICK_HEARTBEAT_MS = 15 * 1000;
 
 export const MAX_SUMMARY_CHARS = 4000;
 export const MAX_DETAIL_CHARS = 4000;
@@ -625,6 +640,30 @@ export async function claimCampaignTick(
   );
   if (result.changes !== 1) return { ok: false, reason: 'another dispatcher holds the tick' };
   return { ok: true, generation: row.generation + 1 };
+}
+
+/**
+ * Push the tick lease out while the tick is still running.
+ *
+ * Guarded on the owner and the generation it was given, so a dispatcher that has
+ * already lost the tick cannot extend somebody else's. Returns false when the
+ * tick is no longer this dispatcher's — which is the signal that its work is now
+ * somebody else's problem.
+ */
+export async function extendCampaignTick(
+  campaignId: string,
+  owner: string,
+  generation: number,
+  leaseMs = CAMPAIGN_TICK_LEASE_MS,
+): Promise<boolean> {
+  const at = factoryNow();
+  const result = await getDb().run(
+    `UPDATE factory_campaigns
+        SET lease_expires_at = ?, updated_at = ?
+      WHERE id = ? AND generation = ? AND lease_owner = ?`,
+    [plusMs(at, leaseMs), at, campaignId, generation, owner],
+  );
+  return result.changes === 1;
 }
 
 /** Hand the tick back. Guarded, so a lost dispatcher cannot release the new owner's. */

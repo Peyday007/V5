@@ -37,6 +37,7 @@ import {
   recordCheckpoint,
   latestCheckpoint,
   claimCampaignTick,
+  extendCampaignTick,
   approveChangeRequest,
 } from '../server/repos/factory.ts';
 import {
@@ -545,6 +546,21 @@ describe('claiming', () => {
       claimCampaignTick(campaignId, 'd2'),
     ]);
     expect([a.ok, b.ok].filter(Boolean).length).toBe(1);
+  });
+
+  it('lets a working dispatcher keep the tick and a lost one extend nothing', async () => {
+    const { campaignId } = await campaignWithUnits();
+    const claim = await claimCampaignTick(campaignId, 'live', 60_000);
+    expect(claim.ok).toBe(true);
+    if (!claim.ok) return;
+
+    // A tick that is still running pushes its own lease out. Without this an
+    // execution tick that waits for its lanes loses the tick while working, and a
+    // second dispatcher joins in.
+    expect(await extendCampaignTick(campaignId, 'live', claim.generation, 60_000)).toBe(true);
+    // Somebody who never held it, or held an older generation, extends nothing.
+    expect(await extendCampaignTick(campaignId, 'other', claim.generation, 60_000)).toBe(false);
+    expect(await extendCampaignTick(campaignId, 'live', claim.generation - 1, 60_000)).toBe(false);
   });
 });
 
