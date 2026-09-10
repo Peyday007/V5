@@ -213,10 +213,23 @@ One thing about that workflow is worth writing down because it is not a
 property of this repository at all: **GitHub registers a `workflow_dispatch`
 workflow from the default branch**, so a new one is not dispatchable from a
 feature branch until it has landed on the default one, whatever ref you ask for.
-Until then the console is the only entrance, which is why the console's own
-wording carries the same warning the constant does. It is also why the wrong
-scope set has to be *detectable* rather than merely avoidable: the site's health
-check says `Connected … — it answered` only when the credential actually
+A mechanism nothing can call is not a mechanism, so the preparation also runs
+from **`Deploy`**, which is registered already, already checks the branch out
+and already has the shell:
+
+```
+Deploy → connect_site_project: <project id or slug>
+         connect_site_admin:   <administrator email>
+         connect_site_name:    deal-dispatch
+```
+
+It runs after the restart, so what it writes is written against the image that
+is actually serving, and it is skipped on every deploy that does not name a
+project.
+
+Neither path removes the console from the story, so it is worth recording what
+makes the wrong scope set *detectable* rather than merely avoidable: the site's
+health check says `Connected … — it answered` only when the credential actually
 authorizes a read, so a site granted the research set reports `it did not
 answer` instead of appearing fine.
 
