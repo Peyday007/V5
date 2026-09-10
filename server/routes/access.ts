@@ -102,6 +102,28 @@ const OWN_AUTHENTICATION_PATHS = new Set(['/mcp']);
  */
 const OWN_AUTHENTICATION_PREFIXES = ['/oauth/', '/.well-known/'];
 
+/**
+ * Paths a connected site reaches with its own bearer credential.
+ *
+ * The same mechanical conflict `/mcp` has, at a second door: an HTTP request
+ * carries one `Authorization` header, this gate wants `Basic <shared token>` in
+ * it, and a site connector must put `Bearer brnw_…` there. A remote client has
+ * no way to send both, and no way to be taught to.
+ *
+ * It is not a hole for the same reasons. Every one of these routes resolves a
+ * principal from server-held rows and authorizes through
+ * `services/identity/policy.ts` — the same module every other route uses — and
+ * an anonymous caller gets `401 Not authorized.` with nothing else in it. What
+ * the outer token would add here is a second lock on a door that already has a
+ * better one, at the cost of making it unopenable by the only clients it exists
+ * for.
+ *
+ * The pattern is deliberately narrow: it matches the connector surface and
+ * nothing above or beside it. Widening it to `/api/` would take the outer gate
+ * off the whole API, which is a different decision and not this one.
+ */
+const CONNECTOR_PATH = /^\/api\/projects\/[^/]+\/connect\//;
+
 export interface AccessGateConfig {
   /** The shared secret. Absent means no gate. */
   token: string | null;
@@ -207,7 +229,8 @@ export function accessGate(config: AccessGateConfig): RequestHandler {
     if (
       OPEN_PATHS.has(req.path) ||
       OWN_AUTHENTICATION_PATHS.has(req.path) ||
-      OWN_AUTHENTICATION_PREFIXES.some((prefix) => req.path.startsWith(prefix))
+      OWN_AUTHENTICATION_PREFIXES.some((prefix) => req.path.startsWith(prefix)) ||
+      CONNECTOR_PATH.test(req.path)
     ) {
       next();
       return;

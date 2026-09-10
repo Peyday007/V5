@@ -68,6 +68,14 @@ POST /api/projects/:id/connect/:system/records/:id/commands        WRITE  extern
 A project the caller may not reach, a source system this Brain does not speak
 and a record that was never registered are **the same 404 with the same body**.
 
+These paths are also outside the optional outer shared-token gate, for the
+mechanical reason `/mcp` is: an HTTP request carries one `Authorization` header,
+that gate wants `Basic <shared token>` in it, and a site connector must put
+`Bearer brnw_…` there. The exemption is a narrow pattern over
+`/api/projects/:id/connect/` and nothing beside it — the rest of the API stays
+behind the gate — and it takes nothing away, because an anonymous caller here
+still gets `401 Not authorized.` from the real authentication behind it.
+
 An `Idempotency-Key` header on the command is **refused**, not ignored: the key
 is derived from the record and the command, both of which are in the path. A
 caller who sent one would believe they had a property that was in fact not

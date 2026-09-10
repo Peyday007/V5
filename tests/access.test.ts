@@ -51,6 +51,11 @@ async function serve(token: string | null): Promise<{ url: string; close: () => 
   app.get('/files/a.pdf', (_req, res) => {
     res.type('application/pdf').send('bytes');
   });
+  // The connector surface, so "did the gate let this through" is a 200 rather
+  // than a 404 that could mean either.
+  app.get('/api/projects/:projectId/connect/:system/records/:id', (_req, res) => {
+    res.json({ record: {} });
+  });
   app.get('/', (_req, res) => {
     res.type('text/html').send('<html>the app</html>');
   });
@@ -185,6 +190,33 @@ describe('the gate itself', () => {
     expect(body).toBe('ok');
     // A platform probe can reach it; it still says nothing about this Brain.
     expect(body).not.toMatch(/postgres|supabase|brain\.db|version/i);
+  });
+
+  it('lets a connected site through, because it cannot send two Authorization headers', async () => {
+    /*
+     * The same mechanical conflict `/mcp` has. A site connector must put
+     * `Bearer brnw_…` in the one Authorization header an HTTP request carries,
+     * so it can never also send `Basic <shared token>`. Behind this the route
+     * still resolves a principal and authorizes it — what is asserted here is
+     * only that the *outer* gate does not make the door unopenable.
+     */
+    const response = await fetch(
+      `${app.url}/api/projects/prj_abc/connect/deal-dispatch/records/opp_1`,
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it('does not take the outer gate off the rest of the API', async () => {
+    // The pattern is narrow on purpose: the connector surface and nothing
+    // beside it. These are all behind the gate and must stay there.
+    for (const path of [
+      '/api/projects/prj_abc',
+      '/api/projects/prj_abc/connect',
+      '/api/connect/deal-dispatch/records',
+      '/api/health',
+    ]) {
+      expect((await fetch(`${app.url}${path}`)).status).toBe(401);
+    }
   });
 
   it('is not a gate at all when no token is configured', async () => {
