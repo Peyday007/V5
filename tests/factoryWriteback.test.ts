@@ -175,6 +175,52 @@ describe('recordCampaignOutcome', () => {
     ]);
   });
 
+  it('races concurrent calls against the reservation and still writes exactly one row', async () => {
+    const campaignId = await completeCampaign();
+
+    // Fired together rather than awaited one at a time: the sequential test
+    // above only ever exercises the `already`-recorded fast path, because by
+    // the time a second call starts, the first has long since committed. This
+    // is the race that fast path cannot see — two callers reading no
+    // recorded outcome yet and both reaching `runIdempotent` for the same
+    // campaign — which is exactly what should land exactly one of them on
+    // `EXECUTED` and turn the rest away as `REPLAYED` or already in progress,
+    // by way of the `UNIQUE (scope_hash, key_fingerprint)` reservation rather
+    // than by luck of ordering.
+    const results = await Promise.all([
+      recordCampaignOutcome(campaignId),
+      recordCampaignOutcome(campaignId),
+      recordCampaignOutcome(campaignId),
+      recordCampaignOutcome(campaignId),
+    ]);
+
+    const winners = results.filter((result) => result.recorded);
+    expect(winners.length).toBe(1);
+    const winnerEvent = winners[0]?.event;
+    expect(winnerEvent).not.toBeNull();
+
+    for (const result of results) {
+      if (result.recorded) continue;
+      expect(['already recorded', 'writeback already in progress elsewhere']).toContain(
+        result.reason,
+      );
+      // A caller that saw a row at all must see the one that actually landed
+      // — never an invented one, and never a second.
+      if (result.event) expect(result.event.id).toBe(winnerEvent?.id);
+    }
+
+    const events = await listEventsByEntity('FACTORY_CAMPAIGN', campaignId);
+    const outcomeEvents = events.filter((event) => event.eventType === FACTORY_CAMPAIGN_OUTCOME);
+    expect(outcomeEvents.length).toBe(1);
+    expect(outcomeEvents[0]?.id).toBe(winnerEvent?.id);
+
+    // A later, sequential call must find the same settled row rather than
+    // reopening any question the race above already answered.
+    const after = await recordCampaignOutcome(campaignId);
+    expect(after.recorded).toBe(false);
+    expect(after.event?.id).toBe(winnerEvent?.id);
+  });
+
   it('refuses a campaign that has not finished', async () => {
     const changeRequest = await approvedChangeRequest();
     const { campaign } = await ensureCampaign({
