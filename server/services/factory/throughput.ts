@@ -381,8 +381,8 @@ export function computeThroughput(metrics: CampaignMetrics): ThroughputReport {
       ),
       deferredMs: num(
         metrics.rateLimitedMs,
-        'PROVIDER_ENFORCED',
-        `ms between a UNIT_DEFERRED factory_event and the deferred unit's next UNIT_CLAIMED event, summed over campaign ${metrics.campaignId}`,
+        'MEASURED',
+        `ms between a UNIT_DEFERRED factory_event and the deferred unit's next UNIT_CLAIMED event, summed over campaign ${metrics.campaignId} — Brain's own clock over its own factory_events rows, not a provider-reported duration`,
       ),
     },
     perWorker: perWorkerBreakdown(metrics),
