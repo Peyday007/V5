@@ -70,7 +70,12 @@ import {
   verificationPassed,
 } from './integrate.ts';
 import { reviewCampaign } from './review.ts';
-import { gatingFindings, queueRepairs, reconcileRepairs } from './repair.ts';
+import {
+  gatingFindings,
+  queueRepairs,
+  queueVerificationRepair,
+  reconcileRepairs,
+} from './repair.ts';
 import { assembleDeliverable } from './assemble.ts';
 import { planCampaign } from './architect.ts';
 
@@ -890,14 +895,24 @@ async function verifyStage(
       evidenceClass: 'MEASURED',
       detail: { stage: 'FINAL', command: failed?.command, exitCode: failed?.exitCode },
     });
-    // Not a blocker: a failing final check is work, and the review that produced
-    // the last verdict judged a tree that no longer passes. Back to review, which
-    // is the stage that turns a defect into repair units.
+    // A failing final check is work, not a re-read. Sending the campaign back to
+    // REVIEWING would find the verdict that already judged this commit, act on it
+    // again, and arrive here again — a cycle with no progress in it. So the
+    // failure becomes a repair unit, authored from the exit code rather than from
+    // anybody's opinion about it.
     report.notes.push(`final verification failed: \`${failed?.command}\` exited ${failed?.exitCode}`);
-    await patchCampaign(campaign.id, {
-      stageDetail: `final verification failed: ${failed?.command}`,
+    const repair = await queueVerificationRepair(campaign, changeRequest, {
+      command: failed?.command ?? '(unknown)',
+      exitCode: failed?.exitCode ?? -1,
+      tail: failed?.tail ?? '',
     });
-    return await advance(report, campaign, 'REVIEWING', 'final verification failed; re-reviewing');
+    report.repairsQueued = repair.created ? 1 : 0;
+    report.notes.push(
+      repair.created
+        ? `queued ${repair.unitKey} from the failing command`
+        : `${repair.unitKey} is already queued for that command`,
+    );
+    return await advance(report, campaign, 'REPAIRING', 'final verification failed; repairing');
   }
 
   report.notes.push(`final verification passed: ${results.map((r) => r.command).join(', ') || 'no commands'}`);
