@@ -7719,3 +7719,34 @@ Two assertions in `tests/packet.test.ts` were pinning that defect —
 answered one is untouched"*, and `every(status === 'MISSING')` under *"nothing
 narrowed"*, which is a claim about `NOT_REQUIRED`. Both now assert what their
 comments always said. **The assertions were wrong, not the code.**
+
+### The declared scenarios, started
+
+Both were checked read-only before anything was asked, and both are well-posed
+for what they are for:
+
+```
+S12A-ACC-3   PRESENT_BUT_UNVERIFIED   would explore true    (as statement: true)
+S12A-ACC-4   MISSING                  needs research true   (as statement: true)
+```
+
+`S12A-ACC-3` asks whether a business-only exemption from DRE broker licensure
+exists for success-fee intermediaries. The project wrote a provisional answer to
+that down and nothing checkable supports it, so the coverage verdict is
+`PRESENT_BUT_UNVERIFIED` and the ordinary judgment sends it for a bounded look
+rather than a packet. `S12A-ACC-4` asks for the written terms of use and
+redistribution rights on the county assessment feeds; the archive has nothing on
+it, so it becomes research — and the compliant audit on the completed packet
+already recorded that no such written terms were found, which is why the honest
+outcome is expected to be a named unresolved gap rather than an answer.
+
+Started 2026-09-10, each as one message from the project's own owner through
+`beginTurn` — the same service the HTTP route calls — and nothing else:
+
+```
+S12A-ACC-3   rcv_51552b1b674144df99cb   rmsg_73e60e5eee9e47959ce2   dispatched
+S12A-ACC-4   rcv_ec55c6c2832c41e9914e   rmsg_04fed616839f498483b5   dispatched
+```
+
+Every candidate, judgment, probe, mission, park and follow-on after that point
+is the product's own.
