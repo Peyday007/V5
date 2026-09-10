@@ -254,9 +254,16 @@ describe('the path from a captured idea to compiled work', () => {
     const after = (await listCandidates({ projectId })).find((c) => c.id === candidateId)!;
     expect(after.state).toBe('QUEUED');
     expect(after.judgment?.['decidedBy']).toBe('COMPILER');
-    // Neither semantic observation was made, and the judgment says so rather
-    // than storing a `false` and a `0` that read as findings.
-    expect(after.judgment?.['cheapToReduceAssessed']).toBe('NOT_ASSESSED');
+    /*
+     * The judgment says what it assessed and what it did not, rather than
+     * storing a `false` and a `0` that read as findings.
+     *
+     * `cheapToReduce` is assessed now, from the archive's own coverage verdict
+     * — and here the archive holds nothing unverified or stale about this
+     * question, so there is nothing to look at cheaply and the idea is queued
+     * outright. `expectedValue` is still not assessed by anything.
+     */
+    expect(after.judgment?.['cheapToReduceAssessed']).toBe('ARCHIVE_HOLDS_NOTHING_TO_CHECK');
     expect(after.judgment?.['expectedValueAssessed']).toBe('NOT_ASSESSED');
   });
 

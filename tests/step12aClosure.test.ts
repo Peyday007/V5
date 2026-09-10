@@ -1,0 +1,440 @@
+/**
+ * The last four Step 12A conditions, and the two contradictions beside them.
+ *
+ * Each of these is a link that existed and could be reached by nothing, which
+ * is the same shape §24 records four times over — so each is tested from the
+ * production entrance rather than from a state a test arranged.
+ *
+ *   - `A07` needed an idea the judgment sent for a cheap look, and nothing
+ *     could form that view after the compiler replaced the planning worker.
+ *   - `A11` needed the account a pass executed under, and the static
+ *     worker -> Routine binding cannot answer it once one worker is bound to
+ *     two Routines — which is the shape production is in.
+ *   - a terminal packet kept its claimable work, because only *advancing* a
+ *     packet retires it and nothing advances one that has finished.
+ *   - and an accepted fragment never moved its requirement's coverage, because
+ *     the one function that does had a single caller and it was not the path
+ *     production uses.
+ */
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { createUser, createWorker } from '../server/repos/identity.ts';
+import { createGoal } from '../server/repos/russellAuthority.ts';
+import { capture } from '../server/services/russell/judgment.ts';
+import { judgeCandidate } from '../server/services/russell/planning.ts';
+import { getCandidate } from '../server/repos/russellCandidates.ts';
+import { listProbesForCandidate, listObservations } from '../server/repos/russellProbes.ts';
+import { tick } from '../server/services/russell/loop.ts';
+import { GENERAL_LIGHT_PROBE_V1 } from '../server/services/russell/probeEnvelope.ts';
+import {
+  createAccount,
+  createRoutine,
+  bindRoutineWorker,
+  getWorkerSession,
+} from '../server/repos/fleet.ts';
+import { lineageForWorker } from '../server/services/research/auditAdmission.ts';
+import {
+  createBin,
+  ensureDispatchIntent,
+  listDispatchesForBin,
+  markDispatchRoutine,
+  markDispatchSent,
+} from '../server/repos/bins.ts';
+import { checkIn } from '../server/services/bins/service.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createOrchestration, updateOrchestration } from '../server/repos/research.ts';
+import { enqueueWork, getWorkItem, claimWork } from '../server/repos/workQueue.ts';
+import { reconcileTerminalPackets } from '../server/services/research/packetRunner.ts';
+import type { ExistingClaim, Principal } from '../server/domain/types.ts';
+
+let projectId = '';
+let layerId = '';
+let userId = '';
+
+const realFetch = globalThis.fetch;
+
+beforeEach(async () => {
+  const fixture = await freshProject();
+  projectId = fixture.project.id;
+  layerId = (await fixture.layerByName('World Model')).id;
+  const owner = await createUser({
+    email: 'closure-owner@example.test',
+    displayName: 'The owner',
+    password: 'a-long-enough-password',
+    isBrainAdmin: false,
+  });
+  userId = owner.id;
+});
+
+afterEach(() => {
+  globalThis.fetch = realFetch;
+});
+
+async function authorize(): Promise<void> {
+  await createGoal({
+    projectId,
+    ownerUserId: userId,
+    createdByUserId: userId,
+    name: 'Step 12A closure',
+    allowedWork: ['RESEARCH'],
+    maxMissions: 1,
+    maxFragments: 1,
+    maxConcurrent: 1,
+    maxProbes: 3,
+  });
+}
+
+/* ------------------------------------------------------------------------- */
+/* A07 — a bounded look, opened because there is something to look at         */
+/* ------------------------------------------------------------------------- */
+
+const STATEMENT =
+  'establish whether a single statewide index of Michigan township assessing offices exists';
+
+/**
+ * One archive claim that answers the question and cites nothing.
+ *
+ * This is what `PRESENT_BUT_UNVERIFIED` means — "somebody wrote the answer down
+ * and nothing supports it" — and it is the whole trigger. A claim with a real
+ * source would settle the requirement instead.
+ */
+function unverifiedClaim(): ExistingClaim {
+  return {
+    id: 'clm_archive_unverified',
+    projectId,
+    documentId: 'doc_archive',
+    layerId,
+    claim: 'A single statewide index of Michigan township assessing offices exists.',
+    claimType: 'FACT',
+    sourceUrl: null,
+    sourceTitle: null,
+    passage: null,
+    asOf: new Date().toISOString(),
+    geography: 'Michigan',
+    verificationState: 'UNVERIFIED',
+    confidence: 0.4,
+  } as unknown as ExistingClaim;
+}
+
+/** A destination that answers, so the probe settles rather than failing. */
+function scriptedFetch(body: string): void {
+  globalThis.fetch = (async () =>
+    new Response(body, { status: 200, headers: { 'content-type': 'text/html' } })) as typeof fetch;
+}
+
+describe('a cheap look comes first only when the archive holds something to check', () => {
+  it('sends an idea to EXPLORE when the answer is written down and unsupported', async () => {
+    await authorize();
+    const captured = await capture({
+      title: 'Statewide assessing-office index',
+      statement: STATEMENT,
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    const candidateId = captured.candidate!.id;
+
+    const outcome = await judgeCandidate(candidateId, { claims: [unverifiedClaim()] });
+    expect(outcome.answeredByArchive).toBe(false);
+
+    const judged = (await getCandidate(candidateId))!;
+    expect(judged.priority).toBe('EXPLORE');
+    expect(judged.state).toBe('CAPTURED');
+    // The label says what was assessed and from what. A `false` recorded as
+    // `NOT_ASSESSED` was the honest answer while nothing could form the view.
+    expect(judged.judgment?.['cheapToReduceAssessed']).toBe('ARCHIVE_HOLDS_UNVERIFIED_OR_STALE');
+    expect(judged.judgment?.['expectedValueAssessed']).toBe('NOT_ASSESSED');
+  });
+
+  it('queues the same idea outright when the archive holds nothing to check', async () => {
+    /*
+     * The other half, and the one that stops this being "probe everything".
+     * Same question, same code path, no unverified claim — and it goes straight
+     * to work.
+     */
+    await authorize();
+    const captured = await capture({
+      title: 'Statewide assessing-office index',
+      statement: STATEMENT,
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    await judgeCandidate(captured.candidate!.id, { claims: [] });
+
+    const judged = (await getCandidate(captured.candidate!.id))!;
+    expect(judged.priority).not.toBe('EXPLORE');
+    expect(judged.state).toBe('QUEUED');
+    expect(judged.judgment?.['cheapToReduceAssessed']).toBe('ARCHIVE_HOLDS_NOTHING_TO_CHECK');
+  });
+
+  it('opens one probe through the loop, settles it, and does not open a second', async () => {
+    await authorize();
+    scriptedFetch('<html><body>Michigan assessor directory</body></html>');
+    const captured = await capture({
+      title: 'Statewide assessing-office index',
+      statement: STATEMENT,
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    const candidateId = captured.candidate!.id;
+    await judgeCandidate(candidateId, { claims: [unverifiedClaim()] });
+
+    // The loop opens it and runs it. Nothing here creates a probe.
+    const first = await tick('closure');
+    expect(first.probed).toHaveLength(1);
+
+    const probes = await listProbesForCandidate(candidateId);
+    expect(probes).toHaveLength(1);
+    const probe = probes[0]!;
+    expect(probe.state).toBe('COMPLETE');
+    expect(probe.outcome).not.toBeNull();
+
+    // Inside its bound: the observations table *is* the budget rather than a
+    // log of it, so this is the spend rather than a report of the spend.
+    const spent = (await listObservations(probe.id)).length;
+    expect(spent).toBeGreaterThan(0);
+    expect(spent).toBeLessThanOrEqual(GENERAL_LIGHT_PROBE_V1.maxLookups);
+
+    /*
+     * A second tick must not buy the look again. `exploring()` skips a
+     * candidate that already has a probe, so the allowance is spent once
+     * however many ticks run.
+     */
+    const second = await tick('closure');
+    expect(second.probed).toHaveLength(0);
+    expect(await listProbesForCandidate(candidateId)).toHaveLength(1);
+    expect((await listObservations(probe.id)).length).toBe(spent);
+  });
+
+  it('lets the settled probe decide, and does not send the idea back for another', async () => {
+    await authorize();
+    scriptedFetch('<html><body>Michigan assessor directory</body></html>');
+    const captured = await capture({
+      title: 'Statewide assessing-office index',
+      statement: STATEMENT,
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    const candidateId = captured.candidate!.id;
+    await judgeCandidate(candidateId, { claims: [unverifiedClaim()] });
+    await tick('closure');
+
+    /*
+     * The second judgment is what a probe is *for*. It reaches the same
+     * `judgeCandidate` with the probe's verdict attached — and Brain forces
+     * `cheapToReduce` false there, which is load-bearing now rather than
+     * incidental: the archive has not changed, so re-deriving it would send the
+     * idea round for another look for ever.
+     */
+    const decided = await tick('closure');
+    expect(decided.planning.concat(decided.answeredByArchive)).toContain(candidateId);
+
+    const after = (await getCandidate(candidateId))!;
+    expect(after.priority).not.toBe('EXPLORE');
+    expect(after.judgment?.['cheapToReduceAssessed']).toBe('SETTLED_BY_PROBE');
+    expect(after.judgment?.['afterProbe']).toBeTruthy();
+
+    // And no further probe, however many ticks run.
+    await tick('closure');
+    await tick('closure');
+    expect(await listProbesForCandidate(candidateId)).toHaveLength(1);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* A11 — the account a pass executed under                                    */
+/* ------------------------------------------------------------------------- */
+
+describe('the executing account is observed from the dispatch that fired the session', () => {
+  /** Two accounts, two Routines, one worker — production's exact shape. */
+  async function twoRoutinesOneWorker(): Promise<{ workerId: string; routineId: string; accountId: string }> {
+    const worker = await createWorker({
+      name: 'closure-worker',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    const primary = await createAccount({ name: 'primary' });
+    const friend = await createAccount({ name: 'friend-2' });
+    const one = await createRoutine({
+      accountId: primary.id,
+      routineRef: 'V1',
+      name: 'V1',
+      tokenSecretName: 'V1_SECRET',
+      tokenDigest: 'a'.repeat(64),
+    });
+    const two = await createRoutine({
+      accountId: friend.id,
+      routineRef: 'V2',
+      name: 'V2',
+      tokenSecretName: 'V2_SECRET',
+      tokenDigest: 'b'.repeat(64),
+    });
+    await bindRoutineWorker(one.id, worker.id);
+    await bindRoutineWorker(two.id, worker.id);
+    return { workerId: worker.id, routineId: one.id, accountId: primary.id };
+  }
+
+  function principalFor(workerId: string, credentialId: string): Principal {
+    return {
+      type: 'WORKER',
+      id: workerId,
+      handle: 'closure-worker',
+      displayName: 'closure-worker',
+      isBrainAdmin: false,
+      mustChangePassword: false,
+      credentialId,
+      authMethod: 'WORKER_BEARER',
+      memberships: [
+        {
+          projectId,
+          principalType: 'WORKER',
+          principalId: workerId,
+          role: 'CONTRIBUTOR',
+          scopes: ['queue:claim', 'queue:complete'],
+          active: true,
+        } as never,
+      ],
+      requestId: 'test',
+    };
+  }
+
+  it('records the account from the fire, where the binding alone cannot say', async () => {
+    const { workerId, routineId, accountId } = await twoRoutinesOneWorker();
+
+    // Two bindings, so the static lookup is ambiguous and fails closed. That is
+    // correct and it is exactly why every production pass had a null account.
+    const beforeArrival = await lineageForWorker({ workerId, credentialId: 'oat_never_seen' });
+    expect(beforeArrival.accountId).toBeNull();
+    expect(beforeArrival.routineId).toBeNull();
+
+    const bin = await createBin({
+      projectId,
+      layerId,
+      kind: 'DETERMINISTIC_CHECK',
+      title: 'A bin to be fired for',
+      objective: 'Arrive and take it.',
+      manifest: {
+        objective: 'Arrive and take it.',
+        why: 'the fire has to be for something',
+        lineage: { projectId, layerId, goal: null, orchestrationId: null },
+        units: [],
+        acceptableSources: [],
+        excludedSources: [],
+        evidence: [],
+        outputs: [],
+        authorizedActions: [],
+        prohibitedActions: [],
+        budgetUnits: 1,
+        retry: { maxAttempts: 3, backoffSeconds: 30 },
+        stoppingConditions: ['done'],
+      },
+      completionContract: 'DETERMINISTIC_UNITS_V1',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+    });
+
+    // Brain fires one Routine for this bin, at this generation.
+    await ensureDispatchIntent(bin);
+    const dispatch = (await listDispatchesForBin(bin.id))[0]!;
+    await markDispatchRoutine(dispatch.id, routineId);
+    await markDispatchSent(dispatch.id, { routineRef: 'V1', routineId, accountId });
+
+    const credentialId = 'oat_closure_session';
+    const result = await checkIn({
+      principal: principalFor(workerId, credentialId),
+      workerId,
+    });
+    expect(result.assigned).toBe(true);
+
+    const observed = await getWorkerSession(credentialId);
+    expect(observed?.routineId).toBe(routineId);
+    expect(observed?.accountId).toBe(accountId);
+    expect(observed?.binId).toBe(bin.id);
+
+    // And the lineage a pass is recorded with now answers.
+    const lineage = await lineageForWorker({ workerId, credentialId });
+    expect(lineage.accountId).toBe(accountId);
+    expect(lineage.routineId).toBe(routineId);
+    expect(lineage.sessionRef).toBe(credentialId);
+
+    // First observation wins: the surface that *started* a session cannot be
+    // re-pointed by a later bin it happens to take.
+    const again = await getWorkerSession(credentialId);
+    expect(again?.observedAt).toBe(observed?.observedAt);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* A terminal packet holds no claimable work                                  */
+/* ------------------------------------------------------------------------- */
+
+describe('a packet that has finished holds nothing a worker can be sent for', () => {
+  it('retires queued and leased items, keeps their rows, and runs once', async () => {
+    const run = await createRun({
+      projectId,
+      layerId,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'anything',
+    });
+    const orchestration = await createOrchestration({
+      projectId,
+      layerId,
+      runId: run.id,
+      title: 'A packet that finishes with work outstanding',
+      assignment: 'the work outstanding is the point',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+
+    const queued = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'ADVERSARIAL' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: orchestration.id,
+    });
+    const held = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: orchestration.id,
+    });
+    const worker = await createWorker({
+      name: 'holder',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    const claimed = await claimWork({
+      workerId: worker.id,
+      scopes: [{ projectId, scopes: ['queue:claim', 'queue:complete'] }],
+      workTypes: ['RESEARCH_AUDIT'],
+    });
+    expect(claimed).not.toBeNull();
+
+    // The packet finishes while both are still live.
+    await updateOrchestration(orchestration.id, {
+      status: 'COMPLETE',
+      completedAt: new Date().toISOString(),
+    });
+
+    const first = await reconcileTerminalPackets(10);
+    expect(first.map((entry) => entry.orchestrationId)).toContain(orchestration.id);
+
+    for (const id of [queued.id, held.id]) {
+      const item = (await getWorkItem(id))!;
+      expect(item.state).toBe('CANCELLED');
+      // Cancelled with the reason, not deleted: the row keeps its id, its
+      // attempts and its history.
+      expect(item.cancelledReason).toContain('concluded');
+    }
+
+    // Idempotent by the state it produces: nothing left to select.
+    expect(await reconcileTerminalPackets(10)).toHaveLength(0);
+  });
+});

@@ -50,6 +50,18 @@
  * sent to `EXPLORE` because a look would be cheap, because nothing can now form
  * that view. The probe path is untouched and still reached the other way — the
  * archive contradicting the idea — and by a person's override.
+ *
+ * **Half of that has since been corrected, and the correction is recorded
+ * rather than quietly applied.** `expectedValue` is still not assessed and this
+ * module still forms no view about it. But "whether a cheap look would settle
+ * this" turned out to have a form that is not semantic at all: the archive's
+ * own coverage verdict. `PRESENT_BUT_UNVERIFIED` and `STALE` mean the project
+ * already holds a candidate answer that nothing supports, or one that was true
+ * outside the timeframe asked about — and confirming or refuting it is a
+ * *presence* question, which is the only kind a bounded probe answers. So
+ * `judgeCandidate` derives `cheapToReduce` from those rows and this module
+ * still supplies neither observation. A compiler cannot judge whether a look
+ * would be worth it; it can read whether there is something to look at.
  */
 import { getMessage, listTurns } from '../../repos/russellConversations.ts';
 import {

@@ -18,7 +18,7 @@
  * its instructions are not asked to; that is the point of deciding here.
  */
 import { getDb } from '../../db/database.ts';
-import { listRoutines } from '../../repos/fleet.ts';
+import { getWorkerSession, listRoutines } from '../../repos/fleet.ts';
 import { passesInCurrentRound } from './auditRound.ts';
 import { parseJson } from '../../repos/util.ts';
 import { AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
@@ -51,6 +51,46 @@ export async function lineageForWorker(input: {
   workerId: string;
   credentialId: string | null;
 }): Promise<ExecutorLineage> {
+  /*
+   * The session's own observed surface first, and it is the answer whenever
+   * one exists.
+   *
+   * `worker_sessions` is written when a fired session arrives and takes the
+   * bin that fire was for, from the dispatch row Brain wrote itself. It is
+   * therefore a *fact about this activation* rather than a lookup over how the
+   * fleet happens to be wired, and it is the only one of the two that survives
+   * one worker being bound to more than one Routine.
+   *
+   * That shape is not hypothetical: production binds `primary`/V1 and
+   * `friend-2`/V2 to a single worker identity, so the binding lookup below
+   * found two candidates, refused to choose — correctly, since choosing would
+   * be a guess — and returned null. Every `research_passes.executor_account_id`
+   * this Brain has ever written was null for that reason, and
+   * `A11_INDEPENDENT_AUDIT` read NOT_RUN over three genuinely independent
+   * passes. The attribution was missing, never the independence.
+   */
+  if (input.credentialId) {
+    const observed = await getWorkerSession(input.credentialId);
+    if (observed && observed.workerId === input.workerId) {
+      return {
+        workerId: input.workerId,
+        routineId: observed.routineId,
+        accountId: observed.accountId,
+        sessionRef: input.credentialId,
+      };
+    }
+  }
+
+  /*
+   * Otherwise the static binding, unchanged — a worker that reached Brain
+   * without a bin assignment (an operator claim, a direct queue call) has no
+   * observation to read, and a fleet with one Routine per worker is answered
+   * completely by this.
+   *
+   * Ambiguity still fails closed. "We could not tell" must never read the same
+   * as "we checked", and the remedy for an ambiguous binding is an observation,
+   * never a preference.
+   */
   const routines = await listRoutines();
   const mine = routines.filter((routine) => routine.workerId === input.workerId);
   const accounts = new Set(mine.map((routine) => routine.accountId));

@@ -75,8 +75,14 @@ import { IN_FLIGHT_WINDOW_MS } from '../server/services/dispatch/candidates.ts';
 import { MAX_TURN_ATTEMPTS, ownerPrincipal, retryTurn } from '../server/services/russell/turn.ts';
 import { parseJson } from '../server/repos/util.ts';
 import { validateProposal } from '../server/services/russell/proposal.ts';
+import { coverBeforeWork } from '../server/services/russell/coverage.ts';
 import { shouldCapture } from '../server/services/russell/judgment.ts';
-import { getConversation, getMessage } from '../server/repos/russellConversations.ts';
+import {
+  createConversation,
+  getConversation,
+  getMessage,
+} from '../server/repos/russellConversations.ts';
+import { beginTurn } from '../server/services/russell/turn.ts';
 import { describeFireTarget } from '../server/services/dispatch/fire.ts';
 import {
   instructionProblems,
@@ -113,6 +119,45 @@ function refuseStep10(why: string): void {
   console.log(`STEP10 REFUSED: ${why}`);
   process.exitCode = 1;
 }
+
+/**
+ * The questions each declared acceptance scenario asks, fixed before it is asked.
+ *
+ * Both are Deal Dispatch's own questions, and neither is chosen to produce an
+ * outcome. `S12A-ACC-3` is a presence question about the project's own archive:
+ * the completed packet recorded that Michigan assessing is a city or township
+ * function while county equalization sits on top of it, and whether a single
+ * statewide index of those local offices exists at all is exactly the kind of
+ * thing a bounded look settles and a research packet is too expensive for.
+ *
+ * `S12A-ACC-4` asks something the public record demonstrably does not answer,
+ * and the project's own audit is the evidence for that: the compliant judge on
+ * `aud_ebbd20b157c4406884cd` recorded that *"no written terms-of-use, license
+ * or data-use restriction was found for Wayne's CSV downloads or Oakland's or
+ * Kent's REST APIs"*. Whether Deal Dispatch may redistribute what it pulls is a
+ * question the business actually has to answer, and the honest outcome is a
+ * named unresolved gap rather than an invented one. **Nothing here manufactures
+ * the gap; the question is real and the research is allowed to settle it if it
+ * can.**
+ */
+const ACCEPTANCE_SCENARIOS = {
+  'S12A-ACC-3': {
+    purpose: 'a bounded cheap look before any mission is created',
+    question:
+      'Is there a single statewide Michigan index that lists every city and township ' +
+      'assessing office with its current contact route, or does that only exist county by ' +
+      'county? I want to know whether one authoritative list exists before we commit to ' +
+      'building anything that depends on having one.',
+  },
+  'S12A-ACC-4': {
+    purpose: "a genuine unresolved gap and the person's decision that follows it",
+    question:
+      'What are the written terms of use, licence and redistribution restrictions that apply ' +
+      "to Wayne County's assessment CSV downloads and to Oakland's and Kent's parcel REST " +
+      'APIs? We need to know what we are contractually allowed to store and pass on to our ' +
+      'own users before we build anything on those feeds.',
+  },
+} as const;
 
 async function scope(): Promise<string> {
   const existing = await getProjectBySlug(SLUG);
@@ -412,6 +457,165 @@ async function main(): Promise<void> {
     }
     console.log(`STEP10: OK seeded=${made.length} units=${units}`);
     for (const id of made) console.log(`  ${id}`);
+    return;
+  }
+
+  /*
+   * Start one declared acceptance scenario, through the paths a person uses.
+   *
+   * ---------------------------------------------------------------------------
+   * Why this exists, and what it deliberately is not
+   * ---------------------------------------------------------------------------
+   *
+   * Three of Step 12A's conditions cannot be exhibited by a research packet
+   * that finishes cleanly, because each is about a branch success does not
+   * take: a cheap look taken *instead* of a packet, a question the evidence
+   * could not settle, and the person's decision that follows it. Requiring one
+   * journey to show all three would be requiring it to end badly.
+   *
+   * So each is its own declared scenario, and this starts one. It creates the
+   * conversation and says one thing in it — `beginTurn`, the same service the
+   * HTTP route calls, as the project's own owner. **Everything after that is
+   * the product**: the fleet answers the turn, `capture` decides whether there
+   * is an idea in it, `judgeCandidate` decides what to do with it, and the
+   * probe, the mission, the park and the follow-on all happen or do not happen
+   * on their own. Nothing here writes a candidate, a probe, a mission, a
+   * judgment or a verdict.
+   *
+   * The questions are constants in this file rather than arguments, so what was
+   * asked is fixed in code somebody reviews before it is asked — an acceptance
+   * question chosen at the command line is one that could be chosen after
+   * seeing what a previous one produced.
+   *
+   * It refuses to create a second conversation carrying a scenario's title. The
+   * reporter resolves that title to **exactly one** conversation and refuses an
+   * ambiguous anchor, so a second one would not widen the evidence — it would
+   * silently destroy the scenario. Refusing here says so instead.
+   */
+  /*
+   * What the archive already says about each declared scenario question.
+   *
+   * Read-only, and it creates nothing: no conversation, no candidate, no
+   * judgment, no probe. It runs the same `coverBeforeWork` the judgment runs
+   * and prints the verdict, so a scenario can be confirmed **well-posed**
+   * before it is asked rather than discovered to be ill-posed afterwards.
+   *
+   * That distinction matters and is worth stating. A question the archive
+   * already settles would be rejected as answered; one it holds an *unchecked*
+   * answer to is exactly the case a bounded look exists for. Knowing which
+   * before asking is not choosing the evidence after seeing it — the questions
+   * are fixed in this file either way, and nothing here changes a row.
+   */
+  if (command === 'scenario-check') {
+    const project = await getProjectBySlug(DEAL_DISPATCH_SLUG);
+    if (!project) {
+      console.log('STEP10: FAIL no Deal Dispatch project');
+      process.exitCode = 1;
+      return;
+    }
+    const layers = await listLayers(project.id);
+    const layer = layers[0];
+    if (!layer) {
+      console.log('STEP10: FAIL project has no layers');
+      process.exitCode = 1;
+      return;
+    }
+    for (const [key, declared] of Object.entries(ACCEPTANCE_SCENARIOS)) {
+      const coverage = await coverBeforeWork({
+        projectId: project.id,
+        layerId: layer.id,
+        requirements: [{ key: `scenario:${key}`, statement: declared.question }],
+      });
+      const verdict = coverage.verdicts[0];
+      console.log(`  ${key}`);
+      console.log(`    claims considered  ${coverage.claimsConsidered}`);
+      console.log(`    status             ${verdict?.status ?? '—'}`);
+      console.log(`    fully answered     ${coverage.fullyAnswered}`);
+      console.log(`    needs research     ${verdict?.needsResearch ?? '—'}`);
+      console.log(`    would explore      ${verdict?.status === 'PRESENT_BUT_UNVERIFIED' || verdict?.status === 'STALE'}`);
+    }
+    console.log('STEP10: OK scenario-check read-only');
+    return;
+  }
+
+  if (command === 'scenario') {
+    const key = String(arg(0) ?? '');
+    const declared = ACCEPTANCE_SCENARIOS[key as keyof typeof ACCEPTANCE_SCENARIOS];
+    if (!declared) {
+      console.log(
+        `STEP10: FAIL unknown scenario ${key || '(none)'} — declared: ` +
+          Object.keys(ACCEPTANCE_SCENARIOS).join(', '),
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    const project = await getProjectBySlug(DEAL_DISPATCH_SLUG);
+    if (!project) {
+      console.log('STEP10: FAIL no Deal Dispatch project to run a scenario against');
+      process.exitCode = 1;
+      return;
+    }
+
+    const existing = await getDb().all<{ id: string }>(
+      `SELECT id FROM russell_conversations WHERE title = ?`,
+      [key],
+    );
+    if (existing.length > 0) {
+      // Already started. Reported rather than repeated: the anchor is unique by
+      // declaration, and a second one is not a retry, it is an ambiguity.
+      console.log(`STEP10: OK scenario=${key} already started conversation=${existing[0]!.id}`);
+      return;
+    }
+
+    /*
+     * The owner is read from the project's own live standing authority, never
+     * chosen. That row names the person who decided what Russell may do here,
+     * which is the only person whose scope these effects may land in.
+     */
+    const grant = await getDb().get<{ owner_user_id: string }>(
+      `SELECT owner_user_id FROM russell_goals
+        WHERE project_id = ? AND state = 'ACTIVE'
+        ORDER BY created_at DESC LIMIT 1`,
+      [project.id],
+    );
+    if (!grant?.owner_user_id) {
+      console.log('STEP10: FAIL no live standing authority, so there is no owner to ask as');
+      process.exitCode = 1;
+      return;
+    }
+    const principal = await ownerPrincipal(grant.owner_user_id);
+    if (!principal) {
+      console.log('STEP10: FAIL the standing authority names a user who cannot be resolved');
+      process.exitCode = 1;
+      return;
+    }
+
+    const conversation = await createConversation({
+      ownerUserId: principal.id,
+      // The scenario id *is* the title, which is what makes the anchor a
+      // declaration in code rather than a search for the best-fitting thread.
+      title: key,
+      projectId: project.id,
+      visibility: 'PRIVATE',
+    });
+
+    const started = await beginTurn({
+      principal,
+      conversationId: conversation.id,
+      content: declared.question,
+    });
+    if (!started.ok) {
+      console.log(`STEP10: FAIL scenario=${key} turn refused: ${started.reason}`);
+      process.exitCode = 1;
+      return;
+    }
+
+    console.log(`STEP10: OK scenario=${key} conversation=${conversation.id}`);
+    console.log(`  purpose     ${declared.purpose}`);
+    console.log(`  owner       ${principal.id}`);
+    console.log(`  message     ${started.userMessage?.id ?? '—'} (${declared.question.length} chars)`);
+    console.log(`  dispatched  ${started.binId !== null}`);
     return;
   }
 

@@ -105,6 +105,21 @@ export interface ArchiveAnswer {
    * was unreachable while this was hard-coded empty.
    */
   contradicting: string[];
+  /**
+   * Claims the archive holds that bear on the idea and that nothing has
+   * verified, or that were true outside the timeframe the question asks about.
+   *
+   * `PRESENT_BUT_UNVERIFIED` — "somebody wrote the answer down and nothing
+   * supports it" — and `STALE` — "true once, outside the timeframe now" — are
+   * the two coverage statuses that mean *there is already a candidate answer
+   * here*. Confirming or refuting one is a presence question, which is exactly
+   * what a bounded look answers and exactly what a research packet is too
+   * expensive for.
+   *
+   * This is the archive-derived form of "the uncertainty here is cheap to
+   * reduce", and it is deliberately the *only* form. See `judgeCandidate`.
+   */
+  unverified: string[];
   claimsConsidered: number;
 }
 
@@ -138,6 +153,7 @@ export async function askArchive(
     fullyAnswered: false,
     supporting: [],
     contradicting: [],
+    unverified: [],
     claimsConsidered: 0,
   };
   if (!candidate.projectId) return unknown;
@@ -161,6 +177,13 @@ export async function askArchive(
       supporting: coverage.answered.flatMap((verdict) => verdict.claimIds).slice(0, 20),
       contradicting: coverage.verdicts
         .filter((verdict) => verdict.status === 'CONTRADICTED')
+        .flatMap((verdict) => verdict.claimIds)
+        .slice(0, 20),
+      unverified: coverage.verdicts
+        .filter(
+          (verdict) =>
+            verdict.status === 'PRESENT_BUT_UNVERIFIED' || verdict.status === 'STALE',
+        )
         .flatMap((verdict) => verdict.claimIds)
         .slice(0, 20),
       claimsConsidered: coverage.claimsConsidered,
@@ -400,11 +423,43 @@ export async function judgeCandidate(
    * And the compiler supplies neither of the two semantic observations,
    * deliberately: see the module comment.
    */
+  /*
+   * Whether a bounded look genuinely comes first, decided from rows.
+   *
+   * Mutation 29 replaced the worker planning pass with a compiler and recorded
+   * the visible consequence honestly: *"an idea is no longer sent to EXPLORE
+   * because a look would be cheap, because nothing can now form that view."*
+   * That was true of a *semantic* view, and it left the automatic probe path
+   * reachable only when the archive positively contradicts an idea — which is
+   * rare, and which meant Brain had lost the ability to look cheaply before
+   * spending a packet.
+   *
+   * **A compiler cannot judge whether a look would be worth it. It can read
+   * whether there is something to look at.** `PRESENT_BUT_UNVERIFIED` and
+   * `STALE` are two of the ten coverage statuses and both mean the same thing
+   * here: the archive already holds a candidate answer that nothing supports,
+   * or that was true outside the timeframe now. Confirming or refuting one is a
+   * *presence* question — the only kind `GENERAL_LIGHT_PROBE_V1` answers — and
+   * a full packet is the wrong instrument for it.
+   *
+   * So the rule is narrow by construction rather than by tuning: no unverified
+   * or stale claim, no probe. It forms no opinion about value, reads no prose,
+   * and cannot lower any evidence bar — a probe's verdict is a claim about
+   * presence and the second judgment still decides what to do with it.
+   *
+   * It is forced false on the pass *after* a probe, and that is load-bearing
+   * now rather than incidental. The archive does not change when a probe
+   * settles — a probe writes observations, not claims — so re-deriving it there
+   * would send the idea back for another look for ever. `loop.ts` has always
+   * said Brain forces it false on that pass; until now it was false anyway.
+   */
+  const cheapToReduce = !options.afterProbe && archive.unverified.length > 0;
+
   const inputs: JudgmentInputs = {
     alreadyAnswered: false,
     supporting: archive.supporting,
     contradicting: archive.contradicting,
-    cheapToReduce: false,
+    cheapToReduce,
     blockedBy: authority.blockedBy ?? null,
   };
   const verdict = judge(inputs);
@@ -431,9 +486,21 @@ export async function judgeCandidate(
       compilerVersion: compiled.mission.compilerVersion,
       envelopeId: compiled.mission.envelopeId,
       jurisdiction: compiled.mission.jurisdiction,
-      // Said out loud, because the alternative is a `false` and a `0` that read
-      // as findings. Neither was assessed; nothing formed a view.
-      cheapToReduceAssessed: 'NOT_ASSESSED',
+      /*
+       * Said out loud, because the alternative is a `false` and a `0` that read
+       * as findings.
+       *
+       * `cheapToReduce` *is* assessed now, and the label says from what: the
+       * archive's own coverage verdict on this question. `expectedValue` still
+       * is not — nothing here can say what settling a question is worth — so it
+       * stays `NOT_ASSESSED` and `judge()` reaches its neutral default.
+       */
+      cheapToReduceAssessed: options.afterProbe
+        ? 'SETTLED_BY_PROBE'
+        : cheapToReduce
+          ? 'ARCHIVE_HOLDS_UNVERIFIED_OR_STALE'
+          : 'ARCHIVE_HOLDS_NOTHING_TO_CHECK',
+      unverifiedClaimIds: archive.unverified,
       expectedValueAssessed: 'NOT_ASSESSED',
       claimsConsidered: archive.claimsConsidered,
       ...(options.afterProbe ? { afterProbe: options.afterProbe } : {}),

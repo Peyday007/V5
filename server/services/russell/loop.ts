@@ -90,6 +90,7 @@ import {
   type HandoffOutcome,
 } from '../audit/handoff.ts';
 import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
+import { reconcileTerminalPackets } from '../research/packetRunner.ts';
 import { recomputeProject } from '../stateEngine.ts';
 import {
   alignMissionLinks,
@@ -207,6 +208,14 @@ export interface TickReport {
    */
   linksUnreconciled: { missionId: string; refusal: string }[];
   /**
+   * Terminal packets that still held claimable work, and how much was retired.
+   *
+   * A finished packet with a `QUEUED` or `LEASED` item is work a worker can
+   * still be sent for, on a question that is already settled. Nothing advanced
+   * a packet that had already finished, so nothing ever cleared it.
+   */
+  retiredPacketWork: { orchestrationId: string; retired: number }[];
+  /**
    * Follow-on ideas created from a mission that finished and filed.
    *
    * An idea, not a mission. It is judged against the archive on a later step
@@ -263,6 +272,7 @@ const EMPTY: TickReport = {
   escalatedBins: [],
   linksReconciled: [],
   linksUnreconciled: [],
+  retiredPacketWork: [],
   followOns: [],
   linkedNext: [],
   needsHuman: [],
@@ -306,6 +316,7 @@ export async function tick(owner: string): Promise<TickReport> {
     escalatedBins: [],
     linksReconciled: [],
     linksUnreconciled: [],
+    retiredPacketWork: [],
     followOns: [],
     linkedNext: [],
     needsHuman: [],
@@ -430,6 +441,26 @@ export async function tick(owner: string): Promise<TickReport> {
       } else if (!outcome.ok) {
         report.linksUnreconciled.push({ missionId, refusal: outcome.refusal ?? 'refused' });
       }
+    }
+
+    /*
+     * 1a-iv. Take live work off a packet that has already finished.
+     *
+     * `advancePacket` retires it, and only something *advancing* the packet
+     * calls that — which nothing does once a packet is terminal. So a packet
+     * that ended while items were outstanding kept them claimable for ever,
+     * and the production one has: `COMPLETE`, filed and audited, with two
+     * `RESEARCH_AUDIT` items still `LEASED` against it. An expired lease is
+     * claimable work, so that is a worker Brain can still send for a question
+     * it has already answered.
+     *
+     * Fleet-wide rather than Russell-scoped, because a stranded lease is the
+     * same defect wherever the packet came from, and the tick is Brain's own
+     * durable loop rather than Russell's — it already reconciles bins here for
+     * the same reason.
+     */
+    for (const entry of await reconcileTerminalPackets(cycle.maxEventsPerCycle)) {
+      report.retiredPacketWork.push(entry);
     }
 
     // 1b. Apply the answers workers have sent back.

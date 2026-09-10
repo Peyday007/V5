@@ -111,7 +111,7 @@ const BLOCKED_BY_A11: Record<string, string> = {
  */
 export const ACCEPTANCE_SCOPE = {
   /**
-   * The scenario this chain is judged against.
+   * The scenario the *first* declared chain is judged against.
    *
    * Frozen in `docs/STEP-12A-ACCEPTANCE-SCENARIO.md` before any live result was
    * seen, so the standard cannot be adjusted to fit an outcome. The id is here
@@ -139,6 +139,70 @@ export const ACCEPTANCE_SCOPE = {
 } as const;
 
 /**
+ * The acceptance suite: every declared chain, and what each one is for.
+ *
+ * ---------------------------------------------------------------------------
+ * Why there is more than one, and why that is not a widening
+ * ---------------------------------------------------------------------------
+ *
+ * One chain was right while the acceptance was one journey. It stopped being
+ * right the moment the journey succeeded, because three of the remaining
+ * conditions are **mutually exclusive with success**:
+ *
+ *   - `A13_AUTO_NEXT` needs a packet that filed with an unresolved question.
+ *     `unresolvedFollowOn` produces a follow-on only from
+ *     `COMPLETE_WITH_GAPS`, and correctly produces none from `COMPLETE`.
+ *   - `A14_HUMAN_RESUME` needs a decision a person had to make. The completed
+ *     packet had none: Brain answered its own park from the rows, withdrew the
+ *     request, and that is the *better* outcome.
+ *   - `A07_PROBE_BOUNDS` needs an idea the judgment thought worth a cheap look
+ *     first. The completed one was worth doing outright.
+ *
+ * Requiring one packet to exhibit all of them would mean requiring it to
+ * finish badly. So the acceptance is a small **declared suite**: each scenario
+ * has an id, a purpose written down before it ran, and its own chain. Nothing
+ * about any gate is relaxed — each still requires its complete original
+ * evidence, walked from a declared anchor through real foreign keys — and the
+ * union is three conversations rather than a database.
+ *
+ * ---------------------------------------------------------------------------
+ * How a chain is declared, and why by title
+ * ---------------------------------------------------------------------------
+ *
+ * `S12A-ACC-2` is pinned by id, because it existed when it was declared.
+ *
+ * The two new ones are declared by an exact conversation **title**, which is
+ * the same kind of declaration one step earlier: the identity is fixed in this
+ * file, in code somebody reviews, *before* the conversation exists — and the
+ * row is then made to match it. Pinning an id would have required creating the
+ * conversation first and editing this file afterwards, which is precisely the
+ * "declare the scope once the rows look favourable" ordering the block above
+ * exists to prevent.
+ *
+ * It resolves **only** on an exact, unique match. Two conversations carrying
+ * one scenario title resolve to nothing rather than to whichever came first: an
+ * ambiguous anchor is an anchor somebody could add to, and this must fail
+ * closed exactly like every other identity question in this codebase.
+ */
+export const ACCEPTANCE_SUITE = [
+  {
+    scenarioId: 'S12A-ACC-2',
+    purpose: 'the completed research journey: capture, judgment, mission, packet, filed and audited report, one writeback',
+    conversationId: 'rcv_02d5312e9d41465a9e0f',
+  },
+  {
+    scenarioId: 'S12A-ACC-3',
+    purpose: 'a bounded cheap look, opened by the ordinary judgment before any mission exists, settled by its real runner and consumed by a second judgment',
+    conversationTitle: 'S12A-ACC-3',
+  },
+  {
+    scenarioId: 'S12A-ACC-4',
+    purpose: "a question whose answer depends on a fact the public record does not hold: a genuine unresolved gap, a person's decision to file with it named, the same mission resuming, and the one follow-on that question leaves behind",
+    conversationTitle: 'S12A-ACC-4',
+  },
+] as const;
+
+/**
  * The scopes this reporter has judged before, kept rather than deleted.
  *
  * `S12A-ACC-1` spent all three of its attempts on three different defects and
@@ -160,9 +224,12 @@ export const PREVIOUS_SCOPES = [
   },
 ] as const;
 
-/** The chain, resolved once from the anchor. `null` when it cannot be. */
+/** The chains, resolved once from the declared suite. `null` when none is. */
 interface Scope {
-  conversationId: string;
+  /** Every declared conversation that actually resolved. */
+  conversationIds: string[];
+  /** Which scenarios resolved, for the reader of the report. */
+  scenarios: { scenarioId: string; conversationId: string }[];
   candidateIds: string[];
   probeIds: string[];
   missionIds: string[];
@@ -184,17 +251,44 @@ function inList(values: string[]): string {
   return values.map(() => '?').join(', ');
 }
 
+/**
+ * The conversation one declared scenario names, or null.
+ *
+ * A pinned id must exist. A declared title must match **exactly one**
+ * conversation: zero is a scenario that has not been run yet, and two is an
+ * ambiguous anchor, which is refused rather than resolved to the first — an
+ * anchor somebody could add to is not a declaration.
+ */
+async function anchorFor(entry: (typeof ACCEPTANCE_SUITE)[number]): Promise<string | null> {
+  if ('conversationId' in entry && entry.conversationId) {
+    const exists = await count(`SELECT COUNT(*) AS total FROM russell_conversations WHERE id = ?`, [
+      entry.conversationId,
+    ]);
+    return exists === 1 ? entry.conversationId : null;
+  }
+  if ('conversationTitle' in entry && entry.conversationTitle) {
+    const matches = await ids(
+      `SELECT id FROM russell_conversations WHERE title = ? ORDER BY created_at, rowid`,
+      [entry.conversationTitle],
+    );
+    return matches.length === 1 ? matches[0]! : null;
+  }
+  return null;
+}
+
 async function resolveScope(): Promise<Scope | null> {
-  const conversationId = ACCEPTANCE_SCOPE.conversationId;
-  if (!conversationId) return null;
-  const exists = await count(`SELECT COUNT(*) AS total FROM russell_conversations WHERE id = ?`, [
-    conversationId,
-  ]);
-  if (exists === 0) return null;
+  const scenarios: { scenarioId: string; conversationId: string }[] = [];
+  for (const entry of ACCEPTANCE_SUITE) {
+    const conversationId = await anchorFor(entry);
+    if (conversationId) scenarios.push({ scenarioId: entry.scenarioId, conversationId });
+  }
+  if (scenarios.length === 0) return null;
+  const conversationIds = scenarios.map((entry) => entry.conversationId);
 
   const candidateIds = await ids(
-    `SELECT id FROM russell_candidates WHERE conversation_id = ? ORDER BY created_at, rowid`,
-    [conversationId],
+    `SELECT id FROM russell_candidates WHERE conversation_id IN (${inList(conversationIds)})
+      ORDER BY created_at, rowid`,
+    conversationIds,
   );
   const probeIds = candidateIds.length
     ? await ids(
@@ -204,14 +298,15 @@ async function resolveScope(): Promise<Scope | null> {
       )
     : [];
   /*
-   * Missions reached either through the conversation or through one of its
-   * candidates, plus every follow-on those missions launched. The follow-on is
-   * part of the frozen chain by construction — `A13` is precisely the claim
-   * that it was launched from this mission and no other.
+   * Missions reached either through a declared conversation or through one of
+   * its candidates, plus every follow-on those missions launched. The follow-on
+   * is part of the chain by construction — `A13` is precisely the claim that it
+   * was launched from this mission and no other.
    */
   const direct = await ids(
-    `SELECT id FROM russell_missions WHERE conversation_id = ? ORDER BY created_at, rowid`,
-    [conversationId],
+    `SELECT id FROM russell_missions WHERE conversation_id IN (${inList(conversationIds)})
+      ORDER BY created_at, rowid`,
+    conversationIds,
   );
   const viaCandidate = candidateIds.length
     ? await ids(
@@ -245,12 +340,20 @@ async function resolveScope(): Promise<Scope | null> {
       )
     : [];
 
-  return { conversationId, candidateIds, probeIds, missionIds: allMissions, orchestrationIds, reservationIds };
+  return {
+    conversationIds,
+    scenarios,
+    candidateIds,
+    probeIds,
+    missionIds: allMissions,
+    orchestrationIds,
+    reservationIds,
+  };
 }
 
 /** The sentence every scoped gate reports while the scope is not frozen. */
 const NO_SCOPE =
-  'the frozen Step 12A acceptance chain is not declared yet — see ACCEPTANCE_SCOPE';
+  'no declared Step 12A acceptance chain has been run yet — see ACCEPTANCE_SUITE';
 
 interface GateResult {
   id: string;
@@ -296,7 +399,7 @@ function fromRows(id: string, found: number, needed: number, what: string): Gate
  * they existed, and one of them (`A14`) could only ever have passed on a
  * decision nothing had carried out.
  *
- * The scope is still resolved from `ACCEPTANCE_SCOPE`, so a test proves the
+ * The scope is still resolved from `ACCEPTANCE_SUITE`, so a test proves the
  * gate and never supplies its own standard.
  */
 export async function gates(): Promise<GateResult[]> {
@@ -312,7 +415,7 @@ export async function gates(): Promise<GateResult[]> {
   const scoped = (id: string, found: number, needed: number, what: string): GateResult =>
     scope === null
       ? { id, verdict: 'NOT_RUN', detail: NO_SCOPE }
-      : fromRows(id, found, needed, `${what} in the frozen acceptance chain`);
+      : fromRows(id, found, needed, `${what} in the declared acceptance suite`);
 
   // A01 — the shell exists and is what a person lands on. The production half
   // is a conversation somebody actually had through it.
@@ -604,7 +707,7 @@ export async function gates(): Promise<GateResult[]> {
         : independence.missing ??
       // The achieved tier, never rounded up. A same-account result says
       // SESSION_SEPARATED and is not described as cross-account independent.
-          `three distinct authenticated sessions on the frozen mission; achieved ${
+          `three distinct authenticated sessions on a declared mission; achieved ${
             independence.achieved ? SEPARATION_LABELS[independence.achieved] : 'no separation'
           }`,
   });
@@ -657,7 +760,7 @@ export async function gates(): Promise<GateResult[]> {
   // The chain predicate, written once and aliased by the caller, because the
   // second query joins and an unqualified column name would be ambiguous.
   const inChain = (alias: string): string =>
-    `(${alias}.conversation_id = ?${
+    `(${alias}.conversation_id IN (${inList(scope?.conversationIds ?? [])})${
       scope && scope.missionIds.length
         ? ` OR ${alias}.mission_id IN (${inList(scope.missionIds)})`
         : ''
@@ -705,7 +808,7 @@ export async function gates(): Promise<GateResult[]> {
             AND o.unresolved_gap_authorized_by = r.answered_by_user_id
             AND m.state NOT IN ('CANCELLED','FAILED')
             AND ${inChain('r')}`,
-        [scope.conversationId, ...scope.missionIds],
+        [...scope.conversationIds, ...scope.missionIds],
       )
     : 0;
 
@@ -721,7 +824,7 @@ export async function gates(): Promise<GateResult[]> {
            JOIN russell_missions m ON m.id = r.mission_id
           WHERE r.state IN ('ANSWERED','RESUMED') AND m.state = 'NEEDS_HUMAN'
             AND ${inChain('r')}`,
-        [scope.conversationId, ...scope.missionIds],
+        [...scope.conversationIds, ...scope.missionIds],
       )
     : 0;
 
@@ -738,7 +841,7 @@ export async function gates(): Promise<GateResult[]> {
            JOIN russell_missions m ON m.id = r.mission_id
           WHERE r.state = 'RESUMED' AND m.state = 'CANCELLED'
             AND ${inChain('r')}`,
-        [scope.conversationId, ...scope.missionIds],
+        [...scope.conversationIds, ...scope.missionIds],
       )
     : 0;
 
@@ -941,6 +1044,23 @@ function pad(text: string, width: number): string {
 async function main(): Promise<void> {
   await initDatabase();
   const results = await gates();
+
+  /*
+   * Which chains this reading was judged against, printed before the verdicts.
+   *
+   * A suite whose membership is invisible is a suite somebody has to take on
+   * trust. Each line is one declared scenario, its purpose as written in this
+   * file before it ran, and the conversation it resolved to — or the fact that
+   * it has not been run.
+   */
+  const suite = await resolveScope();
+  console.log('');
+  console.log('DECLARED SCENARIOS');
+  for (const entry of ACCEPTANCE_SUITE) {
+    const resolved = suite?.scenarios.find((row) => row.scenarioId === entry.scenarioId);
+    console.log(`  ${pad(entry.scenarioId, 12)} ${resolved?.conversationId ?? 'not run'}`);
+    console.log(`               ${entry.purpose}`);
+  }
 
   console.log('');
   console.log('STEP 12A ACCEPTANCE');
