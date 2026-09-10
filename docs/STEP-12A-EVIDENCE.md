@@ -8178,3 +8178,56 @@ was simply never written down.
 The test for it walks the compliant path first — submit, lease still live,
 nothing touched — then lapses the lease and asserts the retirement, so both
 halves are pinned rather than only the one that was broken.
+
+
+## 82. The request the capture gate did not recognise as one — 2026-09-10
+
+`S12A-ACC-8` got one step further than `S12A-ACC-7`. The worker read the
+message as a request for work and proposed `CAPTURE_CANDIDATE` — and **Brain's
+own gate declined it**:
+
+```
+  2026-09-10T13:10:28.658Z  RUSSELL COMPLETE   614 chars  conv rcv_c180700291e14c6c85db
+      produced: {"captureDeclined":true,"gateReason":"nothing here proposes work"}
+    candidates 0
+```
+
+The message was *"Please check something for me rather than answering it from
+what we already wrote down… Go and see whether that holds for Michigan under the
+rule in force now, and record what you find."*
+
+`shouldCapture`'s marker list held every hedged form of asking — `should we`,
+`worth checking`, `look into` — and not the plain one. There is no question
+mark, so the question markers do not fire either, and the honest reading of the
+rule as written is "nothing here proposes work".
+
+That is a defect: a direct request to check something is the clearest proposal
+of work there is. Rewording the scenario to hit an existing keyword was the
+alternative, and it would have been gaming the list rather than fixing it.
+
+The widening is deliberately narrow, because the list's documented failure mode
+— *missing* a candidate rather than inventing one — is worth keeping. The verb
+must be asked of somebody (`please|can you|could you|would you` + check, verify,
+confirm, look into, look up, find out, see) or followed by the thing to
+establish (`check|verify|confirm|find out|look up|see` + `whether|if`). So a
+past-tense report (*"I checked it yesterday"*), a request that proposes nothing
+to establish (*"Please look at the attached file"*) and ordinary conversation
+all still decline, and the test pins each of those beside the two that now
+capture.
+
+`S12A-ACC-9` asks the identical question against the repaired gate. The text is
+unchanged on purpose: what changed is Brain.
+
+### The three look scenarios, and what each established
+
+Worth stating together, because the sequence is the evidence:
+
+| | stopped at | cause | disposition |
+|---|---|---|---|
+| ACC-3 | judgment | `askArchive` read the worker's summary, not the person's question | repaired (§77) |
+| ACC-5 | compiler | the question named a jurisdiction outside the envelope, to exclude it | question changed, compiler untouched (§78) |
+| ACC-7 | the worker | it answered the message rather than capturing an idea from it | not a defect; §8 cuts both ways |
+| ACC-8 | Brain's capture gate | the marker list had no plain request | repaired here |
+
+Four distinct failures at four distinct boundaries, none of them the same
+mistake twice, and three of the four were defects nothing else would have found.

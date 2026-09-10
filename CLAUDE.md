@@ -1256,6 +1256,17 @@ rules.
   *expired* lease on work claimable again for a settled question, and a packet
   goes terminal while its judge is still holding the item it just used.
 
+- **The capture gate held every hedged way of asking for work and not the plain
+  one.** `should we`, `worth checking` and `look into` were markers; *"Please
+  check something for me… Go and see whether that holds"* was not, and had no
+  question mark either, so Brain declined a direct request with "nothing here
+  proposes work". The widening is narrow by construction — the verb is asked of
+  somebody, or followed by the thing to establish — because the list's failure
+  mode must stay *missing* a candidate rather than inventing one: a past-tense
+  report and a bare "please look at this" still decline. Rewording the question
+  to hit an existing keyword was the alternative and would have been gaming the
+  list rather than fixing it.
+
 - **Acceptance is a small declared suite, not one overloaded chain.** One
   conversation was right while the acceptance was one journey, and stopped
   being right the moment that journey succeeded — because a cheap look taken
