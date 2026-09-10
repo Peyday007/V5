@@ -90,7 +90,10 @@ import {
   type HandoffOutcome,
 } from '../audit/handoff.ts';
 import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
-import { reconcileTerminalPackets } from '../research/packetRunner.ts';
+import {
+  reconcileArguedAuditRoles,
+  reconcileTerminalPackets,
+} from '../research/packetRunner.ts';
 import { recoverExecutionLineage } from '../dispatch/lineageRecovery.ts';
 import { recomputeProject } from '../stateEngine.ts';
 import {
@@ -499,6 +502,20 @@ export async function tick(owner: string): Promise<TickReport> {
      * ever replaces a recorded one. Beside the other reconciliations for the
      * same reason they are here.
      */
+    /*
+     * 1a-iv-b. Retire an audit role that has already been argued.
+     *
+     * Beside the terminal sweep and for the identical reason:
+     * `finishRecordedAuditRoles` lives inside `advancePacket`, and
+     * `advancePacket` runs when something completes — which is exactly what
+     * stops happening once a session submits its pass and leaves. Production
+     * argued one role three times while the judge waited, and the fix could not
+     * reach it because nothing was advancing the packet.
+     */
+    for (const entry of await reconcileArguedAuditRoles(cycle.maxEventsPerCycle)) {
+      report.retiredPacketWork.push(entry);
+    }
+
     const lineage = await recoverExecutionLineage(cycle.maxEventsPerCycle);
     report.lineageRecovered.push(...lineage.passes);
     report.lineageUnresolved.push(...lineage.unresolved);

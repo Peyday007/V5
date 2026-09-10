@@ -1881,6 +1881,54 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
  * not scoped to one project — a stranded lease on a Step 9 packet is the same
  * defect as one on a Step 12A packet.
  */
+/**
+ * Sweep for an audit role that has been argued and whose item is still open.
+ *
+ * `finishRecordedAuditRoles` runs inside `advancePacket`, and `advancePacket`
+ * runs when something *completes* — which is exactly what stops happening once
+ * a session submits its pass and leaves. The item lapses, the next arrival
+ * argues the same role again, and nothing ever advances the packet, so the
+ * reconciliation written for that state could not reach it.
+ *
+ * That is the same lesson as the bin reopen, one layer along: **a
+ * reconciliation that only runs when something else happens cannot reach a
+ * state in which nothing is happening.** So it goes on the durable tick, beside
+ * the terminal-packet sweep, and is selected from rows.
+ *
+ * Cheap by construction: the query returns nothing on a healthy packet, and
+ * `advancePacket` is only entered when a role was actually retired.
+ */
+export async function reconcileArguedAuditRoles(
+  limit: number,
+): Promise<{ orchestrationId: string; retired: number }[]> {
+  const live = ['PLANNING', 'RESEARCHING', 'VERIFYING', 'SYNTHESIZING', 'AUDITING', 'AWAITING_REPAIR'];
+  const now = queueNow();
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT DISTINCT o.id AS id
+       FROM research_orchestrations o
+       JOIN work_items w ON w.orchestration_id = o.id
+      WHERE o.status IN (${live.map(() => '?').join(', ')})
+        AND w.work_type = 'RESEARCH_AUDIT'
+        AND ( w.state = 'QUEUED'
+              OR (w.state = 'LEASED' AND (w.lease_expires_at IS NULL OR w.lease_expires_at <= ?)) )
+      ORDER BY o.id
+      LIMIT ?`,
+    [...live, now, Math.max(1, limit)],
+  );
+  const out: { orchestrationId: string; retired: number }[] = [];
+  for (const row of rows) {
+    const orchestration = await getOrchestration(row.id);
+    if (!orchestration) continue;
+    const retired = await finishRecordedAuditRoles(orchestration);
+    if (retired === 0) continue;
+    // Only now, and only because something moved: the advance is what turns the
+    // retired role into the next one being offered.
+    await advancePacket(orchestration.id);
+    out.push({ orchestrationId: orchestration.id, retired });
+  }
+  return out;
+}
+
 export async function reconcileTerminalPackets(
   limit: number,
 ): Promise<{ orchestrationId: string; retired: number }[]> {

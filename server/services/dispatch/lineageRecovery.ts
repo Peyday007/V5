@@ -36,7 +36,7 @@
  *
  *     research_passes.executor_session_ref
  *       = work_leases.credential_id           append-only: who held this item
- *       -> work_items.bin_id                  which bin the item was in
+ *       -> the bin that item was reachable in the queue's own scope rule
  *       -> bin_events (BIN_ASSIGNED)          the arrival this claim followed
  *       -> bin_dispatch at generation - 1     the fire that arrival superseded
  *       -> fleet_routines.account_id
@@ -169,7 +169,18 @@ export async function recoverExecutionLineage(limit = 25): Promise<LineageRecove
        SELECT DISTINCT d.routine_id, d.bin_id, d.lease_generation
          FROM work_leases wl
          JOIN work_items wi ON wi.id = wl.work_item_id
-         JOIN bin_events e ON e.bin_id = wi.bin_id
+         /*
+          * The queue's own bin-scope rule, not wi.bin_id alone.
+          *
+          * A bin naming an orchestration is a lease on that packet, so it
+          * reaches the packet's untagged work — and research items are exactly
+          * that: enqueueResearchItem sets orchestration_id and leaves
+          * bin_id null. Joining on the column alone therefore matched none of
+          * them, which is every audit pass there is, so the arm found nothing
+          * for the one session it was written to recover.
+          */
+         JOIN bins b ON (wi.bin_id = b.id OR (wi.bin_id IS NULL AND wi.orchestration_id = b.orchestration_id))
+         JOIN bin_events e ON e.bin_id = b.id
                           AND e.event_type = 'BIN_ASSIGNED'
                           AND e.worker_id = wl.worker_id
                           AND e.at <= wl.claimed_at

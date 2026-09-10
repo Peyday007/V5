@@ -53,7 +53,10 @@ import {
 } from '../server/repos/research.ts';
 import { recoverExecutionLineage } from '../server/services/dispatch/lineageRecovery.ts';
 import { enqueueWork, getWorkItem, claimWork } from '../server/repos/workQueue.ts';
-import { reconcileTerminalPackets } from '../server/services/research/packetRunner.ts';
+import {
+  reconcileArguedAuditRoles,
+  reconcileTerminalPackets,
+} from '../server/services/research/packetRunner.ts';
 import type { ExistingClaim, Principal } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -291,6 +294,138 @@ describe('a cheap look comes first only when the archive holds something to chec
   });
 });
 
+describe('an audit role that has been argued is retired by the tick', () => {
+  /**
+   * The reconciliation could not reach the state it was written for.
+   *
+   * `finishRecordedAuditRoles` runs inside `advancePacket`, and `advancePacket`
+   * runs when something *completes* — which is exactly what stops happening
+   * once a session submits its pass and leaves. In production the item lapsed,
+   * the next arrival argued the same role again, and nothing ever advanced the
+   * packet, so the fix sat in a function nothing was calling.
+   *
+   * A reconciliation that only runs when something else happens cannot reach a
+   * state in which nothing is happening. So it is on the durable tick.
+   */
+  it('finds it from rows when nothing else is advancing the packet', async () => {
+    const run = await createRun({
+      projectId,
+      layerId,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'anything',
+    });
+    const orchestration = await createOrchestration({
+      projectId,
+      layerId,
+      runId: run.id,
+      title: 'A packet whose adversarial role was argued and left open',
+      assignment: 'the role is the subject',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    await updateOrchestration(orchestration.id, { status: 'AUDITING', currentPass: 'AUDIT' });
+
+    const item = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'ADVERSARIAL' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: orchestration.id,
+    });
+
+    // The role was argued: a completed pass at the adversarial ordinal.
+    const pass = await startPass({
+      orchestrationId: orchestration.id,
+      passKey: 'AUDIT',
+      ordinal: 6,
+      provider: 'WORKER',
+      prompt: 'the adversarial argument',
+      promptSha256: '1'.repeat(64),
+    });
+    await finishPass(pass.id, { status: 'COMPLETE', rawResponse: '{}' });
+
+    // And the session that argued it is gone: the item is claimable again.
+    await getDb().run(`UPDATE work_items SET state = 'QUEUED' WHERE id = ?`, [item.id]);
+
+    const swept = await reconcileArguedAuditRoles(10);
+    expect(swept.map((entry) => entry.orchestrationId)).toContain(orchestration.id);
+    const retired = (await getWorkItem(item.id))!;
+    expect(retired.state).toBe('CANCELLED');
+    expect(retired.cancelledReason).toMatch(/already been argued/i);
+
+    // Idempotent: nothing left to select.
+    expect(await reconcileArguedAuditRoles(10)).toHaveLength(0);
+  });
+
+  it('leaves an item alone while its own session still holds it', async () => {
+    const run = await createRun({
+      projectId,
+      layerId,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'anything',
+    });
+    const orchestration = await createOrchestration({
+      projectId,
+      layerId,
+      runId: run.id,
+      title: 'A packet whose adversarial session is still working',
+      assignment: 'the role is the subject',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    await updateOrchestration(orchestration.id, { status: 'AUDITING', currentPass: 'AUDIT' });
+    const item = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'ADVERSARIAL' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: orchestration.id,
+    });
+    const pass = await startPass({
+      orchestrationId: orchestration.id,
+      passKey: 'AUDIT',
+      ordinal: 6,
+      provider: 'WORKER',
+      prompt: 'the adversarial argument',
+      promptSha256: '2'.repeat(64),
+    });
+    await finishPass(pass.id, { status: 'COMPLETE', rawResponse: '{}' });
+
+    // Leased, and the lease has not lapsed: the contract asks that session to
+    // complete its own item, which it cannot do if Brain retires it underneath.
+    // A lease exists iff the item is LEASED, so all of it goes in one statement.
+    const holder = await createWorker({
+      name: 'still-arguing',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    await getDb().run(
+      `UPDATE work_items
+          SET state = 'LEASED',
+              lease_id = ?,
+              worker_id = ?,
+              lease_generation = lease_generation + 1,
+              lease_expires_at = ?
+        WHERE id = ?`,
+      [
+        'wkl_stillworking',
+        holder.id,
+        new Date(Date.now() + 5 * 60_000).toISOString(),
+        item.id,
+      ],
+    );
+
+    expect(await reconcileArguedAuditRoles(10)).toHaveLength(0);
+    expect((await getWorkItem(item.id))!.state).toBe('LEASED');
+  });
+});
+
 /* ------------------------------------------------------------------------- */
 /* A11 — the account a pass executed under                                    */
 /* ------------------------------------------------------------------------- */
@@ -349,10 +484,16 @@ describe('the executing account is observed from the dispatch that fired the ses
   }
 
   /** A ready bin Brain has fired one named Routine for. */
-  async function firedBin(routineId: string, accountId: string, title: string) {
+  async function firedBin(
+    routineId: string,
+    accountId: string,
+    title: string,
+    orchestrationId?: string,
+  ) {
     const bin = await createBin({
       projectId,
       layerId,
+      ...(orchestrationId ? { orchestrationId } : {}),
       kind: 'DETERMINISTIC_CHECK',
       title,
       objective: 'Arrive and take it.',
@@ -530,10 +671,18 @@ describe('the executing account is observed from the dispatch that fired the ses
     const { workerId, routineId, accountId } = await twoRoutinesOneWorker();
     const credentialId = 'oat_released_session';
 
-    const bin = await firedBin(routineId, accountId, 'A bin whose lease has since ended');
-    expect((await checkIn({ principal: principalFor(workerId, credentialId), workerId })).assigned).toBe(true);
-
     const orchestration = await packetShell();
+    const bin = await firedBin(routineId, accountId, 'A bin whose lease has since ended', orchestration);
+    expect((await checkIn({ principal: principalFor(workerId, credentialId), workerId })).assigned).toBe(true);
+    /*
+     * No `binId`, which is the production shape and was the hole.
+     *
+     * `enqueueResearchItem` sets `orchestration_id` and leaves `bin_id` null; a
+     * bin naming an orchestration is a lease on that packet and reaches its
+     * untagged work, which is `binScopeSql`'s rule. The recovery joined on the
+     * column alone, so it matched no research item at all — which is every
+     * audit pass there is, and the one session it was written to recover.
+     */
     const item = await enqueueWork({
       projectId,
       workType: 'RESEARCH_AUDIT',
@@ -541,7 +690,6 @@ describe('the executing account is observed from the dispatch that fired the ses
       createdByType: 'SYSTEM',
       requiredScopes: ['queue:claim'],
       orchestrationId: orchestration,
-      binId: bin.id,
     });
     const claimed = await claimWork({
       workerId,
