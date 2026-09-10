@@ -189,6 +189,16 @@ export const ACCEPTANCE_SUITE = [
     scenarioId: 'S12A-ACC-2',
     purpose: 'the completed research journey: capture, judgment, mission, packet, filed and audited report, one writeback',
     conversationId: 'rcv_02d5312e9d41465a9e0f',
+    /**
+     * The chain the frozen deduplication condition belongs to.
+     *
+     * `A05`'s falsifier — *"a second canonical candidate fails it"* — is a
+     * property of the chain the reworded question was sent into, and of no
+     * other. Five chains have five canonical ideas with nothing wrong, so the
+     * gate is told which one it is about rather than counting the suite. Exactly
+     * one scenario may carry this, and the gate says so when none does.
+     */
+    provesDedupe: true,
   },
   {
     scenarioId: 'S12A-ACC-3',
@@ -260,8 +270,15 @@ export const PREVIOUS_SCOPES = [
 interface Scope {
   /** Every declared conversation that actually resolved. */
   conversationIds: string[];
-  /** Which scenarios resolved, for the reader of the report. */
-  scenarios: { scenarioId: string; conversationId: string }[];
+  /**
+   * Which scenarios resolved, each with its *own* candidates.
+   *
+   * Kept per scenario as well as flattened, because one gate's falsifier is a
+   * property of a single chain rather than of the suite: `A05` says the
+   * reworded question must leave *one* canonical idea, and five chains have
+   * five canonical ideas without anything having gone wrong.
+   */
+  scenarios: { scenarioId: string; conversationId: string; candidateIds: string[] }[];
   candidateIds: string[];
   probeIds: string[];
   missionIds: string[];
@@ -309,19 +326,23 @@ async function anchorFor(entry: (typeof ACCEPTANCE_SUITE)[number]): Promise<stri
 }
 
 async function resolveScope(): Promise<Scope | null> {
-  const scenarios: { scenarioId: string; conversationId: string }[] = [];
+  const scenarios: { scenarioId: string; conversationId: string; candidateIds: string[] }[] = [];
   for (const entry of ACCEPTANCE_SUITE) {
     const conversationId = await anchorFor(entry);
-    if (conversationId) scenarios.push({ scenarioId: entry.scenarioId, conversationId });
+    if (!conversationId) continue;
+    scenarios.push({
+      scenarioId: entry.scenarioId,
+      conversationId,
+      candidateIds: await ids(
+        `SELECT id FROM russell_candidates WHERE conversation_id = ? ORDER BY created_at, rowid`,
+        [conversationId],
+      ),
+    });
   }
   if (scenarios.length === 0) return null;
   const conversationIds = scenarios.map((entry) => entry.conversationId);
 
-  const candidateIds = await ids(
-    `SELECT id FROM russell_candidates WHERE conversation_id IN (${inList(conversationIds)})
-      ORDER BY created_at, rowid`,
-    conversationIds,
-  );
+  const candidateIds = [...new Set(scenarios.flatMap((entry) => entry.candidateIds))];
   const probeIds = candidateIds.length
     ? await ids(
         `SELECT id FROM russell_probes WHERE candidate_id IN (${inList(candidateIds)})
@@ -533,32 +554,64 @@ export async function gates(): Promise<GateResult[]> {
    * The second is a FAIL rather than a NOT_RUN when it is wrong: two canonical
    * candidates is a thing that happened, not a thing that has not happened yet.
    */
-  const semanticMerges =
-    scope && scope.candidateIds.length
-      ? await count(
-          `SELECT COUNT(*) AS total FROM russell_candidate_merges
-            WHERE action = 'MERGE' AND method = 'SEMANTIC'
-              AND candidate_id IN (${inList(scope.candidateIds)})
-              AND canonical_id IN (${inList(scope.candidateIds)})`,
-          [...scope.candidateIds, ...scope.candidateIds],
-        )
-      : 0;
-  const canonicalInChain =
-    scope && scope.candidateIds.length
-      ? await count(
-          `SELECT COUNT(*) AS total FROM russell_candidates
-            WHERE id IN (${inList(scope.candidateIds)}) AND canonical_candidate_id IS NULL`,
-          scope.candidateIds,
-        )
-      : 0;
+  /*
+   * Both facts are asked **per scenario**, and that is a correction rather than
+   * a relaxation.
+   *
+   * "Exactly one canonical idea left" is the falsifier the frozen scenario
+   * names, and it is a property of *the chain the rewording happened in*. Asked
+   * across a suite it counts one canonical idea per scenario and fails on five
+   * chains that are each behaving correctly — which is what it did the first
+   * time the suite had more than one member.
+   *
+   * So a scenario satisfies this when the fold happened inside it and left one
+   * canonical idea there. A scenario where the fold happened and a second
+   * canonical idea survived is the falsifier, and still a FAIL.
+   */
+  const dedupeEntry = ACCEPTANCE_SUITE.find(
+    (entry) => 'provesDedupe' in entry && entry.provesDedupe,
+  );
+  const dedupeScope = dedupeEntry
+    ? (scope?.scenarios.find((row) => row.scenarioId === dedupeEntry.scenarioId) ?? null)
+    : null;
+  const dedupeIds = dedupeScope?.candidateIds ?? [];
+  const semanticMerges = dedupeIds.length
+    ? await count(
+        `SELECT COUNT(*) AS total FROM russell_candidate_merges
+          WHERE action = 'MERGE' AND method = 'SEMANTIC'
+            AND candidate_id IN (${inList(dedupeIds)})
+            AND canonical_id IN (${inList(dedupeIds)})`,
+        [...dedupeIds, ...dedupeIds],
+      )
+    : 0;
+  const canonicalInChain = dedupeIds.length
+    ? await count(
+        `SELECT COUNT(*) AS total FROM russell_candidates
+          WHERE id IN (${inList(dedupeIds)}) AND canonical_candidate_id IS NULL`,
+        dedupeIds,
+      )
+    : 0;
   results.push(
-    scope !== null && canonicalInChain > 1
+    dedupeScope === null
       ? {
           id: 'A05_DEDUPE',
-          verdict: 'FAIL',
-          detail: `${canonicalInChain} canonical ideas in the chain — the reworded question made a second one`,
+          verdict: 'NOT_RUN',
+          detail: dedupeEntry
+            ? `${dedupeEntry.scenarioId} has not been run, so the reworded question has no chain`
+            : 'no declared scenario carries the deduplication condition',
         }
-      : scoped('A05_DEDUPE', semanticMerges, 1, 'semantic merges onto the canonical idea'),
+      : canonicalInChain > 1
+        ? {
+            id: 'A05_DEDUPE',
+            verdict: 'FAIL',
+            detail: `${canonicalInChain} canonical ideas in ${dedupeScope.scenarioId} — the reworded question made a second one`,
+          }
+        : fromRows(
+            'A05_DEDUPE',
+            semanticMerges,
+            1,
+            `semantic merges onto the canonical idea in ${dedupeScope.scenarioId}`,
+          ),
   );
 
   /*
