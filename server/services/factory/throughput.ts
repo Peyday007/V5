@@ -14,6 +14,17 @@
  * actually observed, always labelled `UNKNOWN`, and never fed into an
  * arithmetic. And a ceiling nobody has observed is reported as `UNKNOWN` with a
  * null value — zero is a measurement, and the absence of any session is not.
+ *
+ * `maxObservedConcurrency` and `ceiling` answer different questions and must
+ * never share a value by construction. The first is a peak overlap — evidence
+ * that the fleet ran at least that many sessions at once, nothing more. The
+ * second is a claim that the fleet could not run any *more* than that, which
+ * only a provider refusal can establish: a peak nothing ever refused is a
+ * fact about what happened, not a fact about a limit. So `ceiling` is
+ * `UNKNOWN` with a null value unless a `RATE_LIMITED` session is on record for
+ * the campaign, in which case it is the observed peak, labelled
+ * `PROVIDER_ENFORCED` rather than `MEASURED` — the evidence for the *ceiling*
+ * claim is the refusal, not the overlap sweep.
  */
 import { getCampaign } from '../../repos/factory.ts';
 import type { FactoryEvidenceClass } from '../../domain/factory.ts';
@@ -97,6 +108,38 @@ function observedConcurrency(metrics: CampaignMetrics): EvidenceNumber {
     metrics.maxObservedConcurrency,
     'MEASURED',
     `peak overlap of factory_sessions start/end intervals for campaign ${metrics.campaignId} (metrics.maxOverlap)`,
+  );
+}
+
+/**
+ * The concurrency ceiling actually enforced, or the honest absence of one.
+ *
+ * A peak overlap is not a ceiling by itself — it is evidence of what ran, not
+ * evidence of what was refused. The only rows that establish a provider
+ * actually stopped the fleet from running more concurrently are the
+ * `RATE_LIMITED` sessions counted in `metrics.sessions.rateLimited`. With none
+ * on record, no ceiling has ever been reached, whatever the peak overlap was —
+ * so this returns `UNKNOWN` with a null value even when `observed` is a real
+ * number. With at least one, the peak overlap is reported as the ceiling, but
+ * under `PROVIDER_ENFORCED`: the number is the same sweep, the evidence for
+ * *this* claim is the refusal that makes the peak into a limit.
+ */
+function ceilingEvidence(metrics: CampaignMetrics, observed: EvidenceNumber): EvidenceNumber {
+  // No session has ever run: `observed` is already UNKNOWN with a null value,
+  // and there is no separate absence-of-a-ceiling to report — it is the same
+  // absence of evidence, not a second one with its own wording.
+  if (metrics.concurrencyEvidence === 'UNKNOWN') return observed;
+  if (metrics.sessions.rateLimited <= 0) {
+    return num(
+      null,
+      'UNKNOWN',
+      `no factory_sessions row with state=RATE_LIMITED has ever been recorded for campaign ${metrics.campaignId}, so no concurrency ceiling has been reached — the peak overlap observed (${observed.value}) is not evidence of a limit`,
+    );
+  }
+  return num(
+    observed.value,
+    'PROVIDER_ENFORCED',
+    `campaign ${metrics.campaignId} has ${metrics.sessions.rateLimited} factory_sessions row(s) with state=RATE_LIMITED, so the peak overlap actually observed (metrics.maxOverlap) is evidence the fleet was stopped from running more concurrently`,
   );
 }
 
@@ -329,7 +372,7 @@ export function computeThroughput(metrics: CampaignMetrics): ThroughputReport {
         'no factory_campaigns row was supplied to this pure computation; throughputReport fills this in from lane_target',
       ),
     },
-    ceiling: observed,
+    ceiling: ceilingEvidence(metrics, observed),
     rateLimited: {
       sessions: num(
         metrics.sessions.rateLimited,
