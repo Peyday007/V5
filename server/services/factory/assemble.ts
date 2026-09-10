@@ -23,7 +23,7 @@ import {
 } from '../../repos/factoryFleet.ts';
 import { listUnits, patchCampaign } from '../../repos/factory.ts';
 import { FACTORY_EVENT_KINDS, campaignMetrics } from './metrics.ts';
-import { commitsBetween, diffStat, git } from './git.ts';
+import { commitsBetween, diffStat, git, mergeBase } from './git.ts';
 
 export interface AssembleInput {
   repoRoot: string;
@@ -47,10 +47,14 @@ const MAX_PATCH_BYTES = 4 * 1024 * 1024;
 export async function assembleDeliverable(input: AssembleInput): Promise<AssembleResult> {
   const { repoRoot, campaign, changeRequest } = input;
   const head = campaign.integrationSha ?? campaign.baseSha;
-  const diffRef = `${campaign.baseSha}..${head}`;
+  // The merge base rather than the pin: a pull request describes what the branch
+  // adds, not what the repository did while the branch was open.
+  const base =
+    (await mergeBase(repoRoot, changeRequest.baseBranch, head)) ?? campaign.baseSha;
+  const diffRef = `${base}..${head}`;
 
-  const stat = await diffStat(repoRoot, campaign.baseSha, head);
-  const commits = await commitsBetween(repoRoot, campaign.baseSha, head);
+  const stat = await diffStat(repoRoot, base, head);
+  const commits = await commitsBetween(repoRoot, base, head);
   const patch = await git(repoRoot, ['diff', diffRef], 300_000);
   const units = await listUnits(campaign.id);
   const reviews = await listReviews(campaign.id);
@@ -74,7 +78,7 @@ export async function assembleDeliverable(input: AssembleInput): Promise<Assembl
     ),
     '',
     '### What landed',
-    `Base \`${campaign.baseSha.slice(0, 12)}\` → \`${head.slice(0, 12)}\` on \`${campaign.integrationBranch}\``,
+    `Base \`${base.slice(0, 12)}\` → \`${head.slice(0, 12)}\` on \`${campaign.integrationBranch}\``,
     `${commits.length} commit(s), ${stat.filesChanged} file(s), +${stat.insertions}/-${stat.deletions}`,
     '',
     ...units

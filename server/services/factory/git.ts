@@ -194,6 +194,25 @@ export async function resolveSha(repoRoot: string, ref: string): Promise<string 
   return result.exitCode === 0 ? result.stdout.trim() : null;
 }
 
+/**
+ * The commit two branches last had in common.
+ *
+ * What a reviewer needs, and not the same thing as the pinned base. A campaign
+ * brings its base branch in whenever that branch moves, so `base..head` grows to
+ * include everything *other* people landed since the pin — and a reviewer reading
+ * that diff is judging the repository rather than the campaign. The merge base is
+ * the answer to "what did this branch add", which is the question a pull request
+ * asks.
+ */
+export async function mergeBase(
+  repoRoot: string,
+  left: string,
+  right: string,
+): Promise<string | null> {
+  const result = await git(repoRoot, ['merge-base', left, right]);
+  return result.exitCode === 0 ? result.stdout.trim() : null;
+}
+
 export async function isAncestor(
   repoRoot: string,
   maybeAncestor: string,
