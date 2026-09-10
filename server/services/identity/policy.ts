@@ -247,6 +247,31 @@ const OVERRIDES: Override[] = [
   // to the default, because it moves work.
   { pattern: /^\/api\/russell\/projects\/[^/]+\/coverage$/, method: 'POST', level: 'READ' },
   { pattern: /^\/api\/russell\/conversations$/, method: 'POST', level: 'READ' },
+
+  // ---------------------------------------------------------------------
+  // Step 12C — a connected site
+  // ---------------------------------------------------------------------
+  //
+  // Two writes and they name one scope, because the connector does one job.
+  // Registering records is a project write; issuing the one typed command is a
+  // project write. Neither is ADMIN and neither has a second scope, so a stolen
+  // site credential reaches exactly this and nothing beside it.
+  //
+  // The reads are deliberately absent from this list. A worker reading a
+  // project already needs `project:read` by default, which is the correct
+  // requirement here and is one fewer entry that could drift.
+  {
+    pattern: /^\/api\/projects\/[^/]+\/connect\/[^/]+\/records$/,
+    method: 'POST',
+    level: 'WRITE',
+    scope: 'external:sync',
+  },
+  {
+    pattern: /^\/api\/projects\/[^/]+\/connect\/[^/]+\/records\/[^/]+\/commands$/,
+    method: 'POST',
+    level: 'WRITE',
+    scope: 'external:sync',
+  },
 ];
 
 export interface Requirement {

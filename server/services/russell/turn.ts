@@ -1093,10 +1093,27 @@ async function applyValidated(input: {
        * completes. What is refused is the *request*, because honouring it here
        * would mean composing a mission scope nobody approved.
        */
+      /*
+       * `UNSUPPORTED` only for the ones Brain actually refuses.
+       *
+       * Derived from `unsupportedAction` rather than written here, because the
+       * two were saying different things about the same turn. `ANSWER_ONLY`
+       * and `ASK_WHICH_PROJECT` are answers: answering *is* the effect, the
+       * message settles `COMPLETE`, and the person is told nothing about a
+       * refusal — but the stored record said `effect: "UNSUPPORTED"`, which
+       * reads to anybody looking at the rows later as a request Brain turned
+       * down. In production `S12A-ACC-7` produced exactly that, and working
+       * out that nothing had been refused took reading three functions.
+       *
+       * The three Brain genuinely will not do from a conversation keep
+       * `UNSUPPORTED`, and it is now the same predicate that decides what the
+       * person is told, so the record and the reply cannot disagree again.
+       */
+      const refusal = unsupportedAction(proposal.action);
       return {
-        produced: { accepted: proposal.action, effect: 'UNSUPPORTED' },
+        produced: { accepted: proposal.action, effect: refusal ? 'UNSUPPORTED' : 'NONE' },
         candidateId: null,
-        unsupported: proposal.action,
+        ...(refusal ? { unsupported: proposal.action } : {}),
       };
   }
   void owner;

@@ -201,6 +201,30 @@ export async function runMigrations(
     const previous = appliedByVersion.get(file.version);
     if (!previous || previous.checksum === file.checksum) continue;
 
+    /*
+     * A different migration took this number, which is not an edited file.
+     *
+     * Two branches extending the same chain both pick the next free number on
+     * their own branch, and whichever deploys second finds the version already
+     * applied with a different checksum. The message below used to say the file
+     * had *changed after it was applied* — so whoever hit it went looking for an
+     * edit to a file nobody had touched, on a Brain that would not boot.
+     *
+     * Named separately, and first, because the remedy is different: an edited
+     * migration is reverted, and a collision is renumbered past the one that is
+     * already applied. `loadMigrationFiles` catches the same collision between
+     * two files in one checkout; this is the half that only shows up against a
+     * database.
+     */
+    if (previous.name !== file.name) {
+      throw new Error(
+        `Migration ${file.filename} wants version ${file.version}, which this database has ` +
+          `already applied as "${previous.name}". Two migrations cannot share a number: ` +
+          `renumber ${file.filename} past every version this database holds. Nothing was ` +
+          `applied and the schema is unchanged.`,
+      );
+    }
+
     // Same content, recorded before line endings were normalised out of the
     // checksum. Heal the row rather than refusing: the file has not been
     // edited, and leaving the old value would mean every future boot from the

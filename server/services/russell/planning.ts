@@ -50,6 +50,7 @@ import { coverBeforeWork } from './coverage.ts';
 import {
   compileMission,
   MISSION_COMPILER_VERSION,
+  personsRequest,
   type CompiledMission,
 } from './compiler.ts';
 import { judge, type JudgmentInputs } from './judgment.ts';
@@ -105,17 +106,88 @@ export interface ArchiveAnswer {
    * was unreachable while this was hard-coded empty.
    */
   contradicting: string[];
+  /**
+   * Claims the archive holds that bear on the idea and that nothing has
+   * verified, or that were true outside the timeframe the question asks about.
+   *
+   * `PRESENT_BUT_UNVERIFIED` — "somebody wrote the answer down and nothing
+   * supports it" — and `STALE` — "true once, outside the timeframe now" — are
+   * the two coverage statuses that mean *there is already a candidate answer
+   * here*. Confirming or refuting one is a presence question, which is exactly
+   * what a bounded look answers and exactly what a research packet is too
+   * expensive for.
+   *
+   * This is the archive-derived form of "the uncertainty here is cheap to
+   * reduce", and it is deliberately the *only* form. See `judgeCandidate`.
+   */
+  unverified: string[];
   claimsConsidered: number;
 }
 
 /**
- * Ask the archive first.
+ * Ask the archive first — about what the person asked, not only about the
+ * summary of it.
  *
  * §13's rule at candidate scale: researching a requirement the project already
- * answers spends the allowance to learn something it knew. The candidate's own
+ * answers spends the allowance to learn something it knew. The candidate's
  * statement becomes one proposed requirement — in memory, never persisted,
  * which is what `coverBeforeWork` is built for — and the verdict decides
  * whether anything further is worth asking.
+ *
+ * **The person's own message is asked about too, and that is a correction.**
+ * This read only `candidate.statement`, which is the short line a capture pass
+ * writes; `relevance` is the fraction of a requirement's terms found in a
+ * claim, so the whole verdict rests on the *worker's choice of words*. It
+ * showed up immediately in production: the same question scored
+ * `PRESENT_BUT_UNVERIFIED` as the person wrote it and `MISSING` as the worker
+ * summarised it, so Brain spent a research packet on something it already held
+ * an unchecked answer to.
+ *
+ * That is §24's recorded lesson at a new boundary. Mutation 30 found the
+ * compiled fragment inheriting a worker's restatement — *"the counties Deal
+ * Dispatch cares about"* — and fixed it by falling back to the person's own
+ * message. The archive check needed the same fix and did not get it; a
+ * specification faithful to a summary is not faithful to the question, and
+ * neither is a coverage verdict.
+ *
+ * **The candidate's own title is asked about too, and that is a second
+ * correction of the same shape.** `relevance` is `hits / wanted.size`: the
+ * denominator is the *requirement's* vocabulary, so a longer requirement scores
+ * lower against the identical claim. That is right for the requirements
+ * `coverBeforeWork` was built for — a compiler writes one bounded, term-dense
+ * declaration per fragment — and it is wrong for the two texts this function
+ * feeds it, both of which are free prose. A four-hundred-character statement
+ * carries forty distinct terms and a claim sentence carries fifteen, so a
+ * perfect subject match cannot reach the floor at all: the check answers
+ * `MISSING` because the question was asked at length, not because the archive
+ * is silent.
+ *
+ * Production said so exactly. `S12A-ACC-9` asked about a claim the archive
+ * holds unsupported, and the worker wrote a 454-character statement; the
+ * archive read `ARCHIVE_HOLDS_NOTHING_TO_CHECK` and Brain spent a packet on a
+ * question its own scenario-check had predicted `PRESENT_BUT_UNVERIFIED`
+ * against the short form of the very same sentence.
+ *
+ * The defect is at this boundary rather than in the scorer, and the remedy is
+ * the one already established here: **ask about the question in every form
+ * Brain holds it**, rather than tuning what "about" means. The title is the
+ * third form and the only short one — written by the same pass that wrote the
+ * statement, stored in the same row, and the only one whose vocabulary is dense
+ * enough to be recognised by a claim. Nothing about `relevance` moves, so no
+ * other caller changes.
+ *
+ * The verdicts are combined **asymmetrically, on purpose**:
+ *
+ *   - `fullyAnswered` requires *every* reading to say answered. Rejecting an
+ *     idea stops work a person asked for, so it takes the conservative reading,
+ *     and a third reading can only make it harder to reject.
+ *   - `contradicting` and `unverified` take the union. Both lead only to a
+ *     bounded look, which spends nothing a mission would, so the cheaper
+ *     mistake is the one worth making.
+ *
+ * Neither direction lowers a bar. A probe still happens only where a real
+ * `PRESENT_BUT_UNVERIFIED` or `STALE` claim row exists, which is the rule
+ * `judgeCandidate` states and this function does not touch.
  *
  * A project with no layers, or one whose claims cannot be read, returns
  * `fullyAnswered: false` with nothing supporting: **not answered** is the
@@ -138,6 +210,7 @@ export async function askArchive(
     fullyAnswered: false,
     supporting: [],
     contradicting: [],
+    unverified: [],
     claimsConsidered: 0,
   };
   if (!candidate.projectId) return unknown;
@@ -145,24 +218,43 @@ export async function askArchive(
   const layer = layers[0];
   if (!layer) return unknown;
   try {
+    const asked = await personsRequest(candidate);
+    /*
+     * Three readings of one question, and each only when it says something the
+     * others do not. A title identical to the statement, or a message identical
+     * to either, would double every count for nothing.
+     */
+    const readings: { key: string; statement: string }[] = [];
+    const seen = new Set<string>();
+    const add = (key: string, text: string | null | undefined): void => {
+      const trimmed = (text ?? '').trim();
+      if (trimmed.length === 0 || seen.has(trimmed)) return;
+      seen.add(trimmed);
+      readings.push({ key: `candidate:${candidate.id}${key}`, statement: trimmed });
+    };
+    add('', candidate.statement);
+    add(':titled', candidate.title);
+    add(':asked', asked);
+    const requirements = readings;
     const coverage = await coverBeforeWork({
       projectId: candidate.projectId,
       layerId: layer.id,
-      requirements: [
-        {
-          key: `candidate:${candidate.id}`,
-          statement: candidate.statement,
-        },
-      ],
+      requirements,
       ...(claims ? { claims } : {}),
     });
+    const withStatus = (...wanted: string[]): string[] =>
+      coverage.verdicts
+        .filter((verdict) => wanted.includes(verdict.status))
+        .flatMap((verdict) => verdict.claimIds)
+        .slice(0, 20);
     return {
+      // Conservative: an idea is only "already answered" when every reading of
+      // the question says so. `coverBeforeWork` reports `fullyAnswered` for the
+      // whole set, which is exactly that.
       fullyAnswered: coverage.fullyAnswered,
       supporting: coverage.answered.flatMap((verdict) => verdict.claimIds).slice(0, 20),
-      contradicting: coverage.verdicts
-        .filter((verdict) => verdict.status === 'CONTRADICTED')
-        .flatMap((verdict) => verdict.claimIds)
-        .slice(0, 20),
+      contradicting: withStatus('CONTRADICTED'),
+      unverified: withStatus('PRESENT_BUT_UNVERIFIED', 'STALE'),
       claimsConsidered: coverage.claimsConsidered,
     };
   } catch {
@@ -400,11 +492,43 @@ export async function judgeCandidate(
    * And the compiler supplies neither of the two semantic observations,
    * deliberately: see the module comment.
    */
+  /*
+   * Whether a bounded look genuinely comes first, decided from rows.
+   *
+   * Mutation 29 replaced the worker planning pass with a compiler and recorded
+   * the visible consequence honestly: *"an idea is no longer sent to EXPLORE
+   * because a look would be cheap, because nothing can now form that view."*
+   * That was true of a *semantic* view, and it left the automatic probe path
+   * reachable only when the archive positively contradicts an idea — which is
+   * rare, and which meant Brain had lost the ability to look cheaply before
+   * spending a packet.
+   *
+   * **A compiler cannot judge whether a look would be worth it. It can read
+   * whether there is something to look at.** `PRESENT_BUT_UNVERIFIED` and
+   * `STALE` are two of the ten coverage statuses and both mean the same thing
+   * here: the archive already holds a candidate answer that nothing supports,
+   * or that was true outside the timeframe now. Confirming or refuting one is a
+   * *presence* question — the only kind `GENERAL_LIGHT_PROBE_V1` answers — and
+   * a full packet is the wrong instrument for it.
+   *
+   * So the rule is narrow by construction rather than by tuning: no unverified
+   * or stale claim, no probe. It forms no opinion about value, reads no prose,
+   * and cannot lower any evidence bar — a probe's verdict is a claim about
+   * presence and the second judgment still decides what to do with it.
+   *
+   * It is forced false on the pass *after* a probe, and that is load-bearing
+   * now rather than incidental. The archive does not change when a probe
+   * settles — a probe writes observations, not claims — so re-deriving it there
+   * would send the idea back for another look for ever. `loop.ts` has always
+   * said Brain forces it false on that pass; until now it was false anyway.
+   */
+  const cheapToReduce = !options.afterProbe && archive.unverified.length > 0;
+
   const inputs: JudgmentInputs = {
     alreadyAnswered: false,
     supporting: archive.supporting,
     contradicting: archive.contradicting,
-    cheapToReduce: false,
+    cheapToReduce,
     blockedBy: authority.blockedBy ?? null,
   };
   const verdict = judge(inputs);
@@ -431,9 +555,21 @@ export async function judgeCandidate(
       compilerVersion: compiled.mission.compilerVersion,
       envelopeId: compiled.mission.envelopeId,
       jurisdiction: compiled.mission.jurisdiction,
-      // Said out loud, because the alternative is a `false` and a `0` that read
-      // as findings. Neither was assessed; nothing formed a view.
-      cheapToReduceAssessed: 'NOT_ASSESSED',
+      /*
+       * Said out loud, because the alternative is a `false` and a `0` that read
+       * as findings.
+       *
+       * `cheapToReduce` *is* assessed now, and the label says from what: the
+       * archive's own coverage verdict on this question. `expectedValue` still
+       * is not — nothing here can say what settling a question is worth — so it
+       * stays `NOT_ASSESSED` and `judge()` reaches its neutral default.
+       */
+      cheapToReduceAssessed: options.afterProbe
+        ? 'SETTLED_BY_PROBE'
+        : cheapToReduce
+          ? 'ARCHIVE_HOLDS_UNVERIFIED_OR_STALE'
+          : 'ARCHIVE_HOLDS_NOTHING_TO_CHECK',
+      unverifiedClaimIds: archive.unverified,
       expectedValueAssessed: 'NOT_ASSESSED',
       claimsConsidered: archive.claimsConsidered,
       ...(options.afterProbe ? { afterProbe: options.afterProbe } : {}),

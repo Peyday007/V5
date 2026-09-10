@@ -41,6 +41,49 @@ function tempDbPath(): string {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'brain-mig-')), 'brain.db');
 }
 
+describe('two branches, one number', () => {
+  /**
+   * The failure this names, and why the message matters more than usual.
+   *
+   * Two branches extending the same chain both take the next free number on
+   * their own branch. Whichever deploys second meets a database that already
+   * holds that version under another name, and before this the runner said the
+   * file had *changed after it was applied* — sending whoever hit it to look
+   * for an edit to a file nobody had touched, on a Brain that would not boot.
+   *
+   * Refusing is right: applying it would put two different schemas under one
+   * version and make the chain unreplayable. Saying *why* is the repair.
+   */
+  it('refuses a version another migration already holds, and says to renumber', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-collide-'));
+    fs.writeFileSync(path.join(dir, '001_first.sql'), 'CREATE TABLE alpha (id TEXT PRIMARY KEY);');
+    const dbPath = tempDbPath();
+    await openDatabaseAt(dbPath, dir);
+    await closeDatabase();
+
+    // The same number, a different migration — exactly what a second branch
+    // produces.
+    fs.rmSync(path.join(dir, '001_first.sql'));
+    fs.writeFileSync(path.join(dir, '001_second.sql'), 'CREATE TABLE beta (id TEXT PRIMARY KEY);');
+
+    await expect(openDatabaseAt(dbPath, dir)).rejects.toThrow(
+      /already applied as "first"[\s\S]*renumber/,
+    );
+  });
+
+  it('still reports a genuinely edited migration as one', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-edited-'));
+    const file = path.join(dir, '001_first.sql');
+    fs.writeFileSync(file, 'CREATE TABLE alpha (id TEXT PRIMARY KEY);');
+    const dbPath = tempDbPath();
+    await openDatabaseAt(dbPath, dir);
+    await closeDatabase();
+
+    fs.writeFileSync(file, 'CREATE TABLE alpha (id TEXT PRIMARY KEY, extra TEXT);');
+    await expect(openDatabaseAt(dbPath, dir)).rejects.toThrow(/changed after it was applied/);
+  });
+});
+
 describe('migrations', () => {
   it('creates every table from an empty database', async () => {
     const { migrations } = await initDatabase({ dbPath: tempDbPath() });

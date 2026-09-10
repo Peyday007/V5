@@ -28,7 +28,7 @@ import { createHash } from 'node:crypto';
 import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
-import { bindRoutineWorker, recordRoutineCheckIn } from './fleet.ts';
+import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSession } from './fleet.ts';
 import type { BinConfinement } from './workQueue.ts';
 import type {
   Bin,
@@ -1327,7 +1327,12 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
         outcome: takeover ? 'TAKEOVER' : 'ASSIGNED',
       });
 
-      await creditDispatchArrival(row.id, row.lease_generation, input.workerId);
+      await creditDispatchArrival(
+        row.id,
+        row.lease_generation,
+        input.workerId,
+        input.credentialId ?? null,
+      );
 
       return { bin, leaseId, leaseGeneration: nextGeneration, leaseExpiresAt: expires, takeover };
     }
@@ -1359,6 +1364,7 @@ async function creditDispatchArrival(
   binId: string,
   leaseGeneration: number,
   workerId: string,
+  credentialId: string | null,
 ): Promise<void> {
   const row = await getDb().get<{ routine_id: string | null }>(
     `SELECT routine_id FROM bin_dispatch
@@ -1372,6 +1378,31 @@ async function creditDispatchArrival(
   // names a different identity; the operator's `bind-worker` is for that case
   // and a silent overwrite here would hide it.
   await bindRoutineWorker(routineId, workerId);
+
+  /*
+   * And which account this authenticated session is executing under.
+   *
+   * The same dispatch row, the same rule, one more fact — and it is the fact
+   * `research_passes.executor_account_id` needed and never had. The static
+   * worker -> Routine binding cannot answer it once one worker is bound to
+   * more than one Routine, which is exactly the shape production is in; the
+   * dispatch always could, because Brain chose the surface it fired.
+   *
+   * Nothing is written when the Routine does not resolve to an account: an
+   * attribution that cannot be established must read as absent rather than as
+   * a guess, which is the fail-closed rule `lineageForWorker` already applies.
+   */
+  if (!credentialId) return;
+  const routine = await getRoutine(routineId);
+  if (!routine?.accountId) return;
+  await recordWorkerSession({
+    sessionRef: credentialId,
+    workerId,
+    routineId,
+    accountId: routine.accountId,
+    binId,
+    leaseGeneration,
+  });
 }
 
 /* ------------------------------------------------------------------------- */

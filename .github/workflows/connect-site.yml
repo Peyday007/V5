@@ -1,0 +1,105 @@
+name: Connect a site
+
+# Preparing a connected site's identity, without a terminal and without a secret.
+#
+# §25 gives a connected site three things: a worker, a membership carrying
+# `SITE_CONNECTOR_SCOPES` on exactly one project, and a credential. The first
+# two are ordinary rows and the third is a secret — and only the third genuinely
+# needs a person, because a credential is shown once, into one response, and is
+# not recoverable afterwards by anyone.
+#
+# The first two are here because getting them wrong is silent. A site granted
+# the research connector's set instead answers every connector call with the
+# same 404 a missing project gives, which is invariant 23 behaving exactly as
+# designed and telling the operator nothing at all. Choosing between two sets on
+# a form is a wrong answer waiting to be given; a constant is not.
+#
+# This deliberately does NOT issue a credential. A workflow log is a log that
+# outlives the run, and invariant 22 says no credential may appear in one. The
+# operator console issues it, in a browser, to somebody signed in. What this
+# removes from that person's job is the part that could be done wrongly.
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Project id or slug the site may reach'
+        required: true
+      admin:
+        description: 'Administrator email the grant is recorded against (omit with check_only)'
+        required: false
+        default: ''
+      site:
+        description: 'Canonical worker name for the site'
+        required: false
+        default: 'deal-dispatch'
+      check_only:
+        description: 'Only report what exists; write nothing'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+# Two of these at once would be two upserts of one membership. Harmless, and
+# still not worth watching happen.
+concurrency:
+  group: connect-site
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: prepare
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Inside the container, for the reason `authorize-gap-policy` gives: it is
+      # the established way in, and it needs no database credential in a second
+      # place. Reaching this shell is the authentication; `--admin` is the
+      # attribution, resolved against the database rather than trusted.
+      - name: Prepare the site's identity
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          args="--project ${{ inputs.project }} --site ${{ inputs.site }}"
+          if [ "${{ inputs.check_only }}" = "true" ]; then
+            args="$args --check"
+          elif [ -n "${{ inputs.admin }}" ]; then
+            args="$args --admin ${{ inputs.admin }}"
+          fi
+          set +e
+          # shellcheck disable=SC2086
+          flyctl ssh console --app "$app" -C "sh /app/scripts/connect-site.sh $args" 2>&1 | tee connect-site.txt
+          set -e
+          # The verdict comes from a line the script printed, not from an exit
+          # code that had to survive an SSH session, a shell and a CLI — the
+          # same reasoning the deploy workflow's hosted verification uses.
+          if grep -q '^CONNECT-SITE: OK' connect-site.txt; then
+            exit 0
+          fi
+          if ! grep -q '^CONNECT-SITE:' connect-site.txt; then
+            echo "::error::The script never ran. If the output above says the SSH connection failed, the Fly token cannot open a console on this app."
+            exit 1
+          fi
+          echo "::error::The preparation refused. The reason is above."
+          exit 1
+
+      - name: What is left for a person
+        if: success()
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          echo "The site's worker and its project membership are in place."
+          echo ""
+          echo "One step is left and it needs a browser, because a credential is shown once:"
+          echo "  1. Sign in at https://$app.fly.dev/operator as a Brain administrator."
+          echo "  2. Find the worker '${{ inputs.site }}' and press Issue credential."
+          echo "  3. Paste the value straight into the site's BRAIN_TOKEN. Do not save it anywhere else."
+          echo ""
+          echo "Nothing on that screen asks you to choose a scope: the grant above already made it."

@@ -90,6 +90,7 @@ import { createRun } from '../server/repos/runs.ts';
 import { NEEDS_HUMAN_CHOICES } from '../server/services/russell/needsHuman.ts';
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
 import { listTurns, createConversation, getConversation } from '../server/repos/russellConversations.ts';
+import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { applyTurn, beginTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
 import { FIELD_LIMITS, REQUIRED_PART } from '../server/services/russell/proposal.ts';
 import { assignNextBin, getBin, putBinUnitResult, terminateUnleasedBin } from '../server/repos/bins.ts';
@@ -1469,6 +1470,111 @@ describe('the loop keeps going without anybody watching', () => {
     ).toBe(true);
   });
 
+  it('fails a packet whose fragments all refused, rather than parking on one button', async () => {
+    /*
+     * The row that separated the rule from the proxy standing in for it.
+     *
+     * On 2026-09-10 `orc_bf57174a711e42c0a18b` held **one** fragment, zero
+     * claims and nothing accepted: the compiler had specified county-records
+     * sources for a question about private marketplace economics, and the
+     * worker reported the domain mismatch rather than inventing an answer. The
+     * park condition was `fragments.length > 0` — a row count standing in for
+     * "there is something to decide" — so it parked, and `choicesFor` then
+     * offered exactly one answer while the card's own explanation said the
+     * honest answers were *"to stop it or to ask a narrower question"*.
+     *
+     * A row is not a decision. The condition is the offer.
+     */
+    const conversation = await ownedConversation('Every fragment refused');
+    const mission = await parkedMission(conversation.id);
+    await withEveryFragmentRefused(mission.orchestrationId!, layerId, projectId);
+
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason:
+        'No fragment cleared its evidence gate, so there is nothing to synthesize.',
+    });
+
+    const ticked = await tick('instance-a');
+    expect(ticked.needsHuman.map((entry) => entry.missionId)).not.toContain(mission.id);
+
+    const failed = (await getMission(mission.id))!;
+    expect(failed.state).toBe('FAILED');
+    // The packet's own words, so the run still reads as the run it was.
+    expect(failed.terminalReason).toMatch(/cleared its evidence gate/i);
+
+    // Nobody is asked to press the only button there is.
+    expect(
+      (await listOpenRequests(projectId)).filter((entry) => entry.missionId === mission.id),
+    ).toHaveLength(0);
+
+    // And every refusal is still on its row, not tidied away.
+    const fragments = await currentFragments(mission.orchestrationId!);
+    expect(fragments.length).toBeGreaterThan(0);
+    expect(fragments.every((fragment) => fragment.status === 'BLOCKED')).toBe(true);
+    expect(fragments.some((fragment) => /domain mismatch/i.test(fragment.blockedReason ?? ''))).toBe(true);
+  });
+
+  it('finishes a park whose mission has already gone, and takes its work off the queue', async () => {
+    /*
+     * The defect production had seven of, and one door along from the rule
+     * above rather than the same door.
+     *
+     * Failing the mission is right and it is only half a transition: the
+     * *packet* stays at `NEEDS_HUMAN`, which says a person must decide, and
+     * nobody will ever be asked — the request was withdrawn and a terminal
+     * mission opens no more. `reconcileTerminalPackets` retires exactly the
+     * work such a packet still holds, and selects on `TERMINAL_ORCHESTRATION`,
+     * which `NEEDS_HUMAN` is not. So `orc_bf57174a711e42c0a18b` sat with a
+     * `RESEARCH_FRAGMENT` at attempt 3 of 2 and an expired lease — claimable
+     * work (§19) for a question abandoned three attempts earlier.
+     *
+     * The queued item below is what a worker would be handed. It is enqueued
+     * against the packet the ordinary way, so nothing about this shape is
+     * arranged: the fixture fails the mission through the same tick the rule
+     * above runs in, and the assertion is about what is left afterwards.
+     */
+    const conversation = await ownedConversation('A park nobody will answer');
+    const mission = await parkedMission(conversation.id, 'abandoned-park');
+    await withEveryFragmentRefused(mission.orchestrationId!, layerId, projectId);
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'No fragment cleared its evidence gate, so there is nothing to synthesize.',
+    });
+    const stranded = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_FRAGMENT',
+      orchestrationId: mission.orchestrationId!,
+      createdByType: 'SYSTEM',
+    });
+
+    /*
+     * Two ticks, and the second one is the assertion rather than a retry.
+     *
+     * The first fails the mission — the rule above — and the sweep had already
+     * run by then, because this is derived from rows and not hooked to the
+     * moment. The second reads the world as it now is: a park whose mission is
+     * gone. Ten seconds in production, and the property being tested is that
+     * nobody has to have been present for either of them.
+     */
+    await tick('instance-a');
+    expect((await getOrchestration(mission.orchestrationId!))!.status).toBe('NEEDS_HUMAN');
+    await tick('instance-a');
+
+    const packet = (await getOrchestration(mission.orchestrationId!))!;
+    expect((await getMission(mission.id))!.state).toBe('FAILED');
+    expect(packet.status).toBe('CANCELLED');
+    expect(packet.cancelReason).toMatch(/nobody is going to answer/i);
+    // The packet's own account of what it did is left exactly as recorded.
+    expect(packet.failureReason).toMatch(/cleared its evidence gate/i);
+
+    // And the work a worker could still have been sent for is off the queue,
+    // with the reason on the row rather than a bare cancellation.
+    const item = (await getWorkItem(stranded.id))!;
+    expect(item.state).toBe('CANCELLED');
+    expect(item.cancelledReason ?? '').toMatch(/concluded|settled/i);
+  });
+
   it('takes back a park that was already open before the rule existed', async () => {
     /*
      * The row that motivated the rule, and the half a fix at the moment of
@@ -1778,6 +1884,93 @@ describe('the loop keeps going without anybody watching', () => {
     const finished = await tick('instance-a');
     expect(finished.resumed).toContain(request.id);
     expect((await getMission(mission.id))!.state).toBe('CANCELLED');
+  });
+
+  it('does not offer to file a report of a packet where nothing cleared its gate', async () => {
+    /*
+     * The same defect one status further along, and the one that would have
+     * stopped the whole journey in production.
+     *
+     * `RECORD_GAPS` files the report with its unresolved questions named
+     * *beside what was established*. A packet where every fragment was refused
+     * at its evidence gate has no beside: `advancePacket` stops it at
+     * `NEEDS_HUMAN` with *no fragment cleared its evidence gate* whatever the
+     * gap authorization says — so the offer would record a person's decision,
+     * move the mission back to `RUNNING`, and have the next tick park it again
+     * on the identical reason, for ever.
+     *
+     * Both halves are checked, because a request opened before this rule
+     * existed still carries both choices on its row and the row is what a
+     * person sees: the offer no longer includes it, and the transition refuses
+     * it too.
+     */
+    const conversation = await ownedConversation('Nothing survived');
+    const mission = await parkedMission(conversation.id);
+    await withEveryFragmentRefused(mission.orchestrationId!, layerId, projectId);
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason:
+        'No fragment cleared its evidence gate, so there is nothing to synthesize.',
+    });
+
+    /*
+     * The card a person is actually looking at, opened the way an older
+     * version of this file opened it: carrying both answers.
+     *
+     * It has to be written by hand now, and that is the point rather than an
+     * inconvenience. This shape no longer *parks* — a packet with nothing
+     * accepted and no plan awaiting approval offers one answer, and a decision
+     * with one option is not a decision — so the only way it reaches somebody
+     * is a row that predates the rule. The row is what they see, so the row is
+     * what both guards have to hold against.
+     */
+    await transitionMission({
+      missionId: mission.id,
+      from: (await getMission(mission.id))!.state,
+      to: 'NEEDS_HUMAN',
+      waitingOn: 'No fragment cleared its evidence gate.',
+    });
+    const { request } = await askHuman({
+      projectId,
+      visibility: 'PRIVATE',
+      missionId: mission.id,
+      candidateId: null,
+      conversationId: conversation.id,
+      authorityNeeded: 'Deciding whether this project accepts a report with unresolved questions.',
+      whyNotRussell: 'The evidence bar was not met and the repair ladder is spent.',
+      recommendation: null,
+      choices: [NEEDS_HUMAN_CHOICES.RECORD_GAPS, NEEDS_HUMAN_CHOICES.STOP],
+      urgency: 'BLOCKING',
+      resumeKey: `russell:needs-human:${mission.id}:${mission.orchestrationId}`,
+    });
+
+    /*
+     * The transition refuses it. Answered by hand against the stored row,
+     * which is what a stale card would produce.
+     */
+    await getDb().run(
+      `UPDATE russell_human_requests
+          SET state = 'ANSWERED', answered_choice = 'RECORD_GAPS', answered_by_user_id = ?
+        WHERE id = ?`,
+      [userId, request.id],
+    );
+    const after = await tick('instance-a');
+    expect(after.resumed).not.toContain(request.id);
+    expect(after.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
+
+    // Nothing was authorized in anybody's name, and the packet did not move.
+    const orchestration = await getOrchestration(mission.orchestrationId!);
+    expect(orchestration!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
+    expect(orchestration!.unresolvedGapAuthorizedBy).toBeNull();
+
+    // And the decision came back rather than staying answered — narrowed to the
+    // answers that can still act, with the words this packet's stop deserves
+    // rather than the other stop's words about a bar that was nearly met.
+    const reopened = (await getHumanRequest(request.id))!;
+    expect(reopened.state).toBe('OPEN');
+    expect(reopened.answeredChoice).toBeNull();
+    expect(reopened.choices.map((choice) => choice.key).sort()).toEqual(['STOP']);
+    expect(reopened.whyNotRussell).toMatch(/no report to file/i);
   });
 
   it('leaves an answer it cannot carry out visible, rather than marking it resumed', async () => {
@@ -2509,6 +2702,29 @@ async function withNoResearchAtAll(orchestrationId: string) {
 }
 
 /**
+ * A packet that was researched and whose every fragment was refused.
+ *
+ * Rows exist, so the old `fragments.length > 0` proxy said "there is something
+ * to decide"; nothing was accepted, so `choicesFor` offered only STOP. That gap
+ * between the two is the whole of what this shape is for.
+ */
+async function withEveryFragmentRefused(
+  orchestrationId: string,
+  layerIdFor: string,
+  projectIdFor: string,
+) {
+  await withPlan(orchestrationId, layerIdFor, projectIdFor);
+  for (const fragment of await currentFragments(orchestrationId)) {
+    await updateFragment(fragment.id, {
+      status: 'BLOCKED',
+      blockedReason:
+        "Domain mismatch between the question and the fragment's own evidence standard, " +
+        'confirmed across every acceptable source class.',
+    });
+  }
+}
+
+/**
  * A packet that has actually been researched.
  *
  * The fragment is moved off `PLANNED` deliberately, and that is a correction to
@@ -2523,6 +2739,17 @@ async function withNoResearchAtAll(orchestrationId: string) {
  *
  * `BLOCKED` is the honest status for the stop these tests set up — the evidence
  * bar was not met and the repair ladder is spent.
+ *
+ * **And one fragment cleared, which is the other half of the shape and was
+ * missing.** A packet where *nothing* cleared cannot file a report with its
+ * unresolved questions named beside what was established, because there is
+ * nothing beside them: `advancePacket` stops such a packet at `NEEDS_HUMAN`
+ * with *no fragment cleared its evidence gate* whatever the gap authorization
+ * says. So a fixture that blocked everything and then asserted `RECORD_GAPS`
+ * was offered was asserting a button that could not finish the packet — the
+ * failure these tests are about, one status further along than the version
+ * they already fixed. The stop `RECORD_GAPS` is *for* is a mixed packet: some
+ * of the goal settled, some of it not.
  */
 async function withResearch(orchestrationId: string, layerIdFor: string, projectIdFor: string) {
   await withPlan(orchestrationId, layerIdFor, projectIdFor);
@@ -2531,6 +2758,31 @@ async function withResearch(orchestrationId: string, layerIdFor: string, project
       status: 'BLOCKED',
       blockedReason: 'The evidence bar was not met and the repair ladder is spent.',
     });
+  }
+  await createFragments([
+    {
+      orchestrationId,
+      projectId: projectIdFor,
+      layerId: layerIdFor,
+      fragmentIndex: 1,
+      fragmentKey: 'permit-terms',
+      question: 'On what terms may the permit data be redistributed?',
+      geography: 'Michigan',
+      requiredEvidence: [
+        { id: 'operative_definition', description: 'the published terms', necessity: 'REQUIRED' },
+      ],
+      acceptableSourceTypes: ['county government portals'],
+      excludedSourceTypes: ['vendor marketing'],
+      completionCriteria: ['the written terms, quoted'],
+      minIndependentSources: 1,
+      maxRepairs: 2,
+      dependsOn: [],
+      attempt: 1,
+    },
+  ] as unknown as Parameters<typeof createFragments>[0]);
+  for (const fragment of await currentFragments(orchestrationId)) {
+    if (fragment.fragmentKey !== 'permit-terms') continue;
+    await updateFragment(fragment.id, { status: 'ACCEPTED' });
   }
 }
 
@@ -2833,6 +3085,40 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
     expect(answered.status).toBe('FAILED');
     expect(answered.pendingReason).toMatch(/RUN_PROBE is not something a turn can carry out/);
     expect(answered.produced).toMatchObject({ accepted: 'RUN_PROBE', effect: 'UNSUPPORTED' });
+    /*
+     * And an action Brain *does* support records no refusal.
+     *
+     * `ANSWER_ONLY` is an answer: answering is the effect, the message settles
+     * `COMPLETE`, and the person is told nothing about a refusal. The stored
+     * record used to say `UNSUPPORTED` for it anyway, which reads to anybody
+     * looking at the rows later as a request Brain turned down — production's
+     * `S12A-ACC-7` produced exactly that. The label now comes from the same
+     * predicate that decides what the person is told.
+     */
+    const plain = await createConversation({
+      ownerUserId: userId,
+      title: 'Just answer it',
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    const asked = await beginTurn({
+      principal: principal([membership(projectId)]),
+      conversationId: plain.id,
+      content: 'Roughly how many Michigan counties are there?',
+    });
+    expect(
+      await answerTurnBin(asked.binId!, {
+        action: 'ANSWER_ONLY',
+        answer: 'Eighty-three.',
+        confidence: 90,
+      }),
+    ).toBe('COMPLETE');
+    const plainly = await applyTurn(asked.binId!);
+    expect(plainly.ok).toBe(true);
+    const answerOnly = (await listTurns(plain.id, 10)).find((turn) => turn.role === 'RUSSELL')!;
+    expect(answerOnly.status).toBe('COMPLETE');
+    expect(answerOnly.pendingReason).toBeNull();
+    expect(answerOnly.produced).toMatchObject({ accepted: 'ANSWER_ONLY', effect: 'NONE' });
     // The worker's words are kept — they are usually a good answer — with the
     // plain fact appended. A refusal that names no route is the defect §22
     // recorded three times.

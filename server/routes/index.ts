@@ -20,6 +20,7 @@ import { researchRouter } from './research.ts';
 import { runsRouter } from './runs.ts';
 import { russellRouter } from './russell.ts';
 import { factoryRouter } from './factory.ts';
+import { connectRouter } from './connect.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
@@ -58,6 +59,11 @@ export function createApiRouter(): Router {
   // prefixes: some are project-scoped (/projects/:id/factory/...) and some
   // address a campaign directly (/factory/campaigns/:id).
   router.use(factoryRouter);
+  // A connected site's door. Mounted at the root because its routes carry
+  // their own `/projects/:id/connect/...` prefix, and they must sit *before*
+  // the projects router so its own `/:projectId/...` routes do not swallow
+  // them.
+  router.use(connectRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);

@@ -847,13 +847,34 @@ export async function reopenRequest(input: {
   requestId: string;
   choices: HumanRequestChoice[];
   recommendation: string;
+  /**
+   * The card's own words, when the caller has re-derived them.
+   *
+   * Optional so a caller with nothing better to say leaves what is there. When
+   * it is supplied it moves *with* the choices, because a card that offers one
+   * thing and explains another is the defect `stopWords` exists to prevent —
+   * and a reopen is exactly the moment the shape has changed underneath the
+   * words that were written for it.
+   */
+  authorityNeeded?: string;
+  whyNotRussell?: string;
 }): Promise<boolean> {
   const result = await getDb().run(
     `UPDATE russell_human_requests
         SET state = 'OPEN', answered_by_user_id = NULL, answered_choice = NULL,
-            answered_at = NULL, choices = ?, recommendation = ?, updated_at = ?
+            answered_at = NULL, choices = ?, recommendation = ?,
+            authority_needed = COALESCE(?, authority_needed),
+            why_not_russell = COALESCE(?, why_not_russell),
+            updated_at = ?
       WHERE id = ? AND state = 'ANSWERED'`,
-    [toJson(input.choices), input.recommendation, nowIso(), input.requestId],
+    [
+      toJson(input.choices),
+      input.recommendation,
+      input.authorityNeeded ?? null,
+      input.whyNotRussell ?? null,
+      nowIso(),
+      input.requestId,
+    ],
   );
   return result.changes === 1;
 }

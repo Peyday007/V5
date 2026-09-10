@@ -662,3 +662,84 @@ export function effectiveTarget(
   }
   return { target: policy.target, source: 'OPERATOR_POLICY', boosted: false };
 }
+
+/* ------------------------------------------------------------------------- */
+/* Worker sessions — which surface an authenticated session actually came from */
+/* ------------------------------------------------------------------------- */
+
+export interface WorkerSession {
+  sessionRef: string;
+  workerId: string;
+  routineId: string;
+  accountId: string;
+  binId: string;
+  leaseGeneration: number;
+  observedAt: string;
+}
+
+/**
+ * Record which Routine and account produced this authenticated session.
+ *
+ * Written from the dispatch row Brain wrote itself, at the moment a fired
+ * session arrives and takes the bin that fire was for. **Never from anything
+ * the worker says about itself** — a body field naming a Routine would be the
+ * same mistake §19 refuses for queue ownership and §23 refuses for arrivals.
+ *
+ * First observation wins, by `ON CONFLICT DO NOTHING`. A credential belongs to
+ * one activation and an activation was started by one Routine, so a second bin
+ * taken by the same session must not be able to re-point what started it — and
+ * a silent re-point would hide a surface wearing another's identity, which is
+ * the case `bindRoutineWorker` already refuses one level up.
+ *
+ * Returns whether this call was the observation, which is what makes it usable
+ * as evidence rather than merely as a cache.
+ */
+export async function recordWorkerSession(input: {
+  sessionRef: string;
+  workerId: string;
+  routineId: string;
+  accountId: string;
+  binId: string;
+  leaseGeneration: number;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    `INSERT INTO worker_sessions
+       (session_ref, worker_id, routine_id, account_id, bin_id, lease_generation, observed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (session_ref) DO NOTHING`,
+    [
+      input.sessionRef,
+      input.workerId,
+      input.routineId,
+      input.accountId,
+      input.binId,
+      input.leaseGeneration,
+      nowIso(),
+    ],
+  );
+  return result.changes === 1;
+}
+
+/** The surface one authenticated session came from, or null if unobserved. */
+export async function getWorkerSession(sessionRef: string): Promise<WorkerSession | null> {
+  const row = await getDb().get<{
+    session_ref: string;
+    worker_id: string;
+    routine_id: string;
+    account_id: string;
+    bin_id: string;
+    lease_generation: number;
+    observed_at: string;
+  }>(`SELECT * FROM worker_sessions WHERE session_ref = ?`, [sessionRef]);
+  return row
+    ? {
+        sessionRef: row.session_ref,
+        workerId: row.worker_id,
+        routineId: row.routine_id,
+        accountId: row.account_id,
+        binId: row.bin_id,
+        leaseGeneration: Number(row.lease_generation),
+        observedAt: row.observed_at,
+      }
+    : null;
+}

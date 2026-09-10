@@ -2851,6 +2851,62 @@ describe('the audit passes', () => {
     expect(await listAuditsByProject(orchestration.projectId)).toHaveLength(0);
   });
 
+  it('finishes the audit item itself, so a redelivery cannot argue the same role twice', async () => {
+    /*
+     * The production loop this closes.
+     *
+     * `orc_91818deaa92a4172aa4e` recorded ADVERSARIAL passes at 10:40, 13:01
+     * and 13:14 while its work item sat `LEASED attempt 4/2`. Each arriving
+     * session read the brief, saw the adversarial role outstanding, argued it
+     * again, submitted — and ended without completing the item. The judge was
+     * withheld for three hours, correctly: `auditEligibility` requires both
+     * arguments *settled*, and settled is a fact about the item.
+     *
+     * A `RESEARCH_AUDIT` item hands out exactly one role and the pass is that
+     * role's entire output, so Brain finishes it. The worker's own completion
+     * still works and is still what the contract asks for — it simply finds
+     * the item already succeeded, which is what `brain_complete_work` is
+     * documented to do on a redelivery.
+     */
+    const orchestration = await filedPacket();
+    const fleet = await auditFleet();
+
+    const item = await as(fleet.primary, async () => {
+      const claimed = await claimNext('RESEARCH_AUDIT');
+      // Submit only. No completion, which is exactly what the session that
+      // ran out of time in production did.
+      await call('brain_submit_audit', { ...proof(claimed), primary: PRIMARY });
+      return claimed;
+    });
+
+    /*
+     * While the lease is live nothing is touched, because the contract asks
+     * that session to complete its own item and Brain retiring it underneath
+     * would make that call fail its ownership proof.
+     */
+    expect((await getWorkItem(item.workItemId))?.state).toBe('LEASED');
+
+    // The session is gone: the lease lapses, and the item is claimable again —
+    // which is the exact moment the repeat became possible.
+    await getDb().run(`UPDATE work_items SET lease_expires_at = ? WHERE id = ?`, [
+      new Date(Date.now() - 60_000).toISOString(),
+      item.workItemId,
+    ]);
+    await advancePacket(orchestration.id);
+
+    const finished = await getWorkItem(item.workItemId);
+    expect(finished?.state).toBe('CANCELLED');
+    expect(finished?.resultSummary ?? finished?.failureCategory ?? '').toBeDefined();
+
+    // The next role is now reachable, which is the thing that was not.
+    const next = await as(fleet.adversarial, () => claimNext('RESEARCH_AUDIT'));
+    expect(next.workItemId).not.toBe(item.workItemId);
+    expect((next.payload as { role?: string }).role).toBe('ADVERSARIAL');
+
+    // Still nothing decided: two roles recorded is not a verdict.
+    expect(await listAuditsByProject(orchestration.projectId)).toHaveLength(0);
+  });
+
   it('refuses a role\'s findings submitted against another role\'s item', async () => {
     const orchestration = await filedPacket();
     const primary = await claimNext('RESEARCH_AUDIT');
@@ -3927,9 +3983,17 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
     const closed = coverage.filter((entry) => entry.status === 'NOT_REQUIRED');
     expect(closed).toHaveLength(3);
     for (const entry of closed) expect((entry.userOverride ?? '').length).toBeGreaterThan(0);
-    // The answered one is untouched: nothing was narrowed that was researched.
+    /*
+     * The answered one is untouched by the narrowing, and it reads as answered.
+     *
+     * This asserted `MISSING`, which was the defect rather than the rule: the
+     * requirement's fragment had cleared all seven gate conditions and nothing
+     * moved its coverage, because `reconcileAcceptedFragment` had one caller
+     * and it was not this path. The comment above already described the truth.
+     */
     const answered = coverage.find((entry) => !closed.includes(entry));
-    expect(answered?.status).toBe('MISSING');
+    expect(answered?.status).toBe('SATISFIED');
+    expect(answered?.userOverride ?? '').toBe('');
 
     // 4. And exactly one synthesis is claimable.
     const items = await itemsByType(orchestration.id);
@@ -4257,9 +4321,16 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
       expect(byKey.get(dependent.fragmentKey)?.blockedReason).toContain('trigger');
     }
 
-    // Nothing narrowed.
+    /*
+     * Nothing narrowed — which is a claim about `NOT_REQUIRED`, not about
+     * `MISSING`. Asserting that every row stayed `MISSING` additionally pinned
+     * the coverage defect: the one requirement whose fragment was accepted is
+     * answered, and reading it as missing is the person-facing contradiction
+     * this test was quietly protecting.
+     */
     const coverage = await listCoverage(orchestration.id);
-    expect(coverage.every((entry) => entry.status === 'MISSING')).toBe(true);
+    expect(coverage.every((entry) => entry.status !== 'NOT_REQUIRED')).toBe(true);
+    expect(coverage.every((entry) => (entry.userOverride ?? '') === '')).toBe(true);
 
     // Nothing minted, and the packet says why it stopped.
     const items = await itemsByType(orchestration.id);

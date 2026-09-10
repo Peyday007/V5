@@ -75,8 +75,19 @@ import { IN_FLIGHT_WINDOW_MS } from '../server/services/dispatch/candidates.ts';
 import { MAX_TURN_ATTEMPTS, ownerPrincipal, retryTurn } from '../server/services/russell/turn.ts';
 import { parseJson } from '../server/repos/util.ts';
 import { validateProposal } from '../server/services/russell/proposal.ts';
+import { coverBeforeWork } from '../server/services/russell/coverage.ts';
+import { recoverExecutionLineage } from '../server/services/dispatch/lineageRecovery.ts';
+import { projectClaims } from '../server/services/reconcile/coverage.ts';
 import { shouldCapture } from '../server/services/russell/judgment.ts';
-import { getConversation, getMessage } from '../server/repos/russellConversations.ts';
+import {
+  createConversation,
+  getConversation,
+  getMessage,
+} from '../server/repos/russellConversations.ts';
+import { getCandidate, listCandidates } from '../server/repos/russellCandidates.ts';
+import { listMissions, listOpenRequests } from '../server/repos/russellMissions.ts';
+import { listGoals, listReservations } from '../server/repos/russellAuthority.ts';
+import { beginTurn } from '../server/services/russell/turn.ts';
 import { describeFireTarget } from '../server/services/dispatch/fire.ts';
 import {
   instructionProblems,
@@ -113,6 +124,294 @@ function refuseStep10(why: string): void {
   console.log(`STEP10 REFUSED: ${why}`);
   process.exitCode = 1;
 }
+
+/**
+ * The questions each declared acceptance scenario asks, fixed before it is asked.
+ *
+ * Both are Deal Dispatch's own questions, and neither is chosen to produce an
+ * outcome. `S12A-ACC-3` is a presence question about the project's own archive:
+ * the completed packet recorded that Michigan assessing is a city or township
+ * function while county equalization sits on top of it, and whether a single
+ * statewide index of those local offices exists at all is exactly the kind of
+ * thing a bounded look settles and a research packet is too expensive for.
+ *
+ * `S12A-ACC-4` asks something the public record demonstrably does not answer,
+ * and the project's own audit is the evidence for that: the compliant judge on
+ * `aud_ebbd20b157c4406884cd` recorded that *"no written terms-of-use, license
+ * or data-use restriction was found for Wayne's CSV downloads or Oakland's or
+ * Kent's REST APIs"*. Whether Deal Dispatch may redistribute what it pulls is a
+ * question the business actually has to answer, and the honest outcome is a
+ * named unresolved gap rather than an invented one. **Nothing here manufactures
+ * the gap; the question is real and the research is allowed to settle it if it
+ * can.**
+ */
+const ACCEPTANCE_SCENARIOS = {
+  'S12A-ACC-3': {
+    purpose: 'a bounded cheap look before any mission is created',
+    /**
+     * The short line a capture pass would write for this question.
+     *
+     * Declared beside the question because it, not the message, is what the
+     * archive is matched against — so this is what decides whether the scenario
+     * is well-posed. It is a prediction of the worker's wording rather than a
+     * substitute for it: the real statement is still the worker's.
+     */
+    statement:
+      'establish whether a business-only exemption from DRE broker licensure exists for ' +
+      'success-fee intermediaries',
+    /*
+     * Chosen from the archive's own shape rather than invented, and the first
+     * version of this question was wrong for a reason worth keeping.
+     *
+     * It asked about a statewide index of township assessing offices — a
+     * perfectly good question the project has *nothing* written down about, so
+     * the coverage verdict was `MISSING` and the right instrument was a
+     * research packet, not a look. `scenario-check` said so before anything was
+     * asked, which is what it is for.
+     *
+     * This is the subject the archive holds an unchecked answer on: six claims
+     * across two Monetization Logic documents, `UNSUPPORTED_ASSERTION` and
+     * `NEGATIVE_EXISTENCE`, none of them citing a source that can be checked —
+     * including *"a DRE broker licence is required; no business-only exemption
+     * exists beyond narrow FCC/securities-broker carve-outs"*. Whether that
+     * provisional answer stands decides whether Deal Dispatch can charge a
+     * success fee at all, and "does such an exemption exist" is a presence
+     * question.
+     */
+    question:
+      'We wrote down early on that a DRE broker licence is required for what we do and that ' +
+      'there is no business-only exemption, but I do not think anyone ever checked it against ' +
+      'the actual rule. Does a business-only exemption from DRE broker licensure exist for ' +
+      'success-fee intermediaries, or does our provisional answer still stand?',
+  },
+  'S12A-ACC-4': {
+    purpose: "a genuine unresolved gap and the person's decision that follows it",
+    statement:
+      'establish the written terms of use and redistribution rights for county assessment data feeds',
+    question:
+      'What are the written terms of use, licence and redistribution restrictions that apply ' +
+      "to Wayne County's assessment CSV downloads and to Oakland's and Kent's parcel REST " +
+      'APIs? We need to know what we are contractually allowed to store and pass on to our ' +
+      'own users before we build anything on those feeds.',
+  },
+  /*
+   * The two re-runs. What each is a re-run *of* is recorded in
+   * `ACCEPTANCE_SUITE`, beside the scenario it replaces.
+   */
+  'S12A-ACC-5': {
+    purpose: 'a bounded cheap look, against the repaired archive check',
+    statement:
+      'establish whether the five-state success-fee brokerage licensure summary is still current',
+    /*
+     * The other subject the archive holds an unchecked answer on:
+     * `exc_29c46282531b46358cdb`, an `UNSUPPORTED_ASSERTION` headed *"LICENSURE
+     * OF SUCCESS-FEE BUSINESS BROKERAGE — FIVE STATES (law in force as at
+     * 2026)"*, with no source that can be checked. Whether that summary still
+     * holds outside California decides where Deal Dispatch may operate at all,
+     * and "is it still in force" is a presence question.
+     */
+    question:
+      'We have a five-state summary of success-fee business brokerage licensure written up as ' +
+      'law in force in 2026, and as far as I can tell nobody ever checked it against anything. ' +
+      'Outside California, is that summary still current, or has one of those states changed ' +
+      'its position since we wrote it down?',
+  },
+  /*
+   * The third attempt at the bounded look, and what the first two established.
+   *
+   * `S12A-ACC-3` asked a probe-shaped question and launched a mission, because
+   * `askArchive` read the worker's summary rather than the person's question.
+   * That was repaired. `S12A-ACC-5` asked the repaired check a question about
+   * the other unchecked subject and was parked before the check was reached at
+   * all: it said *"outside California"*, `jurisdictionFor` matched the state
+   * name, and the standing authorization covers Michigan. The compiler cannot
+   * tell "about California" from "outside California" and refusing is the safe
+   * direction, so nothing about that is repaired either.
+   *
+   * Reading the archive settled which subjects are even available. Sixteen
+   * claims carry no checkable source and they fall into exactly two families:
+   * success-fee licensure, and county assessment data. The suite already has a
+   * live idea on the second. So this is the first family, narrowed to the one
+   * jurisdiction the envelope authorizes — which removes the refusal that
+   * parked `S12A-ACC-5` without changing what makes it a look rather than a
+   * packet: `exc_29c46282531b46358cdb` is an `UNSUPPORTED_ASSERTION` headed
+   * "LICENSURE OF SUCCESS-FEE BUSINESS BROKERAGE — FIVE STATES (law in force
+   * as at 2026)" with nothing behind it, and whether its Michigan line still
+   * holds decides whether Deal Dispatch may charge a success fee where it
+   * actually operates.
+   *
+   * It may be folded into `S12A-ACC-5` by the semantic dedupe, which would be
+   * that mechanism working rather than a defect — and would be reported as
+   * what happened rather than replaced quietly.
+   */
+  'S12A-ACC-7': {
+    purpose: 'a bounded cheap look, on the one jurisdiction the authorization covers',
+    statement:
+      'establish whether the Michigan line of the five-state success-fee brokerage licensure ' +
+      'summary is still current',
+    question:
+      'Our five-state summary of success-fee business brokerage licensure was written up as law ' +
+      'in force in 2026 and as far as I can tell nobody ever checked it against anything. For ' +
+      'Michigan specifically, does that summary still hold — is a licence required for ' +
+      'success-fee business brokerage here?',
+  },
+  /*
+   * The same subject again, asked as a request for work rather than as a
+   * question — and what `S12A-ACC-7` established before it.
+   *
+   * ACC-7 was well-posed: `scenario-check` read the archive at
+   * `PRESENT_BUT_UNVERIFIED` for both the person's question and the predicted
+   * statement, which is the shape a bounded look is for. It stopped one step
+   * earlier than any of the previous attempts. The worker answered it —
+   * `{"accepted":"ANSWER_ONLY","effect":"UNSUPPORTED"}` — so no idea was
+   * captured, `shouldCapture` never ran, and there was nothing for the
+   * judgment to judge.
+   *
+   * Nothing about that is a defect and nothing about it is repaired. Which of
+   * the closed set of actions a message calls for is the worker's reading of
+   * the message, Brain validates that reading rather than overriding it, and a
+   * person whose question was answered can simply ask for the work. §8 cuts
+   * both ways: model prose cannot move state, and Brain cannot manufacture a
+   * proposal the model did not make.
+   *
+   * So this asks for the work in the imperative. It is the same subject and
+   * the same archive claim; what changes is that it is a request rather than a
+   * question, which is the one thing under a person's control.
+   */
+  'S12A-ACC-8': {
+    purpose: 'a bounded cheap look, asked as work to be done rather than as a question to answer',
+    statement:
+      'check the Michigan line of the five-state success-fee brokerage licensure summary ' +
+      'against the current rule',
+    question:
+      'Please check something for me rather than answering it from what we already wrote down. ' +
+      'Our five-state licensure summary says success-fee business brokerage needs a licence, ' +
+      'and nothing behind it cites a source anyone can look at. Go and see whether that holds ' +
+      'for Michigan under the rule in force now, and record what you find.',
+  },
+  /*
+   * The same request again, against the repaired capture gate.
+   *
+   * `S12A-ACC-8` got one step further than `S12A-ACC-7`: the worker read it as
+   * a request for work and proposed `CAPTURE_CANDIDATE`. **Brain's own gate
+   * declined it** — `{"captureDeclined":true,"gateReason":"nothing here
+   * proposes work"}` — because `shouldCapture`'s marker list held every hedged
+   * form of asking ("should we", "worth checking", "look into") and not the
+   * plain one, and the message has no question mark.
+   *
+   * That is a defect and it is repaired at the gate, narrowly: the verb has to
+   * be asked of somebody or followed by the thing to establish, so a past-tense
+   * report and a bare "please look at this" still decline. Rewording the
+   * question to hit an existing keyword was the alternative and would have been
+   * gaming the list rather than fixing it.
+   *
+   * The text is unchanged from ACC-8 on purpose. What changed is Brain.
+   */
+  'S12A-ACC-9': {
+    purpose: 'a bounded cheap look, asked as work, against the repaired capture gate',
+    statement:
+      'check the Michigan line of the five-state success-fee brokerage licensure summary ' +
+      'against the current rule',
+    question:
+      'Please check something for me rather than answering it from what we already wrote down. ' +
+      'Our five-state licensure summary says success-fee business brokerage needs a licence, ' +
+      'and nothing behind it cites a source anyone can look at. Go and see whether that holds ' +
+      'for Michigan under the rule in force now, and record what you find.',
+  },
+  /*
+   * The same request a third time, against the repaired archive check.
+   *
+   * `S12A-ACC-9` got one step further again: the capture gate recognised it and
+   * an idea was created. Then `judgeCandidate` read the archive at
+   * `ARCHIVE_HOLDS_NOTHING_TO_CHECK` and queued a full packet — for a question
+   * `scenario-check` had predicted `PRESENT_BUT_UNVERIFIED` against the short
+   * form of the very same sentence.
+   *
+   * The cause is length, and it is structural rather than a wording accident:
+   * `relevance` is `hits / wanted.size`, so a requirement's score falls as its
+   * vocabulary grows. The worker wrote a 454-character statement over a
+   * ~380-character message, and neither long form can reach the floor against a
+   * claim sentence however exactly it is about the same subject. Brain was
+   * therefore reading the question in two forms and never in the short one it
+   * had written itself.
+   *
+   * Repaired at the boundary rather than in the scorer: `askArchive` now asks
+   * about the candidate's **title** as well. Nothing about `relevance` moves,
+   * so no other caller changes, and a probe still requires a real unverified or
+   * stale claim row.
+   *
+   * The text is unchanged from ACC-8 and ACC-9 on purpose. What changed is
+   * Brain, for the third time, at a third boundary.
+   */
+  'S12A-ACC-10': {
+    purpose: 'a bounded cheap look, against the archive check repaired for length',
+    statement:
+      'check the Michigan line of the five-state success-fee brokerage licensure summary ' +
+      'against the current rule',
+    question:
+      'Please check something for me rather than answering it from what we already wrote down. ' +
+      'Our five-state licensure summary says success-fee business brokerage needs a licence, ' +
+      'and nothing behind it cites a source anyone can look at. Go and see whether that holds ' +
+      'for Michigan under the rule in force now, and record what you find.',
+  },
+  /*
+   * The same *kind* of request, about a different unchecked claim — because
+   * asking the identical question a third time is the one thing Brain will
+   * correctly refuse.
+   *
+   * `S12A-ACC-10` reached further than any of them: the capture gate
+   * recognised the request and an idea was created. Then `capture`'s semantic
+   * dedupe merged it into `S12A-ACC-9`'s canonical idea —
+   * `SEMANTIC rcn_91276e… -> rcn_9646b6…` — which is §24's rule working
+   * exactly as written. The text was unchanged on purpose three times over,
+   * and the third time the project had already recorded that this question is
+   * on the list. A merged candidate is never judged, so the repaired archive
+   * check was never reached.
+   *
+   * Nothing about that is a defect and nothing about it is repaired. What it
+   * establishes is that a scenario re-run has to differ where the dedupe looks
+   * — in the question — while staying the same where the *test* looks: an
+   * `UNVERIFIED` archive claim the project holds with nothing behind it, whose
+   * subject is a presence question inside the standing envelope's
+   * jurisdiction.
+   *
+   * `exc_ea5e2781bb60440183c8` is that claim, from `archive-shape`:
+   * *"While the MGF does store a statewide parcel layer, this data is for
+   * internal use only and is not available in the Open Data Portal"* —
+   * `NEGATIVE_EXISTENCE`, `UNVERIFIED`, citing no page anyone can open. Whether
+   * Michigan publishes such a layer decides whether Deal Dispatch can build on
+   * one, and "is it published" is exactly and only a presence question.
+   */
+  'S12A-ACC-11': {
+    purpose: 'a bounded cheap look, on a claim no other idea already covers',
+    statement:
+      'check whether Michigan publishes a statewide parcel layer on its own open data portal',
+    question:
+      'We wrote down at some point that Michigan keeps its statewide parcel layer for internal ' +
+      'use only and that nothing equivalent is published on the state open data portal, and ' +
+      'nothing behind that note points at a page anyone can open. Please go and check whether ' +
+      'the state publishes such a layer today, and record what you find.',
+  },
+  'S12A-ACC-6': {
+    purpose: "a question the public record does not answer, and the person's decision that follows",
+    statement:
+      'establish the realised net take-rate of comparable success-fee marketplaces after refunds and clawbacks',
+    /*
+     * Deliberately about a different part of the business from anything the
+     * archive holds, so nothing here depends on wording: the answer is private
+     * financial data. Comparable marketplaces do not publish realised net
+     * take-rates after refunds and clawbacks, and the honest outcome is a named
+     * unresolved gap rather than an invented figure. **Nothing manufactures the
+     * gap** — the question is one Deal Dispatch's pricing actually turns on,
+     * and the research is free to settle it if a source exists.
+     */
+    question:
+      'Before we set our own pricing I want to know what comparable success-fee marketplaces ' +
+      'actually realise as a net take-rate once refunds, clawbacks and unpaid invoices are ' +
+      'taken out — not their headline rate. What do the comparable operators actually net, and ' +
+      'where is that published?',
+  },
+} as const;
 
 async function scope(): Promise<string> {
   const existing = await getProjectBySlug(SLUG);
@@ -415,6 +714,349 @@ async function main(): Promise<void> {
     return;
   }
 
+  /*
+   * Start one declared acceptance scenario, through the paths a person uses.
+   *
+   * ---------------------------------------------------------------------------
+   * Why this exists, and what it deliberately is not
+   * ---------------------------------------------------------------------------
+   *
+   * Three of Step 12A's conditions cannot be exhibited by a research packet
+   * that finishes cleanly, because each is about a branch success does not
+   * take: a cheap look taken *instead* of a packet, a question the evidence
+   * could not settle, and the person's decision that follows it. Requiring one
+   * journey to show all three would be requiring it to end badly.
+   *
+   * So each is its own declared scenario, and this starts one. It creates the
+   * conversation and says one thing in it — `beginTurn`, the same service the
+   * HTTP route calls, as the project's own owner. **Everything after that is
+   * the product**: the fleet answers the turn, `capture` decides whether there
+   * is an idea in it, `judgeCandidate` decides what to do with it, and the
+   * probe, the mission, the park and the follow-on all happen or do not happen
+   * on their own. Nothing here writes a candidate, a probe, a mission, a
+   * judgment or a verdict.
+   *
+   * The questions are constants in this file rather than arguments, so what was
+   * asked is fixed in code somebody reviews before it is asked — an acceptance
+   * question chosen at the command line is one that could be chosen after
+   * seeing what a previous one produced.
+   *
+   * It refuses to create a second conversation carrying a scenario's title. The
+   * reporter resolves that title to **exactly one** conversation and refuses an
+   * ambiguous anchor, so a second one would not widen the evidence — it would
+   * silently destroy the scenario. Refusing here says so instead.
+   */
+  /*
+   * What the archive already says about each declared scenario question.
+   *
+   * Read-only, and it creates nothing: no conversation, no candidate, no
+   * judgment, no probe. It runs the same `coverBeforeWork` the judgment runs
+   * and prints the verdict, so a scenario can be confirmed **well-posed**
+   * before it is asked rather than discovered to be ill-posed afterwards.
+   *
+   * That distinction matters and is worth stating. A question the archive
+   * already settles would be rejected as answered; one it holds an *unchecked*
+   * answer to is exactly the case a bounded look exists for. Knowing which
+   * before asking is not choosing the evidence after seeing it — the questions
+   * are fixed in this file either way, and nothing here changes a row.
+   */
+  /*
+   * The shape of the project's own archive, as the coverage classifier sees it.
+   *
+   * Read-only and creates nothing. It exists because a scenario has to be
+   * *well-posed* before it is asked, and whether a bounded look is the right
+   * instrument for a question is a fact about the archive rather than about the
+   * question: `PRESENT_BUT_UNVERIFIED` means the project already wrote an
+   * answer down and nothing supports it, which is precisely when a presence
+   * check beats a research packet.
+   *
+   * It prints each claim's *shape* — which document, what type, whether it
+   * cites a source that can be checked, and its verification state — with a
+   * short excerpt so the subject is identifiable. `packet-report` already shows
+   * a project's own gap text to its operator; this is the same content at the
+   * same boundary, and there is no way to tell whether a question is well-posed
+   * without seeing what the archive is about.
+   */
+  if (command === 'archive-shape') {
+    const project = await getProjectBySlug(DEAL_DISPATCH_SLUG);
+    if (!project) {
+      console.log('STEP10: FAIL no Deal Dispatch project');
+      process.exitCode = 1;
+      return;
+    }
+    const claims = await projectClaims(project.id);
+    const unsourced = claims.filter(
+      (claim) =>
+        claim.sourceUrl === null ||
+        claim.claimType === 'UNSUPPORTED_ASSERTION' ||
+        claim.verificationState === 'UNVERIFIABLE' ||
+        claim.verificationState === 'REJECTED',
+    );
+    console.log(`  claims total       ${claims.length}`);
+    console.log(`  unchecked          ${unsourced.length}`);
+    console.log('');
+    for (const claim of unsourced) {
+      console.log(
+        `  ${claim.id}  doc=${claim.documentId} type=${claim.claimType} ` +
+          `state=${claim.verificationState} superseded=${claim.superseded ? 'yes' : 'no'}`,
+      );
+      console.log(`      ${claim.claim.replace(/\s+/g, ' ').slice(0, 150)}`);
+    }
+    console.log('STEP10: OK archive-shape read-only');
+    return;
+  }
+
+  /*
+   * Why one idea ended where it did — the judgment, not the words around it.
+   *
+   * `turn-trace` prints a candidate's state and priority, and neither of those
+   * says *which branch decided it*. Four different things produce
+   * `priority = PARKED` — the archive already answered it, the compiler could
+   * not specify it, a standing authority is missing, or the research produced
+   * no report — and they have four different remedies. Guessing between them
+   * from a state name is exactly the "diagnose from a label" habit this harness
+   * exists to replace.
+   *
+   * **It prints no title, no statement and no mission specification.** The
+   * judgment JSON holds a compiled specification built from somebody's own
+   * message, so the whole object is never dumped: what is printed is the
+   * decision — the branch, the stored reason, the boolean and id inputs, and
+   * the *lengths* of anything textual. Ids, states, reasons Brain itself wrote,
+   * and times, which is §24's boundary and the same one `turn-trace` keeps.
+   */
+  if (command === 'candidate') {
+    const candidateId = arg(0);
+    if (!candidateId) {
+      console.log('STEP10: FAIL candidate needs a candidate id');
+      process.exitCode = 1;
+      return;
+    }
+    const candidate = await getCandidate(candidateId);
+    if (!candidate) {
+      console.log(`STEP10: OK candidate ${candidateId} found=false`);
+      return;
+    }
+    console.log(`CANDIDATE ${candidate.id}`);
+    console.log(`  conversation   ${candidate.conversationId ?? '—'}`);
+    console.log(`  project        ${candidate.projectId ?? '—'}`);
+    console.log(`  state          ${candidate.state}`);
+    console.log(`  priority       ${candidate.priority ?? '—'}`);
+    console.log(`  canonical      ${candidate.canonicalCandidateId ?? '—'}`);
+    console.log(`  title/stmt     ${candidate.title.length}/${candidate.statement.length} chars`);
+    console.log(`  reason         ${candidate.reason ?? '—'}`);
+    console.log(`  supporting     ${candidate.supporting.join(' ') || '—'}`);
+    console.log(`  contradicting  ${candidate.contradicting.join(' ') || '—'}`);
+    console.log(
+      `  override       ${candidate.overrideUserId ? `${candidate.overrideAt} by a person` : '—'}` +
+        (candidate.overrideReason ? `  (${candidate.overrideReason.length} chars)` : ''),
+    );
+    console.log(`  follow-on of   ${candidate.followOnOfMissionId ?? '—'}`);
+
+    /*
+     * The judgment, field by field, with anything textual reduced to a length.
+     * A whitelist rather than a redaction list: a field added later is printed
+     * as a length until somebody decides it is safe, which fails the right way.
+     */
+    const judgment = (candidate.judgment ?? {}) as Record<string, unknown>;
+    console.log('  judgment');
+    for (const key of Object.keys(judgment).sort()) {
+      const value = judgment[key];
+      if (value === null || value === undefined) {
+        console.log(`    ${key.padEnd(26)} —`);
+      } else if (typeof value === 'boolean' || typeof value === 'number') {
+        console.log(`    ${key.padEnd(26)} ${value}`);
+      } else if (typeof value === 'string') {
+        const safe = /^[A-Z0-9_]+$/.test(value) || value.length <= 200;
+        console.log(`    ${key.padEnd(26)} ${safe ? value : `${value.length} chars`}`);
+      } else if (Array.isArray(value)) {
+        const ids = value.every((entry) => typeof entry === 'string' && /^[a-z]{2,4}_[0-9a-f]{12,}$/.test(entry));
+        console.log(`    ${key.padEnd(26)} ${ids ? value.join(' ') : `${value.length} entries`}`);
+      } else {
+        console.log(`    ${key.padEnd(26)} object(${Object.keys(value as object).length} keys)`);
+      }
+    }
+
+    const probes = await getDb().all<{
+      id: string;
+      state: string;
+      outcome: string | null;
+      max_lookups: number;
+      lookups_used: number;
+      deadline_at: string;
+      created_at: string;
+      completed_at: string | null;
+      reservation_id: string | null;
+      sources: number;
+    }>(
+      `SELECT id, state, outcome, max_lookups, lookups_used, deadline_at,
+              created_at, completed_at, reservation_id,
+              LENGTH(allowed_sources) AS sources
+         FROM russell_probes WHERE candidate_id = ? ORDER BY created_at, rowid`,
+      [candidate.id],
+    );
+    console.log(`  probes ${probes.length}`);
+    for (const probe of probes) {
+      console.log(
+        `    ${probe.created_at}  ${probe.state.padEnd(10)} outcome ${probe.outcome ?? '—'} ` +
+          `lookups ${probe.lookups_used}/${probe.max_lookups} reservation ${probe.reservation_id ?? '—'}`,
+      );
+      console.log(`        deadline ${probe.deadline_at}  completed ${probe.completed_at ?? '—'}  ${probe.id}`);
+    }
+
+    const missions = await getDb().all<{
+      id: string;
+      state: string;
+      orchestration_id: string | null;
+      next_mission_id: string | null;
+      created_at: string;
+    }>(
+      `SELECT id, state, orchestration_id, next_mission_id, created_at
+         FROM russell_missions WHERE candidate_id = ? ORDER BY created_at, rowid`,
+      [candidate.id],
+    );
+    console.log(`  missions ${missions.length}`);
+    for (const mission of missions) {
+      console.log(
+        `    ${mission.created_at}  ${mission.state.padEnd(12)} orchestration ${mission.orchestration_id ?? '—'} ` +
+          `follow-on ${mission.next_mission_id ?? '—'}  ${mission.id}`,
+      );
+    }
+    console.log(`STEP10: OK candidate ${candidate.id} state=${candidate.state} priority=${candidate.priority ?? '—'}`);
+    return;
+  }
+
+  if (command === 'scenario-check') {
+    const project = await getProjectBySlug(DEAL_DISPATCH_SLUG);
+    if (!project) {
+      console.log('STEP10: FAIL no Deal Dispatch project');
+      process.exitCode = 1;
+      return;
+    }
+    const layers = await listLayers(project.id);
+    const layer = layers[0];
+    if (!layer) {
+      console.log('STEP10: FAIL project has no layers');
+      process.exitCode = 1;
+      return;
+    }
+    for (const [key, declared] of Object.entries(ACCEPTANCE_SCENARIOS)) {
+      const coverage = await coverBeforeWork({
+        projectId: project.id,
+        layerId: layer.id,
+        requirements: [{ key: `scenario:${key}`, statement: declared.question }],
+      });
+      const verdict = coverage.verdicts[0];
+      console.log(`  ${key}`);
+      console.log(`    claims considered  ${coverage.claimsConsidered}`);
+      console.log(`    status             ${verdict?.status ?? '—'}`);
+      console.log(`    fully answered     ${coverage.fullyAnswered}`);
+      console.log(`    needs research     ${verdict?.needsResearch ?? '—'}`);
+      console.log(`    would explore      ${verdict?.status === 'PRESENT_BUT_UNVERIFIED' || verdict?.status === 'STALE'}`);
+
+      /*
+       * And against the *statement*, which is what actually gets matched.
+       *
+       * `askArchive` builds its one requirement from `candidate.statement` —
+       * the short line the capture pass writes — not from the person's whole
+       * message. Relevance is the fraction of the requirement's terms found in
+       * a claim, so a long message scores far lower than the statement it
+       * becomes: judging a scenario by the message alone would predict the
+       * wrong verdict, which is the mistake this line exists to stop.
+       */
+      const statement = declared.statement;
+      const asStatement = await coverBeforeWork({
+        projectId: project.id,
+        layerId: layer.id,
+        requirements: [{ key: `scenario:${key}:statement`, statement }],
+      });
+      const short = asStatement.verdicts[0];
+      console.log(`    as statement       ${short?.status ?? '—'} (would explore ${short?.status === 'PRESENT_BUT_UNVERIFIED' || short?.status === 'STALE'})`);
+    }
+    console.log('STEP10: OK scenario-check read-only');
+    return;
+  }
+
+  if (command === 'scenario') {
+    const key = String(arg(0) ?? '');
+    const declared = ACCEPTANCE_SCENARIOS[key as keyof typeof ACCEPTANCE_SCENARIOS];
+    if (!declared) {
+      console.log(
+        `STEP10: FAIL unknown scenario ${key || '(none)'} — declared: ` +
+          Object.keys(ACCEPTANCE_SCENARIOS).join(', '),
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    const project = await getProjectBySlug(DEAL_DISPATCH_SLUG);
+    if (!project) {
+      console.log('STEP10: FAIL no Deal Dispatch project to run a scenario against');
+      process.exitCode = 1;
+      return;
+    }
+
+    const existing = await getDb().all<{ id: string }>(
+      `SELECT id FROM russell_conversations WHERE title = ?`,
+      [key],
+    );
+    if (existing.length > 0) {
+      // Already started. Reported rather than repeated: the anchor is unique by
+      // declaration, and a second one is not a retry, it is an ambiguity.
+      console.log(`STEP10: OK scenario=${key} already started conversation=${existing[0]!.id}`);
+      return;
+    }
+
+    /*
+     * The owner is read from the project's own live standing authority, never
+     * chosen. That row names the person who decided what Russell may do here,
+     * which is the only person whose scope these effects may land in.
+     */
+    const grant = await getDb().get<{ owner_user_id: string }>(
+      `SELECT owner_user_id FROM russell_goals
+        WHERE project_id = ? AND state = 'ACTIVE'
+        ORDER BY created_at DESC LIMIT 1`,
+      [project.id],
+    );
+    if (!grant?.owner_user_id) {
+      console.log('STEP10: FAIL no live standing authority, so there is no owner to ask as');
+      process.exitCode = 1;
+      return;
+    }
+    const principal = await ownerPrincipal(grant.owner_user_id);
+    if (!principal) {
+      console.log('STEP10: FAIL the standing authority names a user who cannot be resolved');
+      process.exitCode = 1;
+      return;
+    }
+
+    const conversation = await createConversation({
+      ownerUserId: principal.id,
+      // The scenario id *is* the title, which is what makes the anchor a
+      // declaration in code rather than a search for the best-fitting thread.
+      title: key,
+      projectId: project.id,
+      visibility: 'PRIVATE',
+    });
+
+    const started = await beginTurn({
+      principal,
+      conversationId: conversation.id,
+      content: declared.question,
+    });
+    if (!started.ok) {
+      console.log(`STEP10: FAIL scenario=${key} turn refused: ${started.reason}`);
+      process.exitCode = 1;
+      return;
+    }
+
+    console.log(`STEP10: OK scenario=${key} conversation=${conversation.id}`);
+    console.log(`  purpose     ${declared.purpose}`);
+    console.log(`  owner       ${principal.id}`);
+    console.log(`  message     ${started.userMessage?.id ?? '—'} (${declared.question.length} chars)`);
+    console.log(`  dispatched  ${started.binId !== null}`);
+    return;
+  }
+
   if (command === 'tick') {
     const burst = Math.max(1, Math.min(60, Number(arg(0) ?? '5')));
     const result = await dispatchTick({ burst });
@@ -714,6 +1356,110 @@ async function main(): Promise<void> {
     console.log(`  orchestration  ${orchestration.id}  ${orchestration.status}`);
     console.log(`  bin            ${bin.id}  ${bin.state}`);
     console.log(`STEP10: OK audit-packet orchestration=${orchestration.id} bin=${bin.id}`);
+    return;
+  }
+
+  if (command === 'russell-state') {
+    /*
+     * Every live Russell row for the connected project, in one read.
+     *
+     * Written because the questions that matter during a closure are all about
+     * how the rows relate — which idea became which mission, which mission
+     * holds which packet, what is waiting on a person, and what is holding the
+     * concurrency the next launch needs. Answering those one command at a time
+     * means a round trip per row and a picture assembled from readings taken
+     * minutes apart, which is how a stale premise gets acted on.
+     *
+     * Read-only and content-free: ids, enums, counts and timestamps. No
+     * conversation text, no statement, no card wording — §24's boundary, at the
+     * surface that most wants to cross it.
+     */
+    const project = await getProjectBySlug(DEAL_DISPATCH_SLUG);
+    if (!project) return refuseStep10('no Deal Dispatch project');
+
+    console.log('RUSSELL STATE');
+
+    const goals = (await listGoals(project.id)).filter((goal) => goal.state === 'ACTIVE');
+    for (const goal of goals) {
+      console.log(`  grant       ${goal.id}  policy ${goal.workPolicy}  maxConcurrent ${goal.maxConcurrent}`);
+      const held = (await listReservations(goal.id)).filter((entry) => entry.state === 'HELD');
+      console.log(`              held reservations ${held.length}`);
+      for (const entry of held) {
+        console.log(`                ${entry.id}  ${entry.kind}  amount ${entry.amount}  expires ${entry.expiresAt}`);
+      }
+    }
+
+    console.log('  MISSIONS');
+    // Every mission, including the finished ones: "did a follow-on happen" is
+    // exactly what A13 reads, and it reads it off a DONE row.
+    for (const mission of await listMissions({ projectId: project.id, limit: 60 })) {
+      const packet = mission.orchestrationId
+        ? await getOrchestration(mission.orchestrationId)
+        : null;
+      console.log(
+        `    ${mission.id}  ${mission.state}` +
+          `  packet ${mission.orchestrationId ?? '—'} ${packet?.status ?? '—'}` +
+          `  verdict ${packet?.verdict ?? '—'}` +
+          `  gapPolicy ${packet?.unresolvedGapPolicy ?? '—'}` +
+          `  next ${mission.nextMissionId ?? '—'}` +
+          `  writeback ${mission.writebackAt ? 'yes' : 'no'}`,
+      );
+    }
+
+    console.log('  OPEN DECISIONS');
+    const open = await listOpenRequests(project.id);
+    if (open.length === 0) console.log('    (none)');
+    for (const request of open) {
+      console.log(
+        `    ${request.id}  mission ${request.missionId ?? '—'}  urgency ${request.urgency}` +
+          `  choices [${request.choices.map((choice) => choice.key).join(' ')}]`,
+      );
+    }
+
+    console.log('  IDEAS');
+    for (const candidate of await listCandidates({ projectId: project.id, limit: 60 })) {
+      console.log(
+        `    ${candidate.id}  ${candidate.state}  ${candidate.priority ?? '—'}` +
+          `  canonical ${candidate.canonicalCandidateId ?? '—'}` +
+          `  followOnOf ${candidate.followOnOfMissionId ?? '—'}`,
+      );
+    }
+
+    console.log(`STEP10: OK russell-state project=${project.id}`);
+    return;
+  }
+
+  if (command === 'lineage') {
+    /*
+     * What the routing rows can and cannot establish about an audit's account.
+     *
+     * `recoverExecutionLineage` is already on the durable tick, so this runs
+     * nothing the Brain is not running anyway — it is here because the tick's
+     * report goes nowhere a person can read, and **the refusals are the part
+     * that matters**. "The attribution cannot be proven" has to be a recorded
+     * fact with the rows' own reason attached, not something inferred from a
+     * column still being null: those two look identical and lead to different
+     * actions. Recovering it is one; running another audit round is the other.
+     *
+     * Idempotent, and names no credential value — a session reference is an id
+     * of a row, which is what every other read here prints.
+     */
+    const report = await recoverExecutionLineage(50);
+    console.log('LINEAGE RECOVERY');
+    for (const session of report.sessions) {
+      console.log(`  observed    ${session.sessionRef}  routine=${session.routineId}  account=${session.accountId}`);
+    }
+    for (const pass of report.passes) {
+      console.log(`  attributed  pass ${pass.passId}  account=${pass.accountId}`);
+    }
+    for (const entry of report.unresolved) {
+      console.log(`  UNRESOLVED  ${entry.sessionRef}`);
+      console.log(`              ${entry.reason}`);
+    }
+    console.log(
+      `STEP10: OK lineage observed=${report.sessions.length} attributed=${report.passes.length} ` +
+        `unresolved=${report.unresolved.length}`,
+    );
     return;
   }
 

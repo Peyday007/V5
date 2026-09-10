@@ -90,6 +90,11 @@ import {
   type HandoffOutcome,
 } from '../audit/handoff.ts';
 import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
+import {
+  reconcileArguedAuditRoles,
+  reconcileTerminalPackets,
+} from '../research/packetRunner.ts';
+import { recoverExecutionLineage } from '../dispatch/lineageRecovery.ts';
 import { recomputeProject } from '../stateEngine.ts';
 import {
   alignMissionLinks,
@@ -102,8 +107,15 @@ import { applyTurn } from './turn.ts';
 import { askArchive, judgeCandidate } from './planning.ts';
 import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
-import { parkStoppedMissions, reopenAnswered, resumeAnsweredRequest } from './needsHuman.ts';
+import {
+  concludeAbandonedParks,
+  parkStoppedMissions,
+  reopenAnswered,
+  resumeAnsweredRequest,
+} from './needsHuman.ts';
 import { parseJson } from '../../repos/util.ts';
+import { getAudit } from '../../repos/audits.ts';
+import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { RussellCandidate, RussellMission, RussellVisibility } from '../../domain/types.ts';
 
 /** How often the loop wakes when nothing else has woken it. */
@@ -207,6 +219,27 @@ export interface TickReport {
    */
   linksUnreconciled: { missionId: string; refusal: string }[];
   /**
+   * Audit passes whose executing account was recovered from the routing rows.
+   *
+   * `worker_sessions` only observes forward, so every activation that arrived
+   * before it existed left `research_passes.executor_account_id` null — on
+   * genuinely independent audits as much as anything else. Recovered here only
+   * where the dispatch Brain sent establishes it, never from the static
+   * binding, and never over a value already recorded.
+   */
+  lineageRecovered: { passId: string; accountId: string }[];
+  /** Sessions the routing rows could not settle, with the word for why. */
+  lineageUnresolved: { sessionRef: string; reason: string }[];
+  /**
+   * Terminal packets that still held claimable work, and how much was retired.
+   *
+   * A finished packet with a `QUEUED` or `LEASED` item is work a worker can
+   * still be sent for, on a question that is already settled. Nothing advanced
+   * a packet that had already finished, so nothing ever cleared it.
+   */
+  retiredPacketWork: { orchestrationId: string; retired: number }[];
+  abandonedParks: { orchestrationId: string; missionId: string; missionState: string }[];
+  /**
    * Follow-on ideas created from a mission that finished and filed.
    *
    * An idea, not a mission. It is judged against the archive on a later step
@@ -263,6 +296,10 @@ const EMPTY: TickReport = {
   escalatedBins: [],
   linksReconciled: [],
   linksUnreconciled: [],
+  lineageRecovered: [],
+  lineageUnresolved: [],
+  retiredPacketWork: [],
+  abandonedParks: [],
   followOns: [],
   linkedNext: [],
   needsHuman: [],
@@ -305,7 +342,11 @@ export async function tick(owner: string): Promise<TickReport> {
     binReopenRefused: [],
     escalatedBins: [],
     linksReconciled: [],
+    lineageRecovered: [],
+    lineageUnresolved: [],
     linksUnreconciled: [],
+    retiredPacketWork: [],
+    abandonedParks: [],
     followOns: [],
     linkedNext: [],
     needsHuman: [],
@@ -431,6 +472,82 @@ export async function tick(owner: string): Promise<TickReport> {
         report.linksUnreconciled.push({ missionId, refusal: outcome.refusal ?? 'refused' });
       }
     }
+
+    /*
+     * 1a-iii-b. Finish a park whose mission has already gone.
+     *
+     * Before the terminal sweep, and that ordering is the point: the sweep
+     * retires work on a packet that is *terminal*, and a packet stranded at
+     * `NEEDS_HUMAN` is exactly the one that never becomes terminal. Concluding
+     * it here means the sweep two steps down finds it in the same pass and
+     * takes its outstanding work off the queue.
+     *
+     * A mission that goes terminal *later* in this same tick — `parkStopped`
+     * runs further down — is picked up on the next one, ten seconds later.
+     * That is the ordinary cost of deriving this from rows instead of catching
+     * the moment, and it is the trade this codebase has taken three times now:
+     * a sweep that reads the world is late by one pass and reaches every row,
+     * where a hook at the moment is immediate and reaches only the entrance it
+     * was written on.
+     */
+    for (const entry of await concludeAbandonedParks(cycle.maxEventsPerCycle)) {
+      report.abandonedParks.push(entry);
+    }
+
+    /*
+     * 1a-iv. Take live work off a packet that has already finished.
+     *
+     * `advancePacket` retires it, and only something *advancing* the packet
+     * calls that — which nothing does once a packet is terminal. So a packet
+     * that ended while items were outstanding kept them claimable for ever,
+     * and the production one has: `COMPLETE`, filed and audited, with two
+     * `RESEARCH_AUDIT` items still `LEASED` against it. An expired lease is
+     * claimable work, so that is a worker Brain can still send for a question
+     * it has already answered.
+     *
+     * Fleet-wide rather than Russell-scoped, because a stranded lease is the
+     * same defect wherever the packet came from, and the tick is Brain's own
+     * durable loop rather than Russell's — it already reconciles bins here for
+     * the same reason.
+     */
+    for (const entry of await reconcileTerminalPackets(cycle.maxEventsPerCycle)) {
+      report.retiredPacketWork.push(entry);
+    }
+
+    /*
+     * 1a-v. Recover the surface a past audit session came from.
+     *
+     * `A11_INDEPENDENT_AUDIT` reads `research_passes.executor_account_id`, and
+     * every row this Brain had ever written was null: the account was resolved
+     * from the static worker -> Routine binding, and production binds two
+     * Routines under two accounts to one worker identity, which is ambiguous
+     * and fails closed. The observation that answers it — which fire produced
+     * this session — is written at arrival now, and only forwards.
+     *
+     * So the history is recovered from the rows that already prove it, and only
+     * from those: the dispatch Brain sent, at a generation the lease has
+     * superseded. Nothing is inferred from how the fleet is wired, a session
+     * fired by more than one Routine is left unresolved, and no recovered value
+     * ever replaces a recorded one. Beside the other reconciliations for the
+     * same reason they are here.
+     */
+    /*
+     * 1a-iv-b. Retire an audit role that has already been argued.
+     *
+     * Beside the terminal sweep and for the identical reason:
+     * `finishRecordedAuditRoles` lives inside `advancePacket`, and
+     * `advancePacket` runs when something completes — which is exactly what
+     * stops happening once a session submits its pass and leaves. Production
+     * argued one role three times while the judge waited, and the fix could not
+     * reach it because nothing was advancing the packet.
+     */
+    for (const entry of await reconcileArguedAuditRoles(cycle.maxEventsPerCycle)) {
+      report.retiredPacketWork.push(entry);
+    }
+
+    const lineage = await recoverExecutionLineage(cycle.maxEventsPerCycle);
+    report.lineageRecovered.push(...lineage.passes);
+    report.lineageUnresolved.push(...lineage.unresolved);
 
     // 1b. Apply the answers workers have sent back.
     //
@@ -943,6 +1060,7 @@ async function followOnsToCreate(limit: number): Promise<
     conversation_id: string | null;
     judgment: string;
     orchestration_id: string | null;
+    audit_id: string | null;
     title: string;
     is_follow_on: number;
   }>(
@@ -957,7 +1075,7 @@ async function followOnsToCreate(limit: number): Promise<
      * what a model happened to write.
      */
     `SELECT m.id, m.project_id, m.visibility, m.conversation_id, c.judgment,
-            m.orchestration_id, m.objective AS title,
+            m.orchestration_id, m.audit_id, m.objective AS title,
             CASE WHEN c.follow_on_of_mission_id IS NULL THEN 0 ELSE 1 END AS is_follow_on
        FROM russell_missions m
        JOIN russell_candidates c ON c.id = m.candidate_id
@@ -1001,7 +1119,7 @@ async function followOnsToCreate(limit: number): Promise<
     const followOn =
       declared && typeof declared === 'object'
         ? readDeclared(declared as Record<string, unknown>)
-        : await unresolvedFollowOn(row.orchestration_id, row.title);
+        : await unresolvedFollowOn(row.orchestration_id, row.audit_id, row.title);
     if (!followOn) continue;
     const { title, question, whyNow } = followOn;
     out.push({
@@ -1042,6 +1160,15 @@ function readDeclared(
  */
 async function unresolvedFollowOn(
   orchestrationId: string | null,
+  /**
+   * The audit that judged this packet, from the mission's own corrected link.
+   *
+   * `linkFiledWork` sets it to the newest audit of the packet's run before the
+   * writeback, and `followOnsToCreate` only selects missions that have written
+   * back — so by the time this is asked, the column names the verdict actually
+   * performed on the filed report rather than a superseded one.
+   */
+  auditId: string | null,
   parentObjective: string,
 ): Promise<{ title: string; question: string; whyNow: string } | null> {
   if (!orchestrationId) return null;
@@ -1093,14 +1220,56 @@ async function unresolvedFollowOn(
     const status = byRequirement.get(requirement.id);
     return status !== 'SATISFIED' && status !== 'NOT_REQUIRED' && status !== 'OWNED_ELSEWHERE';
   });
-  if (!open) return null;
+  if (open) {
+    return {
+      title: `Unsettled: ${open.statement.slice(0, 120)}`,
+      question: open.statement,
+      whyNow:
+        `The report filed for "${parentObjective.slice(0, 120)}" records this as unresolved rather ` +
+        'than answered, so it is still open.',
+    };
+  }
 
+  /*
+   * Every requirement answered, and the judge still asked for more.
+   *
+   * That is not a contradiction and it is the shape a *compiled* mission
+   * actually reaches. `compileMission` produces exactly one fragment for one
+   * idea — deliberately, because a decomposition is a judgement a compiler
+   * cannot make — so a packet has one requirement, and a packet that got as far
+   * as `COMPLETE_WITH_GAPS` did so with that fragment `ACCEPTED`. Its
+   * requirement is therefore answered, the search above finds nothing, and the
+   * requirement route can never fire for a mission this Brain creates.
+   *
+   * `COMPLETE_WITH_GAPS` does not mean "a fragment failed". It means the judge
+   * returned a non-advancing verdict, no fragment could be repaired, and a
+   * person authorized the packet to file short — so what is outstanding is what
+   * the *judge* named, and that is a row rather than prose: `audit_gaps` is the
+   * validated structured output §8 allows to reach state, carrying the
+   * classification, the bounded question and what answering it would add.
+   *
+   * Only the two classifications that may legitimately keep research open, and
+   * only with a bounded question the judge actually wrote. A `FOUNDATIONAL_GAP`
+   * with no question stated is a finding, not a follow-on, and inventing one
+   * from its prose is the thing this function has never done.
+   */
+  if (!auditId) return null;
+  const audit = await getAudit(auditId);
+  if (!audit) return null;
+  const gap = audit.gaps.find(
+    (entry) =>
+      RESEARCH_JUSTIFYING_GAPS.includes(entry.classification) &&
+      (entry.researchQuestion ?? '').trim().length > 0,
+  );
+  if (!gap) return null;
   return {
-    title: `Unsettled: ${open.statement.slice(0, 120)}`,
-    question: open.statement,
+    title: `Unsettled: ${gap.title.slice(0, 120)}`,
+    question: gap.researchQuestion!.trim(),
     whyNow:
-      `The report filed for "${parentObjective.slice(0, 120)}" records this as unresolved rather ` +
-      'than answered, so it is still open.',
+      `The audit of "${parentObjective.slice(0, 120)}" recorded this as a ` +
+      `${gap.classification} the filed report does not settle` +
+      (gap.expectedContribution ? `: ${gap.expectedContribution.slice(0, 200)}` : '') +
+      '. The report was filed with it named rather than answered, so it is still open.',
   };
 }
 

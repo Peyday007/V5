@@ -146,6 +146,15 @@ There must be no workflow where the user has to remember "now go update the data
 30. No remote refusal that distinguishes absent from forbidden, and no remote
     error carrying a payload, an argument, a credential or an identifier the
     caller did not already hold.
+31. No field with two masters: a connected site owns its operational fields and
+    Brain owns what Brain derives, and neither writes the other's.
+32. No delivery accepted that cannot be ordered, and none allowed to regress a
+    newer one — the guard is on the source's own version, in the statement that
+    makes the change.
+33. No storage threshold that stops Brain work, and no figure reported that was
+    not measured.
+34. No scope asserted about a subject that no row and no question stated —
+    a jurisdiction is read from the record, and not knowing it is an answer.
 
 ## 8. Model prose never mutates project state.
 
@@ -1126,6 +1135,218 @@ rules.
   alternative and would have asserted a change of belief that never happened —
   the conclusion and the evidence were right all along; only the citation was
   wrong.
+- **A compiler cannot judge whether a look is worth it; it can read whether
+  there is something to look at.** Mutation 29 replaced the planning worker
+  with a deterministic compiler and recorded the visible consequence honestly:
+  an idea could no longer be sent to `EXPLORE` because a look would be cheap,
+  since nothing could form that view. That was true of a *semantic* view and it
+  left the automatic probe path reachable only when the archive positively
+  contradicts an idea — so Brain had, in practice, lost the ability to look
+  cheaply before spending a packet. **The correction is recorded rather than
+  quietly applied**, because half of that sentence still stands: nothing here
+  assesses what settling a question is *worth*, and `expectedValue` is still
+  `NOT_ASSESSED`.
+
+  What changed is that "would a cheap look settle this" turned out to have a
+  form that is not semantic. `PRESENT_BUT_UNVERIFIED` and `STALE` are two of
+  the ten coverage statuses and both say the same thing: the project already
+  holds a candidate answer that nothing supports, or one that was true outside
+  the timeframe asked about. Confirming or refuting it is a *presence*
+  question — the only kind `GENERAL_LIGHT_PROBE_V1` answers — and a full packet
+  is the wrong instrument. So `judgeCandidate` derives `cheapToReduce` from
+  those rows and from nothing else: no unverified or stale claim, no probe. It
+  is narrow by construction rather than by tuning, forms no opinion about
+  value, reads no prose, and cannot lower any evidence bar. It is forced false
+  on the pass *after* a probe, and that is load-bearing now rather than
+  incidental — the archive does not change when a probe settles, so
+  re-deriving it there would send the idea round for another look for ever.
+
+- **A pass records the account it executed under, and that comes from the fire
+  rather than from the wiring.** `research_passes.executor_account_id` has
+  existed since Step 11 and was null on every row this Brain ever wrote, so
+  `A11_INDEPENDENT_AUDIT` read `NOT_RUN` over three genuinely independent
+  passes. `lineageForWorker` resolved the account from the static
+  worker → Routine binding, and production binds two Routines under two
+  accounts to one worker identity; two candidates is ambiguous, and ambiguity
+  fails closed. **The attribution was missing, never the independence.**
+
+  The account was never ambiguous. Brain fired one Routine for one bin, and the
+  session that arrived and took that bin is that fire's session. `worker_sessions`
+  is that observation, written at arrival from the same `bin_dispatch` row
+  `creditDispatchArrival` already credits the arrival from — never from
+  anything the worker says about itself, first observation winning, and nothing
+  written at all when the Routine does not resolve to an account. The static
+  binding stays as the fallback for a worker that reached Brain without an
+  assignment, and it still fails closed: "we could not tell" must never read
+  the same as "we checked".
+
+- **A packet that has finished holds nothing a worker can be sent for.**
+  `advancePacket` retires outstanding work, and only something *advancing* a
+  packet calls it — which nothing does once a packet is terminal. So a packet
+  that ended while items were outstanding kept them claimable for ever, and the
+  first production one did: `COMPLETE`, filed and audited, with two
+  `RESEARCH_AUDIT` items still `LEASED`. An expired lease is claimable work
+  (§19), so that is a worker Brain can still send for a settled question. It is
+  reconciled from rows on the durable tick, fleet-wide rather than
+  Russell-scoped, and cancelling is not destroying: the fencing generation
+  advances, so a late completion matches nothing, and every row keeps its id,
+  its attempts and the reason it stopped.
+
+- **What a person is shown about coverage is what the auditor read.**
+  `reconcileAcceptedFragment` moves a requirement's coverage when a fragment
+  clears all seven gate conditions, and it had exactly one caller — the
+  in-process orchestrator, not the worker-driven runner production uses. So a
+  requirement whose evidence was accepted still read `MISSING`, on a packet
+  that was `COMPLETE`. It now runs from `gateFragment`, which is the single
+  place a fragment becomes `ACCEPTED`, because a guard on one entrance is not a
+  guard. It changes no evidence: nothing there accepts, rejects or re-judges a
+  claim.
+
+- **An attribution that only observes forwards leaves history unreadable, and
+  the remedy is rows rather than another run.** `worker_sessions` records which
+  fire produced a session at the moment that session arrives, which is the right
+  place and the wrong direction for everything already written: every audit pass
+  from before it carries no account, and a gate reading those rows cannot tell a
+  missing attribution from a missing audit. The recovery is
+  `services/dispatch/lineageRecovery.ts` and it is only honest because of what
+  it refuses — it walks the credential to the bin to the dispatch Brain sent to
+  the Routine's account, never the static worker binding; a session two Routines
+  could have started is left unresolved and said to be; a dispatch at or above
+  the lease's own generation belongs to a later assignment; and every write is
+  guarded on the column still being null, so a recovered value can never replace
+  a recorded one. §5 at a column.
+
+- **The compiler runs before the judgment, so an idea Brain cannot specify is
+  never assessed for whether a cheap look would settle it.** That ordering is
+  right — a bounded look is not a remedy for an unspecifiable question — and it
+  means the probe path is reachable only for questions the standing envelope can
+  carry. A question naming a jurisdiction outside it is refused there and parks,
+  even when it names that jurisdiction to *exclude* it: `jurisdictionFor` matches
+  state names and must not start inferring intent from the words around them,
+  because a compiler that read intent would be the model judgment §8 keeps out of
+  state. What changes in that case is the question, never the compiler.
+
+- **A mission going terminal does not finish the packet it owned, and a park
+  nobody will be asked about keeps its work claimable.** Seven production
+  packets sat at `NEEDS_HUMAN` under a terminal mission, one of them holding a
+  `RESEARCH_FRAGMENT` at attempt 3 of 2 on an expired lease — claimable work
+  (§19) for a question abandoned three attempts earlier, and
+  `reconcileTerminalPackets` could not see it because `NEEDS_HUMAN` is not a
+  terminal status. Both halves are wrong on their own: the status says a person
+  must decide when nobody will ever be asked, and the queue keeps offering the
+  work. It is **not** the fail path's defect — a person answering STOP leaves
+  the identical state — so the remedy is derived from rows
+  (`concludeAbandonedParks`) rather than hooked to the moment a mission ends,
+  because a hook fixes one entrance and the rows reach every entrance plus the
+  ones already stranded. `CANCELLED` rather than `FAILED`: the packet's own
+  recorded reason stands untouched, and what changed is that the thing which
+  asked the question stopped wanting the answer.
+
+- **A packet's work reaches a worker inside a bin, so a live packet whose bin
+  cannot deliver is a packet nothing can be sent for.** Two ways in: a bin
+  parked at `NEEDS_HUMAN` on a condition that has since been resolved, and a
+  bin that legitimately *completed* before its packet was put back to work by a
+  handoff. Neither shows in any state column — the queue says the items are
+  claimable and every row reads as healthy — so `packet-report` prints the bin
+  and says so in words. The remedies are the ones already there: the guarded
+  reopen for the first, the launch's own bin for the second, with the spent bin
+  keeping its row. Both are derived from the bin's *current* budget and state
+  rather than from catching the moment a condition changed, which is the third
+  time that has been the difference between a fix that reaches production and
+  one that does not. Neither adds a ceiling: the work items' own attempt
+  counters are the bound, and a packet whose items are spent goes terminal by
+  itself.
+
+- **`COMPLETE_WITH_GAPS` is a verdict about the report, not a fragment that
+  failed** — the judge asked for more, nothing could be repaired, and a person
+  authorized filing short. So the question such a packet leaves behind is the
+  one the *judge* named, read from `audit_gaps`: a classification the domain
+  already says may keep research open, and a bounded question the judge
+  actually wrote. A finding with no question stated is a finding, and composing
+  one from its prose is exactly the model-prose-as-state §8 forbids. The
+  requirement route still runs first; it simply cannot fire for a compiled
+  mission, because the compiler makes one fragment per idea and a packet that
+  files at all has that fragment accepted.
+
+- **A work item is finished by its owner, and reconciled only once its owner is
+  gone.** An audit item hands out one role and the pass is that role's whole
+  output, so an item still leased after its pass is recorded is a role that will
+  be argued again the moment the lease lapses — production argued one three
+  times while the judge waited, correctly, for both arguments to be *settled*.
+  Brain retires such an item from its own rows, in the packet runner and never
+  in the tool: finishing somebody's item inside `brain_submit_audit` makes their
+  own `brain_complete_work` fail its ownership proof, and the queue is right to
+  refuse that. Neither that reconciliation nor the terminal-packet one may touch
+  an item whose lease is still live — the condition they exist for is an
+  *expired* lease on work claimable again for a settled question, and a packet
+  goes terminal while its judge is still holding the item it just used.
+
+- **The capture gate held every hedged way of asking for work and not the plain
+  one.** `should we`, `worth checking` and `look into` were markers; *"Please
+  check something for me… Go and see whether that holds"* was not, and had no
+  question mark either, so Brain declined a direct request with "nothing here
+  proposes work". The widening is narrow by construction — the verb is asked of
+  somebody, or followed by the thing to establish — because the list's failure
+  mode must stay *missing* a candidate rather than inventing one: a past-tense
+  report and a bare "please look at this" still decline. Rewording the question
+  to hit an existing keyword was the alternative and would have been gaming the
+  list rather than fixing it.
+
+- **A coverage score whose denominator is the question measures how the question
+  was asked.** `relevance` is `hits / wanted.size` over the *requirement's*
+  vocabulary, so a longer requirement scores lower against the identical claim.
+  That is right for what `coverBeforeWork` was built for — the compiler writes
+  one bounded, term-dense declaration per fragment — and wrong for the free
+  prose `askArchive` feeds it: a 454-character statement carries forty terms
+  against a claim sentence's fifteen, so a perfect subject match cannot reach
+  the floor and the archive reads `MISSING` because the question was asked at
+  length. §13 then fails in the expensive direction, spending the allowance to
+  learn what the project had already written down. **The remedy is to ask about
+  the question in every form Brain holds it, never to tune what "about" means**
+  — the candidate's title is the third reading and the only short one, and
+  `relevance` is untouched, so no other caller changes. Neither direction lowers
+  a bar: `fullyAnswered` needs every reading to agree, `unverified` is a union,
+  and a probe still requires a real unverified or stale claim row.
+
+- **A row is not a decision, and a card must not argue with itself.** The park
+  condition was `fragments.length > 0` — a row count standing in for "there is
+  something to decide" — so a packet holding one refused fragment, no claims and
+  nothing accepted parked, and `choicesFor` then offered exactly one answer while
+  the card's own explanation said the honest answers were *"to stop it or to ask
+  a narrower question"*. **The condition is the offer**: park only where more
+  than one thing can be chosen between, which is the module's own rule applied
+  where it is true rather than where a proxy agreed with it. Nothing is
+  abandoned quietly — the mission is `FAILED` with the packet's own words, the
+  event is on the project's history, every refusal keeps its row and its reason,
+  and `redoable()` may offer another try. The same defect lived one door along:
+  `reopenAnswered` re-derived the **choices** and left the **words**, so a
+  request opened when the bar was nearly met could come back carrying only STOP
+  and still explain that the bar was nearly met. The words move with the
+  choices, from the same shape and the same functions.
+
+- **`A13_AUTO_NEXT` is downstream of `A14_HUMAN_RESUME`, and that is the rules
+  holding rather than a gap.** The compiler declares no follow-on, so a compiled
+  mission's only route is `unresolvedFollowOn`, which requires
+  `COMPLETE_WITH_GAPS`, which requires `unresolved_gap_policy = 'RECORD_GAPS'`,
+  which only `recordGaps` writes — the RECORD_GAPS answer to a Needs You
+  request. A follow-on therefore exists only for a packet that filed short, and
+  filing short is a decision the domain reserves to a person. One decision
+  closes both conditions, and neither can be closed without it.
+
+- **Acceptance is a small declared suite, not one overloaded chain.** One
+  conversation was right while the acceptance was one journey, and stopped
+  being right the moment that journey succeeded — because a cheap look taken
+  *instead* of a packet, a question the evidence could not settle, and the
+  decision that follows it are all branches success does not take. Requiring
+  one packet to exhibit them would be requiring it to finish badly, and a
+  packet that truthfully settles everything must keep producing no follow-on
+  and no park. So `ACCEPTANCE_SUITE` names each scenario, its purpose written
+  down before it ran, and its own chain. **No gate is relaxed**: each still
+  requires its complete original evidence, walked from a declared anchor
+  through real foreign keys, and the union is three conversations rather than a
+  database. A scenario declared by title resolves only on an exact, unique
+  match — an anchor somebody could add to is not a declaration.
+
 - **Two boundaries meet at the HTTP surface and they are not the same
   boundary.** A project is guarded by `decideProjectAccess`; a conversation is
   guarded by its owner, plus read access to the attached project for a shared
@@ -1286,8 +1507,133 @@ Step 12B's items
 the full Fleet centre, personalization, advanced math, 3D, social-media
 intelligence) are listed in `docs/STEP-12B-BACKLOG.md` and are not built here.
 
+## 25. A website is a window. Brain is what it looks at.
 
-## 25. The factory is an entrance to the same machinery, and its evidence is the repository.
+Step 12C (`server/services/connect/`, `server/routes/connect.ts`,
+`docs/CONNECT.md`) connects the first real site — Deal Dispatch — and every
+decision in it follows from one sentence: **the site keeps being the master of
+its own operational fields, and Brain becomes authoritative only for what Brain
+derives.**
+
+- **A record is a link plus an idea, not a new kind of object.** There is no
+  Opportunity table here, no WorkItem type, no command bus and no second
+  identity. `external_records` says *this Brain object is that site's record*,
+  and the Brain object is a `russell_candidates` row — the thing this codebase
+  already has for "something worth forming an opinion about". Everything after
+  that is Steps 4 to 12A unchanged.
+- **The version is the whole concurrency design.** A delivery carries the site's
+  own `updatedAt`, normalized so string order is time order, and the write is a
+  single guarded `UPDATE ... WHERE source_version < ?`. A redelivered, replayed
+  or reordered copy matches nothing and is reported `STALE` — an ordinary
+  outcome, not an error. That is the same shape as the queue's compare-and-swap
+  and the fleet's fire slot, and it is the fourth time this codebase has needed
+  it: **the guard is on a value the claimant does not choose.**
+- **Identical content is not a write.** The content hash is compared before the
+  version is, on both sides, so a poll that finds nothing changed makes no
+  request and moves no timestamp. Without that the delta feed would report churn
+  it caused itself, and a consumer cannot tell that from a real change.
+- **Only what Brain reasons about crosses.** An allow-list, not "everything
+  except": the margin, the contacts, the transcripts and the costs are the
+  site's and stay there. A field that crossed would be a field with two masters,
+  which is the failure this design exists to prevent.
+- **The command is an idea, and that is not a technicality.** §22 says a worker
+  cannot create its own work, and a site connector is a worker.
+  `RESEARCH_FURTHER` captures a candidate — which spends nothing — and Russell's
+  own loop then asks the archive first (§13) and launches only inside the
+  standing authority a person granted (§24). A person on the site may *ask*;
+  only a person in Russell may authorise the spending.
+- **The projection is derived on the read path, never stored.** Six answers, and
+  the sixth exists because of §24's own defect at a new altitude: a project with
+  no standing authority would read `QUEUED` for ever while the actual blocker
+  was a decision nobody was being asked for. So the authority is checked and the
+  answer is `NEEDS_PERSON`, naming it. **A state that says "waiting" which
+  nobody can resolve is not waiting, it is stuck** — for the fourth time.
+- **Two authorizations meet at this boundary and neither substitutes for the
+  other.** The person is authenticated by their session on the site and
+  authorized by their role against a record in their own organisation; the site
+  is authenticated by a credential Brain issued it and authorized by
+  `services/identity/policy.ts` against one project and one scope. The person's
+  name crosses as **attribution** and decides nothing — a name a remote system
+  supplied is not an identity, and nothing downstream reads it.
+- **A site's identity is made from a constant; only its secret needs a person.**
+  A connected site is three things — a worker, a membership on one project, and
+  a credential — and exactly one of them is a secret. The membership is the one
+  with a wrong answer in it, and the wrong answer is *silent*: grant a site
+  `CONNECTOR_SCOPES` and every connector call is refused with the same 404 a
+  missing project gives, which is invariant 23 behaving exactly as designed and
+  telling the operator nothing. So the set is chosen from
+  `SITE_CONNECTOR_SCOPES` in `services/identity/connectSite.ts`, which the
+  console and the scripted entrance both call, rather than from a picker.
+  Because the membership upsert rewrites the scopes every time, running it is a
+  repair as well as a setup. It runs inside the container through the release
+  pipeline, where `verify-hosted` and `authorize-gap-policy` already run:
+  reaching that shell is the authentication, and `--admin` is the attribution,
+  resolved against the database rather than trusted. **It never issues a
+  credential and cannot print one** — a credential is shown once, into one
+  response, to somebody signed in, and a workflow log is a log that outlives its
+  run. Invariant 22 admits no exception for a log that is convenient.
+
+- **There is no connect policy module and there must never be one.** Every route
+  resolves through `requireProject`, and absent and forbidden are the same 404
+  with the same body — invariant 23 at a new door.
+- **The site connector's scopes are their own composed set.** `project:read` and
+  `external:sync`, and `tests/oauth.test.ts` withholds `external:sync` from the
+  research connector deliberately: a research credential that could also
+  register records and command them would widen the blast radius of the
+  credential most likely to be running unattended, in exchange for nothing.
+- **Storage is reported, never enforced.** One reading on the health surface an
+  administrator already has. Evidence is counted once per content hash, anything
+  unmeasurable is absent rather than estimated, and **no threshold stops any
+  Brain work** — no work path calls it, there is no per-project quota and there
+  is no per-idea approval. Storage is cheap relative to the business this Brain
+  runs; the only thing worth building is the reading that stops it becoming a
+  surprise.
+- **A jurisdiction is read from the row, never from the sentence about it.**
+  The compiler looked for a state in the *question's prose* and fell back to the
+  approval envelope's when it found none — so a record whose own column said
+  `state: "OH"` compiled as *"Establish, from official Michigan public
+  records, … in Westbrook, OH"*, because `OH` is not the word `ohio`. Every row
+  around it was healthy and the mission ran; a worker would have researched that
+  specification correctly and answered a different question. **The wrong answer
+  confidently derived is worse than no answer**, and nothing in the pipeline
+  below the compiler could have caught it: the gate judges evidence against the
+  fragment's declared scope, and the scope was the thing that was wrong.
+
+  The repair is a boundary, not a patch. `domain/jurisdiction.ts` is the shared
+  vocabulary both readers use, and it holds the one rule that matters: a
+  two-letter code is authoritative in a **field that means a state** and
+  unambiguous in **prose** only as `, OH` in capitals — because `, or`, `, in`,
+  `, me` and `, ok` are ordinary English, and the first version of that rule
+  read all four as states. `services/russell/subject.ts` is what an idea is
+  *about*, resolved from the rows behind it rather than from its own sentence,
+  and it answers `null` rather than defaulting — **not knowing is an answer**.
+
+  The compiler then reads three sources in order — the subject's row, the
+  question's words, the envelope — refuses when the first two disagree rather
+  than choosing which to ignore, and when it reaches the third says so in the
+  objective instead of asserting it about the subject. A jurisdiction the
+  standing authorization does not cover is refused with a sentence naming both,
+  which parks the idea where the person who could authorize it can see it; the
+  connector's projection reads that as **Needs a person** rather than as
+  finished, because a decision being waited on is not work that ended. No state
+  is hard-coded in any of it, and the envelope still decides what is allowed.
+- **The migration number was 035 and is 036.** Step 12A's closure landed
+  `035_worker_sessions.sql` on the same number while this was being written, and
+  `loadMigrationFiles` refuses a duplicate version rather than applying one and
+  skipping the other — so the collision was a boot failure with a sentence in it
+  rather than a schema quietly missing half of itself. That is the whole reason
+  the numbering is checked at load time, and it is the only shared contract two
+  parallel workstreams on this repository actually have to reconcile.
+- **Running the suite against Postgres earned its place again.** The three new
+  tables were created without `seq`, the identity column `dialect.ts` rewrites
+  `rowid` to, and every cursor-ordered query failed on the cloud backend while
+  passing on SQLite. That is the second time — `012_checkpoint_seq.sql` is the
+  first — and it is the argument for the second backend in one line: **a
+  repository layer over two databases is true or merely compiling, and only one
+  of the two can tell you which.**
+
+
+## 26. The factory is an entrance to the same machinery, and its evidence is the repository.
 
 The Software Factory (`server/services/factory/`, `server/repos/factory.ts`,
 `server/repos/factoryFleet.ts`, `docs/FACTORY.md`) converts an approved software
@@ -1410,11 +1756,13 @@ server/
     types.ts            enums, row types, view types — the contract
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
+    jurisdiction.ts     states, postal codes, and where each one may be read from
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
     factory.ts          the contract, the campaign, and units that own a surface
     factoryFleet.ts     factory workers, sessions, reviews, findings, the ledger
+    externalRecords.ts  a site's record, its version guard, and its refusals
   services/
     storage.ts          document keys, confinement, and writing through the store
     storage/
@@ -1437,6 +1785,7 @@ server/
     importer.ts         PDF import and registration
     reconcile.ts        scan & reconcile
     identity/
+      connectSite.ts    a connected site's worker and its scope set, from a constant
       secrets.ts        scrypt for passwords, sha-256 for generated credentials
       context.ts        the request's principal, and why it is also on the request
       policy.ts         roles, scopes, and the one authorization decision
@@ -1479,6 +1828,12 @@ server/
       prompts.ts        every assignment, compiled from rows
       loop.ts           the tick, and every stage's answering transition
       executors/        how a worker is actually run; adding one is a row
+    connect/
+      contract.ts       the frozen wire contract, and nothing about it trusted
+      projection.ts     the six answers, derived from rows on the read path
+      service.ts        registering a site's records, and its one typed command
+      loop.ts           the tick that makes a state change visible to a poller
+    storageHealth.ts    how much room is left, measured rather than guessed
     russell/
       routing.ts        which project a conversation is about, authorization-first
       judgment.ts       what is worth capturing, dedupe, and Russell's own priority
@@ -1494,6 +1849,7 @@ server/
       needsHuman.ts     the park a packet stops at, and the answer that finishes it
       planning.ts       the judgment pass, its post-probe repeat, and the mission spec
       loop.ts           the durable tick, beside the dispatcher
+      subject.ts        what an idea is about, from rows rather than its own prose
       dealDispatch.ts   the connected system, with its freshness in the type
       projections.ts    the briefing, and progress that may not be invented
     research/
@@ -1549,6 +1905,7 @@ server/
     endpoint.ts         POST /mcp: auth, origin, limits, era selection
   routes/               HTTP API
     factory.ts          the Software Factory: objective, stage, evidence, release
+    connect.ts          a connected site's door: records, projections, one command (Step 12C)
     russell.ts          Russell's surface: threads, briefing, work, ideas, Needs You (Step 12A)
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
     operator.ts         the operator console: workers, access, projects, queued work
@@ -1564,6 +1921,8 @@ client/                 React UI
   src/App.tsx           the legacy console, at /legacy
 scripts/
   factory.ts                the operator's factory surface: register, submit, run
+  connect-site.ts           a site's worker and grant, made without a browser
+  connect-report.ts         what a connected site has done, read from inside
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
   fleet.ts                  the operator's fleet surface: register, target, explain
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
@@ -1579,6 +1938,10 @@ data/                   database, documents, backups, runtime state (gitignored)
 - `import type` for type-only imports (`verbatimModuleSyntax` is on).
 - `strict` and `noUncheckedIndexedAccess` are on.
 - SQLite parameters are positional `?` only, so both drivers behave identically.
+- **An `ORDER BY` must be sayable in both dialects.** Postgres refuses an
+  expression that is not in the select list of a `SELECT DISTINCT`, so name the
+  aggregate and order by the alias — `SELECT DISTINCT … ORDER BY MAX(x)` passes
+  the SQLite suite and throws on the database production runs.
 - Booleans are `0`/`1` in the database and real booleans in view types; repositories are
   the only place the two representations meet.
 - Timestamps are ISO-8601 UTC strings.

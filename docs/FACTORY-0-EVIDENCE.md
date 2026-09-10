@@ -18,7 +18,7 @@ outer session did. So:
 | Component | File |
 | --- | --- |
 | The contract, its immutability and its amendment ledger | `server/services/factory/contract.ts` |
-| Schema: contract, campaign, units, graph, fleet, judgement, ledger | `server/db/migrations/035_software_factory.sql` (+ the generated Postgres twin) |
+| Schema: contract, campaign, units, graph, fleet, judgement, ledger | `server/db/migrations/037_software_factory.sql` (+ the generated Postgres twin) |
 | The campaign and unit state machine, and the claim | `server/repos/factory.ts` |
 | Workers, sessions, reviews, findings, artifacts, releases, the ledger | `server/repos/factoryFleet.ts` |
 | Plan validation and installation | `server/services/factory/planner.ts` |

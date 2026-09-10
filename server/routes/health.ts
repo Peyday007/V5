@@ -14,6 +14,7 @@ import { DATA_ROOT, DB_PATH } from '../env.ts';
 import { defaultProviderName, listProviderStatuses } from '../providers/index.ts';
 import { ocrStatus } from '../services/documents/ocr.ts';
 import { antigravityStatus, recheckAntigravity } from '../providers/antigravity/runtime.ts';
+import { storageHealth } from '../services/storageHealth.ts';
 import { handler } from './helpers.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
 
@@ -68,6 +69,13 @@ healthRouter.get(
       // Whether scanned pages can be read here, and if not, the exact one-time
       // step that fixes it.
       ocr: ocrStatus(),
+      // How much room is left. Administrator-only for the same reason the rest
+      // of this branch is: it names where this Brain's data lives and how much
+      // of it there is, which is an operator's business and not a project
+      // member's. It reports and stops nothing — no threshold in it refuses any
+      // work — and it is measured, with anything unmeasurable absent rather
+      // than estimated.
+      storage: await storageHealth(),
     };
   }),
 );

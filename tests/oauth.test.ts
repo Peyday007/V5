@@ -1070,6 +1070,16 @@ describe('the operator console', () => {
       // exposes it and inventing a use for it here would be granting reach for
       // a tool that does not exist.
       'sources:write',
+      // Step 12C. A connected *site* registers its own records and passes its
+      // own person's command through; a research worker does neither, and no
+      // remote tool exposes either. It is withheld rather than added because
+      // the alternative — a research credential that could also register
+      // records and command them — widens the blast radius of the credential
+      // most likely to be running unattended, in exchange for nothing.
+      // `SITE_CONNECTOR_SCOPES` is the set a site holds, and it is granted
+      // through the administration API's explicit list rather than composed
+      // here.
+      'external:sync',
     ];
 
     const expected = WORKER_SCOPES.filter((scope) => !WITHHELD.includes(scope));

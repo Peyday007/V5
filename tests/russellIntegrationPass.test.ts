@@ -531,19 +531,58 @@ describe('one question, walked the whole way', () => {
       },
     ] as unknown as Parameters<typeof createFragments>[0]);
     /*
-     * Researched, then blocked — which is what the stop below describes.
+     * Researched: one fragment cleared, one did not — which is what the stop
+     * below actually describes, and what `RECORD_GAPS` is for.
      *
-     * `createFragments` writes `PLANNED`, meaning *proposed and awaiting
-     * approval*, and leaving it there would have set up a different stop
-     * entirely: a plan nobody has authorized rather than research that ran and
-     * could not clear its bar. The two have different answers, and this journey
-     * is about the second one.
+     * Two corrections live here, one status apart. `createFragments` writes
+     * `PLANNED`, meaning *proposed and awaiting approval*, and leaving it there
+     * set up a different stop entirely: a plan nobody has authorized rather
+     * than research that ran. That was fixed by blocking it.
+     *
+     * Blocking *everything* was the second version of the same mistake.
+     * `advancePacket` stops a packet with no accepted fragment at
+     * `NEEDS_HUMAN` — *no fragment cleared its evidence gate* — whatever the
+     * gap authorization says, so `RECORD_GAPS` on an all-blocked packet
+     * records a person's decision and parks the packet again on the next tick.
+     * This step could not see that because it wrote `COMPLETE_WITH_GAPS` by
+     * hand immediately afterwards. The stop's own words say *one* county is
+     * behind an unauthorized source class, so the fixture now builds that:
+     * the terms question settled, the coverage question not — so the goal's
+     * own requirement is still open and the follow-on it leaves behind is a
+     * real one rather than a fixture's invention.
      */
+    const secondFragment = await createFragments([
+      {
+        orchestrationId: mission.orchestrationId!,
+        projectId,
+        layerId: (await fixture.layerByName('Discovery Logic')).id,
+        fragmentIndex: 1,
+        fragmentKey: 'permit-terms',
+        question: 'On what terms may that county’s permit data be redistributed?',
+        geography: 'Michigan',
+        requiredEvidence: [
+          { id: 'operative_definition', description: 'the published terms', necessity: 'REQUIRED' },
+        ],
+        acceptableSourceTypes: ['county government portals'],
+        excludedSourceTypes: ['vendor marketing'],
+        completionCriteria: ['the written terms, quoted'],
+        minIndependentSources: 1,
+        maxRepairs: 2,
+        dependsOn: [],
+        attempt: 1,
+      },
+    ] as unknown as Parameters<typeof createFragments>[0]);
+    expect(secondFragment).toBeTruthy();
     for (const fragment of await currentFragments(mission.orchestrationId!)) {
-      await updateFragment(fragment.id, {
-        status: 'BLOCKED',
-        blockedReason: 'The only source on point is outside the authorized allowlist.',
-      });
+      await updateFragment(
+        fragment.id,
+        fragment.fragmentKey === 'permit-terms'
+          ? { status: 'ACCEPTED' }
+          : {
+              status: 'BLOCKED',
+              blockedReason: 'The only source on point is outside the authorized allowlist.',
+            },
+      );
     }
     await updateOrchestration(mission.orchestrationId!, {
       status: 'NEEDS_HUMAN',

@@ -43,7 +43,7 @@ import { listGoals, revokeGoal } from '../repos/russellAuthority.ts';
 import { createProject, getProject, getProjectBySlug, listProjects } from '../repos/projects.ts';
 import { PayloadTooLarge, enqueueWork, listWorkItems } from '../repos/workQueue.ts';
 import { InvalidWorkPayload, workType } from '../services/queue/workTypes.ts';
-import { CONNECTOR_SCOPES } from '../domain/types.ts';
+import { CONNECTOR_SCOPES, SITE_CONNECTOR_SCOPES } from '../domain/types.ts';
 import type { Principal, WorkItem, WorkerScope } from '../domain/types.ts';
 import { generateInvitationToken } from '../services/identity/secrets.ts';
 import { listLayers } from '../repos/layers.ts';
@@ -276,8 +276,22 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
      * widen the picker and make every grant ambiguous, the row itself says when
      * it is out of date and offers the one action that fixes it.
      */
+    /*
+     * A membership is out of date when it matches *neither* composed set.
+     *
+     * There are two now: the research connector's, and the smaller one a
+     * connected site holds. Comparing against only the first would mark every
+     * site connector "connected before the research tools existed" and offer
+     * the one button that would overwrite its scopes with the research set —
+     * which reads as a repair and is a silent widening followed by a broken
+     * connector. A row that matches either set is exactly what the Brain
+     * composes today and needs nothing.
+     */
+    const composed = [CONNECTOR_SCOPES, SITE_CONNECTOR_SCOPES].map((set) =>
+      [...set].sort().join(','),
+    );
     const outOfDate = (scopes: string[]): boolean =>
-      [...scopes].sort().join(',') !== [...CONNECTOR_SCOPES].sort().join(',');
+      !composed.includes([...scopes].sort().join(','));
 
     const lines = rows
       .map(
@@ -313,13 +327,32 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
     // being the row you are looking at, and only the projects it does not have
     // are offered, so the choice cannot be a no-op.
     if (available.length === 0) return lines;
+    /*
+     * The Brain composes the scopes; this asks which *job* the worker does.
+     *
+     * There are two composed sets now — a research connector's and a connected
+     * site's — and they overlap in one scope. That is not a picker of
+     * permissions, which is the thing this screen removed for good reason after
+     * two mistakes in ten minutes; it is a choice between two jobs, and the
+     * scopes follow from the job rather than from anybody ticking boxes.
+     *
+     * Without it a site could not be connected through a browser at all: the
+     * console would grant it the research set, every connector call would be
+     * refused for a missing scope, and the refusal is deliberately the same
+     * 404 a missing project gives — indistinguishable, from the outside, from
+     * a broken deployment. That is the cost §22 already paid once.
+     */
     return `${lines}
         <div class="access">
           <form method="post" action="${OPERATOR_BASE}/memberships" class="inline">
             <input type="hidden" name="worker_id" value="${esc(worker.id)}">
             <select name="project_id" required aria-label="Project to grant">
-              <option value="" disabled selected>— add a project —</option>
+              <option value="" disabled selected>&mdash; add a project &mdash;</option>
               ${available.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}
+            </select>
+            <select name="kind" aria-label="What this worker does">
+              <option value="RESEARCH" selected>researches for Brain</option>
+              <option value="SITE">is a connected site</option>
             </select>
             <button type="submit" class="secondary">Grant</button>
           </form>
@@ -840,8 +873,13 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
          <select id="cred_worker" name="worker_id" required>${workerOptions}</select>
          <button type="submit" class="secondary">Issue</button>
        </form>
-       <p class="note">Only for a client that cannot do OAuth. Claude connects through
-         <em>Connect a worker</em>, which handles this without a secret ever being copied.</p>`)
+       <p class="note">For a client that cannot do OAuth. Claude connects through
+         <em>Connect a worker</em>, which handles this without a secret ever being copied — so a
+         research worker does not need this box.</p>
+       <p class="note">A <strong>connected site</strong> does. It is a server holding one bearer
+         token in its own configuration, with no browser to consent in, so this is its only way in.
+         The value below is shown once and is not recoverable afterwards by anyone, including an
+         administrator: paste it straight into the site and save it nowhere else.</p>`)
          : ''
      }`,
   );
@@ -1490,13 +1528,20 @@ export function operatorRouter(): Router {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const workerId = typeof body['worker_id'] === 'string' ? body['worker_id'] : '';
       const projectId = typeof body['project_id'] === 'string' ? body['project_id'] : '';
-      // The Brain composes the set; this form only names a worker and a project.
+      // The Brain composes the set; this form names a worker, a project, and
+      // which of the two jobs the worker does.
       //
-      // A posted `scopes` field is ignored rather than honoured. The console
-      // stopped asking, so anything arriving under that name came from a hand-
-      // edited form, and quietly accepting it would put back the exact hazard
-      // the picker was removed for — with no screen left to show what happened.
-      const scopes: WorkerScope[] = [...CONNECTOR_SCOPES];
+      // A posted `scopes` field is still ignored rather than honoured. The
+      // console does not ask for scopes, so anything arriving under that name
+      // came from a hand-edited form, and quietly accepting it would put back
+      // the exact hazard the picker was removed for — with no screen left to
+      // show what happened. `kind` is not that: it selects between two sets the
+      // Brain composed, and an unrecognised value falls back to the research
+      // set rather than to an empty one, because a membership with no scopes is
+      // a worker that fails with the same 404 a missing project gives.
+      const kind = typeof body['kind'] === 'string' ? body['kind'] : 'RESEARCH';
+      const scopes: WorkerScope[] =
+        kind === 'SITE' ? [...SITE_CONNECTOR_SCOPES] : [...CONNECTOR_SCOPES];
 
       const worker = await getWorker(workerId);
       if (!worker) {
@@ -1518,10 +1563,14 @@ export function operatorRouter(): Router {
         action: 'GRANT_MEMBERSHIP',
         targetId: workerId,
         result: 'SUCCESS',
-        metadata: { projectId, scopeCount: scopes.length },
+        metadata: { projectId, scopeCount: scopes.length, kind },
       });
       res.type('html').send(
-        await consolePage(person, { ok: `${worker.name} can now reach that project.` }),
+        await consolePage(person, {
+          ok: `${worker.name} can now reach that project${
+            kind === 'SITE' ? ', as a connected site' : ''
+          }.`,
+        }),
       );
     })();
   });
