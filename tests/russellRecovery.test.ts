@@ -25,6 +25,9 @@ import { listProbesForCandidate } from '../server/repos/russellProbes.ts';
 import { listCandidates } from '../server/repos/russellCandidates.ts';
 import { validateProposal } from '../server/services/russell/proposal.ts';
 import { tick } from '../server/services/russell/loop.ts';
+import { enqueueWork } from '../server/repos/workQueue.ts';
+import { updateOrchestration } from '../server/repos/research.ts';
+import { getBin } from '../server/repos/bins.ts';
 import type { Principal, ProjectMembership } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -150,6 +153,96 @@ describe('a launch interrupted between its steps is finished, not restarted', ()
     expect((await getMission(missionId))!.binId).toBe(binId);
     // Found rather than remade.
     expect(await countBins()).toBe(1);
+  });
+
+  it('gives a live packet a new bin when the one it had can no longer deliver', async () => {
+    /*
+     * Not a crash window. This is the ordinary path, and it is the shape
+     * production reached.
+     *
+     * A bin reaches `COMPLETE` when `RESEARCH_PACKET_V1` is satisfied — the
+     * packet terminal, no open items, the document filed with bytes. The packet
+     * can then be put back to work: an `OTHER_LAYER` handoff reopens the audit
+     * round, `advancePacket` queues the round's items, and the bin is terminal
+     * and terminal is forever. So the items sit claimable with nobody ever sent
+     * for them, and every state column reads as healthy.
+     *
+     * `reopenAuditRound` covers exactly one state of this — a bin parked at
+     * `NEEDS_HUMAN` — and says nothing about one that completed. The condition
+     * here is the property rather than the state: can this bin still deliver.
+     */
+    await authorized();
+    const candidate = await idea();
+    const launched = await launch({ ...spec(), candidateId: candidate.id });
+    const mission = launched.mission!;
+    const firstBin = mission.binId!;
+    const orchestrationId = mission.orchestrationId!;
+
+    // Work the packet still has to hand out.
+    await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    await updateOrchestration(orchestrationId, { status: 'AUDITING' });
+
+    // And the bin that finished before the round was reopened.
+    await getDb().run(`UPDATE bins SET state = 'COMPLETE' WHERE id = ?`, [firstBin]);
+
+    const report = await repairLaunches();
+    expect(report.completed).toContain(mission.id);
+    expect(report.orphaned).toEqual([]);
+
+    const repaired = (await getMission(mission.id))!;
+    expect(repaired.binId).not.toBe(firstBin);
+    const replacement = await getBin(repaired.binId!);
+    expect(replacement?.state).toBe('READY');
+    expect(replacement?.orchestrationId).toBe(orchestrationId);
+
+    // Nothing is reset and nothing is destroyed: the spent bin keeps its row.
+    expect((await getBin(firstBin))?.state).toBe('COMPLETE');
+    expect(await countBins()).toBe(2);
+
+    // And it converges — a second pass finds a bin that can deliver and stops.
+    const again = await repairLaunches();
+    expect(again.completed).not.toContain(mission.id);
+    expect(await countBins()).toBe(2);
+  });
+
+  it('leaves a spent bin alone when the packet is waiting for a person', async () => {
+    /*
+     * The narrowing that keeps the repair from doing harm.
+     *
+     * `AWAITING_APPROVAL` and `NEEDS_HUMAN` are packets waiting for a decision
+     * only a person can make, and each already has its own answering
+     * transition. A new bin there would send a worker to be told the same thing
+     * again, spending a fire to learn nothing — which is the failure
+     * `RESEARCH_PACKET_V1` answers `HUMAN` rather than `RETRY` to avoid.
+     */
+    await authorized();
+    const candidate = await idea();
+    const launched = await launch({ ...spec(), candidateId: candidate.id });
+    const mission = launched.mission!;
+    const orchestrationId = mission.orchestrationId!;
+
+    await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    await updateOrchestration(orchestrationId, { status: 'NEEDS_HUMAN' });
+    await getDb().run(`UPDATE bins SET state = 'COMPLETE' WHERE id = ?`, [mission.binId!]);
+
+    const report = await repairLaunches();
+    expect(report.completed).not.toContain(mission.id);
+    expect(await countBins()).toBe(1);
+    expect((await getMission(mission.id))!.binId).toBe(mission.binId);
   });
 
   it('converges: repairing twice does the work once', async () => {

@@ -1217,6 +1217,21 @@ rules.
   because a compiler that read intent would be the model judgment §8 keeps out of
   state. What changes in that case is the question, never the compiler.
 
+- **A packet's work reaches a worker inside a bin, so a live packet whose bin
+  cannot deliver is a packet nothing can be sent for.** Two ways in: a bin
+  parked at `NEEDS_HUMAN` on a condition that has since been resolved, and a
+  bin that legitimately *completed* before its packet was put back to work by a
+  handoff. Neither shows in any state column — the queue says the items are
+  claimable and every row reads as healthy — so `packet-report` prints the bin
+  and says so in words. The remedies are the ones already there: the guarded
+  reopen for the first, the launch's own bin for the second, with the spent bin
+  keeping its row. Both are derived from the bin's *current* budget and state
+  rather than from catching the moment a condition changed, which is the third
+  time that has been the difference between a fix that reaches production and
+  one that does not. Neither adds a ceiling: the work items' own attempt
+  counters are the bound, and a packet whose items are spent goes terminal by
+  itself.
+
 - **Acceptance is a small declared suite, not one overloaded chain.** One
   conversation was right while the acceptance was one journey, and stopped
   being right the moment that journey succeeded — because a cheap look taken

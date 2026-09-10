@@ -423,6 +423,47 @@ function refuse(
  * second implementation of it — and a second implementation of a recovery path
  * is the one nobody tests.
  */
+/**
+ * Bin states from which no assignment can ever be made again.
+ *
+ * A packet's claimable work reaches a worker inside a bin. A bin in one of
+ * these states is not dispatchable and cannot be assigned, so a packet whose
+ * bin is here while its own queue still holds work is a packet nothing can be
+ * sent for — the queue says the items are claimable, the fleet has nowhere to
+ * put them, and every state column reads as healthy.
+ */
+const SPENT_BIN: ReadonlySet<string> = new Set(['COMPLETE', 'FAILED', 'CANCELLED']);
+
+/**
+ * Packet states in which work *should* be moving, so a spent bin is a fault.
+ *
+ * `AWAITING_APPROVAL` and `NEEDS_HUMAN` are deliberately absent: those are
+ * waiting for a person and each already has its own answering transition. A
+ * new bin would put a worker in front of a decision only a person can make,
+ * which is the opposite of the repair.
+ */
+const PACKET_SHOULD_BE_RUNNING: ReadonlySet<string> = new Set([
+  'PLANNING',
+  'RESEARCHING',
+  'VERIFYING',
+  'SYNTHESIZING',
+  'AUDITING',
+  'AWAITING_REPAIR',
+]);
+
+/**
+ * Whether this mission's bin can still deliver its packet's outstanding work.
+ *
+ * Read rather than remembered, because `bins.state` moves after the mission
+ * row was written and the mission has no column that would notice.
+ */
+async function binCanStillDeliver(mission: RussellMission): Promise<boolean> {
+  if (!mission.binId) return false;
+  const bin = await getBin(mission.binId);
+  if (!bin) return false;
+  return !SPENT_BIN.has(bin.state);
+}
+
 async function completeLaunch(
   mission: RussellMission,
   input: LaunchInput,
@@ -505,7 +546,31 @@ async function completeLaunch(
     }
   }
 
-  if (!current.binId) {
+  /*
+   * No bin, or one that can no longer deliver anything.
+   *
+   * The guard used to be `!current.binId` alone, which is right exactly while a
+   * bin outlives its packet. It does not always: a bin reaches `COMPLETE` when
+   * `RESEARCH_PACKET_V1` is satisfied, and the packet can be put back to work
+   * afterwards — an `OTHER_LAYER` handoff reopens the audit round on a packet
+   * that had finished, and `advancePacket` queues the round's items. The bin is
+   * terminal and terminal is forever, so the reopened round's items sit
+   * claimable with nobody ever sent for them.
+   *
+   * §24's sentence at a fourth altitude, and the third fix covered exactly one
+   * state of it: `reopenAuditRound` reopens a bin parked at `NEEDS_HUMAN`, and
+   * says nothing about one that completed. So the condition is the property
+   * rather than the state — can this bin still deliver work — and the remedy is
+   * the bin the launch already knows how to build.
+   *
+   * Nothing is reset and nothing is destroyed: the spent bin keeps its row, its
+   * attempts, its events and its `created_by_id`, and the mission's pointer
+   * moves to the one that can actually be assigned. The bound is the work
+   * items' own attempt counters, which are unchanged — a packet whose items are
+   * spent goes terminal by itself and stops qualifying, so this cannot loop and
+   * adds no ceiling of its own.
+   */
+  if (!(await binCanStillDeliver(current))) {
     const bin = await createBin({
       projectId: input.projectId,
       layerId: input.layerId,
@@ -590,10 +655,40 @@ export interface RepairReport {
  */
 export async function repairLaunches(): Promise<RepairReport> {
   const rows = await getDb().all<{ id: string }>(
-    `SELECT id FROM russell_missions
-      WHERE state IN ('PLANNED','LAUNCHING','RUNNING')
-        AND (orchestration_id IS NULL OR bin_id IS NULL)
-      ORDER BY created_at, rowid`,
+    /*
+     * Three shapes, not two.
+     *
+     * The first two are the crash windows this was written for: an orchestration
+     * or a bin the launch never got as far as creating. The third is a mission
+     * that launched perfectly and whose bin has since been spent while its
+     * packet still holds claimable work — which no crash produces and which the
+     * ordinary path reaches, because a bin completes when its packet does and a
+     * packet can be put back to work afterwards.
+     *
+     * The packet's status is part of the condition rather than checked later:
+     * a packet waiting for a person must not have a worker sent to it, and both
+     * of those states already have their own answering transition.
+     */
+    `SELECT m.id FROM russell_missions m
+      WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING')
+        AND (
+          m.orchestration_id IS NULL
+          OR m.bin_id IS NULL
+          OR EXISTS (
+            SELECT 1
+              FROM bins b
+              JOIN research_orchestrations o ON o.id = m.orchestration_id
+             WHERE b.id = m.bin_id
+               AND b.state IN ('COMPLETE','FAILED','CANCELLED')
+               AND o.status IN ('PLANNING','RESEARCHING','VERIFYING','SYNTHESIZING','AUDITING','AWAITING_REPAIR')
+               AND EXISTS (
+                 SELECT 1 FROM work_items w
+                  WHERE w.orchestration_id = m.orchestration_id
+                    AND w.state IN ('QUEUED','LEASED')
+               )
+          )
+        )
+      ORDER BY m.created_at, m.rowid`,
   );
   const report: RepairReport = { inspected: rows.length, completed: [], orphaned: [] };
 
@@ -615,9 +710,14 @@ export async function repairLaunches(): Promise<RepairReport> {
      * another, or the repair is the thing that creates the duplicate.
      */
     if (!mission.binId && mission.orchestrationId) {
+      // A bin that can still be assigned, and only that one. After a re-bin
+      // the mission's earlier bins are still here with the same
+      // `created_by_id`, and linking a spent one would undo the repair.
       const existing = await getDb().all<{ id: string }>(
-        `SELECT id FROM bins WHERE orchestration_id = ? AND created_by_id = ?
-          ORDER BY created_at, rowid LIMIT 1`,
+        `SELECT id FROM bins
+          WHERE orchestration_id = ? AND created_by_id = ?
+            AND state NOT IN ('COMPLETE','FAILED','CANCELLED')
+          ORDER BY created_at DESC, rowid DESC LIMIT 1`,
         [mission.orchestrationId, `russell:${mission.id}`],
       );
       if (existing[0]) {

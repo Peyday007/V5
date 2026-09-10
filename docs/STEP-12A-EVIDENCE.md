@@ -7967,3 +7967,92 @@ Typecheck clean. SQLite 1875 passed / 25 skipped across 77 files. Postgres 1900
 passed across 77 files, exit 0. Client build clean. Migration from an empty
 database applied 35 in order; restart against that populated database read
 "up to date (35 already applied)".
+
+
+## 79. Two ways a packet ends up with nowhere to send a worker — 2026-09-10
+
+The whole system stopped for three hours and every state column read as
+healthy. `orc_91818deaa92a4172aa4e` — `S12A-ACC-3`'s packet — sat `AUDITING`
+with its report filed, one fragment `ACCEPTED`, its requirement `SATISFIED`,
+two `RESEARCH_AUDIT` items claimable, and two of its three audit passes
+complete. Behind it `S12A-ACC-6` was `QUEUED` with no mission, because
+concurrency is one and this mission was holding it.
+
+Nothing deployed could say why, which is the first finding: a packet's work
+reaches a worker inside a **bin**, and no report printed the bin. So
+`packet-report` now does, and the answer was one line:
+
+```
+BIN
+  bin_dcb7564ba5e840b3aac3  NEEDS_HUMAN  gen 12 attempts 0/5 refusals 2
+  ready 2026-09-10T10:45:37.123Z
+  terminal The bin used all 5 attempts without satisfying RESEARCH_PACKET_V1 v1.
+           Outstanding: The packet is AUDITING, which is not a state it files a
+           report in.
+```
+
+**Parked for using all five attempts, with none of them spent.** The five were
+charged for arrivals Brain's own audit-independence guard refused —
+§75's defect — and `creditRefusedAssignments` had already credited every one
+of them back. The condition the bin escalated on was gone. Nothing reopened
+it, because `reconcileBins` returned early on `credited === 0`: the reopen
+could only ever fire in the *same pass* as the credit, and once the two came
+apart the bin stayed parked with a full budget for ever.
+
+That is §24's sentence at a fourth altitude, and the correction is the one
+this codebase keeps arriving at: **derive the condition from rows, not from
+catching the moment.** The reopen is now guarded on the bin's own budget —
+`attemptCount < maxAttempts` — so it reaches a park credited an hour ago, and
+a bin that genuinely spent its attempts stays parked however often the
+reconciliation runs. That is also why it cannot loop: the bin becomes
+dispatchable, spends its attempts the ordinary way if the work still cannot
+be finished, parks again with the budget really exhausted, and is not
+selected. No ceiling was added.
+
+### The second way, found by reading rather than by waiting
+
+`reopenAuditRound` answers exactly one state of this — a bin parked at
+`NEEDS_HUMAN` — and says nothing about a bin that **completed**. A bin reaches
+`COMPLETE` when `RESEARCH_PACKET_V1` is satisfied, and the packet can be put
+back to work afterwards: an `OTHER_LAYER` handoff reopens the audit round and
+`advancePacket` queues its items. Terminal is forever, so those items sit
+claimable with nobody ever sent for them — the same stranding, reached by a
+path nothing was watching.
+
+`repairLaunches` could not reach it either: it selects `bin_id IS NULL`, and
+this mission's `bin_id` is perfectly set. So the condition became the property
+rather than the state — *can this bin still deliver work* — and the remedy is
+the bin the launch already knows how to build. The mission's pointer moves to
+a bin that can be assigned; the spent bin keeps its row, its attempts, its
+events and its `created_by_id`. Packets waiting for a person
+(`AWAITING_APPROVAL`, `NEEDS_HUMAN`) are excluded by name: each already has its
+own answering transition, and a new bin there would send a worker to be told
+the same thing again.
+
+The bound is the work items' own attempt counters, unchanged. A packet whose
+items are spent goes terminal by itself and stops qualifying.
+
+Both fixes were checked by putting the old code back: reverting the
+`credited === 0` early return fails the new reconciliation test, and reverting
+the `!current.binId` guard fails the new recovery test.
+
+### And what the seventh look scenario established
+
+`S12A-ACC-7` was the best-posed of the three: `scenario-check` read
+`PRESENT_BUT_UNVERIFIED` for both the person's question and the predicted
+statement. It stopped one step earlier than any attempt before it — the worker
+**answered** the message rather than capturing an idea from it
+(`{"accepted":"ANSWER_ONLY","effect":"UNSUPPORTED"}`), so `shouldCapture` never
+ran and the judgment had nothing to judge.
+
+Nothing about that is repaired. Which of the closed set of actions a message
+calls for is the worker's reading of the message; Brain validates that reading
+rather than overriding it, and §8 cuts both ways — Brain may not manufacture a
+proposal the model did not make. What a person controls is whether they ask a
+question or ask for the work, so `S12A-ACC-8` asks for the work.
+
+One thing beside it *was* wrong: `unsupportedAction` returns null for
+`ANSWER_ONLY`, so the message settled `COMPLETE` and the person was told
+nothing about a refusal — while the stored record said `effect: "UNSUPPORTED"`.
+Establishing that nothing had been refused took reading three functions. The
+label now comes from the same predicate that decides what the person is told.
