@@ -8611,3 +8611,66 @@ standing envelope's reach; that is a fact about the envelope and the question,
 recorded as one. Widening the envelope to make the scenario succeed was
 available and was not taken — for the same reason ACC-5's jurisdiction refusal
 was left standing.
+
+## 88. The decision that is genuinely a person's — 2026-09-10
+
+`orc_164bbf76e40b4fa88bd1`, the packet `S12A-ACC-9`'s idea launched, reached the
+one state everything else in this closure was clearing the way for:
+
+```
+  status      NEEDS_HUMAN   pass AUDIT
+  gap policy  not authorized
+  document    doc_2c4f89d5972b46e888f2       audit aud_4307d52632ee4907aa51  verdict PATCH
+  FRAGMENTS (1)
+    official-record  ACCEPTED  attempt 1/2  integrity PASS  sufficiency SUFFICIENT
+        claims 4 (3 accepted)
+  REQUIREMENTS (1)
+    official-record  MANDATORY  RESEARCH  coverage CONTRADICTED
+  EVIDENCE
+    claims 4 stored, 3 accepted        passes 6
+        audit role ordinal 5 COMPLETE 14:35:46Z
+        audit role ordinal 6 COMPLETE 15:21:47Z
+        audit role ordinal 7 COMPLETE 16:23:28Z
+    audits 1: aud_4307d52632ee4907aa51 PATCH 1 gap
+      0. [PATCH] Licensure conclusion declared 'confirmed' rests solely on a
+         non-official mirror, contrary to the assignment's evidence standard
+         MCL 339.2501(u)/(v) and MCL 339.2503 were read only from LawServer, a
+         private legal-publishing mirror, after legislature.mi.gov (503) and
+         michigan.gov…
+    citations 3 cited, 3 resolve to accepted evidence
+    document  World Model v1B · 10846 bytes · extraction READY · ledger 3/3
+```
+
+Everything in it is real and none of it was arranged. The research ran, three
+claims cleared the seven-condition gate, a report was filed with its ledger
+inside it and every citation resolving to accepted evidence, and three
+independent sessions audited it. The judge then returned **PATCH** — a
+non-advancing verdict — for a reason that is exactly the one §22 already
+recorded about this host: `legislature.mi.gov` answers **503** to automation, so
+the Michigan statute was read from a private mirror, and the assignment's own
+evidence standard says official sources.
+
+The fragment is `ACCEPTED`, so `shapeOf` gives `accepted > 0` and
+`researched > 0`, and `choicesFor` offers **RECORD_GAPS and STOP**. Two answers,
+both of which can act — a real decision, and the park is legitimate.
+
+**Brain cannot make it.** `recordGaps` requires `answered_by_user_id`, taken from
+the authenticated principal and never from a body field; `authorizeUnresolvedGaps`
+records the person by id and address; and `A14_HUMAN_RESUME` additionally
+requires `o.unresolved_gap_authorized_by = r.answered_by_user_id`, so nothing a
+script or a worker submits can satisfy it. That is invariant 20 and §24's *"Brain
+may not decide this for you"*, working exactly as written.
+
+**Nothing was falsified to produce it.** The gap is the judge's own, about a
+source that is genuinely unreachable; the alternative — widening the acceptable
+source class to make the mirror official — was available and was not taken, for
+the same reason §22 records not taking it the first time this host refused.
+
+And answering it closes **both** remaining conditions, because §84's chain runs
+from exactly here: RECORD_GAPS → `unresolved_gap_policy` → `COMPLETE_WITH_GAPS`
+→ writeback → `unresolvedFollowOn` reads the judge's own `audit_gaps` row → a
+follow-on candidate → launched → `setNextMission` on the parent = `A13_AUTO_NEXT`.
+
+**STOP would not.** It cancels the mission, and the gate counts a stop separately
+and never as a pass — correctly, because condition 17 asks for a park and a
+*resume*, not for recovery.
