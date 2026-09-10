@@ -2939,6 +2939,40 @@ describe('a turn goes out to the fleet and comes back as a decision', () => {
     expect(answered.status).toBe('FAILED');
     expect(answered.pendingReason).toMatch(/RUN_PROBE is not something a turn can carry out/);
     expect(answered.produced).toMatchObject({ accepted: 'RUN_PROBE', effect: 'UNSUPPORTED' });
+    /*
+     * And an action Brain *does* support records no refusal.
+     *
+     * `ANSWER_ONLY` is an answer: answering is the effect, the message settles
+     * `COMPLETE`, and the person is told nothing about a refusal. The stored
+     * record used to say `UNSUPPORTED` for it anyway, which reads to anybody
+     * looking at the rows later as a request Brain turned down — production's
+     * `S12A-ACC-7` produced exactly that. The label now comes from the same
+     * predicate that decides what the person is told.
+     */
+    const plain = await createConversation({
+      ownerUserId: userId,
+      title: 'Just answer it',
+      projectId,
+      visibility: 'PRIVATE',
+    });
+    const asked = await beginTurn({
+      principal: principal([membership(projectId)]),
+      conversationId: plain.id,
+      content: 'Roughly how many Michigan counties are there?',
+    });
+    expect(
+      await answerTurnBin(asked.binId!, {
+        action: 'ANSWER_ONLY',
+        answer: 'Eighty-three.',
+        confidence: 90,
+      }),
+    ).toBe('COMPLETE');
+    const plainly = await applyTurn(asked.binId!);
+    expect(plainly.ok).toBe(true);
+    const answerOnly = (await listTurns(plain.id, 10)).find((turn) => turn.role === 'RUSSELL')!;
+    expect(answerOnly.status).toBe('COMPLETE');
+    expect(answerOnly.pendingReason).toBeNull();
+    expect(answerOnly.produced).toMatchObject({ accepted: 'ANSWER_ONLY', effect: 'NONE' });
     // The worker's words are kept — they are usually a good answer — with the
     // plain fact appended. A refusal that names no route is the defect §22
     // recorded three times.

@@ -252,6 +252,40 @@ const ACCEPTANCE_SCENARIOS = {
       'Michigan specifically, does that summary still hold — is a licence required for ' +
       'success-fee business brokerage here?',
   },
+  /*
+   * The same subject again, asked as a request for work rather than as a
+   * question — and what `S12A-ACC-7` established before it.
+   *
+   * ACC-7 was well-posed: `scenario-check` read the archive at
+   * `PRESENT_BUT_UNVERIFIED` for both the person's question and the predicted
+   * statement, which is the shape a bounded look is for. It stopped one step
+   * earlier than any of the previous attempts. The worker answered it —
+   * `{"accepted":"ANSWER_ONLY","effect":"UNSUPPORTED"}` — so no idea was
+   * captured, `shouldCapture` never ran, and there was nothing for the
+   * judgment to judge.
+   *
+   * Nothing about that is a defect and nothing about it is repaired. Which of
+   * the closed set of actions a message calls for is the worker's reading of
+   * the message, Brain validates that reading rather than overriding it, and a
+   * person whose question was answered can simply ask for the work. §8 cuts
+   * both ways: model prose cannot move state, and Brain cannot manufacture a
+   * proposal the model did not make.
+   *
+   * So this asks for the work in the imperative. It is the same subject and
+   * the same archive claim; what changes is that it is a request rather than a
+   * question, which is the one thing under a person's control.
+   */
+  'S12A-ACC-8': {
+    purpose: 'a bounded cheap look, asked as work to be done rather than as a question to answer',
+    statement:
+      'check the Michigan line of the five-state success-fee brokerage licensure summary ' +
+      'against the current rule',
+    question:
+      'Please check something for me rather than answering it from what we already wrote down. ' +
+      'Our five-state licensure summary says success-fee business brokerage needs a licence, ' +
+      'and nothing behind it cites a source anyone can look at. Go and see whether that holds ' +
+      'for Michigan under the rule in force now, and record what you find.',
+  },
   'S12A-ACC-6': {
     purpose: "a question the public record does not answer, and the person's decision that follows",
     statement:

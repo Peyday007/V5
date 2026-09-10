@@ -263,6 +263,25 @@ export const ACCEPTANCE_SUITE = [
     purpose: 'a bounded cheap look, asked about the one jurisdiction the standing authorization covers',
     conversationTitle: 'S12A-ACC-7',
   },
+  /*
+   * The same subject, asked as work rather than as a question.
+   *
+   * `S12A-ACC-7` was well-posed and stopped one step earlier than any attempt
+   * before it: `scenario-check` read `PRESENT_BUT_UNVERIFIED` for both the
+   * question and the predicted statement, and the worker answered the message
+   * instead of capturing an idea from it — `ANSWER_ONLY`, so `shouldCapture`
+   * never ran and the judgment had nothing to judge.
+   *
+   * That is not a defect and is not repaired. Which action a message calls for
+   * is the worker's reading of it; Brain validates that reading and may not
+   * manufacture a proposal the model did not make. What a person controls is
+   * whether they ask a question or ask for the work, so this asks for the work.
+   */
+  {
+    scenarioId: 'S12A-ACC-8',
+    purpose: 'a bounded cheap look, asked as work to be done rather than as a question to answer',
+    conversationTitle: 'S12A-ACC-8',
+  },
 ] as const;
 
 /**
