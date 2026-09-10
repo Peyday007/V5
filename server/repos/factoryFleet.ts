@@ -611,10 +611,31 @@ export async function listFindings(campaignId: string): Promise<FactoryFinding[]
   return rows.map(mapFinding);
 }
 
+/**
+ * Findings nobody has finished with.
+ *
+ * `OPEN` *and* `REPAIR_QUEUED`, because a finding whose repair is queued is still
+ * unresolved — the defect is only gone once the repair integrated and the
+ * verification passed. Reading only `OPEN` was worse than wrong in one place: it
+ * made `reconcileRepairs` iterate an empty set, so twelve findings whose repairs
+ * had landed and been verified stayed REPAIR_QUEUED forever and the campaign
+ * reported nothing repaired.
+ */
 export async function listOpenFindings(campaignId: string): Promise<FactoryFinding[]> {
   const rows = await getDb().all<FactoryFindingRow>(
     `SELECT * FROM factory_findings
-      WHERE campaign_id = ? AND state = 'OPEN' ORDER BY created_at, rowid`,
+      WHERE campaign_id = ? AND state IN ('OPEN','REPAIR_QUEUED') ORDER BY created_at, rowid`,
+    [campaignId],
+  );
+  return rows.map(mapFinding);
+}
+
+/** Findings with no repair attached yet — what `queueRepairs` has left to do. */
+export async function listUnqueuedFindings(campaignId: string): Promise<FactoryFinding[]> {
+  const rows = await getDb().all<FactoryFindingRow>(
+    `SELECT * FROM factory_findings
+      WHERE campaign_id = ? AND state = 'OPEN' AND repair_unit_id IS NULL
+      ORDER BY created_at, rowid`,
     [campaignId],
   );
   return rows.map(mapFinding);
