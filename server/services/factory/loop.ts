@@ -189,10 +189,11 @@ async function runTick(
     });
   }
 
-  // A lease that ran out is claimable work. Sweeping makes the state readable and
-  // the metrics honest; the claim query would find those units either way.
+  // An expired lease on a unit with attempts left is claimable work, and the
+  // claim takes it as a takeover — which is the only record that a recovery
+  // happened. The sweep therefore touches only leases nothing will claim.
   const swept = await sweepExpiredUnitLeases();
-  if (swept > 0) notes.push(`${swept} expired lease(s) reclaimed`);
+  if (swept > 0) notes.push(`${swept} expired lease(s) retired with no attempts left`);
 
   // Has the world moved underneath the pin? Asked every tick, because a campaign
   // that produced a pull request against a branch that has moved is a campaign a
