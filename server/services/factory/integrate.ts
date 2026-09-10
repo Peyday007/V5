@@ -58,6 +58,7 @@ import {
   gitOrThrow,
   isAncestor,
   mergeBranch,
+  resetWorktree,
   resolveSha,
   run,
   campaignWorkspace,
@@ -231,6 +232,19 @@ export async function integrateUnit(options: IntegrateOptions): Promise<Integrat
   const { repoRoot, campaign, unit } = options;
   const startedAt = Date.now();
   const worktreePath = await ensureIntegrationWorktree(repoRoot, campaign);
+  /*
+   * Clean before merging, because the last verification dirtied this tree.
+   *
+   * `npm install` writes a lockfile and a build writes its output, both untracked,
+   * and git refuses a merge that would overwrite an untracked file. The campaign
+   * that found this had a repair whose whole job was to add `package-lock.json`
+   * and it was refused twice with "untracked working tree files would be
+   * overwritten" — a merge conflict in a file neither side had conflicting
+   * content for. Nothing uncommitted here is evidence, so resetting costs
+   * nothing and removes a whole class of integration failure that looks like
+   * somebody's mistake.
+   */
+  await resetWorktree(worktreePath);
   const beforeSha = await gitOrThrow(worktreePath, ['rev-parse', 'HEAD']);
 
   const record = async (

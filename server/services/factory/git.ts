@@ -50,6 +50,38 @@ export interface CommandResult {
  */
 export const FACTORY_SCAFFOLDING = ['node_modules'];
 
+/**
+ * Bring a worktree back to exactly what its branch says, keeping `node_modules`.
+ *
+ * The integration worktree is scratch: nothing uncommitted in it is ever
+ * evidence, because integration merges committed branches and the commits are
+ * the record. Verification, though, leaves things behind — `npm install` writes a
+ * lockfile, a build writes its output — and git refuses a merge that would
+ * overwrite an untracked file. So a campaign whose verification generates a
+ * lockfile cannot merge the unit that adds one, and the failure reads as a merge
+ * conflict in a file neither side conflicted on.
+ *
+ * `node_modules` is excluded deliberately: it is expensive to recreate, it is
+ * scaffolding the factory adds rather than anything a unit owns, and the commit
+ * path already refuses to stage it.
+ */
+export async function resetWorktree(worktreePath: string): Promise<{ cleaned: string[] }> {
+  const untracked = await git(worktreePath, [
+    'clean',
+    '-fd',
+    '-e',
+    'node_modules',
+    '--dry-run',
+  ]);
+  const cleaned = untracked.stdout
+    .split('\n')
+    .map((line) => line.replace(/^Would remove /, '').trim())
+    .filter((line) => line.length > 0);
+  await git(worktreePath, ['clean', '-fd', '-e', 'node_modules']);
+  await git(worktreePath, ['checkout', '--', '.']);
+  return { cleaned };
+}
+
 /** Plenty for a test suite; bounded so a hung command cannot hold a lane forever. */
 export const DEFAULT_COMMAND_TIMEOUT_MS = 20 * 60 * 1000;
 const MAX_CAPTURED_BYTES = 2 * 1024 * 1024;
