@@ -48,6 +48,9 @@ import { ensureCampaign } from '../repos/factory.ts';
 import { INITIAL_LANE_TARGET } from '../services/factory/scheduler.ts';
 import { campaignMetrics } from '../services/factory/metrics.ts';
 import { capacity, readiness } from '../services/factory/registry.ts';
+import { campaignBriefing } from '../services/factory/projections.ts';
+import { throughputReport } from '../services/factory/throughput.ts';
+import { pullRequestFor } from '../services/factory/pullRequest.ts';
 import {
   authorizeProject,
   badRequest,
@@ -261,7 +264,9 @@ factoryRouter.get(
 );
 
 /**
- * One campaign, in the terms a person cares about.
+ * One campaign, in the terms a person cares about — derived from
+ * `campaignBriefing` rather than re-derived inline, so this route and the
+ * dedicated briefing route below can never disagree about the same campaign.
  *
  * Objective, stage, what is actually running, the blocker if there is one, the
  * result, and the decision if one is waiting. The unit list is included because
@@ -273,12 +278,13 @@ factoryRouter.get(
   handler(async (req, res) => {
     const campaignId = pathId(req, 'campaignId');
     const { campaign, changeRequest } = await campaignFor(campaignId, 'READ');
-    const [units, reviews, findings, metrics, releases] = await Promise.all([
+    const [units, reviews, findings, metrics, releases, briefing] = await Promise.all([
       listUnits(campaignId),
       listReviews(campaignId),
       listFindings(campaignId),
       campaignMetrics(campaignId),
       listReleases(campaignId),
+      campaignBriefing(campaignId),
     ]);
 
     const lastReview = reviews[reviews.length - 1] ?? null;
@@ -287,20 +293,46 @@ factoryRouter.get(
       expectedOutcome: changeRequest.expectedOutcome,
       stage: campaign.state,
       stageDetail: campaign.stageDetail,
-      blocker: campaign.blockerKind
-        ? { kind: campaign.blockerKind, detail: campaign.blockerDetail }
-        : null,
+      blocker: briefing?.blocker ?? null,
       decisionWaiting:
         releases.find((release) => release.decision === 'REQUESTED') ?? null,
       campaign,
-      activeWork: units
-        .filter((unit) => unit.state === 'LEASED' || unit.state === 'IMPLEMENTED')
-        .map((unit) => ({ unitKey: unit.unitKey, title: unit.title, state: unit.state })),
+      activeWork: briefing?.activeWork.units ?? [],
       units,
       review: lastReview,
       openFindings: findings.filter((finding) => finding.state === 'OPEN'),
       metrics,
     });
+  }),
+);
+
+/** The briefing: objective, stage, active work, blocker and result, nothing invented. */
+factoryRouter.get(
+  '/factory/campaigns/:campaignId/briefing',
+  handler(async (req, res) => {
+    const campaignId = pathId(req, 'campaignId');
+    await campaignFor(campaignId, 'READ');
+    res.json(await campaignBriefing(campaignId));
+  }),
+);
+
+/** The factory's own throughput, with an evidence class on every number. */
+factoryRouter.get(
+  '/factory/campaigns/:campaignId/throughput',
+  handler(async (req, res) => {
+    const campaignId = pathId(req, 'campaignId');
+    await campaignFor(campaignId, 'READ');
+    res.json(await throughputReport(campaignId));
+  }),
+);
+
+/** The reviewable artifact's title and body, from rows — never published from here. */
+factoryRouter.get(
+  '/factory/campaigns/:campaignId/pull-request',
+  handler(async (req, res) => {
+    const campaignId = pathId(req, 'campaignId');
+    await campaignFor(campaignId, 'READ');
+    res.json((await pullRequestFor(campaignId)) ?? { title: null, body: null });
   }),
 );
 

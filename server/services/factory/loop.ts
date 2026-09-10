@@ -79,6 +79,8 @@ import {
 } from './repair.ts';
 import { assembleDeliverable } from './assemble.ts';
 import { planCampaign } from './architect.ts';
+import { recoverAll, recoverCampaign, type RecoveryReport } from './recovery.ts';
+import { listCampaignsPendingOutcome, recordCampaignOutcome } from './writeback.ts';
 
 export interface TickOptions {
   repoRoot?: string;
@@ -138,6 +140,25 @@ const DEFAULT_MAX_REVIEW_ROUNDS = 4;
  */
 const HELD_TICK_WAIT_MS = 20_000;
 const MAX_HELD_TICKS = 60;
+
+/** The one sentence a recovery report becomes on a tick's notes, or nothing if it found no mess to clean up. */
+function describeRecovery(recovery: RecoveryReport): string | null {
+  if (
+    recovery.sessionsClosed === 0 &&
+    recovery.leasesReclaimed === 0 &&
+    recovery.worktreesPruned === 0 &&
+    !recovery.stateRederived
+  ) {
+    return null;
+  }
+  return (
+    `recovery: ${recovery.sessionsClosed} session(s) closed, ${recovery.leasesReclaimed} lease(s) reclaimed, ` +
+    `${recovery.worktreesPruned} worktree(s) pruned` +
+    (recovery.stateRederived
+      ? `; state re-derived ${recovery.stateRederived.from} -> ${recovery.stateRederived.to}`
+      : '')
+  );
+}
 
 /* ------------------------------------------------------------------------- */
 /* The tick                                                                   */
@@ -202,7 +223,15 @@ async function runTick(
     notes,
   };
 
-  if (campaign.state === 'COMPLETE' || campaign.state === 'CANCELLED') return report;
+  if (campaign.state === 'COMPLETE' || campaign.state === 'CANCELLED') {
+    // A terminal campaign has nothing left for the loop to move, but its
+    // writeback may not have landed yet — a crash or a swallowed error
+    // between the COMPLETE patch and the writeback insert leaves exactly
+    // this shape. Retried here so a tick on this campaign, however it was
+    // reached, is what closes that gap rather than walking past it forever.
+    await ensureWrittenBack(report, campaign);
+    return report;
+  }
 
   if (changeRequest.state !== 'APPROVED') {
     return await block(report, campaign, 'CONTRADICTORY_CONTRACT', {
@@ -210,6 +239,22 @@ async function runTick(
         'The change request is not approved. A campaign cannot run against an objective nobody ' +
         'has frozen.',
     });
+  }
+
+  // A dead process may have left this campaign's sessions RUNNING, its unit
+  // leases stale, its worktrees undisposed, or its own recorded state
+  // describing a pipeline stage nothing underneath it still supports. Recovered
+  // before anything below schedules or dispatches, so neither ever acts on a
+  // picture of the campaign a dead process left behind. A recovery failure is
+  // recorded as a note rather than thrown — a tick that cannot recover is still
+  // a tick that should try to make progress.
+  try {
+    const recovery = await recoverCampaign(campaignId, { repoRoot });
+    const note = describeRecovery(recovery);
+    if (note) notes.push(note);
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : String(error);
+    notes.push(`recovery failed: ${detail.slice(0, 300)}`);
   }
 
   // A dead dispatcher's sessions are still RUNNING, and `workerLoad` counts
@@ -319,7 +364,53 @@ async function advance(
     evidenceClass: 'MEASURED',
     detail: { from: campaign.state, to, stageDetail },
   });
+  if (to === 'COMPLETE') {
+    // The rows already agree the campaign is finished — patched and eventled
+    // above — so this is what leaves that fact in Brain's own project history.
+    // Idempotent by itself; no second guard belongs here, and a writeback
+    // failure is a note, never a reason to undo the completion above. A
+    // failure here is not the end of it: `ensureWrittenBack` is what a later
+    // tick on this now-terminal campaign retries.
+    await ensureWrittenBack(report, { ...campaign, state: to });
+  }
   return { ...report, state: to, stage: stageDetail, progress: true };
+}
+
+/**
+ * Write the campaign's Brain outcome if it has not landed yet, and leave a
+ * trace on the factory's own ledger when it does.
+ *
+ * `recordCampaignOutcome` is safe to call more than once — its idempotency
+ * reservation (`runIdempotent`, keyed off the campaign id) admits exactly
+ * one caller's insert, and every other caller — concurrent or redelivered —
+ * replays or waits rather than inserting a second row. The
+ * `listEventsByEntity` read inside it is only a fast path for the ordinary
+ * case, a campaign whose outcome already landed on an earlier tick; it is
+ * not what makes repeated calls safe. So this never has to remember whether
+ * an earlier attempt (this tick's own COMPLETE transition, or a previous
+ * tick that died or threw between the patch and the insert) already got
+ * there. Called from both the transition that first reaches COMPLETE and
+ * from every later tick that finds a terminal campaign still missing one, so
+ * the two paths cannot drift apart about what "written back" means.
+ */
+async function ensureWrittenBack(report: TickReport, campaign: FactoryCampaign): Promise<void> {
+  try {
+    const result = await recordCampaignOutcome(campaign.id);
+    if (result.recorded) {
+      await recordFactoryEvent({
+        campaignId: campaign.id,
+        kind: FACTORY_EVENT_KINDS.writeback,
+        evidenceClass: 'MEASURED',
+        detail: { eventId: result.event?.id ?? null },
+      });
+      report.notes.push('writeback recorded');
+    } else if (result.reason && result.reason !== 'already recorded') {
+      report.notes.push(`writeback not recorded: ${result.reason}`);
+    }
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : String(error);
+    report.notes.push(`writeback failed: ${detail.slice(0, 300)}`);
+  }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1223,13 +1314,60 @@ export async function runCampaign(
   return { reports, final: await getCampaign(campaignId) };
 }
 
-/** Every live campaign, one tick each. What a scheduled dispatcher would call. */
+/**
+ * Every live campaign, one tick each — plus every terminal campaign still
+ * missing its Brain writeback, which `listLiveCampaigns` deliberately excludes
+ * because the loop itself has nothing left to move there. Without this second
+ * set, a campaign that reached COMPLETE with a failed or interrupted
+ * writeback would never be ticked again by anything a scheduled dispatcher
+ * calls: `tickCampaign` still recovers it (see the terminal-state branch in
+ * `runTick`), but only if something hands it that campaign's id. This is
+ * that something. What a scheduled dispatcher would call.
+ *
+ * Before any campaign is individually ticked, `recoverAll` runs once across
+ * every live campaign — a dead process's mess (a `RUNNING` session with no
+ * live lease, an expired unit lease, an undisposed worktree, a campaign state
+ * describing a stage nothing underneath it supports) is cleared for the whole
+ * batch up front, rather than rediscovered one campaign at a time as the loop
+ * below happens to reach each in turn. `recoverAll` claims and releases each
+ * campaign's own tick around its recovery, so it can never race a dispatcher
+ * that is genuinely mid-tick on that campaign elsewhere — it simply leaves
+ * that one for its own tick to recover, exactly as before. This is additional
+ * to, not instead of, the per-campaign recovery `runTick` still carries for a
+ * campaign ticked on its own (the caller most tests use, and what
+ * `tests/factoryWiring.test.ts` pins): running both is safe because recovery
+ * is idempotent, and the second pass costs nothing when the first already
+ * found everything — it is what turns a `recovery:` note here into a report
+ * of what the bulk pass did rather than a duplicate of it. A bulk-pass
+ * failure is swallowed rather than thrown: it must never take an
+ * otherwise-healthy batch down with it, since each campaign's own tick still
+ * carries its guarded recovery as a fallback.
+ */
 export async function tickAllCampaigns(options: TickOptions = {}): Promise<TickReport[]> {
   const { listLiveCampaigns } = await import('../../repos/factory.ts');
-  const campaigns = await listLiveCampaigns();
+  const [live, pendingOutcome] = await Promise.all([
+    listLiveCampaigns(),
+    listCampaignsPendingOutcome(),
+  ]);
+
+  const repoRoot = options.repoRoot ?? FACTORY_DEFAULT_REPO_ROOT;
+  const bulkRecoveryNotes = new Map<string, string>();
+  try {
+    for (const recovery of await recoverAll({ repoRoot })) {
+      const note = describeRecovery(recovery);
+      if (note) bulkRecoveryNotes.set(recovery.campaignId, note);
+    }
+  } catch {
+    // Left empty on purpose: an unrecovered batch still ticks, and each
+    // campaign's own tick still runs `recoverCampaign` for itself.
+  }
+
   const reports: TickReport[] = [];
-  for (const campaign of campaigns) {
-    reports.push(await tickCampaign(campaign.id, options));
+  for (const campaign of [...live, ...pendingOutcome]) {
+    const report = await tickCampaign(campaign.id, options);
+    const bulkNote = bulkRecoveryNotes.get(campaign.id);
+    if (bulkNote && !report.tickHeld) report.notes.push(bulkNote);
+    reports.push(report);
   }
   return reports;
 }
