@@ -389,11 +389,19 @@ export async function commitAll(
   trailers: Record<string, string> = {},
 ): Promise<string | null> {
   if (!(await isDirty(worktreePath))) return null;
-  // Everything except what the factory itself put there. The dependency link is
-  // the factory's own scaffolding, and a rescue commit that swept it in put a
-  // path no unit owns into every diff — which the integrator then correctly
-  // rejected, for a reason that was never the worker's.
-  await gitOrThrow(worktreePath, ['add', '-A', '--', '.', ...FACTORY_SCAFFOLDING.map((p) => `:(exclude)${p}`)]);
+  await gitOrThrow(worktreePath, ['add', '-A']);
+  // Then take back what the factory itself put there. The dependency link is the
+  // factory's own scaffolding, and a rescue commit that swept it in put a path no
+  // unit owns into every diff — which the integrator then correctly rejected, for
+  // a reason that was never the worker's.
+  //
+  // Unstaged rather than excluded by pathspec: `:(exclude)node_modules` names an
+  // ignored path explicitly, which git refuses outright once the ignore rule is
+  // also in place. Belt and braces became a conflict, and the crash took the
+  // whole tick with it. This form cannot fail either way.
+  for (const scaffold of FACTORY_SCAFFOLDING) {
+    await git(worktreePath, ['rm', '--cached', '--ignore-unmatch', '-r', '-q', '--', scaffold]);
+  }
   const lines = [message, ''];
   for (const [key, value] of Object.entries(trailers)) lines.push(`${key}: ${value}`);
   const args = ['commit', '--no-verify', '-m', lines.join('\n')];

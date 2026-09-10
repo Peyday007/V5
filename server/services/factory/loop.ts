@@ -89,6 +89,15 @@ export interface TickOptions {
   planInstalled?: boolean;
   unitTimeoutMs?: number;
   reviewTimeoutMs?: number;
+  /**
+   * How long a unit's lease lasts.
+   *
+   * An operational knob rather than a tuning parameter: the default is right for
+   * ordinary work, and a recovery drill needs a short one so a dead dispatcher's
+   * lease becomes claimable inside a person's attention span rather than half an
+   * hour later. Bounded by `clampUnitLeaseMs`, so it cannot be set to never.
+   */
+  unitLeaseMs?: number;
   /** How many review rounds before the campaign stops and says so. */
   maxReviewRounds?: number;
 }
@@ -565,48 +574,26 @@ export async function scheduleAndDispatch(
   // both wanted a unit cannot both have it, and the loser is not an error.
   const results = await Promise.all(
     assignments.map(async (assignment) => {
-      const worker = await getWorker(assignment.workerId);
-      const unit = await getUnit(assignment.unitId);
-      if (!worker || !unit) return false;
-
-      const claimed = await claimUnits({
-        campaignId: campaign.id,
-        workerId: worker.id,
-        unitIds: [assignment.unitId],
-        limit: 1,
-        onSkip: async (row, reason) => {
-          await recordFactoryEvent({
-            campaignId: campaign.id,
-            unitId: row.id,
-            workerId: worker.id,
-            kind: FACTORY_EVENT_KINDS.unitRefused,
-            evidenceClass: 'DERIVED',
-            detail: { reason, stage: 'CLAIM' },
-          });
-        },
-      });
-      const taken = claimed[0];
-      if (!taken) return false;
-
-      const finding = unit.repairsFindingId
-        ? (await listFindings(campaign.id)).find((f) => f.id === unit.repairsFindingId) ?? null
-        : null;
-
-      const outcome = await executeUnit({
-        repoRoot,
-        campaign,
-        changeRequest,
-        claimed: taken,
-        worker,
-        model: assignment.model,
-        role: assignment.role,
-        finding,
-        timeoutMs: options.unitTimeoutMs,
-      });
-      // Integrate this lane now rather than at the end of the tick. The queue
-      // serialises the merges; it does not wait for the other lanes.
-      if (outcome.outcome === 'IMPLEMENTED') queue.enqueue(taken.unit.id);
-      return true;
+      try {
+        return await runLane(campaign, changeRequest, repoRoot, options, assignment, queue);
+      } catch (error: unknown) {
+        // One lane's unexpected failure is that lane's, never the campaign's. The
+        // first version let it propagate out of `Promise.all`, which killed the
+        // tick, left every other lane's unit LEASED, and needed a lease expiry to
+        // recover from a failed `git add`. A dispatcher that dies because one
+        // worker's commit failed is the fragility the loop exists to absorb.
+        const detail = error instanceof Error ? error.message : String(error);
+        await recordFactoryEvent({
+          campaignId: campaign.id,
+          unitId: assignment.unitId,
+          workerId: assignment.workerId,
+          kind: FACTORY_EVENT_KINDS.unitFailed,
+          evidenceClass: 'MEASURED',
+          detail: { reason: detail.slice(0, 800), stage: 'LANE' },
+        });
+        notes.push(`lane for ${assignment.unitId} threw: ${detail.slice(0, 200)}`);
+        return false;
+      }
     }),
   );
 
@@ -620,6 +607,68 @@ export async function scheduleAndDispatch(
     rejected: integration.rejected,
     notes,
   };
+}
+
+/**
+ * One lane: claim the unit the scheduler chose, run it, and queue its
+ * integration.
+ *
+ * Separated from the fan-out so the fan-out can catch. A lane that throws has to
+ * be contained: its unit is already leased, and a lease nobody releases is
+ * recovered half an hour later by expiry rather than immediately by the tick that
+ * was holding it.
+ */
+async function runLane(
+  campaign: FactoryCampaign,
+  changeRequest: FactoryChangeRequest,
+  repoRoot: string,
+  options: TickOptions,
+  assignment: { unitId: string; workerId: string; model: string; role: FactoryWorkUnit['role'] },
+  queue: { enqueue(unitId: string): void },
+): Promise<boolean> {
+  const worker = await getWorker(assignment.workerId);
+  const unit = await getUnit(assignment.unitId);
+  if (!worker || !unit) return false;
+
+  const claimed = await claimUnits({
+    campaignId: campaign.id,
+    workerId: worker.id,
+    unitIds: [assignment.unitId],
+    limit: 1,
+    leaseMs: options.unitLeaseMs,
+    onSkip: (row, reason) => {
+      void recordFactoryEvent({
+        campaignId: campaign.id,
+        unitId: row.id,
+        workerId: worker.id,
+        kind: FACTORY_EVENT_KINDS.unitRefused,
+        evidenceClass: 'DERIVED',
+        detail: { reason, stage: 'CLAIM' },
+      });
+    },
+  });
+  const taken = claimed[0];
+  if (!taken) return false;
+
+  const finding = unit.repairsFindingId
+    ? (await listFindings(campaign.id)).find((f) => f.id === unit.repairsFindingId) ?? null
+    : null;
+
+  const outcome = await executeUnit({
+    repoRoot,
+    campaign,
+    changeRequest,
+    claimed: taken,
+    worker,
+    model: assignment.model,
+    role: assignment.role,
+    finding,
+    timeoutMs: options.unitTimeoutMs,
+  });
+  // Integrate this lane now rather than at the end of the tick. The queue
+  // serialises the merges; it does not wait for the other lanes.
+  if (outcome.outcome === 'IMPLEMENTED') queue.enqueue(taken.unit.id);
+  return true;
 }
 
 /**
