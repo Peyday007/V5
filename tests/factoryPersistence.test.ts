@@ -83,7 +83,14 @@ function startServer(): ChildProcessByStdio<null, Readable, Readable> {
 }
 
 async function waitForHealthy(): Promise<void> {
-  const deadline = Date.now() + 45_000;
+  /*
+   * Generous, because this file starts two servers in sequence and a machine
+   * running the rest of the suite in parallel takes far longer than an idle one
+   * to boot either. It failed exactly that way once — under load, in the middle
+   * of a full run — and a test that only passes on a quiet machine is a test that
+   * will fail in CI for a reason that has nothing to do with the code.
+   */
+  const deadline = Date.now() + 120_000;
   for (;;) {
     if (Date.now() > deadline) throw new Error(`server never became healthy:\n${log}`);
     try {
@@ -188,7 +195,7 @@ beforeAll(async () => {
   current = startServer();
   await waitForHealthy();
   adminCookie = await signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
-}, 180_000);
+}, 300_000);
 
 afterAll(async () => {
   await stopServer();

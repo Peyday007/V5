@@ -156,14 +156,23 @@ describe('recoverCampaign: sessions, leases and history', () => {
     const closedSession = await getSession(session.id);
     expect(closedSession?.state).toBe('ABANDONED');
 
+    /*
+     * The lease is left exactly where it is, and that is the corrected contract
+     * rather than a gap: an expired lease on a unit with attempts left is
+     * claimable work, and the claim takes it as a *takeover* naming the worker
+     * that died holding it. Sweeping the row to READY first leaves the same work
+     * claimable and destroys the only record that a recovery happened.
+     */
     const reclaimedUnit = await getUnit(unit.id);
-    expect(reclaimedUnit?.state).toBe('READY');
-    expect(reclaimedUnit?.leaseId).toBeNull();
+    expect(reclaimedUnit?.state).toBe('LEASED');
+    expect((reclaimedUnit?.leaseExpiresAt ?? '') < new Date().toISOString()).toBe(true);
 
-    // The unit is claimable again — recovery did not leave it stranded.
+    // The unit is claimable again — recovery did not leave it stranded — and the
+    // claim credits the takeover, which is the evidence the sweep used to eat.
     const retaken = await claimUnits({ campaignId: campaign.id, workerId: 'w2', unitIds: [unit.id] });
     expect(retaken.length).toBe(1);
     expect(retaken[0]?.attempt).toBe(2);
+    expect(retaken[0]?.takeoverFrom).toBe('w1');
 
     // History survived: the checkpoint from the dead attempt is still there.
     const checkpoints = await listCheckpoints(unit.id);

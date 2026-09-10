@@ -197,16 +197,26 @@ export async function recoverCampaign(
     sessionsClosed += 1;
   }
 
-  /* Step 2: reclaim expired unit leases, through the existing sweep only. */
-  await sweepExpiredUnitLeases();
-  const unitsAfterSweep = await listUnits(campaignId);
-  const afterById = new Map(unitsAfterSweep.map((u) => [u.id, u]));
+  /*
+   * Step 2: account for expired unit leases, and let the sweep do only its part.
+   *
+   * `leasesReclaimed` counts the dead leases this recovery *found*, not the rows
+   * it moved — and the difference is deliberate. An expired lease on a unit with
+   * attempts left is claimable work, and the claim takes it as a **takeover**,
+   * recording which worker died holding it. Moving that row to READY first would
+   * leave the same work claimable and destroy the only evidence that a recovery
+   * happened, so `sweepExpiredUnitLeases` now touches only leases no claim will
+   * come for. Counting transitions instead of findings would therefore report
+   * zero for exactly the case this function exists to handle.
+   */
   let leasesReclaimed = 0;
   for (const before of unitsBeforeSweep) {
     if (before.state !== 'LEASED') continue;
-    const after = afterById.get(before.id);
-    if (after && after.state === 'READY') leasesReclaimed += 1;
+    if (!before.leaseExpiresAt || before.leaseExpiresAt > now) continue;
+    leasesReclaimed += 1;
   }
+  await sweepExpiredUnitLeases();
+  const unitsAfterSweep = await listUnits(campaignId);
 
   /* Step 3: prune terminal units' worktrees, only when told where the repository is. */
   let worktreesPruned = 0;
