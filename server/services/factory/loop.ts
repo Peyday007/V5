@@ -171,7 +171,6 @@ export async function tickCampaign(
   options: TickOptions = {},
 ): Promise<TickReport> {
   const owner = options.owner ?? `tick-${process.pid}`;
-  const repoRoot = options.repoRoot ?? FACTORY_DEFAULT_REPO_ROOT;
 
   const claim = await claimCampaignTick(campaignId, owner);
   if (!claim.ok) {
@@ -200,23 +199,36 @@ export async function tickCampaign(
     void extendCampaignTick(campaignId, owner, claim.generation);
   }, CAMPAIGN_TICK_HEARTBEAT_MS);
   try {
-    return await runTick(campaignId, repoRoot, options);
+    return await runTick(campaignId, options);
   } finally {
     clearInterval(keepTick);
     await releaseCampaignTick(campaignId, owner, claim.generation);
   }
 }
 
-async function runTick(
-  campaignId: string,
-  repoRoot: string,
-  options: TickOptions,
-): Promise<TickReport> {
+async function runTick(campaignId: string, options: TickOptions): Promise<TickReport> {
   const notes: string[] = [];
   const campaign = await getCampaign(campaignId);
   if (!campaign) throw new Error(`factory: no campaign ${campaignId}`);
   const changeRequest = await getChangeRequest(campaign.changeRequestId);
   if (!changeRequest) throw new Error(`factory: campaign ${campaignId} has no change request`);
+
+  /*
+   * Which checkout this campaign works in, read from the contract.
+   *
+   * It used to come from whoever started the tick, defaulted to the factory's
+   * own repository. That is correct exactly as long as every later tick passes
+   * the same flag, and a tick that forgot would plan, lease, diff and verify
+   * against the wrong repository while every row still looked right. The contract
+   * records the path its base commit was pinned from, so the campaign carries the
+   * answer and a dispatcher cannot supply a different one by accident.
+   *
+   * An explicit `repoRoot` still wins, because moving a checkout is a real thing
+   * that happens to a machine and the operator needs a way to say where it went.
+   * Both are narrowed by the same default for every change request submitted
+   * before the contract had somewhere to put this.
+   */
+  const repoRoot = options.repoRoot ?? changeRequest.repositoryRoot ?? FACTORY_DEFAULT_REPO_ROOT;
 
   const report: TickReport = {
     campaignId,

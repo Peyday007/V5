@@ -137,10 +137,17 @@ async function main(): Promise<void> {
         mutationScope: spec['mutationScope'] as string[] | undefined,
         deploymentPolicy: spec['deploymentPolicy'] as undefined,
         submissionKey: spec['submissionKey'] as string | undefined,
+        // The repository this objective is about, when it is not the one the
+        // factory itself lives in. Recorded on the contract, so every later tick
+        // resolves the same checkout without being told again.
+        repositoryRoot:
+          flagString(flags, 'repo') ?? (spec['repositoryRoot'] as string | undefined),
       });
       process.stdout.write(
         `${result.created ? 'created' : 'already existed'} ${result.changeRequest.id}\n` +
           `base ${result.changeRequest.baseSha} on ${result.changeRequest.baseBranch}\n` +
+          `repository ${result.changeRequest.repository}\n` +
+          `checkout ${result.changeRequest.repositoryRoot ?? '(the factory default)'}\n` +
           `verification ${result.changeRequest.verificationCommands.join(', ')}\n`,
       );
       break;

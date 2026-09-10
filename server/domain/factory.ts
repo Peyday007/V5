@@ -241,6 +241,15 @@ export interface FactoryChangeRequest {
   nonGoals: string[];
   acceptanceConditions: FactoryAcceptanceCondition[];
   repository: string;
+  /**
+   * The checkout this campaign's work happens in, when it is not the default.
+   *
+   * `repository` is what the remote calls itself and is what belongs in a pull
+   * request; this is a path on the machine a worker runs on. Null means the
+   * factory's own default root, which is what every campaign before this column
+   * existed was submitted against.
+   */
+  repositoryRoot: string | null;
   baseBranch: string;
   baseSha: string;
   environment: FactoryEnvironment;
@@ -269,6 +278,7 @@ export interface FactoryChangeRequestRow {
   non_goals: string;
   acceptance_conditions: string;
   repository: string;
+  repository_root: string | null;
   base_branch: string;
   base_sha: string;
   environment: string;

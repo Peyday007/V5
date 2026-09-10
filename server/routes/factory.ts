@@ -43,7 +43,7 @@ import {
   listSessions,
   listWorkers,
 } from '../repos/factoryFleet.ts';
-import { approveObjective, submitObjective } from '../services/factory/contract.ts';
+import { ContractError, approveObjective, submitObjective } from '../services/factory/contract.ts';
 import { ensureCampaign } from '../repos/factory.ts';
 import { INITIAL_LANE_TARGET } from '../services/factory/scheduler.ts';
 import { campaignMetrics } from '../services/factory/metrics.ts';
@@ -60,6 +60,7 @@ import {
   optionalEnum,
   optionalString,
   optionalStringArray,
+  unprocessable,
   pathId,
   requiredString,
   requireProject,
@@ -163,6 +164,16 @@ factoryRouter.post(
       };
     });
 
+    /*
+     * A contract refusal is a 422, not a 500.
+     *
+     * `submitObjective` refuses for reasons that are about this request or about
+     * what this Brain can do — an objective too short to say anything, a
+     * condition with no verification, no repository checkout to pin against.
+     * Every one of them is an answer, and a 500 tells the caller the opposite:
+     * that something broke and retrying might work. The message is the service's
+     * own, which is written to name a remedy and never a path.
+     */
     const result = await submitObjective({
       projectId,
       objective: requiredString(body['objective'], 'objective'),
@@ -179,6 +190,9 @@ factoryRouter.post(
         FACTORY_DEPLOYMENT_POLICIES,
         'deploymentPolicy',
       ),
+    }).catch((error: unknown) => {
+      if (error instanceof ContractError) throw unprocessable(error.message, error.detail);
+      throw error;
     });
 
     res.status(result.created ? 201 : 200).json({

@@ -40,6 +40,7 @@ import {
   claimCampaignTick,
   factoryNow,
   getCampaign,
+  getChangeRequest,
   listLiveCampaigns,
   listTerminalCampaigns,
   listUnits,
@@ -298,25 +299,43 @@ export async function recoverCampaign(
  */
 async function terminalCampaignsStillOnDisk(
   options: RecoveryOptions,
+  rootFor: (campaign: FactoryCampaign) => Promise<string | null>,
 ): Promise<FactoryCampaign[]> {
-  const repoRoot = options.repoRoot;
-  if (!repoRoot) return [];
-  let onDisk: string[];
-  try {
-    onDisk = (await listWorktrees(repoRoot)).map((worktree) => path.resolve(worktree.path));
-  } catch {
-    // A repository that cannot be listed is not a reason to skip the live
-    // campaigns this function is called alongside.
-    return [];
-  }
-  if (onDisk.length === 0) return [];
   const terminal = await listTerminalCampaigns();
-  return terminal.filter((campaign) => {
+  if (terminal.length === 0) return [];
+
+  /*
+   * Worktrees are listed per repository, and campaigns do not all share one.
+   *
+   * A worktree registered against repository A is invisible to
+   * `git worktree list` run in repository B, so asking one repository about
+   * every campaign would report "nothing on disk" for each campaign belonging to
+   * another — the exact shape of a check that passes by never looking. Cached by
+   * root, so several campaigns in the same checkout cost one listing.
+   */
+  const listings = new Map<string, string[]>();
+  const kept: FactoryCampaign[] = [];
+  for (const campaign of terminal) {
+    const root = await rootFor(campaign);
+    if (!root) continue;
+    let onDisk = listings.get(root);
+    if (!onDisk) {
+      try {
+        onDisk = (await listWorktrees(root)).map((worktree) => path.resolve(worktree.path));
+      } catch {
+        // A repository that cannot be listed is not a reason to skip the live
+        // campaigns this function is called alongside.
+        onDisk = [];
+      }
+      listings.set(root, onDisk);
+    }
     const workspace = path.resolve(campaignWorkspace(campaign.id));
-    return onDisk.some(
+    const present = onDisk.some(
       (candidate) => candidate === workspace || candidate.startsWith(`${workspace}${path.sep}`),
     );
-  });
+    if (present) kept.push(campaign);
+  }
+  return kept;
 }
 
 /**
@@ -336,13 +355,40 @@ async function terminalCampaignsStillOnDisk(
  */
 export async function recoverAll(options: RecoveryOptions = {}): Promise<RecoveryReport[]> {
   const owner = options.owner ?? `recover-all-${process.pid}`;
-  const campaigns = [...(await listLiveCampaigns()), ...(await terminalCampaignsStillOnDisk(options))];
+
+  /*
+   * Each campaign's own checkout, from its own contract.
+   *
+   * A batch pass across a fleet of campaigns cannot have one repository root:
+   * the factory is generic at the repository boundary, so two live campaigns may
+   * be against two different repositories and pruning either with the other's
+   * root would find nothing and report success. An explicit option still wins,
+   * for an operator whose checkout has moved.
+   */
+  const rootCache = new Map<string, string | null>();
+  const rootFor = async (campaign: FactoryCampaign): Promise<string | null> => {
+    if (options.repoRoot) return options.repoRoot;
+    const cached = rootCache.get(campaign.changeRequestId);
+    if (cached !== undefined) return cached;
+    const changeRequest = await getChangeRequest(campaign.changeRequestId);
+    const resolved = changeRequest?.repositoryRoot ?? null;
+    rootCache.set(campaign.changeRequestId, resolved);
+    return resolved;
+  };
+
+  const campaigns = [
+    ...(await listLiveCampaigns()),
+    ...(await terminalCampaignsStillOnDisk(options, rootFor)),
+  ];
   const reports: RecoveryReport[] = [];
   for (const campaign of campaigns) {
     const claim = await claimCampaignTick(campaign.id, owner);
     if (!claim.ok) continue;
     try {
-      reports.push(await recoverCampaign(campaign.id, options));
+      const root = await rootFor(campaign);
+      reports.push(
+        await recoverCampaign(campaign.id, root ? { ...options, repoRoot: root } : options),
+      );
     } finally {
       await releaseCampaignTick(campaign.id, owner, claim.generation);
     }

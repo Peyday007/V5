@@ -1,0 +1,14 @@
+-- A campaign remembers which checkout it operates on.
+--
+-- `repository` holds what `git remote get-url origin` said, which is the right
+-- thing to put in a pull request and the wrong thing to run `git worktree add`
+-- in. Until now the local path came from whoever started the tick — a flag,
+-- defaulted to the Brain's own repository — so a campaign against a different
+-- repository was correct exactly as long as every later tick remembered to pass
+-- the same flag. A tick that forgot would plan, lease and diff against the wrong
+-- checkout while every row still looked right.
+--
+-- Nullable, because every change request that already exists was submitted
+-- against the default root and saying so by omission is honest; the resolver
+-- falls back to it and records which it used.
+ALTER TABLE factory_change_requests ADD COLUMN repository_root TEXT;

@@ -105,8 +105,13 @@ jobs:
           # suite creates and drops its own schemas and needs no more than that.
           sudo -u postgres psql -v ON_ERROR_STOP=1 -c \
             "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$(whoami)') THEN CREATE ROLE \"$(whoami)\" LOGIN CREATEDB; END IF; END \$\$;"
-          sudo -u postgres psql -v ON_ERROR_STOP=1 -c \
-            "SELECT 'CREATE DATABASE brain_test OWNER \"$(whoami)\"' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'brain_test')\gexec"
+          # `createdb` rather than a `\gexec` one-liner: `\gexec` is a psql
+          # meta-command read from stdin and is a syntax error inside `-c`, which
+          # is how the first run of this workflow failed.
+          if ! sudo -u postgres psql -tAc \
+            "SELECT 1 FROM pg_database WHERE datname = 'brain_test'" | grep -q 1; then
+            sudo -u postgres createdb -O "$(whoami)" brain_test
+          fi
           # Proof it answers as this user, before twenty minutes are spent finding out.
           psql "postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable" -tAc \
             "select 'connected as ' || current_user || ' to ' || current_database()"

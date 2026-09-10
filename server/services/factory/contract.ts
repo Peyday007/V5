@@ -112,6 +112,8 @@ export function submissionKeyFor(projectId: string, objective: string): string {
 
 export interface DerivedDefaults {
   repository: string;
+  /** The checkout the pin came from, so a later tick uses the same one. */
+  repositoryRoot: string;
   baseBranch: string;
   baseSha: string;
   mutationScope: string[];
@@ -132,7 +134,31 @@ export async function deriveDefaults(
   submission: ObjectiveSubmission,
 ): Promise<DerivedDefaults> {
   const root = path.resolve(submission.repositoryRoot ?? FACTORY_DEFAULT_REPO_ROOT);
-  const state = await inspectRepository(root);
+  /*
+   * No checkout, no pin — said in those words rather than as a git error.
+   *
+   * A deployed Brain deliberately contains no repository: `.git` is in
+   * `.dockerignore`, and the image is copied to registries and pulled by
+   * machines nobody here controls. So `inspectRepository` throws there, and it
+   * used to throw straight through the HTTP route as a 500 carrying git's own
+   * complaint — which tells a caller that something broke when in fact the
+   * server did exactly what it should and simply cannot answer this request.
+   *
+   * A ContractError instead, naming the remedy and not the path. The path is
+   * server-controlled (§18: a request never chooses a location), and a refusal
+   * that prints it hands a caller a fact about the filesystem they did not have.
+   */
+  let state;
+  try {
+    state = await inspectRepository(root);
+  } catch (error: unknown) {
+    throw new ContractError(
+      'This Brain has no repository checkout to pin a base commit against, so it cannot ' +
+        'accept an objective. Submit where the repository is: a campaign needs a real commit ' +
+        'to pin and a worker with that commit in front of it.',
+      { reason: 'NO_REPOSITORY_CHECKOUT', cause: error instanceof Error ? error.name : 'unknown' },
+    );
+  }
 
   const commands: string[] = [];
   const packageJsonPath = path.join(root, 'package.json');
@@ -152,6 +178,9 @@ export async function deriveDefaults(
 
   return {
     repository: state.remote ?? root,
+    // The path that was actually inspected, so a later tick operates on the
+    // checkout this pin came from rather than on whatever the caller defaults to.
+    repositoryRoot: root,
     baseBranch: state.branch,
     baseSha: state.headSha,
     // Everything under version control, narrowed by the submission if it asked
@@ -266,6 +295,7 @@ export async function submitObjective(
     nonGoals: submission.nonGoals ?? [],
     acceptanceConditions: conditions,
     repository: derived.repository,
+    repositoryRoot: derived.repositoryRoot,
     baseBranch: derived.baseBranch,
     baseSha: derived.baseSha,
     environment: submission.environment ?? 'LOCAL',

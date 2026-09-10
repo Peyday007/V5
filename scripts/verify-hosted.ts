@@ -87,6 +87,27 @@ import {
   releaseWork,
 } from '../server/repos/workQueue.ts';
 import { getDb } from '../server/db/database.ts';
+import {
+  approveChangeRequest,
+  claimUnits,
+  ensureCampaign,
+  ensureChangeRequest,
+  ensureUnit,
+  factoryNow,
+  markIntegrated,
+  patchCampaign,
+} from '../server/repos/factory.ts';
+import {
+  attachRepair,
+  closeSession as closeFactorySession,
+  listFindings,
+  openSession as openFactorySession,
+  recordFactoryEvent,
+  recordReview,
+  resolveFinding,
+} from '../server/repos/factoryFleet.ts';
+import { recordCampaignOutcome } from '../server/services/factory/writeback.ts';
+import { listEventsByEntity } from '../server/repos/events.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
 import { listOrchestrationsByProject, updateOrchestration } from '../server/repos/research.ts';
 import { getDocument } from '../server/repos/documents.ts';
@@ -2828,6 +2849,523 @@ async function checkBeacon(required: boolean): Promise<void> {
   await clearBeacons();
 }
 
+
+/* ------------------------------------------------------------------------ */
+/* The Software Factory                                                      */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * What a deployed factory can and cannot be asked, proven against the edge.
+ *
+ * The control plane is the whole of what ships here: contracts, campaigns,
+ * units, sessions, reviews, findings, the ledger, the writeback, and the two
+ * decisions that belong to a person. What does **not** ship is a repository —
+ * `.git` is in `.dockerignore`, because an image is pushed to a registry and
+ * pulled by machines nobody here controls — and nor does a coding worker, since
+ * §22's rule is that the surface a worker runs on grants its own authority and
+ * Brain must never mint one to get around that.
+ *
+ * So a hosted submission is refused, and the interesting thing is *how*. It used
+ * to be a 500 carrying git's own complaint, which tells a caller that something
+ * broke when in fact the server did exactly what it should. It is now a 422 that
+ * names the remedy and does not name the path.
+ */
+async function factoryChecks(fixtures: Fixtures, cookie: string): Promise<void> {
+  console.log('\nThe Software Factory');
+  if (!cookie) {
+    record('the factory', false, 'skipped: there was no session to test with');
+    return;
+  }
+
+  const anonymous = await call('/api/factory/campaigns/fcp_0000000000000000');
+  expectStatus('an anonymous caller cannot read a campaign', anonymous.status, 401);
+
+  const anonymousList = await call(`/api/projects/${fixtures.scope.id}/factory/campaigns`);
+  expectStatus('an anonymous caller cannot list a project’s campaigns', anonymousList.status, 401);
+
+  // A machine is refused by principal type at the routes a person owns, whatever
+  // its membership says. No scope configuration turns a worker into a person.
+  const asWorker = await call(`/api/projects/${fixtures.scope.id}/factory/change-requests`, {
+    method: 'POST',
+    bearer: fixtures.credential,
+    body: { objective: 'a worker should not be able to do this', expectedOutcome: 'refused' },
+  });
+  record(
+    'a worker credential cannot submit an objective',
+    asWorker.status === 401 || asWorker.status === 403 || asWorker.status === 404,
+    String(asWorker.status),
+  );
+
+  /*
+   * Absent and forbidden, on the *same route*, compared on the body as well as
+   * the status. The pairing has to be same-route to mean anything: a caller
+   * asking after a campaign and a caller asking after a project are asking
+   * different questions, and different answers to different questions are not an
+   * oracle. What would be one is a project that exists and is not yours reading
+   * differently from a project that was never there.
+   */
+  const absentProject = await call('/api/projects/prj_0000000000000000/factory/campaigns', {
+    cookie,
+  });
+  const forbiddenProject = fixtures.holdout
+    ? await call(`/api/projects/${fixtures.holdout.id}/factory/campaigns`, { cookie })
+    : null;
+  expectStatus('a project that does not exist is a 404', absentProject.status, 404);
+  if (forbiddenProject) {
+    expectStatus('a project the caller may not see is the same 404', forbiddenProject.status, 404);
+    record(
+      'and the same body, not merely the same status',
+      JSON.stringify(absentProject.json) === JSON.stringify(forbiddenProject.json),
+      `${JSON.stringify(absentProject.json)} vs ${JSON.stringify(forbiddenProject.json)}`,
+    );
+  }
+  const absentCampaign = await call('/api/factory/campaigns/fcp_0000000000000000', { cookie });
+  expectStatus('a campaign that does not exist is a 404', absentCampaign.status, 404);
+
+  /*
+   * Submitting an objective, and the two honest outcomes.
+   *
+   * Whether this Brain can accept one is a fact about the *deployment* rather
+   * than about the request: a campaign pins a base commit, and a production image
+   * deliberately contains no repository to pin against. So both answers are
+   * asserted, and which one applies is read from the deployment rather than
+   * assumed — a check written for only one of them would be vacuous in the place
+   * it was not written for, and this script runs in both.
+   */
+  const submitted = await call(`/api/projects/${fixtures.scope.id}/factory/change-requests`, {
+    method: 'POST',
+    cookie,
+    origin: base,
+    body: {
+      objective: 'Prove a deployed factory either pins a real commit or says why it cannot.',
+      expectedOutcome: 'A pinned change request, or a 422 naming the remedy rather than a 500.',
+      acceptanceConditions: [{ statement: 'it answers honestly', verification: 'read the status' }],
+      mutationScope: ['nothing/**'],
+      submissionKey: 'hosted-verification-submission',
+    },
+  });
+  const message = ((submitted.json as { error?: string } | null)?.error ?? '').toLowerCase();
+  if (submitted.status === 422) {
+    record(
+      'a submission this Brain cannot pin is refused as unprocessable, not as broken',
+      true,
+      '422 — no repository checkout, which is what a production image should contain',
+    );
+    record(
+      'the refusal names the remedy and not a filesystem path',
+      message.includes('repository') && !message.includes('/app') && !message.includes('enoent'),
+      message.slice(0, 140) || '(no message)',
+    );
+  } else {
+    const pinned =
+      (submitted.json as { changeRequest?: { baseSha?: string; state?: string } } | null)
+        ?.changeRequest ?? {};
+    record(
+      'a submission is accepted where there is a repository to pin against',
+      submitted.status === 201 || submitted.status === 200,
+      String(submitted.status),
+    );
+    record(
+      'and it is pinned to a real commit, before anything is approved',
+      /^[0-9a-f]{40}$/.test(pinned.baseSha ?? '') && pinned.state === 'DRAFT',
+      `${(pinned.baseSha ?? '(none)').slice(0, 12)} · ${pinned.state ?? '(no state)'}`,
+    );
+    // Submitting the same objective twice is still one change request. Asserted
+    // here rather than only in the suite, because idempotency that holds in a
+    // test process and not across a load balancer is not idempotency.
+    const again = await call(`/api/projects/${fixtures.scope.id}/factory/change-requests`, {
+      method: 'POST',
+      cookie,
+      origin: base,
+      body: {
+        objective: 'Prove a deployed factory either pins a real commit or says why it cannot.',
+        expectedOutcome: 'A pinned change request, or a 422 naming the remedy rather than a 500.',
+        acceptanceConditions: [
+          { statement: 'it answers honestly', verification: 'read the status' },
+        ],
+        mutationScope: ['nothing/**'],
+        submissionKey: 'hosted-verification-submission',
+      },
+    });
+    record(
+      'submitting it twice collides on the row that already exists',
+      (again.json as { created?: boolean } | null)?.created === false,
+      `created: ${String((again.json as { created?: boolean } | null)?.created)}`,
+    );
+  }
+
+  // The schema really is here: a table the factory owns, reachable through the
+  // same connection the server uses.
+  try {
+    const counted = await getDb().all<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM factory_campaigns',
+    );
+    record(
+      'the factory schema migrated into the production database',
+      true,
+      `factory_campaigns reachable, ${Number(counted[0]?.total ?? 0)} row(s)`,
+    );
+  } catch (error) {
+    record(
+      'the factory schema migrated into the production database',
+      false,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+/**
+ * The factory's own persistence beacon.
+ *
+ * Every kind of row a campaign produces, left in a state a restart could lose,
+ * and then checked from a process that did not create any of it: a campaign, its
+ * units (one READY, one with a *live lease*, one INTEGRATED), its sessions (one
+ * still RUNNING, one FINISHED), a review with its verdict and independence tier,
+ * findings in two states, a takeover on the ledger, and the project event the
+ * writeback wrote.
+ *
+ * The change request and campaign rows are stable across runs, keyed by a
+ * submission key, so the writeback's idempotency is asserted as well: after many
+ * runs there is still exactly one outcome event for this campaign. The scratch
+ * below them is rebuilt each time, because a beacon that accumulated would stop
+ * being a statement about this run's restart.
+ *
+ * Nothing here is deleted afterwards. `factory_events` is append-only and so is
+ * `project_events`; the campaign lives on the verification project, which is
+ * archived at the end of every run and is never anybody's default.
+ */
+const FACTORY_BEACON_KEY = 'hosted-verification-factory-beacon';
+
+interface FactoryBeaconShape {
+  campaignId: string;
+  leaseGeneration: number;
+  attempt: number;
+}
+
+async function leaveFactoryBeacon(fixtures: Fixtures): Promise<FactoryBeaconShape | null> {
+  const db = getDb();
+  const headSha = crypto.createHash('sha1').update(FACTORY_BEACON_KEY).digest('hex');
+
+  const { changeRequest } = await ensureChangeRequest({
+    projectId: fixtures.scope.id,
+    submissionKey: FACTORY_BEACON_KEY,
+    objective: 'Prove a campaign and everything under it survives a production restart.',
+    expectedOutcome: 'A process that created none of it finds all of it exactly as it was.',
+    nonGoals: [],
+    acceptanceConditions: [
+      {
+        id: 'A01',
+        statement: 'every row a campaign produces survives a restart',
+        verification: 'read them from a process that did not create them',
+        mandatory: true,
+      },
+    ],
+    // A pin that is a real hash and belongs to no repository: this campaign is
+    // never executed, and a beacon must not look like work a dispatcher should
+    // pick up. Its units are terminal or leased for an hour for the same reason.
+    repository: 'hosted-verification://beacon',
+    baseBranch: 'main',
+    baseSha: headSha,
+    environment: 'LOCAL',
+    riskClass: 'LOW',
+    mutationScope: ['nothing/**'],
+    deploymentPolicy: 'NONE',
+    rollbackRequirement: 'nothing to roll back: this campaign is never executed',
+    verificationCommands: [],
+  });
+  await approveChangeRequest({
+    changeRequestId: changeRequest.id,
+    via: 'PERSON',
+    userId: fixtures.adminId,
+    authorityId: null,
+  });
+  const { campaign } = await ensureCampaign({
+    changeRequestId: changeRequest.id,
+    projectId: fixtures.scope.id,
+    baseSha: headSha,
+    laneTarget: 3,
+    laneTargetReason: 'beacon',
+  });
+
+  // This run's scratch only. Rebuilt rather than added to, so the assertions
+  // afterwards are about this restart.
+  for (const table of [
+    'factory_checkpoints',
+    'factory_findings',
+    'factory_reviews',
+    'factory_sessions',
+    'factory_unit_dependencies',
+    'factory_work_units',
+  ]) {
+    try {
+      if (table === 'factory_findings' || table === 'factory_reviews') {
+        await db.run(`DELETE FROM ${table} WHERE campaign_id = ?`, [campaign.id]);
+      } else if (table === 'factory_unit_dependencies') {
+        await db.run(
+          `DELETE FROM factory_unit_dependencies WHERE unit_id IN
+             (SELECT id FROM factory_work_units WHERE campaign_id = ?)`,
+          [campaign.id],
+        );
+      } else {
+        await db.run(`DELETE FROM ${table} WHERE campaign_id = ?`, [campaign.id]);
+      }
+    } catch {
+      // A table this Brain does not have yet contributes nothing to the beacon.
+    }
+  }
+
+  const unitOf = async (unitKey: string, state: 'READY' | 'IMPLEMENTED') =>
+    (
+      await ensureUnit({
+        campaignId: campaign.id,
+        unitKey,
+        kind: 'IMPLEMENTATION',
+        role: 'IMPLEMENTER',
+        title: unitKey,
+        objective: `beacon unit ${unitKey}`,
+        acceptance: ['it survives a restart'],
+        ownedPaths: [`nothing/${unitKey}`],
+        requiredContext: [],
+        verification: [],
+        expectedArtifact: 'a row that is still there afterwards',
+        state,
+      })
+    ).unit;
+
+  const ready = await unitOf('beacon-ready', 'READY');
+  const toLease = await unitOf('beacon-leased', 'READY');
+  const integrated = await unitOf('beacon-integrated', 'IMPLEMENTED');
+  await markIntegrated(integrated.id, headSha);
+
+  const runningSession = await openFactorySession({
+    campaignId: campaign.id,
+    unitId: toLease.id,
+    workerId: fixtures.workerId,
+    accountRef: 'hosted-verification',
+    attempt: 1,
+    role: 'IMPLEMENTER',
+    model: 'beacon',
+  });
+  const claimed = await claimUnits({
+    campaignId: campaign.id,
+    workerId: fixtures.workerId,
+    unitIds: [toLease.id],
+    sessionId: runningSession.id,
+    // An hour, so the restart genuinely interrupts an owner rather than tidily
+    // finding an expired lease.
+    leaseMs: 60 * 60 * 1000,
+  });
+  if (claimed.length !== 1) return null;
+
+  const finishedSession = await openFactorySession({
+    campaignId: campaign.id,
+    unitId: integrated.id,
+    workerId: fixtures.workerId,
+    accountRef: 'hosted-verification',
+    attempt: 1,
+    role: 'REVIEWER',
+    model: 'beacon',
+  });
+  await closeFactorySession(finishedSession.id, { state: 'FINISHED', exitReason: 'beacon' });
+
+  const review = await recordReview({
+    campaignId: campaign.id,
+    round: 1,
+    scope: 'CAMPAIGN',
+    reviewerSessionId: finishedSession.id,
+    reviewedSha: headSha,
+    verdict: 'CHANGES_REQUIRED',
+    independence: 'SESSION_SEPARATED',
+    summary: 'a verdict that must read the same after a restart',
+    findings: [
+      {
+        key: 'beacon-open',
+        severity: 'MINOR',
+        category: 'persistence',
+        statement: 'a finding that must still be open afterwards',
+        evidence: 'left by the pass before the restart',
+        acceptanceConditionId: 'A01',
+      },
+      {
+        key: 'beacon-repaired',
+        severity: 'MAJOR',
+        category: 'persistence',
+        statement: 'a finding that must still be repaired afterwards',
+        evidence: 'left by the pass before the restart',
+        acceptanceConditionId: 'A01',
+      },
+    ],
+  });
+  const findings = await listFindings(campaign.id);
+  const toRepair = findings.find((finding) => finding.findingKey === 'beacon-repaired');
+  if (toRepair) {
+    await attachRepair(toRepair.id, ready.id);
+    await resolveFinding(toRepair.id, 'REPAIRED', 'closed by the beacon');
+  }
+
+  // A takeover on the ledger: the one row that says a recovery happened.
+  await recordFactoryEvent({
+    campaignId: campaign.id,
+    unitId: toLease.id,
+    workerId: fixtures.workerId,
+    sessionId: runningSession.id,
+    kind: 'UNIT_TAKEOVER',
+    evidenceClass: 'MEASURED',
+    detail: { unitKey: toLease.unitKey, from: fixtures.workerId, reason: 'beacon' },
+  });
+
+  /*
+   * And the writeback, which needs a finished campaign.
+   *
+   * A terminal campaign still holding a live lease looks wrong and is exactly
+   * right for a beacon: it is the shape a restart leaves when a machine goes
+   * down between a unit's lease and its integration, and it is the shape the
+   * writeback-retry path in the loop's terminal branch exists for. The CHECK
+   * constraint that matters — a lease exists if and only if the unit is LEASED —
+   * holds either way.
+   *
+   * Idempotent by campaign, so this stays at exactly one however many times the
+   * verification runs, which is the other half of what the check afterwards
+   * asserts.
+   */
+  await patchCampaign(campaign.id, {
+    state: 'COMPLETE',
+    stageDetail: 'a beacon, never executed',
+    finishedAt: factoryNow(),
+    integrationSha: headSha,
+  });
+  const written = await recordCampaignOutcome(campaign.id);
+  if (!written.recorded && written.reason !== 'already recorded') {
+    console.log(`  ....  the beacon's writeback did not land: ${written.reason ?? 'no reason given'}`);
+  }
+
+  void review;
+  return {
+    campaignId: campaign.id,
+    leaseGeneration: claimed[0]!.leaseGeneration,
+    attempt: claimed[0]!.attempt,
+  };
+}
+
+async function checkFactoryBeacon(required: boolean): Promise<void> {
+  console.log('\nThe factory, surviving a restart');
+  const db = getDb();
+
+  const request = await db.get<{ id: string }>(
+    'SELECT id FROM factory_change_requests WHERE submission_key = ?',
+    [FACTORY_BEACON_KEY],
+  );
+  const campaign = request
+    ? await db.get<{ id: string; state: string; base_sha: string }>(
+        'SELECT id, state, base_sha FROM factory_campaigns WHERE change_request_id = ?',
+        [request.id],
+      )
+    : undefined;
+
+  if (!campaign) {
+    if (!required) {
+      console.log('  ....  no previous pass left a factory beacon; nothing to compare');
+      return;
+    }
+    record(
+      'the campaign left before the restart is still there',
+      false,
+      'no factory beacon found — the pass before the restart did not leave one, or it did not survive',
+    );
+    return;
+  }
+  record('the campaign left before the restart is still there', true, campaign.id);
+  record(
+    'and it is still the state and the pin it was left in',
+    campaign.state === 'COMPLETE' && campaign.base_sha.length === 40,
+    `${campaign.state} at ${campaign.base_sha.slice(0, 12)}`,
+  );
+
+  const units = await db.all<{
+    unit_key: string;
+    state: string;
+    lease_generation: number;
+    attempt: number;
+    lease_expires_at: string | null;
+  }>(
+    'SELECT unit_key, state, lease_generation, attempt, lease_expires_at FROM factory_work_units WHERE campaign_id = ? ORDER BY unit_key',
+    [campaign.id],
+  );
+  const unit = (key: string) => units.find((candidate) => candidate.unit_key === key);
+  record('its three units are all still there', units.length === 3, `${units.length} unit(s)`);
+  record('a ready unit is still ready', unit('beacon-ready')?.state === 'READY', unit('beacon-ready')?.state ?? 'missing');
+  record(
+    'an integrated unit is still integrated',
+    unit('beacon-integrated')?.state === 'INTEGRATED',
+    unit('beacon-integrated')?.state ?? 'missing',
+  );
+  const leased = unit('beacon-leased');
+  record(
+    'a live lease survived, still owned and still counting down',
+    leased?.state === 'LEASED' && leased.lease_expires_at !== null,
+    `${leased?.state ?? 'missing'}, expires ${leased?.lease_expires_at ?? 'never'}`,
+  );
+  record(
+    'its fencing generation and attempt are unchanged',
+    Number(leased?.lease_generation) === 1 && Number(leased?.attempt) === 1,
+    `generation ${leased?.lease_generation}, attempt ${leased?.attempt}`,
+  );
+
+  const sessions = await db.all<{ role: string; state: string }>(
+    'SELECT role, state FROM factory_sessions WHERE campaign_id = ? ORDER BY started_at',
+    [campaign.id],
+  );
+  record(
+    'both worker sessions survived, one still running and one finished',
+    sessions.length === 2 &&
+      sessions.some((session) => session.state === 'RUNNING') &&
+      sessions.some((session) => session.state === 'FINISHED'),
+    sessions.map((session) => `${session.role}:${session.state}`).join(', ') || 'none',
+  );
+
+  const reviews = await db.all<{ round: number; verdict: string; independence: string }>(
+    'SELECT round, verdict, independence FROM factory_reviews WHERE campaign_id = ?',
+    [campaign.id],
+  );
+  record(
+    'the review kept its verdict and its independence tier',
+    reviews.length === 1 &&
+      reviews[0]?.verdict === 'CHANGES_REQUIRED' &&
+      reviews[0]?.independence === 'SESSION_SEPARATED',
+    reviews.map((review) => `round ${review.round}: ${review.verdict}/${review.independence}`).join(', ') || 'none',
+  );
+
+  const findings = await db.all<{ finding_key: string; state: string; repair_unit_id: string | null }>(
+    'SELECT finding_key, state, repair_unit_id FROM factory_findings WHERE campaign_id = ? ORDER BY finding_key',
+    [campaign.id],
+  );
+  const open = findings.find((finding) => finding.finding_key === 'beacon-open');
+  const repaired = findings.find((finding) => finding.finding_key === 'beacon-repaired');
+  record('an open finding is still open', open?.state === 'OPEN', open?.state ?? 'missing');
+  record(
+    'a repaired finding is still repaired, still pointing at the unit that closed it',
+    repaired?.state === 'REPAIRED' && Boolean(repaired.repair_unit_id),
+    `${repaired?.state ?? 'missing'}${repaired?.repair_unit_id ? ', linked' : ', unlinked'}`,
+  );
+
+  const takeovers = await db.all<{ total: number }>(
+    "SELECT COUNT(*) AS total FROM factory_events WHERE campaign_id = ? AND kind = 'UNIT_TAKEOVER'",
+    [campaign.id],
+  );
+  record(
+    'the takeover on the ledger survived',
+    Number(takeovers[0]?.total ?? 0) >= 1,
+    `${Number(takeovers[0]?.total ?? 0)} row(s)`,
+  );
+
+  const outcomes = await listEventsByEntity('FACTORY_CAMPAIGN', campaign.id);
+  record(
+    'the writeback survived, and there is still exactly one of it',
+    outcomes.length === 1,
+    `${outcomes.length} project event(s)${outcomes[0] ? ` · ${outcomes[0].eventType}` : ''}`,
+  );
+}
+
 /* ------------------------------------------------------------------------ */
 /* Running it                                                                */
 /* ------------------------------------------------------------------------ */
@@ -2917,6 +3455,7 @@ async function main(): Promise<void> {
     // Before anything else creates work: was the previous pass's work still
     // here when this process started?
     if (phase === 'check' || phase === 'both') await checkBeacon(phase === 'check');
+    if (phase === 'check' || phase === 'both') await checkFactoryBeacon(phase === 'check');
 
     await anonymousIsRefused(fixtures);
     const cookie = await humanAuthentication(fixtures);
@@ -2930,6 +3469,10 @@ async function main(): Promise<void> {
     await researchChecks(fixtures);
     // Step 12A. Before revocation, like the two above: it needs a live session.
     await russellChecks(fixtures, cookie);
+    // The factory. Before revocation, like the three above: its worker-refusal
+    // check needs a credential that still authenticates, so that a refusal means
+    // "a machine may not do this" rather than "this credential is dead".
+    await factoryChecks(fixtures, cookie);
     await revocationEndsAccess(fixtures, cookie);
 
     // Last, so the beacon is not swept up by the checks above.
@@ -2939,6 +3482,14 @@ async function main(): Promise<void> {
       console.log(
         `Left three work items behind for the pass after the restart ` +
           `(a live lease at generation ${shape.leasedGeneration}, attempt ${shape.leasedAttempts}).`,
+      );
+      const factoryShape = await leaveFactoryBeacon(fixtures);
+      console.log(
+        factoryShape
+          ? `Left a campaign behind too — ${factoryShape.campaignId}: three units, two sessions, ` +
+            `a review, two findings, a takeover and a writeback ` +
+            `(its live lease at generation ${factoryShape.leaseGeneration}, attempt ${factoryShape.attempt}).`
+          : 'Could not leave a factory beacon: the unit claim did not take.',
       );
     }
 

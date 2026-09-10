@@ -129,6 +129,7 @@ export function mapChangeRequest(row: FactoryChangeRequestRow): FactoryChangeReq
     nonGoals: parseJson<string[]>(row.non_goals, []),
     acceptanceConditions: parseJson<FactoryAcceptanceCondition[]>(row.acceptance_conditions, []),
     repository: row.repository,
+    repositoryRoot: row.repository_root ?? null,
     baseBranch: row.base_branch,
     baseSha: row.base_sha,
     environment: row.environment as FactoryEnvironment,
@@ -266,6 +267,8 @@ export interface CreateChangeRequestInput {
   nonGoals: string[];
   acceptanceConditions: FactoryAcceptanceCondition[];
   repository: string;
+  /** Optional: a checkout other than the factory's default root. */
+  repositoryRoot?: string | null;
   baseBranch: string;
   baseSha: string;
   environment: FactoryEnvironment;
@@ -294,11 +297,11 @@ export async function ensureChangeRequest(
   const result = await db.run(
     `INSERT INTO factory_change_requests (
        id, project_id, submission_key, contract_version, objective, expected_outcome,
-       non_goals, acceptance_conditions, repository, base_branch, base_sha, environment,
-       risk_class, mutation_scope, deployment_policy, external_spend_policy,
+       non_goals, acceptance_conditions, repository, repository_root, base_branch, base_sha,
+       environment, risk_class, mutation_scope, deployment_policy, external_spend_policy,
        rollback_requirement, verification_commands, approved_by_user_id, approved_via,
        authority_id, approved_at, state, created_at, updated_at)
-     VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROHIBITED', ?, ?,
+     VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROHIBITED', ?, ?,
              NULL, NULL, NULL, NULL, 'DRAFT', ?, ?)
      ON CONFLICT (project_id, submission_key) DO NOTHING`,
     [
@@ -310,6 +313,7 @@ export async function ensureChangeRequest(
       toJson(input.nonGoals),
       toJson(input.acceptanceConditions),
       input.repository,
+      input.repositoryRoot ?? null,
       input.baseBranch,
       input.baseSha,
       input.environment,

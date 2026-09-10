@@ -315,6 +315,89 @@ describe('one pull-request rendering, two readers', () => {
   });
 });
 
+describe('a campaign works in the checkout its contract names', () => {
+  it('batch recovery prunes a worktree in the target repository with no root supplied', async () => {
+    /*
+     * The repository the objective is about is not the one the factory lives in,
+     * and nothing in this test tells recovery where it is. Before the contract
+     * carried the path, `recoverAll()` called without a root had nothing to list
+     * worktrees in and quietly pruned nothing — a batch pass that reported
+     * success by never looking.
+     */
+    const target = await makeRepository();
+    try {
+      const headSha = await gitOrThrow(target, ['rev-parse', 'HEAD']);
+      const { changeRequest } = await ensureChangeRequest({
+        projectId: fixture.project.id,
+        submissionKey: 'findings-target-repo',
+        objective: 'Work in a repository the factory does not live in.',
+        expectedOutcome: 'Its worktrees are retired without anybody naming the path again.',
+        nonGoals: [],
+        acceptanceConditions: [
+          { id: 'A01', statement: 'the contract carries the checkout', verification: 'read the row', mandatory: true },
+        ],
+        repository: 'https://example.invalid/target.git',
+        repositoryRoot: target,
+        baseBranch: 'main',
+        baseSha: headSha,
+        environment: 'LOCAL',
+        riskClass: 'LOW',
+        mutationScope: ['src.txt'],
+        deploymentPolicy: 'NONE',
+        rollbackRequirement: 'discard the branch',
+        verificationCommands: [],
+      });
+      expect(changeRequest.repositoryRoot).toBe(target);
+
+      const { campaign } = await ensureCampaign({
+        changeRequestId: changeRequest.id,
+        projectId: fixture.project.id,
+        baseSha: headSha,
+        laneTarget: 1,
+        laneTargetReason: 'initial',
+      });
+      const { unit } = await ensureUnit({
+        campaignId: campaign.id,
+        unitKey: 'alpha',
+        kind: 'IMPLEMENTATION',
+        role: 'IMPLEMENTER',
+        title: 'alpha',
+        objective: 'alpha',
+        acceptance: ['it works'],
+        ownedPaths: ['src.txt'],
+        requiredContext: [],
+        verification: [],
+        expectedArtifact: 'a commit',
+        state: 'READY',
+      });
+      const worktree = path.join(campaignWorkspace(campaign.id), 'alpha-a1');
+      await ensureWorktree(target, {
+        branch: `factory/${campaign.id}/alpha/a1`,
+        path: worktree,
+        baseSha: headSha,
+      });
+      expect(fs.existsSync(worktree)).toBe(true);
+
+      await patchCampaign(campaign.id, {
+        state: 'COMPLETE',
+        stageDetail: 'finished',
+        finishedAt: factoryNow(),
+        integrationSha: headSha,
+      });
+      const { getDb } = await import('../server/db/database.ts');
+      await getDb().run(`UPDATE factory_work_units SET state = 'INTEGRATED' WHERE id = ?`, [unit.id]);
+
+      // No options at all: the campaign has to supply its own answer.
+      const reports = await recoverAll();
+      const mine = reports.find((report) => report.campaignId === campaign.id);
+      expect(mine?.worktreesPruned).toBe(1);
+      expect(fs.existsSync(worktree)).toBe(false);
+    } finally {
+      fs.rmSync(target, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('a finished campaign does not keep its checkouts forever', () => {
   it('recoverAll reaches a terminal campaign whose worktree is still on disk', async () => {
     const changeRequest = await makeApprovedRequest('findings-terminal-prune');
