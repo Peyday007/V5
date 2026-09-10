@@ -7395,11 +7395,31 @@ two would disagree about the same mission.
 The rule is that the packet is authoritative and the mission is a projection of
 it. Each link takes the orchestration's current value; a null there means Brain
 has nothing better to say than what the mission already holds, never an
-instruction to blank one. `orchestration.audit_id` is written by the judge's own
-submission on every round, so it is trusted rather than re-derived — except when
-it predates the current round's boundary, which is precisely the stale pointer
-this exists to refuse. Then the round is asked directly, scoped to the packet's
-own run and ordered explicitly rather than trusting a repository's `ORDER BY`.
+instruction to blank one. The audit is **the newest audit of the packet's own
+run**, with `orchestration.audit_id` included as a candidate rather than
+re-derived — it is written by the judge's own submission, and it loses to a
+genuinely newer audit rather than winning by being named. The ordering is
+explicit rather than trusting a repository's `ORDER BY`.
+
+**A round boundary was the obvious rule, I wrote it first, and it was wrong —
+recorded rather than quietly replaced.** "The latest audit of the current round"
+is what the defect report asked for and is what §74's `auditRound.ts` already
+computes, so reaching for it looked like consistency. It is not total. A handoff
+can happen *after* a packet is terminal — the routing is selected from rows and
+reaches an audit recorded a second ago or a month ago — and a terminal packet is
+not re-opened, so no new round runs. Under a boundary rule the newest handoff
+then places every existing audit in a previous round, and the derivation answers
+null: it refuses to cite the verdict that was actually performed on this report.
+
+**The production packet is exactly that shape.** Its document was routed to
+Qualification Logic a second time, after round two had judged it compliant and
+after the writeback. The boundary version would have read the one mission this
+correction exists for, refused it by name, and left the stale citation in place
+— a correction that reports a refusal on the only row it was written for. Citing
+the newest audit is truthful in every case, and while a re-opened round is still
+running it names the packet's standing verdict, which is the only thing there is
+to name. Nothing is ever attributed to a verdict a later one has superseded,
+which is the whole of what the boundary was for.
 
 `routeAuditedDocument` now moves all three ownership rows. Ownership belongs to
 the routing decision rather than to whichever consumer notices it.
@@ -7427,11 +7447,22 @@ their work had concluded twice. §5 protects history, and the history of *this*
 correction is the append-only `RUSSELL_LINKS_RECONCILED` event, which carries
 every before and after and the version of the rule that decided.
 
-One refusal is deliberate. A mission whose audit is stale while the re-opened
-round has produced no replacement stops at `NO_CURRENT_ROUND_AUDIT` rather than
-repointing at nothing: a filed conclusion citing no verdict at all is worse than
-one citing a superseded verdict, and a repeated line in the tick report is how
-somebody finds out that a round is not finishing.
+The selection has two arms, because there are two ways to drift apart. The first
+is the packet moving underneath the mission, and it reads the same three columns
+the derivation does. The second is the projection being left behind: the handoff
+moves the document, the packet **and** the mission together, which is right and
+leaves the first arm nothing to find — while the knowledge the writeback
+promoted still names the layer the work has left. That arm asks about the
+knowledge directly, and it is the reason a routing and its projection settle one
+tick apart rather than never: the reconciliation runs before the routing in a
+tick, so the tick that moves a document leaves the knowledge behind and the next
+one catches it.
+
+One refusal is deliberate and fail-closed. A mission citing a verdict, pointed
+at a packet that has recorded none, stops at `NO_PACKET_AUDIT` rather than
+repointing at nothing: a filed conclusion resting on no verdict at all is worse
+than one that has to be explained, and a repeated line in the tick report is how
+somebody finds out that a mission and a packet do not belong together.
 
 ### What the tests had to bite
 

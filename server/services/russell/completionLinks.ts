@@ -49,12 +49,15 @@
  * an instruction to blank one. Nothing here reads a model's prose, and nothing
  * here re-judges: it copies ids Brain wrote itself.
  *
- * `orchestration.audit_id` is written by the judge's own submission on every
- * round, so it *is* the latest completed audit of the current round. The round
- * boundary is still checked rather than assumed — `auditRoundStartedAt` reads
- * the append-only handoff event — because a value that predates the current
- * round is precisely the stale pointer this module exists to refuse, and
- * refusing it visibly is worth more than linking it quietly.
+ * The audit is the newest one this packet's own run has recorded, which is the
+ * latest completed audit of the current round whenever the current round has
+ * produced one — and, unlike a round-scoped rule, is total. `newestAuditId`
+ * below records why the round boundary was the wrong instrument here.
+ *
+ * And the projection is corrected with the links, because the knowledge a
+ * writeback promoted is derived from them: a mission repointed while its
+ * knowledge still names the old layer has moved the pointer nobody reads and
+ * left the row somebody does.
  */
 import { getDb } from '../../db/database.ts';
 import { getAudit, listAuditsByProject } from '../../repos/audits.ts';
@@ -66,7 +69,6 @@ import {
   linkMission,
   reanchorKnowledge,
 } from '../../repos/russellMissions.ts';
-import { auditRoundStartedAt } from '../research/auditRound.ts';
 import type { ResearchOrchestration, RussellMission } from '../../domain/types.ts';
 
 /**
@@ -107,46 +109,55 @@ export async function currentLinksFor(
   return {
     documentId: orchestration.documentId ?? null,
     layerId: orchestration.layerId ?? null,
-    auditId: await currentRoundAuditId(orchestration),
+    auditId: await newestAuditId(orchestration),
   };
 }
 
 /**
- * The audit the current round produced, or null while it has not produced one.
+ * The newest audit this packet has, or null if it has none.
  *
- * The packet's own `audit_id` is the answer in every ordinary case, and it is
- * trusted rather than re-derived: it is written by the judge's own submission,
- * so it names the verdict this packet is actually resting on. It is only *not*
- * the answer when a handoff has started a new round and that column still names
- * the round before it — the state a re-opened packet sits in between the
- * handoff and its new judge. Linking that would attribute a superseded verdict
- * to a finished mission, which is the defect this file is named after, so it is
- * refused and the round is asked directly instead.
+ * **"The latest audit of the current round" and "the newest audit" are the same
+ * answer whenever the current round has produced one, and only the second is
+ * total** — so the second is what this computes, and the difference is worth
+ * writing down because the first is what the defect report asked for.
  *
- * The fallback is scoped to the packet's own run for the reason the original
- * lookup was: a project's other audits belong to other work and must never be
- * attributed here. It is also ordered explicitly rather than trusting a
- * repository's `ORDER BY` — the previous version of this took the *last*
- * element of a list that arrives newest-first, and picked the oldest audit in
- * the run every time. That is the single line that put round one's
- * `MORE_RESEARCH` verdict on a mission that had passed round two.
+ * A round boundary was the obvious rule and is wrong here. A handoff can happen
+ * *after* a packet is terminal — the routing is selected from rows and reaches
+ * an audit recorded a second ago or a month ago — and when it does, no new round
+ * runs, because a terminal packet is not re-opened. Under a boundary rule the
+ * newest handoff would then place every existing audit in a previous round and
+ * this would answer null, which means refusing to cite the verdict that was
+ * actually performed on this report. The production packet is exactly that
+ * shape: judged compliant, written back, and routed once more afterwards.
+ *
+ * Citing the newest audit is truthful in every case. While a re-opened round is
+ * still running it names the packet's standing verdict, which is the only thing
+ * there is to name; the moment the new judge records one, this answers with it
+ * and the mission is repointed. Nothing is ever attributed to a verdict that a
+ * later one has superseded, which is the whole of what the boundary was for.
+ *
+ * `orchestration.audit_id` is Brain's own pointer, written by the judge's own
+ * submission, so it is included as a candidate rather than re-derived — and it
+ * loses to a genuinely newer audit on the same run rather than winning by being
+ * named. The run scope is the original rule and stays: a project's other audits
+ * belong to other work and must never be attributed here.
+ *
+ * The ordering is explicit rather than trusting a repository's `ORDER BY`. The
+ * previous version of this took the *last* element of a list that arrives
+ * newest-first, and so picked the oldest audit in the run every time. That is
+ * the single line that put round one's `MORE_RESEARCH` verdict on a mission
+ * that had passed round two.
  */
-async function currentRoundAuditId(
-  orchestration: ResearchOrchestration,
-): Promise<string | null> {
-  const since = await auditRoundStartedAt(orchestration.id);
+async function newestAuditId(orchestration: ResearchOrchestration): Promise<string | null> {
+  const candidates = (await listAuditsByProject(orchestration.projectId)).filter(
+    (audit) => audit.runId !== null && audit.runId === orchestration.runId,
+  );
 
-  const named = orchestration.auditId ?? null;
-  if (named) {
-    const audit = await getAudit(named);
-    if (audit && (!since || audit.createdAt > since)) return named;
-  }
+  const named = orchestration.auditId ? await getAudit(orchestration.auditId) : null;
+  if (named && !candidates.some((audit) => audit.id === named.id)) candidates.push(named);
 
-  const audits = (await listAuditsByProject(orchestration.projectId))
-    .filter((audit) => audit.runId !== null && audit.runId === orchestration.runId)
-    .filter((audit) => (since ? audit.createdAt > since : true))
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-  return audits[0]?.id ?? null;
+  candidates.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  return candidates[0]?.id ?? null;
 }
 
 /** Which of the three the mission disagrees with. Empty means it is current. */
@@ -187,7 +198,7 @@ export async function alignMissionLinks(
 export type ReconcileRefusal =
   | 'NO_ORCHESTRATION'
   | 'NO_SUCH_PACKET'
-  | 'NO_CURRENT_ROUND_AUDIT'
+  | 'NO_PACKET_AUDIT'
   | 'ALREADY_CURRENT';
 
 export interface ReconcileOutcome {
@@ -238,23 +249,68 @@ export async function reconcileCompletedMission(
   const links = await currentLinksFor(orchestration);
   if (links.auditId === null && mission.auditId !== null) {
     /*
-     * The mission cites an audit the current round has superseded and the new
-     * round has not produced its own yet. Repointing at nothing would be worse
-     * than the stale pointer — a conclusion citing no audit at all — so this
-     * stops and says so, and is picked up again once the judge has run.
+     * The mission cites an audit and the packet it now names has none.
      *
-     * Reported rather than silent, because a repeated refusal here means a
-     * re-opened round is not finishing, which is a fact somebody would want.
+     * Fail-closed rather than expected: repointing at nothing would leave a
+     * filed conclusion citing no verdict at all, which is worse than a citation
+     * that has to be explained. It is reported rather than silent, because a
+     * repeated line here means a mission and a packet that do not belong
+     * together, and that is a fact somebody would want.
      */
     return refuse(
       missionId,
-      'NO_CURRENT_ROUND_AUDIT',
-      'This packet is between audit rounds, so there is no current verdict to point at yet.',
+      'NO_PACKET_AUDIT',
+      'The packet this mission names has recorded no audit, so there is no verdict to point at.',
     );
   }
 
   const corrections = driftOf(mission, links);
-  if (corrections.length === 0) {
+  if (corrections.length > 0) await linkMission(patchFor(mission.id, corrections));
+  const corrected = (await getMission(mission.id)) ?? mission;
+
+  /*
+   * And the projection those links produced.
+   *
+   * A knowledge row's `layer_id` is a copy of the mission's, and its provenance
+   * is a copy of the mission's document and audit ids. Correcting the mission
+   * and leaving these is the same defect one level down: the project would
+   * still believe its conclusion under the wrong heading, citing the wrong
+   * verdict, and the row a person actually reads is this one.
+   *
+   * It is re-anchored against the mission rather than against the corrections,
+   * because the mission's own links can move without this function moving them
+   * — an `OTHER_LAYER` handoff repoints all three ownership rows itself, and
+   * the knowledge it left behind is then the only thing still naming the old
+   * layer. That case has no drift for `driftOf` to find, which is why the
+   * selection below asks about the knowledge as well.
+   *
+   * Only the two derived fields are touched. The statement, the confidence, the
+   * author, the mission, the conversation and every timestamp are what they
+   * were, and nothing is superseded.
+   */
+  const knowledgeIds: string[] = [];
+  for (const row of await knowledgeForMission(mission.id)) {
+    const provenance = { ...row.provenance };
+    let changed = false;
+    if (corrected.auditId && provenance['auditId'] !== corrected.auditId) {
+      provenance['auditId'] = corrected.auditId;
+      changed = true;
+    }
+    if (corrected.documentId && provenance['documentId'] !== corrected.documentId) {
+      provenance['documentId'] = corrected.documentId;
+      changed = true;
+    }
+    const layerMoved = corrected.layerId !== null && row.layerId !== corrected.layerId;
+    if (!changed && !layerMoved) continue;
+    await reanchorKnowledge({
+      knowledgeId: row.id,
+      ...(layerMoved ? { layerId: corrected.layerId } : {}),
+      ...(changed ? { provenance } : {}),
+    });
+    knowledgeIds.push(row.id);
+  }
+
+  if (corrections.length === 0 && knowledgeIds.length === 0) {
     return {
       ok: true,
       missionId,
@@ -263,44 +319,6 @@ export async function reconcileCompletedMission(
       refusal: 'ALREADY_CURRENT',
       detail: 'This mission already points at what its packet produced.',
     };
-  }
-
-  await linkMission(patchFor(mission.id, corrections));
-  const corrected = (await getMission(mission.id)) ?? mission;
-
-  /*
-   * And the projection the stale links produced.
-   *
-   * A knowledge row's `layer_id` is a copy of the mission's, and its
-   * provenance is a copy of the mission's document and audit ids. Correcting
-   * the mission and leaving these is the same defect one level down: the
-   * project would still believe its conclusion under the wrong heading, citing
-   * the wrong verdict, and the row a person actually reads is this one.
-   *
-   * Only the two derived fields are touched. The statement, the confidence, the
-   * author, the mission, the conversation and every timestamp are what they
-   * were.
-   */
-  const knowledgeIds: string[] = [];
-  for (const row of await knowledgeForMission(mission.id)) {
-    const provenance = { ...row.provenance };
-    let changed = false;
-    for (const entry of corrections) {
-      if (entry.field === 'layerId') continue;
-      if (provenance[entry.field] === entry.from) {
-        provenance[entry.field] = entry.to;
-        changed = true;
-      }
-    }
-    const layerId = corrected.layerId;
-    const layerMoved = layerId !== null && row.layerId !== layerId;
-    if (!changed && !layerMoved) continue;
-    await reanchorKnowledge({
-      knowledgeId: row.id,
-      ...(layerMoved ? { layerId } : {}),
-      ...(changed ? { provenance } : {}),
-    });
-    knowledgeIds.push(row.id);
   }
 
   await recordEvent({
@@ -315,10 +333,11 @@ export async function reconcileCompletedMission(
       knowledgeIds,
       reconcilerVersion: COMPLETION_LINK_VERSION,
       reason:
-        'This mission was written back while its links still named the previous audit round. ' +
-        'The packet was re-audited after its document was handed to the layer that owns it, ' +
-        'and the mission and the knowledge it produced now cite that round instead. No audit, ' +
-        'claim, document or message was altered.',
+        'This mission had already written back against links that no longer described its ' +
+        'packet — a superseded audit round, a layer its document has left, or a projection ' +
+        'still naming both. The mission and the knowledge it promoted now cite what the ' +
+        'packet actually produced. No audit, pass, claim, document or message was altered, ' +
+        'nothing was superseded and no id changed.',
     },
   });
 
@@ -328,19 +347,33 @@ export async function reconcileCompletedMission(
     corrections,
     knowledgeIds,
     refusal: null,
-    detail: corrections
-      .map((entry) => `${entry.field}: ${entry.from ?? 'none'} -> ${entry.to}`)
-      .join('; '),
+    detail:
+      corrections
+        .map((entry) => `${entry.field}: ${entry.from ?? 'none'} -> ${entry.to}`)
+        .join('; ') || `re-anchored ${knowledgeIds.length} knowledge row(s)`,
   };
 }
 
 /**
- * Missions that already wrote back and whose links disagree with their packet.
+ * Missions that already wrote back and no longer describe their own packet.
  *
- * A pre-filter, and deliberately the *same three columns* the derivation reads,
- * so a mission this selects is one `reconcileCompletedMission` will either
- * correct or refuse by name. Selecting on rows rather than from a queue is what
- * makes this reach a mission written back before this code existed.
+ * Two arms, because there are two ways to drift apart and only one of them is
+ * about the mission's own columns.
+ *
+ * The first is the packet moving underneath the mission — a second audit round,
+ * a handoff — and it is deliberately the *same three columns* the derivation
+ * reads, so a mission this selects is one `reconcileCompletedMission` will
+ * either correct or refuse by name.
+ *
+ * The second is the projection being left behind. `routeAuditedDocument` moves
+ * the document, the packet **and** the mission together, which is right and
+ * leaves nothing for the first arm to find — and the knowledge the writeback
+ * promoted still names the layer the work has left. So the knowledge is asked
+ * about directly. Only the layer is compared here; a provenance that drifted
+ * did so because a link drifted, which the first arm already catches.
+ *
+ * Selecting on rows rather than from a queue is what makes this reach a mission
+ * written back before this code existed.
  */
 export async function missionsWithStaleLinks(limit: number): Promise<string[]> {
   const rows = await getDb().all<{ id: string }>(
@@ -352,6 +385,11 @@ export async function missionsWithStaleLinks(limit: number): Promise<string[]> {
              (o.document_id IS NOT NULL AND (m.document_id IS NULL OR m.document_id <> o.document_id))
           OR (o.audit_id    IS NOT NULL AND (m.audit_id    IS NULL OR m.audit_id    <> o.audit_id))
           OR (o.layer_id    IS NOT NULL AND (m.layer_id    IS NULL OR m.layer_id    <> o.layer_id))
+          OR (m.layer_id IS NOT NULL AND EXISTS (
+                SELECT 1 FROM russell_knowledge k
+                 WHERE k.mission_id = m.id
+                   AND (k.layer_id IS NULL OR k.layer_id <> m.layer_id)
+              ))
         )
       ORDER BY m.updated_at, m.rowid
       LIMIT ?`,

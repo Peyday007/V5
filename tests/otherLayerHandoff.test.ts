@@ -1021,21 +1021,135 @@ describe('the rest of the path, after the routing', () => {
       });
     });
 
-    it('refuses to repoint at nothing while a re-opened round is unfinished', async () => {
+    it('cites the newest audit even when the document is routed again after it', async () => {
       /*
-       * Between the handoff and round two's judge the mission's audit is stale
-       * and there is no replacement. Blanking it would leave a filed conclusion
-       * citing no verdict at all, which is worse than the stale citation, so
-       * this stops and says which case it is — and says it every tick, because
-       * a round that never finishes is a fact somebody would want.
+       * Production's actual shape, and the reason this does not use a round
+       * boundary. The routing is selected from rows, so it can reach a
+       * *terminal* packet's audit — no new round runs, because a terminal
+       * packet is not re-opened. A boundary rule would then place the audit
+       * that was really performed on this report in a previous round and
+       * refuse to cite it, leaving a filed conclusion citing nothing.
+       */
+      const { orchestration, mission } = await packetInTheWrongLayer();
+      await tick('test-owner');
+      const { audit: roundTwo } = await passRoundTwo(orchestration.id);
+      await tick('test-owner');
+      expect((await getMission(mission.id))!.auditId).toBe(roundTwo.id);
+
+      // A second handoff, after the packet finished and after that audit.
+      const packet = (await getOrchestration(orchestration.id))!;
+      const qualification = await fixture.layerByName('Qualification Logic');
+      await recordAudit({
+        projectId: fixture.project.id,
+        layerId: packet.layerId,
+        runId: packet.runId,
+        auditedDocumentId: packet.documentId,
+        auditedDocumentIds: packet.documentId ? [packet.documentId] : [],
+        source: 'TEST',
+        mode: 'SINGLE_DOCUMENT',
+        result: {
+          verdict: 'PASS',
+          summary: 'Sound, and it belongs one layer further on.',
+          failures: [],
+          missingDocuments: [],
+          requiredResearchRuns: [],
+          requiredPatches: [],
+          synthesisRequired: false,
+          freezeEligible: false,
+          nextVersion: null,
+          nextAction: 'File it where it belongs.',
+          confidence: 0.9,
+        },
+        gaps: [
+          {
+            classification: 'OTHER_LAYER' as const,
+            title: 'Qualification Logic owns this',
+            detail: 'Recorded by the judge.',
+            owningLayerName: 'Qualification Logic',
+            justification: 'Recorded by the judge.',
+            researchQuestion: null,
+            expectedContribution: null,
+            sourcePass: 'JUDGE' as const,
+          },
+        ],
+      });
+
+      const report = await tick('test-owner');
+      expect(report.handedOff.map((entry) => entry.toLayerId)).toContain(qualification.id);
+
+      // The document moved; the mission follows it and keeps a real verdict.
+      const finished = (await getMission(mission.id))!;
+      expect(finished.layerId).toBe(qualification.id);
+      expect(finished.auditId).not.toBeNull();
+      expect((await getDocument(packet.documentId!))!.layerId).toBe(qualification.id);
+      expect(report.linksUnreconciled).toHaveLength(0);
+
+      /*
+       * The projection follows on the next tick, not this one, and that is the
+       * order rather than a lag to design away: the reconciliation runs before
+       * the routing in a tick, so the tick that moves a document leaves the
+       * knowledge it produced naming the old layer, and the next one catches
+       * it. It is caught by the knowledge arm of the selection — the mission,
+       * the packet and the document all agree by then, so there is no link
+       * drift left to notice.
+       */
+      const next = await tick('test-owner');
+      expect(next.linksReconciled.map((entry) => entry.missionId)).toContain(mission.id);
+
+      // The newest audit of this packet's run, which is the one that has just
+      // judged it. Read back rather than remembered: the third audit is newer
+      // than round two's, so a mission still naming round two would be the
+      // very staleness this exists to remove.
+      const settled = (await getMission(mission.id))!;
+      const newest = (await listAuditsByProject(fixture.project.id))
+        .filter((entry) => entry.runId === packet.runId)
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0]!;
+      expect(settled.auditId).toBe(newest.id);
+      for (const row of await knowledgeForMission(mission.id)) {
+        expect(row.layerId).toBe(qualification.id);
+        expect(row.provenance['auditId']).toBe(settled.auditId);
+      }
+
+      // Still once, and still nothing left to correct.
+      expect((await getMission(mission.id))!.writebackAt).toBe(finished.writebackAt);
+      expect((await tick('test-owner')).linksReconciled).toHaveLength(0);
+    });
+
+    it('refuses to repoint at a packet that has recorded no audit at all', async () => {
+      /*
+       * Fail-closed rather than expected. A mission citing a verdict, pointed
+       * at a packet with none, is a mission and a packet that do not belong
+       * together — and blanking the citation would leave a filed conclusion
+       * resting on nothing.
        */
       const { mission, audit: roundOne } = await packetInTheWrongLayer();
-      await tick('test-owner');
-      await linkMission({ missionId: mission.id, auditId: roundOne.id });
+      const worldModel = await fixture.layerByName('World Model');
+      const emptyRun = await createRun({
+        projectId: fixture.project.id,
+        layerId: worldModel.id,
+        runType: 'FOUNDATION',
+        status: 'PLANNED',
+        provider: 'WORKER',
+        prompt: 'a packet that has not been audited',
+      });
+      const unaudited = await createOrchestration({
+        projectId: fixture.project.id,
+        layerId: worldModel.id,
+        runId: emptyRun.id,
+        title: 'Unaudited',
+        assignment: 'nothing yet',
+        provider: 'WORKER',
+        autoApprove: false,
+      });
+      await linkMission({
+        missionId: mission.id,
+        orchestrationId: unaudited.id,
+        auditId: roundOne.id,
+      });
 
       const outcome = await reconcileCompletedMission(mission.id);
       expect(outcome.ok).toBe(false);
-      expect(outcome.refusal).toBe('NO_CURRENT_ROUND_AUDIT');
+      expect(outcome.refusal).toBe('NO_PACKET_AUDIT');
       expect((await getMission(mission.id))!.auditId).toBe(roundOne.id);
     });
   });
