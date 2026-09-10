@@ -23,6 +23,7 @@
  */
 import { Router } from 'express';
 import type { Principal } from '../domain/types.ts';
+import { FACTORY_DEPLOYMENT_POLICIES } from '../domain/factory.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
 import {
   getCampaign,
@@ -43,6 +44,8 @@ import {
   listWorkers,
 } from '../repos/factoryFleet.ts';
 import { approveObjective, submitObjective } from '../services/factory/contract.ts';
+import { ensureCampaign } from '../repos/factory.ts';
+import { INITIAL_LANE_TARGET } from '../services/factory/scheduler.ts';
 import { campaignMetrics } from '../services/factory/metrics.ts';
 import { capacity, readiness } from '../services/factory/registry.ts';
 import {
@@ -51,6 +54,7 @@ import {
   bodyOf,
   handler,
   notFound,
+  optionalEnum,
   optionalString,
   optionalStringArray,
   pathId,
@@ -130,6 +134,14 @@ factoryRouter.post(
       acceptanceConditions: conditions,
       mutationScope: optionalStringArray(body['mutationScope'], 'mutationScope'),
       submissionKey: optionalString(body['submissionKey'], 'submissionKey'),
+      // Whether this campaign's result needs a release decision is a person's
+      // call rather than a technical field: it says who is allowed to let the
+      // work out, which is exactly the question a person is here to answer.
+      deploymentPolicy: optionalEnum(
+        body['deploymentPolicy'],
+        FACTORY_DEPLOYMENT_POLICIES,
+        'deploymentPolicy',
+      ),
     });
 
     res.status(result.created ? 201 : 200).json({
@@ -171,7 +183,20 @@ factoryRouter.post(
       userId: principal.id,
     });
     if (!result.ok) throw badRequest(result.reason ?? 'The objective could not be approved.');
-    res.json({ changeRequest: result.changeRequest });
+
+    // Approving the objective is what starts the campaign. One campaign per
+    // change request, decided by the database, so a second approval — or a
+    // retried request — joins the campaign that exists instead of forking it.
+    const approved = result.changeRequest;
+    const { campaign, created } = await ensureCampaign({
+      changeRequestId: approved.id,
+      projectId: approved.projectId,
+      baseSha: approved.baseSha,
+      integrationBranch: `factory/campaign/${approved.submissionKey.slice(0, 12)}`,
+      laneTarget: INITIAL_LANE_TARGET,
+      laneTargetReason: 'initial',
+    });
+    res.json({ changeRequest: approved, campaign, campaignCreated: created });
   }),
 );
 
