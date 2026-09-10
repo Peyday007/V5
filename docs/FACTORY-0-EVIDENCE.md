@@ -37,7 +37,8 @@ outer session did. So:
 | The tick | `server/services/factory/loop.ts` |
 | HTTP surface | `server/routes/factory.ts` |
 | Operator tool, acceptance reporter, verifier | `scripts/factory.ts`, `scripts/factory-acceptance.ts`, `scripts/factory-verify.ts` |
-| Seed tests | `tests/factory.test.ts`, `tests/factoryHttp.test.ts` |
+| Seed tests | `tests/factory.test.ts`, `tests/factoryHttp.test.ts`, `tests/factoryPersistence.test.ts` |
+| Pins for three repairs the round-3 reviewer found untested | `tests/factoryBulkTick.test.ts` |
 
 Review and repair are in the seed rather than in the bootstrap campaign, and
 that is a deliberate departure from the assignment's suggested split: the seed
@@ -217,6 +218,26 @@ outside tests calls it."*
 Round 3: PASS, with five MINOR findings recorded as limitations rather than
 closed — three of them saying that a repair from round 2 is asserted by no test.
 
+**Three of those five are now closed, by hand, in the outer session.** They said
+that reverting a round-2 repair would leave the suite green, and the assignment's
+own verification standard is that reverting a critical repair makes its test
+fail — so they are the one class of MINOR finding that cannot be left standing.
+`tests/factoryBulkTick.test.ts` pins all three: the batch tick's bulk recovery
+pass, by recovering a campaign whose own tick refuses above the line where it
+would have recovered; the writeback retry, by the terminal campaign nothing that
+walks live campaigns can reach; and the 90-minute unattached-session default, by
+taking the default instead of supplying a bound. **The factory did not write
+these.** It found them — its reviewer's wording was *"a revert of any of them
+would leave the suite green"* — and it correctly did not queue them, because
+MINOR is non-gating by design and the campaign was already released. Closing
+them was a decision about the assignment's verification bar, made outside the
+campaign, and counting them as factory output would be the exact claim §1 exists
+to keep honest.
+
+The two that remain are genuine limitations and stay recorded: two renderings of
+the same pull-request body with nothing reconciling them, and A03's per-entry
+breakdown carrying fewer figures than the condition names.
+
 ### The recovery drill
 
 A separate campaign, `fcp_97e7399a36014135938c`, run to exercise the recovery
@@ -229,6 +250,14 @@ path on real work rather than a fixture:
    `UNIT_TAKEOVER` naming the worker that died holding it — *"the previous lease
    expired and the unit was claimable again"*.
 4. That attempt produced the work and integrated it.
+
+The row reads `from` and `worker_id` as the same registered worker, and that is
+worth saying plainly rather than leaving to be misread: the scheduler had four
+implementers free and handed the retaken unit back to the same one. What changed
+is the **session** — `fss_6a73…` ABANDONED at attempt 1, `fss_7ac7…` FINISHED at
+attempt 2, on its own branch — which is the thing a resume is about. A takeover
+by a second worker identity would be the same mechanism with a different row in
+one column, and this drill did not produce one.
 
 Running the drill found three defects in the factory itself — the campaign tick
 lease being neither renewed nor short, the integration branch name that could
