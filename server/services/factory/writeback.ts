@@ -10,11 +10,30 @@
  * nothing, unless one row is written there when the campaign stops moving for
  * good. This module writes exactly that row, once.
  *
- * It is a read of `loadCampaignView` and a single `recordEvent`, in that
- * order, and nothing else: no factory table is touched here, matching
+ * It is a read of `loadCampaignView`, an idempotency-guarded write, and
+ * nothing else: no factory table is touched here, matching
  * `server/services/russell/writeback.ts`'s own boundary between "what
  * happened" (owned elsewhere) and "the fact that it happened is now in
  * project history" (owned here).
+ *
+ * "Exactly one row" is a database-arbitrated guarantee, not a re-read of
+ * `listEventsByEntity` in front of `recordEvent`. `project_events` carries no
+ * unique constraint over (entity_type, entity_id, event_type) in either
+ * migration chain, and this unit is not permitted to add one, so the
+ * guarantee is built on `idempotency_operations` instead — the table §20
+ * already exists for exactly this shape, with
+ * `UNIQUE (scope_hash, key_fingerprint)` behind it. `runIdempotent` reserves
+ * with `INSERT ... ON CONFLICT DO NOTHING`, so of any number of dispatchers
+ * that reach `COMPLETE` for the same campaign and call this function
+ * concurrently, exactly one wins the reservation and runs `recordEvent`
+ * inside the same transaction as its own success record; every other caller
+ * finds the row it collided with and returns without inserting. The
+ * `listEventsByEntity` check below is a fast path for the common case — a
+ * campaign whose outcome already landed on an earlier tick — and is bounded
+ * by the campaign tick lease, the same narrowing (never elimination) of the
+ * read-then-write window that `recoverCampaign`'s staleness bound describes;
+ * it is not what makes the property true. What makes it true is the unique
+ * index the reservation is refused against.
  */
 import { listEventsByEntity, recordEvent } from '../../repos/events.ts';
 import type { EventType, ProjectEvent } from '../../domain/types.ts';
@@ -28,6 +47,12 @@ import {
 import { getDb } from '../../db/database.ts';
 import { mapCampaign } from '../../repos/factory.ts';
 import type { FactoryCampaign, FactoryCampaignRow, FactoryCampaignState } from '../../domain/factory.ts';
+import {
+  OperationConflict,
+  OperationInProgress,
+  runIdempotent,
+  type OperationNamespace,
+} from '../effects/engine.ts';
 
 /**
  * `EventType` has no factory member. Adding one means editing the union in
@@ -50,6 +75,43 @@ const ENTITY_TYPE = 'FACTORY_CAMPAIGN';
  */
 const TERMINAL_STATES: ReadonlySet<FactoryCampaignState> = new Set(['COMPLETE', 'CANCELLED']);
 
+/**
+ * One namespace, one campaign per key: `PROJECT` scope, because two
+ * dispatchers racing to write this campaign's outcome are the same intent,
+ * not two different ones — the second should join the first rather than be
+ * refused as a stranger to it. `PERMANENT` retention, because this operation
+ * record is the only thing standing behind "exactly one row" and must outlive
+ * whatever cleanup policy `idempotency_operations` otherwise carries.
+ */
+const OUTCOME_NAMESPACE: OperationNamespace = {
+  name: 'factory.campaign.outcome',
+  version: 1,
+  principalScope: 'PROJECT',
+  retention: 'PERMANENT',
+};
+
+/**
+ * There is no principal here — this runs from the campaign tick, not from a
+ * request — so the operation is attributed to the system rather than to
+ * anyone who happened to be dispatching when the campaign finished.
+ */
+const WRITEBACK_PRINCIPAL_ID = 'factory-campaign-writeback';
+
+/**
+ * `assertValidKey` refuses `_`; campaign ids (`newId('fcp')`) contain it.
+ * The scope hash already carries the namespace and the project, so this only
+ * has to be injective per campaign, not globally unique or secret — a
+ * character substitution is enough.
+ */
+function outcomeIdempotencyKey(campaignId: string): string {
+  return campaignId.replace(/_/g, '-');
+}
+
+async function findRecordedOutcome(campaignId: string): Promise<ProjectEvent | null> {
+  const events = await listEventsByEntity(ENTITY_TYPE, campaignId);
+  return events.find((event) => event.eventType === FACTORY_CAMPAIGN_OUTCOME) ?? null;
+}
+
 export interface RecordCampaignOutcomeResult {
   recorded: boolean;
   event: ProjectEvent | null;
@@ -65,10 +127,18 @@ export interface RecordCampaignOutcomeResult {
  * the same rule §8 applies to a judge — no state moves from an outcome that
  * was never reached.
  *
- * Idempotent by reading `listEventsByEntity` first: if a row of this event
- * type already exists for this campaign, that row is handed back with
- * `recorded: false` and nothing is inserted. A redelivered tick therefore
- * never appends a second row, and two calls in a row leave exactly one.
+ * The read of `listEventsByEntity` immediately below is a fast path, not the
+ * guard: a `COMPLETE` campaign practically always already has its row by the
+ * time a later tick asks again, and this skips reservation machinery for that
+ * common case. Two callers that both pass it because neither has written yet
+ * are exactly the race this function must survive, and what survives it is
+ * `runIdempotent`: it reserves this campaign's outcome as one operation keyed
+ * off the campaign id, behind `idempotency_operations`'
+ * `UNIQUE (scope_hash, key_fingerprint)`, and only the caller that wins the
+ * reservation runs `recordEvent` — inside the same transaction as its own
+ * success record, so a crash between them leaves neither. Every other caller,
+ * concurrent or redelivered, is told what already happened instead of being
+ * allowed to repeat it.
  */
 export async function recordCampaignOutcome(
   campaignId: string,
@@ -90,45 +160,92 @@ export async function recordCampaignOutcome(
     return { recorded: false, event: null, reason: 'campaign has not finished' };
   }
 
-  const existing = await listEventsByEntity(ENTITY_TYPE, campaignId);
-  const already = existing.find((event) => event.eventType === FACTORY_CAMPAIGN_OUTCOME);
+  const already = await findRecordedOutcome(campaign.id);
   if (already) {
     return { recorded: false, event: already, reason: 'already recorded' };
   }
 
   const review = latestReview(view);
+  const payload = {
+    campaignId: campaign.id,
+    changeRequestId: campaign.changeRequestId,
+    objective: view.changeRequest.objective,
+    reviewVerdict: review?.verdict ?? null,
+    independenceTier: review?.independence ?? null,
+    integrationSha: campaign.integrationSha,
+    unitsIntegrated: integratedUnits(view),
+    unitsTotal: totalUnits(view),
+    openFindings: openFindings(view).map((finding) => ({
+      findingKey: finding.findingKey,
+      severity: finding.severity,
+      statement: finding.statement,
+    })),
+    finishedAt: campaign.finishedAt,
+  };
 
-  const event = await recordEvent({
-    projectId: campaign.projectId,
-    entityType: ENTITY_TYPE,
-    entityId: campaign.id,
-    eventType: FACTORY_CAMPAIGN_OUTCOME,
-    payload: {
-      campaignId: campaign.id,
-      changeRequestId: campaign.changeRequestId,
-      objective: view.changeRequest.objective,
-      reviewVerdict: review?.verdict ?? null,
-      independenceTier: review?.independence ?? null,
-      integrationSha: campaign.integrationSha,
-      unitsIntegrated: integratedUnits(view),
-      unitsTotal: totalUnits(view),
-      openFindings: openFindings(view).map((finding) => ({
-        findingKey: finding.findingKey,
-        severity: finding.severity,
-        statement: finding.statement,
-      })),
-      finishedAt: campaign.finishedAt,
-    },
-  });
+  try {
+    const outcome = await runIdempotent(
+      {
+        namespace: OUTCOME_NAMESPACE,
+        projectId: campaign.projectId,
+        key: outcomeIdempotencyKey(campaign.id),
+        payload,
+        principalType: 'SYSTEM',
+        principalId: WRITEBACK_PRINCIPAL_ID,
+      },
+      async () => {
+        const event = await recordEvent({
+          projectId: campaign.projectId,
+          entityType: ENTITY_TYPE,
+          entityId: campaign.id,
+          eventType: FACTORY_CAMPAIGN_OUTCOME,
+          payload,
+        });
+        return { value: event, resultRef: event.id };
+      },
+    );
 
-  return { recorded: true, event };
+    switch (outcome.status) {
+      case 'EXECUTED':
+        return { recorded: true, event: outcome.value };
+      case 'REPLAYED': {
+        const recorded = await findRecordedOutcome(campaign.id);
+        return { recorded: false, event: recorded, reason: 'already recorded' };
+      }
+      default:
+        // UNCERTAIN / TERMINAL_FAILURE are outcomes of a failed executor or a
+        // provider call, neither of which this same-database effect performs
+        // — reachable only if `recordEvent` itself throws, which the try/catch
+        // below already turns into a plain error. Handled rather than assumed
+        // away, matching `RunOutcome`'s own shape.
+        return {
+          recorded: false,
+          event: null,
+          reason: `writeback did not complete (outcome: ${outcome.status})`,
+        };
+    }
+  } catch (error) {
+    if (error instanceof OperationInProgress || error instanceof OperationConflict) {
+      // Another caller is mid-reservation for this same campaign right now.
+      // That caller either has not committed yet (nothing to hand back) or
+      // already has (the lookup below finds it) — either way this call must
+      // not insert a second row.
+      const recorded = await findRecordedOutcome(campaign.id);
+      return {
+        recorded: false,
+        event: recorded,
+        reason: recorded ? 'already recorded' : 'writeback already in progress elsewhere',
+      };
+    }
+    throw error;
+  }
 }
 
 /**
  * Terminal campaigns whose Brain outcome has not landed yet.
  *
- * `recordCampaignOutcome`'s read-before-insert guard is what makes calling it
- * a second time safe; the defect this closes is that nothing was ever calling
+ * `recordCampaignOutcome`'s idempotency guard is what makes calling it a
+ * second time safe; the defect this closes is that nothing was ever calling
  * it a second time. A crash between `patchCampaign(state: 'COMPLETE', ...)`
  * and this module's own insert — or a caught error from the insert itself —
  * leaves a campaign that is COMPLETE or CANCELLED, has a `finishedAt`, and
