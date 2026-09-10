@@ -7795,3 +7795,19 @@ no source that can be checked. `S12A-ACC-6` moves to a different part of the
 business entirely, so nothing about it depends on wording: what comparable
 success-fee marketplaces actually net after refunds and clawbacks is private
 financial data, and the honest outcome is a named unresolved gap.
+
+### The two re-runs, started
+
+```
+S12A-ACC-5   rcv_5d56e84a14504c73a26d   would explore true  (as statement PRESENT_BUT_UNVERIFIED)
+S12A-ACC-6   rcv_d4a8bd16430b47dc86ea   MISSING both ways, so it becomes research
+```
+
+`S12A-ACC-5` is the case the repair was for: its question reads `MISSING` and
+its statement reads `PRESENT_BUT_UNVERIFIED`, so the union rule sends it for a
+look while the statement-only rule would have queued it outright. `S12A-ACC-6`
+reads `MISSING` both ways, which is the honest answer for a question about
+private financial data.
+
+The archive had grown from 31 claims to 46 by then, because `S12A-ACC-3`'s
+mission had already filed.
