@@ -77,11 +77,46 @@ function requirePerson(): Principal {
   return principal;
 }
 
+/**
+ * Refuse with one answer, whatever the reason.
+ *
+ * `authorizeProject` already answers 404 for a project a principal may not
+ * reach — but with *its* message, and a body that differs between "you may not"
+ * and "it is not there" is still an oracle even when the status matches. A test
+ * written as an attack found exactly that here, which is why this exists rather
+ * than each handler calling the authorizer directly.
+ */
+async function authorizeOrDeny(
+  projectId: string,
+  level: 'read' | 'write',
+  refusal: string,
+): Promise<void> {
+  try {
+    await authorizeProject(projectId, level);
+  } catch {
+    throw notFound(refusal);
+  }
+}
+
+/** A project, or the same refusal whether it is absent or forbidden. */
+async function projectForFactory(projectId: string, level: 'read' | 'write'): Promise<void> {
+  try {
+    await requireProject(projectId);
+  } catch {
+    throw notFound('No such project.');
+  }
+  await authorizeOrDeny(projectId, level, 'No such project.');
+}
+
 /** Resolve a campaign and authorize the project it actually belongs to. */
 async function campaignFor(campaignId: string, level: 'READ' | 'WRITE') {
   const campaign = await getCampaign(campaignId);
   if (!campaign) throw notFound('No such campaign.');
-  await authorizeProject(campaign.projectId, level === 'READ' ? 'read' : 'write');
+  await authorizeOrDeny(
+    campaign.projectId,
+    level === 'READ' ? 'read' : 'write',
+    'No such campaign.',
+  );
   const changeRequest = await getChangeRequest(campaign.changeRequestId);
   if (!changeRequest) throw notFound('No such campaign.');
   return { campaign, changeRequest };
@@ -103,8 +138,7 @@ factoryRouter.post(
   handler(async (req, res) => {
     requirePerson();
     const projectId = pathId(req, 'projectId');
-    await requireProject(projectId);
-    await authorizeProject(projectId, 'write');
+    await projectForFactory(projectId, 'write');
 
     const body = bodyOf(req);
     const rawConditions = body['acceptanceConditions'];
@@ -156,8 +190,7 @@ factoryRouter.get(
   '/projects/:projectId/factory/change-requests',
   handler(async (req, res) => {
     const projectId = pathId(req, 'projectId');
-    await requireProject(projectId);
-    await authorizeProject(projectId, 'read');
+    await projectForFactory(projectId, 'read');
     res.json({ changeRequests: await listChangeRequests(projectId) });
   }),
 );
@@ -175,7 +208,7 @@ factoryRouter.post(
     const changeRequestId = pathId(req, 'changeRequestId');
     const changeRequest = await getChangeRequest(changeRequestId);
     if (!changeRequest) throw notFound('No such change request.');
-    await authorizeProject(changeRequest.projectId, 'write');
+    await authorizeOrDeny(changeRequest.projectId, 'write', 'No such change request.');
 
     const result = await approveObjective({
       changeRequestId,
@@ -206,7 +239,7 @@ factoryRouter.get(
     const changeRequestId = pathId(req, 'changeRequestId');
     const changeRequest = await getChangeRequest(changeRequestId);
     if (!changeRequest) throw notFound('No such change request.');
-    await authorizeProject(changeRequest.projectId, 'read');
+    await authorizeOrDeny(changeRequest.projectId, 'read', 'No such change request.');
     res.json({
       changeRequest,
       amendments: await listAmendments(changeRequestId),
@@ -222,8 +255,7 @@ factoryRouter.get(
   '/projects/:projectId/factory/campaigns',
   handler(async (req, res) => {
     const projectId = pathId(req, 'projectId');
-    await requireProject(projectId);
-    await authorizeProject(projectId, 'read');
+    await projectForFactory(projectId, 'read');
     res.json({ campaigns: await listCampaigns(projectId) });
   }),
 );

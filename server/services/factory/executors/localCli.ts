@@ -174,6 +174,16 @@ function usageFrom(result: CliResult | null): FactoryUsage | null {
 
 const MAX_LOG_BYTES = 1024 * 1024;
 
+/**
+ * How much of a worker's reply is kept.
+ *
+ * Generous, because the reply is not a summary: a plan and a review verdict both
+ * arrive inside it as a fenced block, and a reply cut off before that block is a
+ * pass that was bought and then thrown away. The first version truncated at
+ * 8,000 characters and the architect's plan did not fit.
+ */
+const MAX_REPLY_CHARS = 200_000;
+
 export const localCliExecutor: Executor = {
   kind: 'LOCAL_CLI',
 
@@ -288,7 +298,7 @@ export const localCliExecutor: Executor = {
       return {
         ...base,
         outcome: 'RATE_LIMITED',
-        summary: (parsed?.result ?? '').slice(0, 2000),
+        summary: (parsed?.result ?? '').slice(0, MAX_REPLY_CHARS),
         retryAfterMs: retryAfterFrom(combined),
         detail: 'The provider refused the session. Backpressure, not a failure.',
       };
@@ -298,7 +308,7 @@ export const localCliExecutor: Executor = {
       return {
         ...base,
         outcome: 'ERROR',
-        summary: (parsed?.result ?? '').slice(0, 2000),
+        summary: (parsed?.result ?? '').slice(0, MAX_REPLY_CHARS),
         retryAfterMs: null,
         detail:
           parsed?.result?.slice(0, 1000) ??
@@ -312,7 +322,7 @@ export const localCliExecutor: Executor = {
     return {
       ...base,
       outcome: 'COMPLETED',
-      summary: (parsed.result ?? '').slice(0, 8000),
+      summary: (parsed.result ?? '').slice(0, MAX_REPLY_CHARS),
       retryAfterMs: null,
       detail: `${parsed.subtype ?? 'success'} in ${parsed.num_turns ?? '?'} turns`,
     };
