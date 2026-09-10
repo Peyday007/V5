@@ -25,6 +25,7 @@
     "reissue:verification": "tsx scripts/reissue-verification.ts",
     "authorize:gap-policy": "tsx scripts/authorize-gap-policy.ts",
     "connect:site": "tsx scripts/connect-site.ts",
+    "connect:report": "tsx scripts/connect-report.ts",
     "report:packet": "tsx scripts/packet-report.ts",
     "verify:capability": "tsx scripts/verify-research-capability.ts",
     "step12a:acceptance": "tsx --env-file-if-exists=.env scripts/step12a-acceptance.ts"

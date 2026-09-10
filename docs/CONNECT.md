@@ -175,7 +175,7 @@ reading that stops it becoming a surprise.
 
 ## 6. Connecting a site
 
-Three steps, all in a browser, once.
+Three steps, and only one of them genuinely needs a person.
 
 1. **Create the worker.** `/operator` → *Workers* → create one named for the
    site.
@@ -186,6 +186,35 @@ Three steps, all in a browser, once.
    calls this endpoint refuses with the same 404 a missing project gives.)
 3. **Issue a credential** on the same row and copy it. It is shown once and is
    not recoverable afterwards by anyone, including an administrator.
+
+Steps 1 and 2 are ordinary rows, and the choice inside step 2 is the one thing
+here with a wrong answer in it — a wrong answer that is *silent*, because the
+refusal it causes is indistinguishable from a project that does not exist. So
+they can be made from a constant instead of from a form:
+
+```
+npm run connect:site -- --project prj_… --admin someone@example.com
+npm run connect:site -- --project prj_… --check     # reads, writes nothing
+```
+
+`services/identity/connectSite.ts` holds the rule and the console calls the same
+repositories with the same set, so the two entrances cannot disagree. It is
+idempotent, and because the membership upsert rewrites the scopes every time it
+is a **repair** as well as a setup: a site granted the research set by hand is
+fixed by running it.
+
+Against a deployed Brain there is a workflow for it — *Connect a site* — which
+runs the same script inside the container through `flyctl ssh`, the way
+`verify-hosted` and `authorize-gap-policy` already do. Reaching that shell is the
+authentication; `--admin` is the attribution, resolved against the database
+rather than trusted, because an audit row with no author answers nothing later.
+
+**Neither the script nor the workflow issues a credential, and neither can print
+one.** That is the contract rather than caution. A credential is shown once,
+into one response, to somebody signed in; a workflow log is a log that outlives
+its run, and invariant 22 admits no exception for a log that is convenient. So
+step 3 stays in the browser, and what the script removes from the person's job is
+step 2 — the part that could be done wrongly.
 
 Then set three variables on the site and redeploy it:
 

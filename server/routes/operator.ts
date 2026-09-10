@@ -873,8 +873,13 @@ async function consolePage(person: Principal, flash: Flash = {}): Promise<string
          <select id="cred_worker" name="worker_id" required>${workerOptions}</select>
          <button type="submit" class="secondary">Issue</button>
        </form>
-       <p class="note">Only for a client that cannot do OAuth. Claude connects through
-         <em>Connect a worker</em>, which handles this without a secret ever being copied.</p>`)
+       <p class="note">For a client that cannot do OAuth. Claude connects through
+         <em>Connect a worker</em>, which handles this without a secret ever being copied — so a
+         research worker does not need this box.</p>
+       <p class="note">A <strong>connected site</strong> does. It is a server holding one bearer
+         token in its own configuration, with no browser to consent in, so this is its only way in.
+         The value below is shown once and is not recoverable afterwards by anyone, including an
+         administrator: paste it straight into the site and save it nowhere else.</p>`)
          : ''
      }`,
   );

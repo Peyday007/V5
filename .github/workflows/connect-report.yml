@@ -1,0 +1,52 @@
+name: Connected site report
+
+# What a connected site has actually done to Brain.
+#
+# Reading the connector's own rows over HTTP needs a credential, and a
+# credential is precisely the thing that must not travel to whoever is asking.
+# So this reads them where `verify-hosted` and `connect-site` already run —
+# inside the container, where reaching the shell is the authentication.
+#
+# It writes nothing. Projections are derived on the read path (§25), so asking
+# for one moves no state and costs the site nothing. It prints identifiers,
+# versions, states and Brain's own sentences, and never a credential, because it
+# never reads one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Project id or slug'
+        required: true
+      site:
+        description: 'Source system'
+        required: false
+        default: 'deal-dispatch'
+      limit:
+        description: 'How many records to list'
+        required: false
+        default: '20'
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: report
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Ask the Brain what it holds
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "sh /app/scripts/connect-report.sh --project ${{ inputs.project }} --site ${{ inputs.site }} --limit ${{ inputs.limit }}" \
+            2>&1 | tee connect-report.txt
+          set -e
+          grep -q '^CONNECT-REPORT: OK' connect-report.txt
