@@ -218,7 +218,17 @@ async function main(): Promise<void> {
           ? Number(flagString(flags, 'lease-seconds')) * 1000
           : undefined,
         owner: flagString(flags, 'owner') ?? `cli-${process.pid}`,
-        onTick: (report: { state: string; stage: string; dispatched: number; integrated: number; rejected: number; reviewed: boolean; repairsQueued: number; notes: string[] }) => {
+        onTick: (report: {
+          state: string;
+          stage: string;
+          dispatched: number;
+          integrated: number;
+          rejected: number;
+          reviewed: boolean;
+          repairsQueued: number;
+          tickHeld: boolean;
+          notes: string[];
+        }) => {
           process.stdout.write(
             `[${new Date().toISOString()}] ${report.state} — ${report.stage}; ` +
               `dispatched ${report.dispatched}, integrated ${report.integrated}, ` +
