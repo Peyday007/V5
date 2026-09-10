@@ -1,5 +1,12 @@
 # The connector, proven
 
+> **Where this stands.** The Brain half is **deployed and live** in production.
+> The Deal Dispatch half is merged into its production branch and Vercel refuses
+> every deployment of it with `Account is blocked.` — read fresh at
+> **2026-09-10T11:19:42Z** against commit `2e3e84d`, and `402
+> DEPLOYMENT_DISABLED` on the live URL. That is an account-status matter on the
+> hosting side and the one thing here that no amount of code resolves.
+
 Everything below was read back from a database or an HTTP response. Nothing in
 it is a summary of what a previous step printed.
 
@@ -232,3 +239,104 @@ server log, both rendered pages, every `identity_events` row, every
 ```
 credential occurrences: 0, everywhere
 ```
+
+
+---
+
+# Production
+
+## The Brain half is live
+
+| | |
+|---|---|
+| App | `northline-brain.fly.dev` |
+| Deploy run | [34467477356](https://github.com/Peyday007/V5/actions/runs/34467477356), success |
+| Commit | `cc143ea` on `claude/blissful-tesla-a31dc1` |
+| Schema | **036** — `036_external_records` applied, `035_worker_sessions` untouched |
+| Liveness | `GET /healthz` → `200 ok` |
+
+The connector's door answers, and refuses correctly:
+
+```
+GET /api/projects/prj_9d86…/connect/deal-dispatch/records/opp_x
+  (no credential)          401 {"error":"Not authorized."}
+  (fabricated bearer)      401 {"error":"Not authorized."}
+```
+
+The branch deployed is a strict superset of the Step 12A closure branch: eleven
+commits ahead of it, zero behind, with `036` renumbered past its `035`. Nothing
+of that work was displaced.
+
+## The Deal Dispatch half cannot deploy
+
+```
+2026-09-10T11:19:42Z  Vercel  failure  "Account is blocked."
+https://v4-4-points.vercel.app/api/health  →  402  DEPLOYMENT_DISABLED
+```
+
+Three pushes to the production branch — `018c338`, `a1b5f55`, `2e3e84d` — each
+produced the same refusal. The branch is correct and the build is clean
+locally; there is nothing on the site to fix.
+
+---
+
+# The jurisdiction repair, proven
+
+The production defect: a compiled objective read *"Establish, from official
+Michigan public records, … Brightpath Family Dental … in Westbrook, OH"*. The
+record's own row said `state: "OH"`; `OH` is not the word `ohio`, so the
+compiler found no jurisdiction in the question's prose and fell back to the
+approval envelope's — asserting it as though the question had said it.
+
+Two records were registered through the connector on a Brain running the
+deployed tree, identical but for where they are, and each was commanded once.
+
+**Michigan — the authorization covers it, so it runs:**
+
+```
+opp_mi   QUEUED   WORTH_DOING   "useful strengthening work with nothing blocking it"
+mission  rms_81de4ae7e5a34322a4da  RUNNING
+  objective: Establish, from official Michigan public records, what would we need
+             to establish to decide whether to pursue "… Rivergate Dental …" in
+             Oakland County, MI?
+projection: IN_PROGRESS · Worth doing · filed under "How the market works"
+```
+
+**Ohio — the authorization does not, so it stops where a person can act:**
+
+```
+opp_oh   PARKED   PARKED
+  "Brain could not specify this: this work is about Ohio — the record itself
+   says so — and the standing authorization for this project covers Michigan.
+   Authorising research in Ohio is a decision for a person"
+projection: NEEDS_PERSON
+```
+
+No Michigan objective was compiled for the Ohio record, no state is hard-coded
+in the repair, and the envelope still decides what is allowed. The projection
+reads `NEEDS_PERSON` rather than `COMPLETED` because a parked-by-refusal idea is
+a decision being waited on, not work that ended — read from the compiler's own
+judgment rather than inferred from the words of a reason.
+
+`tests/jurisdiction.test.ts` pins the rest, including the rule that makes prose
+matching safe: `, OH` in capitals is a state and `, or`, `, in`, `, me`, `, ok`
+are ordinary English. The first version of that rule read all four as states.
+
+---
+
+# Suites, on the reconciled tree
+
+| Suite | Result |
+|---|---|
+| Brain, SQLite | **1 945 passed**, 37 skipped, 0 failed |
+| Brain, Postgres | **1 968 passed**, 12 skipped, 0 failed, exit 0 |
+| Deal Dispatch | **989 passed**, 0 failed |
+| Brain build | clean |
+| Deal Dispatch build | clean |
+
+Three internal defects were found and repaired along the way: the new tables
+were missing the `seq` column Postgres needs; a test-teardown race made the
+Postgres run exit non-zero with every test passing; and the migration runner
+reported a *number collision* between two branches as an *edited file*, sending
+whoever hit it to look for an edit nobody had made on a Brain that would not
+boot.
