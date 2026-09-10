@@ -89,6 +89,15 @@ export interface TickOptions {
   planInstalled?: boolean;
   unitTimeoutMs?: number;
   reviewTimeoutMs?: number;
+  /**
+   * How long a unit's lease lasts.
+   *
+   * An operational knob rather than a tuning parameter: the default is right for
+   * ordinary work, and a recovery drill needs a short one so a dead dispatcher's
+   * lease becomes claimable inside a person's attention span rather than half an
+   * hour later. Bounded by `clampUnitLeaseMs`, so it cannot be set to never.
+   */
+  unitLeaseMs?: number;
   /** How many review rounds before the campaign stops and says so. */
   maxReviewRounds?: number;
 }
@@ -574,6 +583,7 @@ export async function scheduleAndDispatch(
         workerId: worker.id,
         unitIds: [assignment.unitId],
         limit: 1,
+        leaseMs: options.unitLeaseMs,
         onSkip: async (row, reason) => {
           await recordFactoryEvent({
             campaignId: campaign.id,

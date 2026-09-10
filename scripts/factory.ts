@@ -212,6 +212,11 @@ async function main(): Promise<void> {
         unitTimeoutMs: flags['unit-timeout']
           ? Number(flagString(flags, 'unit-timeout')) * 1000
           : undefined,
+        // For a recovery drill: a short lease makes a dead dispatcher's work
+        // claimable in seconds rather than half an hour.
+        unitLeaseMs: flags['lease-seconds']
+          ? Number(flagString(flags, 'lease-seconds')) * 1000
+          : undefined,
         owner: flagString(flags, 'owner') ?? `cli-${process.pid}`,
         onTick: (report: { state: string; stage: string; dispatched: number; integrated: number; rejected: number; reviewed: boolean; repairsQueued: number; notes: string[] }) => {
           process.stdout.write(
