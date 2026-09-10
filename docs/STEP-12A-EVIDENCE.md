@@ -8484,3 +8484,62 @@ suite was green on the tree after it. Only running the second backend against
 the *changed* tree found it, which is the whole reason `CLAUDE.md` asks for both
 — and the deploy carrying it was cancelled mid-flight rather than allowed to put
 a query that throws every ten seconds onto the database production runs.
+
+## 86. The look scenario Brain refused as a repeat — 2026-09-10
+
+`S12A-ACC-10` reached further than any attempt before it. The capture gate
+recognised the request, an idea was created — and then:
+
+```
+  CANDIDATE LINKS
+    by source message  1
+      rcn_91276e5fa2794ea2be08  MERGED  priority —  canonical rcn_9646b600bac14e90a930
+    merges touching it 1
+      SEMANTIC  rcn_91276e… (conv rcv_1e84cc…) -> rcn_9646b6… (conv rcv_e181c5…)
+```
+
+The text was unchanged from ACC-8 and ACC-9 **on purpose**, three times over,
+and the third time the project had already recorded that this question is on the
+list. `capture`'s semantic dedupe merged the new idea into ACC-9's canonical
+one — §24's rule working exactly as written, and a merge nothing here should
+undo.
+
+A merged candidate is never judged, so the repaired archive check was never
+reached. Nothing about this is a defect and nothing about it is repaired.
+
+**What it establishes is a constraint on re-runs.** A scenario re-run has to
+differ where the dedupe looks — in the question — while staying the same where
+the test looks: an `UNVERIFIED` archive claim the project holds with nothing
+behind it, whose subject is a *presence* question, inside the standing
+envelope's jurisdiction. Rewording ACC-10 to slip under the merge floor would
+have been gaming the dedupe exactly as rewording ACC-8 would have gamed the
+capture list.
+
+`archive-shape` names sixteen such claims. `S12A-ACC-11` takes a different one:
+
+```
+  exc_ea5e2781bb60440183c8  doc=doc_99d4a5b97ffa4d7cb015
+      type=NEGATIVE_EXISTENCE  state=UNVERIFIED  superseded=no
+      While the MGF does store a statewide parcel layer, this data is for
+      internal use only and is not available in the Open Data Portal.
+```
+
+Michigan, so the compiler's envelope carries it; `NEGATIVE_EXISTENCE` with no
+page anyone can open behind it, so a bounded look is the right instrument; and
+about a state-level layer's *availability* rather than the county feeds' licence
+terms, which is `S12A-ACC-4`'s live question and a different one.
+
+### The look scenarios, complete
+
+| | stopped at | cause | disposition |
+|---|---|---|---|
+| ACC-3 | judgment | `askArchive` read the worker's summary, not the person's question | repaired (§77) |
+| ACC-5 | compiler | the question named a jurisdiction outside the envelope, to exclude it | question changed, compiler untouched (§78) |
+| ACC-7 | the worker | it answered the message rather than capturing an idea from it | not a defect; §8 cuts both ways |
+| ACC-8 | Brain's capture gate | the marker list had no plain request | repaired (§82) |
+| ACC-9 | the archive check | a long requirement cannot reach the relevance floor | repaired (§83) |
+| ACC-10 | the semantic dedupe | the identical question, already on the list | not a defect; the rule working |
+
+Six attempts, six distinct boundaries, three defects and three correct refusals.
+Every one of them found by walking the journey rather than by reading the code,
+and none of them the same mistake twice.

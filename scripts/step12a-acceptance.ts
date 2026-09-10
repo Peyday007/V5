@@ -317,6 +317,25 @@ export const ACCEPTANCE_SUITE = [
     purpose: 'a bounded cheap look, against the archive check repaired for length',
     conversationTitle: 'S12A-ACC-10',
   },
+  /*
+   * The same kind of request about a different unchecked claim.
+   *
+   * ACC-10 reached furthest of all of them and was then **merged** into ACC-9
+   * by `capture`'s semantic dedupe — the identical question, correctly
+   * recognised as already on the list. A merged candidate is never judged, so
+   * the repaired archive check was never reached. That is the rule working,
+   * not a defect, and it establishes that a re-run must differ where the dedupe
+   * looks while staying the same where the test looks: an `UNVERIFIED` archive
+   * claim with nothing behind it, whose subject is a presence question inside
+   * the envelope's jurisdiction.
+   *
+   * `exc_ea5e2781bb60440183c8` is that claim.
+   */
+  {
+    scenarioId: 'S12A-ACC-11',
+    purpose: 'a bounded cheap look, on a claim no other idea already covers',
+    conversationTitle: 'S12A-ACC-11',
+  },
 ] as const;
 
 /**

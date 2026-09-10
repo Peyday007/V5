@@ -352,6 +352,44 @@ const ACCEPTANCE_SCENARIOS = {
       'and nothing behind it cites a source anyone can look at. Go and see whether that holds ' +
       'for Michigan under the rule in force now, and record what you find.',
   },
+  /*
+   * The same *kind* of request, about a different unchecked claim — because
+   * asking the identical question a third time is the one thing Brain will
+   * correctly refuse.
+   *
+   * `S12A-ACC-10` reached further than any of them: the capture gate
+   * recognised the request and an idea was created. Then `capture`'s semantic
+   * dedupe merged it into `S12A-ACC-9`'s canonical idea —
+   * `SEMANTIC rcn_91276e… -> rcn_9646b6…` — which is §24's rule working
+   * exactly as written. The text was unchanged on purpose three times over,
+   * and the third time the project had already recorded that this question is
+   * on the list. A merged candidate is never judged, so the repaired archive
+   * check was never reached.
+   *
+   * Nothing about that is a defect and nothing about it is repaired. What it
+   * establishes is that a scenario re-run has to differ where the dedupe looks
+   * — in the question — while staying the same where the *test* looks: an
+   * `UNVERIFIED` archive claim the project holds with nothing behind it, whose
+   * subject is a presence question inside the standing envelope's
+   * jurisdiction.
+   *
+   * `exc_ea5e2781bb60440183c8` is that claim, from `archive-shape`:
+   * *"While the MGF does store a statewide parcel layer, this data is for
+   * internal use only and is not available in the Open Data Portal"* —
+   * `NEGATIVE_EXISTENCE`, `UNVERIFIED`, citing no page anyone can open. Whether
+   * Michigan publishes such a layer decides whether Deal Dispatch can build on
+   * one, and "is it published" is exactly and only a presence question.
+   */
+  'S12A-ACC-11': {
+    purpose: 'a bounded cheap look, on a claim no other idea already covers',
+    statement:
+      'check whether Michigan publishes a statewide parcel layer on its own open data portal',
+    question:
+      'We wrote down at some point that Michigan keeps its statewide parcel layer for internal ' +
+      'use only and that nothing equivalent is published on the state open data portal, and ' +
+      'nothing behind that note points at a page anyone can open. Please go and check whether ' +
+      'the state publishes such a layer today, and record what you find.',
+  },
   'S12A-ACC-6': {
     purpose: "a question the public record does not answer, and the person's decision that follows",
     statement:
