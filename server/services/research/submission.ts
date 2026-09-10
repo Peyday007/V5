@@ -31,12 +31,14 @@ import type {
 } from '../../domain/types.ts';
 import {
   decideClaim,
+  getFragment,
   insertClaims,
   listClaimsForFragment,
   markContradiction,
   updateClaimDerivedFrom,
   updateFragment,
 } from '../../repos/research.ts';
+import { reconcileAcceptedFragment } from './replan.ts';
 import { applyGate, fragmentPasses, type GateResult, type VerificationInput } from './gate.ts';
 import { validateClaim } from './sources.ts';
 import type { ClaimScopeMatch, ParsedClaim } from './schema.ts';
@@ -219,6 +221,41 @@ export async function gateFragment(input: {
     completedAt: at,
     acceptedAt: passed ? at : null,
   });
+
+  /*
+   * Accepted evidence moves the coverage matrix, and it must do so on **every**
+   * path that can accept a fragment.
+   *
+   * `reconcileAcceptedFragment` existed, was tested, and had exactly one
+   * caller: the in-process orchestrator. The worker-driven packet runner — the
+   * only path production actually uses — never called it, so a requirement
+   * whose fragment had cleared all seven gate conditions still read
+   * `coverage MISSING` for ever. Production shows it on a `COMPLETE` packet
+   * whose one fragment is `ACCEPTED`, which is a person-facing status
+   * contradicting the rows the auditor read. §24's own sentence again: a
+   * mechanism nothing calls is not a mechanism.
+   *
+   * It belongs here rather than at either caller because this function is the
+   * single place a fragment becomes `ACCEPTED` — a guard on one entrance is
+   * not a guard. It re-reads the fragment because the update above changed it,
+   * and it is idempotent: the claim reconciliations and the coverage rows are
+   * upserts, and `cancelUnnecessaryWork` only ever touches fragments still
+   * `QUEUED` or `PLANNED`. So the orchestrator's own call, which additionally
+   * needs the contradictions in order to plan fragments for them, stays where
+   * it is and costs nothing.
+   *
+   * It changes no evidence. Nothing here accepts, rejects or re-judges a
+   * claim; it records what the accepted claims mean for the requirements they
+   * were researched for.
+   */
+  if (passed) {
+    const current = (await getFragment(fragment.id)) ?? fragment;
+    await reconcileAcceptedFragment({
+      orchestrationId: current.orchestrationId,
+      projectId: current.projectId,
+      fragment: current,
+    });
+  }
 
   return gate;
 }

@@ -1126,6 +1126,87 @@ rules.
   alternative and would have asserted a change of belief that never happened —
   the conclusion and the evidence were right all along; only the citation was
   wrong.
+- **A compiler cannot judge whether a look is worth it; it can read whether
+  there is something to look at.** Mutation 29 replaced the planning worker
+  with a deterministic compiler and recorded the visible consequence honestly:
+  an idea could no longer be sent to `EXPLORE` because a look would be cheap,
+  since nothing could form that view. That was true of a *semantic* view and it
+  left the automatic probe path reachable only when the archive positively
+  contradicts an idea — so Brain had, in practice, lost the ability to look
+  cheaply before spending a packet. **The correction is recorded rather than
+  quietly applied**, because half of that sentence still stands: nothing here
+  assesses what settling a question is *worth*, and `expectedValue` is still
+  `NOT_ASSESSED`.
+
+  What changed is that "would a cheap look settle this" turned out to have a
+  form that is not semantic. `PRESENT_BUT_UNVERIFIED` and `STALE` are two of
+  the ten coverage statuses and both say the same thing: the project already
+  holds a candidate answer that nothing supports, or one that was true outside
+  the timeframe asked about. Confirming or refuting it is a *presence*
+  question — the only kind `GENERAL_LIGHT_PROBE_V1` answers — and a full packet
+  is the wrong instrument. So `judgeCandidate` derives `cheapToReduce` from
+  those rows and from nothing else: no unverified or stale claim, no probe. It
+  is narrow by construction rather than by tuning, forms no opinion about
+  value, reads no prose, and cannot lower any evidence bar. It is forced false
+  on the pass *after* a probe, and that is load-bearing now rather than
+  incidental — the archive does not change when a probe settles, so
+  re-deriving it there would send the idea round for another look for ever.
+
+- **A pass records the account it executed under, and that comes from the fire
+  rather than from the wiring.** `research_passes.executor_account_id` has
+  existed since Step 11 and was null on every row this Brain ever wrote, so
+  `A11_INDEPENDENT_AUDIT` read `NOT_RUN` over three genuinely independent
+  passes. `lineageForWorker` resolved the account from the static
+  worker → Routine binding, and production binds two Routines under two
+  accounts to one worker identity; two candidates is ambiguous, and ambiguity
+  fails closed. **The attribution was missing, never the independence.**
+
+  The account was never ambiguous. Brain fired one Routine for one bin, and the
+  session that arrived and took that bin is that fire's session. `worker_sessions`
+  is that observation, written at arrival from the same `bin_dispatch` row
+  `creditDispatchArrival` already credits the arrival from — never from
+  anything the worker says about itself, first observation winning, and nothing
+  written at all when the Routine does not resolve to an account. The static
+  binding stays as the fallback for a worker that reached Brain without an
+  assignment, and it still fails closed: "we could not tell" must never read
+  the same as "we checked".
+
+- **A packet that has finished holds nothing a worker can be sent for.**
+  `advancePacket` retires outstanding work, and only something *advancing* a
+  packet calls it — which nothing does once a packet is terminal. So a packet
+  that ended while items were outstanding kept them claimable for ever, and the
+  first production one did: `COMPLETE`, filed and audited, with two
+  `RESEARCH_AUDIT` items still `LEASED`. An expired lease is claimable work
+  (§19), so that is a worker Brain can still send for a settled question. It is
+  reconciled from rows on the durable tick, fleet-wide rather than
+  Russell-scoped, and cancelling is not destroying: the fencing generation
+  advances, so a late completion matches nothing, and every row keeps its id,
+  its attempts and the reason it stopped.
+
+- **What a person is shown about coverage is what the auditor read.**
+  `reconcileAcceptedFragment` moves a requirement's coverage when a fragment
+  clears all seven gate conditions, and it had exactly one caller — the
+  in-process orchestrator, not the worker-driven runner production uses. So a
+  requirement whose evidence was accepted still read `MISSING`, on a packet
+  that was `COMPLETE`. It now runs from `gateFragment`, which is the single
+  place a fragment becomes `ACCEPTED`, because a guard on one entrance is not a
+  guard. It changes no evidence: nothing there accepts, rejects or re-judges a
+  claim.
+
+- **Acceptance is a small declared suite, not one overloaded chain.** One
+  conversation was right while the acceptance was one journey, and stopped
+  being right the moment that journey succeeded — because a cheap look taken
+  *instead* of a packet, a question the evidence could not settle, and the
+  decision that follows it are all branches success does not take. Requiring
+  one packet to exhibit them would be requiring it to finish badly, and a
+  packet that truthfully settles everything must keep producing no follow-on
+  and no park. So `ACCEPTANCE_SUITE` names each scenario, its purpose written
+  down before it ran, and its own chain. **No gate is relaxed**: each still
+  requires its complete original evidence, walked from a declared anchor
+  through real foreign keys, and the union is three conversations rather than a
+  database. A scenario declared by title resolves only on an exact, unique
+  match — an anchor somebody could add to is not a declaration.
+
 - **Two boundaries meet at the HTTP surface and they are not the same
   boundary.** A project is guarded by `decideProjectAccess`; a conversation is
   guarded by its owner, plus read access to the attached project for a shared

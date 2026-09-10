@@ -69,6 +69,7 @@ import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
 import { listCoverage, overrideCoverage, upsertCoverage } from '../../repos/reconciliation.ts';
 import { binForOrchestration, creditBinAttempt } from '../../repos/bins.ts';
 import { cancelWork, enqueueWork, listWorkItems } from '../../repos/workQueue.ts';
+import { getDb } from '../../db/database.ts';
 import { workType, AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { recomputeProject } from '../stateEngine.ts';
@@ -1114,6 +1115,26 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
    */
   const finished = [...TERMINAL_ORCHESTRATION];
   if (finished.includes(orchestration.status)) {
+    /*
+     * A terminal packet holds no live work.
+     *
+     * This branch used to return immediately, which is right about *minting*
+     * work and wrong about the work already out there. The live packet shows
+     * what that costs: `orc_d636b91950734d4f9b38` is `COMPLETE`, its report is
+     * filed and audited — and two `RESEARCH_AUDIT` items are still `LEASED`
+     * against it, one at `attempt 9/2`. An expired lease is claimable work
+     * (§19), so a worker could still be sent for an audit of a packet that has
+     * already been judged, spending an activation to be refused by the
+     * completion contract.
+     *
+     * Cancelling is not destroying. `cancelWork` advances the fencing
+     * generation, so a late completion from the previous holder matches
+     * nothing, and the row keeps its id, its attempts, its history and the
+     * reason it stopped. Idempotent by the state it produces: a packet whose
+     * work is already retired finds nothing to retire and writes nothing, so
+     * this runs once however often the packet is advanced.
+     */
+    await retireTerminalWork(orchestration);
     return {
       orchestrationId,
       status: orchestration.status,
@@ -1767,6 +1788,74 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
         ? 'a person: the judge asked for more research and this run has nothing left to attempt'
         : null,
   };
+}
+
+/**
+ * Terminal packets that still hold live work, and the retirement of it.
+ *
+ * The producer `retireTerminalWork` was missing. `advancePacket` reaches the
+ * terminal branch only when something advances the packet, and nothing
+ * advances one that has already finished — so a packet that ended while items
+ * were outstanding kept them for ever, and the live one has done exactly that
+ * since 2026-09-10T02:40:21Z.
+ *
+ * Derived from rows rather than from a queue, so it reaches a packet that
+ * finished long before this code existed without anybody naming it, and
+ * idempotent by the state it produces: once the items are `CANCELLED` the
+ * selection no longer matches. It is not Russell-specific and is deliberately
+ * not scoped to one project — a stranded lease on a Step 9 packet is the same
+ * defect as one on a Step 12A packet.
+ */
+export async function reconcileTerminalPackets(
+  limit: number,
+): Promise<{ orchestrationId: string; retired: number }[]> {
+  const terminal = [...TERMINAL_ORCHESTRATION];
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT DISTINCT o.id AS id
+       FROM research_orchestrations o
+       JOIN work_items w ON w.orchestration_id = o.id
+      WHERE o.status IN (${terminal.map(() => '?').join(', ')})
+        AND w.state IN ('QUEUED','LEASED')
+      ORDER BY o.id
+      LIMIT ?`,
+    [...terminal, Math.max(1, limit)],
+  );
+  const out: { orchestrationId: string; retired: number }[] = [];
+  for (const row of rows) {
+    const orchestration = await getOrchestration(row.id);
+    if (!orchestration) continue;
+    const retired = await retireTerminalWork(orchestration);
+    if (retired > 0) out.push({ orchestrationId: orchestration.id, retired });
+  }
+  return out;
+}
+
+/**
+ * Retire the work a terminal packet still holds.
+ *
+ * Scoped to this orchestration's own items and to the two states that are
+ * still live — `QUEUED`, which a worker could claim, and `LEASED`, which is
+ * claimable again the moment the lease expires. Everything else is history and
+ * is left exactly as written.
+ *
+ * The reason travels with each row, because "cancelled" with no explanation is
+ * indistinguishable from a cancellation somebody performed by hand.
+ */
+async function retireTerminalWork(orchestration: ResearchOrchestration): Promise<number> {
+  let retired = 0;
+  for (const item of await listWorkItems(orchestration.projectId, { limit: 500 })) {
+    if (item.orchestrationId !== orchestration.id) continue;
+    if (item.state !== 'QUEUED' && item.state !== 'LEASED') continue;
+    await cancelWork(
+      item.id,
+      `This packet is ${orchestration.status}, so the work this item asks for has already ` +
+        'been concluded. Retired rather than left claimable: an expired lease is claimable ' +
+        'work, and a worker sent for it would spend an activation on a question that is ' +
+        'settled.',
+    );
+    retired += 1;
+  }
+  return retired;
 }
 
 /** Has this audit role already produced a completed pass? */

@@ -3927,9 +3927,17 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
     const closed = coverage.filter((entry) => entry.status === 'NOT_REQUIRED');
     expect(closed).toHaveLength(3);
     for (const entry of closed) expect((entry.userOverride ?? '').length).toBeGreaterThan(0);
-    // The answered one is untouched: nothing was narrowed that was researched.
+    /*
+     * The answered one is untouched by the narrowing, and it reads as answered.
+     *
+     * This asserted `MISSING`, which was the defect rather than the rule: the
+     * requirement's fragment had cleared all seven gate conditions and nothing
+     * moved its coverage, because `reconcileAcceptedFragment` had one caller
+     * and it was not this path. The comment above already described the truth.
+     */
     const answered = coverage.find((entry) => !closed.includes(entry));
-    expect(answered?.status).toBe('MISSING');
+    expect(answered?.status).toBe('SATISFIED');
+    expect(answered?.userOverride ?? '').toBe('');
 
     // 4. And exactly one synthesis is claimable.
     const items = await itemsByType(orchestration.id);
@@ -4257,9 +4265,16 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
       expect(byKey.get(dependent.fragmentKey)?.blockedReason).toContain('trigger');
     }
 
-    // Nothing narrowed.
+    /*
+     * Nothing narrowed — which is a claim about `NOT_REQUIRED`, not about
+     * `MISSING`. Asserting that every row stayed `MISSING` additionally pinned
+     * the coverage defect: the one requirement whose fragment was accepted is
+     * answered, and reading it as missing is the person-facing contradiction
+     * this test was quietly protecting.
+     */
     const coverage = await listCoverage(orchestration.id);
-    expect(coverage.every((entry) => entry.status === 'MISSING')).toBe(true);
+    expect(coverage.every((entry) => entry.status !== 'NOT_REQUIRED')).toBe(true);
+    expect(coverage.every((entry) => (entry.userOverride ?? '') === '')).toBe(true);
 
     // Nothing minted, and the packet says why it stopped.
     const items = await itemsByType(orchestration.id);

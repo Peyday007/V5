@@ -7580,3 +7580,142 @@ the reporter says which in its own words:
 
 `A22_FAST_CHAT_ROUTING` remains `DEFERRED` by the owner and outside the
 denominator.
+
+## 77. The four that were left, and the two contradictions beside them — 2026-09-10
+
+§76 closed the completion-integrity defect and the acceptance read 17/21 with
+four `NOT_RUN`. Each of those four turned out to be the same shape §24 has
+recorded four times already — a link that existed, was tested, and could be
+reached by nothing — rather than work that simply had not been done.
+
+This section is the map of the remaining journey, the repairs it found, and the
+two production contradictions the closure report had recorded and not acted on.
+
+### A11 — the attribution, not the independence
+
+The production audit was real: PRIMARY, ADVERSARIAL and JUDGE in three distinct
+authenticated sessions, `oat_e26611e232664dea9a7c` / `oat_8d3f654e8027455da69a`
+/ `oat_24b3e6e8b292454f9d3d`, and the judge's own submission passed the live
+separation matrix — which is what let the verdict be stored at all.
+
+`independenceEvidence` additionally requires `executor_account_id` on each pass,
+and every pass this Brain has ever written has it null. The cause:
+
+```ts
+const mine = routines.filter((routine) => routine.workerId === input.workerId);
+const accounts = new Set(mine.map((routine) => routine.accountId));
+accountId: accounts.size === 1 ? mine[0]!.accountId : null,
+```
+
+Production binds `primary`/V1 **and** `friend-2`/V2 to one worker identity. Two
+candidates is ambiguous; ambiguity fails closed; closed is null. The rule was
+right and the source was wrong.
+
+**The account was never ambiguous.** Brain fired one Routine for one bin, and
+the session that arrived and took that bin is that fire's session — which is
+exactly the reasoning §23 already uses to credit an arrival. `worker_sessions`
+(migrations 035/026) records it at that moment, from the same `bin_dispatch`
+row, first observation winning, and writes nothing at all when the Routine does
+not resolve to an account. `lineageForWorker` reads it first and falls back to
+the static binding, which still fails closed.
+
+Historical attribution was **not** reconciled, and deliberately. Nothing in the
+append-only rows joins a credential to a dispatch for a session that predates
+the observation, and inferring the account from "only one is enabled" is a guess
+wearing a fact's clothes. The passes stay as written; the evidence comes from an
+audit run after the fix, in a scenario declared for it.
+
+### A07 — nothing could form the view any more
+
+`judgeCandidate` hard-coded `cheapToReduce: false` and recorded
+`cheapToReduceAssessed: 'NOT_ASSESSED'`. That was mutation 29's own decision and
+it was honest about the consequence: *"an idea is no longer sent to EXPLORE
+because a look would be cheap, because nothing can now form that view."*
+
+Which left the automatic probe path reachable only through
+`archive.contradicting`, and in practice unreachable. Brain had lost the ability
+to look cheaply before spending a packet.
+
+**Half of that sentence still stands and half of it was wrong.** Nothing here
+can say what settling a question is *worth*, so `expectedValue` is still
+`NOT_ASSESSED`. But "would a cheap look settle this" has a form that is not
+semantic at all: `PRESENT_BUT_UNVERIFIED` — *"somebody wrote the answer down and
+nothing supports it"* — and `STALE` — *"true once, outside the timeframe now"*.
+Both mean the project already holds a candidate answer, and confirming or
+refuting one is a **presence** question, which is the only kind
+`GENERAL_LIGHT_PROBE_V1` answers.
+
+So `cheapToReduce` is derived from those two coverage statuses and from nothing
+else. It is narrow by construction rather than by tuning — no unverified or
+stale claim, no probe — and it is forced false on the pass *after* a probe. That
+last part is load-bearing now rather than incidental: the archive does not
+change when a probe settles, because a probe writes observations and not claims,
+so re-deriving it there would send the idea round for another look for ever.
+`loop.ts` has always said Brain forces it false on that pass; until now it was
+false anyway.
+
+### A13 and A14 — one journey, and it is not the one that succeeded
+
+Both need a packet that filed with a question it could not settle:
+`unresolvedFollowOn` produces a follow-on only from `COMPLETE_WITH_GAPS`, and
+`authorizeUnresolvedGaps` is the only writer of the column A14 checks. The
+completed packet has neither, and **that is the correct outcome** — it settled
+what it asked, and Brain answered its own park from the rows rather than asking
+a person a question they did not need to answer.
+
+No mechanism was missing here. What was missing was a scenario in which the
+mechanism applies.
+
+### The acceptance is a declared suite
+
+One conversation was right while the acceptance was one journey. It stopped
+being right the moment that journey succeeded, because three of the remaining
+conditions are branches success does not take. Requiring one packet to exhibit
+all of them would be requiring it to end badly, and the completed packet must go
+on producing no follow-on and no park.
+
+`ACCEPTANCE_SUITE` therefore names each scenario, the purpose written down
+before it ran, and its own chain:
+
+| id | purpose |
+| --- | --- |
+| `S12A-ACC-2` | the completed research journey, end to end |
+| `S12A-ACC-3` | a bounded cheap look, taken before any mission exists |
+| `S12A-ACC-4` | a real unresolved gap, a person's decision, the same mission resuming, and its one follow-on |
+
+**No gate is relaxed.** Each still requires its complete original evidence,
+walked from a declared anchor through real foreign keys; the union is three
+conversations rather than a database. `S12A-ACC-2` is pinned by id because it
+existed when it was declared. The other two are declared by an exact
+conversation **title**, which is the same declaration one step earlier: the
+identity is fixed in reviewed code *before* the conversation exists, and the row
+is made to match — pinning an id would have required creating the conversation
+first and editing the reporter afterwards, which is the ordering the scope block
+exists to prevent. A title resolves only on an exact, unique match: two
+conversations carrying one scenario title resolve to nothing, because an anchor
+somebody can add to is not a declaration.
+
+### The two contradictions
+
+**A terminal packet held claimable work.** `advancePacket`'s terminal branch
+returned immediately — right about *minting* work, wrong about the work already
+out there. Nothing advances a packet that has finished, so
+`orc_d636b91950734d4f9b38` kept two `RESEARCH_AUDIT` items `LEASED` (one at
+`attempt 9/2`) after it was `COMPLETE`. An expired lease is claimable work, so
+that is a worker Brain can still send for a settled question.
+`reconcileTerminalPackets` selects them from rows on the durable tick,
+fleet-wide, and `cancelWork` advances the fencing generation so a late
+completion matches nothing. Every row keeps its id, its attempts and its reason.
+
+**A requirement read `MISSING` on evidence the auditor had accepted.**
+`reconcileAcceptedFragment` moves coverage when a fragment clears all seven gate
+conditions, and its only caller was the in-process orchestrator — not the
+worker-driven runner production uses. It now runs from `gateFragment`, the
+single place a fragment becomes `ACCEPTED`. It changes no evidence: nothing
+there accepts, rejects or re-judges a claim.
+
+Two assertions in `tests/packet.test.ts` were pinning that defect —
+`expect(answered?.status).toBe('MISSING')` under a comment reading *"the
+answered one is untouched"*, and `every(status === 'MISSING')` under *"nothing
+narrowed"*, which is a claim about `NOT_REQUIRED`. Both now assert what their
+comments always said. **The assertions were wrong, not the code.**
