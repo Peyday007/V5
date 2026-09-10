@@ -19,6 +19,7 @@ import { providersRouter } from './providers.ts';
 import { researchRouter } from './research.ts';
 import { runsRouter } from './runs.ts';
 import { russellRouter } from './russell.ts';
+import { connectRouter } from './connect.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
@@ -53,6 +54,11 @@ export function createApiRouter(): Router {
   // `/projects/:id/...` ones inside it are Russell's views of a project rather
   // than the project router's.
   router.use('/russell', russellRouter);
+  // A connected site's door. Mounted at the root because its routes carry
+  // their own `/projects/:id/connect/...` prefix, and they must sit *before*
+  // the projects router so its own `/:projectId/...` routes do not swallow
+  // them.
+  router.use(connectRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);

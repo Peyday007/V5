@@ -284,6 +284,21 @@ export const EVENT_TYPES = [
   // rule that decided. A pointer that changed with nothing saying why is
   // indistinguishable from one edited by hand.
   'RUSSELL_LINKS_RECONCILED',
+
+  // A connected site's record registered here, and what happened to it.
+  //
+  // Project history rather than connector telemetry: "where did this idea come
+  // from" is a question about the project, and the answer — a named record in a
+  // named system, at a named version — is the provenance §4 requires of every
+  // registered artefact. The payload carries the source system, the source
+  // record id and the version, and never the record's contents: those are the
+  // site's, and Brain holds only the part it reasons about.
+  'EXTERNAL_RECORD_IMPORTED',
+  'EXTERNAL_RECORD_UPDATED',
+  // A delivery Brain could not map, kept as a fact rather than dropped.
+  'EXTERNAL_RECORD_REJECTED',
+  // A person on the connected site asked Brain for something, and Brain took it.
+  'EXTERNAL_COMMAND_ACCEPTED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -2720,6 +2735,17 @@ export const WORKER_SCOPES = [
   'queue:claim',
   'queue:heartbeat',
   'queue:complete',
+
+  // Step 12C — a connected site.
+  //
+  // One scope, not three, because the site connector does exactly one job:
+  // keep a project's external records current and pass a person's typed
+  // command through. It permits registering and updating records the site
+  // already owns, and issuing a command from the closed set in
+  // `EXTERNAL_COMMANDS`. It permits nothing else — no enqueueing, no
+  // membership, no approval, no research write — so a stolen site credential
+  // reaches exactly the surface a site already had.
+  'external:sync',
 ] as const;
 export type WorkerScope = (typeof WORKER_SCOPES)[number];
 
@@ -2780,6 +2806,26 @@ export const CONNECTOR_SCOPES: readonly WorkerScope[] = [
   'contradictions:write',
   'checkpoints:write',
   'blockers:report',
+];
+
+/**
+ * What a connected *site* gets, which is not what a research worker gets.
+ *
+ * Two composed sets rather than one, because the two jobs share nothing. A
+ * research worker claims queue items and writes claims, verifications and
+ * audits; a site connector does none of that and must not be able to. It reads
+ * the project it is attached to and keeps its own records current — and the
+ * whole of "keeps its own records current" is one scope, so there is no
+ * combination of these two that could be ticked wrongly.
+ *
+ * The operator console composes `CONNECTOR_SCOPES` and offers no picker, for
+ * the reason recorded there. A site connector's membership is granted through
+ * the administration API's explicit scope list instead, which is the case that
+ * comment says has not come up yet. This is it.
+ */
+export const SITE_CONNECTOR_SCOPES: readonly WorkerScope[] = [
+  'project:read',
+  'external:sync',
 ];
 
 /** How a request proved who it was. */
@@ -4793,4 +4839,172 @@ export interface RussellCycle {
   lastError: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Step 12C — a connected site
+// ---------------------------------------------------------------------------
+//
+// The whole contract between Brain and a site it is the intelligence behind.
+// It is deliberately small: identity, provenance, a version, a bounded set of
+// attributes Brain can reason about, and one command. Everything a site is
+// actually *for* — its pipeline, its money, its calls — stays on the site,
+// which remains the master of its own operational fields.
+
+/**
+ * The sites this Brain speaks to, matched exactly.
+ *
+ * A closed set in code rather than a CHECK constraint, so connecting a second
+ * site is a reviewed code change rather than a schema migration. Anything not
+ * in this list is refused at the door with the source system named nowhere in
+ * the refusal.
+ */
+export const EXTERNAL_SOURCE_SYSTEMS = ['DEAL_DISPATCH'] as const;
+export type ExternalSourceSystem = (typeof EXTERNAL_SOURCE_SYSTEMS)[number];
+
+/** What kind of thing the site's record is. One per site, so far. */
+export const EXTERNAL_RECORD_TYPES = ['OPPORTUNITY'] as const;
+export type ExternalRecordType = (typeof EXTERNAL_RECORD_TYPES)[number];
+
+/**
+ * Why a delivery was refused, from a closed vocabulary.
+ *
+ * A category, never a sentence containing the payload. The detail beside it is
+ * Brain's own words about the shape of the delivery — "no source version" —
+ * and never the delivery itself.
+ */
+export const EXTERNAL_REJECTION_REASONS = [
+  'MISSING_SOURCE_ID',
+  'MISSING_VERSION',
+  'UNPARSEABLE_VERSION',
+  'MISSING_TITLE',
+  'UNKNOWN_RECORD_TYPE',
+  'OVERSIZED',
+  'MALFORMED',
+] as const;
+export type ExternalRejectionReason = (typeof EXTERNAL_REJECTION_REASONS)[number];
+
+/**
+ * What a person on the site may ask Brain to do.
+ *
+ * One command, and it is the cheapest useful one: put this record on Brain's
+ * list of things to form an opinion about. It creates an *idea*, not work — the
+ * decision to spend anything on it is still Russell's, still bounded by the
+ * standing authority a person granted in Russell, and still refused outright
+ * when no authority exists (§24). A connector cannot create its own work, and
+ * this is not a way around that.
+ */
+export const EXTERNAL_COMMANDS = ['RESEARCH_FURTHER'] as const;
+export type ExternalCommand = (typeof EXTERNAL_COMMANDS)[number];
+
+/**
+ * What the site is told about a record, and the six answers it may get.
+ *
+ * These are the states the assignment asked to be distinguishable, and they are
+ * derived from rows rather than asserted:
+ *
+ *   NOT_EVALUATED  registered here; nobody has asked Brain for anything
+ *   QUEUED         asked for, and waiting its turn — the idea exists
+ *   IN_PROGRESS    a mission for it is running
+ *   NEEDS_PERSON   something is waiting on a human decision, and it says which
+ *   COMPLETED      finished, with what was concluded
+ *   FAILED         over, with the actual reason it ended
+ *
+ * There is no optimistic seventh. A record whose idea Brain parked because the
+ * archive already answered it is `COMPLETED` with that as its reason, not
+ * "in progress".
+ */
+export const EXTERNAL_PROJECTION_STATES = [
+  'NOT_EVALUATED',
+  'QUEUED',
+  'IN_PROGRESS',
+  'NEEDS_PERSON',
+  'COMPLETED',
+  'FAILED',
+] as const;
+export type ExternalProjectionState = (typeof EXTERNAL_PROJECTION_STATES)[number];
+
+export interface ExternalRecordRow {
+  id: string;
+  project_id: string;
+  source_system: string;
+  source_record_type: string;
+  source_record_id: string;
+  source_version: string;
+  source_created_at: string | null;
+  source_ref: string | null;
+  title: string;
+  summary: string;
+  attributes: string;
+  provenance: string;
+  content_hash: string;
+  idempotency_key: string;
+  candidate_id: string | null;
+  commanded_at: string | null;
+  commanded_command: string | null;
+  commanded_by_label: string | null;
+  last_synced_version: string;
+  first_seen_at: string;
+  updated_at: string;
+}
+
+export interface ExternalRecord {
+  id: string;
+  projectId: string;
+  sourceSystem: ExternalSourceSystem;
+  sourceRecordType: ExternalRecordType;
+  sourceRecordId: string;
+  sourceVersion: string;
+  sourceCreatedAt: string | null;
+  sourceRef: string | null;
+  title: string;
+  summary: string;
+  attributes: Record<string, unknown>;
+  provenance: Record<string, unknown>;
+  contentHash: string;
+  idempotencyKey: string;
+  candidateId: string | null;
+  commandedAt: string | null;
+  commandedCommand: ExternalCommand | null;
+  commandedByLabel: string | null;
+  lastSyncedVersion: string;
+  firstSeenAt: string;
+  updatedAt: string;
+}
+
+export interface ExternalRecordRejectionRow {
+  id: string;
+  project_id: string;
+  source_system: string;
+  source_record_type: string;
+  source_record_id: string;
+  reason: string;
+  detail: string;
+  first_at: string;
+  last_at: string;
+  occurrences: number;
+}
+
+export interface ExternalRecordRejection {
+  id: string;
+  projectId: string;
+  sourceSystem: string;
+  sourceRecordType: string;
+  sourceRecordId: string;
+  reason: ExternalRejectionReason;
+  detail: string;
+  firstAt: string;
+  lastAt: string;
+  occurrences: number;
+}
+
+export interface StorageReadingRow {
+  id: string;
+  observed_at: string;
+  provider: string;
+  database_bytes: number | null;
+  object_bytes: number | null;
+  object_count: number | null;
+  object_bytes_raw: number | null;
+  categories: string;
 }

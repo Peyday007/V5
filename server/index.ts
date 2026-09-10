@@ -50,6 +50,7 @@ import { queueUnreadDocuments } from './services/documents/queue.ts';
 import { recoverInterruptedResearch } from './services/research/queue.ts';
 import { recoverDispatchAtBoot, startDispatcher } from './services/dispatch/loop.ts';
 import { startRussell } from './services/russell/loop.ts';
+import { startConnectRefresh } from './services/connect/loop.ts';
 import { repairLaunches } from './services/russell/launch.ts';
 import { describeFireTarget } from './services/dispatch/fire.ts';
 import { resumePulledPackets } from './services/research/packetRunner.ts';
@@ -566,6 +567,17 @@ async function main(): Promise<void> {
     );
   }
   startRussell(`brain:${process.pid}`);
+
+  /*
+   * The connected site's delta feed.
+   *
+   * Beside Russell's loop rather than inside it, and for the reason the
+   * dispatcher is separate too: this is two indexed queries on a five-second
+   * cadence, and folding it into a claimed thirty-second cycle would make a
+   * site's view of its own records as slow as the slowest thing in that cycle.
+   * It writes nothing when nothing has changed.
+   */
+  startConnectRefresh();
 
   // A folder import interrupted by the shutdown is paused rather than left
   // looking live. Nothing already imported is re-read when it resumes.

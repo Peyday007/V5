@@ -146,6 +146,13 @@ There must be no workflow where the user has to remember "now go update the data
 30. No remote refusal that distinguishes absent from forbidden, and no remote
     error carrying a payload, an argument, a credential or an identifier the
     caller did not already hold.
+31. No field with two masters: a connected site owns its operational fields and
+    Brain owns what Brain derives, and neither writes the other's.
+32. No delivery accepted that cannot be ordered, and none allowed to regress a
+    newer one — the guard is on the source's own version, in the statement that
+    makes the change.
+33. No storage threshold that stops Brain work, and no figure reported that was
+    not measured.
 
 ## 8. Model prose never mutates project state.
 
@@ -1286,6 +1293,77 @@ Step 12B's items
 the full Fleet centre, personalization, advanced math, 3D, social-media
 intelligence) are listed in `docs/STEP-12B-BACKLOG.md` and are not built here.
 
+## 25. A website is a window. Brain is what it looks at.
+
+Step 12C (`server/services/connect/`, `server/routes/connect.ts`,
+`docs/CONNECT.md`) connects the first real site — Deal Dispatch — and every
+decision in it follows from one sentence: **the site keeps being the master of
+its own operational fields, and Brain becomes authoritative only for what Brain
+derives.**
+
+- **A record is a link plus an idea, not a new kind of object.** There is no
+  Opportunity table here, no WorkItem type, no command bus and no second
+  identity. `external_records` says *this Brain object is that site's record*,
+  and the Brain object is a `russell_candidates` row — the thing this codebase
+  already has for "something worth forming an opinion about". Everything after
+  that is Steps 4 to 12A unchanged.
+- **The version is the whole concurrency design.** A delivery carries the site's
+  own `updatedAt`, normalized so string order is time order, and the write is a
+  single guarded `UPDATE ... WHERE source_version < ?`. A redelivered, replayed
+  or reordered copy matches nothing and is reported `STALE` — an ordinary
+  outcome, not an error. That is the same shape as the queue's compare-and-swap
+  and the fleet's fire slot, and it is the fourth time this codebase has needed
+  it: **the guard is on a value the claimant does not choose.**
+- **Identical content is not a write.** The content hash is compared before the
+  version is, on both sides, so a poll that finds nothing changed makes no
+  request and moves no timestamp. Without that the delta feed would report churn
+  it caused itself, and a consumer cannot tell that from a real change.
+- **Only what Brain reasons about crosses.** An allow-list, not "everything
+  except": the margin, the contacts, the transcripts and the costs are the
+  site's and stay there. A field that crossed would be a field with two masters,
+  which is the failure this design exists to prevent.
+- **The command is an idea, and that is not a technicality.** §22 says a worker
+  cannot create its own work, and a site connector is a worker.
+  `RESEARCH_FURTHER` captures a candidate — which spends nothing — and Russell's
+  own loop then asks the archive first (§13) and launches only inside the
+  standing authority a person granted (§24). A person on the site may *ask*;
+  only a person in Russell may authorise the spending.
+- **The projection is derived on the read path, never stored.** Six answers, and
+  the sixth exists because of §24's own defect at a new altitude: a project with
+  no standing authority would read `QUEUED` for ever while the actual blocker
+  was a decision nobody was being asked for. So the authority is checked and the
+  answer is `NEEDS_PERSON`, naming it. **A state that says "waiting" which
+  nobody can resolve is not waiting, it is stuck** — for the fourth time.
+- **Two authorizations meet at this boundary and neither substitutes for the
+  other.** The person is authenticated by their session on the site and
+  authorized by their role against a record in their own organisation; the site
+  is authenticated by a credential Brain issued it and authorized by
+  `services/identity/policy.ts` against one project and one scope. The person's
+  name crosses as **attribution** and decides nothing — a name a remote system
+  supplied is not an identity, and nothing downstream reads it.
+- **There is no connect policy module and there must never be one.** Every route
+  resolves through `requireProject`, and absent and forbidden are the same 404
+  with the same body — invariant 23 at a new door.
+- **The site connector's scopes are their own composed set.** `project:read` and
+  `external:sync`, and `tests/oauth.test.ts` withholds `external:sync` from the
+  research connector deliberately: a research credential that could also
+  register records and command them would widen the blast radius of the
+  credential most likely to be running unattended, in exchange for nothing.
+- **Storage is reported, never enforced.** One reading on the health surface an
+  administrator already has. Evidence is counted once per content hash, anything
+  unmeasurable is absent rather than estimated, and **no threshold stops any
+  Brain work** — no work path calls it, there is no per-project quota and there
+  is no per-idea approval. Storage is cheap relative to the business this Brain
+  runs; the only thing worth building is the reading that stops it becoming a
+  surprise.
+- **Running the suite against Postgres earned its place again.** The three new
+  tables were created without `seq`, the identity column `dialect.ts` rewrites
+  `rowid` to, and every cursor-ordered query failed on the cloud backend while
+  passing on SQLite. That is the second time — `012_checkpoint_seq.sql` is the
+  first — and it is the argument for the second backend in one line: **a
+  repository layer over two databases is true or merely compiling, and only one
+  of the two can tell you which.**
+
 
 ---
 
@@ -1315,6 +1393,7 @@ server/
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
+    externalRecords.ts  a site's record, its version guard, and its refusals
   services/
     storage.ts          document keys, confinement, and writing through the store
     storage/
@@ -1363,6 +1442,12 @@ server/
       scaler.ts         raise, lower, quarantine — proposals, never actions
       simulate.ts       a deterministic projection, structurally labelled
       profiles.ts       workload cost and activation traces, as queries
+    connect/
+      contract.ts       the frozen wire contract, and nothing about it trusted
+      projection.ts     the six answers, derived from rows on the read path
+      service.ts        registering a site's records, and its one typed command
+      loop.ts           the tick that makes a state change visible to a poller
+    storageHealth.ts    how much room is left, measured rather than guessed
     russell/
       routing.ts        which project a conversation is about, authorization-first
       judgment.ts       what is worth capturing, dedupe, and Russell's own priority
@@ -1432,6 +1517,7 @@ server/
     legacy.ts           the 2025-11-25 front-end, over the official SDK
     endpoint.ts         POST /mcp: auth, origin, limits, era selection
   routes/               HTTP API
+    connect.ts          a connected site's door: records, projections, one command (Step 12C)
     russell.ts          Russell's surface: threads, briefing, work, ideas, Needs You (Step 12A)
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
     operator.ts         the operator console: workers, access, projects, queued work
