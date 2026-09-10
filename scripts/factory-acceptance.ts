@@ -367,29 +367,52 @@ export async function gates(): Promise<GateResult[]> {
         },
   );
 
-  // 10. Rate limiting defers work without consuming a false failure.
-  const deferrals = await rows<{ detail: string }>(
-    `SELECT detail FROM factory_events WHERE campaign_id = ? AND kind = 'SESSION_RATE_LIMITED'`,
-    [c],
+  /*
+   * 10. Rate limiting defers work without consuming a false failure.
+   *
+   * Counted across the Brain rather than one campaign, because a refusal lands
+   * wherever the provider happens to refuse — and what has to be true of it is
+   * the same everywhere: the session says RATE_LIMITED, no unit attempt was
+   * charged for it, and no worker was walked toward quarantine by it. The
+   * failure streak is the strict half: a refusal recorded as a failure is
+   * exactly the "false failure" this condition is about.
+   */
+  const refusedSessions = await rows<{ id: string; unit_id: string | null; worker_id: string }>(
+    `SELECT id, unit_id, worker_id FROM factory_sessions WHERE state = 'RATE_LIMITED'`,
   );
-  const refunded = deferrals.filter((row) => row.detail.includes('"attemptRefunded":true'));
+  const chargedAttempts = await count(
+    `SELECT COUNT(*) AS total FROM factory_events
+      WHERE kind = 'SESSION_RATE_LIMITED' AND detail LIKE '%"attemptCharged":true%'`,
+  );
+  const quarantinedByRefusal = await count(
+    `SELECT COUNT(*) AS total FROM factory_workers w
+      WHERE w.availability = 'QUARANTINED'
+        AND EXISTS (SELECT 1 FROM factory_sessions s
+                     WHERE s.worker_id = w.id AND s.state = 'RATE_LIMITED')
+        AND NOT EXISTS (SELECT 1 FROM factory_sessions s
+                         WHERE s.worker_id = w.id AND s.state = 'FAILED')`,
+  );
   results.push(
-    deferrals.length === 0
+    refusedSessions.length === 0
       ? {
           id: 'F10_RATE_LIMIT_DEFERS',
           verdict: 'NOT_RUN',
-          detail: 'no provider refusal occurred in this campaign, so nothing was deferred',
+          detail: 'no provider refusal has occurred, so nothing has been deferred',
         }
-      : refunded.length === deferrals.length
+      : chargedAttempts === 0 && quarantinedByRefusal === 0
         ? {
             id: 'F10_RATE_LIMIT_DEFERS',
             verdict: 'PASS',
-            detail: `${deferrals.length} provider refusal(s), every one deferred with its attempt refunded`,
+            detail:
+              `${refusedSessions.length} provider refusal(s) recorded; no unit attempt charged ` +
+              'and no worker quarantined for being refused',
           }
         : {
             id: 'F10_RATE_LIMIT_DEFERS',
             verdict: 'FAIL',
-            detail: `${deferrals.length - refunded.length} provider refusal(s) charged the unit an attempt`,
+            detail:
+              `${chargedAttempts} refusal(s) charged an attempt and ${quarantinedByRefusal} ` +
+              'worker(s) were quarantined for being refused',
           },
   );
 

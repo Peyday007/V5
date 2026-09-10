@@ -156,7 +156,17 @@ with the reason recorded rather than quietly patched.
     now closed at the start of every tick, before the scheduler reads what is
     free.
 
-12. **A reviewer was being asked to judge the repository rather than the
+12. **A provider refusal at the review was invisible and never deferred
+    anybody.** The dispatch path treats a refusal properly — defer the unit,
+    refund its attempt, mark the worker rate-limited, leave the failure streak
+    alone. The review path did only the first half of the last part: it recorded
+    RATE_LIMITED on the session and then neither wrote it to the ledger nor
+    deferred the worker, so the campaign's own throughput report could not see a
+    refusal that had happened and the next tick picked the same refusing surface
+    immediately. Found because the drill campaign was genuinely refused, which is
+    also where the production evidence for F10 came from.
+
+13. **A reviewer was being asked to judge the repository rather than the
     campaign.** A campaign merges its base branch in whenever that branch moves,
     so `pinnedBase..head` grows to include everything other people landed since
     the pin. The review and the assembled artifact now diff against the merge
@@ -228,13 +238,14 @@ collide, and the sweeper narrowing that had never landed. All three are in §2.
 
 ## 4. What is not proven
 
-**F10, rate-limit deferral, is NOT_RUN and is the one gate that is.** No
-provider refusal occurred in either campaign, so there is no production evidence
-that a refusal defers a unit without charging it an attempt. The mechanism is
-implemented and pinned by a test (`refunds the attempt a provider refusal
-spent`), and the honest reading of the gate is the one it gives: nobody has
-produced that evidence yet. It is not forced, and a simulated refusal would be a
-simulation reported as a measurement.
+**Every one of the twenty-four production-shaped conditions passes**, read from
+rows by `npm run factory:acceptance -- --campaign fcp_9c66057104d6466cace0`. The
+last to arrive was F10: a provider genuinely refused a reviewer session during
+the recovery drill, and the rows show what the factory did with it — the session
+marked RATE_LIMITED, no unit attempt charged, no worker quarantined for being
+refused. It was not simulated, and it was not forced.
+
+What follows is what the twenty-four do **not** cover.
 
 **Cross-account independence is not proven and is not claimed.** All six
 registered workers draw on one subscription (`account_ref`

@@ -43,6 +43,7 @@ import {
   recordFactoryEvent,
   recordReview,
   recordWorkerFailure,
+  recordWorkerRateLimit,
   recordWorkerSuccess,
 } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
@@ -433,7 +434,39 @@ export async function reviewCampaign(input: ReviewInput): Promise<ReviewOutcome>
       numTurns: result.numTurns,
       usage: result.usage,
     });
-    if (result.outcome !== 'RATE_LIMITED') await recordWorkerFailure(worker.id);
+    if (result.outcome === 'RATE_LIMITED') {
+      /*
+       * A provider refusal at the review is backpressure, exactly as it is at a
+       * unit — and it was missing both halves of the treatment the dispatch path
+       * gives it. Nothing wrote it to the ledger, so the campaign's own
+       * throughput report could not see a refusal that had happened; and nothing
+       * deferred the worker, so the next tick chose the same refusing surface
+       * immediately. The failure streak is still untouched: an account at its
+       * ceiling is busy, not broken.
+       */
+      const until = await recordWorkerRateLimit(worker.id, result.retryAfterMs ?? 5 * 60 * 1000);
+      await recordFactoryEvent({
+        campaignId: campaign.id,
+        workerId: worker.id,
+        sessionId: session.id,
+        accountRef: worker.accountRef,
+        kind: FACTORY_EVENT_KINDS.sessionRateLimited,
+        durationMs: result.durationMs,
+        evidenceClass: 'PROVIDER_ENFORCED',
+        detail: {
+          stage: 'REVIEW',
+          round: input.round,
+          until,
+          // No unit attempt was spent, so there is none to refund: the campaign
+          // simply stays in REVIEWING and the next tick tries again.
+          attemptRefunded: false,
+          attemptCharged: false,
+          workerFailureCharged: false,
+        },
+      });
+    } else {
+      await recordWorkerFailure(worker.id);
+    }
     return {
       ok: false,
       reason: `The reviewer did not finish: ${result.detail}`,

@@ -47,6 +47,10 @@ import {
   recordReview,
   listSessions,
   openSession,
+  getWorker,
+  listFactoryEvents,
+  recordFactoryEvent,
+  recordWorkerRateLimit,
   registerWorker,
   workerLoad,
 } from '../server/repos/factoryFleet.ts';
@@ -58,6 +62,7 @@ import { gatingFindings, queueRepairs, reconcileRepairs } from '../server/servic
 import { decideIndependence, parseReview } from '../server/services/factory/review.ts';
 import { maxOverlap, computeMetrics } from '../server/services/factory/metrics.ts';
 import { decide, tuneLaneTarget, chooseWorker } from '../server/services/factory/scheduler.ts';
+import { capacity } from '../server/services/factory/registry.ts';
 import { parseWorkerReport } from '../server/services/factory/prompts.ts';
 import { run, gitOrThrow, ensureWorktree, commitAll } from '../server/services/factory/git.ts';
 import type { FactoryChangeRequest } from '../server/domain/factory.ts';
@@ -886,6 +891,57 @@ describe('independent review', () => {
     );
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) expect(parsed.reason).toMatch(/no evidence/);
+  });
+});
+
+describe('a provider refusal', () => {
+  it('defers the worker and writes it to the ledger without charging a failure', async () => {
+    const changeRequest = await approvedChangeRequest({ mutationScope: ['src/**'] });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: changeRequest.baseSha,
+      laneTarget: 1,
+      laneTargetReason: 'initial',
+    });
+    const { worker } = await registerWorker({
+      name: 'refused-reviewer',
+      kind: 'LOCAL_CLI',
+      accountRef: 'a1',
+      model: 'opus',
+      capabilities: ['REVIEW'],
+      repositories: ['*'],
+    });
+
+    // A refusal is backpressure: the worker is deferred, its failure streak is
+    // untouched, and it stays AVAILABLE rather than being quarantined for being
+    // busy. Three separate assertions because three separate things were wrong
+    // at one point or another.
+    const until = await recordWorkerRateLimit(worker.id, 60_000);
+    expect(until > factoryNow()).toBe(true);
+    await recordFactoryEvent({
+      campaignId: campaign.id,
+      workerId: worker.id,
+      kind: 'SESSION_RATE_LIMITED',
+      evidenceClass: 'PROVIDER_ENFORCED',
+      detail: { stage: 'REVIEW', until, attemptCharged: false, workerFailureCharged: false },
+    });
+
+    const after = await getWorker(worker.id);
+    expect(after?.consecutiveFailures).toBe(0);
+    expect(after?.availability).toBe('AVAILABLE');
+    expect(after?.rateLimitedUntil).toBe(until);
+
+    // And a deferred worker is not capacity: the registry must not offer its slot.
+    const snapshot = await capacity();
+    expect(snapshot.slots.find((slot) => slot.workerId === worker.id)?.freeSlots).toBe(0);
+    expect(snapshot.rateLimited).toBeGreaterThan(0);
+
+    // The refusal is in the ledger, so a throughput report can see it happened.
+    const ledger = await listFactoryEvents(campaign.id, { kinds: ['SESSION_RATE_LIMITED'] });
+    expect(ledger.length).toBe(1);
+    expect(ledger[0]?.evidenceClass).toBe('PROVIDER_ENFORCED');
+    expect(ledger[0]?.detail['attemptCharged']).toBe(false);
   });
 });
 
