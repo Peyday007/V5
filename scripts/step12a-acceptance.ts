@@ -242,6 +242,27 @@ export const ACCEPTANCE_SUITE = [
     purpose: "a question whose answer is not in the public record at all: a genuine unresolved gap, a person's decision to file with it named, the same mission resuming, and the one follow-on it leaves behind",
     conversationTitle: 'S12A-ACC-6',
   },
+  /*
+   * The third attempt at the look, and the second thing that stopped it.
+   *
+   * `S12A-ACC-5` never reached the repaired archive check. It said *"outside
+   * California"*, the compiler's jurisdiction match saw the state name, the
+   * standing authorization covers Michigan, and the idea was parked before
+   * anything was asked of the archive at all. The compiler cannot tell "about
+   * California" from "outside California", and refusing is the safe direction,
+   * so nothing about that is repaired — the question is.
+   *
+   * Reading the archive decided the subject rather than inventing one. Sixteen
+   * claims carry no checkable source, in two families: success-fee licensure
+   * and county assessment data. The suite already has a live idea on the
+   * second, so this is the first, narrowed to the only jurisdiction the
+   * envelope authorizes.
+   */
+  {
+    scenarioId: 'S12A-ACC-7',
+    purpose: 'a bounded cheap look, asked about the one jurisdiction the standing authorization covers',
+    conversationTitle: 'S12A-ACC-7',
+  },
 ] as const;
 
 /**

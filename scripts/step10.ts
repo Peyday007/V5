@@ -213,6 +213,45 @@ const ACCEPTANCE_SCENARIOS = {
       'Outside California, is that summary still current, or has one of those states changed ' +
       'its position since we wrote it down?',
   },
+  /*
+   * The third attempt at the bounded look, and what the first two established.
+   *
+   * `S12A-ACC-3` asked a probe-shaped question and launched a mission, because
+   * `askArchive` read the worker's summary rather than the person's question.
+   * That was repaired. `S12A-ACC-5` asked the repaired check a question about
+   * the other unchecked subject and was parked before the check was reached at
+   * all: it said *"outside California"*, `jurisdictionFor` matched the state
+   * name, and the standing authorization covers Michigan. The compiler cannot
+   * tell "about California" from "outside California" and refusing is the safe
+   * direction, so nothing about that is repaired either.
+   *
+   * Reading the archive settled which subjects are even available. Sixteen
+   * claims carry no checkable source and they fall into exactly two families:
+   * success-fee licensure, and county assessment data. The suite already has a
+   * live idea on the second. So this is the first family, narrowed to the one
+   * jurisdiction the envelope authorizes — which removes the refusal that
+   * parked `S12A-ACC-5` without changing what makes it a look rather than a
+   * packet: `exc_29c46282531b46358cdb` is an `UNSUPPORTED_ASSERTION` headed
+   * "LICENSURE OF SUCCESS-FEE BUSINESS BROKERAGE — FIVE STATES (law in force
+   * as at 2026)" with nothing behind it, and whether its Michigan line still
+   * holds decides whether Deal Dispatch may charge a success fee where it
+   * actually operates.
+   *
+   * It may be folded into `S12A-ACC-5` by the semantic dedupe, which would be
+   * that mechanism working rather than a defect — and would be reported as
+   * what happened rather than replaced quietly.
+   */
+  'S12A-ACC-7': {
+    purpose: 'a bounded cheap look, on the one jurisdiction the authorization covers',
+    statement:
+      'establish whether the Michigan line of the five-state success-fee brokerage licensure ' +
+      'summary is still current',
+    question:
+      'Our five-state summary of success-fee business brokerage licensure was written up as law ' +
+      'in force in 2026 and as far as I can tell nobody ever checked it against anything. For ' +
+      'Michigan specifically, does that summary still hold — is a licence required for ' +
+      'success-fee business brokerage here?',
+  },
   'S12A-ACC-6': {
     purpose: "a question the public record does not answer, and the person's decision that follows",
     statement:
