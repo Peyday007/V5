@@ -103,6 +103,38 @@ with the reason recorded rather than quietly patched.
    file by file, so `data/factory/` was not. A checkout of the repository inside
    the repository is not evidence.
 
+9. **Belt and braces became a conflict, and the crash took the tick with it.**
+   `:(exclude)node_modules` names an ignored path explicitly, which git refuses
+   outright once the ignore rule is also in place. The scaffolding is now staged
+   and taken back with `git rm --cached --ignore-unmatch`, which cannot fail
+   either way — and, more importantly, a lane's throw no longer propagates out
+   of `Promise.all`. It killed the whole tick, left every other lane's unit
+   LEASED, and made a failed `git add` recoverable only by a lease expiry. Each
+   lane is now contained: it fails its own unit and records why.
+
+10. **The sweeper was eating the evidence that recovery happened.** An expired
+    lease on a unit with attempts left is claimable work, and the claim path
+    takes it as a *takeover*, recording which worker died holding it. The
+    sweeper ran first and swept those rows to READY — same work, no record. A
+    signal that exists only if you do not sweep is a signal you lose, which is
+    §23's arrival-credit defect in a new place. The sweeper now touches only
+    leases no claim will come for.
+
+11. **A dead dispatcher's sessions held capacity that did not exist.** A session
+    exists to run a unit, so a RUNNING session whose unit is not LEASED is a
+    session whose process is gone — but `workerLoad` counted it, so the dead
+    dispatcher's lanes held phantom slots forever. Measured, not theorised: when
+    the dispatcher died here, three sessions stayed RUNNING and the recovered
+    dispatcher could start exactly one lane out of four. Orphaned sessions are
+    now closed at the start of every tick, before the scheduler reads what is
+    free.
+
+12. **A reviewer was being asked to judge the repository rather than the
+    campaign.** A campaign merges its base branch in whenever that branch moves,
+    so `pinnedBase..head` grows to include everything other people landed since
+    the pin. The review and the assembled artifact now diff against the merge
+    base, which is the question a pull request actually asks.
+
 ---
 
 ## 3. The bootstrap campaign, from rows

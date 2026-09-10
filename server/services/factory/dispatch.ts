@@ -32,10 +32,12 @@ import type {
   FactoryRole,
   FactoryWorker,
 } from '../../domain/factory.ts';
+import { DEFAULT_UNIT_LEASE_MS } from '../../repos/factory.ts';
 import {
   deferUnit,
   failUnit,
   getUnit,
+  heartbeatUnit,
   latestCheckpoint,
   markImplemented,
   recordCheckpoint,
@@ -59,6 +61,14 @@ import { campaignWorkspace, commitAll, ensureWorktree, gitOrThrow, resolveSha } 
 
 /** How long one unit's worker may run before it is stopped. */
 export const DEFAULT_UNIT_TIMEOUT_MS = 25 * 60 * 1000;
+
+/**
+ * How often a live dispatcher renews a working unit's lease.
+ *
+ * Short relative to the shortest lease anybody would set, so a drill with a
+ * one-minute lease still keeps a live worker's unit while the dispatcher runs.
+ */
+export const HEARTBEAT_INTERVAL_MS = 15 * 1000;
 
 /**
  * A branch per attempt, from the attempt's own base.
@@ -213,16 +223,34 @@ export async function executeUnit(input: ExecuteUnitInput): Promise<ExecuteUnitR
     text: assignment,
   });
 
-  const result = await executor.execute({
-    campaignId: campaign.id,
-    unitId: unit.id,
-    sessionId: session.id,
-    worktreePath,
-    branch,
-    model: input.model,
-    assignment,
-    timeoutMs: input.timeoutMs ?? DEFAULT_UNIT_TIMEOUT_MS,
-  });
+  /*
+   * Renew the lease while the worker is actually working.
+   *
+   * Without this, a lease shorter than the worker's run is lost by a worker that
+   * is alive and producing — and the point of a lease is to recover work from a
+   * dispatcher that *died*, not from one that is slow. With it, the distinction is
+   * exact: the heartbeat stops when the dispatcher's process stops, so a dead
+   * dispatcher's lease expires and a live one's does not. It is also what makes
+   * `unitLeaseMs` safe to shorten for a recovery drill.
+   */
+  const heartbeat = setInterval(() => {
+    void heartbeatUnit(proof, DEFAULT_UNIT_LEASE_MS);
+  }, HEARTBEAT_INTERVAL_MS);
+  let result;
+  try {
+    result = await executor.execute({
+      campaignId: campaign.id,
+      unitId: unit.id,
+      sessionId: session.id,
+      worktreePath,
+      branch,
+      model: input.model,
+      assignment,
+      timeoutMs: input.timeoutMs ?? DEFAULT_UNIT_TIMEOUT_MS,
+    });
+  } finally {
+    clearInterval(heartbeat);
+  }
 
   if (result.rawLog) {
     await putArtifact({

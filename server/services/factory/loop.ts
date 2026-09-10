@@ -114,10 +114,30 @@ export interface TickReport {
   repairsQueued: number;
   blocker: { kind: FactoryBlockerKind; detail: string } | null;
   progress: boolean;
+  /**
+   * Another dispatcher holds the tick.
+   *
+   * Not a failure and not an absence of work: it means somebody else is already
+   * advancing this campaign. A caller that treated it as "nothing to do" would
+   * stop the moment a previous dispatcher's tick lease outlived the process that
+   * took it — which is exactly what happened the first time one was replaced
+   * mid-tick.
+   */
+  tickHeld: boolean;
   notes: string[];
 }
 
 const DEFAULT_MAX_REVIEW_ROUNDS = 4;
+
+/**
+ * How long to wait for another dispatcher's tick, and how many times.
+ *
+ * Bounded: a campaign whose tick is held for an hour by something that is not
+ * advancing it has a problem a person should see, and silently waiting forever
+ * would hide it. A tick lease is ten minutes, so this outlasts one by a margin.
+ */
+const HELD_TICK_WAIT_MS = 20_000;
+const MAX_HELD_TICKS = 60;
 
 /* ------------------------------------------------------------------------- */
 /* The tick                                                                   */
@@ -144,6 +164,7 @@ export async function tickCampaign(
       repairsQueued: 0,
       blocker: null,
       progress: false,
+      tickHeld: true,
       notes: [claim.reason],
     };
   }
@@ -177,6 +198,7 @@ async function runTick(
     repairsQueued: 0,
     blocker: null,
     progress: false,
+    tickHeld: false,
     notes,
   };
 
@@ -1142,12 +1164,23 @@ export async function runCampaign(
   const maxTicks = Math.max(1, options.maxTicks ?? 60);
   const reports: TickReport[] = [];
 
+  let heldInARow = 0;
   for (let tick = 0; tick < maxTicks; tick += 1) {
     const report = await tickCampaign(campaignId, options);
     reports.push(report);
     options.onTick?.(report);
     if (report.state === 'COMPLETE' || report.state === 'CANCELLED') break;
     if (report.state === 'AWAITING_RELEASE') break;
+    if (report.tickHeld) {
+      // Somebody else is advancing this campaign, or their tick lease is still
+      // running out. Wait rather than exit: a dispatcher that gave up here would
+      // leave a campaign with nobody driving it whenever one was replaced.
+      heldInARow += 1;
+      if (heldInARow > MAX_HELD_TICKS) break;
+      await new Promise((resolve) => setTimeout(resolve, HELD_TICK_WAIT_MS));
+      continue;
+    }
+    heldInARow = 0;
     if (report.state === 'BLOCKED' && !report.progress) break;
     if (!report.progress && report.dispatched === 0 && !report.reviewed) break;
   }
