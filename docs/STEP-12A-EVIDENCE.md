@@ -7284,3 +7284,52 @@ times it runs.
 Migrations 034/025. No evidence gate, envelope, authority or fleet setting
 changed, and the three-distinct-session floor is untouched — this changes who is
 *offered* work, never who is allowed to do it.
+
+### The chain, finished
+
+The fix deployed at 02:33 and the running Brain recovered the bin by itself on
+its next ticks — no operator command, nobody asked:
+
+```
+bin_75bea12e15534ba4b93f   NEEDS_HUMAN 100/100  →  READY 70/100
+```
+
+Thirty attempts credited back: only the generations whose events record a
+withheld-by-admission and no claim, which is exactly the discrimination the rule
+is for. Every refusal kept its row.
+
+The chain then ran to the end on its own.
+
+```
+AUDIT ROUND TWO   PRIMARY      oat_e26611e232664dea9a7c   21:34:45
+                  ADVERSARIAL  oat_8d3f654e8027455da69a   22:34:16
+                  JUDGE        oat_24b3e6e8b292454f9d3d   02:40:12
+                  compliant=true, three distinct sessions, no future: placeholder
+
+PACKET   orc_d636b91950734d4f9b38   status=COMPLETE   audits=2
+DOCUMENT doc_99d4a5b97ffa4d7cb015   Qualification Logic v1B
+         same id, same bytes (16884), same storage key, ledger 7/7, extraction READY
+
+MISSION  rms_2f53d1629a4348b2be53   DONE
+         doc=doc_99d4a5b97ffa4d7cb015   audit=aud_fa00b082361f49bca42b
+         writeback=2026-09-10T02:40:57.216Z   next=—
+
+IDEA     rcn_85f9689b461c4972a1ba   DONE
+NEEDS YOU  four requests, all WITHDRAWN — nobody was asked for anything
+```
+
+The second judge issued another `OTHER_LAYER`, this time naming Qualification
+Logic, and §73's consumer routed it again — the same document, the same bytes,
+the third name it has carried and the first one its own audit chose twice over.
+A terminal packet is not reopened, so the routing happened and the round did not
+restart.
+
+**The follow-on is none, and that is the answer rather than an omission.** The
+packet reached `COMPLETE` rather than `COMPLETE_WITH_GAPS`, so it settled what
+it asked; §13 forbids researching what the archive already answers, and
+`tests/otherLayerHandoff.test.ts` pins exactly this case — "creates no follow-on
+when the packet settled what it asked".
+
+Writeback exactly once: `writeback_at` is a single value set by
+`claimWriteback`'s compare-and-swap on `writeback_at IS NULL`, the conversation
+gained exactly one new `RUSSELL` turn, and the idea moved to `DONE` once.
