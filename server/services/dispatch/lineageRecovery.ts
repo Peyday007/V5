@@ -141,8 +141,19 @@ export async function recoverExecutionLineage(limit = 25): Promise<LineageRecove
    * question this answers is which *audit lineage* is missing, and recovering
    * a session that no pass refers to would be work with no reader.
    * --------------------------------------------------------------------- */
-  const candidates = await getDb().all<{ session_ref: string; worker_id: string }>(
-    `SELECT DISTINCT p.executor_session_ref AS session_ref, p.executor_worker_id AS worker_id
+  const candidates = await getDb().all<{ session_ref: string; worker_id: string; newest: string }>(
+    /*
+     * `GROUP BY` rather than `SELECT DISTINCT`, and the aggregate is named in
+     * the select list rather than only in the ordering.
+     *
+     * Both are what makes one statement mean the same thing on both backends.
+     * Postgres refuses an `ORDER BY` expression that is not in the select list
+     * of a `SELECT DISTINCT`, so the first version of this ordering compiled,
+     * passed on SQLite, and threw on the database production actually runs.
+     */
+    `SELECT p.executor_session_ref AS session_ref,
+            p.executor_worker_id AS worker_id,
+            MAX(p.started_at) AS newest
        FROM research_passes p
       WHERE p.executor_account_id IS NULL
         AND p.executor_worker_id IS NOT NULL
@@ -161,7 +172,7 @@ export async function recoverExecutionLineage(limit = 25): Promise<LineageRecove
        * attribution that is missing *now*, and ordering by the work rather than
        * by the id is what makes the page reach it.
        */
-      ORDER BY MAX(p.started_at) DESC, p.executor_session_ref
+      ORDER BY newest DESC, session_ref
       LIMIT ?`,
     [bounded],
   );
