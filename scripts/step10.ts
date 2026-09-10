@@ -153,12 +153,32 @@ const ACCEPTANCE_SCENARIOS = {
      * substitute for it: the real statement is still the worker's.
      */
     statement:
-      'establish whether one statewide Michigan index of township assessing offices exists',
+      'establish whether a business-only exemption from DRE broker licensure exists for ' +
+      'success-fee intermediaries',
+    /*
+     * Chosen from the archive's own shape rather than invented, and the first
+     * version of this question was wrong for a reason worth keeping.
+     *
+     * It asked about a statewide index of township assessing offices — a
+     * perfectly good question the project has *nothing* written down about, so
+     * the coverage verdict was `MISSING` and the right instrument was a
+     * research packet, not a look. `scenario-check` said so before anything was
+     * asked, which is what it is for.
+     *
+     * This is the subject the archive holds an unchecked answer on: six claims
+     * across two Monetization Logic documents, `UNSUPPORTED_ASSERTION` and
+     * `NEGATIVE_EXISTENCE`, none of them citing a source that can be checked —
+     * including *"a DRE broker licence is required; no business-only exemption
+     * exists beyond narrow FCC/securities-broker carve-outs"*. Whether that
+     * provisional answer stands decides whether Deal Dispatch can charge a
+     * success fee at all, and "does such an exemption exist" is a presence
+     * question.
+     */
     question:
-      'Is there a single statewide Michigan index that lists every city and township ' +
-      'assessing office with its current contact route, or does that only exist county by ' +
-      'county? I want to know whether one authoritative list exists before we commit to ' +
-      'building anything that depends on having one.',
+      'We wrote down early on that a DRE broker licence is required for what we do and that ' +
+      'there is no business-only exemption, but I do not think anyone ever checked it against ' +
+      'the actual rule. Does a business-only exemption from DRE broker licensure exist for ' +
+      'success-fee intermediaries, or does our provisional answer still stand?',
   },
   'S12A-ACC-4': {
     purpose: "a genuine unresolved gap and the person's decision that follows it",
