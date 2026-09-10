@@ -7333,3 +7333,126 @@ when the packet settled what it asked".
 Writeback exactly once: `writeback_at` is a single value set by
 `claimWriteback`'s compare-and-swap on `writeback_at IS NULL`, the conversation
 gained exactly one new `RUSSELL` turn, and the idea moved to `DONE` once.
+
+## 76. The packet was right and the mission cited the wrong round — 2026-09-10
+
+§75 finished the chain. The packet reached `COMPLETE`, the report was filed in
+Qualification Logic, three distinct sessions audited it, the writeback ran once
+and the mission read `DONE`. An independent completion review then read the rows
+rather than the states, and found two links pointing at the round that had been
+superseded:
+
+```
+rms_2f53d1629a4348b2be53   audit_id = aud_fa00b082361f49bca42b
+aud_fa00b082361f49bca42b   MORE_RESEARCH   round one
+```
+
+Round one is the verdict that said the work belonged to a different layer. The
+mission that carried the *passing* round two named it, and `writeBack` builds
+the knowledge provenance from `mission.auditId` and files the conclusion under
+`mission.layerId` — so the project's belief about county assessment-roll access
+cited the verdict that sent the work away.
+
+**Nothing about this looked like a failure.** Mission `DONE`, packet `COMPLETE`,
+document filed, audit compliant, writeback once. Every state field was correct
+and only the ids disagreed. That is what makes it worth writing down: a defect
+with no failing state is one that a status board cannot show you.
+
+### Two faults, in the same direction
+
+`linkFiledWork` had both.
+
+```ts
+if (mission.documentId && mission.auditId) return mission;   // (a)
+...
+auditId = audits.length > 0 ? audits[audits.length - 1]!.id : null;   // (b)
+```
+
+**(a) The early return.** Correct exactly while a packet is audited once. §22's
+`OTHER_LAYER` handoff is the case where it is not: a re-audited packet has a new
+verdict and, usually, a new layer, and a mission that stopped looking the first
+time can never learn either. Non-null is not the same fact as current.
+
+**(b) The lookup.** `listAuditsByProject` orders `created_at DESC`. The comment
+above that line says *"The latest, because an audit that superseded an earlier
+one is the one the packet's verdict rests on"* — and `.at(-1)` on a newest-first
+list is the **oldest**. With one audit in the run it is right; with two it is
+wrong every time. This is the one that produced the production row.
+
+A third, one level out: the handoff updated `documents.layer_id` and
+`research_orchestrations.layer_id`, and the mission's layer was repointed in the
+Russell loop's own re-open path — so a mission stayed aligned with its document
+exactly when the Russell loop happened to be the caller.
+
+### One derivation, two readers
+
+`server/services/russell/completionLinks.ts` holds the rule, for the reason
+`auditRound.ts` holds the round boundary: it has more than one reader — the link
+taken before a writeback, and the reconciliation of a mission that already took
+one — and a rule applied by one of two readers is worse than none, because the
+two would disagree about the same mission.
+
+The rule is that the packet is authoritative and the mission is a projection of
+it. Each link takes the orchestration's current value; a null there means Brain
+has nothing better to say than what the mission already holds, never an
+instruction to blank one. `orchestration.audit_id` is written by the judge's own
+submission on every round, so it is trusted rather than re-derived — except when
+it predates the current round's boundary, which is precisely the stale pointer
+this exists to refuse. Then the round is asked directly, scoped to the packet's
+own run and ordered explicitly rather than trusting a repository's `ORDER BY`.
+
+`routeAuditedDocument` now moves all three ownership rows. Ownership belongs to
+the routing decision rather than to whichever consumer notices it.
+
+### Correcting a mission that already wrote back
+
+`missionsAwaitingWriteback` selects on `writeback_at IS NULL`, so the production
+mission would never have been looked at again however correct the derivation
+became. `reconcileCompletedMission` is the answering transition, selected from
+rows on the tick rather than from a queue — so it reaches a mission written back
+long before this code existed, without anybody naming it — and idempotent by the
+state it produces: corrected links no longer match the selection.
+
+It is non-destructive throughout, and the distinction is the point. Every audit,
+pass, claim, message, document, bin and event stays exactly as written; no id
+changes; nothing is deleted and nothing is superseded. What moves is a *pointer*
+and a *projection*: three columns on the mission, and the layer and provenance
+of the knowledge rows derived from them.
+
+**Re-recording the knowledge was the obvious alternative and is wrong here.**
+The conclusion did not change and the evidence did not change; only the citation
+was wrong. A superseding row would assert that the project once believed
+something it never believed, and a second conversation turn would tell a person
+their work had concluded twice. §5 protects history, and the history of *this*
+correction is the append-only `RUSSELL_LINKS_RECONCILED` event, which carries
+every before and after and the version of the rule that decided.
+
+One refusal is deliberate. A mission whose audit is stale while the re-opened
+round has produced no replacement stops at `NO_CURRENT_ROUND_AUDIT` rather than
+repointing at nothing: a filed conclusion citing no verdict at all is worse than
+one citing a superseded verdict, and a repeated line in the tick report is how
+somebody finds out that a round is not finishing.
+
+### What the tests had to bite
+
+Both faults are covered by tests that fail against the old code, checked by
+putting the old code back:
+
+- restoring the `.at(-1)` lookup fails three of them;
+- restoring the early return alone fails one — and only because the test
+  additionally requires **no** `RUSSELL_LINKS_RECONCILED` event. The
+  reconciliation runs later in the same tick, so without that assertion an early
+  return would produce a stale writeback and an immediate repair, and every
+  other assertion would still pass. A self-healing system can hide the defect it
+  heals.
+
+The journey is the production one: round one `MORE_RESEARCH` → handoff → round
+two `PASS` in the owning layer → the mission points at round two → mission,
+document, orchestration and knowledge all on the final layer → writeback still
+exactly once. The reconciliation test arranges its starting state, which the
+rest of that file deliberately avoids — and it is the honest thing here, because
+the rows exist precisely because an *older* build wrote them and the current one
+cannot produce them.
+
+No migration. No evidence gate, envelope, authority, ceiling or fleet setting
+changed, and the three-distinct-session separation floor is untouched.

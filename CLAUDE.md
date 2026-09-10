@@ -1096,6 +1096,36 @@ rules.
   invisible to a test that arranged its own starting state, which is why
   `tests/russellIntegrationPass.test.ts` walks the journey once from a person's
   first message and simulates only the worker and the network.
+- **A link is a fact about now, and non-null is not the same fact as current.**
+  A mission's `document_id`, `audit_id` and `layer_id` are a projection of its
+  packet, and the writeback reads all three — `recordKnowledge` files the
+  conclusion under the layer and attaches the document and the audit as its
+  provenance — so those three columns decide what the project ends up believing
+  and under which heading. `linkFiledWork` filled them once and returned early
+  whenever both were set, which is correct exactly while a packet is audited
+  once; §22's `OTHER_LAYER` handoff is the case where it is not. Its lookup
+  failed in the same direction: it took the *last* element of a newest-first
+  list, so with two audits in one run it chose the older one every time. In
+  production a packet that passed a compliant second round wrote back citing the
+  first round's `MORE_RESEARCH` verdict — the one that said the work belonged
+  somewhere else — filed under the layer it had left. **The correction is
+  recorded rather than quietly applied**, because nothing about it looked like a
+  failure: the mission read DONE, the packet COMPLETE, the report filed and
+  audited, and only the ids disagreed.
+
+  `services/russell/completionLinks.ts` is one derivation with two readers — the
+  link taken before a writeback, and the reconciliation of a mission that
+  already took one — for the reason `auditRound.ts` is one module: a rule
+  applied by one of two readers is worse than none, because the two would
+  disagree about the same mission. The handoff moves all three ownership rows
+  itself rather than leaving the third to whichever consumer notices. And a
+  mission that already wrote back is corrected **in place**: the pointer and the
+  projection move, every audit, pass, claim, document, message and id stays
+  exactly as written, and an append-only `RUSSELL_LINKS_RECONCILED` row carries
+  every before and after. A superseding knowledge row was the obvious
+  alternative and would have asserted a change of belief that never happened —
+  the conclusion and the evidence were right all along; only the citation was
+  wrong.
 - **Two boundaries meet at the HTTP surface and they are not the same
   boundary.** A project is guarded by `decideProjectAccess`; a conversation is
   guarded by its owner, plus read access to the attached project for a shared

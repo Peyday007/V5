@@ -553,6 +553,55 @@ export async function getKnowledge(id: string): Promise<RussellKnowledge | null>
   return rows[0] ? mapKnowledge(rows[0]) : null;
 }
 
+/** Everything one mission promoted, oldest first. Superseded rows included. */
+export async function knowledgeForMission(missionId: string): Promise<RussellKnowledge[]> {
+  const rows = await getDb().all<RussellKnowledgeRow>(
+    'SELECT * FROM russell_knowledge WHERE mission_id = ? ORDER BY created_at, rowid',
+    [missionId],
+  );
+  return rows.map(mapKnowledge);
+}
+
+/**
+ * Re-point a knowledge row at the layer and the evidence it was always about.
+ *
+ * Deliberately narrow: the layer and the provenance, and nothing else. Both are
+ * *derived* from the mission's own links at the moment the row was written, so
+ * a mission whose links were stale produced a row filed under the wrong heading
+ * citing the wrong verdict — about the right conclusion, from the right claims.
+ *
+ * The statement, the confidence, the author, the kind, the visibility and the
+ * supersession chain are untouched, and this is not a way to edit what the
+ * project believes. Recording a superseding row instead would assert a change
+ * of belief that never happened; the record of *this* correction is the
+ * append-only `RUSSELL_LINKS_RECONCILED` event its caller writes.
+ */
+export async function reanchorKnowledge(input: {
+  knowledgeId: string;
+  layerId?: string | null;
+  provenance?: Record<string, unknown>;
+}): Promise<boolean> {
+  const sets: string[] = [];
+  const params: (string | null)[] = [];
+  if (input.layerId !== undefined) {
+    sets.push('layer_id = ?');
+    params.push(input.layerId);
+  }
+  if (input.provenance !== undefined) {
+    sets.push('provenance = ?');
+    params.push(toJson(input.provenance));
+  }
+  if (sets.length === 0) return false;
+  sets.push('updated_at = ?');
+  params.push(nowIso());
+  params.push(input.knowledgeId);
+  const result = await getDb().run(
+    `UPDATE russell_knowledge SET ${sets.join(', ')} WHERE id = ?`,
+    params,
+  );
+  return result.changes === 1;
+}
+
 // ---------------------------------------------------------------------------
 // Needs You
 // ---------------------------------------------------------------------------

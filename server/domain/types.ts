@@ -273,6 +273,17 @@ export const EVENT_TYPES = [
   // version of the rule that decided, because a document that changed layers
   // with no row saying why is indistinguishable from one edited by hand.
   'DOCUMENT_HANDED_OFF',
+
+  // A finished mission repointed at what its packet actually produced.
+  //
+  // A mission's document, audit and layer are a projection of its packet, and a
+  // packet re-audited after a handoff moves all three underneath a mission that
+  // has already written back. Correcting the projection is not a change of
+  // belief and does not supersede anything, so the only record that it happened
+  // is this row — which carries every before and after, and the version of the
+  // rule that decided. A pointer that changed with nothing saying why is
+  // indistinguishable from one edited by hand.
+  'RUSSELL_LINKS_RECONCILED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

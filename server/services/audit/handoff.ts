@@ -55,6 +55,7 @@ import { getAudit } from '../../repos/audits.ts';
 import { getDocument, listDocumentsByLayer, updateDocument } from '../../repos/documents.ts';
 import { getLayer, listLayers } from '../../repos/layers.ts';
 import { getOrchestration, updateOrchestration } from '../../repos/research.ts';
+import { getMissionByOrchestration, linkMission } from '../../repos/russellMissions.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { getDb } from '../../db/database.ts';
 import { buildNames } from '../../domain/naming.ts';
@@ -308,6 +309,29 @@ export async function routeAuditedDocument(input: { auditId: string }): Promise<
   const orchestration = audit.runId ? await orchestrationForDocument(document.id) : null;
   if (orchestration && orchestration.layerId !== target.id) {
     await updateOrchestration(orchestration.id, { layerId: target.id });
+  }
+
+  /*
+   * And the mission, which is the third row carrying the same ownership fact.
+   *
+   * `documents.layer_id`, `research_orchestrations.layer_id` and
+   * `russell_missions.layer_id` all say which layer this work belongs to, so a
+   * routing that moved two of them and left the third produced a mission that
+   * reported a filed report under a heading its own audit said was wrong — and
+   * `writeBack` files the project's conclusion under exactly that column. It
+   * *was* corrected, in the Russell loop's re-open path, which meant it was
+   * corrected only when the Russell loop was the caller. Ownership belongs to
+   * the routing decision rather than to whichever consumer notices it.
+   *
+   * The audit link is deliberately not touched here: this round has not
+   * produced a verdict yet, and `completionLinks.ts` is what points a mission
+   * at the one it eventually does.
+   */
+  if (orchestration) {
+    const mission = await getMissionByOrchestration(orchestration.id);
+    if (mission && mission.layerId !== target.id) {
+      await linkMission({ missionId: mission.id, layerId: target.id });
+    }
   }
 
   /*

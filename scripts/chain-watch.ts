@@ -333,6 +333,127 @@ async function main(): Promise<void> {
     line('predicted (future:)', [...sessions].filter((s) => String(s).startsWith('future:')).length);
   }
 
+  /* ------------------------------------------- the links, and what they cite */
+  /*
+   * Whether the three rows that carry one mission's completion agree.
+   *
+   * `russell_missions.document_id`, `audit_id` and `layer_id` are a projection
+   * of the packet, and the knowledge the writeback promoted is a projection of
+   * those. So a stale link is invisible in every state field — the mission says
+   * DONE, the packet says COMPLETE, the document is filed — and shows up only
+   * by comparing the ids. It is the exact shape of the defect that put round
+   * one's `MORE_RESEARCH` verdict on a mission that had passed round two.
+   *
+   * Ids, layers and kinds only. No statement, no summary, no conclusion: the
+   * standing rule that diagnostics carry structure and not content applies here
+   * as everywhere else in this script.
+   */
+  if (missions.length) {
+    console.log('');
+    console.log('COMPLETION LINKS');
+    for (const mission of missions) {
+      if (!mission.orchestration_id) continue;
+      const packets = await all<{
+        id: string;
+        status: string;
+        layer_id: string | null;
+        document_id: string | null;
+        audit_id: string | null;
+      }>(
+        `SELECT id, status, layer_id, document_id, audit_id
+           FROM research_orchestrations WHERE id = ?`,
+        [mission.orchestration_id],
+      );
+      const packet = packets[0];
+      if (!packet) continue;
+
+      const missionLayers = await all<{ layer_id: string | null }>(
+        `SELECT layer_id FROM russell_missions WHERE id = ?`,
+        [mission.id],
+      );
+      const missionLayer = missionLayers[0]?.layer_id ?? null;
+
+      const named = async (layerId: string | null): Promise<string> => {
+        if (!layerId) return '—';
+        const rows = await all<{ name: string }>(`SELECT name FROM layers WHERE id = ?`, [layerId]);
+        return rows[0]?.name ?? layerId;
+      };
+
+      const aligned =
+        packet.audit_id === mission.audit_id &&
+        packet.document_id === mission.document_id &&
+        packet.layer_id === missionLayer;
+
+      console.log(`  ${mission.id}  ${aligned ? 'ALIGNED' : 'STALE'}`);
+      line('packet', `${packet.id} ${packet.status}`);
+      line('layer  packet / mission', `${await named(packet.layer_id)} / ${await named(missionLayer)}`);
+      line('audit  packet / mission', `${packet.audit_id ?? '—'} / ${mission.audit_id ?? '—'}`);
+      line('doc    packet / mission', `${packet.document_id ?? '—'} / ${mission.document_id ?? '—'}`);
+
+      const audits = await all<{ id: string; verdict: string; created_at: string }>(
+        `SELECT id, verdict, created_at FROM audits WHERE run_id =
+           (SELECT run_id FROM research_orchestrations WHERE id = ?)
+          ORDER BY created_at`,
+        [mission.orchestration_id],
+      );
+      for (const audit of audits) {
+        line('  audit in run', `${audit.id} ${audit.verdict} ${audit.created_at}`);
+      }
+
+      const knowledge = await all<{
+        id: string;
+        kind: string;
+        layer_id: string | null;
+        provenance: string;
+        superseded_by_id: string | null;
+      }>(
+        `SELECT id, kind, layer_id, provenance, superseded_by_id
+           FROM russell_knowledge WHERE mission_id = ? ORDER BY created_at, rowid`,
+        [mission.id],
+      );
+      line('knowledge rows', knowledge.length);
+      for (const row of knowledge) {
+        let cited: Record<string, unknown> = {};
+        try {
+          cited = JSON.parse(row.provenance) as Record<string, unknown>;
+        } catch {
+          cited = {};
+        }
+        console.log(
+          `      ${row.id}  ${row.kind.padEnd(10)} layer=${await named(row.layer_id)} ` +
+            `audit=${String(cited['auditId'] ?? '—')} doc=${String(cited['documentId'] ?? '—')} ` +
+            `superseded=${row.superseded_by_id ?? 'no'}`,
+        );
+      }
+    }
+
+    const reconciled = await all<{ id: string; entity_id: string | null; created_at: string; payload: string }>(
+      `SELECT id, entity_id, created_at, payload FROM project_events
+        WHERE project_id = ? AND event_type = 'RUSSELL_LINKS_RECONCILED'
+        ORDER BY created_at`,
+      [project.id],
+    );
+    line('reconciliations', reconciled.length);
+    for (const event of reconciled) {
+      let payload: Record<string, unknown> = {};
+      try {
+        payload = JSON.parse(event.payload) as Record<string, unknown>;
+      } catch {
+        payload = {};
+      }
+      const corrections = Array.isArray(payload['corrections'])
+        ? (payload['corrections'] as { field?: unknown; from?: unknown; to?: unknown }[])
+        : [];
+      console.log(`      ${event.created_at}  mission=${event.entity_id ?? '—'}`);
+      for (const correction of corrections) {
+        console.log(
+          `        ${String(correction.field)}: ${String(correction.from ?? 'none')} -> ` +
+            `${String(correction.to)}`,
+        );
+      }
+    }
+  }
+
   /* -------------------------------------------------------- the human asks */
   const requests = await all<{
     id: string;

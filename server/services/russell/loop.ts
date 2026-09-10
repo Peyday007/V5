@@ -59,7 +59,6 @@ import {
 } from '../../repos/russellCycle.ts';
 import {
   getMission,
-  linkMission,
   listAnsweredRequests,
   latestMissionForCandidate,
   markResumed,
@@ -73,7 +72,6 @@ import { currentFragments, getOrchestration, updateOrchestration } from '../../r
 import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
 import { getProject } from '../../repos/projects.ts';
 import { recordEvent } from '../../repos/events.ts';
-import { listAuditsByProject } from '../../repos/audits.ts';
 import {
   createCandidate,
   getCandidate,
@@ -93,6 +91,11 @@ import {
 } from '../audit/handoff.ts';
 import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
 import { recomputeProject } from '../stateEngine.ts';
+import {
+  alignMissionLinks,
+  missionsWithStaleLinks,
+  reconcileCompletedMission,
+} from './completionLinks.ts';
 import { outcomeOf, writeBack } from './writeback.ts';
 import { launch, repairLaunches, type LaunchInput } from './launch.ts';
 import { applyTurn } from './turn.ts';
@@ -187,6 +190,23 @@ export interface TickReport {
    */
   escalatedBins: { binId: string; reason: string }[];
   /**
+   * Missions that had already written back against links naming a superseded
+   * audit round, repointed at what their packet actually produced.
+   *
+   * A correction, not a re-run: no audit, claim, document or message changes,
+   * and the knowledge the mission promoted is re-anchored rather than written
+   * again. Selected from rows, so it reaches a mission written back long before
+   * this existed, and performing it is what stops it being selected again.
+   */
+  linksReconciled: { missionId: string; corrections: string }[];
+  /**
+   * Missions whose links are stale and could not be corrected yet, with the
+   * word for why. Reported rather than silent: the case this exists for is a
+   * re-opened audit round that is not finishing, and a repeated line here is
+   * how somebody would find out.
+   */
+  linksUnreconciled: { missionId: string; refusal: string }[];
+  /**
    * Follow-on ideas created from a mission that finished and filed.
    *
    * An idea, not a mission. It is judged against the archive on a later step
@@ -241,6 +261,8 @@ const EMPTY: TickReport = {
   handoffRefused: [],
   binReopenRefused: [],
   escalatedBins: [],
+  linksReconciled: [],
+  linksUnreconciled: [],
   followOns: [],
   linkedNext: [],
   needsHuman: [],
@@ -282,6 +304,8 @@ export async function tick(owner: string): Promise<TickReport> {
     handoffRefused: [],
     binReopenRefused: [],
     escalatedBins: [],
+    linksReconciled: [],
+    linksUnreconciled: [],
     followOns: [],
     linkedNext: [],
     needsHuman: [],
@@ -381,6 +405,31 @@ export async function tick(owner: string): Promise<TickReport> {
         followOnOfMissionId: entry.missionId,
       });
       report.followOns.push({ missionId: entry.missionId, candidateId: created.id });
+    }
+
+    /*
+     * 1a-iii. Repoint a finished mission that cites a superseded audit round.
+     *
+     * `linkFiledWork` keeps a mission current from now on, and that is no help
+     * to one that already wrote back — `missionsAwaitingWriteback` selects on
+     * `writeback_at IS NULL`, so a mission that finished against stale links
+     * would never be looked at again. In production exactly one had: a packet
+     * re-audited after an `OTHER_LAYER` handoff, whose mission still named the
+     * first round's `MORE_RESEARCH` verdict, and whose promoted knowledge cited
+     * it. §24 once more — a defect nothing re-reads is a defect nobody finds.
+     *
+     * Derived from rows rather than from a queue, so it reaches that mission
+     * without anybody naming it, and idempotent by the state it produces:
+     * corrected links no longer match the selection. It creates no work, spends
+     * nothing, promotes nothing and supersedes nothing.
+     */
+    for (const missionId of await missionsWithStaleLinks(cycle.maxEventsPerCycle)) {
+      const outcome = await reconcileCompletedMission(missionId);
+      if (outcome.ok && outcome.corrections.length > 0) {
+        report.linksReconciled.push({ missionId, corrections: outcome.detail });
+      } else if (!outcome.ok) {
+        report.linksUnreconciled.push({ missionId, refusal: outcome.refusal ?? 'refused' });
+      }
     }
 
     // 1b. Apply the answers workers have sent back.
@@ -709,43 +758,30 @@ export async function tick(owner: string): Promise<TickReport> {
  * whole table.
  */
 /**
- * Attach the packet's filed document and its audit to the mission.
+ * Attach the packet's filed document, its audit and its layer to the mission.
  *
  * Separate from the writeback because it is a *reading*, not a decision: it
- * copies two ids Brain already holds onto the row that needs them, and returns
- * the mission as it now stands. If the packet has filed nothing yet there is
+ * copies ids Brain already holds onto the row that needs them, and returns the
+ * mission as it now stands. If the packet has filed nothing yet there is
  * nothing to copy and the mission comes back unchanged, which is the ordinary
  * case on most ticks.
  *
- * The audit is the packet's own — matched on the run the orchestration names,
- * which is the same join `packet-report` uses. A project's other audits belong
- * to other work and must not be attributed here.
+ * **It re-reads every time, and the early return it used to have was half the
+ * defect.** Skipping the work once the document and the audit were both
+ * non-null is correct exactly while a packet is audited once — and §22's
+ * `OTHER_LAYER` handoff is the case where it is not. A re-audited packet has a
+ * new verdict and, usually, a new layer; a mission that stopped looking cited
+ * the round that said the work belonged somewhere else, and the writeback filed
+ * the project's conclusion under it. Non-null is not the same fact as current.
+ *
+ * The other half was the lookup itself, and `completionLinks.ts` holds both the
+ * rule and the account of what it got wrong. It lives there rather than here
+ * because the reconciliation of a mission that already wrote back has to apply
+ * the identical rule, and two readers of one derivation must not become two
+ * derivations.
  */
 async function linkFiledWork(mission: RussellMission): Promise<RussellMission> {
-  if (!mission.orchestrationId) return mission;
-  if (mission.documentId && mission.auditId) return mission;
-
-  const orchestration = await getOrchestration(mission.orchestrationId);
-  if (!orchestration) return mission;
-
-  const documentId = mission.documentId ?? orchestration.documentId ?? null;
-  let auditId = mission.auditId ?? null;
-  if (!auditId) {
-    const audits = (await listAuditsByProject(mission.projectId)).filter(
-      (audit) => audit.runId === orchestration.runId,
-    );
-    // The latest, because an audit that superseded an earlier one is the one
-    // the packet's verdict rests on.
-    auditId = audits.length > 0 ? audits[audits.length - 1]!.id : null;
-  }
-  if (!documentId && !auditId) return mission;
-
-  await linkMission({
-    missionId: mission.id,
-    ...(documentId ? { documentId } : {}),
-    ...(auditId ? { auditId } : {}),
-  });
-  return (await getMission(mission.id)) ?? mission;
+  return (await alignMissionLinks(mission)).mission;
 }
 
 async function missionsAwaitingWriteback(limit: number): Promise<RussellMission[]> {
@@ -1273,9 +1309,17 @@ async function reopenAuditRound(
   }
 
   if (mission) {
-    if (mission.layerId !== routed.toLayerId) {
-      await linkMission({ missionId: mission.id, layerId: routed.toLayerId });
-    }
+    /*
+     * The mission's layer is not repointed here any more.
+     *
+     * It was, and only here — so a mission stayed aligned with its document
+     * exactly when the Russell loop happened to be the caller. `documents`,
+     * `research_orchestrations` and `russell_missions` all carry the same
+     * ownership fact, and a routing that moved two of the three left the third
+     * to be corrected by whoever noticed. `routeAuditedDocument` now moves all
+     * three, so ownership is aligned by the handoff itself rather than by its
+     * consumers, and the mission read above already carries the new layer.
+     */
     if (mission.state === 'NEEDS_HUMAN') {
       await transitionMission({
         missionId: mission.id,

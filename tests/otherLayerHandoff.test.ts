@@ -19,7 +19,11 @@ import { getDocument, listDocumentsByLayer } from '../server/repos/documents.ts'
 import { getAudit, listAuditsByProject } from '../server/repos/audits.ts';
 import { recordAudit } from '../server/services/auditEngine.ts';
 import { listEvents } from '../server/repos/events.ts';
-import { decideHandoff, HANDOFF_DECIDER_VERSION } from '../server/services/audit/handoff.ts';
+import {
+  decideHandoff,
+  HANDOFF_DECIDER_VERSION,
+  routeAuditedDocument,
+} from '../server/services/audit/handoff.ts';
 import { tick } from '../server/services/russell/loop.ts';
 import type { AuditGap, Layer } from '../server/domain/types.ts';
 import { createRun } from '../server/repos/runs.ts';
@@ -51,11 +55,16 @@ import { advancePacket } from '../server/services/research/packetRunner.ts';
 import {
   askHuman,
   getMission,
+  knowledgeForMission,
   launchMission,
   linkMission,
   openRequestFor,
+  reanchorKnowledge,
   transitionMission,
 } from '../server/repos/russellMissions.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { createConversation, listTurns } from '../server/repos/russellConversations.ts';
+import { reconcileCompletedMission } from '../server/services/russell/completionLinks.ts';
 
 let fixture: TestProject;
 
@@ -356,7 +365,7 @@ describe('the rest of the path, after the routing', () => {
    * out to `NEEDS_HUMAN` saying a worker "finished without recording anything",
    * which was untrue and was the exact state the handoff exists to clear.
    */
-  async function packetInTheWrongLayer() {
+  async function packetInTheWrongLayer(options: { conversationId?: string | null } = {}) {
     const worldModel = await fixture.layerByName('World Model');
     const document = await addDocument(fixture, 'World Model', 'v1B', {
       contents: 'Which Michigan county offices publish assessment rolls, and on what terms.',
@@ -542,6 +551,7 @@ describe('the rest of the path, after the routing', () => {
       objective: 'County property tax assessment roll access',
       whyNow: "The project's own archive does not answer this.",
       idempotencyKey: `handoff-test-${orchestration.id}`,
+      conversationId: options.conversationId ?? null,
     });
     await linkMission({ missionId: mission.id, orchestrationId: orchestration.id, binId: bin.id });
     await transitionMission({
@@ -733,6 +743,301 @@ describe('the rest of the path, after the routing', () => {
     const report = await tick('test-owner');
     expect(report.followOns.filter((entry) => entry.missionId === mission.id)).toHaveLength(0);
     expect((await getMission(mission.id))!.nextMissionId).toBeNull();
+  });
+
+  /*
+   * The links a finished mission leaves behind.
+   *
+   * The handoff and the second round were built and proven, and the packet came
+   * out right: the report was filed in the layer that owns it and three fresh
+   * sessions passed it. Then the mission's own pointers still named round one.
+   *
+   * `russell_missions.document_id`, `audit_id` and `layer_id` are what the
+   * writeback reads — `recordKnowledge` files the conclusion under the layer
+   * and attaches the document and the audit as its provenance — so a stale
+   * pointer does not stop anything and does not look like a failure. It just
+   * makes the project believe the right conclusion under the wrong heading,
+   * citing the verdict that said the work belonged somewhere else.
+   *
+   * In production that is what mission `rms_2f53d1629a4348b2be53` did.
+   */
+  describe('a finished mission cites the round that actually judged it', () => {
+    /** Round two, run and passed in the layer the handoff moved the work to. */
+    async function passRoundTwo(orchestrationId: string) {
+      const packet = (await getOrchestration(orchestrationId))!;
+      const discovery = await fixture.layerByName('Discovery Logic');
+      // The role's own ordinal, which is what `earlierAuditRole` matches on.
+      // Round one used the same three; the round boundary is what separates
+      // them, and that is the whole point of the boundary being a timestamp.
+      for (const ordinal of [5, 6, 7]) {
+        const pass = await startPass({
+          orchestrationId,
+          passKey: 'AUDIT',
+          ordinal,
+          provider: 'WORKER',
+          model: 'wkr-2',
+          prompt: `round two pass ${ordinal}`,
+          promptSha256: 'y'.repeat(64),
+          executorWorkerId: 'wkr_round_two',
+          executorRoutineId: 'frt_round_two',
+          executorAccountId: 'fac_round_two',
+          executorSessionRef: `oat_round_two_${ordinal}`,
+        });
+        await finishPass(pass.id, { status: 'COMPLETE', rawResponse: '{}' });
+      }
+      const second = await recordAudit({
+        projectId: fixture.project.id,
+        layerId: discovery.id,
+        runId: packet.runId,
+        auditedDocumentId: packet.documentId,
+        auditedDocumentIds: packet.documentId ? [packet.documentId] : [],
+        source: 'TEST',
+        mode: 'SINGLE_DOCUMENT',
+        result: {
+          verdict: 'PASS',
+          summary: 'In the layer that owns it, the work stands.',
+          failures: [],
+          missingDocuments: [],
+          requiredResearchRuns: [],
+          requiredPatches: [],
+          synthesisRequired: false,
+          freezeEligible: false,
+          nextVersion: null,
+          nextAction: 'None.',
+          confidence: 0.9,
+        },
+        gaps: [],
+      });
+      await updateOrchestration(orchestrationId, {
+        verdict: 'PASS',
+        auditId: second.audit.id,
+      });
+      const advanced = await advancePacket(orchestrationId);
+      expect(advanced.status).toBe('COMPLETE');
+      return { audit: second.audit, discovery };
+    }
+
+    it('points at round two, and files what it concluded in the new layer', async () => {
+      const { orchestration, mission, audit: roundOne } = await packetInTheWrongLayer();
+      await tick('test-owner');
+
+      /*
+       * Both links already set, and both naming round one — the state a mission
+       * is in whenever anything linked it while the first round was live. The
+       * old derivation stopped looking the moment these two were non-null, so
+       * everything below was decided before the second round existed. Non-null
+       * is not the same fact as current, and this is where the difference bites.
+       */
+      await linkMission({
+        missionId: mission.id,
+        documentId: (await getOrchestration(orchestration.id))!.documentId!,
+        auditId: roundOne.id,
+      });
+
+      const { audit: roundTwo, discovery } = await passRoundTwo(orchestration.id);
+      expect(roundTwo.id).not.toBe(roundOne.id);
+
+      const writebackTick = await tick('test-owner');
+
+      /*
+       * Corrected *before* the writeback, not repaired afterwards.
+       *
+       * The reconciliation below can fix a mission that already wrote back, and
+       * that would hide this: it runs later in the same tick, so an early
+       * return here would produce a stale writeback and an immediate
+       * correction, and every assertion below would still pass. Requiring no
+       * correction is what makes the re-read load-bearing.
+       */
+      expect(writebackTick.linksReconciled).toHaveLength(0);
+      expect(
+        (await listEvents(fixture.project.id, 300)).filter(
+          (event) => event.eventType === 'RUSSELL_LINKS_RECONCILED',
+        ),
+      ).toHaveLength(0);
+
+      /*
+       * The link, and the exact thing that was wrong.
+       *
+       * `listAuditsByProject` returns newest first and the old derivation took
+       * the last element of it, so with two audits in one run it chose the
+       * older one every time — round one's `MORE_RESEARCH`, the verdict that
+       * sent the work away. Asserting on the id rather than on a count is the
+       * point: both were present and one of them was correct.
+       */
+      const finished = (await getMission(mission.id))!;
+      expect(finished.auditId).toBe(roundTwo.id);
+      expect(finished.auditId).not.toBe(roundOne.id);
+
+      // All four rows carrying the same ownership fact agree.
+      const packet = (await getOrchestration(orchestration.id))!;
+      expect(packet.layerId).toBe(discovery.id);
+      expect((await getDocument(packet.documentId!))!.layerId).toBe(discovery.id);
+      expect(finished.layerId).toBe(discovery.id);
+      expect(finished.documentId).toBe(packet.documentId);
+
+      const knowledge = await knowledgeForMission(mission.id);
+      expect(knowledge.length).toBeGreaterThan(0);
+      for (const row of knowledge) {
+        expect(row.layerId).toBe(discovery.id);
+        expect(row.provenance['auditId']).toBe(roundTwo.id);
+        expect(row.provenance['documentId']).toBe(packet.documentId);
+      }
+
+      // And it is still one writeback, replayed rather than repeated.
+      await tick('test-owner');
+      const again = (await getMission(mission.id))!;
+      expect(again.writebackAt).toBe(finished.writebackAt);
+      expect(
+        (await listEvents(fixture.project.id, 300)).filter(
+          (event) => event.eventType === 'RUSSELL_MISSION_WRITEBACK',
+        ),
+      ).toHaveLength(1);
+      expect(await knowledgeForMission(mission.id)).toHaveLength(knowledge.length);
+    });
+
+    it('aligns the mission with the document, whoever calls the handoff', async () => {
+      /*
+       * The alignment used to live in the Russell loop's re-open path, so a
+       * mission stayed with its document exactly when the loop was the caller.
+       * This calls the routing directly, which is what any other consumer —
+       * including the reconciliation below — would do.
+       */
+      const { mission, audit } = await packetInTheWrongLayer();
+      const discovery = await fixture.layerByName('Discovery Logic');
+
+      const routed = await routeAuditedDocument({ auditId: audit.id });
+      expect(routed.ok).toBe(true);
+      expect((await getMission(mission.id))!.layerId).toBe(discovery.id);
+    });
+
+    it('repairs a mission that already wrote back against the round before it', async () => {
+      /*
+       * This is the one starting state the current build cannot produce, and
+       * arranging it is therefore the honest thing rather than the shortcut the
+       * rest of this file avoids: the rows exist because an *older* build wrote
+       * them, and the reconciliation exists for exactly those rows. What is
+       * arranged is precisely what production has — a written-back mission
+       * whose links name the superseded round, and knowledge derived from them.
+       */
+      const owner = await createUser({
+        email: 'reconcile-owner@example.test',
+        displayName: 'The owner',
+        password: 'a-long-enough-password',
+        isBrainAdmin: false,
+      });
+      const conversation = await createConversation({
+        ownerUserId: owner.id,
+        title: 'County assessment rolls',
+        projectId: fixture.project.id,
+        visibility: 'PRIVATE',
+      });
+      const { orchestration, mission, audit: roundOne } = await packetInTheWrongLayer({
+        conversationId: conversation.id,
+      });
+      const worldModel = await fixture.layerByName('World Model');
+      await tick('test-owner');
+      const { audit: roundTwo, discovery } = await passRoundTwo(orchestration.id);
+      await tick('test-owner');
+
+      const finished = (await getMission(mission.id))!;
+      const knowledgeBefore = await knowledgeForMission(mission.id);
+      const turnsBefore = await listTurns(conversation.id);
+      expect(knowledgeBefore.length).toBeGreaterThan(0);
+
+      // Wind the links back to what the older build left, projection included.
+      await linkMission({
+        missionId: mission.id,
+        auditId: roundOne.id,
+        layerId: worldModel.id,
+      });
+      for (const row of knowledgeBefore) {
+        await reanchorKnowledge({
+          knowledgeId: row.id,
+          layerId: worldModel.id,
+          provenance: { ...row.provenance, auditId: roundOne.id },
+        });
+      }
+
+      const report = await tick('test-owner');
+
+      expect(report.linksReconciled.map((entry) => entry.missionId)).toContain(mission.id);
+      const corrected = (await getMission(mission.id))!;
+      expect(corrected.auditId).toBe(roundTwo.id);
+      expect(corrected.layerId).toBe(discovery.id);
+      expect(corrected.documentId).toBe(finished.documentId);
+
+      // The projection is corrected in place: same rows, same ids, no second
+      // conclusion and no second thing for a person to read.
+      const knowledgeAfter = await knowledgeForMission(mission.id);
+      expect(knowledgeAfter.map((row) => row.id)).toEqual(knowledgeBefore.map((row) => row.id));
+      for (const row of knowledgeAfter) {
+        expect(row.layerId).toBe(discovery.id);
+        expect(row.provenance['auditId']).toBe(roundTwo.id);
+        expect(row.supersededById).toBeNull();
+      }
+      expect((await listTurns(conversation.id)).map((turn) => turn.id)).toEqual(
+        turnsBefore.map((turn) => turn.id),
+      );
+
+      // Nothing is re-run and nothing is written back twice.
+      expect(corrected.writebackAt).toBe(finished.writebackAt);
+      expect(
+        (await listEvents(fixture.project.id, 300)).filter(
+          (event) => event.eventType === 'RUSSELL_MISSION_WRITEBACK',
+        ),
+      ).toHaveLength(1);
+
+      // Both audits are still there, and the correction says what it did.
+      const audits = await listAuditsByProject(fixture.project.id);
+      expect(audits.map((entry) => entry.id)).toEqual(
+        expect.arrayContaining([roundOne.id, roundTwo.id]),
+      );
+      const reconciled = (await listEvents(fixture.project.id, 300)).filter(
+        (event) => event.eventType === 'RUSSELL_LINKS_RECONCILED',
+      );
+      expect(reconciled).toHaveLength(1);
+      const corrections = reconciled[0]!.payload['corrections'] as {
+        field: string;
+        from: string | null;
+        to: string;
+      }[];
+      expect(corrections.map((entry) => entry.field).sort()).toEqual(['auditId', 'layerId']);
+      expect(corrections.find((entry) => entry.field === 'auditId')).toMatchObject({
+        from: roundOne.id,
+        to: roundTwo.id,
+      });
+
+      // Idempotent by the state it produces: nothing left to select.
+      const second = await tick('test-owner');
+      expect(second.linksReconciled).toHaveLength(0);
+      expect(
+        (await listEvents(fixture.project.id, 300)).filter(
+          (event) => event.eventType === 'RUSSELL_LINKS_RECONCILED',
+        ),
+      ).toHaveLength(1);
+      expect(await reconcileCompletedMission(mission.id)).toMatchObject({
+        ok: true,
+        refusal: 'ALREADY_CURRENT',
+      });
+    });
+
+    it('refuses to repoint at nothing while a re-opened round is unfinished', async () => {
+      /*
+       * Between the handoff and round two's judge the mission's audit is stale
+       * and there is no replacement. Blanking it would leave a filed conclusion
+       * citing no verdict at all, which is worse than the stale citation, so
+       * this stops and says which case it is — and says it every tick, because
+       * a round that never finishes is a fact somebody would want.
+       */
+      const { mission, audit: roundOne } = await packetInTheWrongLayer();
+      await tick('test-owner');
+      await linkMission({ missionId: mission.id, auditId: roundOne.id });
+
+      const outcome = await reconcileCompletedMission(mission.id);
+      expect(outcome.ok).toBe(false);
+      expect(outcome.refusal).toBe('NO_CURRENT_ROUND_AUDIT');
+      expect((await getMission(mission.id))!.auditId).toBe(roundOne.id);
+    });
   });
 
   /*
