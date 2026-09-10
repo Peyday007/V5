@@ -1641,6 +1641,10 @@ data/                   database, documents, backups, runtime state (gitignored)
 - `import type` for type-only imports (`verbatimModuleSyntax` is on).
 - `strict` and `noUncheckedIndexedAccess` are on.
 - SQLite parameters are positional `?` only, so both drivers behave identically.
+- **An `ORDER BY` must be sayable in both dialects.** Postgres refuses an
+  expression that is not in the select list of a `SELECT DISTINCT`, so name the
+  aggregate and order by the alias — `SELECT DISTINCT … ORDER BY MAX(x)` passes
+  the SQLite suite and throws on the database production runs.
 - Booleans are `0`/`1` in the database and real booleans in view types; repositories are
   the only place the two representations meet.
 - Timestamps are ISO-8601 UTC strings.

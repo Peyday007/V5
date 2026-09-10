@@ -8463,3 +8463,24 @@ such — it simply no longer spends the budget of the rows that can be settled.
 `tests/step12aClosure.test.ts` pins it with a page smaller than the backlog, and
 asserts the backlog is still there and still unattributed afterwards. Reverting
 either half fails it.
+
+### The ordering that compiled and did not run — 2026-09-10
+
+§85's newest-first ordering passed typecheck, passed the whole SQLite suite, and
+threw six failures on Postgres:
+
+```
+  SELECT DISTINCT p.executor_session_ref … ORDER BY MAX(p.started_at) DESC
+```
+
+Postgres refuses an `ORDER BY` expression that is not in the select list of a
+`SELECT DISTINCT`. `GROUP BY` already did what the `DISTINCT` was there for, so
+the fix is to drop it, name the aggregate in the select list, and order by the
+alias — one statement meaning the same thing on both backends.
+
+It is worth recording because of *when* it was caught. The full Postgres suite
+had been green forty minutes earlier, on the tree before this change; the SQLite
+suite was green on the tree after it. Only running the second backend against
+the *changed* tree found it, which is the whole reason `CLAUDE.md` asks for both
+— and the deploy carrying it was cancelled mid-flight rather than allowed to put
+a query that throws every ten seconds onto the database production runs.
