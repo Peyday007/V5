@@ -1397,8 +1397,8 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
  * has a packet of its own to protect; the drain has none yet.
  *
  * Cancelled rather than deleted: `project_events` records what happened to
- * them, and the operator console stops offering an approve button for a packet
- * nobody should approve.
+ * them, and Needs You stops offering an approve choice for a packet nobody
+ * should approve.
  */
 async function retireEarlierPackets(fixtures: Fixtures, keepId?: string): Promise<void> {
   const older = (await listOrchestrationsByProject(fixtures.scope.id)).filter(

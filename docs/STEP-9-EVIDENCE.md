@@ -593,9 +593,11 @@ against the deployed Brain, not from a worker's report of itself.
 | Terminal state and document survive restart/redeploy | ✅ | document written ~09:12; deploys 61, 62 and 63 each replaced and restarted the machine; read back whole at 10:10Z |
 | Closure evidence recorded | ✅ | this file, plus the fault log in `STEP-9-LOG.md` |
 
-**Where to inspect it.** `/operator` on the deployed Brain lists the packet under
-its project; the filed report is served from the document store through the
-Brain's own `/files` route. `npm run report:packet -- --orchestration
+**Where to inspect it.** *(Written during Step 9. The operator console it names
+was removed in §26; the packet is `npm run admin -- packets list <project>`
+now, and Russell's Work surface shows the same thing to a person.)* The filed
+report is served from the document store through the Brain's own `/files`
+route. `npm run report:packet -- --orchestration
 orc_f4850ad197474c22b5ea` prints every row above, and the **Packet report**
 workflow runs the same thing against production without a terminal.
 

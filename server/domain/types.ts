@@ -2818,10 +2818,13 @@ export const CONNECTOR_SCOPES: readonly WorkerScope[] = [
  * whole of "keeps its own records current" is one scope, so there is no
  * combination of these two that could be ticked wrongly.
  *
- * The operator console composes `CONNECTOR_SCOPES` and offers no picker, for
- * the reason recorded there. A site connector's membership is granted through
- * the administration API's explicit scope list instead, which is the case that
- * comment says has not come up yet. This is it.
+ * Nothing composes these two sets from a picker, and there is no screen that
+ * asks which. A site's membership is written from this constant by
+ * `services/connect/sites.ts` when somebody connects it in Russell; a research
+ * worker's is written from `CONNECTOR_SCOPES` by `npm run admin`. The console
+ * that once offered the choice was removed for exactly this reason: the wrong
+ * answer fails *silently*, because a site holding the research set is refused
+ * by every connector route with the same 404 a missing project gives.
  */
 export const SITE_CONNECTOR_SCOPES: readonly WorkerScope[] = [
   'project:read',

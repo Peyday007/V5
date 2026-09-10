@@ -155,6 +155,9 @@ There must be no workflow where the user has to remember "now go update the data
     not measured.
 34. No scope asserted about a subject that no row and no question stated —
     a jurisdiction is read from the record, and not knowing it is an answer.
+35. No administration page: a decision a person makes belongs on the surface
+    they already use, and everything else is a terminal where reaching the
+    shell is the authentication.
 
 ## 8. Model prose never mutates project state.
 
@@ -606,7 +609,7 @@ the research engine passing its tests and a real job having actually run.
 
 ## 22. A worker signs in. It does not hold a pasted key.
 
-Step 8 (`server/routes/oauth.ts`, `server/routes/operator.ts`,
+Step 8 (`server/routes/oauth.ts`, `server/routes/pages.ts`,
 `docs/workers/`) connects the first real Claude worker, and the shape of it was
 decided by one fact about the outside world: **Claude's custom connector has no
 field for a static `Authorization` header.** Its only authentication affordance
@@ -646,25 +649,17 @@ however correct its bearer design is.
   client credentials optional, so a client given neither must be able to
   register itself. A registered client cannot read, call a tool, or obtain a
   token without a human approving it in a browser.
-- **The operator console is server-rendered and has no JavaScript.** It is the
-  surface you need when the client bundle is broken or access has to be
-  repaired, so it must not depend on the front-end having built. It exposes no
-  operation an administrator could not already perform.
-- **It has three answers, not two.** Nobody signed in gets a sign-in form, which
-  discloses nothing — the Brain already serves one at its root to the whole
-  internet. Somebody who *is* signed in and may not be here gets **404**, because
-  that is the case worth hiding: a caller who has already proved they are not an
-  administrator learns nothing about whether the path is anything. A bearer token
-  is refused in all three, since a machine reaching the screen that grants
-  credentials would be a machine widening its own access. The first version
-  answered 404 to both of the last two, which also told an administrator with an
-  expired session that the console did not exist — a control indistinguishable
-  from a broken deployment costs more than it saves.
+- **The operator console was server-rendered and had no JavaScript, and it no
+  longer exists.** Its argument was that it is the surface you need when the
+  client bundle is broken or access has to be repaired — and that argument was
+  wrong in a way worth keeping rather than deleting. "It works when the bundle
+  is broken" is a reason for a **recovery** to exist; it is not a reason for the
+  recovery to be a public browser page. See §26.
 - **A worker cannot create its own work.** Enqueueing is a project write and no
   worker scope grants it, so `decideProjectAccess` refuses a worker principal
-  however its membership is configured. The console has the button instead,
+  however its membership is configured. The console had the button instead,
   because a machine that could create its own work could also create work nobody
-  asked for. The same reasoning put project creation there: the only project that
+  asked for; it is `npm run admin` now. The same reasoning put project creation there: the only project that
   existed held real research, and a test worker's first bounded run must not be
   able to write into work somebody depends on.
 
@@ -678,8 +673,9 @@ however correct its bearer design is.
   /api/russell/projects/:projectId/authority`, behind `requirePerson` and
   `decideProjectAccess` — which is a *stronger* guard than this console's
   administrator-plus-same-site pair, because a worker principal is refused there
-  by type. What stays here is the reading and the revoke: both are worth having
-  when the client bundle will not load, which is what this console is for.
+  by type. What stayed there was the reading and the revoke, on the argument
+  that both are worth having when the client bundle will not load — and §26
+  removed those too, for the reason that argument turned out to be wrong.
 
 Step 8 connects **one** worker and proves a bounded cycle. The first production
 research packet is Step 9, scheduling is Step 10, and a second worker is
@@ -1447,8 +1443,8 @@ rules.
   Routine or session.
 - **Russell is the default route; the old console is at `/legacy`.** One click
   away behind a secondary menu, not deleted and not hidden: it is still the
-  only place some operations exist. `/operator` stays server-rendered and
-  outside the bundle, for the same reason §22 gave.
+  only place some operations exist. The *operator* console was a different thing
+  and is gone entirely — see §26.
 
 **No inference is bought.** The deployed Brain has no `ANTHROPIC_API_KEY` and
 no `BRAIN_PROVIDER`, so its only permitted model path is the fixed-subscription
@@ -1561,17 +1557,22 @@ derives.**
   with a wrong answer in it, and the wrong answer is *silent*: grant a site
   `CONNECTOR_SCOPES` and every connector call is refused with the same 404 a
   missing project gives, which is invariant 23 behaving exactly as designed and
-  telling the operator nothing. So the set is chosen from
-  `SITE_CONNECTOR_SCOPES` in `services/identity/connectSite.ts`, which the
-  console and the scripted entrance both call, rather than from a picker.
-  Because the membership upsert rewrites the scopes every time, running it is a
-  repair as well as a setup. It runs inside the container through the release
-  pipeline, where `verify-hosted` and `authorize-gap-policy` already run:
-  reaching that shell is the authentication, and `--admin` is the attribution,
-  resolved against the database rather than trusted. **It never issues a
-  credential and cannot print one** — a credential is shown once, into one
-  response, to somebody signed in, and a workflow log is a log that outlives its
-  run. Invariant 22 admits no exception for a log that is convenient.
+  telling nobody anything. So the set is chosen from `SITE_CONNECTOR_SCOPES` in
+  `services/connect/sites.ts`, which is the only thing in the repository that
+  writes it, rather than from a picker. Because the membership is rewritten from
+  the constant every time, connecting is a **repair** as well as a setup — and
+  because the credential is revoked before the new one is issued, it is a
+  **rotation** too, with never more than one live secret to reason about.
+
+  **Where it runs moved twice, and both are recorded rather than quietly
+  applied.** It was three screens on the operator console. Then it was a script
+  in the release pipeline, on the argument that a constant beats a form — true,
+  and it still left the console standing as a second way to get it wrong. It is
+  now one action in Russell under **Connected sites**, behind `requirePerson`
+  and `decideProjectAccess` at `ADMIN`, which is the level every other
+  membership change already carries. A worker principal is refused by type: a
+  machine that could issue itself a site credential is precisely what §22 was
+  protecting against.
 
 - **There is no connect policy module and there must never be one.** Every route
   resolves through `requireProject`, and absent and forbidden are the same 404
@@ -1633,6 +1634,70 @@ derives.**
   of the two can tell you which.**
 
 
+## 26. An administration page is not a workflow, and Brain has none.
+
+`/operator` is gone. Not renamed, not unlinked, not kept as break-glass: the
+route, the templates, the forms, the navigation entry and the module are
+deleted, and the path is refused with the same 404 any other non-route gives —
+to an administrator exactly as to an anonymous caller. A page that answered one
+of them and not the other would be the same console with an extra step, and a
+redirect would be a working link somebody could still be told to follow.
+
+**The argument for it was wrong, and the correction is recorded rather than
+quietly applied.** §22 justified it as "the surface you need when the client
+bundle is broken or access has to be repaired". That is a reason for a
+**recovery** to exist. It is not a reason for the recovery to be a public
+browser page, and treating it as one is how a console accumulates: each new
+thing arrives because the page is already there.
+
+What decided where each piece went is one sentence: **a decision a person makes
+about their own project belongs on the surface they already use; everything
+else was internal machinery that should never have had a page.**
+
+- **Connecting a site, its credential, its status, its rotation and its way
+  out** are **Connected sites** (§25). One action. Brain makes or reuses the
+  identity, writes the fixed scope set, revokes what was there and issues one
+  secret, shown once.
+- **What Russell may spend** and **approving a plan** are **Needs you** — the
+  standing authority and `APPROVE_PLAN`, both already there.
+- **Identities, surfaces, capacity and who is on the project** are **Who**.
+- **Storage and health** are the health surface an administrator already has.
+- **Creating a project, queueing an item, starting a packet by hand, approving
+  one outside Russell, reissuing a stranded verification, retrying a fragment,
+  granting a research worker a project, disabling or archiving an identity** are
+  `npm run admin`, on a terminal. Reaching the shell is the authentication —
+  the same reasoning `verify-hosted.ts` and `authorize-gap-policy.ts` already
+  run on — and `--admin` is the attribution, resolved against the database
+  rather than trusted, because an audit row with no author answers nothing
+  later.
+
+**The guard got stronger, not weaker.** The console's gate was a Brain
+administrator plus a same-site origin. Connected sites is `requirePerson` plus
+`decideProjectAccess` at `ADMIN`, which is the level `/api/projects/:id/members`
+already carries because connecting a site *is* a membership grant. A worker
+principal is refused by type at every one of these surfaces: no membership
+configuration turns a machine into a person.
+
+**`npm run admin` cannot mint a site credential**, and that is deliberate rather
+than an omission. Connecting a site is a person's decision and the secret is
+shown once, in a browser, to somebody signed in. A terminal that could issue one
+would be the console again with fewer witnesses. It does not import
+`SITE_CONNECTOR_SCOPES` at all, and a test asserts that exactly one module in
+the repository writes that set.
+
+**Nothing that existed was destroyed.** Every worker, membership, credential
+digest, token and `identity_events` row is untouched by the removal; the console
+was a surface over repositories, and the repositories did not move.
+
+**A deleted page comes back as a link.** So the removal is tested three ways
+rather than one: the route is refused for every principal; the client contains
+no `/operator` at all; and `tests/operatorConsoleRemoved.test.ts` reads the
+repository and fails on any link or any instruction to go there. It
+deliberately *classifies* rather than bans — this file records its own
+corrections, and a sentence like "it was on the operator console, and that was
+wrong" is history worth keeping. What must not exist is somewhere to go.
+
+
 ---
 
 ## Repository map
@@ -1685,8 +1750,7 @@ server/
     importer.ts         PDF import and registration
     reconcile.ts        scan & reconcile
     identity/
-      connectSite.ts    a connected site's worker and its scope set, from a constant
-      secrets.ts        scrypt for passwords, sha-256 for generated credentials
+        secrets.ts        scrypt for passwords, sha-256 for generated credentials
       context.ts        the request's principal, and why it is also on the request
       policy.ts         roles, scopes, and the one authorization decision
       authenticate.ts   cookie or bearer -> principal, from server rows only
@@ -1713,6 +1777,7 @@ server/
       simulate.ts       a deterministic projection, structurally labelled
       profiles.ts       workload cost and activation traces, as queries
     connect/
+      sites.ts          a connected site's identity, credential and status, as one action
       contract.ts       the frozen wire contract, and nothing about it trusted
       projection.ts     the six answers, derived from rows on the read path
       service.ts        registering a site's records, and its one typed command
@@ -1789,9 +1854,8 @@ server/
     endpoint.ts         POST /mcp: auth, origin, limits, era selection
   routes/               HTTP API
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
-    russell.ts          Russell's surface: threads, briefing, work, ideas, Needs You (Step 12A)
+    russell.ts          Russell's surface: threads, briefing, work, ideas, sites, Needs You
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
-    operator.ts         the operator console: workers, access, projects, queued work
     pages.ts            shared chrome for the server-rendered pages
     guard.ts            request context, authentication, deny-by-default
     auth.ts             sign in, sign out, change a password
@@ -1800,11 +1864,12 @@ server/
     files.ts            serving a stored document through the storage layer
 client/                 React UI
   src/Root.tsx          which shell this address wants, and who is signed in
-  src/russell/          the default shell: conversation, thin views, states
+  src/russell/          the whole product: conversation, thin views, states
   src/App.tsx           the legacy console, at /legacy
 scripts/
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
+  admin.ts                  emergency administration, on a terminal rather than a page
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
   fleet.ts                  the operator's fleet surface: register, target, explain
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one

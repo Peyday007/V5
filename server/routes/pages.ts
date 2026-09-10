@@ -2,26 +2,33 @@
  * Server-rendered pages, and why there are any.
  *
  * Brain's product UI is the React client. These pages are not part of it, and
- * the separation is deliberate: they are the **operator console** — the screens
- * you need in order to set up access, or to get access back when something is
- * wrong.
+ * the separation is deliberate: what is left here is the **OAuth consent
+ * screen** — the one page a person must be able to reach in a browser that is
+ * not the client, because it is where they approve a connector.
+ *
+ * There used to be an operator console here too, and there is not now: every
+ * decision on it either moved to the surface a person already uses (Connected
+ * sites, Needs you, Who) or turned out to be internal machinery, which lives
+ * at `npm run admin` where reaching the shell is the authentication.
  *
  * Two properties follow from that, and both are the reason not to build these
  * into the SPA:
  *
- *   * **They must work when the client bundle does not.** A failed `vite build`,
- *     a broken deploy of the front-end, or a browser that cannot run the bundle
- *     must not be able to lock an administrator out of worker administration.
- *     These pages are plain HTML from the server with no JavaScript at all.
+ *   * **A consent screen has to be server-rendered.** It is a page an external
+ *     client redirects a browser to, mid-flow, before any application session
+ *     exists in the SPA's sense. That is the whole reason this file exists.
  *
- *   * **They are the OAuth consent screen's neighbours.** A consent screen has
- *     to be server-rendered — it is a page an external client redirects a
- *     browser to, mid-flow, before any application session exists in the SPA's
- *     sense. Once one such page exists, the administration screens that grant
- *     the thing being consented to belong beside it, looking the same.
+ *   * **It must work when the client bundle does not.** A failed `vite build`
+ *     or a broken front-end deploy must not break the flow by which a worker is
+ *     connected. These pages are plain HTML from the server with no JavaScript
+ *     at all.
  *
- * Nothing here reads or writes project research. It is identity and access
- * only.
+ * The second property used to be an argument for keeping administration screens
+ * here too, and it was a bad one: "works when the bundle is broken" is a reason
+ * for a *recovery* to exist, not a reason for it to be a public page. The
+ * recovery is a terminal now.
+ *
+ * Nothing here reads or writes project research. It is consent only.
  */
 
 /** Everything interpolated into a page goes through this. No exceptions. */

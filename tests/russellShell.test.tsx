@@ -432,16 +432,33 @@ describe('opening Brain', () => {
     expect(optionNames).not.toContain(button.textContent);
   });
 
-  it('offers the operator console only to a Brain administrator', async () => {
-    baseRoutes({
-      'GET /api/auth/session': { body: { authenticated: true, user: { ...USER, isBrainAdmin: false } } },
-    });
+  /*
+   * The console is gone, so no menu offers it — to an administrator or to
+   * anybody else. A link nobody can follow is still a link somebody can be
+   * told to follow, and the point of removing the page was that it stopped
+   * being part of the workflow rather than that it got harder to reach.
+   */
+  it('offers the operator console to nobody, administrator or not', async () => {
+    for (const isBrainAdmin of [true, false]) {
+      baseRoutes({
+        'GET /api/auth/session': { body: { authenticated: true, user: { ...USER, isBrainAdmin } } },
+      });
+      cleanup();
+      await mount();
+      await waitFor(() => expect(screen.getByRole('button', { name: 'More' })).toBeTruthy());
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'More' }));
+      });
+      expect(screen.queryByRole('menuitem', { name: /operator/i })).toBeNull();
+      expect(document.querySelector('a[href="/operator"]')).toBeNull();
+    }
+  });
+
+  it('offers Connected sites as an ordinary section', async () => {
     await mount();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'More' })).toBeTruthy());
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'More' }));
-    });
-    expect(screen.queryByRole('menuitem', { name: 'Operator console' })).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Connected sites' })).toBeTruthy(),
+    );
   });
 });
 

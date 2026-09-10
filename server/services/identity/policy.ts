@@ -248,6 +248,19 @@ const OVERRIDES: Override[] = [
   { pattern: /^\/api\/russell\/projects\/[^/]+\/coverage$/, method: 'POST', level: 'READ' },
   { pattern: /^\/api\/russell\/conversations$/, method: 'POST', level: 'READ' },
 
+  // Connecting a site is a membership grant, so it is stated at the level every
+  // other membership change already carries rather than inherited from the
+  // method. `/api/projects/:id/members` is ADMIN above for the identical
+  // reason: it changes who may reach the project, which is a different kind of
+  // act from changing what the project contains.
+  //
+  // No `scope` on any of them, which is what makes a worker principal unable to
+  // do this at all — a machine that could issue itself a site credential is
+  // precisely what §22 was protecting against. The routes refuse a worker by
+  // type as well; this is the same answer said in the module that decides.
+  { pattern: /^\/api\/russell\/projects\/[^/]+\/sites\/[^/]+\/(connect|disconnect)$/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/russell\/projects\/[^/]+\/sites/, method: 'GET', level: 'READ' },
+
   // ---------------------------------------------------------------------
   // Step 12C — a connected site
   // ---------------------------------------------------------------------

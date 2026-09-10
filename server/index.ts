@@ -39,7 +39,6 @@ import { accessGate, accessGateConfig, describeAccessGate, AccessGateError, type
 import { requestContext, requireAuthentication } from './routes/guard.ts';
 import { MCP_PATH, mcpRouter } from './mcp/endpoint.ts';
 import { OAUTH_BASE, oauthRouter, wellKnownRouter } from './routes/oauth.ts';
-import { OPERATOR_BASE, operatorRouter } from './routes/operator.ts';
 import { authRouter } from './routes/auth.ts';
 import { bootstrapFirstAdmin, hasAnyAccount } from './services/identity/bootstrap.ts';
 import { writeProjectState } from './services/runtimeState.ts';
@@ -104,9 +103,7 @@ function isServerPath(requestPath: string): boolean {
     requestPath === '/mcp' ||
     requestPath.startsWith('/mcp/') ||
     requestPath.startsWith('/oauth/') ||
-    requestPath.startsWith('/.well-known/') ||
-    requestPath === '/operator' ||
-    requestPath.startsWith('/operator/')
+    requestPath.startsWith('/.well-known/')
   );
 }
 
@@ -166,15 +163,28 @@ function buildApp(gate: AccessGateConfig): Express {
     oauthRouter(),
   );
 
-  // The operator console. Behind its own Brain-administrator check, and
-  // deliberately server-rendered: it is the surface you need when the client
-  // bundle is broken or access has to be repaired, so it must not depend on
-  // the front-end having built.
-  app.use(
-    OPERATOR_BASE,
-    express.urlencoded({ extended: false, limit: '64kb' }),
-    operatorRouter(),
-  );
+  /*
+   * `/operator` is gone, and is refused here rather than left to the SPA.
+   *
+   * The console was a browser page for the inside of the Brain, and every
+   * legitimate thing on it now has a home: connecting a site, its credential
+   * and its status are in Russell under Connected sites; what Russell may
+   * spend and whether to approve a plan are in Needs You; identities and
+   * capacity are in Who; the machinery and the recoveries are
+   * `npm run admin`, on a terminal where reaching the shell is the
+   * authentication.
+   *
+   * It is refused *identically to any other path that is not a route*, for
+   * everybody, signed in or not. A page that answered differently to an
+   * administrator would be the console again with an extra step, and a
+   * redirect would be a working link somebody could still be told to follow.
+   * Without this line the SPA fallback would serve the client bundle here,
+   * which is a 200 and a Russell shell — not a console, but not an honest
+   * answer either.
+   */
+  app.use(['/operator', '/operator/*'], (_req, res) => {
+    res.status(404).type('application/json').send({ error: 'Not found.' });
+  });
 
   // Prompts and pasted audit text are large; uploads go through multer instead.
   app.use(express.json({ limit: '10mb' }));

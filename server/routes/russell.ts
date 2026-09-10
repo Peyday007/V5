@@ -65,6 +65,15 @@ import {
   RESEARCH_WORK,
 } from '../services/russell/authority.ts';
 import { createGoal, getGoal, revokeGoal } from '../repos/russellAuthority.ts';
+import { getUser } from '../repos/identity.ts';
+import {
+  connectSite,
+  disconnectSite,
+  isKnownSite,
+  listConnectedSites,
+  siteFor,
+  siteStatus,
+} from '../services/connect/sites.ts';
 import { recordEvent } from '../repos/events.ts';
 import {
   badRequest,
@@ -914,6 +923,126 @@ russellRouter.post(
 
     const coverage = await coverBeforeWork({ projectId: project.id, layerId, requirements });
     return { coverage, explanation: explainCoverage(coverage) };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Connected sites
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The address this person is looking at, offered back to them as the value the
+ * site should hold.
+ *
+ * §18 says a request never *chooses* a location, and this does not: nothing
+ * reads it back, no storage key is built from it, and no decision anywhere
+ * depends on it. It is the suggestion a person would otherwise copy out of
+ * their own address bar, which is exactly the value they need and exactly the
+ * one this request already proves they can reach.
+ */
+function brainUrlFrom(req: { protocol: string; get(name: string): string | undefined }): string | null {
+  const host = req.get('host');
+  if (!host) return null;
+  const scheme = req.get('x-forwarded-proto')?.split(',')[0]?.trim() || req.protocol;
+  if (scheme !== 'http' && scheme !== 'https') return null;
+  return `${scheme}://${host}`;
+}
+
+/** A site this Brain knows, or the same 404 an unknown route gives. */
+function requireSite(req: { params: Record<string, string> }) {
+  const raw = req.params['site'] ?? '';
+  if (!isKnownSite(raw)) throw notFound('No site with that name.');
+  return siteFor(raw);
+}
+
+/**
+ * The person acting, as a row rather than as a principal.
+ *
+ * Everything below attributes an identity change to somebody, and an audit row
+ * with no author answers nothing later. The id comes from the authenticated
+ * principal and from no field.
+ */
+async function actingPerson() {
+  const principal = requirePerson();
+  const user = await getUser(principal.id);
+  if (!user || user.disabledAt) throw notFound('No such route.');
+  return user;
+}
+
+/**
+ * What every site Brain knows is doing on this project.
+ *
+ * `requirePerson` on the read as well as the writes, for the reason the
+ * authority read gives: this enumerates identities and says what each one may
+ * reach, and neither is a machine's business.
+ */
+russellRouter.get(
+  '/projects/:projectId/sites',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { sites: await listConnectedSites(project.id) };
+  }),
+);
+
+russellRouter.get(
+  '/projects/:projectId/sites/:site',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const site = requireSite(req);
+    return await siteStatus(project.id, site.system);
+  }),
+);
+
+/**
+ * Connect it, or rotate what it holds. One action, and the same one.
+ *
+ * There is no worker to name, no scope to choose and no project to pick: the
+ * site is the one in the path, the project is the one being connected, and the
+ * scope set is a constant. That is the whole point — the choice this replaced
+ * had a wrong answer that failed silently, and a decision already settled is
+ * not a decision to put in front of somebody.
+ *
+ * The response carries the credential once. It is not stored in a form it can
+ * be recovered from, does not appear in the identity event, and is not in any
+ * later read of this route.
+ */
+russellRouter.post(
+  '/projects/:projectId/sites/:site/connect',
+  handler(async (req) => {
+    const actor = await actingPerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const site = requireSite(req);
+    return await connectSite({
+      projectId: project.id,
+      system: site.system,
+      actor,
+      brainUrl: brainUrlFrom(req as never),
+    });
+  }),
+);
+
+/**
+ * Take it away.
+ *
+ * Revoking rather than deleting: the worker, the membership, every credential
+ * digest and every record the site delivered all keep their rows. What changes
+ * is that nothing it presents authenticates.
+ */
+russellRouter.post(
+  '/projects/:projectId/sites/:site/disconnect',
+  handler(async (req) => {
+    const actor = await actingPerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const site = requireSite(req);
+    const body = bodyOf(req);
+    return await disconnectSite({
+      projectId: project.id,
+      system: site.system,
+      actor,
+      reason: nullableString(body['reason'], 'reason') ?? null,
+    });
   }),
 );
 

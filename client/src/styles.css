@@ -2819,3 +2819,104 @@ legend {
 .rs-briefing-more[open] > summary {
   margin-bottom: 4px;
 }
+
+/* --------------------------------------------------------------------------
+   Connected sites
+
+   A site is a window onto Brain, and this is where a person opens or closes
+   one. The state badge is the only colour: five answers, and the two that mean
+   "somebody has to do something" are the two that are not green.
+   -------------------------------------------------------------------------- */
+
+.rs-sites h2 {
+  margin: 0 0 4px;
+}
+
+.rs-site {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+}
+
+.rs-site h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.rs-site-head {
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.rs-site p {
+  margin: 6px 0;
+}
+
+.rs-site-connected {
+  background: var(--ok-bg, #123a22);
+  color: var(--ok-fg, #7ee2a8);
+}
+
+.rs-site-awaiting_first_call,
+.rs-site-needs_repair {
+  background: var(--warn-bg, #3a2f12);
+  color: var(--warn-fg, #e8c46a);
+}
+
+.rs-site-disconnected,
+.rs-site-not_connected {
+  background: var(--bg-3, #23262b);
+  color: var(--fg-2, #a9b0ba);
+}
+
+/* The one-time secret. Deliberately loud: it is on screen once, and a person
+   who scrolls past it has lost it. */
+.rs-site-secret {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--warn-fg, #e8c46a);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+}
+
+.rs-site-secret h4 {
+  margin: 0 0 6px;
+}
+
+.rs-site-vars {
+  margin: 10px 0;
+}
+
+.rs-site-vars > div {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.rs-site-vars dt {
+  min-width: 180px;
+  font-weight: 600;
+}
+
+.rs-site-vars dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.rs-secret {
+  user-select: all;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-3, #23262b);
+}
+
+@media (max-width: 640px) {
+  .rs-site-vars > div {
+    flex-direction: column;
+    gap: 2px;
+  }
+}

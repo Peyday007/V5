@@ -28,6 +28,7 @@ import {
   IdeasView,
   KnowledgeView,
   NeedsYouView,
+  SitesView,
   ProgressLine,
   WhoView,
   WorkView,
@@ -40,6 +41,7 @@ const SECTIONS = [
   { name: 'PROJECTS' as const, label: 'Ideas' },
   { name: 'KNOWLEDGE' as const, label: 'Knows' },
   { name: 'FLEET' as const, label: 'Who' },
+  { name: 'SITES' as const, label: 'Connected sites' },
   { name: 'NEEDS_YOU' as const, label: 'Needs you' },
 ];
 
@@ -243,15 +245,6 @@ export function RussellShell({
                   Full console
                 </button>
               </li>
-              {user.isBrainAdmin ? (
-                <li role="none">
-                  {/* Server-rendered and outside the client bundle on purpose:
-                      it is the surface you need when the bundle is broken. */}
-                  <a role="menuitem" href="/operator">
-                    Operator console
-                  </a>
-                </li>
-              ) : null}
               <li role="none">
                 <button type="button" role="menuitem" onClick={signOut}>
                   Sign out ({user.displayName})
@@ -304,6 +297,7 @@ export function RussellShell({
             <FleetView />
           </>
         ) : null}
+        {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
         {route.name === 'NEEDS_YOU' ? (
           <NeedsYouView projectId={projectId} onAnswered={needsYou.reload} />
         ) : null}

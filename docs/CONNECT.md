@@ -175,78 +175,43 @@ reading that stops it becoming a surprise.
 
 ## 6. Connecting a site
 
-Three steps, and only one of them genuinely needs a person.
+**One action, in Russell, under *Connected sites*.** Press **Connect Deal
+Dispatch**. Brain makes or reuses the site's worker, writes the membership from
+`SITE_CONNECTOR_SCOPES`, revokes whatever it held before, issues exactly one
+credential, and shows it once.
 
-1. **Create the worker.** `/operator` → *Workers* → create one named for the
-   site.
-2. **Grant it the project, as a site.** On that worker's row, pick the project
-   and choose **is a connected site**. The Brain composes
-   `SITE_CONNECTOR_SCOPES` — `project:read` and `external:sync`, and nothing
-   else. (Choosing *researches for Brain* would grant the research set, whose
-   calls this endpoint refuses with the same 404 a missing project gives.)
-3. **Issue a credential** on the same row and copy it. It is shown once and is
-   not recoverable afterwards by anyone, including an administrator.
+There is no worker to name, no scope to choose and no project to pick, and that
+is the point rather than a convenience. It used to be three screens on an
+operator console, and the middle one asked which of two jobs the worker did —
+a choice whose wrong answer fails **silently**, because a site granted the
+research set is refused by every connector route with the same 404 a missing
+project gives. A decision already settled is not a decision to put in front of
+somebody, and a decision whose wrong answer is indistinguishable from a broken
+deployment is not one to offer at all.
 
-Steps 1 and 2 are ordinary rows, and the choice inside step 2 is the one thing
-here with a wrong answer in it — a wrong answer that is *silent*, because the
-refusal it causes is indistinguishable from a project that does not exist. So
-they can be made from a constant instead of from a form:
+The same button repairs and rotates. `connectSite` rewrites the scopes from the
+constant every time, so a membership that drifted is fixed by pressing it; and
+it revokes before it issues, so there is never more than one live credential —
+rotating because you believe one is compromised must not leave it working.
 
-```
-npm run connect:site -- --project prj_… --admin someone@example.com
-npm run connect:site -- --project prj_… --check     # reads, writes nothing
-```
+**Disconnecting revokes; it does not delete.** The worker keeps its row, the
+membership is marked revoked, every credential keeps its digest and its history,
+and every record the site delivered stays exactly where it is. What changes is
+that nothing it presents authenticates.
 
-`services/identity/connectSite.ts` holds the rule and the console calls the same
-repositories with the same set, so the two entrances cannot disagree. It is
-idempotent, and because the membership upsert rewrites the scopes every time it
-is a **repair** as well as a setup: a site granted the research set by hand is
-fixed by running it.
+### The one manual step
 
-Against a deployed Brain there is a workflow for it — *Connect a site* — which
-runs the same script inside the container through `flyctl ssh`, the way
-`verify-hosted` and `authorize-gap-policy` already do. Reaching that shell is the
-authentication; `--admin` is the attribution, resolved against the database
-rather than trusted, because an audit row with no author answers nothing later.
-
-One thing about that workflow is worth writing down because it is not a
-property of this repository at all: **GitHub registers a `workflow_dispatch`
-workflow from the default branch**, so a new one is not dispatchable from a
-feature branch until it has landed on the default one, whatever ref you ask for.
-A mechanism nothing can call is not a mechanism, so the preparation also runs
-from **`Deploy`**, which is registered already, already checks the branch out
-and already has the shell:
+Brain holds no authorization to the site's deployment, so it cannot install the
+credential itself. That transfer is the only thing left for a person, and the
+card names all three values with two of them already filled in:
 
 ```
-Deploy → connect_site_project: <project id or slug>
-         connect_site_admin:   <administrator email>
-         connect_site_name:    deal-dispatch
+BRAIN_URL         https://<your brain>          (offered, from the address you are on)
+BRAIN_TOKEN       <shown once, on the card>
+BRAIN_PROJECT_ID  prj_…                         (offered, the project you connected)
 ```
 
-It runs after the restart, so what it writes is written against the image that
-is actually serving, and it is skipped on every deploy that does not name a
-project.
-
-Neither path removes the console from the story, so it is worth recording what
-makes the wrong scope set *detectable* rather than merely avoidable: the site's
-health check says `Connected … — it answered` only when the credential actually
-authorizes a read, so a site granted the research set reports `it did not
-answer` instead of appearing fine.
-
-**Neither the script nor the workflow issues a credential, and neither can print
-one.** That is the contract rather than caution. A credential is shown once,
-into one response, to somebody signed in; a workflow log is a log that outlives
-its run, and invariant 22 admits no exception for a log that is convenient. So
-step 3 stays in the browser, and what the script removes from the person's job is
-step 2 — the part that could be done wrongly.
-
-Then set three variables on the site and redeploy it:
-
-```
-BRAIN_URL=https://<your brain>
-BRAIN_TOKEN=<the credential from step 3>
-BRAIN_PROJECT_ID=prj_…
-```
+Then redeploy the site.
 
 All three or none: with any missing the connector is off, the panel says the
 site is not connected, no job is enqueued and nothing on the site changes.

@@ -43,18 +43,6 @@ on:
         description: 'Optional: administrator email the authorization is recorded against'
         required: false
         default: ''
-      connect_site_project:
-        description: 'Optional: project id or slug to prepare a connected site on'
-        required: false
-        default: ''
-      connect_site_admin:
-        description: 'Optional: administrator email the site grant is recorded against'
-        required: false
-        default: ''
-      connect_site_name:
-        description: 'Optional: canonical worker name for the connected site'
-        required: false
-        default: 'deal-dispatch'
 
 # Two deploys of one app at once is a race whose loser is whichever image
 # finishes second. The second run waits rather than being cancelled: a deploy
@@ -433,62 +421,6 @@ jobs:
             2>&1 | tee gap-policy.txt
           set -e
           grep -q '^GAP-POLICY: OK' gap-policy.txt
-
-      # -------------------------------------------------------------------
-      # A connected site's identity, made with the release that carries it
-      # -------------------------------------------------------------------
-      #
-      # A site needs a worker and a membership carrying SITE_CONNECTOR_SCOPES
-      # before its credential means anything, and the scope set is the part with
-      # a wrong answer in it — a site granted the research set is refused by
-      # every connector route with the same 404 a missing project gives, which
-      # is invariant 23 behaving exactly as designed and telling nobody
-      # anything. So it is made from the constant rather than from a picker.
-      #
-      # It lives here rather than in a workflow of its own for a reason that is
-      # not about this repository at all: GitHub registers a workflow_dispatch
-      # workflow from the *default* branch, so a new one is not dispatchable
-      # from a feature branch however the ref is named. This one is already
-      # registered, and it already checks the branch out and already has the
-      # shell.
-      #
-      # It runs after the restart, so what it writes is written against the
-      # image that is actually serving. Skipped on every deploy that does not
-      # name a project, which is all of them but the one. Idempotent: repeating
-      # it reports what exists and rewrites the scopes to the site set, which
-      # makes it a repair as well as a setup.
-      #
-      # **It issues no credential and can print none.** That still belongs in a
-      # browser, to somebody signed in, once — a workflow log is a log that
-      # outlives its run.
-      - name: Prepare a connected site
-        if: always() && steps.release.outcome == 'success' && inputs.connect_site_project != '' && inputs.connect_site_admin != ''
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: |
-          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
-          # Read first, always. When the write refuses — an address that is not
-          # an administrator of this Brain is the likely way — the log still
-          # says which project this is and what the site already has, rather
-          # than only saying no.
-          flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/connect-site.sh --project ${{ inputs.connect_site_project }} --site ${{ inputs.connect_site_name }} --check" \
-            2>&1 || true
-          set +e
-          flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/connect-site.sh --project ${{ inputs.connect_site_project }} --site ${{ inputs.connect_site_name }} --admin ${{ inputs.connect_site_admin }}" \
-            2>&1 | tee connect-site.txt
-          set -e
-          if grep -q '^CONNECT-SITE: OK' connect-site.txt; then
-            echo "::notice::The site's worker and grant are in place. Issue its credential at https://$app.fly.dev/operator — that part is a browser and a person, once."
-            exit 0
-          fi
-          if ! grep -q '^CONNECT-SITE:' connect-site.txt; then
-            echo "::error::The preparation never ran. If the output above says the SSH connection failed, the Fly token cannot open a console on this app; the deployment itself is unaffected."
-            exit 1
-          fi
-          echo "::error::The preparation refused. The reason is above; the deployment itself is unaffected."
-          exit 1
 
       # The release is asked about first, and separately.
       #

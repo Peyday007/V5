@@ -388,10 +388,10 @@ describe('a project view is behind the project gate', () => {
 
 describe('the authority decision is a person’s, on Russell’s surface', () => {
   /*
-   * It was on the operator console. §22 puts buttons there so a *machine*
-   * cannot create its own work, and applying that to the person who owns the
-   * project sent their own decision into an administration surface 12A had
-   * already taken off the normal route.
+   * It was on the operator console, which no longer exists. §22 put buttons
+   * there so a *machine* could not create its own work, and applying that to
+   * the person who owns the project sent their own decision into an
+   * administration surface 12A had already taken off the normal route.
    *
    * `russellAuthoritySurface.test.ts` proves what it does. What is proven here
    * is the half only a booted server can show: that the surface moved and the
@@ -435,14 +435,16 @@ describe('the authority decision is a person’s, on Russell’s surface', () =>
     }
   });
 
-  it('no longer offers a way to create one on the operator console', async () => {
-    // The console keeps the reading and the break-glass revoke; creating a
-    // grant is Russell's. A second way to make one would be a second place for
-    // the limits to be set differently.
-    const console_ = await call<string>('GET', '/operator', { cookie: adminCookie });
-    expect(console_.status).toBe(200);
-    expect(String(console_.body)).toMatch(/Granting one happens in Russell/i);
-    expect(String(console_.body)).not.toMatch(/action="\/operator\/authority"/);
+  it('has nowhere else to make one, because the console it came from is gone', async () => {
+    // A second way to make a grant would be a second place for the limits to be
+    // set differently. The console used to keep a reading and a revoke; now it
+    // keeps nothing, because it is not there.
+    const gone = await call<string>('GET', '/operator', { cookie: adminCookie });
+    expect(gone.status).toBe(404);
+    expect(String(gone.body)).not.toMatch(/authority/i);
+
+    const post = await call('POST', '/operator/authority/revoke', { cookie: adminCookie });
+    expect(post.status).toBe(404);
   });
 });
 

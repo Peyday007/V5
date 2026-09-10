@@ -1137,7 +1137,7 @@ async function main(): Promise<void> {
      *
      * This is deliberately thin. It does not plan anything, decompose
      * anything, or decide what to research: it calls `startPacket`, which is
-     * the same function the operator console calls, and then creates a bin
+     * the same function `npm run admin` calls, and then creates a bin
      * pointing at what that returned. There is no second orchestration system
      * here and there must never be one — if this file ever starts making
      * research decisions, the thing it is testing has been replaced by a

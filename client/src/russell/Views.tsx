@@ -14,6 +14,7 @@ import { Constellation } from './Constellation.tsx';
 import { freshnessLabel, listState, readingState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { RussellApi } from '../lib/russellApi.ts';
+import type { ConnectSiteResult, SiteConnectionState } from '../lib/russellApi.ts';
 import type {
   CandidatePriority,
   IdeaNode,
@@ -707,6 +708,235 @@ export function FleetView(): JSX.Element {
  * - **Pretend.** No optimistic update: the panel re-reads, so what a person
  *   sees afterwards is what was stored.
  */
+/* --------------------------------------------------------------------------
+ * Connected sites
+ * ------------------------------------------------------------------------ */
+
+/** The word a person reads for each state. One mapping, and it is not the enum. */
+const SITE_STATE_LABEL: Record<SiteConnectionState, string> = {
+  NOT_CONNECTED: 'Not connected',
+  AWAITING_FIRST_CALL: 'Ready — waiting for the site',
+  CONNECTED: 'Connected',
+  NEEDS_REPAIR: 'Needs repair',
+  DISCONNECTED: 'Disconnected',
+};
+
+/**
+ * The one-time secret, and the one step Brain cannot take itself.
+ *
+ * Held in this component's memory and nowhere else: not in storage, not in the
+ * URL, and never fetched again. Navigating away loses it, which is correct —
+ * a secret you can come back to is a secret that is stored.
+ */
+function SiteSecret({
+  result,
+  onDone,
+}: {
+  result: ConnectSiteResult;
+  onDone: () => void;
+}): JSX.Element {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="rs-site-secret" role="group" aria-labelledby="rs-site-secret-heading">
+      <h4 id="rs-site-secret-heading">Put this into {result.status.name}, then it is done</h4>
+      <p className="rs-item-meta">{result.instruction.reason}</p>
+      <dl className="rs-site-vars">
+        {result.instruction.variables.map((variable) => (
+          <div key={variable.name}>
+            <dt>{variable.name}</dt>
+            <dd>
+              {variable.secret ? (
+                <code className="rs-secret">{result.secret}</code>
+              ) : (
+                <code>{variable.value ?? '—'}</code>
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <div className="rs-row">
+        <button
+          type="button"
+          className="rs-primary"
+          onClick={() => {
+            void navigator.clipboard
+              ?.writeText(result.secret)
+              .then(() => setCopied(true))
+              .catch(() => setCopied(false));
+          }}
+        >
+          {copied ? 'Copied' : `Copy ${result.instruction.variables.find((v) => v.secret)?.name ?? 'the secret'}`}
+        </button>
+        <button type="button" onClick={onDone}>
+          I have saved it
+        </button>
+      </div>
+      <p className="rs-item-meta">
+        Shown once. Nobody can read it back afterwards, including an
+        administrator — if it is lost, connect again and a new one replaces it.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Every site this Brain can be a window for, and one action each.
+ *
+ * There is no worker to name, no scope to choose and no project to pick. Those
+ * were three screens on a console, and the middle one had a wrong answer that
+ * failed silently — a site granted the research scope set is refused by every
+ * connector route with the same 404 a missing project gives. A decision already
+ * settled is not a decision to put in front of somebody, so none of it is
+ * asked.
+ */
+export function SitesView({ projectId }: { projectId: string | null }): JSX.Element {
+  const query = useAsync(
+    () => (projectId ? RussellApi.sites(projectId) : Promise.resolve(null)),
+    [projectId],
+  );
+  const [issued, setIssued] = useState<ConnectSiteResult | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+
+  if (!projectId) {
+    return (
+      <p className="rs-state rs-state-empty">
+        Open a project first — a site is connected to one project, and Brain has
+        to know which.
+      </p>
+    );
+  }
+  if (query.loading) {
+    return <p className="rs-state rs-state-loading">Reading what is connected…</p>;
+  }
+  if (query.error || !query.data) {
+    return (
+      <p className="rs-state rs-state-error" role="alert">
+        What is connected here could not be read.{' '}
+        <button type="button" onClick={query.reload}>
+          Try again
+        </button>
+      </p>
+    );
+  }
+
+  async function run(slug: string, action: () => Promise<unknown>): Promise<void> {
+    setBusy(slug);
+    setError(null);
+    try {
+      await action();
+      query.reload();
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : 'That did not go through.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="rs-sites" aria-labelledby="rs-sites-heading">
+      <h2 id="rs-sites-heading">Connected sites</h2>
+      <p className="rs-item-meta">
+        A website is a window. Brain holds what it means; the site keeps being
+        the master of its own operational fields.
+      </p>
+
+      {error ? (
+        <p className="rs-state rs-state-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {query.data.sites.map((site) => (
+        <article key={site.system} className="rs-site">
+          <div className="rs-row rs-site-head">
+            <h3>{site.name}</h3>
+            <span className={`rs-badge rs-site-${site.state.toLowerCase()}`}>
+              {SITE_STATE_LABEL[site.state]}
+            </span>
+          </div>
+          <p>{site.description}</p>
+          {/* The server's own sentence about the state, never one composed here. */}
+          <p className="rs-item-meta">{site.stateReason}</p>
+
+          {site.state === 'CONNECTED' || site.state === 'DISCONNECTED' ? (
+            <p className="rs-item-meta">
+              {site.records} record(s) held
+              {site.lastDeliveryAt ? ` · last delivery ${site.lastDeliveryAt.slice(0, 16).replace('T', ' ')}` : ''}
+              {site.lastCommandAt ? ` · last asked for research ${site.lastCommandAt.slice(0, 10)}` : ''}
+              {site.rejections > 0 ? ` · ${site.rejections} refused delivery kind(s)` : ''}
+            </p>
+          ) : null}
+
+          {issued && issued.status.system === site.system ? (
+            <SiteSecret result={issued} onDone={() => setIssued(null)} />
+          ) : (
+            <div className="rs-row">
+              <button
+                type="button"
+                className="rs-primary"
+                disabled={busy !== null}
+                onClick={() =>
+                  void run(site.slug, async () => {
+                    setIssued(await RussellApi.connectSite(projectId, site.slug));
+                  })
+                }
+              >
+                {busy === site.slug
+                  ? 'Working…'
+                  : site.state === 'NOT_CONNECTED'
+                    ? `Connect ${site.name}`
+                    : site.state === 'NEEDS_REPAIR'
+                      ? `Repair ${site.name}`
+                      : `Issue a new secret for ${site.name}`}
+              </button>
+
+              {site.state !== 'NOT_CONNECTED' ? (
+                confirming === site.slug ? (
+                  <>
+                    <span className="rs-item-meta">
+                      Disconnecting revokes what {site.name} holds. Its records stay.
+                    </span>
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() =>
+                        void run(site.slug, async () => {
+                          await RussellApi.disconnectSite(projectId, site.slug, null);
+                          setConfirming(null);
+                        })
+                      }
+                    >
+                      Yes, disconnect
+                    </button>
+                    <button type="button" onClick={() => setConfirming(null)}>
+                      Keep it
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => setConfirming(site.slug)}>
+                    Disconnect
+                  </button>
+                )
+              ) : null}
+            </div>
+          )}
+
+          {/* Issuing a new secret replaces the old one, and says so before it is
+              pressed rather than afterwards. */}
+          {site.liveCredentials > 0 && !issued ? (
+            <p className="rs-item-meta">
+              A secret is live. Issuing a new one revokes it immediately, so the
+              site stops working until the new one reaches it.
+            </p>
+          ) : null}
+        </article>
+      ))}
+    </section>
+  );
+}
+
 export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX.Element | null {
   const query = useAsync(
     () => (projectId ? RussellApi.authority(projectId) : Promise.resolve(null)),

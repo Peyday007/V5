@@ -122,6 +122,58 @@ export interface SurfaceEnvelope<T> {
 /** A surface plus the honest reason it is empty, when it is. */
 export type KnowsSurface = SurfaceEnvelope<KnowsEntry>;
 
+/* --------------------------------------------------------------------------
+ * Connected sites
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The five answers, matching the server's vocabulary exactly.
+ *
+ * `NOT_CONNECTED` and `AWAITING_FIRST_CALL` are different on purpose: the
+ * first means nothing has been issued, the second means Brain's half is done
+ * and the secret has not reached the site yet. Collapsing them would leave a
+ * person pressing Connect against a Brain that was already ready.
+ */
+export type SiteConnectionState =
+  | 'NOT_CONNECTED'
+  | 'AWAITING_FIRST_CALL'
+  | 'CONNECTED'
+  | 'NEEDS_REPAIR'
+  | 'DISCONNECTED';
+
+export interface SiteStatus {
+  system: string;
+  name: string;
+  slug: string;
+  description: string;
+  variables: { url: string; token: string; project: string };
+  state: SiteConnectionState;
+  stateReason: string;
+  workerName: string;
+  workerId: string | null;
+  scopes: string[] | null;
+  scopesCorrect: boolean;
+  liveCredentials: number;
+  lastUsedAt: string | null;
+  records: number;
+  rejections: number;
+  lastDeliveryAt: string | null;
+  lastCommandAt: string | null;
+}
+
+export interface ConnectSiteResult {
+  status: SiteStatus;
+  /** Shown once, held only in this tab's memory, never fetched again. */
+  secret: string;
+  createdIdentity: boolean;
+  repairedScopes: boolean;
+  revokedCredentials: number;
+  instruction: {
+    reason: string;
+    variables: { name: string; value: string | null; secret: boolean }[];
+  };
+}
+
 export const RussellApi = {
   conversations: (): Promise<{ conversations: RussellConversation[] }> =>
     api('/api/russell/conversations'),
@@ -186,6 +238,31 @@ export const RussellApi = {
 
   ideas: (projectId: string): Promise<{ map: IdeaMap; state: SurfaceEnvelope<IdeaNode> }> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/ideas`),
+
+  sites: (projectId: string): Promise<{ sites: SiteStatus[] }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/sites`),
+
+  /**
+   * Connect a site, or rotate what it holds. The same call for both, because
+   * they are the same operation: the identity is reused, the permissions are
+   * rewritten from the server's own constant, and exactly one credential is
+   * live afterwards.
+   *
+   * The secret is in this response and in no other. Nothing stores it.
+   */
+  connectSite: (projectId: string, slug: string): Promise<ConnectSiteResult> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/sites/` +
+        `${encodeURIComponent(slug)}/connect`,
+      { method: 'POST' },
+    ),
+
+  disconnectSite: (projectId: string, slug: string, reason: string | null): Promise<SiteStatus> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/sites/` +
+        `${encodeURIComponent(slug)}/disconnect`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    ),
 
   who: (projectId: string): Promise<WhoView> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/who`),

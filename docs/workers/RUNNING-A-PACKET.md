@@ -37,7 +37,7 @@ You need one thing that is not on this page: **a connected worker with access to
 the project**. `CONNECTING-A-WORKER.md` covers that.
 
 If the worker was connected before the research tools existed, its row on
-`/operator` says so and offers **Update access**. Press it. A worker holding the
+`npm run admin -- access show <worker>` says so, and `access grant` repairs it. A worker holding the
 older scope set will claim a research item happily and then be refused by every
 tool that would let it record anything — and the refusal is the same *no such
 thing* a missing item gives, so from the outside it looks like a broken Brain
@@ -49,7 +49,8 @@ rather than a stale grant.
 
 Before pointing a real question at this, run a **test packet**.
 
-`/operator` → **Try it without spending anything** → **Create a test packet**.
+A test packet is a fixture, and it is created from the terminal rather than
+from a page: see `services/research/fixtures.ts`.
 
 It appears in the same **Research packets** card a real one does, labelled
 `— TEST PACKET`, with the same approval screen. Approve it. It costs nothing:
@@ -78,7 +79,9 @@ Once you have looked at that and think the machinery is worth it, carry on.
 
 ## 1. Write the assignment — you
 
-`/operator` → **Start a research packet**.
+Starting a packet by hand is `services/research/startPacket.ts`, from the
+terminal. In ordinary operation nobody does this: Russell launches a mission
+from an idea, inside the standing authority a person granted in **Needs you**.
 
 Choose the layer the answer belongs to. Give it a title. Then write the
 assignment, and this is the part worth spending time on, because **the
@@ -132,7 +135,7 @@ knew.
 
 ## 4. Read the plan and approve it — you
 
-Refresh `/operator`. The **Research packets** card shows every proposed
+`npm run admin -- packets list <project>` shows every proposed
 fragment in full — not a count, because "approve 6 fragments" is not a decision
 anybody can make.
 
@@ -213,7 +216,7 @@ that answered something easier than the one that beat it.
 
 ### Where the control is
 
-`/operator` is one long page. The packet form is **four cards below Workers** —
+The packet commands are `npm run admin -- packets …` —
 scroll, or find it with your browser's find-on-page. Three fields and a button:
 
 | Field | What goes in it |
@@ -302,9 +305,9 @@ allowance is spent on it. So:
 
 | | Who | What happens |
 |---|---|---|
-| Create the packet | you, at `/operator` | A `RESEARCH_PLAN` item is queued. Nothing is spent. |
+| Create the packet | you, at a terminal | A `RESEARCH_PLAN` item is queued. Nothing is spent. |
 | **Activation 1** | a Cowork occurrence | The worker reads the archive, proposes fragments, and the packet **stops**. The session ending here is correct. |
-| Approve the plan | you, at `/operator` | You see the goal as Brain read it, what the archive already answers, the genuine gaps, and the jobs proposed. |
+| Approve the plan | you, in **Needs you** | You see the goal as Brain read it, what the archive already answers, the genuine gaps, and the jobs proposed. |
 | **Activation 2** | one Cowork occurrence | The measured one: approval → research → repair → synthesis → three audit roles → terminal. |
 
 **Then judge it, and do not judge it by reading it.** Run the **Verify research

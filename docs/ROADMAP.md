@@ -19,7 +19,7 @@ the tag in git is the record of *when*, this file is the record of *what*.
 | **5** | **Who owns this work, right now.** Durable queued work, atomic claiming by compare-and-swap, time-bounded leases, fencing generations, heartbeats, expiry and reclaim, bounded retry, cancellation, attempt history | `step-5-distributed-queue-leases` |
 | **6** | **A retry is not a second effect.** Idempotency keys, canonical fingerprints, reservation and replay, concurrent duplicate suppression, fenced effect commits, the external adapter contract, uncertain-outcome handling and administrative reconciliation | `step-6-idempotency-safe-effects` |
 | **7** | **A door, not a second set of rules.** One authoritative remote MCP endpoint serving both protocol eras statelessly, worker authentication at the boundary, execution-time authorization, a permanent tool surface over existing services, Step 6 idempotency on every mutation, bounded results, safe error categories and an MCP audit | `step-7-authoritative-remote-mcp` |
-| **8** | **A worker signs in.** OAuth 2.1 authorization so a Claude connector can authenticate at all, a consent screen where a human approves a named worker, tokens that resolve to the worker rather than the approver, the operator console — including the two things a worker must never do for itself, creating a project and queueing its own work — and the first real Claude Max worker | `step-8-first-claude-max-worker` |
+| **8** | **A worker signs in.** OAuth 2.1 authorization so a Claude connector can authenticate at all, a consent screen where a human approves a named worker, tokens that resolve to the worker rather than the approver, an operator console (since removed — see below) carrying the two things a worker must never do for itself, and the first real Claude Max worker | `step-8-first-claude-max-worker` |
 
 Step 3's evidence is in [`STEP-3-EVIDENCE.md`](STEP-3-EVIDENCE.md); Step 4's is
 in [`STEP-4-EVIDENCE.md`](STEP-4-EVIDENCE.md), and the model it built is
@@ -178,31 +178,38 @@ network reach. **Step 10 is not closed**: it needs a filed, audited document fro
 a worker surface that can reach published primary sources, and that needs no
 change to this repository.
 
-### What Step 12 is actually for
+### What Step 12 was actually for, and how it ended
 
-Step 8 built `/operator` because worker administration existed only over HTTP
-and a credential has to be shown once inside a browser. Two things ended up on
-that screen that do not belong there, and they are Step 12's to move:
+Step 8 built an operator console because worker administration existed only
+over HTTP and a credential has to be shown once inside a browser. Things ended
+up on that screen that did not belong there, and Step 12 moved them. **The
+console is gone**, and the sentence that decided where each piece went is: a
+decision a person makes about their own project belongs on the surface they
+already use, and everything else was internal machinery that should never have
+had a page at all.
 
-- **Creating a project** and **queueing a work item** are scaffolding. They
-  exist because neither had a UI anywhere and the alternative was `curl`. In
-  the finished product the planner decides what work exists; nobody hand-queues
-  an item.
-- **Setting a worker's projects and scopes** is a real and permanent decision,
-  but it belongs in the Brain proper rather than a separate console.
+- **Connecting a site, its credential, its status and its way out** are in
+  Russell under **Connected sites** — one action, with the identity, the fixed
+  scope set and the rotation all made by the server. The one screen that asked
+  which of two scope sets a worker got is gone, because its wrong answer failed
+  *silently*.
+- **What Russell may spend** and **approving a plan** are in **Needs you**.
+- **Identities, surfaces and capacity** are in **Who**.
+- **Creating a project, queueing an item, starting a packet by hand, reissuing
+  a stranded verification, retrying a fragment, archiving an identity** are
+  `npm run admin`, on a terminal where reaching the shell is the
+  authentication. They are recoveries and scaffolding, not a workflow.
 
-The distinction Step 12 must preserve while moving them: **the Brain dispatches;
-a worker never widens its own reach.** Assignment is already automatic — a
-worker asks the queue what is next and the Brain answers by priority, so no
-person matches workers to projects and none should. What stays a deliberate act
-is the trust boundary itself: which research a borrowed account may touch, set
-once when the account is connected. That is the platform being the authority,
-not a human being a bottleneck, and the difference is worth keeping when the
-screen is rebuilt.
+The distinction that survived the move: **the Brain dispatches; a worker never
+widens its own reach.** It is stronger now than it was on the console, because
+every one of those surfaces refuses a worker principal by type rather than by
+an administrator-plus-same-site pair.
 
-`/operator` should end up small: the consent screen, and issuing a credential
-for a client that cannot do OAuth. Both have to keep working when the front-end
-does not, which is why they are plain server-rendered HTML.
+What is left server-rendered is the **consent screen**, and only that: it is a
+page an external client redirects a browser to, mid-flow, before any
+application session exists. "It works when the bundle is broken" turned out to
+be a reason for a *recovery* to exist, not a reason for it to be a public
+page.
 
 ### Research budgets — where the ceiling gets built
 

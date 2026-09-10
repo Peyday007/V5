@@ -30,9 +30,10 @@ it at any time without changing your own password or anything else.
 
 ## 1. Create the worker
 
-Sign in to the Brain, then go to **`/operator`**.
+Sign in to the Brain. Everything below is `npm run admin`, run where the Brain
+runs — there is no administration page, and there has not been one since
+connecting a site moved into Russell.
 
-> `https://northline-brain.fly.dev/operator`
 
 This screen is only reachable by a Brain administrator. To anyone else — signed
 out, an ordinary member, or a worker holding a token — it answers *404*, because
@@ -84,7 +85,8 @@ Everything below assumes you are sitting at the machine whose Claude account is
 being connected. When you are not — a friend's account, a second laptop — do
 this instead and skip to *Checking it worked*.
 
-On `/operator`, click **Invite** beside the worker. You get a link, shown once.
+Run `npm run admin -- workers list` to confirm the worker, then mint the
+invitation the same way. You get a link, shown once.
 Send it to whoever holds the account. They:
 
 1. open the link — this connects nothing, it just tells their browser which
@@ -165,7 +167,7 @@ two ever disagree, the repository is right and the pasted one is stale.
 
 ## 7. Give it something to do
 
-Back on **`/operator`**, in **Give a worker something to do**:
+Back at the terminal, `npm run admin -- access grant <worker> <project>`:
 
 - **Project** — the same acceptance project
 - **Note** — anything short, e.g. `Step 8 acceptance item`
@@ -213,7 +215,7 @@ the one thing this design must never do.
 
 ## Revoking
 
-**One connection:** `/operator` → **Disable** the worker. Every live token for
+**One connection:** `npm run admin -- workers disable <name>`. Every live token for
 it is revoked immediately, not at expiry.
 
 **Re-enable:** the same button. It will need connecting again — disabling ends
@@ -230,7 +232,7 @@ Revoking a worker never touches your account, your password, or your own access.
   them and has no column that could.
 - An Anthropic API key. This is your Max subscription, not metered usage.
 - A credential you copy by hand. The **Issue a credential** button on
-  `/operator` exists for a client that cannot do OAuth; Claude does not need it.
+  A pasted bearer exists for a client that cannot do OAuth; Claude does not need it.
 - Any database, storage or deployment access. The worker reaches the Brain's
   tools and nothing behind them.
 
@@ -241,7 +243,7 @@ Check the URL is exactly `https://northline-brain.fly.dev/mcp` with no trailing
 slash and nothing after it, and that Advanced settings is empty.
 
 **The consent screen says the Brain has no workers.**
-Step 1 did not save. The worker list on `/operator` is the truth.
+Step 1 did not save. `npm run admin -- workers list` is the truth.
 
 **The worker connects but every tool refuses.**
 It has no project membership, or not the scope that tool needs. `brain_whoami`
@@ -249,4 +251,5 @@ tells you what it actually holds — trust that over what you meant to grant.
 
 **You want to start over.**
 Remove the connector in Claude (there is no edit — remove and re-add), disable
-the worker in `/operator`, and begin at step 1. Nothing accumulates.
+the worker with `npm run admin -- workers archive <name>`, and begin at step 1.
+Nothing accumulates.
