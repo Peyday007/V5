@@ -32,7 +32,6 @@ import type {
   FactoryRole,
   FactoryWorker,
 } from '../../domain/factory.ts';
-import { DEFAULT_UNIT_LEASE_MS } from '../../repos/factory.ts';
 import {
   deferUnit,
   failUnit,
@@ -69,6 +68,18 @@ export const DEFAULT_UNIT_TIMEOUT_MS = 25 * 60 * 1000;
  * one-minute lease still keeps a live worker's unit while the dispatcher runs.
  */
 export const HEARTBEAT_INTERVAL_MS = 15 * 1000;
+
+/**
+ * How far ahead a heartbeat pushes the lease.
+ *
+ * Much shorter than the lease granted at claim time, and that is the whole
+ * point. The first version renewed by the full default lease, so a dispatcher
+ * killed a second after a heartbeat left its unit unclaimable for another half
+ * hour — the heartbeat made recovery *slower* than no heartbeat at all. Two
+ * minutes is far longer than any plausible stall in a dispatcher that is still
+ * running, and far shorter than a person's patience when one is not.
+ */
+export const HEARTBEAT_LEASE_MS = 2 * 60 * 1000;
 
 /**
  * A branch per attempt, from the attempt's own base.
@@ -234,7 +245,7 @@ export async function executeUnit(input: ExecuteUnitInput): Promise<ExecuteUnitR
    * `unitLeaseMs` safe to shorten for a recovery drill.
    */
   const heartbeat = setInterval(() => {
-    void heartbeatUnit(proof, DEFAULT_UNIT_LEASE_MS);
+    void heartbeatUnit(proof, HEARTBEAT_LEASE_MS);
   }, HEARTBEAT_INTERVAL_MS);
   let result;
   try {
