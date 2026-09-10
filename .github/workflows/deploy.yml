@@ -467,6 +467,13 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          # Read first, always. When the write refuses — an address that is not
+          # an administrator of this Brain is the likely way — the log still
+          # says which project this is and what the site already has, rather
+          # than only saying no.
+          flyctl ssh console --app "$app" \
+            -C "sh /app/scripts/connect-site.sh --project ${{ inputs.connect_site_project }} --site ${{ inputs.connect_site_name }} --check" \
+            2>&1 || true
           set +e
           flyctl ssh console --app "$app" \
             -C "sh /app/scripts/connect-site.sh --project ${{ inputs.connect_site_project }} --site ${{ inputs.connect_site_name }} --admin ${{ inputs.connect_site_admin }}" \
