@@ -87,8 +87,28 @@ async function verifyPopulatedMigration(): Promise<{
   const db = getDb();
   const before = await db.all<{ total: number }>(`SELECT MAX(version) AS total FROM schema_migrations`);
   const versionBefore = Number(before[0]?.total ?? 0);
-  const rowsBefore = await db.all<{ total: number }>(`SELECT COUNT(*) AS total FROM project_events`);
-  const populatedRowsBefore = Number(rowsBefore[0]?.total ?? 0);
+  /*
+   * How populated the database actually is.
+   *
+   * Counted across the tables a real Brain fills rather than one of them: the
+   * first version counted `project_events` alone, which in a freshly seeded Brain
+   * is a single row — technically populated and not what the check is about.
+   */
+  let populatedRowsBefore = 0;
+  for (const table of [
+    'project_events',
+    'factory_events',
+    'factory_work_units',
+    'factory_sessions',
+    'identity_events',
+  ]) {
+    try {
+      const counted = await db.all<{ total: number }>(`SELECT COUNT(*) AS total FROM ${table}`);
+      populatedRowsBefore += Number(counted[0]?.total ?? 0);
+    } catch {
+      // A table this Brain does not have contributes nothing.
+    }
+  }
 
   if (db.dialect !== 'sqlite') {
     // A cloud Brain cannot be copied sideways from here, and pretending otherwise
@@ -101,21 +121,30 @@ async function verifyPopulatedMigration(): Promise<{
   const copy = path.join(scratch, 'brain.db');
   fs.copyFileSync(source, copy);
 
-  // A second process, so this really is a reopen rather than the same handle.
+  /*
+   * A second process, so this really is a reopen rather than the same handle.
+   *
+   * A *file* rather than `tsx -e`, because `-e` compiles to CommonJS and refuses
+   * top-level await — which made the probe exit non-zero and report a schema
+   * version of 0, so the check failed for a reason that had nothing to do with
+   * the migration it was checking.
+   */
+  const probePath = path.join(scratch, 'probe.mts');
+  fs.writeFileSync(
+    probePath,
+    [
+      `import { initDatabase, getDb, closeDatabase } from ${JSON.stringify(path.join(REPO_ROOT, 'server/db/database.ts'))};`,
+      'const opened = await initDatabase({ dbPath: process.env.FACTORY_MIGRATE_COPY });',
+      "const rows = await getDb().all('SELECT COUNT(*) AS total FROM factory_events');",
+      'console.log(JSON.stringify({ version: opened.migrations.schemaVersion, applied: opened.migrations.applied.length, rows: Number(rows[0]?.total ?? 0) }));',
+      'await closeDatabase();',
+    ].join('\n'),
+  );
+
   const result = await new Promise<{ code: number; out: string }>((resolve) => {
     const child = spawn(
       'npx',
-      [
-        'tsx',
-        '-e',
-        [
-          "import { initDatabase, getDb, closeDatabase } from './server/db/database.ts';",
-          "const opened = await initDatabase({ dbPath: process.env.FACTORY_MIGRATE_COPY });",
-          "const rows = await getDb().all('SELECT COUNT(*) AS total FROM project_events');",
-          'console.log(JSON.stringify({ version: opened.migrations.schemaVersion, applied: opened.migrations.applied.length, rows: Number(rows[0]?.total ?? 0) }));',
-          'await closeDatabase();',
-        ].join('\n'),
-      ],
+      ['tsx', probePath],
       {
         cwd: REPO_ROOT,
         env: { ...process.env, FACTORY_MIGRATE_COPY: copy, BRAIN_DB_PATH: copy },
@@ -126,8 +155,13 @@ async function verifyPopulatedMigration(): Promise<{
     child.stdout?.on('data', (chunk: Buffer) => {
       out += chunk.toString('utf8');
     });
-    child.stderr?.on('data', () => {
-      /* the exit code is the verdict */
+    let err = '';
+    child.stderr?.on('data', (chunk: Buffer) => {
+      err += chunk.toString('utf8');
+    });
+    child.on('error', () => resolve({ code: -1, out }));
+    child.on('exit', (code) => {
+      if (code !== 0 && err) process.stderr.write(`migration probe: ${err.slice(-600)}\n`);
     });
     child.on('close', (code) => resolve({ code: code ?? -1, out }));
   });
@@ -154,6 +188,30 @@ async function verifyPopulatedMigration(): Promise<{
 async function main(): Promise<void> {
   await initDatabase();
   const postgresUrl = (process.env.BRAIN_TEST_DATABASE_URL ?? '').trim();
+  /*
+   * Re-check the migration without repeating twenty minutes of tests.
+   *
+   * The suites and the migration check are separate measurements of separate
+   * things, and a defect in one should not cost a re-run of the other.
+   */
+  const migrationOnly = process.argv.includes('--migration-only');
+
+  if (migrationOnly) {
+    console.log('--- migration over a populated database ---');
+    const only = await verifyPopulatedMigration();
+    await recordFactoryEvent({
+      kind: 'MIGRATION_VERIFIED',
+      evidenceClass: 'MEASURED',
+      detail: only,
+    });
+    console.log(
+      `schema ${only.versionBefore} to ${only.versionAfter} over ` +
+        `${only.populatedRowsBefore} pre-existing row(s); reopened: ${only.restarted}`,
+    );
+    await closeDatabase();
+    process.exitCode = only.restarted ? 0 : 1;
+    return;
+  }
 
   console.log('--- suite on sqlite ---');
   const sqlite = await runSuite({ BRAIN_TEST_DATABASE_URL: '' });
