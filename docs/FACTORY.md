@@ -296,8 +296,12 @@ exactly one guarantee:
   capacity — how many units it merges per hour, how many lanes it has
   genuinely run at once — carries the same evidence class discipline as every
   row in `factory_events`: measured where Brain timed it, derived where it was
-  computed from declared numbers, and unknown where nothing has established it
-  yet, never rounded up to a ceiling nobody has observed.
+  computed from other measured numbers, and unknown where nothing has
+  established it yet. Unlike `registry`'s capacity reading, a declared number
+  — a campaign's `laneTarget`, a worker's declared `maxConcurrency` — is never
+  the input to a `throughput` figure; it is shown beside what was actually
+  observed, always labelled `UNKNOWN`, and never rounded up to a ceiling
+  nobody has observed.
 
 - **`recovery`** guarantees that a campaign whose process died mid-unit is not
   a campaign that is stuck. Leases expire, units that were mid-flight become
