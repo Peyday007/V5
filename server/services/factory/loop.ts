@@ -48,6 +48,7 @@ import {
   sweepExpiredUnitLeases,
 } from '../../repos/factory.ts';
 import {
+  abandonOrphanedSessions,
   getRelease,
   getWorker,
   implementingSessions,
@@ -188,6 +189,12 @@ async function runTick(
         'has frozen.',
     });
   }
+
+  // A dead dispatcher's sessions are still RUNNING, and `workerLoad` counts
+  // them — so its lanes hold phantom capacity until somebody closes them. Done
+  // first, because the scheduler's idea of what is free is read from these rows.
+  const orphaned = await abandonOrphanedSessions();
+  if (orphaned > 0) notes.push(`${orphaned} orphaned session(s) closed, freeing their slots`);
 
   // An expired lease on a unit with attempts left is claimable work, and the
   // claim takes it as a takeover — which is the only record that a recovery

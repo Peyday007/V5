@@ -425,6 +425,45 @@ export async function implementingSessions(campaignId: string): Promise<FactoryS
   return rows.map(mapSession);
 }
 
+/**
+ * Close sessions nothing is working on.
+ *
+ * A session exists to run a unit, so a `RUNNING` session whose unit is not
+ * `LEASED` is a session whose process is gone. Left alone it is worse than
+ * untidy: `workerLoad` counts it, so a dead dispatcher's lanes hold phantom
+ * capacity forever and the fleet reports slots it does not have. That is exactly
+ * what happened the first time a dispatcher died here — three sessions stayed
+ * RUNNING and the recovered dispatcher could only start one lane.
+ *
+ * Sessions with no unit — an architect or a reviewer — are bounded by age
+ * instead, because there is no lease to compare them against.
+ */
+export async function abandonOrphanedSessions(maxUnattachedAgeMs = 90 * 60 * 1000): Promise<number> {
+  const db = getDb();
+  const at = factoryNow();
+  const attached = await db.run(
+    `UPDATE factory_sessions
+        SET state = 'ABANDONED',
+            exit_reason = 'The unit it was running is no longer leased; its process is gone.',
+            ended_at = ?, updated_at = ?
+      WHERE state = 'RUNNING' AND unit_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM factory_work_units u
+           WHERE u.id = factory_sessions.unit_id AND u.state = 'LEASED'
+        )`,
+    [at, at],
+  );
+  const unattached = await db.run(
+    `UPDATE factory_sessions
+        SET state = 'ABANDONED',
+            exit_reason = 'No unit and no heartbeat within the bound; reclaimed on recovery.',
+            ended_at = ?, updated_at = ?
+      WHERE state = 'RUNNING' AND unit_id IS NULL AND started_at <= ?`,
+    [at, at, new Date(Date.now() - Math.max(60_000, maxUnattachedAgeMs)).toISOString()],
+  );
+  return attached.changes + unattached.changes;
+}
+
 /** Release a dead process's sessions, so a restart does not leave them RUNNING forever. */
 export async function abandonStaleSessions(olderThanIso: string): Promise<number> {
   const at = factoryNow();

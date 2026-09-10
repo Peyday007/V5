@@ -39,7 +39,14 @@ import {
   claimCampaignTick,
   approveChangeRequest,
 } from '../server/repos/factory.ts';
-import { registerWorker, listFindings } from '../server/repos/factoryFleet.ts';
+import {
+  abandonOrphanedSessions,
+  listFindings,
+  listSessions,
+  openSession,
+  registerWorker,
+  workerLoad,
+} from '../server/repos/factoryFleet.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { submitObjective, approveObjective, amendContract } from '../server/services/factory/contract.ts';
 import { validatePlan, installPlan } from '../server/services/factory/planner.ts';
@@ -984,6 +991,68 @@ describe('worker reports', () => {
     expect(report?.summary).toBe('second');
     expect(report?.commits).toEqual(['abc']);
     expect(parseWorkerReport('no block at all')).toBeNull();
+  });
+});
+
+describe('recovery', () => {
+  it('frees the phantom capacity a dead dispatcher left behind', async () => {
+    const changeRequest = await approvedChangeRequest({ mutationScope: ['src/**'] });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: changeRequest.baseSha,
+      integrationBranch: 'factory/campaign/orphan',
+      laneTarget: 2,
+      laneTargetReason: 'initial',
+    });
+    const { unit } = await ensureUnit({
+      campaignId: campaign.id,
+      unitKey: 'orphaned',
+      kind: 'IMPLEMENTATION',
+      role: 'IMPLEMENTER',
+      title: 'orphaned',
+      objective: 'o',
+      acceptance: ['a'],
+      ownedPaths: ['src/one.txt'],
+      requiredContext: [],
+      verification: [],
+      expectedArtifact: 'a commit',
+      state: 'READY',
+    });
+
+    const claimed = await claimUnits({ campaignId: campaign.id, workerId: 'w1', unitIds: [unit.id] });
+    expect(claimed.length).toBe(1);
+    const session = await openSession({
+      campaignId: campaign.id,
+      unitId: unit.id,
+      workerId: 'w1',
+      accountRef: 'a1',
+      attempt: 1,
+      role: 'IMPLEMENTER',
+      model: 'sonnet',
+    });
+    // While the unit is genuinely leased, the session is real work and the slot
+    // it holds is really held.
+    expect(await abandonOrphanedSessions()).toBe(0);
+    expect((await workerLoad()).get('w1')).toBe(1);
+
+    // The dispatcher dies: the lease expires and is reclaimed, and nothing closes
+    // the session. Without this, `workerLoad` counts it forever.
+    await failUnit(
+      {
+        unitId: unit.id,
+        workerId: 'w1',
+        leaseId: claimed[0]?.leaseId ?? '',
+        leaseGeneration: claimed[0]?.leaseGeneration ?? 0,
+      },
+      { category: 'WORKER_LOST', detail: 'the dispatcher died', retryable: true },
+    );
+    expect(await abandonOrphanedSessions()).toBe(1);
+    expect((await workerLoad()).get('w1')).toBeUndefined();
+    const sessions = await listSessions(campaign.id);
+    expect(sessions.find((s) => s.id === session.id)?.state).toBe('ABANDONED');
+    // The row stays, with a reason. Nothing is deleted.
+    expect(sessions.length).toBe(1);
   });
 });
 
