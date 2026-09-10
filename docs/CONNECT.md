@@ -122,6 +122,23 @@ Measured locally: a Brain-side state change reappeared in a cursor-filtered poll
 in **3.55 s**, and on the site's own record page in **202 ms** (the detail page
 reads live rather than polling).
 
+### Where the work is
+
+A compiled research specification asserts a jurisdiction, and it must be the
+subject's own. `services/russell/subject.ts` reads it from the record's `state`
+column first and its `location` second, and answers `null` rather than
+defaulting — a record Brain cannot place is one it will not place.
+
+That matters here because the connector is what first brought records with a
+jurisdiction of their own into a project whose standing authorization has one.
+Three outcomes:
+
+| The record is | Result |
+|---|---|
+| in a jurisdiction the authorization covers | researched, and the objective names it |
+| in one it does not | **Needs a person** — refused with a sentence naming both, so the authorization can be granted |
+| somewhere Brain cannot read | the objective names the authorized search rather than claiming the record is there |
+
 ---
 
 ## 5. Storage

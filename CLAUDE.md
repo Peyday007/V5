@@ -153,6 +153,8 @@ There must be no workflow where the user has to remember "now go update the data
     makes the change.
 33. No storage threshold that stops Brain work, and no figure reported that was
     not measured.
+34. No scope asserted about a subject that no row and no question stated —
+    a jurisdiction is read from the record, and not knowing it is an answer.
 
 ## 8. Model prose never mutates project state.
 
@@ -1437,6 +1439,35 @@ derives.**
   is no per-idea approval. Storage is cheap relative to the business this Brain
   runs; the only thing worth building is the reading that stops it becoming a
   surprise.
+- **A jurisdiction is read from the row, never from the sentence about it.**
+  The compiler looked for a state in the *question's prose* and fell back to the
+  approval envelope's when it found none — so a record whose own column said
+  `state: "OH"` compiled as *"Establish, from official Michigan public
+  records, … in Westbrook, OH"*, because `OH` is not the word `ohio`. Every row
+  around it was healthy and the mission ran; a worker would have researched that
+  specification correctly and answered a different question. **The wrong answer
+  confidently derived is worse than no answer**, and nothing in the pipeline
+  below the compiler could have caught it: the gate judges evidence against the
+  fragment's declared scope, and the scope was the thing that was wrong.
+
+  The repair is a boundary, not a patch. `domain/jurisdiction.ts` is the shared
+  vocabulary both readers use, and it holds the one rule that matters: a
+  two-letter code is authoritative in a **field that means a state** and
+  unambiguous in **prose** only as `, OH` in capitals — because `, or`, `, in`,
+  `, me` and `, ok` are ordinary English, and the first version of that rule
+  read all four as states. `services/russell/subject.ts` is what an idea is
+  *about*, resolved from the rows behind it rather than from its own sentence,
+  and it answers `null` rather than defaulting — **not knowing is an answer**.
+
+  The compiler then reads three sources in order — the subject's row, the
+  question's words, the envelope — refuses when the first two disagree rather
+  than choosing which to ignore, and when it reaches the third says so in the
+  objective instead of asserting it about the subject. A jurisdiction the
+  standing authorization does not cover is refused with a sentence naming both,
+  which parks the idea where the person who could authorize it can see it; the
+  connector's projection reads that as **Needs a person** rather than as
+  finished, because a decision being waited on is not work that ended. No state
+  is hard-coded in any of it, and the envelope still decides what is allowed.
 - **The migration number was 035 and is 036.** Step 12A's closure landed
   `035_worker_sessions.sql` on the same number while this was being written, and
   `loadMigrationFiles` refuses a duplicate version rather than applying one and
@@ -1478,6 +1509,7 @@ server/
     types.ts            enums, row types, view types — the contract
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
+    jurisdiction.ts     states, postal codes, and where each one may be read from
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
@@ -1551,6 +1583,7 @@ server/
       needsHuman.ts     the park a packet stops at, and the answer that finishes it
       planning.ts       the judgment pass, its post-probe repeat, and the mission spec
       loop.ts           the durable tick, beside the dispatcher
+      subject.ts        what an idea is about, from rows rather than its own prose
       dealDispatch.ts   the connected system, with its freshness in the type
       projections.ts    the briefing, and progress that may not be invented
     research/
