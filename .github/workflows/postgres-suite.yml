@@ -30,6 +30,17 @@
 # echoed, and there is no value for a later reader of this file to find.
 name: Postgres suite
 
+# ---------------------------------------------------------------------------
+# Why a tag as well as a button
+# ---------------------------------------------------------------------------
+#
+# `workflow_dispatch` can only be *called* for a workflow that already exists on
+# the default branch — the API answers 404 for one that lives on a feature branch,
+# however correct the file is. That makes the button useless for the case it is
+# most needed in: verifying the branch that introduces the workflow. A tag push
+# runs the workflow from the tagged tree itself, so `postgres-gate-<anything>`
+# names a commit and gets that commit's suite. It is deliberate in the way a
+# branch push is not: an ordinary commit does not spend twenty minutes.
 on:
   workflow_dispatch:
     inputs:
@@ -37,6 +48,9 @@ on:
         description: 'What is being verified, for the run log'
         required: false
         default: 'the repository layer against the other backend'
+  push:
+    tags:
+      - 'postgres-gate-*'
 
 # One at a time: two runs would share the cluster this job sets up.
 concurrency:
