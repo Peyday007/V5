@@ -8840,3 +8840,87 @@ fragment, claim, pass, refusal and reason keeps its row, and an append-only
 belongs to `rms_1a86ee44b40847308174`, whose mission is `NEEDS_HUMAN` and
 therefore not terminal, so this reconciliation cannot see it and does not try
 to. What it stops is workers being spent on questions nobody is waiting for.
+
+## 90. The fire nobody answered, and the bin nothing could come for — 2026-09-10
+
+The person's RECORD_GAPS answer freed the one mission slot the grant allows, and
+Russell used it without being asked: `rms_57167183c8a648b09161` launched on
+S12A-ACC-11's question, researched it, filed **World Model v1C** with a 2/2
+citation ledger, and entered its audit. One audit role recorded at 22:21:28Z.
+Then it stopped.
+
+Forty minutes later:
+
+```
+PACKET  orc_0804d6046c054dd4bf87   AUDITING   pass AUDIT
+  RESEARCH_AUDIT wki_d288a7d13d0840489f49 QUEUED attempt 0/2   claimable now 1
+BIN     bin_99775b55ce7d40549287  READY  gen 4  attempts 0/5  refusals 1
+        worker —  leased —  not before —
+
+IN FLIGHT  as at 23:04:17Z
+  stale  22:22:08Z  age 2529s  bin_99775b55ce7d40549287  READY  gen 4
+         arrived no worker has checked in
+         excluded: older than the window
+STEP10: OK in-flight counted=0
+
+FLEET   in flight 0 · candidates 2 considered, 1 eligible now
+```
+
+Work waiting, capacity free, an eligible Routine, and nothing connecting them.
+
+### Why nothing was ever going to fire again
+
+Three rules, each right on its own, and together terminal:
+
+- `bin_dispatch` has `UNIQUE (bin_id, lease_generation)` and
+  `ensureDispatchIntent` is `ON CONFLICT DO NOTHING`, so **a second intent at
+  one generation is impossible**.
+- `claimDispatchIntent` selects `PENDING` and `SENDING` only, so **a `SENT`
+  intent is never claimed again**.
+- The generation advances when a worker **takes a lease**.
+
+A session that never arrives takes no lease. No lease, no new generation; no new
+generation, no new intent; no new intent and no claimable old one, no second
+fire. The bin sits `READY` for ever.
+
+That is word for word the state `services/dispatch/loop.ts` opens by saying the
+design exists to prevent — *"The bin would sit READY forever with nothing coming
+for it"* — reached by the one path the intent table makes unavoidable. It has
+nothing to do with the surface being slow: `in-flight` had already stopped
+counting the fire, so Brain knew the activation was gone and still had no way to
+replace it.
+
+### The reopen, and what it refuses
+
+`reopenNoShowDispatches` is derived from rows, like every other reconciliation
+here. A `SENT` intent is a no-show when the bin is **still `READY` at the very
+generation that intent was created for** — a worker that arrived would have
+taken a lease and advanced it, so an unchanged generation *is* the evidence that
+nothing has been handed out — and when the fire is older than
+`IN_FLIGHT_WINDOW_MS`.
+
+The window is passed in rather than restated. `inFlightByRoutine` owns that
+number, and passing it makes one instant do both jobs: a dispatch stops being
+counted as an activation and becomes reopenable at the same moment, so this can
+never race a fire Brain still believes is running. Two copies of that constant
+would eventually be two different numbers, and the gap between them would be
+either a double fire or a permanent stall.
+
+Four properties, and three of them are refusals:
+
+- **It never reopens a live fire.** Inside the window, nothing happens — proved
+  by a test that moves `sent_at` forward and expects an empty result.
+- **It never reopens a bin somebody arrived for.** `assignNextBin` advances the
+  generation, so the predicate stops matching the moment a worker claims.
+- **It gives up out loud.** At `max_attempts` the row becomes `ABANDONED` with
+  `last_error_kind = 'NO_SHOW'` — the state the schema already defines as
+  *attempts exhausted; recorded, never silently dropped*. Five fires that all
+  went unanswered is a surface problem a person has to fix, and a bin that is
+  visibly out of attempts is worth more than one quietly waiting.
+- **The swap is on `state = 'SENT'`**, a value the claimant does not supply, so
+  two dispatchers reopening at once produce one reopen. The fourth time this
+  codebase has needed that sentence.
+
+Nothing else moves. The bin keeps its state, its generation, its attempts and
+its refusals; the intent keeps its `session_ref` and its attempt count, so the
+fire that went unanswered is still in the record as a fire that went unanswered.

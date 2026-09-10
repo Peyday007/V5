@@ -62,9 +62,10 @@ import {
   markDispatchSent,
   recordBinEvent,
   supersedeStaleIntents,
+  reopenNoShowDispatches,
 } from '../../repos/bins.ts';
 import { fireConfig, fireRoutine, isFireConfigured, isRetryable, recordAllowanceObservation, resolveToken } from './fire.ts';
-import { fleetSnapshot } from './candidates.ts';
+import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from './candidates.ts';
 import { routeBin } from './router.ts';
 import type { RoutingRefusal } from './router.ts';
 import { markDispatchRoutine } from '../../repos/bins.ts';
@@ -111,6 +112,9 @@ export const DISPATCH_BURST = 5;
 
 export interface TickResult {
   superseded: number;
+  /** Fires nobody answered, put back in the queue or given up on. */
+  reopenedNoShows: number;
+  abandonedNoShows: number;
   intentsCreated: number;
   fired: number;
   failed: number;
@@ -139,6 +143,8 @@ export async function dispatchTick(
 ): Promise<TickResult> {
   const result: TickResult = {
     superseded: 0,
+    reopenedNoShows: 0,
+    abandonedNoShows: 0,
     intentsCreated: 0,
     fired: 0,
     failed: 0,
@@ -149,6 +155,28 @@ export async function dispatchTick(
   };
 
   result.superseded = await supersedeStaleIntents();
+
+  /*
+   * Put back a fire nobody answered.
+   *
+   * Before `ensureDispatchIntent`, because that is the call this rescues: an
+   * intent is one row per (bin, generation) and it is `ON CONFLICT DO NOTHING`,
+   * so once a fire has been `SENT` there is no second intent to be had at that
+   * generation — and the generation only moves when a worker takes a lease. A
+   * session that never arrives therefore leaves the bin READY with nothing that
+   * could ever come for it, which is the exact state the comment at the top of
+   * this file says the design exists to avoid.
+   *
+   * The window is `IN_FLIGHT_WINDOW_MS` and it is passed rather than re-stated,
+   * because `inFlightByRoutine` owns that number: a dispatch stops being
+   * counted as an activation and becomes reopenable at the same instant, so
+   * this can never race a fire Brain still believes is running.
+   */
+  const reopened = await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 50);
+  for (const entry of reopened) {
+    if (entry.outcome === 'REOPENED') result.reopenedNoShows += 1;
+    else result.abandonedNoShows += 1;
+  }
 
   // Ensure intent for everything a worker could be given — which is not the
   // same set as "READY". A bin whose worker died is claimable the moment its

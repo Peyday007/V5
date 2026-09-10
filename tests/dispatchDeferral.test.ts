@@ -34,11 +34,12 @@ import {
   markDispatchFailed,
   markDispatchRoutine,
   markDispatchSent,
+  reopenNoShowDispatches,
   releaseBin,
   assignNextBin,
 } from '../server/repos/bins.ts';
 import { getDb } from '../server/db/database.ts';
-import { inFlightByRoutine } from '../server/services/dispatch/candidates.ts';
+import { inFlightByRoutine, IN_FLIGHT_WINDOW_MS } from '../server/services/dispatch/candidates.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import type { BinManifest } from '../server/domain/types.ts';
 
@@ -360,5 +361,130 @@ describe('capacity counts occupied slots, not stale reservations', () => {
   it('stops counting a fire older than the window', async () => {
     await aFiredBin({ sentAt: new Date(Date.now() - 60 * 60_000).toISOString() });
     expect((await inFlightByRoutine(Date.now())).get(routineId)).toBeUndefined();
+  });
+});
+
+describe('a fire nobody answered', () => {
+  /*
+   * Put the bin in the state production reached: fired, and the session never
+   * turned up. No arrival means no lease, so the bin keeps the very generation
+   * the intent was created at — which is the whole signal.
+   *
+   * `sent_at` is backdated past the in-flight window rather than waited out,
+   * because that window is thirty minutes and the property has nothing to do
+   * with real time. Everything else is written by the ordinary functions.
+   */
+  async function aFireThatWentUnanswered(
+    binId: string,
+    options: { attempts?: number } = {},
+  ): Promise<string> {
+    const bin = (await getBin(binId))!;
+    await ensureDispatchIntent(bin);
+    const [intent] = await listDispatchesForBin(binId);
+    await markDispatchRoutine(intent!.id, (await routineId())!);
+    await markDispatchSent(intent!.id, {
+      routineRef: 'trig_defer',
+      sessionRef: 'session_never_arrived',
+    });
+    const long_ago = new Date(Date.now() - IN_FLIGHT_WINDOW_MS - 60_000).toISOString();
+    await getDb().run(`UPDATE bin_dispatch SET sent_at = ?, attempt_count = ? WHERE id = ?`, [
+      long_ago,
+      options.attempts ?? 1,
+      intent!.id,
+    ]);
+    return intent!.id;
+  }
+
+  async function routineId(): Promise<string | null> {
+    const row = await getDb().get<{ id: string }>(
+      `SELECT id FROM fleet_routines WHERE routine_ref = ? LIMIT 1`,
+      ['trig_defer'],
+    );
+    return row?.id ?? null;
+  }
+
+  it('is put back in the queue, because no other row ever could be', async () => {
+    const binId = await aReadyBin();
+    await aFleet();
+    const intentId = await aFireThatWentUnanswered(binId);
+
+    /*
+     * The two doors that are shut, which is why this needs a third.
+     *
+     * `ensureDispatchIntent` is ON CONFLICT DO NOTHING against a UNIQUE index
+     * on (bin_id, lease_generation), so no second intent can exist while the
+     * generation stands still — and it stands still precisely because nobody
+     * arrived to take a lease. `claimDispatchIntent` selects PENDING and
+     * SENDING only, so the SENT row is not a candidate either.
+     */
+    const bin = (await getBin(binId))!;
+    expect(bin.state).toBe('READY');
+    expect(await ensureDispatchIntent(bin)).toBe(false);
+    expect(await claimDispatchIntent()).toBeNull();
+    expect(await inFlightByRoutine(Date.now())).toEqual(new Map());
+
+    const [reopened] = await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10);
+    expect(reopened).toEqual({ dispatchId: intentId, binId, outcome: 'REOPENED' });
+
+    const [intent] = await listDispatchesForBin(binId);
+    expect(intent!.state).toBe('PENDING');
+    // The history stays: which session was fired, and how many attempts it cost.
+    expect(intent!.sessionRef).toBe('session_never_arrived');
+    expect(intent!.attemptCount).toBe(1);
+    // And it is claimable again, which is the entire point.
+    expect((await claimDispatchIntent())?.id).toBe(intentId);
+  });
+
+  it('never races a fire Brain still believes is running', async () => {
+    const binId = await aReadyBin();
+    await aFleet();
+    const intentId = await aFireThatWentUnanswered(binId);
+    // Move the fire back inside the window. It is now an activation in flight,
+    // and reopening it would be Brain firing twice for one bin.
+    await getDb().run(`UPDATE bin_dispatch SET sent_at = ? WHERE id = ?`, [
+      new Date(Date.now() - 60_000).toISOString(),
+      intentId,
+    ]);
+
+    expect(await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10)).toEqual([]);
+    expect((await listDispatchesForBin(binId))[0]!.state).toBe('SENT');
+  });
+
+  it('gives up out loud once the attempts are spent', async () => {
+    const binId = await aReadyBin();
+    await aFleet();
+    // max_attempts defaults to 5; five fires that all went unanswered is a
+    // surface problem a person has to fix, and it must be legible rather than
+    // quiet.
+    await aFireThatWentUnanswered(binId, { attempts: 5 });
+
+    const [given_up] = await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10);
+    expect(given_up?.outcome).toBe('ABANDONED');
+    const [intent] = await listDispatchesForBin(binId);
+    expect(intent!.state).toBe('ABANDONED');
+    expect(intent!.lastErrorKind).toBe('NO_SHOW');
+    // Never a second time: an abandoned intent is not a SENT one.
+    expect(await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10)).toEqual([]);
+  });
+
+  it('leaves a bin somebody did arrive for exactly alone', async () => {
+    const binId = await aReadyBin();
+    await aFleet();
+    await aFireThatWentUnanswered(binId);
+
+    // A worker arrives and claims it. `assignNextBin` advances the generation,
+    // so the intent no longer names the generation the bin is at — which is the
+    // difference between "nobody came" and "somebody is working on it".
+    const worker = await createWorker({
+      name: `arrived-${Math.random().toString(36).slice(2, 8)}`,
+      displayName: 'a worker that turned up',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    const assigned = await assignNextBin({ workerId: worker.id, projectIds: [projectId] });
+    expect(assigned).toBeTruthy();
+
+    expect(await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10)).toEqual([]);
+    expect((await listDispatchesForBin(binId))[0]!.state).toBe('SENT');
   });
 });
