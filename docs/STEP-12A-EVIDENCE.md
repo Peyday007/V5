@@ -8714,6 +8714,47 @@ Nothing about that is a defect to repair. It is the two rules meeting: a person
 decides whether a report files short, and a model's own classification decides
 whether what is left over is research. Brain is not permitted to supply either.
 
+### The decision was made, and A14 is PASS
+
+At 2026-09-10T22:0x the operator answered **RECORD_GAPS** in Russell's Needs
+You. The rows afterwards:
+
+```
+rms_1a86ee44b40847308174  DONE  packet orc_164bbf76e40b4fa88bd1 COMPLETE_WITH_GAPS
+                                verdict PATCH  gapPolicy RECORD_GAPS  next —  writeback yes
+OPEN DECISIONS
+    (none)
+```
+
+and the gate, which is the part that matters because it is derived rather than
+described:
+
+```
+A14_HUMAN_RESUME  PASS  1 decision(s) a person made, carried out, and the same
+                        mission continued past
+```
+
+Every clause of that gate is a row Brain wrote from its own state: the request
+reached `RESUMED`, so the loop actually carried the answer out rather than
+merely recording it; `answered_by_user_id` is set, so a person decided;
+`o.unresolved_gap_authorized_by = r.answered_by_user_id`, so the decision
+reached the *packet* in the name of the person who gave it — and
+`authorizeUnresolvedGaps` is the only writer of that column, on the RECORD_GAPS
+path alone. A stop could not have satisfied it, and neither could anything a
+script or a worker submits.
+
+`next —` is the predicted outcome, and it is worth reading as the confirmation
+it is: the follow-on did not fire, exactly as the correction above said it would
+not, because the judge's one gap is a `PATCH`. **A13 remains the only unmet
+required gate.**
+
+What the decision also did is free the concurrency the grant allows: one
+mission at a time, and the parked one had been holding it. Within minutes
+`rms_57167183c8a648b09161` had launched on `orc_0804d6046c054dd4bf87` —
+*Confirm current publication status of Michigan's statewide parcel layer*, which
+is S12A-ACC-11's question — filed `World Model v1C` with a 2/2 citation ledger,
+and entered its audit. That is the pipeline running with nobody driving it.
+
 ## 89. The park nobody was going to answer — 2026-09-10
 
 `step10 russell-state` was written to read every live Russell row in one call,
