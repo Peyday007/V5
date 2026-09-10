@@ -234,9 +234,27 @@ them was a decision about the assignment's verification bar, made outside the
 campaign, and counting them as factory output would be the exact claim §1 exists
 to keep honest.
 
-The two that remain are genuine limitations and stay recorded: two renderings of
-the same pull-request body with nothing reconciling them, and A03's per-entry
-breakdown carrying fewer figures than the condition names.
+**The other three are now closed too, and one of them needed a correction to the
+finding itself.** `tests/factoryFindingsClosed.test.ts` pins all three, each
+failing alone when its own fix is reverted: the throughput breakdown now sweeps a
+MEASURED peak overlap per worker, per role and per account and carries queue time
+as UNKNOWN with its reason rather than omitting it; `assemble.ts` renders through
+`renderPullRequest` instead of holding a second template, so the stored artifact
+and the live route cannot disagree; and `recoverAll` now reaches terminal
+campaigns whose workspace is still on disk, with the single-campaign tick's
+terminal branch retiring its own scratch as well.
+
+The correction: the PR-body finding named three divergences and one of them does
+not exist. It said `assemble.ts` used `reviews[reviews.length - 1]` and would
+therefore report the *older* verdict once a campaign had more than one round.
+`listReviews` orders by round ascending, so the last element is the newest — the
+two readers always agreed about the verdict. The other two divergences were
+real: acceptance conditions with no MET/NOT_MET status against conditions with
+one, and OPEN-only limitations against OPEN plus REPAIR_QUEUED plus
+ACCEPTED_LIMITATION. A reviewer being wrong about one of three claims is not a
+reason to dismiss the finding — the defect it named was there — and it is a
+reason to say which claim was wrong rather than to let the fix imply all three
+were.
 
 ### The recovery drill
 
