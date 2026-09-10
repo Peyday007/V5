@@ -98,10 +98,13 @@ const OUTCOME_NAMESPACE: OperationNamespace = {
 const WRITEBACK_PRINCIPAL_ID = 'factory-campaign-writeback';
 
 /**
- * `assertValidKey` refuses `_`; campaign ids (`newId('fcp')`) contain it.
- * The scope hash already carries the namespace and the project, so this only
- * has to be injective per campaign, not globally unique or secret — a
- * character substitution is enough.
+ * `assertValidKey`'s `KEY_CHARSET` already permits `_`, so a campaign id
+ * (`newId('fcp')`) is a valid key as-is and this substitution is not what
+ * makes it one. It exists so the key reads as a plain hyphenated slug rather
+ * than exposing the id's own separator. The scope hash already carries the
+ * namespace and the project, so this only has to stay injective per
+ * campaign, not globally unique or secret — and it does, since a UUID's hex
+ * digits never produce a `-` for the substitution to collide with.
  */
 function outcomeIdempotencyKey(campaignId: string): string {
   return campaignId.replace(/_/g, '-');
