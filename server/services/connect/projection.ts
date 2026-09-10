@@ -269,11 +269,43 @@ export async function projectRecord(
     }
   }
 
+  /*
+   * Parked, and there are two kinds of parked.
+   *
+   * An idea the archive already answered is **finished** — Brain looked, found
+   * the project already knew, and spent nothing. An idea Brain could not
+   * specify is not: the standing authorization does not cover the jurisdiction
+   * the record is in, or the project has no authorization at all. Those have
+   * remedies and a person is the only one who can apply them, so reading them
+   * as "finished" would hide exactly the decision that is being waited on.
+   *
+   * The difference is on the judgment the compiler wrote, not inferred from the
+   * words of a reason.
+   */
+  const refusedByCompiler =
+    candidate.judgment['decidedBy'] === 'COMPILER' &&
+    typeof candidate.judgment['refusal'] === 'string';
+
   // No mission. The candidate's own state and Brain's authority to act decide.
   switch (candidate.state) {
     case 'DONE':
     case 'PARKED':
     case 'REJECTED':
+      if (refusedByCompiler) {
+        return {
+          ...base,
+          state: 'NEEDS_PERSON',
+          stateReason:
+            candidate.reason?.trim() ||
+            'Brain could not specify this piece of work and needs a decision.',
+          priority: priorityLabel,
+          priorityRank,
+          reason: candidate.reason,
+          confidence: candidate.confidence,
+          research,
+          nextAction: noAction(),
+        };
+      }
       return {
         ...base,
         state: 'COMPLETED',

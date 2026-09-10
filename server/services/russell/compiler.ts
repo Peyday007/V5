@@ -69,6 +69,8 @@ import {
   getApprovalEnvelope,
   type ApprovalEnvelope,
 } from '../research/approvalEnvelope.ts';
+import { properName, statesNamedIn } from '../../domain/jurisdiction.ts';
+import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
 import type {
   EvidenceLane,
   Project,
@@ -104,17 +106,6 @@ const ENVELOPE_BY_PROJECT: Readonly<Record<string, string>> = Object.freeze({
   'deal-dispatch': 'RUSSELL_PUBLIC_RECORDS_V1',
 });
 
-/** The states a question may name, so one naming another is refused rather than re-scoped. */
-const US_STATES = [
-  'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut',
-  'delaware', 'florida', 'georgia', 'hawaii', 'idaho', 'illinois', 'indiana', 'iowa',
-  'kansas', 'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts', 'michigan',
-  'minnesota', 'mississippi', 'missouri', 'montana', 'nebraska', 'nevada',
-  'new hampshire', 'new jersey', 'new mexico', 'new york', 'north carolina',
-  'north dakota', 'ohio', 'oklahoma', 'oregon', 'pennsylvania', 'rhode island',
-  'south carolina', 'south dakota', 'tennessee', 'texas', 'utah', 'vermont', 'virginia',
-  'washington', 'west virginia', 'wisconsin', 'wyoming',
-] as const;
 
 /** One fragment, fully specified, ready for `createFragments` to place. */
 export interface PlannedFragment {
@@ -160,8 +151,15 @@ export interface CompiledMission {
   envelopeId: string;
   /** The decomposition, so nothing downstream has to ask a model for one. */
   fragments: PlannedFragment[];
-  /** Where the jurisdiction came from, because a default is not a finding. */
-  jurisdiction: { value: string; from: 'QUESTION' | 'ENVELOPE' };
+  /**
+   * Where the jurisdiction came from, because a default is not a finding.
+   *
+   * `SUBJECT` is the strongest: a row about the thing itself said so.
+   * `QUESTION` is the person's own words. `ENVELOPE` means neither named one
+   * and this is where the project is authorized to look — which the objective
+   * says in those terms rather than asserting it about the subject.
+   */
+  jurisdiction: { value: string; from: 'SUBJECT' | 'QUESTION' | 'ENVELOPE' };
   compilerVersion: string;
 }
 
@@ -187,26 +185,41 @@ function clamp(text: string, max: number): string {
 }
 
 /**
- * Which jurisdiction the question is about.
+ * Which jurisdiction this work is about.
  *
- * The question's own words first: a question naming a state is about that
- * state, and if the envelope does not authorize it the compiler refuses rather
- * than quietly re-scoping the person's question to somewhere it is allowed to
- * look. Two states named is also a refusal — that is a decomposition decision,
- * and guessing which one is meant would be the compiler inventing scope.
+ * Three sources, in this order, and the order is the whole repair:
  *
- * Naming none falls back to the envelope's declared jurisdiction, which is what
- * the operator authorized for this project and is recorded as a fallback rather
- * than as something the question said.
+ *   1. **The subject's own row.** An idea raised from a connected record is
+ *      about a thing whose location is a column, not a turn of phrase. That
+ *      column outranks everything below it, because the sentence beneath it is
+ *      a paraphrase of the same row and a paraphrase can lose a field.
+ *   2. **The question's own words.** A question naming a state is about that
+ *      state, and if the envelope does not authorize it the compiler refuses
+ *      rather than quietly re-scoping the person's question to somewhere it is
+ *      allowed to look. Two states named is also a refusal — that is a
+ *      decomposition decision, and guessing which is meant would be the
+ *      compiler inventing scope.
+ *   3. **The envelope's**, and only when neither of the first two says
+ *      anything. It is recorded as `ENVELOPE` so the objective can say the
+ *      jurisdiction is where this project may *look* rather than where the
+ *      subject *is*.
+ *
+ * The defect this replaces: a record whose row said `state: "OH"` named no
+ * state in prose — `OH` is not the word `ohio` — fell through to the envelope,
+ * and was compiled as *"Establish, from official Michigan public records, …"*
+ * about a deal in Ohio. Research against that specification would have
+ * answered a different question correctly, which is worse than not researching.
+ *
+ * A subject and a question naming **different** states is a refusal rather than
+ * a precedence question: two rows disagree about what the work is about, and
+ * choosing one would be choosing which to ignore.
  */
 function jurisdictionFor(
   question: string,
   envelope: ApprovalEnvelope,
-): { value: string; from: 'QUESTION' | 'ENVELOPE' } | { refusal: string } {
-  const haystack = question.toLowerCase();
-  const named = US_STATES.filter((state) =>
-    new RegExp(`\\b${state}\\b`, 'i').test(haystack),
-  );
+  subject: SubjectContext,
+): { value: string; from: 'SUBJECT' | 'QUESTION' | 'ENVELOPE' } | { refusal: string } {
+  const named = statesNamedIn(question).map(properName);
   if (named.length > 1) {
     return {
       refusal:
@@ -214,18 +227,46 @@ function jurisdictionFor(
         'it into one question per jurisdiction is a decision Brain does not take on its own',
     };
   }
-  const only = named[0];
-  if (!only) return { value: envelope.jurisdiction, from: 'ENVELOPE' };
+  const fromQuestion = named[0] ?? null;
+  const fromSubject = subject.jurisdiction?.value ?? null;
 
-  const proper = only.replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
-  if (!envelope.geography.test(proper) || envelope.forbiddenScope.test(proper)) {
+  if (fromSubject && fromQuestion && fromSubject !== fromQuestion) {
     return {
       refusal:
-        `this question is about ${proper}, and the standing authorization for this project ` +
-        `covers ${envelope.jurisdiction}`,
+        `the record this is about is in ${fromSubject} and the question is about ` +
+        `${fromQuestion}; Brain will not choose which of the two to ignore`,
     };
   }
-  return { value: proper, from: 'QUESTION' };
+
+  const chosen: { value: string; from: 'SUBJECT' | 'QUESTION' | 'ENVELOPE' } = fromSubject
+    ? { value: fromSubject, from: 'SUBJECT' }
+    : fromQuestion
+      ? { value: fromQuestion, from: 'QUESTION' }
+      : { value: envelope.jurisdiction, from: 'ENVELOPE' };
+
+  /*
+   * The envelope's own jurisdiction needs no check against itself. Anything the
+   * subject or the question named does — and a refusal here is an escalation
+   * with an answering transition: `judgeCandidate` parks the idea carrying this
+   * sentence, so the person who can authorize the jurisdiction can see that it
+   * is what is wanted.
+   */
+  if (chosen.from !== 'ENVELOPE') {
+    if (!envelope.geography.test(chosen.value) || envelope.forbiddenScope.test(chosen.value)) {
+      const because =
+        chosen.from === 'SUBJECT' && subject.jurisdiction
+          ? describeSource(subject.jurisdiction.from)
+          : 'the question says so';
+      return {
+        refusal:
+          `this work is about ${chosen.value} — ${because} — and the standing authorization ` +
+          `for this project covers ${envelope.jurisdiction}. Authorising research in ` +
+          `${chosen.value} is a decision for a person`,
+      };
+    }
+  }
+
+  return chosen;
 }
 
 /**
@@ -308,7 +349,15 @@ export async function compileMission(input: {
 
   const question = request || statement;
 
-  const jurisdiction = jurisdictionFor(question, envelope);
+  /*
+   * What the idea is about, from rows.
+   *
+   * Resolved here rather than inside `jurisdictionFor`, so the compiler's one
+   * database read is visible at the top level and the decision function stays
+   * pure and directly testable.
+   */
+  const subject = await subjectContextFor(candidate);
+  const jurisdiction = jurisdictionFor(question, envelope, subject);
   if ('refusal' in jurisdiction) return refuse(jurisdiction.refusal);
 
   const sources = sourceClassesFor(envelope);
@@ -335,8 +384,23 @@ export async function compileMission(input: {
    * world, and that is the line this compiler does not cross.
    */
   const title = clamp(tidy(candidate.title) || clamp(question, 80), 160);
+  /*
+   * The objective says where the answer comes from, and only claims where the
+   * subject *is* when something actually said so.
+   *
+   * With `SUBJECT` or `QUESTION` the jurisdiction is a fact about the work, and
+   * the sentence reads as it always did. With `ENVELOPE` nothing named one, so
+   * the sentence names the authorization instead — because the alternative is
+   * the defect this replaces: a specification asserting that a deal in Ohio is
+   * a question about Michigan records, which a worker would then research
+   * correctly and answer wrongly.
+   */
   const objective =
-    `Establish, from official ${jurisdiction.value} public records, ${lowerFirst(question)}`;
+    jurisdiction.from === 'ENVELOPE'
+      ? `Establish, from the official ${jurisdiction.value} public records this project is ` +
+        `authorized to search — nothing about this names a jurisdiction of its own — ` +
+        lowerFirst(question)
+      : `Establish, from official ${jurisdiction.value} public records, ${lowerFirst(question)}`;
   /*
    * Stable over time, and that is load-bearing rather than stylistic.
    *
