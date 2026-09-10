@@ -32,6 +32,7 @@ import { ensureUnit, getUnit, listUnits, promoteReadyUnits } from '../../repos/f
 import {
   attachRepair,
   listOpenFindings,
+  listUnqueuedFindings,
   recordFactoryEvent,
   resolveFinding,
 } from '../../repos/factoryFleet.ts';
@@ -106,7 +107,10 @@ export async function queueRepairs(
   campaign: FactoryCampaign,
   changeRequest: FactoryChangeRequest,
 ): Promise<RepairResult> {
-  const findings = await listOpenFindings(campaign.id);
+  // Only findings that have no repair yet. A finding whose repair is queued is
+  // still unresolved, so it belongs in the open set — but it does not need a
+  // second repair unit, and `attachRepair` would refuse one anyway.
+  const findings = await listUnqueuedFindings(campaign.id);
   const units = await listUnits(campaign.id);
   const result: RepairResult = { queued: [], skipped: [] };
 

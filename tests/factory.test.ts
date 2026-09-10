@@ -42,6 +42,7 @@ import {
 import {
   abandonOrphanedSessions,
   listFindings,
+  recordReview,
   listSessions,
   openSession,
   registerWorker,
@@ -51,6 +52,7 @@ import { createUser } from '../server/repos/identity.ts';
 import { submitObjective, approveObjective, amendContract } from '../server/services/factory/contract.ts';
 import { validatePlan, installPlan } from '../server/services/factory/planner.ts';
 import { checkOwnership, matchesGlob, integrateUnit } from '../server/services/factory/integrate.ts';
+import { gatingFindings, queueRepairs, reconcileRepairs } from '../server/services/factory/repair.ts';
 import { decideIndependence, parseReview } from '../server/services/factory/review.ts';
 import { maxOverlap, computeMetrics } from '../server/services/factory/metrics.ts';
 import { decide, tuneLaneTarget, chooseWorker } from '../server/services/factory/scheduler.ts';
@@ -991,6 +993,77 @@ describe('worker reports', () => {
     expect(report?.summary).toBe('second');
     expect(report?.commits).toEqual(['abc']);
     expect(parseWorkerReport('no block at all')).toBeNull();
+  });
+});
+
+describe('repairs', () => {
+  it('closes a finding when its repair integrated, and leaves one whose repair failed open', async () => {
+    const changeRequest = await approvedChangeRequest({ mutationScope: ['src/**'] });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: changeRequest.baseSha,
+      integrationBranch: 'factory/campaign/repairs',
+      laneTarget: 2,
+      laneTargetReason: 'initial',
+    });
+    const stored = await recordReview({
+      campaignId: campaign.id,
+      round: 1,
+      scope: 'CAMPAIGN',
+      reviewerSessionId: null,
+      reviewedSha: 'a'.repeat(40),
+      verdict: 'CHANGES_REQUIRED',
+      summary: 'two defects',
+      independence: 'WORKER_SEPARATED',
+      findings: [
+        {
+          key: 'fixed-one',
+          severity: 'MAJOR',
+          category: 'correctness',
+          statement: 'the first defect, which a repair will fix',
+          evidence: 'src/one.txt:1',
+        },
+        {
+          key: 'stuck-one',
+          severity: 'MAJOR',
+          category: 'correctness',
+          statement: 'the second defect, whose repair will run out of attempts',
+          evidence: 'src/two.txt:1',
+        },
+      ],
+    });
+    expect(stored.findings.length).toBe(2);
+
+    const queued = await queueRepairs(campaign, changeRequest);
+    expect(queued.queued.length).toBe(2);
+    // A second pass queues nothing: one finding, one repair.
+    expect((await queueRepairs(campaign, changeRequest)).queued.length).toBe(0);
+
+    const repairs = (await listUnits(campaign.id)).filter((unit) => unit.kind === 'REPAIR');
+    expect(repairs.length).toBe(2);
+    const landed = repairs.find((unit) => unit.unitKey.includes('fixed-one'));
+    const stuck = repairs.find((unit) => unit.unitKey.includes('stuck-one'));
+
+    // One repair integrates; the other spends every attempt.
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run(`UPDATE factory_work_units SET state = 'INTEGRATED' WHERE id = ?`, [
+      landed?.id ?? '',
+    ]);
+    await getDb().run(
+      `UPDATE factory_work_units SET state = 'FAILED', attempt = max_attempts WHERE id = ?`,
+      [stuck?.id ?? ''],
+    );
+
+    const reconciled = await reconcileRepairs(campaign.id);
+    expect(reconciled.repaired).toBe(1);
+    expect(reconciled.exhausted.length).toBe(1);
+
+    const findings = await listFindings(campaign.id);
+    expect(findings.find((f) => f.findingKey === 'fixed-one')?.state).toBe('REPAIRED');
+    // A defect nobody fixed is not a defect that went away.
+    expect(findings.find((f) => f.findingKey === 'stuck-one')?.state).toBe('REPAIR_QUEUED');
+    expect((await gatingFindings(campaign.id)).map((f) => f.findingKey)).toEqual(['stuck-one']);
   });
 });
 
