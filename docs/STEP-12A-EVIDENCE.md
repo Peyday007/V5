@@ -8666,11 +8666,136 @@ source that is genuinely unreachable; the alternative — widening the acceptabl
 source class to make the mirror official — was available and was not taken, for
 the same reason §22 records not taking it the first time this host refused.
 
-And answering it closes **both** remaining conditions, because §84's chain runs
-from exactly here: RECORD_GAPS → `unresolved_gap_policy` → `COMPLETE_WITH_GAPS`
-→ writeback → `unresolvedFollowOn` reads the judge's own `audit_gaps` row → a
-follow-on candidate → launched → `setNextMission` on the parent = `A13_AUTO_NEXT`.
-
 **STOP would not.** It cancels the mission, and the gate counts a stop separately
 and never as a pass — correctly, because condition 17 asks for a park and a
 *resume*, not for recovery.
+
+---
+
+### Correction: this decision closes A14, and not A13
+
+An earlier version of this section said answering it closes **both** remaining
+conditions, running §84's chain from here: RECORD_GAPS → `unresolved_gap_policy`
+→ `COMPLETE_WITH_GAPS` → writeback → `unresolvedFollowOn` reads the judge's own
+`audit_gaps` row → a follow-on candidate → `setNextMission` = `A13_AUTO_NEXT`.
+**Every link in that chain is real except the one that decides it**, and the
+correction is recorded rather than quietly deleted.
+
+`unresolvedFollowOn` has two routes and this packet takes neither.
+
+The **requirement** route asks which MANDATORY requirement the report did not
+answer. This packet has one requirement, `official-record`, and one fragment
+carrying it, and that fragment is `ACCEPTED` — which is what let it file at all.
+A compiled mission makes exactly one fragment per idea, so its requirement is
+answered by construction whenever the packet gets far enough to file. §24
+already records that: *the requirement route can never fire for a mission this
+Brain creates.*
+
+The **audit-gap** route reads `audit_gaps` and takes the first entry whose
+classification is in `RESEARCH_JUSTIFYING_GAPS` — `FOUNDATIONAL_GAP` or
+`TARGETED_RESEARCH_GAP`, the two the domain says may legitimately keep research
+open. `aud_4307d52632ee4907aa51` carries exactly one gap and the judge
+classified it **`PATCH`**: fix the report, not research it further. That is a
+defensible reading of its own finding — the claim is sourced, and what is wrong
+is which publisher it is sourced *to* — and it is model output that reached
+state through the validated structured path §8 requires. **Reclassifying it to
+make a gate pass would be the exact thing this codebase forbids**, so the gap
+stands as the judge wrote it and A13 does not fire from this packet.
+
+So the honest statement of where A13 is:
+
+- It is **downstream of a RECORD_GAPS decision** — §84's dependency, unchanged.
+- It additionally requires that the decided packet's judge left a **research-justifying**
+  gap with a bounded question written out.
+- Both conditions are met by **one** person's decision when they land on the
+  same packet. They do not here, because this judge's gap is a `PATCH`.
+
+Nothing about that is a defect to repair. It is the two rules meeting: a person
+decides whether a report files short, and a model's own classification decides
+whether what is left over is research. Brain is not permitted to supply either.
+
+## 89. The park nobody was going to answer — 2026-09-10
+
+`step10 russell-state` was written to read every live Russell row in one call,
+and the first thing it showed was not the thing it was written for. Ten
+missions, and **seven of them terminal with their packet still at
+`NEEDS_HUMAN`**:
+
+```
+rms_c0df05e2e6e94c888fd1  FAILED  packet orc_bf57174a711e42c0a18b NEEDS_HUMAN
+rms_9be8cc63e8d348d8a7da  FAILED  packet orc_855493a5015243d2b6e1 NEEDS_HUMAN
+rms_684c676e930a47eeb29b  FAILED  packet orc_acecd5b97e5248a693ca NEEDS_HUMAN
+rms_b37b8fe4688c46e0a48d  FAILED  packet orc_8adc4708f56f49a8964b NEEDS_HUMAN
+rms_49ae5e29a42a49ffad71  FAILED  packet orc_41bf77371d9c48d6bd2f NEEDS_HUMAN
+rms_91f7bda7a9964066b269  FAILED  packet orc_0c0186f1a58d47d6a1d7 NEEDS_HUMAN
+rms_8e96b5f246464c069451  FAILED  packet orc_e1afa97f566d4b468373 NEEDS_HUMAN
+```
+
+`packet-report orc_bf57174a711e42c0a18b` says what that costs:
+
+```
+  status      NEEDS_HUMAN   pass —
+WORK ITEMS (1)
+  RESEARCH_FRAGMENT LEASED           1
+  claimable now                      1
+      RESEARCH_FRAGMENT wki_a46f51742fb74ac280b3 LEASED attempt 3/2 held by wkr_1cdd82cfb2a54faf8edd
+```
+
+**Attempt 3 of 2, on an expired lease, still claimable.** An expired lease is
+claimable work (§19), so that is a worker Brain can still be sent for on a
+question whose mission was abandoned three attempts ago — and it had already
+been handed out three times.
+
+### Two things are wrong, and neither depends on the other
+
+**The status lies.** `NEEDS_HUMAN` says a person must decide. Nobody will be
+asked: the request was withdrawn when the mission failed, and a terminal mission
+opens no more. That is §22's sentence at a fourth altitude — *a state that says
+"waiting for a person" which that person cannot resolve is not waiting, it is
+stuck* — and this time the person cannot resolve it because they are never shown
+it at all.
+
+**The work is live.** `reconcileTerminalPackets` exists for exactly this row and
+could not see it: it selects on `TERMINAL_ORCHESTRATION`, and `NEEDS_HUMAN` is
+not in that set. The sweep written for stranded leases was blind to the packets
+that had them.
+
+### Not the fail path's defect, and that decided the fix
+
+The obvious reading is that §87's rule caused this — a packet with nothing to
+decide now fails its mission, and here are seven of them. It did not. `stop()`
+does the same thing: a **person** answering STOP moves the mission to
+`CANCELLED` and never touches the packet. So the defect is as old as the park
+itself and is reachable by a person's own decision, which means fixing it at the
+moment a mission goes terminal would have fixed one entrance and left the other.
+
+`concludeAbandonedParks` derives it from rows instead: `research_orchestrations`
+at `NEEDS_HUMAN` joined to a `russell_missions` row in `DONE`, `FAILED` or
+`CANCELLED`. Every entrance, and the seven already stranded — the same choice
+`lineageRecovery` made for the same reason, *an attribution that only observes
+forwards leaves history unreadable*.
+
+It sits **before** the terminal sweep in the tick, so a park concluded on a pass
+has its work retired on that same pass. A mission that goes terminal later in
+the same tick waits ten seconds for the next one; the test asserts that
+two-tick sequence explicitly rather than hiding it, because being late by one
+pass and reaching every row is the trade, not an accident.
+
+### What it does not do
+
+`CANCELLED`, not `FAILED`, and the distinction is load-bearing: the packet did
+not fail here. Whatever it did is already in its own `failure_reason` and that
+is left exactly as written — *No fragment cleared its evidence gate, so there is
+nothing to synthesize.* What happened is that the thing which asked the question
+stopped wanting the answer, and that is a cancellation.
+
+The guard is a compare-and-swap on `status = 'NEEDS_HUMAN'`, so a packet a
+person answers in the same instant is never reached back through. Retirement is
+left to `retireTerminalWork`, which already refuses to touch a live lease. Every
+fragment, claim, pass, refusal and reason keeps its row, and an append-only
+`RESEARCH_CANCELLED` event carries the mission, its state and the reason.
+
+**It frees no capacity and unblocks no acceptance.** The concurrency reservation
+belongs to `rms_1a86ee44b40847308174`, whose mission is `NEEDS_HUMAN` and
+therefore not terminal, so this reconciliation cannot see it and does not try
+to. What it stops is workers being spent on questions nobody is waiting for.

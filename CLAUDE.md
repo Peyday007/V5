@@ -1217,6 +1217,22 @@ rules.
   because a compiler that read intent would be the model judgment §8 keeps out of
   state. What changes in that case is the question, never the compiler.
 
+- **A mission going terminal does not finish the packet it owned, and a park
+  nobody will be asked about keeps its work claimable.** Seven production
+  packets sat at `NEEDS_HUMAN` under a terminal mission, one of them holding a
+  `RESEARCH_FRAGMENT` at attempt 3 of 2 on an expired lease — claimable work
+  (§19) for a question abandoned three attempts earlier, and
+  `reconcileTerminalPackets` could not see it because `NEEDS_HUMAN` is not a
+  terminal status. Both halves are wrong on their own: the status says a person
+  must decide when nobody will ever be asked, and the queue keeps offering the
+  work. It is **not** the fail path's defect — a person answering STOP leaves
+  the identical state — so the remedy is derived from rows
+  (`concludeAbandonedParks`) rather than hooked to the moment a mission ends,
+  because a hook fixes one entrance and the rows reach every entrance plus the
+  ones already stranded. `CANCELLED` rather than `FAILED`: the packet's own
+  recorded reason stands untouched, and what changed is that the thing which
+  asked the question stopped wanting the answer.
+
 - **A packet's work reaches a worker inside a bin, so a live packet whose bin
   cannot deliver is a packet nothing can be sent for.** Two ways in: a bin
   parked at `NEEDS_HUMAN` on a condition that has since been resolved, and a

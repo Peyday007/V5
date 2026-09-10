@@ -90,6 +90,7 @@ import { createRun } from '../server/repos/runs.ts';
 import { NEEDS_HUMAN_CHOICES } from '../server/services/russell/needsHuman.ts';
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
 import { listTurns, createConversation, getConversation } from '../server/repos/russellConversations.ts';
+import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { applyTurn, beginTurn, TURN_UNIT_KEY } from '../server/services/russell/turn.ts';
 import { FIELD_LIMITS, REQUIRED_PART } from '../server/services/russell/proposal.ts';
 import { assignNextBin, getBin, putBinUnitResult, terminateUnleasedBin } from '../server/repos/bins.ts';
@@ -1512,6 +1513,66 @@ describe('the loop keeps going without anybody watching', () => {
     expect(fragments.length).toBeGreaterThan(0);
     expect(fragments.every((fragment) => fragment.status === 'BLOCKED')).toBe(true);
     expect(fragments.some((fragment) => /domain mismatch/i.test(fragment.blockedReason ?? ''))).toBe(true);
+  });
+
+  it('finishes a park whose mission has already gone, and takes its work off the queue', async () => {
+    /*
+     * The defect production had seven of, and one door along from the rule
+     * above rather than the same door.
+     *
+     * Failing the mission is right and it is only half a transition: the
+     * *packet* stays at `NEEDS_HUMAN`, which says a person must decide, and
+     * nobody will ever be asked — the request was withdrawn and a terminal
+     * mission opens no more. `reconcileTerminalPackets` retires exactly the
+     * work such a packet still holds, and selects on `TERMINAL_ORCHESTRATION`,
+     * which `NEEDS_HUMAN` is not. So `orc_bf57174a711e42c0a18b` sat with a
+     * `RESEARCH_FRAGMENT` at attempt 3 of 2 and an expired lease — claimable
+     * work (§19) for a question abandoned three attempts earlier.
+     *
+     * The queued item below is what a worker would be handed. It is enqueued
+     * against the packet the ordinary way, so nothing about this shape is
+     * arranged: the fixture fails the mission through the same tick the rule
+     * above runs in, and the assertion is about what is left afterwards.
+     */
+    const conversation = await ownedConversation('A park nobody will answer');
+    const mission = await parkedMission(conversation.id, 'abandoned-park');
+    await withEveryFragmentRefused(mission.orchestrationId!, layerId, projectId);
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'No fragment cleared its evidence gate, so there is nothing to synthesize.',
+    });
+    const stranded = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_FRAGMENT',
+      orchestrationId: mission.orchestrationId!,
+      createdByType: 'SYSTEM',
+    });
+
+    /*
+     * Two ticks, and the second one is the assertion rather than a retry.
+     *
+     * The first fails the mission — the rule above — and the sweep had already
+     * run by then, because this is derived from rows and not hooked to the
+     * moment. The second reads the world as it now is: a park whose mission is
+     * gone. Ten seconds in production, and the property being tested is that
+     * nobody has to have been present for either of them.
+     */
+    await tick('instance-a');
+    expect((await getOrchestration(mission.orchestrationId!))!.status).toBe('NEEDS_HUMAN');
+    await tick('instance-a');
+
+    const packet = (await getOrchestration(mission.orchestrationId!))!;
+    expect((await getMission(mission.id))!.state).toBe('FAILED');
+    expect(packet.status).toBe('CANCELLED');
+    expect(packet.cancelReason).toMatch(/nobody is going to answer/i);
+    // The packet's own account of what it did is left exactly as recorded.
+    expect(packet.failureReason).toMatch(/cleared its evidence gate/i);
+
+    // And the work a worker could still have been sent for is off the queue,
+    // with the reason on the row rather than a bare cancellation.
+    const item = (await getWorkItem(stranded.id))!;
+    expect(item.state).toBe('CANCELLED');
+    expect(item.cancelledReason ?? '').toMatch(/concluded|settled/i);
   });
 
   it('takes back a park that was already open before the rule existed', async () => {

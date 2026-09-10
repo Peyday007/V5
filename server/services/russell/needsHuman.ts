@@ -41,6 +41,7 @@ import {
 import { getUser } from '../../repos/identity.ts';
 import { getDb } from '../../db/database.ts';
 import { recordEvent } from '../../repos/events.ts';
+import { nowIso } from '../../repos/util.ts';
 import { authorizeUnresolvedGaps } from '../research/gapPolicy.ts';
 import { advancePacket, approvePlan } from '../research/packetRunner.ts';
 import type {
@@ -871,4 +872,115 @@ async function recordGaps(
     missionId: mission.id,
     settled: true,
   };
+}
+
+/**
+ * A park nobody is going to answer.
+ *
+ * The third altitude of §24's own sentence, found by reading production rather
+ * than by reasoning about it. Seven packets sat at `NEEDS_HUMAN` whose Russell
+ * mission had already gone terminal, and one of them —
+ * `orc_bf57174a711e42c0a18b` — still held a `RESEARCH_FRAGMENT` at attempt 3 of
+ * 2, `LEASED` on an expired lease and therefore claimable. An expired lease is
+ * claimable work (§19), so that is a worker Brain can still be sent for on a
+ * question whose mission was abandoned three attempts ago.
+ *
+ * Both halves are wrong independently:
+ *
+ *   - **The status lies.** `NEEDS_HUMAN` says a person must decide. Nobody will
+ *     be asked: the request was withdrawn when the mission failed, and a
+ *     terminal mission opens no new ones. That is *"a state that says waiting
+ *     for a person which that person cannot resolve"* — stuck, not waiting.
+ *   - **The work is live.** `reconcileTerminalPackets` retires exactly this,
+ *     and it selects on `TERMINAL_ORCHESTRATION`, which `NEEDS_HUMAN` is not.
+ *     So the sweep written for stranded leases could not see the packets that
+ *     had them.
+ *
+ * **This is not specific to the fail path that found it.** A person answering
+ * `STOP` leaves the packet in the identical state — `stop()` moves the mission
+ * to `CANCELLED` and never touches the packet — so the defect is as old as the
+ * park itself and reachable by a person's own decision. Fixing it at the moment
+ * a mission goes terminal would have fixed one entrance; deriving it from the
+ * rows fixes every entrance, and reaches the seven already stranded. That is
+ * the same choice `lineageRecovery` made, for the same reason: *an attribution
+ * that only observes forwards leaves history unreadable*.
+ *
+ * `CANCELLED` rather than `FAILED`, and the distinction is load-bearing. The
+ * packet did not fail here — whatever it did is already written in its own
+ * `failure_reason`, and this leaves that exactly as recorded. What happened is
+ * that the thing which asked the question stopped wanting the answer, and that
+ * is a cancellation. Nothing else is touched: every fragment, claim, pass,
+ * refusal and reason keeps its row, and the retirement is left to the sweep
+ * that already knows how to do it without disturbing a live lease.
+ *
+ * The guard is a compare-and-swap on the status the select read, so a packet a
+ * person answers in the same instant is never reached back through.
+ */
+export async function concludeAbandonedParks(
+  limit: number,
+): Promise<{ orchestrationId: string; missionId: string; missionState: string }[]> {
+  const rows = await getDb().all<{
+    orchestration_id: string;
+    run_id: string;
+    layer_id: string;
+    mission_id: string;
+    project_id: string;
+    mission_state: string;
+    terminal_reason: string | null;
+  }>(
+    `SELECT o.id AS orchestration_id,
+            m.id AS mission_id,
+            m.project_id AS project_id,
+            o.run_id AS run_id,
+            o.layer_id AS layer_id,
+            m.state AS mission_state,
+            m.terminal_reason AS terminal_reason
+       FROM research_orchestrations o
+       JOIN russell_missions m ON m.orchestration_id = o.id
+      WHERE o.status = 'NEEDS_HUMAN'
+        AND m.state IN ('DONE', 'FAILED', 'CANCELLED')
+      ORDER BY o.id
+      LIMIT ?`,
+    [Math.max(1, limit)] as never[],
+  );
+
+  const concluded: { orchestrationId: string; missionId: string; missionState: string }[] = [];
+  for (const row of rows) {
+    const reason =
+      `The mission that asked this question is ${row.mission_state}, so nobody is going to ` +
+      'answer the decision this packet stopped at. Cancelled rather than left parked: a park ' +
+      'nobody will be asked about keeps its outstanding work claimable, and a worker sent for ' +
+      'it would spend an activation on a question that was abandoned' +
+      (row.terminal_reason ? ` — ${row.terminal_reason}` : '') +
+      '. Nothing else is altered; this packet keeps every row and every reason it recorded.';
+    const at = nowIso();
+    const result = await getDb().run(
+      `UPDATE research_orchestrations
+          SET status = 'CANCELLED', cancelled_at = ?, cancel_reason = ?, updated_at = ?
+        WHERE id = ? AND status = 'NEEDS_HUMAN'`,
+      [at, reason, at, row.orchestration_id] as never[],
+    );
+    if (result.changes !== 1) continue;
+    await recordEvent({
+      projectId: row.project_id,
+      layerId: row.layer_id,
+      entityType: 'RUN',
+      entityId: row.run_id,
+      eventType: 'RESEARCH_CANCELLED',
+      payload: {
+        orchestrationId: row.orchestration_id,
+        missionId: row.mission_id,
+        missionState: row.mission_state,
+        abandonedPark: true,
+        reason,
+        surface: 'RUSSELL',
+      },
+    });
+    concluded.push({
+      orchestrationId: row.orchestration_id,
+      missionId: row.mission_id,
+      missionState: row.mission_state,
+    });
+  }
+  return concluded;
 }
