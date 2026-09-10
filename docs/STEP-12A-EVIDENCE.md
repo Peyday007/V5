@@ -7864,7 +7864,19 @@ write is guarded on the column still being null, so a recovered value can never
 replace a recorded one. It is idempotent and self-limiting — once a session is
 observed and a pass attributed, neither query returns them again.
 
-Three tests, two of which bite. The recovery test deletes the observation for a
+The live arm alone was not enough, and production said so within the hour.
+`audit-lineage` after the release still read `routine=— account=—` on the
+primary pass: `bins.lease_credential_id` is current state, cleared on release
+and on completion, so for a bin that has finished the live arm finds nothing.
+`work_leases` is append-only by design — *"a failed attempt is evidence, not
+something to tidy away"* — so the durable arm walks the claim to the work item,
+the item to its bin, the bin to the `BIN_ASSIGNED` that claim followed, and
+that arrival to the fire it superseded. `BIN_ASSIGNED` and not any arrival: a
+`BIN_TAKEOVER` session took an expired lease, and the fire at that generation
+was the previous owner's, which is the refusal `creditDispatchArrival` already
+makes live.
+
+Four tests, three of which bite. The recovery test deletes the observation for a
 session that really was fired, really did arrive and really did produce a pass,
 which is production's exact shape; it asserts the blank pass is filled from the
 dispatch, that a pass already naming a *different* account keeps it, and that a
@@ -7880,12 +7892,31 @@ this Brain, and the two scenarios declared for one each failed differently.
 `S12A-ACC-3` launched a mission. Cause and repair are in §77: `askArchive` read
 the worker's summary rather than the person's question.
 
-`S12A-ACC-5` never reached the repaired check at all. Its candidate
-`rcn_d7bbaf012ce447aabc6b` is `PARKED`, and the branch that parks before the
-archive is consulted is the compiler's. The question said *"Outside California,
-is that summary still current"*; `jurisdictionFor` matches US state names in the
-question, found `california`, and the standing authorization for this project
-covers Michigan. The compiler cannot tell "about California" from "outside
+`S12A-ACC-5` never reached the repaired check at all. `candidate
+rcn_d7bbaf012ce447aabc6b` — the new diagnostic, on the deployed Brain — says
+which branch decided it, in the words Brain itself stored:
+
+```
+  state          PARKED
+  priority       PARKED
+  reason         Brain could not specify this: this work is about California — the
+                 question says so — and the standing authorization for this project
+                 covers Michigan. Authorising research in California is a decision
+                 for a person
+  judgment
+    decidedBy                  COMPILER
+    compilerVersion            2026-09-09.1
+    claimsConsidered           46
+  probes 0
+  missions 0
+```
+
+The question said *"Outside California, is that summary still current"*;
+`jurisdictionFor` matches US state names in the question, found `california`,
+and the standing authorization for this project covers Michigan. The archive
+was never asked — `claimsConsidered` is recorded because `askArchive` runs
+first, but its verdict never reached `judge()`, because the compiler refused in
+between. The compiler cannot tell "about California" from "outside
 California", and it must not try — a compiler that inferred intent from
 surrounding words would be the model judgment §24 keeps out of it. Refusing is
 the safe direction, so the question changes and the compiler does not.
