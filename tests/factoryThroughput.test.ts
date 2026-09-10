@@ -221,6 +221,53 @@ describe('computeThroughput over a campaign with two timed sessions', () => {
     expect(implementer?.unitsMerged.evidence).toBe('UNKNOWN');
     expect(implementer?.unitsMerged.value).toBeNull();
   });
+
+  it('separates the observed peak from an unreached ceiling: two sessions overlapped but nothing was ever refused', () => {
+    // Both sessions share the default startedAt/endedAt from the `session()`
+    // builder, so they genuinely overlapped and the peak is a real MEASURED 2 —
+    // but neither session is RATE_LIMITED, so that peak must not be reported as
+    // a ceiling. Asserting only on `maxObservedConcurrency` (as the pre-repair
+    // `return observed` did) would pass even if `ceiling` were wired straight
+    // back to it; this pins the two numbers apart.
+    expect(report.maxObservedConcurrency.value).toBe(2);
+    expect(report.maxObservedConcurrency.evidence).toBe('MEASURED');
+    expect(report.ceiling.value).toBeNull();
+    expect(report.ceiling.evidence).toBe('UNKNOWN');
+    expect(report.ceiling).not.toEqual(report.maxObservedConcurrency);
+  });
+});
+
+describe('computeThroughput over a campaign with a RATE_LIMITED session', () => {
+  const units = [unit({ id: 'u1', unitKey: 'u1' }), unit({ id: 'u2', unitKey: 'u2' })];
+  const sessions = [
+    session({ id: 's1', unitId: 'u1', workerId: 'w1', accountRef: 'acct-1', durationMs: 60_000 }),
+    session({
+      id: 's2',
+      unitId: 'u2',
+      workerId: 'w2',
+      accountRef: 'acct-2',
+      durationMs: 30_000,
+      state: 'RATE_LIMITED',
+    }),
+  ];
+  const metrics = computeMetrics({
+    campaignId: 'c1',
+    units,
+    sessions,
+    integrations: [],
+    events: [],
+    reviews: [],
+    findings: [],
+  });
+  const report = computeThroughput(metrics);
+
+  it('reports the same overlapped peak as both the observed number and, now labelled PROVIDER_ENFORCED, the ceiling', () => {
+    expect(report.maxObservedConcurrency.value).toBe(2);
+    expect(report.maxObservedConcurrency.evidence).toBe('MEASURED');
+    expect(report.ceiling.value).toBe(2);
+    expect(report.ceiling.evidence).toBe('PROVIDER_ENFORCED');
+    expect(report.ceiling.basis).toContain('RATE_LIMITED');
+  });
 });
 
 describe('throughputReport against real rows', () => {
