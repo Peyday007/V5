@@ -1539,6 +1539,24 @@ derives.**
   `services/identity/policy.ts` against one project and one scope. The person's
   name crosses as **attribution** and decides nothing — a name a remote system
   supplied is not an identity, and nothing downstream reads it.
+- **A site's identity is made from a constant; only its secret needs a person.**
+  A connected site is three things — a worker, a membership on one project, and
+  a credential — and exactly one of them is a secret. The membership is the one
+  with a wrong answer in it, and the wrong answer is *silent*: grant a site
+  `CONNECTOR_SCOPES` and every connector call is refused with the same 404 a
+  missing project gives, which is invariant 23 behaving exactly as designed and
+  telling the operator nothing. So the set is chosen from
+  `SITE_CONNECTOR_SCOPES` in `services/identity/connectSite.ts`, which the
+  console and the scripted entrance both call, rather than from a picker.
+  Because the membership upsert rewrites the scopes every time, running it is a
+  repair as well as a setup. It runs inside the container through the release
+  pipeline, where `verify-hosted` and `authorize-gap-policy` already run:
+  reaching that shell is the authentication, and `--admin` is the attribution,
+  resolved against the database rather than trusted. **It never issues a
+  credential and cannot print one** — a credential is shown once, into one
+  response, to somebody signed in, and a workflow log is a log that outlives its
+  run. Invariant 22 admits no exception for a log that is convenient.
+
 - **There is no connect policy module and there must never be one.** Every route
   resolves through `requireProject`, and absent and forbidden are the same 404
   with the same body — invariant 23 at a new door.
@@ -1651,6 +1669,7 @@ server/
     importer.ts         PDF import and registration
     reconcile.ts        scan & reconcile
     identity/
+      connectSite.ts    a connected site's worker and its scope set, from a constant
       secrets.ts        scrypt for passwords, sha-256 for generated credentials
       context.ts        the request's principal, and why it is also on the request
       policy.ts         roles, scopes, and the one authorization decision
@@ -1768,6 +1787,8 @@ client/                 React UI
   src/russell/          the default shell: conversation, thin views, states
   src/App.tsx           the legacy console, at /legacy
 scripts/
+  connect-site.ts           a site's worker and grant, made without a browser
+  connect-report.ts         what a connected site has done, read from inside
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
   fleet.ts                  the operator's fleet surface: register, target, explain
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
