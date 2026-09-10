@@ -38,6 +38,7 @@ import {
   latestCheckpoint,
   claimCampaignTick,
   extendCampaignTick,
+  sweepExpiredUnitLeases,
   approveChangeRequest,
 } from '../server/repos/factory.ts';
 import {
@@ -443,6 +444,50 @@ describe('claiming', () => {
     });
     expect(second.length).toBe(0);
     expect(skips.join(' ')).toMatch(/overlaps/);
+  });
+
+  it('leaves an expired lease claimable so the claim can credit the takeover', async () => {
+    const { campaignId, unitIds } = await campaignWithUnits();
+    const claimed = await claimUnits({
+      campaignId,
+      workerId: 'w1',
+      unitIds: [unitIds[0] ?? ''],
+      leaseMs: 30_000,
+    });
+    expect(claimed.length).toBe(1);
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run(`UPDATE factory_work_units SET lease_expires_at = ? WHERE id = ?`, [
+      plusMs(factoryNow(), -60_000),
+      unitIds[0] ?? '',
+    ]);
+
+    // The sweep must not touch it: a unit with attempts left is claimable work,
+    // and sweeping it to READY first destroys the only record that a worker died
+    // holding it. Reverting this makes the takeover assertion below fail.
+    expect(await sweepExpiredUnitLeases()).toBe(0);
+    const stillLeased = await getUnit(unitIds[0] ?? '');
+    expect(stillLeased?.state).toBe('LEASED');
+
+    const takeover = await claimUnits({ campaignId, workerId: 'w2', unitIds: [unitIds[0] ?? ''] });
+    expect(takeover[0]?.takeoverFrom).toBe('w1');
+  });
+
+  it('retires an expired lease only when no attempt is left', async () => {
+    const { campaignId, unitIds } = await campaignWithUnits();
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run(`UPDATE factory_work_units SET max_attempts = 1 WHERE id = ?`, [
+      unitIds[0] ?? '',
+    ]);
+    const claimed = await claimUnits({ campaignId, workerId: 'w1', unitIds: [unitIds[0] ?? ''] });
+    expect(claimed.length).toBe(1);
+    await getDb().run(`UPDATE factory_work_units SET lease_expires_at = ? WHERE id = ?`, [
+      plusMs(factoryNow(), -60_000),
+      unitIds[0] ?? '',
+    ]);
+    expect(await sweepExpiredUnitLeases()).toBe(1);
+    const retired = await getUnit(unitIds[0] ?? '');
+    expect(retired?.state).toBe('FAILED');
+    expect(retired?.failureCategory).toBe('WORKER_LOST');
   });
 
   it('treats an expired lease as claimable work, and credits the takeover', async () => {

@@ -1468,22 +1468,29 @@ export async function listCheckpoints(unitId: string): Promise<FactoryCheckpoint
 }
 
 /**
- * Close leases that have run out.
+ * Retire leases that have run out and that nothing will ever claim.
  *
- * Deliberately not load-bearing. An expired lease is already claimable by the
- * claim query, so this exists to make the state readable and the metrics
- * honest; delete it and nothing breaks. Exactly what `sweepExpiredLeases` is
- * for in the work queue, and for the same reason.
+ * Deliberately not load-bearing, and deliberately narrower than it first was.
+ * An expired lease on a unit that still has attempts left is **claimable work**:
+ * the claim query takes it, and takes it as a *takeover*, recording which worker
+ * died holding it. The first version swept those rows to READY first — which
+ * left the same work claimable and destroyed the only evidence that a recovery
+ * had happened. A signal that exists only if you do not sweep is a signal you
+ * lose, which is §23's arrival-credit defect in a new place.
+ *
+ * So this touches only rows no claim will come for: an expired lease on a unit
+ * whose attempts are spent is a unit that failed, and saying so is the whole of
+ * its job. Delete this function and nothing breaks.
  */
 export async function sweepExpiredUnitLeases(): Promise<number> {
   const at = factoryNow();
   const result = await getDb().run(
     `UPDATE factory_work_units
-        SET state = 'READY', lease_id = NULL, lease_worker_id = NULL, lease_expires_at = NULL,
+        SET state = 'FAILED', lease_id = NULL, lease_worker_id = NULL, lease_expires_at = NULL,
             failure_category = COALESCE(failure_category, 'WORKER_LOST'),
-            failure_detail = COALESCE(failure_detail, 'The lease expired and the unit was reclaimed.'),
+            failure_detail = COALESCE(failure_detail, 'The lease expired with no attempts left.'),
             updated_at = ?
-      WHERE state = 'LEASED' AND lease_expires_at <= ? AND attempt < max_attempts`,
+      WHERE state = 'LEASED' AND lease_expires_at <= ? AND attempt >= max_attempts`,
     [at, at],
   );
   return result.changes;

@@ -1301,7 +1301,7 @@ export async function runCampaign(
   const reports: TickReport[] = [];
 
   let heldInARow = 0;
-  for (let tick = 0; tick < maxTicks; tick += 1) {
+  for (let tick = 0; tick < maxTicks; ) {
     const report = await tickCampaign(campaignId, options);
     reports.push(report);
     options.onTick?.(report);
@@ -1311,12 +1311,19 @@ export async function runCampaign(
       // Somebody else is advancing this campaign, or their tick lease is still
       // running out. Wait rather than exit: a dispatcher that gave up here would
       // leave a campaign with nobody driving it whenever one was replaced.
+      //
+      // And waiting does not spend a tick. The first version counted it, so a
+      // dispatcher asked to run sixty ticks gave up after sixty *refusals* —
+      // twenty minutes of waiting and no work — which is the opposite of what
+      // the retry was for. `heldInARow` is the bound on waiting; `maxTicks` is
+      // the bound on working.
       heldInARow += 1;
       if (heldInARow > MAX_HELD_TICKS) break;
       await new Promise((resolve) => setTimeout(resolve, HELD_TICK_WAIT_MS));
       continue;
     }
     heldInARow = 0;
+    tick += 1;
     if (report.state === 'BLOCKED' && !report.progress) break;
     if (!report.progress && report.dispatched === 0 && !report.reviewed) break;
   }

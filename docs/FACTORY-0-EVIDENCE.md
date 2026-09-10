@@ -112,7 +112,13 @@ with the reason recorded rather than quietly patched.
    LEASED, and made a failed `git add` recoverable only by a lease expiry. Each
    lane is now contained: it fails its own unit and records why.
 
-10. **The sweeper was eating the evidence that recovery happened.** An expired
+10. **The sweeper was eating the evidence that recovery happened — and the first
+    fix for it never landed.** The correction is recorded twice because it
+    happened twice: the change was written, the commit message described it, and
+    the edit had silently matched nothing, so what was committed was the comment
+    beside it. Nothing caught that until a recovery drill produced a takeover
+    with no takeover recorded. It is fixed now with a test that fails if the
+    sweep widens again — which is what should have pinned it the first time. An expired
     lease on a unit with attempts left is claimable work, and the claim path
     takes it as a *takeover*, recording which worker died holding it. The
     sweeper ran first and swept those rows to READY — same work, no record. A
