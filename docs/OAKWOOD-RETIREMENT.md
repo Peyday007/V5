@@ -300,3 +300,38 @@ fleet explain-route <bin>              # which surface Brain would fire, and wha
 cannot describe a scope the claim would not apply. Neither writes anything, and
 neither authenticates anything: a real claim is still decided inside the claim
 loop at the moment it is made.
+
+## The checks
+
+- **SQLite suite**: 2143 passed, 37 skipped, 98 files (1 skipped).
+- **Postgres suite**: the same suite against the other backend,
+  run 34646667102 — `completed success`. `040_worker_routing.sql` and its
+  Postgres twin `031_worker_routing.sql` both apply, and `worker_routing`
+  carries the `seq` identity column every cursor-ordered query needs.
+- **Both boot paths**: a fresh database applied every migration and answered
+  `healthz`; an existing database migrated forward and answered after a
+  restart. `Deploy` does the second one for real on every release — it removes
+  a secret, which restarts the machine, and then re-runs the hosted
+  verification against what came back.
+- **Deployed only from canonical `production`**, through `Deploy`, with the
+  first job refusing any other ref and the `production` environment's branch
+  policy refusing one the workflow guard would miss.
+- **Paid API executions recorded: 0.** Nothing here added a provider, a key or a
+  spend path; the deployed Brain still has no `ANTHROPIC_API_KEY` and no
+  `BRAIN_PROVIDER`.
+
+## The decision matrix, rehearsed before it was taken
+
+`admin routing check`, over two workers and two bins, so the boundary is shown in
+both directions rather than only in the direction that refuses:
+
+| worker serves | bin | decision |
+| --- | --- | --- |
+| `RESEARCH,GENERAL` | a Step 12A research packet | **WOULD BE HANDED IT** |
+| `RESEARCH,GENERAL` | a factory unit bin naming Oakwood | `FAMILY_NOT_SERVED` |
+| `FACTORY` for `peyday007/oakwood-junk-removal` | the same research packet | `FAMILY_NOT_SERVED` |
+| `FACTORY` for `peyday007/oakwood-junk-removal` | the factory unit bin | **WOULD BE HANDED IT** |
+
+Each refusal names the dimension and says the list is exhaustive. The fourth row
+is what makes the second and third rows meaningful: the boundary refuses
+crossings, not work.
