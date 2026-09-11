@@ -1,11 +1,17 @@
 # Deploying the connector
 
-The package is deploy-ready and **has deliberately not been deployed**. This
-file says why, and what the one action is.
+**Done, and superseded.** The connector is deployed, the site is connected, and
+the production golden loop passes. What follows is kept because the reasoning is
+the reason the migration numbering held — the file is history now, not a plan.
+
+**Where deployment actually happens is `docs/DEPLOYMENT.md`:** one canonical
+branch, `production`, named in `.github/CANONICAL_BRANCH`. Everything below
+describes a world in which three branches each deployed themselves, which is
+precisely the thing that went wrong and the reason that rule exists.
 
 ---
 
-## Why it is not deployed
+## Why it was not deployed at first
 
 The production Brain runs from `claude/zealous-hypatia-78a2yp`, which is being
 actively worked and deployed by the Step 12A closure. That branch and this one
@@ -29,37 +35,15 @@ of the loop is unavailable anyway (see below).
 So the reconciliation happens in the repository first, and only then does
 anything deploy.
 
-## The one action
+## What actually happened
 
-`claude/blissful-tesla-a31dc1` already contains everything on
-`claude/zealous-hypatia-78a2yp` plus the connector, with the migration
-renumbered past theirs. Once the Step 12A closure is at a point where it can
-take it:
+The merge did not go into the Step 12A branch. Both of those branches — and the
+Software Factory branch — now merge into `production`, which is the only branch
+that deploys. Migration `036` / pg `027` applied to production as the only
+claimant of its number, exactly as this file predicted it must, and the Software
+Factory's `037`/`038` and pg `028`/`029` follow it without a collision.
 
-1. Merge `claude/blissful-tesla-a31dc1` into `claude/zealous-hypatia-78a2yp`
-   (or make it the deployment branch — it is a strict superset).
-2. Run the **Deploy** workflow on that branch.
-
-Migration `036` then applies to production as the only claimant of that number,
-and every subsequent migration on either line is `037`.
-
-## What deploying does, and does not do
-
-| | |
-|---|---|
-| Creates | `external_records`, `external_record_rejections`, `storage_readings` |
-| Alters | nothing |
-| Deletes | nothing |
-| Reads | nothing that existed before |
-| Costs | no new service, no new secret, no paid provider |
-
-Rolling back is deploying the previous image. The three tables stay, unread by
-anything; no other table references them, and no existing row changes. To
-remove them: `DROP TABLE external_records, external_record_rejections,
-storage_readings;`
-
-## Connecting the site afterwards
-
-`docs/CONNECT.md` §6. Three steps in a browser, once — create the worker, grant
-it the project **as a connected site**, issue its credential — then three
-environment variables on the site.
+The prediction in the section above was right about the mechanism and wrong
+about the remedy: reconciling *into whichever branch happened to be deploying*
+would have left three branches able to deploy, and that is what came back to
+bite. The remedy is one branch, not a careful merge order.

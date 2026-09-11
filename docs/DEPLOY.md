@@ -15,7 +15,7 @@ deliberately, long after you have stopped needing it.
 ## Before you start
 
 ```bash
-git checkout claude/zealous-hypatia-78a2yp
+git checkout production          # the canonical branch; see docs/DEPLOYMENT.md
 npm install
 npm test          # 474 pass, 24 skipped — the skips are the Postgres-only tests
 npm run build

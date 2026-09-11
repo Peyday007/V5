@@ -57,6 +57,10 @@ on:
         default: 'the repository layer against the other backend'
   push:
     branches:
+      # The canonical branch, because that is the tree that deploys. A feature
+      # branch may add itself here while it is being worked on; production must
+      # never come off the list.
+      - 'production'
       - 'claude/pensive-bell-dr81a4'
 
 # One at a time, and the newest commit is the one worth the twenty minutes: a

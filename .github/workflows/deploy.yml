@@ -22,9 +22,11 @@
 # To deploy on every push instead, add:
 #
 #     push:
-#       branches: [claude/zealous-hypatia-78a2yp]
+#       branches: [production]
 #
-# under `on:`. One line, and the trade is the paragraph above.
+# under `on:`. One line, and the trade is the paragraph above. Only the
+# canonical branch belongs in that list — see `docs/DEPLOYMENT.md`, and the
+# `canonical` job below, which refuses every other ref anyway.
 
 name: Deploy
 
@@ -52,7 +54,63 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # -----------------------------------------------------------------------
+  # Only one branch may become production
+  # -----------------------------------------------------------------------
+  #
+  # Three branches once deployed to this one Fly app, and each overwrote the
+  # last: `/operator` came back twice in one evening because a branch that
+  # predated its removal deployed after the branch that removed it. A feature
+  # branch reaching production is not a mistake somebody makes once — it is the
+  # default behaviour of a dispatchable workflow with no opinion about its ref.
+  #
+  # So this job runs before anything else and refuses two different things:
+  #
+  #   * a ref that is not the canonical branch, whatever it contains; and
+  #   * the canonical branch when the remote has moved past the checkout, so a
+  #     re-run of an old dispatch cannot quietly ship an older tree.
+  #
+  # **Read this honestly: a guard inside a workflow file cannot bind a branch
+  # whose copy of the file predates it.** `workflow_dispatch` runs the workflow
+  # from the ref it is dispatched on, so an older branch carries an older
+  # deploy.yml and an older deploy.yml has no guard. The control that actually
+  # binds every ref is GitHub's own **deployment branch policy** on the
+  # `production` environment, which refuses the job before it starts and cannot
+  # be edited by the branch being deployed. This job is the fast, legible half;
+  # that setting is the enforcing half, and `docs/DEPLOYMENT.md` says how to set
+  # it. Neither is a substitute for the other.
+  canonical:
+    name: Refuse a branch that is not canonical
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: This ref must be the canonical branch
+        run: |
+          set -euo pipefail
+          canonical=$(tr -d '[:space:]' < .github/CANONICAL_BRANCH)
+          echo "canonical branch: $canonical"
+          echo "this ref:         ${{ github.ref_name }}"
+
+          if [ "${{ github.ref_name }}" != "$canonical" ]; then
+            echo "::error::Production deploys only from '$canonical'. This is '${{ github.ref_name }}'. Merge into $canonical and deploy that — a feature branch deploying directly is how an older tree overwrites a newer one."
+            exit 1
+          fi
+
+          # And it must not be behind its own remote. A re-run of an older
+          # dispatch is the same failure wearing the right branch name.
+          git fetch origin "$canonical" --quiet
+          behind=$(git rev-list --count "HEAD..origin/$canonical")
+          if [ "$behind" != "0" ]; then
+            echo "::error::This checkout is $behind commit(s) behind origin/$canonical, so deploying it would roll production back. Re-dispatch against the current tip."
+            exit 1
+          fi
+          echo "on $canonical, and level with origin. Proceeding."
+
   verify:
+    needs: canonical
     name: Typecheck and tests
     runs-on: ubuntu-latest
     steps:

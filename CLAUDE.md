@@ -158,6 +158,8 @@ There must be no workflow where the user has to remember "now go update the data
 35. No administration page: a decision a person makes belongs on the surface
     they already use, and everything else is a terminal where reaching the
     shell is the authentication.
+36. No production deployment from a branch that is not the canonical one named
+    in `.github/CANONICAL_BRANCH`, and none from a checkout behind it.
 
 ## 8. Model prose never mutates project state.
 
@@ -1811,6 +1813,46 @@ state in either mode: it is execution scratch, the evidence is the commits, the
 rows and the artifacts, and retiring one destroys nothing that mattered. It
 carries a symlink to the repository's `node_modules` because a worktree that
 cannot run the repository's own commands cannot be verified.
+
+## 28. One branch owns production.
+
+`.github/CANONICAL_BRANCH` names it, and it is **`production`**. Step 12A,
+Website Connection and the Software Factory merge *into* it and deploy from it;
+none of them deploys itself.
+
+**This is a rule written from damage, not from tidiness.** Three branches were
+dispatching the one `Deploy` workflow at the same Fly app, and each overwrote
+the last. `/operator` came back twice in one evening — nobody re-added it; a
+branch that predated its removal simply deployed after the branch that removed
+it, and a connector went missing the same way. A feature branch reaching
+production is not a mistake somebody makes once. It is the default behaviour of
+a dispatchable workflow with no opinion about its ref.
+
+The guard is the first job in `deploy.yml`, everything else `needs:` it, and it
+refuses two things rather than one: **a ref that is not canonical**, and **the
+canonical branch when the checkout is behind its own remote** — because a re-run
+of an older dispatch is the same rollback wearing the right branch name.
+
+- **Say what a workflow guard cannot do.** `workflow_dispatch` runs the workflow
+  file *from the ref it is dispatched on*, so a branch whose copy of
+  `deploy.yml` predates the guard has no guard. The control that binds every
+  ref is GitHub's **deployment branch policy** on the `production` environment:
+  it refuses the job before it starts and cannot be edited by the branch being
+  deployed. The job is the fast, legible half; that setting is the enforcing
+  half. Claiming the first is the whole control would be the kind of comfortable
+  half-truth this file exists to refuse — see `docs/DEPLOYMENT.md`.
+- **The branch name lives in one file.** The workflow reads
+  `.github/CANONICAL_BRANCH`; it does not restate the name. A second copy is a
+  second thing to forget.
+- **Converging branches is checked, not assumed.**
+  `tests/deploymentOwnership.test.ts` names a file each workstream owns and
+  fails if a merge dropped one, and walks both migration chains for a gap or a
+  collision. A merge that loses work is otherwise silent until production.
+- **A future session inherits this.** Do not dispatch `Deploy` on a feature
+  branch, do not add a second workflow that runs `flyctl deploy`, and do not
+  "temporarily" deploy a branch to test something — that is precisely what
+  happened, twice, and the cost was a deleted surface coming back.
+
 
 ---
 
