@@ -1841,6 +1841,22 @@ of an older dispatch is the same rollback wearing the right branch name.
   deployed. The job is the fast, legible half; that setting is the enforcing
   half. Claiming the first is the whole control would be the kind of comfortable
   half-truth this file exists to refuse — see `docs/DEPLOYMENT.md`.
+
+  **It is set, and it has been exercised rather than assumed.** A branch cut
+  from `production` — identical tree, so a fall-through deploy could only be a
+  no-op — was given a marker naming itself so the in-workflow guard passed and
+  execution reached the deploy job. GitHub refused it: *Branch "guard-probe" is
+  not allowed to deploy to production due to environment protection rules*, with
+  zero steps and no log, because no runner was ever allocated. The environments
+  API is blocked through the agent proxy, so this is the only way the policy can
+  be verified from here, and an unverified setting is not a control.
+
+  It binds the *next* deploy, not the last one:
+  `claude/zealous-hypatia-78a2yp` released an image at 01:35:30Z on 2026-09-11 —
+  after the canonical deploy — and put `/operator` back, because its two-job
+  `deploy.yml` predates the guard and the policy did not yet exist. Repaired by
+  re-deploying `production`. **That is the damage this rule is written from,
+  observed twice.**
 - **The branch name lives in one file.** The workflow reads
   `.github/CANONICAL_BRANCH`; it does not restate the name. A second copy is a
   second thing to forget.

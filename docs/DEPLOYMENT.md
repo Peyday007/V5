@@ -73,6 +73,43 @@ Once that is in place, dispatching `Deploy` on any other branch fails at the
 environment gate with *"Branch is not allowed to deploy to production"*, whatever
 that branch's workflow file says.
 
+### It is set, and it was proven rather than assumed
+
+The environments API is blocked through the agent proxy, so the policy cannot be
+*read* from here — only exercised. It was, on 2026-09-11:
+
+A throwaway branch `guard-probe` was cut from `production`, so its tree was
+identical and a fall-through deploy could only have been a no-op. Its
+`CANONICAL_BRANCH` named itself, so the in-workflow guard passed deliberately
+and execution actually reached the `deploy` job — which is the only place the
+environment can speak.
+
+The first attempt proved something else by accident:
+`tests/deploymentOwnership.test.ts` caught the tampered marker
+(*"expected 'guard-probe' to be 'production'"*), failed the verify job and
+skipped the deploy, leaving the question unasked. The suite doing its job is why
+the probe could not answer. Removing that one file on the probe branch let it
+through.
+
+The second attempt reached `Deploy to Fly`, and GitHub refused it:
+
+```
+Branch "guard-probe" is not allowed to deploy to production
+due to environment protection rules.
+```
+
+The job carried **zero steps and no log**, because no runner was ever allocated.
+That is the whole point: the refusal happens before the branch's own workflow
+file gets to run anything.
+
+**What this does not cover.** A branch that deployed *before* the policy existed
+already overwrote production once —
+`claude/zealous-hypatia-78a2yp` released an image at 01:35:30Z on 2026-09-11,
+thirty-three minutes after the canonical deploy, and put `/operator` back. Its
+run had only two jobs, because that branch's `deploy.yml` predates the
+`canonical` guard, and nothing refused it. The policy prevents the next one; it
+could not undo that one, which was repaired by re-deploying `production`.
+
 Optionally add **Required reviewers** to the same environment if you want a
 person to approve each production deploy. Nothing in this repository depends on
 that either way.
