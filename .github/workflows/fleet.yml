@@ -105,10 +105,11 @@ jobs:
             esac
           done
           # `extra` additionally allows spaces, because it is a sequence of
-          # flag/value pairs. Everything a shell could act on is still refused.
+          # flag/value pairs, and commas, because a capability list is one value
+          # with commas in it. Everything a shell could act on is still refused.
           case "$FLEET_EXTRA" in
-            *[!A-Za-z0-9_.:\ -]*)
-              echo "::error::Refusing the extra flags: same character class, plus spaces."
+            *[!A-Za-z0-9_.:,\ -]*)
+              echo "::error::Refusing the extra flags: same character class, plus spaces and commas."
               exit 1
               ;;
           esac

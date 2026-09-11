@@ -103,8 +103,8 @@ jobs:
               ;;
           esac
           case "$FACTORY_EXTRA" in
-            *[!A-Za-z0-9_.:/\ -]*)
-              echo "::error::Refusing the extra flags: the same class, plus spaces and slashes."
+            *[!A-Za-z0-9_.:/,\ -]*)
+              echo "::error::Refusing the extra flags: the same class, plus spaces, slashes and commas."
               exit 1
               ;;
           esac
