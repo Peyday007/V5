@@ -965,11 +965,9 @@ describe('a bin is not handed to a surface that cannot do it', () => {
     expect(verdict.ok).toBe(true);
   });
 
-  it('refuses one whose Routine is known and lacks it, and admits one that has it', async () => {
-    const { createAccount, createRoutine, bindRoutineWorker } = await import(
-      '../server/repos/fleet.ts'
-    );
-    const { recordWorkerSession } = await import('../server/repos/fleet.ts');
+  it('refuses only a surface it has observed arriving, and admits one that can push', async () => {
+    const { createAccount, createRoutine, bindRoutineWorker, recordWorkerSession } =
+      await import('../server/repos/fleet.ts');
     const account = await createAccount({ name: `acct-${Math.random().toString(36).slice(2)}` });
     const readOnly = await createRoutine({
       accountId: account.id,
@@ -1021,16 +1019,32 @@ describe('a bin is not handed to a surface that cannot do it', () => {
       memberships: [],
     } as unknown as Principal;
 
-    // One Routine, unambiguously bound: the surface is known, and it is known to
-    // be unable to push.
+    /*
+     * A binding alone is not evidence about an arriving session: one worker
+     * identity may serve several Routines, so the static binding names whichever
+     * is enabled rather than the one that turned up. Admitted.
+     */
+    const bound = await (await binAdmission({ workerId, principal }))(
+      (await getBin(bin.id))!,
+    );
+    expect(bound.ok).toBe(true);
+
+    // Observed arrival from a surface that cannot push: now it is known, and
+    // refused.
+    await recordWorkerSession({
+      sessionRef: 'cred-reader',
+      workerId,
+      routineId: readOnly.id,
+      accountId: account.id,
+      binId: bin.id,
+      leaseGeneration: 1,
+    });
     const refused = await (await binAdmission({ workerId, principal }))(
       (await getBin(bin.id))!,
     );
     expect(refused.ok).toBe(false);
     expect(refused.reason).toContain('repository-write');
 
-    // Observed lineage wins over the static binding, so a session recorded
-    // against a surface that can push is admitted.
     const writer = await createRoutine({
       accountId: account.id,
       routineRef: `trig_write_${Math.random().toString(36).slice(2)}`,
@@ -1040,16 +1054,17 @@ describe('a bin is not handed to a surface that cannot do it', () => {
       capabilities: ['repository', 'repository-write'],
     });
     await recordWorkerSession({
-      sessionRef: 'cred-reader',
+      sessionRef: 'cred-writer',
       workerId,
       routineId: writer.id,
       accountId: account.id,
       binId: bin.id,
       leaseGeneration: 1,
     });
-    const admitted = await (await binAdmission({ workerId, principal }))(
-      (await getBin(bin.id))!,
-    );
+    const admitted = await (await binAdmission({
+      workerId,
+      principal: { ...principal, credentialId: 'cred-writer' } as unknown as Principal,
+    }))((await getBin(bin.id))!);
     expect(admitted.ok).toBe(true);
   });
 });

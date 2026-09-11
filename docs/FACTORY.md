@@ -449,16 +449,24 @@ any authenticated worker that checks in is offered the oldest ready bin in its
 scopes. So `binAdmission` checks it at assignment too, read from the Routine the
 authenticated worker resolves to and never from anything the caller sent.
 
-It refuses only a surface it **knows** lacks the capability. Failing closed on
-unknown lineage made the gate unreachable: an arriving session's Routine comes
-from `worker_sessions`, which is written after a bin is assigned, so a first
-arrival has none — and in a fleet where one worker identity serves several
-Routines the static fallback is ambiguous and resolves to nothing. In production
-that refused every factory bin to the only surface that could do it. The rule the
-direction follows from is worth stating, because this codebase fails closed nearly
-everywhere: **fail closed when the unknown could let something false be recorded;
-fail open when the unknown could only waste a fire.** A capability grants no
-access, so the worst an admitted surface can do is report BLOCKED honestly.
+It refuses only a surface it has **observed arriving** and knows lacks the
+capability, and the two halves of that sentence were each wrong once.
+
+Failing closed on unknown lineage made the gate unreachable: an arriving
+session's Routine comes from `worker_sessions`, written *after* a bin is
+assigned, so a first arrival has none. The rule the direction follows from is
+worth stating, because this codebase fails closed nearly everywhere: **fail
+closed when the unknown could let something false be recorded; fail open when the
+unknown could only waste a fire.** A capability grants no access, so the worst an
+admitted surface can do is report BLOCKED honestly.
+
+Reading the *static* worker → Routine binding as the attribution was the second
+error. `lineageForWorker` falls back to it for "a worker that reached Brain
+without an assignment", which is every check-in — and where one worker identity
+serves several Routines it names whichever is enabled. In production that told
+Brain a session holding the target repository was the Routine that holds a
+different one, and refused it the only bins it could do. A binding is a fact
+about a Routine, not about who just turned up, so only the observation counts.
 
 The split itself is what makes
 an independent review possible on a fleet where only some surfaces can push.

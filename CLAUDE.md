@@ -1910,9 +1910,19 @@ remote.
   worker runs — so the worst an admitted surface can do is report BLOCKED, which
   every stage handles. Review independence keeps failing closed, because a
   verdict from the session that wrote the code *is* something false being
-  recorded. The honest limitation is that in a fleet sharing one worker identity
-  across Routines this gate can know that about no arrival; the remedy is a
-  distinct worker identity per Routine, granted where the worker runs.
+  recorded.
+
+  **And the attribution is the observation, never the binding.**
+  `lineageForWorker` prefers the observed session and falls back to
+  `fleet_routines.worker_id` for "a worker that reached Brain without an
+  assignment" — which is *every* check-in, because the assignment is what this
+  gate decides. That fallback is not evidence about who turned up: where one
+  worker identity serves several Routines it names whichever of them is enabled,
+  and in production it told Brain that a session holding the target repository
+  was the Routine that holds a different one, and refused it the only bins it
+  could do. **A binding is a fact about a Routine, not a fact about an arrival.**
+  So this reads `worker_sessions` — written by Brain from its own dispatch row
+  when that credential last took a bin — and no row means unknown, which admits.
 - **A finished bin cannot say who finished it**, because `finishBin` clears the
   worker, the lease and the credential in the same statement. `worker_sessions`
   can, written from Brain's own dispatch row, and that is what every factory

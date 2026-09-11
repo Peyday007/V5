@@ -417,6 +417,10 @@ async function main(): Promise<void> {
             // except the field the decision turns on is how an operator ends up
             // guessing at a refusal.
             `worker=${routine.workerId ?? '—'}  ` +
+            // The capabilities too, for the reason the binding is printed: the
+            // decision about which bin may be handed here turns on them, and an
+            // operator reading everything except the deciding field guesses.
+            `caps=[${routine.capabilities.join(',')}]  ` +
             `secret=${routine.tokenSecretName}  fires=${routine.totalFires} ` +
             `refusals=${routine.totalRefusals} no-shows=${routine.consecutiveNoShows}` +
             (inFlight ? `  in-flight=${inFlight.routineInFlight}` : '  (not routable)') +

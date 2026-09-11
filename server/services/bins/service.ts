@@ -206,18 +206,42 @@ export async function binAdmission(input: {
      * rest is a distinct worker identity per Routine, which is granted where the
      * worker runs.
      */
-    if (bin.requiredCapabilities.length > 0 && lineage.routineId) {
-      const { getRoutine } = await import('../../repos/fleet.ts');
-      const routine = await getRoutine(lineage.routineId);
-      const has = new Set(routine?.capabilities ?? []);
-      const missing = bin.requiredCapabilities.filter((tag) => !has.has(tag));
-      if (routine && missing.length > 0) {
-        return {
-          ok: false,
-          reason:
-            `This surface does not carry ${missing.join(', ')}, which this bin needs. ` +
-            'Declaring it is an operator decision about what the surface can actually reach.',
-        };
+    if (bin.requiredCapabilities.length > 0 && input.principal.credentialId) {
+      const { getRoutine, getWorkerSession } = await import('../../repos/fleet.ts');
+      /*
+       * The *observed* surface only, and never the static worker binding.
+       *
+       * `lineageForWorker` prefers the observation and falls back to
+       * `fleet_routines.worker_id` for "a worker that reached Brain without an
+       * assignment" — which is every check-in, because the assignment is what
+       * this decision gates. That fallback is not evidence about an arriving
+       * session: where one worker identity serves several Routines it names
+       * whichever of them is enabled, so in production it told Brain that a
+       * session holding the oakwood repository was the V5 Routine and refused it
+       * the only bins it could actually do. **A binding is a fact about a
+       * Routine; it is not a fact about who just turned up.**
+       *
+       * `worker_sessions` is, because Brain wrote it from its own dispatch row
+       * when that credential last arrived and took a bin. No row means this
+       * credential has never been seen taking work, which is unknown — and
+       * unknown admits, for the reason above.
+       */
+      const observed = await getWorkerSession(input.principal.credentialId);
+      const routine =
+        observed && observed.workerId === input.workerId && observed.routineId
+          ? await getRoutine(observed.routineId)
+          : null;
+      if (routine) {
+        const has = new Set(routine.capabilities);
+        const missing = bin.requiredCapabilities.filter((tag) => !has.has(tag));
+        if (missing.length > 0) {
+          return {
+            ok: false,
+            reason:
+              `This surface does not carry ${missing.join(', ')}, which this bin needs. ` +
+              'Declaring it is an operator decision about what the surface can actually reach.',
+          };
+        }
       }
     }
 
