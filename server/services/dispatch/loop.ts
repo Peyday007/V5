@@ -69,7 +69,7 @@ import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from './candidates.ts';
 import { routeBin } from './router.ts';
 import type { RoutingRefusal } from './router.ts';
 import { markDispatchRoutine } from '../../repos/bins.ts';
-import { claimRoutineFireSlot, recordAccountRefusal, recordRoutineFire } from '../../repos/fleet.ts';
+import { claimRoutineFireSlot, recordAccountRefusal, recordRoutineFire, setRoutineState } from '../../repos/fleet.ts';
 
 /**
  * Routing refusals that mean "wait", not "give up".
@@ -466,17 +466,57 @@ export async function dispatchTick(
     }
 
     if (!isRetryable(outcome.kind)) {
-      // A wrong token, a deleted routine or a paused one will not be fixed by
-      // trying again in five seconds. The intent is failed straight to
-      // abandoned by exhausting it, and the reason is kept.
+      /*
+       * A wrong token, a deleted routine or a paused one will not be fixed by
+       * trying again in five seconds — but it is a fact about **that surface**,
+       * not about the fleet, and treating it as fleet-wide is the same mistake
+       * the RATE_LIMIT branch below already records having made.
+       *
+       * **This was measured, not reasoned about.** In production one Routine was
+       * registered under a deployment secret that did not authorize it, so every
+       * fire to it returned `AUTH 401 "Token is not authorized for this routine"`.
+       * Eighteen of them. Each one ended the whole burst here, so Brain never
+       * tried the healthy Routine beside it — and because `recordRoutineFire`
+       * only advances a counter that nothing acts on, the bad surface was picked
+       * again on the very next tick, for ever. A factory bin sat `READY` with a
+       * dispatch `PENDING` and nothing in the fleet out of action.
+       *
+       * So: the surface is quarantined by name, immediately, because an
+       * unauthorized token is not transient and retrying cannot change it. That
+       * is the same rule `fleet_routines` already applies to a Routine whose
+       * secret is *absent* — left out of routing and reported, rather than
+       * spending a fire discovering it — and this is the identical fact
+       * discovered at fire time. It is not a tuning decision, which is why it is
+       * here and not a proposal in `scaler.ts`. `fleet set-state` is the
+       * answering transition once the secret is fixed.
+       *
+       * And the burst continues, because the next routing decision is a
+       * different one. The intent's backoff is short for the same reason: the
+       * thing that refused has just been taken out of routing, so trying again
+       * is not trying the same thing again.
+       */
+      const surfaceSpecific = decision?.ok === true && outcome.kind !== 'NOT_CONFIGURED';
+      if (surfaceSpecific && decision?.ok) {
+        await setRoutineState({
+          routineId: decision.routine.id,
+          from: decision.routine.state,
+          to: 'QUARANTINED',
+          reason:
+            `The provider refused a fire with ${outcome.kind}: ${outcome.message.slice(0, 200)}. ` +
+            'Retrying cannot change an unauthorized or missing routine, so this surface is out ' +
+            'of routing until its deployment secret is corrected and it is enabled again.',
+        });
+      }
       await markDispatchFailed(intent.id, {
         kind: outcome.kind,
         message: outcome.message,
-        retryAfterMs: 24 * 60 * 60 * 1000,
+        retryAfterMs: surfaceSpecific ? 30_000 : 24 * 60 * 60 * 1000,
       });
       result.failed += 1;
-      // A non-retryable failure applies to every intent, not just this one, so
-      // there is no point walking the rest of the burst into the same wall.
+      if (surfaceSpecific) continue;
+      // Nothing was routed, or there is no trigger at all: that genuinely
+      // applies to every intent, so there is no point walking the rest of the
+      // burst into the same wall.
       break;
     }
 

@@ -906,6 +906,26 @@ a value the claimant does not supply.**
   being busy. Only failures and no-shows quarantine, and never a refusal however
   many arrive.
 
+  **An authentication failure is not a refusal, and treating it as one stopped
+  every dispatch in the fleet.** A token that does not authorize a Routine will
+  not start authorizing it on the next tick, so `AUTH` is a fact about *that
+  surface* rather than capacity — but the dispatcher ended the whole burst on any
+  non-retryable failure, on reasoning that was true when the fleet was one
+  Routine. Production measured the cost: eighteen consecutive
+  `AUTH 401 "Token is not authorized for this routine"` against one registered
+  Routine, the healthy Routine beside it never tried, every surface still
+  `ENABLED` because the only thing a failed fire advanced was a counter nothing
+  acts on, and a factory bin sitting `READY` with its dispatch `PENDING`. **This
+  is the same correction the rate-limit branch already carries, one category
+  along.** The surface is quarantined by name at the first `AUTH`, `NOT_FOUND` or
+  `PAUSED` — not a tuning decision, which is why it is the dispatcher's and not a
+  proposal in `scaler.ts`, and the same rule `fleet_routines` already applies to a
+  Routine whose secret is *absent*: left out of routing and reported, rather than
+  spending a fire discovering it. The burst then continues, because the next
+  routing decision is a different one, and the intent's backoff is short for the
+  same reason. `fleet set-state` is the answering transition once the secret is
+  fixed. Only `NOT_CONFIGURED` is genuinely fleet-wide.
+
   **The same sentence is true one level down, about bins, and it was not.**
   `assignNextBin` charged a bin an attempt in the very statement that handed it
   over, so a session refused by the audit independence guard still cost the bin
