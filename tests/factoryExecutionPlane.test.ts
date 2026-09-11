@@ -244,6 +244,49 @@ describe('a report is refused whole, never partly believed', () => {
     expect(parseUnitReport({ ...unit, headSha: HEAD.toUpperCase() }).ok).toBe(false);
   });
 
+  /*
+   * The one case the original schema could not express, and the one that actually
+   * happened: a worker blocked before it pushed anything. It has a reason and no
+   * commit, and demanding a commit of it turned a correct report into an exhausted
+   * bin. Required of IMPLEMENTED, optional of BLOCKED — and a sha that is present
+   * and malformed is still refused either way.
+   */
+  it('accepts a BLOCKED unit that pushed nothing, and still refuses a malformed sha', () => {
+    const { headSha: _drop, ...withoutSha } = unit;
+    expect(parseUnitReport({ ...withoutSha, outcome: 'IMPLEMENTED' }).ok).toBe(false);
+    const blocked = parseUnitReport({
+      ...withoutSha,
+      outcome: 'BLOCKED',
+      blockedReason: 'This execution surface has no credential for the remote.',
+    });
+    expect(blocked.ok).toBe(true);
+    if (blocked.ok) expect(blocked.value.headSha).toBe('');
+  });
+
+  it('accepts a BLOCKED integration that pushed nothing', () => {
+    const blocked = parseIntegrationReport({
+      outcome: 'BLOCKED',
+      integrationBranch: 'factory/campaign/c',
+      merged: [],
+      conflicts: [],
+      commands: [],
+      summary: 'nothing was merged',
+      blockedReason: 'This execution surface has no credential for the remote.',
+    });
+    expect(blocked.ok).toBe(true);
+    if (blocked.ok) expect(blocked.value.headSha).toBe('');
+    // An integration that claims to have landed still has to name the commit.
+    const landed = parseIntegrationReport({
+      outcome: 'IMPLEMENTED',
+      integrationBranch: 'factory/campaign/c',
+      merged: [{ unitKey: 'u', branch: 'b', headSha: BASE }],
+      conflicts: [],
+      commands: [],
+      summary: 'merged one',
+    });
+    expect(landed.ok).toBe(false);
+  });
+
   it('refuses a BLOCKED unit that does not say why', () => {
     expect(parseUnitReport({ ...unit, outcome: 'BLOCKED' }).ok).toBe(false);
     expect(

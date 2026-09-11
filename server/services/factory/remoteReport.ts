@@ -128,10 +128,17 @@ export function isCommitSha(value: unknown): value is string {
 /**
  * Parse one unit report.
  *
- * `headSha` is required even for a BLOCKED outcome, because a worker that got far
- * enough to push has a commit and one that did not should report `BLOCKED` with
- * the branch it never created — which is caught here rather than discovered when
- * the forge is asked about a sha that does not exist.
+ * `headSha` is required for an `IMPLEMENTED` outcome and optional for a `BLOCKED`
+ * one, and that is a correction recorded rather than quietly applied. It used to
+ * be required for both, on the reasoning that a worker which got far enough to
+ * push has a commit. Some do; a worker blocked *before* pushing — no credential,
+ * a refused host, a conflict it was told not to resolve — has nothing to report,
+ * and a schema that cannot express that forces it to invent a sha or be refused
+ * for ever. **An honest blocker is a result, and a contract that cannot accept one
+ * turns it into an exhausted bin.** That is what happened to the first hosted
+ * integration: the worker reported BLOCKED with the operation that was refused,
+ * the parser demanded a commit for a branch it had deliberately not pushed, and
+ * the bin retired at `NEEDS_HUMAN` having said exactly the right thing twice.
  */
 export function parseUnitReport(raw: unknown): Parsed<FactoryUnitReport> {
   const errors: string[] = [];
@@ -166,8 +173,11 @@ export function parseUnitReport(raw: unknown): Parsed<FactoryUnitReport> {
   if (branch.length === 0) errors.push('`branch` is required.');
 
   const headSha = value['headSha'];
-  if (!isCommitSha(headSha)) {
-    errors.push('`headSha` must be a 40-character lowercase hex commit sha.');
+  if (outcome === 'IMPLEMENTED' && !isCommitSha(headSha)) {
+    errors.push(
+      '`headSha` must be a 40-character lowercase hex commit sha for an IMPLEMENTED unit. ' +
+        'If nothing was pushed, report BLOCKED and say which operation was refused.',
+    );
   }
 
   const filesChanged = stringArray(value['filesChanged'], 'filesChanged', errors);
@@ -212,7 +222,9 @@ export function parseUnitReport(raw: unknown): Parsed<FactoryUnitReport> {
       unitKey,
       outcome: outcome as FactoryReportOutcome,
       branch,
-      headSha: headSha as string,
+      // Empty for a blocked unit, which pushed nothing. Every consumer checks the
+      // outcome before it reads this.
+      headSha: isCommitSha(headSha) ? headSha : '',
       filesChanged,
       commands,
       summary,
@@ -339,7 +351,10 @@ export function reportRefused(errors: string[]): FactoryError {
  * `outcome` carries the same two words a unit report does, and for the same
  * reason: the honest answer to a merge conflict or a red verification is that the
  * integration did not happen, which is a fact Brain records rather than a failure
- * it hides. An integrator that could not get the tree green is told not to push.
+ * it hides. An integrator that could not get the tree green is told not to push —
+ * and therefore has no commit to name, which is why `headSha` is required only of
+ * an integration that actually landed. Requiring it of both is what made the
+ * first hosted integration's correct BLOCKED report unsubmittable.
  */
 export interface FactoryIntegrationMerge {
   unitKey: string;
@@ -435,8 +450,11 @@ export function parseIntegrationReport(raw: unknown): Parsed<FactoryIntegrationR
   if (integrationBranch.length === 0) errors.push('`integrationBranch` is required.');
 
   const headSha = value['headSha'];
-  if (!isCommitSha(headSha)) {
-    errors.push('`headSha` must be a 40-character lowercase hex commit sha.');
+  if (outcome === 'IMPLEMENTED' && !isCommitSha(headSha)) {
+    errors.push(
+      '`headSha` must be a 40-character lowercase hex commit sha for an integration that ' +
+        'landed. A BLOCKED integration pushed nothing and needs none.',
+    );
   }
 
   const merged: FactoryIntegrationMerge[] = [];
@@ -500,7 +518,9 @@ export function parseIntegrationReport(raw: unknown): Parsed<FactoryIntegrationR
     value: {
       outcome: outcome as FactoryReportOutcome,
       integrationBranch,
-      headSha: headSha as string,
+      // Empty when the integration was blocked: the branch did not move, so there
+      // is no commit to name. `ingestIntegrateBin` reads the outcome first.
+      headSha: isCommitSha(headSha) ? headSha : '',
       merged,
       conflicts,
       commands,

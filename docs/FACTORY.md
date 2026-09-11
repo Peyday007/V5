@@ -463,6 +463,22 @@ BLOCKED naming the refused operation. Refusing wrongly cost a campaign that coul
 never move. Between a gate that sometimes wastes a fire and one that sometimes
 stops all work, only the first is tolerable.
 
+**And the report it produces has to be submittable.** `headSha` was required of
+every unit and integration report, on the reasoning that a worker which got far
+enough to push has a commit. Some do. A worker blocked *before* pushing — no
+credential, a refused host, a conflict it was told not to resolve — has nothing to
+name, so the contract left it a choice between inventing a sha and being refused
+for ever. It chose correctly and was refused twice: bin
+`bin_f55fb62ee22a4708b2f4` reported `BLOCKED` with the operation the surface had
+refused, the parser demanded a 40-character commit for a branch it had
+deliberately not pushed, and the bin retired at `NEEDS_HUMAN` having said exactly
+the right thing on both attempts. **An honest blocker is a result, and a contract
+that cannot accept one turns it into an exhausted bin.** The sha is required of an
+`IMPLEMENTED` outcome and optional of a `BLOCKED` one; a sha that is present and
+malformed is still refused, and every consumer reads the outcome before the sha.
+The correction is recorded rather than quietly applied, because the original
+reasoning was half right and the half that was wrong is the half worth keeping.
+
 The split itself is what makes
 an independent review possible on a fleet where only some surfaces can push.
 `repository` is reading and running; `repository-write` is pushing a branch, and
