@@ -39,8 +39,10 @@
  *   1. **project** — the bin's `project_id` against the worker's active
  *      memberships carrying `queue:claim`. Unchanged; `assignNextBin` already
  *      scopes its candidate query by it.
- *   2. **workload family** — derived from the bin's own `workload_class`, against
- *      the families this worker may serve.
+ *   2. **workload family** — read from the bin's **manifest first** and its
+ *      `workload_class` second, against the families this worker may serve. The
+ *      manifest is the work; the class is a label somebody wrote, so a manifest
+ *      naming a repository is repository work whatever the label says.
  *   3. **repository** — for a family whose work is a change to a repository, the
  *      remote on the bin's manifest against the repositories this worker may act
  *      on. A repository family with no repository named is refused.
@@ -74,6 +76,24 @@
  * So the default is deny for the dimension that was actually crossed — repository
  * work is never implicit — and derived from existing rows for the rest. Nothing
  * halts, and no worker gains reach it did not already have.
+ *
+ * ---------------------------------------------------------------------------
+ * Every entrance, because one entrance is not a boundary
+ * ---------------------------------------------------------------------------
+ *
+ * Three readers, and they have to agree or this is decoration:
+ *
+ *   - `assignNextBin`'s candidate query, so a bin outside the caller's scope is
+ *     never a candidate (`classesForFamilies`);
+ *   - `binAdmission` and `claimWork`'s `admit` hook, inside the claim loop and
+ *     ahead of the compare-and-swap, so a refusal costs no attempt, no lease and
+ *     no generation (`decideBinRouting`, `workloadAdmission`);
+ *   - `routeBin`, which decides which surface Brain fires (`familyOf`).
+ *
+ * The queue is the second entrance and it matters: `RESEARCH_AUDIT` items are
+ * handed out directly by the Step 5 queue, so without `workloadAdmission` a
+ * worker registered for one repository could reach a Step 12A audit role by
+ * asking the queue for it instead of waiting to be handed a bin.
  */
 import type { Bin, Principal, WorkItemRow, WorkerScope } from '../../domain/types.ts';
 
