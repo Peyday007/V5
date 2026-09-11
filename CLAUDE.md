@@ -1024,6 +1024,15 @@ property became an optional tier.
 - **Unknown lineage fails closed.** A worker bound to no registered Routine has
   no resolvable account and is refused, because "we could not tell" must never
   read the same as "we checked".
+- **A surface serves a workload family, or it is not fired for one.** The fire
+  router reads the same `worker_routing` row the admission hook reads (§27) and
+  refuses by name — `NO_SURFACE_SERVES_THIS_FAMILY` — rather than reporting the
+  nearest available refusal, because "no capable surface" sends an operator to
+  look at capabilities when the answer is a scope. A Routine whose worker has no
+  recorded scope is *eligible*, not refused: a scope Brain has not been told is
+  unknown rather than empty, and this is the half of the decision that can only
+  waste a fire. The half that could record something false — a claim — fails
+  closed at the admission hook instead.
 
 **Never infer fleet capacity from account count.** Throughput is measured per
 account, Routine, workload class and reset period, or it is reported as unknown.
@@ -1946,6 +1955,40 @@ remote.
   work, only the first is tolerable** — and the rule it is an instance of is: fail
   closed when the unknown could let something false be recorded, fail open when it
   could only waste a fire.
+- **That paragraph is right about capabilities and wrong about scope, and the
+  difference is the subject of the sentence. The correction is recorded rather
+  than quietly applied.** Brain cannot tell which *Routine* has arrived, for the
+  three reasons above, and nothing about that has changed. But the thing a bin
+  must be matched against was never the Routine: it is the **authenticated
+  worker**, which is the one identity in the exchange the caller does not supply —
+  the property every compare-and-swap in this codebase rests on. Reading a
+  worker's own recorded scope is not a guess about a surface; it is a row Brain
+  wrote.
+
+  The cost of not having one was not a wasted fire. One worker identity served
+  every surface in this fleet and held membership on the research project, so
+  Software Factory sessions were handed Deal Dispatch research and audit bins, and
+  a research session could be handed a repository implementation bin. Project
+  scoping existed the whole time and separated nothing, because both workloads
+  were one worker on one project. **A scope that cannot distinguish its callers is
+  not a scope.**
+
+  `services/bins/routing.ts` is that one decision, and it is read in the three
+  places that must agree or it is not a boundary: the candidate query that decides
+  which bins exist for this caller, the admission hook that decides the claim, and
+  the fire router that chooses a surface. Every dimension must match — the
+  project, the workload family, the repository where the work names one, the
+  declared capabilities, the authorization scope, and then, afterwards and
+  unchanged, the independence lineage. It is deny-by-default where that matters:
+  an explicit row is **exhaustive**, a worker with no row serves what its scopes
+  imply, and **no worker without an explicit row may ever be handed repository
+  work**. So authorizing a repository is three things — the envelope grant, a
+  `worker_routing` row, and access where the worker runs — and any one of them
+  missing authorizes nothing.
+
+  The family comes from the bin's **manifest** first and its label second: a
+  manifest naming a repository is repository work whatever its `workload_class`
+  says, because the manifest is the work and the class is a label somebody wrote.
 - **Review independence rests on the reported session, validated against a real
   credential of the presenting worker.** I wrote the opposite first — the
   credential, never the `session_ref`, because a decision on a value the claimant

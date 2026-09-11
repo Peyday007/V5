@@ -525,6 +525,52 @@ describe('the dispatcher does not send work to a surface that cannot be handed i
   });
 });
 
+describe('a correctly scoped worker is still handed its own work', () => {
+  /*
+   * The boundary has to be checked in the direction that can pass, too. A guard
+   * that refuses everything satisfies every test above and stops the product, and
+   * item 8's failure mode is exactly that: a ready eligible bin waiting while the
+   * only surface that could take it is never offered it.
+   */
+  it('admits a Deal Dispatch research bin to the research worker, and hands it over', async () => {
+    const workerId = await worker('wkr-research-positive');
+    const principal = principalFor(workerId, ['queue:claim', 'research:write']);
+    const bin = await researchBin();
+
+    // No explicit row: the derived scope is what its own scopes imply.
+    const routing = await workerRoutingFor(workerId, principal);
+    expect(routing.explicit).toBe(false);
+    expect(routing.families).toContain('RESEARCH');
+
+    const admit = await binAdmission({ workerId, principal, sessionRef: 'cse_positive' });
+    expect((await admit(bin)).ok).toBe(true);
+
+    // And the family filter on the candidate query does not hide it either: the
+    // two must agree, or the bin is invisible to the caller the hook would admit.
+    const handed = await checkIn({ workerId, principal, sessionRef: 'cse_positive' });
+    expect(handed.assigned).toBe(true);
+    if (handed.assigned) expect(handed.assignment.binId).toBe(bin.id);
+  });
+
+  it('hands the same worker nothing once it is registered for the factory alone', async () => {
+    const workerId = await worker('wkr-research-then-factory');
+    const principal = principalFor(workerId, ['queue:claim', 'research:write']);
+    const bin = await researchBin();
+    await setWorkerRouting({
+      workerId,
+      families: ['FACTORY'],
+      repositories: [OAKWOOD],
+      capabilities: [],
+      reason: 'registered for one repository and nothing else',
+      setBy: 'test',
+    });
+    const handed = await checkIn({ workerId, principal, sessionRef: 'cse_factory_only' });
+    expect(handed.assigned).toBe(false);
+    // The bin is still ready: it was not consumed, refused or retired by asking.
+    expect((await getBin(bin.id))!.state).toBe('READY');
+  });
+});
+
 describe('a repository id comes from the manifest, not from a name', () => {
   it('reads owner/name from the remote, in every spelling', async () => {
     for (const remote of [OAKWOOD, `${OAKWOOD}.git`, `${OAKWOOD}/`, OAKWOOD.toUpperCase()]) {
