@@ -9176,3 +9176,30 @@ a named unresolved part rather than an inference from silence.
 **Nothing about it manufactures a gap.** If every county turns out to publish
 one, the packet settles its goal, files `COMPLETE` and correctly produces no
 follow-on — and that is the answer, reported as the answer.
+
+### The same worker, the same gate, the contract stated
+
+`S12A-ACC-14` ran on the canonical deployment (`34563342964`, commit `d34ea61`)
+against the repaired contract. The two runs are the measurement:
+
+```
+S12A-ACC-13   official-record  BLOCKED   integrity FAIL   claims 17 (7 accepted)
+              rejected  9 × No source URL was given, so this is the tool's assertion
+                        1 × This is a calculation or inference with no stated inputs
+
+S12A-ACC-14   official-record  ACCEPTED  integrity PASS   claims 60 (57 accepted)
+              sufficiency SUFFICIENT
+              tagged  official_source×54, office_variation×3   untagged 0
+              document doc_e9eaeab710b148d29fdd
+```
+
+Forty-one per cent accepted becomes ninety-five. Nothing in the gate changed
+between them — the seven conditions, the majority rule, the evidence standard
+and the integrity check are byte-identical — and the worker is the same fleet
+under the same envelope. What changed is that the contract it reads before
+submitting now states what an unsourced claim costs, so it attached the URLs it
+had rather than submitting assertions beside them.
+
+That is the whole of the repair the user named: *valid research is not discarded
+merely because the execution contract omitted the requirement.* Fifty-seven
+sourced findings survived a bar that had discarded seven.
