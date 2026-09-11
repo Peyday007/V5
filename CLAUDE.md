@@ -2044,6 +2044,17 @@ remote.
   worker cannot declare itself surface-blocked to escape a failed verification,
   because the exit codes it reported about what it ran are what decide — prose
   never does.
+- **A rule applied by one of two runners is worse than none**, and this is the
+  third time: `reconcileRepairs` had exactly one caller, the in-process
+  orchestrator, and the hosted plane is the other runner — the same shape as
+  `reconcileAcceptedFragment` showing `MISSING` on a `COMPLETE` packet. Here it
+  showed as a pull request: the repair integrated, its commit became the request's
+  head, the repository's own checks passed on it, and the body a person reads still
+  listed the finding under *remaining limitations*, because nothing on this plane
+  had ever moved it to `REPAIRED`. **The evidence was right and the sentence about
+  it was wrong**, which is the failure mode this file cares about most. It changes
+  no evidence: a finding is REPAIRED because its unit reached `INTEGRATED`, never
+  because a worker said so.
 - **A contract that lies about its own inputs refuses work and says nothing.**
   `brain_check_in`'s `session_ref` is an *optional* argument, and its schema said it
   was "never used to decide anything" — while the factory's review-independence

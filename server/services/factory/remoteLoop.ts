@@ -52,7 +52,7 @@ import {
 } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { installPlan, validatePlan } from './planner.ts';
-import { gatingFindings, queueRepairs } from './repair.ts';
+import { gatingFindings, queueRepairs, reconcileRepairs } from './repair.ts';
 import { recordCampaignOutcome } from './writeback.ts';
 import {
   acceptIntegration,
@@ -920,6 +920,31 @@ async function runRemoteTick(
       if (await ingestDeliverBin(campaign, changeRequest, bin, report)) report.progress = true;
     }
   }
+
+  /*
+   * Close out the findings whose repair has landed, before anything decides what
+   * the campaign now needs.
+   *
+   * `reconcileRepairs` had exactly one caller — the in-process orchestrator in
+   * `loop.ts` — and the hosted plane is the other runner. **A rule applied by one
+   * of two runners is worse than none**, because the two then disagree about the
+   * same campaign, and §24 has recorded this exact shape before:
+   * `reconcileAcceptedFragment` moved a requirement's coverage and was called only
+   * by the orchestrator, so production showed `MISSING` on a packet that was
+   * COMPLETE.
+   *
+   * Here it showed as a pull request. The repair integrated, its commit became the
+   * request's head, the repository's own checks passed on it — and the body a
+   * person reads still listed the finding under *remaining limitations*, because
+   * nothing on this plane had ever moved it to `REPAIRED`. The evidence was right
+   * and the sentence about it was wrong, which is the failure mode this file cares
+   * about most.
+   *
+   * It changes no evidence: a finding becomes `REPAIRED` because its unit reached
+   * `INTEGRATED` — the diff was inside its ownership and the contract's commands
+   * passed on the merged tree — and never because a worker said so.
+   */
+  await reconcileRepairs(campaign.id);
 
   const fresh = (await getCampaign(campaign.id)) ?? campaign;
   const units = await listUnits(fresh.id);

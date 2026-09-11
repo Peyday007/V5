@@ -1623,6 +1623,117 @@ describe('an integration blocked before the work was judged costs the work nothi
 
 /* ========================================================================= */
 
+describe('a finding whose repair landed is closed on this plane too', () => {
+  /*
+   * `reconcileRepairs` had exactly one caller — the in-process orchestrator — and
+   * the hosted plane is the other runner. A rule applied by one of two runners is
+   * worse than none, and §24 has recorded this exact shape before with
+   * `reconcileAcceptedFragment`.
+   *
+   * Here it showed as a pull request. The repair integrated, its commit became the
+   * request's head, the repository's own checks passed on it, and the body a person
+   * reads still listed the finding under *remaining limitations* — because nothing
+   * on this plane had ever moved it to REPAIRED. The evidence was right and the
+   * sentence about it was wrong.
+   */
+  it('marks the finding repaired from the unit reaching INTEGRATED', async () => {
+    const workerId = (await createWorker({ name: 'fix', createdByType: 'SYSTEM', createdById: 't' })).id;
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: `repaired-${Math.random()}`,
+      objective: 'Guard the published tree.',
+      expectedOutcome: 'The suite fails when it breaks.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'the suite asserts it', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+
+    // A review with one finding, and the repair unit the finding produced.
+    const { recordReview, listFindings } = await import('../server/repos/factoryFleet.ts');
+    await recordReview({
+      campaignId: campaign.id,
+      round: 1,
+      scope: 'CAMPAIGN',
+      reviewerSessionId: 'cse_reviewer',
+      reviewedSha: BASE,
+      verdict: 'CHANGES_REQUIRED',
+      independence: 'SESSION_SEPARATED',
+      summary: 'one thing to fix',
+      findings: [
+        {
+          key: 'ci-runs-only-the-floor',
+          severity: 'MINOR',
+          category: 'ci',
+          statement: 'CI exercises only the declared floor.',
+          evidence: '.github/workflows/ci.yml',
+          acceptanceConditionId: 'A01',
+        },
+      ],
+    });
+    const { queueRepairs } = await import('../server/services/factory/repair.ts');
+    const queued = await queueRepairs(campaign, changeRequest);
+    expect(queued.queued.length).toBe(1);
+
+    const { getUnitByKey, claimUnits, markImplemented, markIntegrated, promoteReadyUnits } =
+      await import('../server/repos/factory.ts');
+    await promoteReadyUnits(campaign.id);
+    const unit = (await getUnitByKey(campaign.id, queued.queued[0]!.unitKey))!;
+    const held = (
+      await claimUnits({ campaignId: campaign.id, workerId, unitIds: [unit.id], leaseMs: 60_000 })
+    )[0]!;
+    await markImplemented(
+      { unitId: unit.id, workerId, leaseId: held.leaseId, leaseGeneration: held.leaseGeneration },
+      {
+        branch: 'factory/x/repair/a1',
+        headSha: 'd'.repeat(40),
+        baseSha: BASE,
+        worktreePath: null,
+        workerSummary: 'repaired',
+        terminalResult: { outcome: 'IMPLEMENTED', commands: [], filesForgeReported: [], filesWorkerReported: [] },
+      },
+    );
+    await markIntegrated(unit.id, 'd'.repeat(40));
+
+    // Before the tick the finding is still carried as open work.
+    expect((await listFindings(campaign.id)).every((f) => f.state !== 'REPAIRED')).toBe(true);
+
+    stubForge({});
+    await tickRemoteCampaign(campaign.id);
+
+    const after = await listFindings(campaign.id);
+    expect(after.length).toBe(1);
+    expect(after[0]!.state).toBe('REPAIRED');
+    expect(after[0]!.resolution ?? '').toContain('verified on the merged tree');
+  });
+});
+
+/* ========================================================================= */
+
 describe('a reviewer Brain fired is identified by the fire, not by what it says', () => {
   /*
    * `brain_check_in`'s `session_ref` is an **optional** argument whose schema used to
