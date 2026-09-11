@@ -380,6 +380,48 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * Every bin a campaign has, and what happened when Brain tried to fire one.
+     *
+     * The one thing neither `campaigns` nor `status` could answer: a campaign can
+     * read EXECUTING while its bin has been refused by every surface, and the
+     * reason lives on the dispatch row rather than on the campaign. Read-only,
+     * and it prints no credential — a dispatch row holds the Routine's reference
+     * and the provider's own error, never a token.
+     */
+    case 'bins': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const { campaignBins } = await import('../server/services/factory/remote.ts');
+      const { listDispatchesForBin, listSessionRefusals } = await import(
+        '../server/repos/bins.ts'
+      );
+      const bins = await campaignBins(campaignId);
+      if (bins.length === 0) process.stdout.write('no bin for this campaign\n');
+      for (const bin of bins) {
+        process.stdout.write(
+          `${bin.id} ${bin.kind} ${bin.state} gen ${bin.leaseGeneration} ` +
+            `attempts ${bin.attemptCount}/${bin.maxAttempts} ` +
+            `needs [${bin.requiredCapabilities.join(',')}]` +
+            `${bin.workerId ? ` worker=${bin.workerId}` : ''}\n`,
+        );
+        for (const dispatch of await listDispatchesForBin(bin.id)) {
+          process.stdout.write(
+            `    dispatch gen ${dispatch.leaseGeneration} ${dispatch.state} ` +
+              `attempt ${dispatch.attemptCount}/${dispatch.maxAttempts} ` +
+              `routine=${dispatch.routineRef ?? '—'} session=${dispatch.sessionRef ?? '—'}` +
+              `${dispatch.lastErrorKind ? ` ${dispatch.lastErrorKind}: ${(dispatch.lastError ?? '').slice(0, 200)}` : ''}\n`,
+          );
+        }
+        for (const refusal of await listSessionRefusals(bin.id)) {
+          process.stdout.write(
+            `    refused  ${refusal.sessionRef} x${refusal.refusals} ` +
+              `until ${refusal.retryAt}: ${refusal.reason.slice(0, 220)}\n`,
+          );
+        }
+      }
+      break;
+    }
+
     /** Every campaign in a project, newest first, in one line each. */
     case 'campaigns': {
       const projectFlag = flagString(flags, 'project');
@@ -459,7 +501,7 @@ async function main(): Promise<void> {
     default:
       process.stdout.write(
         'commands: fleet, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
-          '  remote-tick, campaigns, status, release\n',
+          '  remote-tick, campaigns, bins, status, release\n',
       );
   }
 
