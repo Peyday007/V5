@@ -1887,15 +1887,32 @@ remote.
   `repository-write`, exist for exactly this: a reviewer needs to read and run,
   and only the bins that push need a surface that can push, so a one-pushing-
   surface fleet does not make the reviewer the implementer.
-- **A capability gates the fire *and* the assignment.**
-  `requiredCapabilities` was read only by the router, which chooses which Routine
-  to fire — not the same question as which bin an arriving worker may be handed,
-  since any authenticated worker is offered the oldest ready bin in its scopes.
-  Harmless while no bin required anything; not harmless for one that must push,
-  which a surface without the credential would take, fail, and charge an attempt
-  for against a condition that was never about the work. Refused at assignment as
-  well, from the Routine the authenticated worker resolves to, with unknown
-  failing closed.
+- **A capability gates the fire, and the assignment only where the surface is
+  known.** `requiredCapabilities` was read by the router, which chooses which
+  Routine to fire — not the same question as which bin an arriving worker may be
+  handed, since any authenticated worker is offered the oldest ready bin in its
+  scopes. So it is checked at assignment too, from the Routine the authenticated
+  worker resolves to and never from anything the caller sent.
+
+  **It failed closed on unknown lineage, and that was wrong; the correction is
+  recorded rather than quietly applied.** An arriving session's Routine is
+  knowable only from `worker_sessions`, which is written *after* a bin is
+  assigned — so a first arrival has no lineage, falls back to the static worker
+  binding, and resolves to nothing whenever one worker identity serves several
+  Routines. In production that refused every factory bin to the only surface that
+  could do it: Brain fired the right Routine, the session arrived, and Brain
+  answered NO_READY_BINS over its own READY bin, with nothing able to clear it
+  because clearing it required taking a bin.
+
+  **Fail closed when the unknown could let something false be recorded; fail open
+  when the unknown could only waste a fire.** A capability grants no access — the
+  manifest's own first authorized action says the access comes from where the
+  worker runs — so the worst an admitted surface can do is report BLOCKED, which
+  every stage handles. Review independence keeps failing closed, because a
+  verdict from the session that wrote the code *is* something false being
+  recorded. The honest limitation is that in a fleet sharing one worker identity
+  across Routines this gate can know that about no arrival; the remedy is a
+  distinct worker identity per Routine, granted where the worker runs.
 - **A finished bin cannot say who finished it**, because `finishBin` clears the
   worker, the lease and the credential in the same statement. `worker_sessions`
   can, written from Brain's own dispatch row, and that is what every factory

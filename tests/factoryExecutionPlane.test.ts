@@ -955,10 +955,102 @@ describe('a bin is not handed to a surface that cannot do it', () => {
       } as unknown as Principal,
     });
     const verdict = await admit((await getBin(bin.id))!);
-    // No registered Routine resolves for this worker, so what it can reach is
-    // unknown — and unknown is refused rather than assumed.
-    expect(verdict.ok).toBe(false);
-    expect(verdict.reason).toContain('repository-write');
+    /*
+     * No registered Routine resolves for this worker, so what it can reach is
+     * unknown — and unknown **admits** here, deliberately. The gate prevents a
+     * wasted fire rather than an unauthorized one, and failing closed made it
+     * unreachable on a first arrival: lineage exists only after a bin has been
+     * assigned, so refusing without it refused every bin forever.
+     */
+    expect(verdict.ok).toBe(true);
+  });
+
+  it('refuses one whose Routine is known and lacks it, and admits one that has it', async () => {
+    const { createAccount, createRoutine, bindRoutineWorker } = await import(
+      '../server/repos/fleet.ts'
+    );
+    const { recordWorkerSession } = await import('../server/repos/fleet.ts');
+    const account = await createAccount({ name: `acct-${Math.random().toString(36).slice(2)}` });
+    const readOnly = await createRoutine({
+      accountId: account.id,
+      routineRef: `trig_read_${Math.random().toString(36).slice(2)}`,
+      name: 'reads only',
+      tokenSecretName: 'NEVER_SET',
+      tokenDigest: null,
+      capabilities: ['repository'],
+    });
+    const workerId = (
+      await createWorker({ name: 'reader', createdByType: 'SYSTEM', createdById: 't' })
+    ).id;
+    await bindRoutineWorker(readOnly.id, workerId);
+
+    const bin = await createBin({
+      projectId: fixture.project.id,
+      kind: 'FACTORY_UNITS',
+      title: 'Work that needs a push',
+      objective: 'Implement something and push it.',
+      manifest: {
+        objective: 'Implement something and push it.',
+        why: 'a test',
+        lineage: { projectId: fixture.project.id, layerId: null, goal: null, orchestrationId: null },
+        units: [{ key: 'u', establishes: 'a branch', input: '{}', transform: 'FACTORY_UNIT', dependsOn: [] }],
+        acceptableSources: [],
+        excludedSources: [],
+        evidence: ['a pushed branch'],
+        outputs: ['one result'],
+        authorizedActions: ['push the branch Brain named'],
+        prohibitedActions: ['anything else'],
+        budgetUnits: null,
+        retry: { maxAttempts: 2, backoffSeconds: 60 },
+        stoppingConditions: ['a result per unit'],
+      },
+      completionContract: 'FACTORY_UNITS_V1',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      requiredCapabilities: ['repository', 'repository-write'],
+      ready: true,
+    });
+
+    const principal = {
+      type: 'WORKER',
+      id: workerId,
+      credentialId: 'cred-reader',
+      displayName: 'reader',
+      isBrainAdmin: false,
+      scopes: [],
+      memberships: [],
+    } as unknown as Principal;
+
+    // One Routine, unambiguously bound: the surface is known, and it is known to
+    // be unable to push.
+    const refused = await (await binAdmission({ workerId, principal }))(
+      (await getBin(bin.id))!,
+    );
+    expect(refused.ok).toBe(false);
+    expect(refused.reason).toContain('repository-write');
+
+    // Observed lineage wins over the static binding, so a session recorded
+    // against a surface that can push is admitted.
+    const writer = await createRoutine({
+      accountId: account.id,
+      routineRef: `trig_write_${Math.random().toString(36).slice(2)}`,
+      name: 'can push',
+      tokenSecretName: 'NEVER_SET',
+      tokenDigest: null,
+      capabilities: ['repository', 'repository-write'],
+    });
+    await recordWorkerSession({
+      sessionRef: 'cred-reader',
+      workerId,
+      routineId: writer.id,
+      accountId: account.id,
+      binId: bin.id,
+      leaseGeneration: 1,
+    });
+    const admitted = await (await binAdmission({ workerId, principal }))(
+      (await getBin(bin.id))!,
+    );
+    expect(admitted.ok).toBe(true);
   });
 });
 

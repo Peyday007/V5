@@ -442,16 +442,23 @@ set by a tick that then dies, rows cannot.
 A campaign is COMPLETE only when a review passed, nothing is gating, **and** the
 forge confirms a pull request carrying the integrated commit.
 
-Two capabilities gate which surface gets which bin, and the gate is at **both**
-ends. `requiredCapabilities` was only ever read by the router, which decides
-which Routine to *fire* — and that is a different question from which bin an
-arriving worker may be *handed*, because any authenticated worker that checks in
-is offered the oldest ready bin in its scopes. For a research bin that was
-harmless, since none required anything; for a bin that has to push a branch it is
-not, because the surface would take it, fail to push, and charge the work an
-attempt against a condition that was never about the work. So `binAdmission`
-refuses it at assignment too, read from the Routine the authenticated worker
-resolves to and never from anything the caller sent, with unknown failing closed.
+Two capabilities gate which surface gets which bin. `requiredCapabilities` was
+only ever read by the router, which decides which Routine to *fire* — and that is
+a different question from which bin an arriving worker may be *handed*, because
+any authenticated worker that checks in is offered the oldest ready bin in its
+scopes. So `binAdmission` checks it at assignment too, read from the Routine the
+authenticated worker resolves to and never from anything the caller sent.
+
+It refuses only a surface it **knows** lacks the capability. Failing closed on
+unknown lineage made the gate unreachable: an arriving session's Routine comes
+from `worker_sessions`, which is written after a bin is assigned, so a first
+arrival has none — and in a fleet where one worker identity serves several
+Routines the static fallback is ambiguous and resolves to nothing. In production
+that refused every factory bin to the only surface that could do it. The rule the
+direction follows from is worth stating, because this codebase fails closed nearly
+everywhere: **fail closed when the unknown could let something false be recorded;
+fail open when the unknown could only waste a fire.** A capability grants no
+access, so the worst an admitted surface can do is report BLOCKED honestly.
 
 The split itself is what makes
 an independent review possible on a fleet where only some surfaces can push.

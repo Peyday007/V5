@@ -174,23 +174,49 @@ export async function binAdmission(input: {
      * the work.
      *
      * Read from the Routine the authenticated worker resolves to, never from
-     * anything the caller sent, and unknown fails closed: a worker whose surface
-     * cannot be established has not been shown to be able to do this.
+     * anything the caller sent — and **unknown admits**, which is the opposite of
+     * what the first version of this did and is the correction recorded rather
+     * than quietly applied.
+     *
+     * It failed closed, and that made the gate unreachable on a first arrival.
+     * An arriving session's Routine is knowable only from `worker_sessions`,
+     * which is written by `creditDispatchArrival` *after* a bin is assigned — so
+     * the very first session from a newly registered Routine has no lineage,
+     * falls back to the static worker binding, and resolves to nothing whenever
+     * one worker identity serves more than one Routine, which is the shape this
+     * fleet is in. In production that refused every factory bin to the only
+     * surface that could do it: Brain fired the right Routine, the session
+     * arrived, and Brain answered NO_READY_BINS while its own bin sat READY.
+     * Nothing could ever clear it, because clearing it required taking a bin.
+     *
+     * The failure direction follows from what the gate protects, and that is
+     * worth stating because this codebase fails closed nearly everywhere: **fail
+     * closed when the unknown could let something false be recorded; fail open
+     * when the unknown could only waste a fire.** A capability grants no access —
+     * the manifest says in its own first authorized action that the access comes
+     * from where the worker runs — so the worst an admitted surface can do is
+     * report BLOCKED honestly, which every stage already handles. The
+     * independence gate below keeps failing closed, because a verdict from the
+     * session that wrote the code is exactly something false being recorded.
+     *
+     * So it refuses only what it *knows* is wrong, and the honest limitation is
+     * that in a fleet where several Routines share one worker identity it can
+     * know that about no arrival. What still decides which surface Brain
+     * *starts* is the router's own check on the same field; the remedy for the
+     * rest is a distinct worker identity per Routine, which is granted where the
+     * worker runs.
      */
-    if (bin.requiredCapabilities.length > 0) {
+    if (bin.requiredCapabilities.length > 0 && lineage.routineId) {
       const { getRoutine } = await import('../../repos/fleet.ts');
-      const routine = lineage.routineId ? await getRoutine(lineage.routineId) : null;
+      const routine = await getRoutine(lineage.routineId);
       const has = new Set(routine?.capabilities ?? []);
       const missing = bin.requiredCapabilities.filter((tag) => !has.has(tag));
-      if (missing.length > 0) {
+      if (routine && missing.length > 0) {
         return {
           ok: false,
           reason:
             `This surface does not carry ${missing.join(', ')}, which this bin needs. ` +
-            (routine
-              ? 'Declaring it is an operator decision about what the surface can actually reach.'
-              : 'It resolves to no registered Routine, so what it can reach is unknown, and ' +
-                'unknown is refused rather than assumed.'),
+            'Declaring it is an operator decision about what the surface can actually reach.',
         };
       }
     }
