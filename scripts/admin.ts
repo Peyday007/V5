@@ -197,8 +197,12 @@ async function main(): Promise<void> {
     case 'workers list': {
       for (const worker of await listWorkers({ includeArchived: true })) {
         const memberships = await listMembershipsForPrincipal('WORKER', worker.id);
+        // The id as well as the name: every other operator surface — `fleet show`,
+        // a dispatch row, a ledger entry — names a worker by id, and a listing you
+        // cannot join to those is a listing you have to guess against.
         console.log(
-          `  ${worker.name.padEnd(28)} ${worker.status.padEnd(10)} ${memberships.length} project(s)`,
+          `  ${worker.name.padEnd(28)} ${worker.id}  ${worker.status.padEnd(10)} ` +
+            `${memberships.length} project(s)`,
         );
       }
       break;
@@ -224,7 +228,7 @@ async function main(): Promise<void> {
         const worker = byId.get(row.workerId);
         const families = row.families.length > 0 ? row.families.join(',') : '(none — serves nothing)';
         console.log(
-          `  ${(worker?.name ?? row.workerId).padEnd(28)} families=[${families}] ` +
+          `  ${(worker?.name ?? row.workerId).padEnd(28)} ${row.workerId}  families=[${families}] ` +
             `repositories=[${row.repositories.join(',')}] ` +
             `capabilities=[${row.capabilities.join(',')}]`,
         );
@@ -239,7 +243,7 @@ async function main(): Promise<void> {
       const implicit = [...byId.values()].filter((w) => !explicit.has(w.id) && w.status === 'ACTIVE');
       if (implicit.length > 0) {
         console.log('  derived (no explicit row — scopes imply the family, never repository work):');
-        for (const worker of implicit) console.log(`      ${worker.name}`);
+        for (const worker of implicit) console.log(`      ${worker.name.padEnd(28)} ${worker.id}`);
       }
       break;
     }
