@@ -17,6 +17,7 @@ import {
 import { resolveToken } from './fire.ts';
 import type { RoutingCandidate } from './router.ts';
 import type { FleetAccount, FleetPolicy } from '../../domain/types.ts';
+import { getWorkerRouting, listMembershipsForPrincipal } from '../../repos/identity.ts';
 
 /**
  * How long a sent activation counts as in flight.
@@ -138,6 +139,21 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
   const candidates: RoutingCandidate[] = [];
   const missingSecrets: { routineId: string; secretName: string }[] = [];
 
+  /*
+   * The families each Routine's bound worker may be handed, read once.
+   *
+   * A Routine bound to no worker resolves to `null` — the question cannot be
+   * answered, and the router treats that as eligible because the fire is not the
+   * boundary. A worker with no routing row resolves to its *derived* default,
+   * which is the same rule the assigner applies, so the two cannot disagree about
+   * a worker nobody has narrowed.
+   */
+  const familiesByWorker = new Map<string, string[]>();
+  for (const routine of routines) {
+    if (!routine.workerId || familiesByWorker.has(routine.workerId)) continue;
+    familiesByWorker.set(routine.workerId, await servedFamiliesForWorker(routine.workerId));
+  }
+
   for (const routine of routines) {
     const account = accountById.get(routine.accountId);
     if (!account) continue;
@@ -152,6 +168,7 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
     candidates.push({
       routine,
       account,
+      servesFamilies: routine.workerId ? familiesByWorker.get(routine.workerId) ?? null : null,
       routineInFlight: perRoutine.get(routine.id) ?? 0,
       accountInFlight: perAccount.get(account.id) ?? 0,
       routineTarget: routinePolicy ? effectiveTarget(routinePolicy, nowIso).target : null,
@@ -163,4 +180,33 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
   for (const n of perRoutine.values()) fleetInFlight += n;
 
   return { candidates, fleetPolicy, fleetInFlight, missingSecrets };
+}
+
+/**
+ * The workload families one worker may be handed, for the routing snapshot.
+ *
+ * Its own function because the *derived* default needs the worker's membership
+ * scopes, and `fleetSnapshot` holds a Routine rather than a principal. Reading
+ * the memberships here keeps one rule — a worker with no explicit row serves what
+ * its scopes imply and no repository work — rather than letting the fire side
+ * invent a second, more generous default.
+ *
+ * An unreadable row resolves to `RESEARCH`/`GENERAL` and never to the repository
+ * family, so a failure here can waste a fire and can never start a surface on
+ * software work it is not authorized for.
+ */
+async function servedFamiliesForWorker(workerId: string): Promise<string[]> {
+  try {
+    const explicit = await getWorkerRouting(workerId);
+    if (explicit) return explicit.families;
+    const memberships = await listMembershipsForPrincipal('WORKER', workerId);
+    const scopes = new Set<string>();
+    for (const membership of memberships) {
+      if (!membership.active) continue;
+      for (const scope of membership.scopes) scopes.add(scope);
+    }
+    return scopes.has('research:write') ? ['RESEARCH', 'GENERAL'] : ['GENERAL'];
+  } catch {
+    return ['RESEARCH', 'GENERAL'];
+  }
 }

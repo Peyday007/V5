@@ -63,6 +63,15 @@ import {
   type ClaimScope,
 } from '../../repos/workQueue.ts';
 import { evaluateContract, hashUnitValue, type ContractVerdict } from './contracts.ts';
+import { getWorkerRouting } from '../../repos/identity.ts';
+import {
+  classesForFamilies,
+  decideBinRouting,
+  derivedFamilies,
+  WORKLOAD_FAMILIES,
+  type WorkerRouting,
+  type WorkloadFamily,
+} from './routing.ts';
 
 /* ------------------------------------------------------------------------- */
 /* Eligibility                                                                */
@@ -151,6 +160,49 @@ export type CheckInResult =
  * `claimWork` under the same hook, so this cannot let anything through that the
  * later guard would refuse.
  */
+/**
+ * The routing scope in force for this worker, right now.
+ *
+ * Read per request rather than cached, for §17's reason: membership and scopes
+ * are read on every request so revoking access lands on the next call rather than
+ * at the next sign-in, and a routing scope nobody can narrow in under a process
+ * lifetime would be the weaker half of that pair.
+ *
+ * An unreadable table is **not** an open boundary. It resolves to the derived
+ * default, which is this worker's own scopes and no repository work — never to
+ * "everything", because the one thing a failure here must not do is hand software
+ * work to a research surface.
+ */
+export async function workerRoutingFor(
+  workerId: string,
+  principal: Principal,
+): Promise<WorkerRouting> {
+  const derived: WorkerRouting = {
+    workerId,
+    families: derivedFamilies(principal),
+    repositories: [],
+    capabilities: [],
+    reason: 'No routing row: the families this worker\'s scopes imply, and no repository work.',
+    explicit: false,
+  };
+  try {
+    const stored = await getWorkerRouting(workerId);
+    if (!stored) return derived;
+    return {
+      workerId,
+      families: stored.families.filter((family): family is WorkloadFamily =>
+        (WORKLOAD_FAMILIES as readonly string[]).includes(family),
+      ),
+      repositories: stored.repositories,
+      capabilities: stored.capabilities,
+      reason: stored.reason,
+      explicit: true,
+    };
+  } catch {
+    return derived;
+  }
+}
+
 export async function binAdmission(input: {
   workerId: string;
   principal: Principal;
@@ -162,7 +214,29 @@ export async function binAdmission(input: {
     credentialId: input.principal.credentialId,
   });
   const admit = auditAdmission(lineage);
+  const routing = await workerRoutingFor(input.workerId, input.principal);
   return async (bin: Bin): Promise<{ ok: boolean; reason?: string }> => {
+    /*
+     * Scope first, and every dimension of it, before anything else is asked.
+     *
+     * `assignNextBin` already keeps another family's work out of the candidate
+     * list, and this is the same decision asked of the bin in hand — because the
+     * query can narrow by the bin's own `workload_class` and cannot reach the
+     * repository inside its manifest. Two readers of one rule
+     * (`decideBinRouting`) rather than two rules, for the reason `auditRound.ts`
+     * is one module: a boundary enforced by one of two readers is worse than
+     * none, because the two disagree about the same worker.
+     */
+    const scoped = decideBinRouting({ bin, principal: input.principal, routing });
+    if (!scoped.ok) {
+      return {
+        ok: false,
+        reason:
+          `${scoped.refusal}: ${scoped.reason ?? 'out of this worker\'s routing scope'} ` +
+          'Routing scope is a row an operator wrote; it is not something a worker can widen.',
+      };
+    }
+
     /*
      * There is no capability check here, and that is the end of two corrections
      * rather than an omission.
@@ -290,12 +364,25 @@ export async function checkIn(input: {
   const scopes = claimableProjects(input.principal);
   if (scopes.length === 0) return { assigned: false, reason: 'NO_READY_BINS' };
 
+  /*
+   * The families this worker serves, resolved before anything is offered.
+   *
+   * Passed into the query rather than only checked afterwards: the candidate list
+   * is capped, so a queue holding another family's work would otherwise push this
+   * worker's own work off the end and the check-in would truthfully report "no
+   * work" while its work sat ready. That is the defect one altitude up from the
+   * one this boundary exists for.
+   */
+  const routing = await workerRoutingFor(input.workerId, input.principal);
+  const families = classesForFamilies(routing.families);
+
   let assigned = await assignNextBin({
     workerId: input.workerId,
     credentialId: input.principal.credentialId,
     projectIds: scopes.map((scope) => scope.projectId),
     sessionRef: input.sessionRef ?? null,
     leaseMs: input.leaseMs,
+    families,
     /*
      * Asked before the assignment charges an attempt. A bin whose only open
      * work this session may not take is skipped, costs the bin nothing, and
@@ -343,6 +430,7 @@ export async function checkIn(input: {
       projectIds: scopes.map((scope) => scope.projectId),
       sessionRef: input.sessionRef ?? null,
       leaseMs: input.leaseMs,
+      families,
       admit: await binAdmission({
         workerId: input.workerId,
         principal: input.principal,

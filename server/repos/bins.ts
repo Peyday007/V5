@@ -1111,6 +1111,22 @@ export interface AssignBinInput {
    * losing the compare-and-swap skips it.
    */
   admit?: (bin: Bin) => Promise<{ ok: boolean; reason?: string }>;
+  /**
+   * The workload classes this worker may be offered, as prefixes, and whether a
+   * bin with no class at all may be offered.
+   *
+   * This narrows the **candidate query**, which is the difference between a
+   * scope-aware assignment and "hand over the oldest ready bin and hope something
+   * downstream refuses it". `admit` still asks the rest — repository, capability,
+   * independence — but a worker must never even be *considered* for a family it
+   * does not serve, because the list is capped at twenty-five and a queue full of
+   * another family's work would otherwise hide its own.
+   *
+   * Optional, and absent means unscoped, so every existing caller behaves exactly
+   * as before. `services/bins/service.ts` is the caller that supplies it, from
+   * `classesForFamilies`.
+   */
+  families?: { prefixes: string[]; allowsNull: boolean };
 }
 
 export interface AssignedBin {
@@ -1216,22 +1232,63 @@ export async function listDispatchableBins(limit = 200): Promise<Bin[]> {
   return rows.map(mapBin);
 }
 
+/**
+ * The SQL that keeps another family's work out of the candidate list.
+ *
+ * `null` means this worker may be offered nothing at all — distinct from an
+ * absent filter, which means it may be offered anything its projects hold. The
+ * two are easy to conflate and conflating them fails open, so they are different
+ * return values rather than an empty string.
+ *
+ * Prefix matching because `workload_class` is a family plus a stage
+ * (`FACTORY_INTEGRATE`, `RESEARCH`, `RUSSELL_TURN`), and a stage nobody has
+ * invented yet still belongs to the family whose name it starts with. A fixed
+ * list of classes would silently admit a new stage to every worker.
+ */
+function familyWhereClause(
+  families: { prefixes: string[]; allowsNull: boolean } | undefined,
+): { sql: string; params: SqlParam[] } | null {
+  if (!families) return { sql: '', params: [] };
+  const clauses: string[] = [];
+  const params: SqlParam[] = [];
+  for (const prefix of families.prefixes) {
+    clauses.push('workload_class LIKE ?');
+    params.push(`${prefix}%`);
+  }
+  if (families.allowsNull) clauses.push('workload_class IS NULL');
+  if (clauses.length === 0) return null;
+  return { sql: `AND (${clauses.join(' OR ')})`, params };
+}
+
 export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin | null> {
   const db = getDb();
   const leaseMs = clampBinLeaseMs(input.leaseMs);
   if (input.projectIds.length === 0) return null;
 
+  /*
+   * The family filter, built once: a worker that serves nothing is handed
+   * nothing, which is the one case where an empty scope must not read as "no
+   * filter". `classesForFamilies` never returns that for a real worker, and a
+   * caller that passed it deliberately means it.
+   */
+  const familyClause = familyWhereClause(input.families);
+  if (familyClause === null) return null;
+
   for (let round = 0; round < 3; round += 1) {
     const now = binNow();
-    const params: SqlParam[] = [now, ...input.projectIds];
+    const params: SqlParam[] = [now, ...input.projectIds, ...familyClause.params];
 
     // Deterministic baseline ordering: priority first, then oldest first, then
     // the insertion counter so the order is total rather than merely mostly
     // decided. Two workers see the same list and the swap settles the rest.
+    //
+    // Scoped before it is ordered. The ordering decides which of the bins this
+    // worker may be given comes first; it never decides which family it is in.
     const candidates = await db.all<BinRow>(
       `SELECT * FROM bins
         WHERE ${DISPATCHABLE_SQL}
           AND project_id IN (${input.projectIds.map(() => '?').join(', ')})
+          ${familyClause.sql}
         ORDER BY priority DESC, created_at, rowid
         LIMIT 25`,
       params,

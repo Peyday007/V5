@@ -41,7 +41,11 @@
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import {
   archiveWorker,
+  clearWorkerRouting,
   getUserByEmail,
+  getWorkerRouting,
+  listWorkerRouting,
+  setWorkerRouting,
   getWorkerByName,
   grantMembership,
   listMembershipsForPrincipal,
@@ -57,6 +61,7 @@ import { listOrchestrationsByProject, currentFragments } from '../server/repos/r
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import { reissueMissingVerification, retryFragment } from '../server/services/research/reissue.ts';
 import { CONNECTOR_SCOPES } from '../server/domain/types.ts';
+import { WORKLOAD_FAMILIES } from '../server/services/bins/routing.ts';
 import type { User } from '../server/domain/types.ts';
 
 function flag(name: string): string | null {
@@ -64,6 +69,20 @@ function flag(name: string): string | null {
   const index = argv.indexOf(`--${name}`);
   if (index === -1) return null;
   return argv[index + 1] ?? null;
+}
+
+/**
+ * A comma-separated flag as a list, with blanks dropped.
+ *
+ * Its own helper so `--families ''` and an absent flag are the same empty list:
+ * "set this worker to serve nothing" has to be spelled deliberately, and
+ * `routing retire` is the command that spells it.
+ */
+function list(value: string | null): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 }
 
 function words(): string[] {
@@ -142,6 +161,9 @@ async function workerFrom(ref: string) {
 const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@example.com]
 
   workers   list | disable <name> | enable <name> | archive <name>
+  routing   show | set <worker> --families A,B [--repositories o/r,...]
+                   [--capabilities a,b] --reason "why"
+            clear <worker> | retire <worker> --reason "why"
   projects  list | create <name>
   access    show <worker> | grant <worker> <project> | revoke <worker> <project>
   queue     list <project>
@@ -171,6 +193,147 @@ async function main(): Promise<void> {
           `  ${worker.name.padEnd(28)} ${worker.status.padEnd(10)} ${memberships.length} project(s)`,
         );
       }
+      break;
+    }
+    /*
+     * What a worker may be handed. See `services/bins/routing.ts`.
+     *
+     * Here rather than on a surface, because it is not a decision about somebody's
+     * own project — it is internal machinery, and §26's rule is that machinery
+     * belongs on a terminal where reaching the shell is the authentication. The
+     * `--admin` attribution is resolved against the database rather than trusted,
+     * and every change lands in `identity_events` with both values, because a
+     * boundary nobody can later explain is indistinguishable from one that
+     * widened itself.
+     */
+    case 'routing show': {
+      const rows = await listWorkerRouting();
+      const byId = new Map((await listWorkers({ includeArchived: true })).map((w) => [w.id, w]));
+      if (rows.length === 0) {
+        console.log('  no worker has an explicit routing scope');
+      }
+      for (const row of rows) {
+        const worker = byId.get(row.workerId);
+        const families = row.families.length > 0 ? row.families.join(',') : '(none — serves nothing)';
+        console.log(
+          `  ${(worker?.name ?? row.workerId).padEnd(28)} families=[${families}] ` +
+            `repositories=[${row.repositories.join(',')}] ` +
+            `capabilities=[${row.capabilities.join(',')}]`,
+        );
+        console.log(`      ${row.reason}  (set by ${row.setBy})`);
+      }
+      /*
+       * And the workers with no row, because "nothing is listed" and "nothing is
+       * scoped" read the same otherwise — and a worker with no row is not
+       * unrestricted, it serves what its scopes imply and no repository work.
+       */
+      const explicit = new Set(rows.map((row) => row.workerId));
+      const implicit = [...byId.values()].filter((w) => !explicit.has(w.id) && w.status === 'ACTIVE');
+      if (implicit.length > 0) {
+        console.log('  derived (no explicit row — scopes imply the family, never repository work):');
+        for (const worker of implicit) console.log(`      ${worker.name}`);
+      }
+      break;
+    }
+    case 'routing set': {
+      const actor = await administrator();
+      const worker = await workerFrom(rest[0] ?? fail('Name a worker.'));
+      const families = list(flag('families'));
+      const repositories = list(flag('repositories'));
+      const capabilities = list(flag('capabilities'));
+      const reason = flag('reason') ?? fail('Pass --reason: a scope with no recorded why is one nobody can explain later.');
+      const unknown = families.filter((family) => !(WORKLOAD_FAMILIES as readonly string[]).includes(family));
+      if (unknown.length > 0) {
+        fail(`Unknown workload famil${unknown.length === 1 ? 'y' : 'ies'}: ${unknown.join(', ')}. One of: ${WORKLOAD_FAMILIES.join(', ')}.`);
+      }
+      /*
+       * Repository work needs a repository. A FACTORY family with an empty list is
+       * a worker that can be offered software work and authorized for none of it,
+       * which is a scope that reads as a grant and behaves as a refusal.
+       */
+      if (families.includes('FACTORY') && repositories.length === 0) {
+        fail('FACTORY work needs at least one --repositories <owner/name>; a family with no repository authorizes nothing.');
+      }
+      const before = await getWorkerRouting(worker.id);
+      await setWorkerRouting({
+        workerId: worker.id,
+        families,
+        repositories,
+        capabilities,
+        reason,
+        setBy: `admin:${actor.id}`,
+      });
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'SET_WORKER_ROUTING',
+        targetType: 'WORKER',
+        targetId: worker.id,
+        result: 'SUCCESS',
+        // Both values, because a boundary you cannot see the previous state of is
+        // one nobody can say was narrowed or widened.
+        metadata: {
+          before: before
+            ? { families: before.families, repositories: before.repositories, capabilities: before.capabilities }
+            : null,
+          after: { families, repositories, capabilities },
+          reason,
+        },
+      });
+      console.log(
+        `  ${worker.name} now serves [${families.join(',') || '(nothing)'}]` +
+          `${repositories.length > 0 ? ` for [${repositories.join(',')}]` : ''}.`,
+      );
+      break;
+    }
+    case 'routing retire': {
+      /*
+       * Retirement is a scope, not a deletion. An explicit row listing no family
+       * is the only configuration in this system that means "serves nothing", and
+       * it is the one that makes a retired surface unable to claim work while
+       * every row it ever wrote stays attributable to it.
+       */
+      const actor = await administrator();
+      const worker = await workerFrom(rest[0] ?? fail('Name a worker.'));
+      const reason = flag('reason') ?? fail('Pass --reason: why this surface is out of active dispatch.');
+      const before = await getWorkerRouting(worker.id);
+      await setWorkerRouting({
+        workerId: worker.id,
+        families: [],
+        repositories: [],
+        capabilities: [],
+        reason,
+        setBy: `admin:${actor.id}`,
+      });
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'RETIRE_WORKER_ROUTING',
+        targetType: 'WORKER',
+        targetId: worker.id,
+        result: 'SUCCESS',
+        metadata: { before: before ? before.families : null, after: [], reason },
+      });
+      console.log(`  ${worker.name} is retired from active dispatch: it may be handed nothing.`);
+      break;
+    }
+    case 'routing clear': {
+      const actor = await administrator();
+      const worker = await workerFrom(rest[0] ?? fail('Name a worker.'));
+      const removed = await clearWorkerRouting(worker.id);
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'CLEAR_WORKER_ROUTING',
+        targetType: 'WORKER',
+        targetId: worker.id,
+        result: removed ? 'SUCCESS' : 'FAILED',
+      });
+      console.log(
+        removed
+          ? `  ${worker.name} is back to the derived default: what its scopes imply, and no repository work.`
+          : `  ${worker.name} had no explicit routing scope.`,
+      );
       break;
     }
     case 'workers disable':

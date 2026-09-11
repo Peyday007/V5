@@ -45,17 +45,50 @@ export interface RepositoryGrant {
  * declining a pull request. It is authorized for the *bootstrap* campaign only,
  * which ran locally with a person watching every tick, and that is not this.
  */
-export const REPOSITORY_GRANTS: readonly RepositoryGrant[] = [
-  {
-    id: 'oakwood-site',
-    remote: 'https://github.com/Peyday007/oakwood-junk-removal',
-    description:
-      'The Oakwood Junk Removal site: one hand-written page with a quote form, its test ' +
-      'harness, its build and its continuous integration.',
-    defaultBranch: 'main',
-    forbiddenPaths: ['.github/workflows/deploy*', '.git/**'],
-    mayOpenPullRequest: true,
-  },
+export const REPOSITORY_GRANTS: readonly RepositoryGrant[] = [];
+
+/**
+ * **The envelope is empty, and that is the intended resting state.**
+ *
+ * `oakwood-site` was in it. The Oakwood Junk Removal site was revived for one
+ * purpose — to be the target the hosted factory proved itself against — and that
+ * proof is finished and kept: the campaigns, the commits, the pull request and
+ * `docs/FACTORY-EXECUTION-PLANE-EVIDENCE.md` are all still there to read. What it
+ * must not remain is a standing authorization, because a repository nobody is
+ * working in is a repository nobody is watching, and the factory's own executor
+ * must not be whichever target it last proved itself on.
+ *
+ * So the factory is intact and dormant. `decideRepository` refuses every remote,
+ * which means no campaign can be created for any repository at all until somebody
+ * adds one back here in a reviewed change — which is exactly what this envelope is
+ * for, and is the same shape §24 gives for the approval envelope: nobody supplies
+ * the limits their own work is judged against.
+ *
+ * **Onboarding a repository is three things, and the grant is only the first.**
+ * A grant here says the factory may be *pointed* at it; a `worker_routing` row
+ * saying some worker may be handed `FACTORY` work for that repository id says who
+ * may *execute* it; and the access itself is granted where that worker runs. Add a
+ * grant alone and nothing can run it — which is the failure mode worth having,
+ * because the alternative is a new repository silently inheriting the executor of
+ * the last one.
+ */
+/**
+ * Paths no unit may own in **any** repository, grant or no grant.
+ *
+ * These were per-grant, and that was a latent bug the empty envelope exposed
+ * rather than caused: `forbiddenHere` was the grant's list or nothing, so a
+ * repository with no grant forbade nothing, and the protection arrived only if
+ * whoever onboarded the next repository remembered to copy it. A rule that has to
+ * be remembered per repository is a rule that will be missing from one.
+ *
+ * A grant may still add to this; it may not subtract from it.
+ */
+export const UNIVERSAL_FORBIDDEN_PATHS: readonly string[] = [
+  // The deployment pipeline. §28's rule is that one branch owns production, and a
+  // unit that could edit the workflow enforcing it could edit its way around it.
+  '.github/workflows/deploy*',
+  // The repository's own history and hooks.
+  '.git/**',
 ];
 
 export const REPOSITORY_ENVELOPE_ID = 'factory-repositories-2026-09-11';
@@ -86,7 +119,9 @@ export function decideRepository(remote: string): GrantDecision {
       reason:
         'That repository is not one this factory is authorized to work in. Authorizing another ' +
         'one is a reviewed change to the envelope in code, deliberately — so that nobody can ' +
-        'widen what the factory may touch by making a request.',
+        'widen what the factory may touch by making a request. A grant alone is not enough: a ' +
+        'worker must also be registered to be handed FACTORY work for that repository, and the ' +
+        'access itself is granted where that worker runs.',
     };
   }
   return { ok: true, grant, reason: null };

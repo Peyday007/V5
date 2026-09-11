@@ -2914,6 +2914,24 @@ export interface UserSessionRow {
   created_ip: string | null;
 }
 
+/**
+ * What a worker may be handed, as stored.
+ *
+ * `families`, `repositories` and `capabilities` are JSON arrays; repositories are
+ * `owner/name` ids, never remotes and never credentials. An explicit row is
+ * exhaustive — see `services/bins/routing.ts`.
+ */
+export interface WorkerRoutingRow {
+  worker_id: string;
+  families: string;
+  repositories: string;
+  capabilities: string;
+  reason: string;
+  set_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface WorkerRow {
   id: string;
   name: string;

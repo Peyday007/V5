@@ -110,6 +110,10 @@ function candidate(
       retryAt: null,
       ...account,
     } as FleetAccount,
+    // Unknown by default, which the router treats as eligible: these tests are
+    // about capacity and slots, and a family scope they never set must not
+    // silently refuse every candidate.
+    servesFamilies: null,
     routineInFlight: 0,
     accountInFlight: 0,
     routineTarget: null,

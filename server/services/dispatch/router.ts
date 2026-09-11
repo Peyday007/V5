@@ -30,6 +30,7 @@
  * operator set, spends that resource to be told something the rows already say.
  */
 import type { Bin, FleetAccount, FleetPolicy, FleetRoutine } from '../../domain/types.ts';
+import { familyOf } from '../bins/routing.ts';
 
 /** Why no Routine was chosen. A closed set, because each one has its own fix. */
 export type RoutingRefusal =
@@ -39,11 +40,26 @@ export type RoutingRefusal =
   | 'ALL_SURFACES_INELIGIBLE'
   | 'ALL_SURFACES_RATE_LIMITED'
   | 'NO_CAPABLE_SURFACE'
+  | 'NO_SURFACE_SERVES_THIS_FAMILY'
   | 'ACCOUNT_TARGETS_REACHED';
 
 export interface RoutingCandidate {
   routine: FleetRoutine;
   account: FleetAccount;
+  /**
+   * The workload families the worker this Routine is bound to may be handed, or
+   * `null` when the Routine resolves to no worker and the question cannot be
+   * answered.
+   *
+   * **Null is eligible here, and that is deliberate rather than lax.** The fire is
+   * not the boundary — `assignNextBin` is, keyed on the authenticated worker — so
+   * the cost of firing a surface that turns out to be out of scope is one wasted
+   * activation, while the cost of refusing on an unknown is a bin nothing is ever
+   * started for. Fail closed where the unknown could record something false; fail
+   * open where it could only waste a fire. Known-and-wrong is refused, because
+   * that is not an unknown.
+   */
+  servesFamilies: string[] | null;
   /** In-flight activations attributed to this Routine and its account. */
   routineInFlight: number;
   accountInFlight: number;
@@ -92,6 +108,23 @@ function routable(state: string): boolean {
  * every Step 10 bin. Requirements are matched as a subset rather than an
  * equality so a more capable surface is never excluded for being more capable.
  */
+/**
+ * Does this surface's worker serve the family of work this bin is?
+ *
+ * Read from `worker_routing` through the snapshot, never from the Routine's own
+ * capability tags: a tag says what an operator thinks the surface can *do*, and
+ * the family says what its worker may be *handed*. Conflating them would let a
+ * Routine declaring `repository` be fired for research simply because nobody had
+ * narrowed it.
+ */
+function servesFamily(candidate: RoutingCandidate, family: string): boolean {
+  // Absent and explicitly-null are one answer: the question could not be asked.
+  // A snapshot built by a caller that predates this field must not refuse every
+  // surface, and a router that threw on it would stop all dispatch.
+  if (!Array.isArray(candidate.servesFamilies)) return true;
+  return candidate.servesFamilies.includes(family);
+}
+
 function capable(routine: FleetRoutine, required: string[]): boolean {
   if (required.length === 0) return true;
   const has = new Set(routine.capabilities);
@@ -166,7 +199,11 @@ export function routeBin(input: RoutingInput): RoutingResult {
   }
 
   const required = requiredCapabilities(bin);
+  // From the bin's own columns. One derivation, shared with the assigner, so the
+  // fire and the hand-over cannot disagree about what kind of work this is.
+  const family = familyOf(bin);
   let sawCapable = false;
+  let sawServesFamily = false;
   let sawRateLimited: string | null = null;
   let sawTargetReached = false;
 
@@ -182,6 +219,28 @@ export function routeBin(input: RoutingInput): RoutingResult {
       considered.push({ routineId: routine.id, verdict: `routine ${routine.state}` });
       continue;
     }
+    /*
+     * Whether its worker may be handed this family at all, asked **before**
+     * capabilities.
+     *
+     * Both would refuse, and the order decides which reason a person reads. Scope
+     * is the more precise answer and the one with a different remedy: "no surface
+     * serves this family" is a routing row somebody has to write, while "lacks a
+     * capability" reads as a missing tag on a surface that was otherwise right for
+     * the work. Asking capabilities first reported the second for what was always
+     * the first.
+     *
+     * Asked at all so Brain does not spend an activation on a surface the assigner
+     * will refuse — which is what stranded a ready bin behind an hourly cron in
+     * production: the dispatcher kept choosing the surface it could fire, that
+     * surface kept being refused the work, and the only surface that could take it
+     * arrived on a schedule nobody had tied to the work.
+     */
+    if (!servesFamily(candidate, family)) {
+      considered.push({ routineId: routine.id, verdict: `does not serve ${family} work` });
+      continue;
+    }
+    sawServesFamily = true;
     if (!capable(routine, required)) {
       considered.push({ routineId: routine.id, verdict: 'lacks a required capability' });
       continue;
@@ -218,6 +277,18 @@ export function routeBin(input: RoutingInput): RoutingResult {
   }
 
   if (eligible.length === 0) {
+    if (!sawServesFamily) {
+      return {
+        ok: false,
+        refusal: 'NO_SURFACE_SERVES_THIS_FAMILY',
+        reason:
+          `No enabled Routine is bound to a worker that may be handed ${family} work. That is a ` +
+          'routing scope an operator sets, not a capacity problem: register a worker for this ' +
+          'family, or widen one whose scope was narrowed too far.',
+        considered,
+        retryAt: null,
+      };
+    }
     if (!sawCapable && required.length > 0) {
       return {
         ok: false,

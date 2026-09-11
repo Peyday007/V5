@@ -39,6 +39,7 @@ import { recordFactoryEvent } from '../server/repos/factoryFleet.ts';
 import {
   decideRepository,
   listRepositoryGrants,
+  UNIVERSAL_FORBIDDEN_PATHS,
 } from '../server/services/factory/repositoryEnvelope.ts';
 import {
   parseDeliveryReport,
@@ -173,19 +174,85 @@ afterEach(async () => {
   await teardown();
 });
 
+/**
+ * Register a worker as a factory surface for the repository under test.
+ *
+ * Needed explicitly now, and that is the architecture rather than test
+ * bookkeeping: a worker with no routing row serves what its membership scopes
+ * imply and never repository work, so a test that wants to be handed a factory
+ * bin has to say which worker may be handed one — exactly as an operator does.
+ */
+async function registerFactoryWorker(workerId: string): Promise<void> {
+  const { setWorkerRouting } = await import('../server/repos/identity.ts');
+  await setWorkerRouting({
+    workerId,
+    families: ['FACTORY'],
+    repositories: ['peyday007/oakwood-junk-removal'],
+    capabilities: [],
+    reason: 'a factory surface for the repository under test',
+    setBy: 'test',
+  });
+}
+
+/**
+ * A minimally real principal for a factory surface.
+ *
+ * It has to carry memberships now, because the routing boundary reads the
+ * project and the scopes from them — which is the point: a principal with no
+ * membership may be handed nothing, and a test that passed one was testing a
+ * caller that could not exist.
+ */
+function reviewerPrincipal(workerId: string): Parameters<typeof binAdmission>[0]['principal'] {
+  return {
+    type: 'WORKER',
+    id: workerId,
+    credentialId: 'cred-x',
+    displayName: 'reviewer',
+    isBrainAdmin: false,
+    scopes: [],
+    memberships: [
+      {
+        projectId: fixture.project.id,
+        principalType: 'WORKER',
+        principalId: workerId,
+        role: 'MEMBER',
+        scopes: ['queue:claim', 'queue:complete'],
+        active: true,
+      },
+    ],
+  } as unknown as Parameters<typeof binAdmission>[0]['principal'];
+}
+
 /* ========================================================================= */
 
 describe('the repository envelope', () => {
-  it('authorizes the repository it names and refuses one it does not', () => {
-    expect(decideRepository(OAKWOOD).ok).toBe(true);
-    // Trailing slash, .git suffix and case are all the same repository.
-    expect(decideRepository(`${OAKWOOD}.git`).ok).toBe(true);
-    expect(decideRepository(`${OAKWOOD}/`).ok).toBe(true);
-    expect(decideRepository(OAKWOOD.toUpperCase()).ok).toBe(true);
-
+  /*
+   * The envelope is empty, and that is its intended resting state rather than an
+   * oversight. `oakwood-site` was in it for one purpose — being the target the
+   * hosted factory proved itself against — and that proof is finished and kept.
+   * What it must not remain is a standing authorization, because the factory's
+   * executor must not be whichever repository it last proved itself on.
+   */
+  it('authorizes nothing at rest, including the repository it was proved against', () => {
+    expect(listRepositoryGrants()).toHaveLength(0);
+    for (const remote of [OAKWOOD, `${OAKWOOD}.git`, `${OAKWOOD}/`, OAKWOOD.toUpperCase()]) {
+      expect(decideRepository(remote).ok).toBe(false);
+    }
     const refused = decideRepository('https://github.com/Peyday007/V5');
     expect(refused.ok).toBe(false);
     expect(refused.grant).toBeNull();
+  });
+
+  /*
+   * And a grant is only the first of three things. Authorizing a repository says
+   * the factory may be *pointed* at it; a worker routing row says who may execute
+   * it; the access itself is granted where that worker runs. The forbidden-path
+   * floor is in the envelope rather than in each grant for the same reason — a
+   * protection copied per repository is one that will be missing from one.
+   */
+  it('forbids the deployment pipeline and the git directory in every repository', () => {
+    expect(UNIVERSAL_FORBIDDEN_PATHS).toContain('.github/workflows/deploy*');
+    expect(UNIVERSAL_FORBIDDEN_PATHS).toContain('.git/**');
   });
 
   it('refuses without enumerating what else it would have allowed', () => {
@@ -952,18 +1019,24 @@ describe('a reviewer is independent by lineage, or it is refused', () => {
 
 /* ========================================================================= */
 
-describe('a bin is handed out even when Brain cannot tell which surface arrived', () => {
+describe('a bin is handed out by scope, not by which surface Brain guessed', () => {
   /*
-   * The opposite of what this file asserted twice, and the reason is the premise
-   * rather than the rule: Brain cannot attribute an arrival to a Routine before
-   * that arrival takes a bin, because `worker_sessions` is keyed by the
-   * credential and the credential is per-connector rather than per-session. A
-   * gate on that attribution refused the only surface that could do the work.
+   * This file asserted twice that nothing could gate the assignment, and the
+   * reasoning was about the wrong subject. Brain genuinely cannot attribute an
+   * arrival to a **Routine** — `worker_sessions` is keyed by the credential and
+   * the credential is per-connector — and a gate on that attribution refused the
+   * only surface that could do the work.
    *
-   * What remains is the router's own check at fire time, and a worker that
-   * cannot push reporting BLOCKED with the operation that was refused.
+   * It can identify the arriving **worker**, because the worker id comes from the
+   * authenticated principal, which is built entirely from rows the server owns. So
+   * the capability dimension is still not guessed from a Routine, and the family
+   * and repository dimensions are enforced from the worker's own routing row.
+   *
+   * Which is what production needed: one worker identity served every surface and
+   * held membership on the research project, so a session started to implement a
+   * repository checked in and was handed a Step 12A research item.
    */
-  it('admits a bin whose capabilities this arrival cannot be shown to carry', async () => {
+  it('admits repository work to a worker registered for that repository', async () => {
     const workerId = (
       await createWorker({ name: 'unknown-surface', createdByType: 'SYSTEM', createdById: 't' })
     ).id;
@@ -975,6 +1048,13 @@ describe('a bin is handed out even when Brain cannot tell which surface arrived'
       manifest: {
         objective: 'Implement something and push it.',
         why: 'a test',
+        repository: {
+          remote: OAKWOOD,
+          ref: 'main',
+          baseSha: BASE,
+          integrationBranch: 'factory/campaign/x',
+          pullRequest: null,
+        },
         lineage: { projectId: fixture.project.id, layerId: null, goal: null, orchestrationId: null },
         units: [{ key: 'u', establishes: 'a branch', input: '{}', transform: 'FACTORY_UNIT', dependsOn: [] }],
         acceptableSources: [],
@@ -993,20 +1073,59 @@ describe('a bin is handed out even when Brain cannot tell which surface arrived'
       requiredCapabilities: ['repository', 'repository-write'],
       ready: true,
     });
-    const admit = await binAdmission({
+    const principal = {
+      type: 'WORKER',
+      id: workerId,
+      credentialId: 'cred-unknown',
+      displayName: 'unknown-surface',
+      isBrainAdmin: false,
+      scopes: [],
+      memberships: [
+        {
+          projectId: fixture.project.id,
+          principalType: 'WORKER',
+          principalId: workerId,
+          role: 'MEMBER',
+          scopes: ['queue:claim', 'queue:complete'],
+          active: true,
+        },
+      ],
+    } as unknown as Principal;
+
+    // With no routing row this worker serves what its scopes imply — which is
+    // never repository work, whatever capabilities the bin asks for.
+    const unscoped = await binAdmission({ workerId, principal, sessionRef: 'provider-session-1' });
+    const refused = await unscoped((await getBin(bin.id))!);
+    expect(refused.ok).toBe(false);
+    expect(refused.reason).toContain('FAMILY_NOT_SERVED');
+
+    // Registered for this repository, the same arrival is admitted. The
+    // capabilities it cannot be shown to carry are still not held against it.
+    const { setWorkerRouting } = await import('../server/repos/identity.ts');
+    await setWorkerRouting({
       workerId,
-      principal: {
-        type: 'WORKER',
-        id: workerId,
-        credentialId: 'cred-unknown',
-        displayName: 'unknown-surface',
-        isBrainAdmin: false,
-        scopes: [],
-        memberships: [],
-      } as unknown as Principal,
-      sessionRef: 'provider-session-1',
+      families: ['FACTORY'],
+      repositories: ['peyday007/oakwood-junk-removal'],
+      capabilities: [],
+      reason: 'a factory worker, for this repository only',
+      setBy: 'test',
     });
-    expect((await admit((await getBin(bin.id))!)).ok).toBe(true);
+    const scoped = await binAdmission({ workerId, principal, sessionRef: 'provider-session-1' });
+    expect((await scoped((await getBin(bin.id))!)).ok).toBe(true);
+
+    // And not for a repository it was not registered for.
+    await setWorkerRouting({
+      workerId,
+      families: ['FACTORY'],
+      repositories: ['someone/else'],
+      capabilities: [],
+      reason: 'authorized elsewhere',
+      setBy: 'test',
+    });
+    const elsewhere = await binAdmission({ workerId, principal, sessionRef: 'provider-session-1' });
+    const wrongRepo = await elsewhere((await getBin(bin.id))!);
+    expect(wrongRepo.ok).toBe(false);
+    expect(wrongRepo.reason).toContain('REPOSITORY_NOT_AUTHORIZED');
   });
 });
 
@@ -1754,6 +1873,7 @@ describe('a reviewer Brain fired is identified by the fire, not by what it says'
 
   beforeEach(async () => {
     workerId = (await createWorker({ name: 'rev-id', createdByType: 'SYSTEM', createdById: 't' })).id;
+    await registerFactoryWorker(workerId);
     const { changeRequest } = await ensureChangeRequest({
       projectId: fixture.project.id,
       submissionKey: `review-id-${Math.random()}`,
@@ -1804,7 +1924,7 @@ describe('a reviewer Brain fired is identified by the fire, not by what it says'
     // establish independence, so it does not assert it.
     const closed = await binAdmission({
       workerId,
-      principal: { credentialId: 'cred-x' } as unknown as Parameters<typeof binAdmission>[0]['principal'],
+      principal: reviewerPrincipal(workerId),
       sessionRef: null,
     });
     expect((await closed(bin)).ok).toBe(false);
@@ -1822,7 +1942,7 @@ describe('a reviewer Brain fired is identified by the fire, not by what it says'
     // The same arrival, reporting nothing, is now identifiable and admitted.
     const admit = await binAdmission({
       workerId,
-      principal: { credentialId: 'cred-x' } as unknown as Parameters<typeof binAdmission>[0]['principal'],
+      principal: reviewerPrincipal(workerId),
       sessionRef: null,
     });
     expect((await admit((await getBin(reviewBinId))!)).ok).toBe(true);
@@ -1851,7 +1971,7 @@ describe('a reviewer Brain fired is identified by the fire, not by what it says'
     });
     const admit = await binAdmission({
       workerId,
-      principal: { credentialId: 'cred-x' } as unknown as Parameters<typeof binAdmission>[0]['principal'],
+      principal: reviewerPrincipal(workerId),
       sessionRef: null,
     });
     const verdict = await admit((await getBin(reviewBinId))!);
@@ -2073,6 +2193,7 @@ describe('a check-in derives the next stage rather than saying there is nothing'
   beforeEach(async () => {
     const worker = await createWorker({ name: 'derive', createdByType: 'SYSTEM', createdById: 't' });
     workerId = worker.id;
+    await registerFactoryWorker(workerId);
     credentialId = `cred_${workerId}`;
     const { changeRequest } = await ensureChangeRequest({
       projectId: fixture.project.id,

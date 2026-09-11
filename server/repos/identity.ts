@@ -31,6 +31,7 @@ import type {
   WorkerCredentialRow,
   WorkerCredentialSummary,
   WorkerRow,
+  WorkerRoutingRow,
   WorkerScope,
   WorkerStatus,
 } from '../domain/types.ts';
@@ -479,6 +480,130 @@ export async function getWorkerByName(name: string): Promise<Worker | null> {
     normalizeWorkerName(name),
   ]);
   return row ? mapWorker(row) : null;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Worker routing scope                                                       */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The routing scope stored for a worker, or null when none is.
+ *
+ * Null is meaningful and the caller must not collapse it to an empty scope:
+ * `services/bins/routing.ts` treats an explicit row as exhaustive and no row as
+ * "the families this worker's scopes already imply, and no repository work".
+ * Returning an empty object here would turn every unconfigured worker into one
+ * that may be handed nothing.
+ */
+export async function getWorkerRouting(workerId: string): Promise<{
+  workerId: string;
+  families: string[];
+  repositories: string[];
+  capabilities: string[];
+  reason: string;
+  setBy: string;
+  updatedAt: string;
+} | null> {
+  const row = await getDb().get<WorkerRoutingRow>(
+    'SELECT * FROM worker_routing WHERE worker_id = ?',
+    [workerId],
+  );
+  if (!row) return null;
+  return {
+    workerId: row.worker_id,
+    families: parseStringArray(row.families),
+    repositories: parseStringArray(row.repositories),
+    capabilities: parseStringArray(row.capabilities),
+    reason: row.reason,
+    setBy: row.set_by,
+    updatedAt: row.updated_at,
+  };
+}
+
+/** Every stored routing scope, for the operator's reading. */
+export async function listWorkerRouting(): Promise<
+  { workerId: string; families: string[]; repositories: string[]; capabilities: string[]; reason: string; setBy: string }[]
+> {
+  const rows = await getDb().all<WorkerRoutingRow>(
+    'SELECT * FROM worker_routing ORDER BY worker_id',
+  );
+  return rows.map((row) => ({
+    workerId: row.worker_id,
+    families: parseStringArray(row.families),
+    repositories: parseStringArray(row.repositories),
+    capabilities: parseStringArray(row.capabilities),
+    reason: row.reason,
+    setBy: row.set_by,
+  }));
+}
+
+/**
+ * Write a worker's routing scope, replacing any it had.
+ *
+ * Replacing rather than merging, because the row is exhaustive: a merge would
+ * make "the families this worker may serve" the union of every edit anybody ever
+ * made, which is the opposite of a boundary. The previous value is carried into
+ * `identity_events` by the caller, which is where the history belongs — this
+ * table holds what is true now.
+ */
+export async function setWorkerRouting(input: {
+  workerId: string;
+  families: string[];
+  repositories: string[];
+  capabilities: string[];
+  reason: string;
+  setBy: string;
+}): Promise<void> {
+  const at = new Date().toISOString();
+  const db = getDb();
+  const existing = await db.get<{ worker_id: string }>(
+    'SELECT worker_id FROM worker_routing WHERE worker_id = ?',
+    [input.workerId],
+  );
+  const families = JSON.stringify(input.families);
+  const repositories = JSON.stringify(input.repositories.map((id) => id.toLowerCase()));
+  const capabilities = JSON.stringify(input.capabilities);
+  if (existing) {
+    await db.run(
+      `UPDATE worker_routing
+          SET families = ?, repositories = ?, capabilities = ?, reason = ?, set_by = ?,
+              updated_at = ?
+        WHERE worker_id = ?`,
+      [families, repositories, capabilities, input.reason, input.setBy, at, input.workerId],
+    );
+    return;
+  }
+  await db.run(
+    `INSERT INTO worker_routing
+       (worker_id, families, repositories, capabilities, reason, set_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.workerId,
+      families,
+      repositories,
+      capabilities,
+      input.reason,
+      input.setBy,
+      at,
+      at,
+    ],
+  );
+}
+
+/** Remove a worker's explicit scope, returning it to the derived default. */
+export async function clearWorkerRouting(workerId: string): Promise<boolean> {
+  const result = await getDb().run('DELETE FROM worker_routing WHERE worker_id = ?', [workerId]);
+  return result.changes === 1;
+}
+
+function parseStringArray(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry): entry is string => typeof entry === 'string');
+  } catch {
+    return [];
+  }
 }
 
 /**

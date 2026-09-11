@@ -43,7 +43,7 @@ import { recordFactoryEvent } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { narrowsOrEqual } from './contract.ts';
 import { matchesGlob } from './integrate.ts';
-import { decideRepository } from './repositoryEnvelope.ts';
+import { UNIVERSAL_FORBIDDEN_PATHS, decideRepository } from './repositoryEnvelope.ts';
 
 /** The only shape a proposed unit may have. An unknown field refuses the plan. */
 export interface UnitSpec {
@@ -115,9 +115,18 @@ export function validatePlan(
   const errors: string[] = [];
   const warnings: string[] = [];
   const maxUnits = options.maxUnits ?? MAX_PLAN_UNITS;
-  // Empty for a repository with no grant — the local bootstrap path, which runs
-  // from a checkout a person is watching. A grant that exists is applied.
-  const forbiddenHere = decideRepository(changeRequest.repository).grant?.forbiddenPaths ?? [];
+  /*
+   * What no unit may own here: the universal set, plus anything this repository's
+   * own grant adds.
+   *
+   * It used to be the grant's list *or nothing*, so a repository with no grant
+   * forbade nothing — the local bootstrap path, and also every future repository
+   * whose grant forgot to restate the list. A protection that is copied per
+   * repository is one that will be missing from one of them, so it moved into the
+   * envelope as a floor a grant may add to and cannot subtract from.
+   */
+  const grant = decideRepository(changeRequest.repository).grant;
+  const forbiddenHere = [...UNIVERSAL_FORBIDDEN_PATHS, ...(grant?.forbiddenPaths ?? [])];
 
   if (typeof proposed !== 'object' || proposed === null || Array.isArray(proposed)) {
     return { ok: false, units: [], errors: ['The plan is not an object.'], warnings, uncoveredConditions: [] };
