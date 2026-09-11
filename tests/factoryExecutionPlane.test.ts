@@ -1623,6 +1623,188 @@ describe('an integration blocked before the work was judged costs the work nothi
 
 /* ========================================================================= */
 
+describe('a check-in derives the next stage rather than saying there is nothing', () => {
+  /*
+   * The defect this pins cost an hour per stage in production, and nothing about
+   * it looked wrong.
+   *
+   * A factory stage becomes available only when a tick reads what the last one
+   * finished, and the loop ticks every twenty seconds — `index.ts` says that
+   * interval exists so a stage becoming ready inside an activation is taken by the
+   * worker that is still there. The worker did not wait twenty seconds. It
+   * integrated two units, pushed, completed its bin, checked in again within the
+   * same minute, was told NO_WORK because the tick had not run yet, and ended with
+   * its own summary reading "awaiting next Brain check-in". The next stage became
+   * ready seconds later and sat there until the next hourly activation.
+   *
+   * A timer is the wrong place to answer a question somebody is asking right now.
+   */
+  let campaignId = '';
+  let workerId = '';
+  let credentialId = '';
+  const unitHead = 'e'.repeat(40);
+
+  function session(cred: string): Principal {
+    return {
+      type: 'WORKER',
+      id: workerId,
+      handle: 'derive-worker',
+      displayName: 'derive-worker',
+      isBrainAdmin: false,
+      mustChangePassword: false,
+      credentialId: cred,
+      authMethod: 'WORKER_BEARER',
+      memberships: [
+        {
+          projectId: fixture.project.id,
+          principalType: 'WORKER',
+          principalId: workerId,
+          role: 'MEMBER',
+          scopes: ['queue:claim', 'queue:complete', 'research:write'],
+          active: true,
+        } as unknown as Principal['memberships'][number],
+      ],
+      requestId: `req_${cred}`,
+    };
+  }
+
+  beforeEach(async () => {
+    const worker = await createWorker({ name: 'derive', createdByType: 'SYSTEM', createdById: 't' });
+    workerId = worker.id;
+    credentialId = `cred_${workerId}`;
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: `derive-${Math.random()}`,
+      objective: 'Guard the published tree.',
+      expectedOutcome: 'The suite fails when it breaks.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'the suite asserts it', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    campaignId = campaign.id;
+    await ensureUnit({
+      campaignId,
+      unitKey: 'only-unit',
+      kind: 'TEST',
+      role: 'IMPLEMENTER',
+      title: 'Assert the published tree',
+      objective: 'Assert the build publishes the site only.',
+      acceptance: ['the suite fails when a repository-only file is published'],
+      ownedPaths: ['test/only.test.js'],
+      requiredContext: [],
+      verification: ['npm test'],
+      expectedArtifact: 'a test file',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+    });
+    const { promoteReadyUnits } = await import('../server/repos/factory.ts');
+    await promoteReadyUnits(campaignId);
+  });
+
+  it('hands out the integration the worker just made possible, in the same check-in', async () => {
+    const { checkIn } = await import('../server/services/bins/service.ts');
+    stubForge({});
+
+    // The units stage, taken and finished the way a worker finishes it.
+    const first = await checkIn({ principal: session(credentialId), workerId, sessionRef: credentialId });
+    expect(first.assigned).toBe(true);
+    if (!first.assigned) return;
+    expect(first.assignment.kind).toBe('FACTORY_UNITS');
+
+    const bin = (await getBin(first.assignment.binId))!;
+    const { declaredBranchFor } = await import('../server/services/factory/remote.ts');
+    const branch = declaredBranchFor(bin, 'only-unit')!;
+    stubForge({
+      branches: { [branch]: unitHead },
+      compares: { [`${BASE}...${unitHead}`]: { files: ['test/only.test.js'], status: 'ahead' } },
+    });
+    await putBinUnitResult({
+      binId: bin.id,
+      unitKey: 'only-unit',
+      value: JSON.stringify({
+        unitKey: 'only-unit',
+        outcome: 'IMPLEMENTED',
+        branch,
+        headSha: unitHead,
+        filesChanged: ['test/only.test.js'],
+        commands: [{ command: 'npm test', exitCode: 0 }],
+        summary: 'implemented',
+      }),
+      contentHash: 'h-derive',
+      leaseId: first.assignment.leaseId,
+      leaseGeneration: first.assignment.leaseGeneration,
+    });
+    expect(
+      await finishBin(
+        {
+          binId: bin.id,
+          leaseId: first.assignment.leaseId,
+          leaseGeneration: first.assignment.leaseGeneration,
+          workerId,
+        },
+        { state: 'COMPLETE', reason: 'implemented' },
+      ),
+    ).toBe('OK');
+
+    /*
+     * And straight back for more, with no tick in between. Before the derivation
+     * this answered NO_READY_BINS: the integration stage exists only once a tick
+     * has read the report that was stored a second ago.
+     */
+    const second = await checkIn({
+      principal: session(credentialId),
+      workerId,
+      sessionRef: credentialId,
+    });
+    expect(second.assigned).toBe(true);
+    if (!second.assigned) return;
+    expect(second.assignment.kind).toBe('FACTORY_INTEGRATE');
+  });
+
+  it('still says there is nothing when there is nothing', async () => {
+    const { checkIn } = await import('../server/services/bins/service.ts');
+    stubForge({});
+    const { patchCampaign } = await import('../server/repos/factory.ts');
+    await patchCampaign(campaignId, { state: 'CANCELLED' });
+    const arrival = await checkIn({
+      principal: session(credentialId),
+      workerId,
+      sessionRef: credentialId,
+    });
+    expect(arrival.assigned).toBe(false);
+    if (!arrival.assigned) expect(arrival.reason).toBe('NO_READY_BINS');
+  });
+});
+
+/* ========================================================================= */
+
 describe('a unit value too large is refused, never truncated', () => {
   /*
    * The defect this pins cost a correct plan two attempts and a bin.

@@ -553,6 +553,27 @@ timestamp, because two rows written in the same millisecond are a tie a timestam
 cannot break — and a re-authorization that sorted before the refusals it answers
 would count for nothing.
 
+**A timer is the wrong place to answer a question somebody is asking right now.**
+A factory stage becomes available only when a tick reads what the last one
+finished, and the loop ticks every twenty seconds — `index.ts` says that interval
+exists precisely so a stage becoming ready inside an activation is taken by the
+worker that is still there. **The worker did not wait twenty seconds.** In
+production it integrated two units, pushed, completed its bin, checked in again
+inside the same minute, was told there was no work because the tick had not run
+yet, and ended — its own summary reading *"awaiting next Brain check-in"*. The
+next stage became ready seconds later and sat there until the next hourly
+activation. Nothing was broken and nothing was lost; the campaign simply took an
+hour per stage for want of twenty seconds.
+
+So `checkIn` derives before it answers: only after an assignment found nothing,
+only for the caller's own scopes, only once, and only the same idempotent tick the
+loop runs — guarded by its own compare-and-swap, so a tick already in flight
+declines rather than colliding. Then the assignment is retried. A derivation that
+creates nothing returns false, which is what stops this becoming a second attempt
+at the same empty answer, and a failure inside it is the same answer as "there is
+none" — the loop's own timer will try again, so it is a missed opportunity rather
+than a lost transition.
+
 **A tick also has to describe the campaign it just changed.** `report.state` was
 read once at the start of the pass and updated again only on the paths that
 *block*, so every pass that made progress reported the state from before its own

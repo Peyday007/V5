@@ -270,7 +270,7 @@ export async function checkIn(input: {
   const scopes = claimableProjects(input.principal);
   if (scopes.length === 0) return { assigned: false, reason: 'NO_READY_BINS' };
 
-  const assigned = await assignNextBin({
+  let assigned = await assignNextBin({
     workerId: input.workerId,
     credentialId: input.principal.credentialId,
     projectIds: scopes.map((scope) => scope.projectId),
@@ -288,7 +288,50 @@ export async function checkIn(input: {
       sessionRef: input.sessionRef ?? null,
     }),
   });
-  if (!assigned) return { assigned: false, reason: 'NO_READY_BINS' };
+  if (!assigned) {
+    /*
+     * Nothing was ready — so derive once before saying so, and look again.
+     *
+     * A factory stage becomes available only when a tick reads what the last one
+     * finished. `startFactoryRemoteLoop` does that every twenty seconds, and
+     * `index.ts` says why that interval matters: a stage that becomes ready inside
+     * an activation is taken by the worker that is still there, so a whole campaign
+     * finishes in one firing instead of one stage per firing.
+     *
+     * **In production the worker did not wait twenty seconds.** It integrated two
+     * units, pushed, called `brain_bin_complete`, checked in again within the same
+     * minute, was told NO_WORK because the tick had not run yet, and ended — with
+     * its own summary reading "awaiting next Brain check-in". The next stage became
+     * ready seconds later and sat there until the next hourly activation. Nothing
+     * was broken and nothing was lost; the campaign simply took an hour per stage
+     * for want of twenty seconds.
+     *
+     * A timer is the wrong place to answer a question somebody is asking right now.
+     * So the derivation runs here, on the read path, bounded: only after an
+     * assignment found nothing, only for the caller's own scopes, and only once. It
+     * is the same idempotent tick the loop runs — guarded by its own
+     * compare-and-swap, so a tick already in flight simply declines — and it
+     * creates only what the rows already imply. Then the assignment is retried,
+     * because the honest answer to "is there anything to do" is the one computed
+     * from current state rather than from the last time a timer happened to fire.
+     */
+    const derived = await deriveReadyWork(scopes.map((scope) => scope.projectId));
+    if (!derived) return { assigned: false, reason: 'NO_READY_BINS' };
+    const retried = await assignNextBin({
+      workerId: input.workerId,
+      credentialId: input.principal.credentialId,
+      projectIds: scopes.map((scope) => scope.projectId),
+      sessionRef: input.sessionRef ?? null,
+      leaseMs: input.leaseMs,
+      admit: await binAdmission({
+        workerId: input.workerId,
+        principal: input.principal,
+        sessionRef: input.sessionRef ?? null,
+      }),
+    });
+    if (!retried) return { assigned: false, reason: 'NO_READY_BINS' };
+    assigned = retried;
+  }
 
   const { bin } = assigned;
   return {
@@ -316,6 +359,34 @@ export async function checkIn(input: {
       budgetUnits: bin.budgetUnits,
     },
   };
+}
+
+/**
+ * Run the factory's own derivation once for these projects, and say whether
+ * anything was created.
+ *
+ * Deliberately narrow. It ticks remote campaigns in the caller's scopes and
+ * nothing else: no Russell tick, no dispatch fire, no research orchestration. The
+ * tick is idempotent by rows and guarded by its own compare-and-swap, so a loop
+ * tick already in flight declines rather than colliding — and a campaign that has
+ * nothing to hand out creates nothing, which is the `false` that stops this
+ * becoming a second attempt at the same empty answer.
+ *
+ * A failure here is not the caller's problem: the worker asked whether there was
+ * work, and "we could not derive any" and "there is none" are the same answer to
+ * that question. The loop will try again on its own timer, so this swallowing is a
+ * missed opportunity rather than a lost transition.
+ */
+async function deriveReadyWork(projectIds: string[]): Promise<boolean> {
+  if (projectIds.length === 0) return false;
+  try {
+    const { tickAllRemoteCampaigns } = await import('../factory/remoteLoop.ts');
+    const scoped = new Set(projectIds);
+    const reports = await tickAllRemoteCampaigns();
+    return reports.some((report) => report.created.length > 0 && scoped.has(report.projectId));
+  } catch {
+    return false;
+  }
 }
 
 /* ------------------------------------------------------------------------- */

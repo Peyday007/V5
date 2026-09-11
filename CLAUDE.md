@@ -2011,6 +2011,16 @@ remote.
   worker cannot declare itself surface-blocked to escape a failed verification,
   because the exit codes it reported about what it ran are what decide — prose
   never does.
+- **A timer is the wrong place to answer a question somebody is asking right
+  now.** A stage becomes available only when a tick reads what the last one
+  finished, and the twenty-second loop exists so a stage becoming ready inside an
+  activation is taken by the worker still there. The worker did not wait twenty
+  seconds: it integrated, pushed, completed its bin, checked in again in the same
+  minute, was told there was no work, and ended — so the next stage sat until the
+  next hourly activation. An hour per stage for want of twenty seconds. `checkIn`
+  derives before it answers — once, scoped to the caller, the same idempotent
+  tick, then retries the assignment — and a derivation that creates nothing is
+  still "there is none".
 - **A unit out of attempts stops the campaign before any review.** `outstanding`
   excludes FAILED, correctly — nothing more is going to happen to it — and the
   effect of that alone was a campaign whose only unit had retired walking into the

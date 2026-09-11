@@ -89,6 +89,14 @@ const TICK_HEARTBEAT_MS = 15_000;
 
 export interface RemoteTickReport {
   campaignId: string;
+  /**
+   * The project the campaign belongs to.
+   *
+   * Here because a caller asking "did anything become available for *me*" cannot
+   * answer it from a campaign id, and resolving one afterwards would be a second
+   * read of a row this already had in its hand.
+   */
+  projectId: string;
   state: string;
   stage: string;
   notes: string[];
@@ -98,9 +106,16 @@ export interface RemoteTickReport {
   tickHeld: boolean;
 }
 
-function empty(campaignId: string, state: string, stage: string, note: string): RemoteTickReport {
+function empty(
+  campaignId: string,
+  projectId: string,
+  state: string,
+  stage: string,
+  note: string,
+): RemoteTickReport {
   return {
     campaignId,
+    projectId,
     state,
     stage,
     notes: [note],
@@ -865,6 +880,7 @@ async function runRemoteTick(
 ): Promise<RemoteTickReport> {
   const report: RemoteTickReport = {
     campaignId: campaign.id,
+    projectId: campaign.projectId,
     state: campaign.state,
     stage: campaign.stageDetail ?? campaign.state,
     notes: [],
@@ -1267,30 +1283,37 @@ async function noteBin(campaign: FactoryCampaign, bin: Bin, why: string): Promis
  */
 export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTickReport> {
   const campaign = await getCampaign(campaignId);
-  if (!campaign) return empty(campaignId, 'UNKNOWN', 'unknown', 'no such campaign');
+  if (!campaign) return empty(campaignId, '', 'UNKNOWN', 'unknown', 'no such campaign');
   if (campaign.executionMode !== 'REMOTE') {
-    return empty(campaignId, campaign.state, campaign.state, 'not a remote campaign');
+    return empty(campaignId, campaign.projectId, campaign.state, campaign.state, 'not a remote campaign');
   }
   const changeRequest = await getChangeRequest(campaign.changeRequestId);
   if (!changeRequest) {
-    return empty(campaignId, campaign.state, campaign.state, 'the campaign has no change request');
+    return empty(
+      campaignId,
+      campaign.projectId,
+      campaign.state,
+      campaign.state,
+      'the campaign has no change request',
+    );
   }
   if (changeRequest.state !== 'APPROVED') {
     return empty(
       campaignId,
+      campaign.projectId,
       campaign.state,
       campaign.state,
       'the objective is not approved, so nothing may be created for it',
     );
   }
   if (campaign.state === 'CANCELLED') {
-    return empty(campaignId, campaign.state, campaign.state, 'cancelled');
+    return empty(campaignId, campaign.projectId, campaign.state, campaign.state, 'cancelled');
   }
 
   const owner = `factory-remote-${process.pid}`;
   const claim = await claimCampaignTick(campaignId, owner);
   if (!claim.ok) {
-    const held = empty(campaignId, campaign.state, campaign.state, claim.reason);
+    const held = empty(campaignId, campaign.projectId, campaign.state, campaign.state, claim.reason);
     held.tickHeld = true;
     return held;
   }
@@ -1333,6 +1356,7 @@ export async function tickAllRemoteCampaigns(): Promise<RemoteTickReport[]> {
       reports.push(
         empty(
           campaign.id,
+          campaign.projectId,
           campaign.state,
           campaign.state,
           `the tick threw: ${error instanceof Error ? error.message : String(error)}`,
