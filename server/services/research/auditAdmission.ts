@@ -114,7 +114,9 @@ export async function lineageForWorker(input: {
  * draining are not touched by this at all.
  */
 export function auditAdmission(executor: ExecutorLineage) {
-  return async (item: WorkItemRow): Promise<{ ok: boolean; reason?: string }> => {
+  return async (
+    item: WorkItemRow,
+  ): Promise<{ ok: boolean; reason?: string; sessionBlocked?: boolean }> => {
     if (item.work_type !== 'RESEARCH_AUDIT') return { ok: true };
     if (!item.orchestration_id) return { ok: true };
 
@@ -160,7 +162,22 @@ export function auditAdmission(executor: ExecutorLineage) {
       ...(requiredTier ? { requiredTier } : {}),
     });
     if (verdict.eligible) return { ok: true };
-    return { ok: false, reason: verdict.reasons.join(' ') };
+    /*
+     * Whether the thing in the way was the *session*, as a flag and never a
+     * value.
+     *
+     * `conflicts` carries the offending identifier, which is a credential id and
+     * stays in Brain's own log — so what leaves here is one boolean. The caller
+     * uses it for one thing: a session collision is the only refusal in this
+     * module with a knowable expiry, because a credential has one and an
+     * account, a worker and a Routine do not. Everything else keeps the ladder
+     * exactly as it was.
+     */
+    return {
+      ok: false,
+      reason: verdict.reasons.join(' '),
+      sessionBlocked: verdict.conflicts.some((conflict) => conflict.level === 'SESSION'),
+    };
   };
 }
 

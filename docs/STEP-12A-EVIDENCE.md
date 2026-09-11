@@ -9300,3 +9300,98 @@ open, and the same operator answered the identical decision on
 report short of its goal is a judgement the domain reserves to a person
 (invariant 20, §16, §24), and that reservation is the reason the gate is worth
 passing.
+
+## 96. The hour was Brain's own token clock — 2026-09-11
+
+The product owner asked for enough distinct, immediately fireable worker
+identities to complete PRIMARY, ADVERSARIAL and JUDGE "without waiting for
+hourly schedules". Reading production found the hourly thing, and it is not a
+schedule.
+
+**The mechanism, end to end.** `auditEligibility` compares audit roles on
+`ExecutorLineage.sessionRef`, and `lineageForWorker` sets that to the credential
+the request authenticated with — `oauth_tokens.id` for the Cowork connector.
+`ACCESS_TOKEN_TTL_MS` in `server/repos/oauth.ts` is `60 * 60 * 1000`. So two
+activations of one Routine inside one hour authenticate as **the same session**,
+and Brain correctly refuses the second the next audit role. It then records the
+refusal and walks `REFUSAL_BACKOFF_MS` — 1, 2, 5, 15, 30 minutes, then 30
+minutes for ever — re-firing at a surface whose answer could not change until
+the token aged out.
+
+**Measured, on the live packet.** `packet-report` on
+`orc_08b94f87a71a4b588829` at 2026-09-11T23:15Z:
+
+```
+BIN
+  bin_aa20917c0c1a418895cd  NEEDS_HUMAN  gen 18 attempts 4/5 refusals 6
+EVIDENCE
+  passes      9
+      audit role ordinal 5 COMPLETE 2026-09-11T05:35:49.064Z
+      audit role ordinal 6 COMPLETE 2026-09-11T06:28:19.591Z
+      audit role ordinal 7 COMPLETE 2026-09-11T07:25:35.729Z
+      audit role ordinal 5 COMPLETE 2026-09-11T07:49:13.267Z
+      audit role ordinal 6 COMPLETE 2026-09-11T08:25:09.116Z
+      audit role ordinal 7 COMPLETE 2026-09-11T09:26:12.825Z
+```
+
+Six session refusals, and consecutive roles 53, 57, 36 and 61 minutes apart on
+work that takes minutes. Two complete audit rounds cost the best part of four
+hours, almost all of it Brain waiting on its own clock.
+
+**What was changed.** `recordSessionRefusal` now takes an upper bound and clamps
+the rung to it (`retryAtWithin` in `repos/util.ts`), and
+`services/research/sessionWindow.ts` answers where the bound comes from: the
+blocking access token's own `expires_at`. `auditAdmission` says *whether* the
+refusal was a session collision as a boolean and never the value, because that
+value is a credential id. Everything else is untouched — the ladder, the
+refusal, the recorded reason, `bin_session_refusals`, and every comparison the
+matrix makes. The clamp can only move a retry **earlier**.
+
+Load-bearing, checked by reverting it: with `retryAtWithin` ignoring its bound,
+five of the eleven tests in `tests/sessionWindow.test.ts` fail, including the
+production shape — a credential expiring inside the first rung must set the
+bin's `dispatch_not_before` to that expiry rather than to a minute later.
+
+**Two fixes were available, both refused, and the refusal is the substance of
+this section.** Brain minted the token and could revoke it the moment it refuses
+a role; the connector would refresh within seconds and a distinct session would
+arrive at once. It would also mean the one model context Brain had just refused
+coming straight back under a second session id, eligible for the role it was
+refused — which defeats the control outright, since the whole content of the
+session dimension is that one context cannot hold two roles. Shortening
+`ACCESS_TOKEN_TTL_MS` is the same hole reached more slowly: a lifetime short
+enough to guarantee a fresh session per activation is short enough to expire
+*inside* one, and then the credential stops identifying a context at all.
+
+So the honest limit is recorded rather than engineered around: **Brain cannot
+manufacture a second simultaneous worker identity.** §22 settles it — "Brain
+owns dispatch. The surface owns whether a worker may act" — and that is about
+*who* a worker is as much as what it may do. More simultaneous identities are an
+operator provisioning fact (another authorized connector on another account),
+not something application code may mint, and §22 is explicit that Brain must
+never mint its own workers. What Brain can do, and now does, is refuse to wait
+longer than the answer is true for.
+
+## 97. A13 is one decision, and nothing else — 2026-09-11
+
+The same production read settles what is left. `claimable=0`: there is no work
+item any worker could be sent for, on the packet or anywhere near it. The report
+is filed — `doc_e9eaeab710b148d29fdd`, Execution Playbooks v1D, 42,621 bytes,
+`extraction READY`, `30/30 cited claim id(s) present in the stored bytes`. Two
+audits are recorded, both `MORE_RESEARCH`, carrying five `TARGETED_RESEARCH_GAP`
+entries between them with questions the judge wrote.
+
+`A13_AUTO_NEXT` counts `russell_missions.next_mission_id IS NOT NULL` inside the
+declared scope. `unresolvedFollowOn` produces that from `COMPLETE_WITH_GAPS`,
+which `outcomeFor` produces from `unresolved_gap_policy = 'RECORD_GAPS'`, whose
+only writer is `authorizeUnresolvedGaps` — and `recordGaps` calls it with
+`request.answeredByUserId`, which `answerHumanRequest` took from the
+authenticated principal. There is no path to it from a script, a worker or this
+session, and §95 already recorded why that must stay true: it is the property
+that makes `A14_HUMAN_RESUME` mean anything, and routing around it to pass A13
+would hollow out both.
+
+`scripts/authorize-gap-policy.ts` writes the column but does not answer the
+request, so it would leave the mission at `NEEDS_HUMAN` with an open decision,
+no writeback, and therefore no follow-on. It is not a way round this and was not
+used.

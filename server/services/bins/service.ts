@@ -56,6 +56,7 @@ import {
 import { getOrchestration } from '../../repos/research.ts';
 import { recordWorkerArrival } from '../../repos/fleet.ts';
 import { auditAdmission, lineageForWorker } from '../research/auditAdmission.ts';
+import { distinctSessionPossibleAt } from '../research/sessionWindow.ts';
 import {
   claimWork,
   getWorkItemRow,
@@ -205,19 +206,38 @@ export async function workerRoutingFor(
   }
 }
 
+/**
+ * What the admission rule answers about one bin.
+ *
+ * `retryNotLaterThan` is the only addition to what this has always returned, and
+ * it is an **upper bound on a backoff** rather than a decision: the refusal
+ * stands exactly as it did, and a caller that ignores the field behaves exactly
+ * as it did too. It is present only for the one refusal that has a knowable
+ * expiry — a session that may not take a second audit role on a packet, which
+ * stops being that session when its credential does.
+ */
+export interface BinAdmissionVerdict {
+  ok: boolean;
+  reason?: string;
+  /** An instant, never a credential. Null means "no opinion; use the ladder". */
+  retryNotLaterThan?: string | null;
+}
+
+export type BinAdmission = (bin: Bin) => Promise<BinAdmissionVerdict>;
+
 export async function binAdmission(input: {
   workerId: string;
   principal: Principal;
   /** The session the arriving worker reported, for the review-independence floor. */
   sessionRef?: string | null;
-}): Promise<(bin: Bin) => Promise<{ ok: boolean; reason?: string }>> {
+}): Promise<BinAdmission> {
   const lineage = await lineageForWorker({
     workerId: input.workerId,
     credentialId: input.principal.credentialId,
   });
   const admit = auditAdmission(lineage);
   const routing = await workerRoutingFor(input.workerId, input.principal);
-  return async (bin: Bin): Promise<{ ok: boolean; reason?: string }> => {
+  return async (bin: Bin): Promise<BinAdmissionVerdict> => {
     /*
      * Scope first, and every dimension of it, before anything else is asked.
      *
@@ -329,19 +349,41 @@ export async function binAdmission(input: {
     if (claimable.length === 0) return { ok: true };
 
     const reasons: string[] = [];
+    let sessionBlocked = false;
     for (const item of claimable) {
       const row = await getWorkItemRow(item.id);
       if (!row) return { ok: true }; // Unreadable is not ineligible.
       const verdict = await admit(row);
       if (verdict.ok) return { ok: true };
       if (verdict.reason) reasons.push(`${item.workType}: ${verdict.reason}`);
+      if (verdict.sessionBlocked) sessionBlocked = true;
     }
+    /*
+     * A refusal that is only about *which session turned up* has an expiry, and
+     * the backoff should not outlive it.
+     *
+     * This is the whole of the correction, and its shape is deliberately small:
+     * the refusal is unchanged, the ladder is unchanged, and the only new fact
+     * is an upper bound the repository clamps to. Every other kind of refusal —
+     * routing scope, factory review lineage, a stronger separation tier the
+     * fleet cannot supply — has no such expiry and passes null, so it behaves
+     * exactly as it did.
+     *
+     * See `services/research/sessionWindow.ts` for why this is a bound rather
+     * than a rotation: Brain could revoke the credential and have the connector
+     * refresh in seconds, and that would let one model context come back under a
+     * second session id and take the role it was just refused.
+     */
+    const retryNotLaterThan = sessionBlocked
+      ? await distinctSessionPossibleAt(input.principal.credentialId)
+      : null;
     return {
       ok: false,
       reason:
         reasons.length > 0
           ? reasons.join(' ')
           : 'No item this bin still has open is admissible for this session.',
+      retryNotLaterThan,
     };
   };
 }

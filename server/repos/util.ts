@@ -54,3 +54,21 @@ export function buildUpdate(
     values: keys.map((k) => patch[k]),
   };
 }
+
+/**
+ * The earlier of a computed retry point and a bound, with a floor under both.
+ *
+ * Timestamps here are ISO-8601 UTC strings, so string order is time order and
+ * the comparison needs no parsing — the same property `external_records`
+ * normalises its source versions for.
+ *
+ * `bound` may be null, which means the caller has no opinion and the computed
+ * value is the answer unchanged. When it is present the result is never later
+ * than it, so a refusal cannot be honoured past the moment it can stop being
+ * true; and never earlier than `floor`, so a bound already in the past cannot
+ * turn a backoff into a per-tick retry.
+ */
+export function retryAtWithin(computed: string, bound: string | null, floor: string): string {
+  const chosen = bound !== null && bound < computed ? bound : computed;
+  return chosen < floor ? floor : chosen;
+}

@@ -322,6 +322,22 @@ export async function findLiveToken(
   return mapToken(row);
 }
 
+/**
+ * One token by its row id, whatever state it is in.
+ *
+ * Deliberately *not* `findLiveToken`'s sibling: that one answers "may this
+ * bearer act", collapses unknown, revoked and expired into one refusal, and
+ * needs the secret to do it. This one answers "what is the shape of the grant
+ * an id names" and is only ever called with an id Brain already resolved from
+ * an authenticated request — so it discloses nothing a caller did not present.
+ *
+ * It carries no secret and no digest, because `mapToken` projects neither.
+ */
+export async function getToken(id: string): Promise<OAuthToken | null> {
+  const row = await getDb().get<OAuthTokenRow>('SELECT * FROM oauth_tokens WHERE id = ?', [id]);
+  return row ? mapToken(row) : null;
+}
+
 export async function touchToken(id: string): Promise<void> {
   await getDb().run('UPDATE oauth_tokens SET last_used_at = ? WHERE id = ?', [nowIso(), id]);
 }
