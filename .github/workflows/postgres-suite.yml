@@ -128,8 +128,21 @@ jobs:
           BRAIN_TEST_DATABASE_URL: postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable
         run: npm test
 
+      # Useful on a failure, and quiet about the ordinary case.
+      #
+      # The suite drops the schemas it created when it finishes, so on a green run
+      # `schema_migrations` is *correctly* gone — and asking for it anyway printed
+      # `ERROR: relation "schema_migrations" does not exist` into an otherwise
+      # passing log. A green log with an error in it costs somebody ten minutes
+      # the next time they read one.
       - name: What the database ended up holding
         if: always()
         run: |
-          psql "postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable" -tAc \
-            "select 'schema version ' || coalesce(max(version)::text, 'none') from schema_migrations" || true
+          present=$(psql "postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable" -tAc \
+            "select to_regclass('public.schema_migrations') is not null" 2>/dev/null || echo f)
+          if [ "$present" = "t" ]; then
+            psql "postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable" -tAc \
+              "select 'schema version ' || coalesce(max(version)::text, 'none') from schema_migrations"
+          else
+            echo "No schema left, which is what a finished run should leave: the suite drops what it created."
+          fi
