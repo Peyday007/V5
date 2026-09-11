@@ -43,7 +43,7 @@
  */
 
 /** Bumped when the text changes, and recorded on the run that used it. */
-export const RESEARCH_METHOD_VERSION = '2026-08-31.2';
+export const RESEARCH_METHOD_VERSION = '2026-09-11.1';
 
 /**
  * The standing method, restored from the workflow that produced the archive's
@@ -84,6 +84,40 @@ a claim you got wrong: it is recorded as unresolved, named in the report, and
 excluded from the fragment's rejection rate. Inferring the content of a page you
 could not open is the one thing that would make this worse than saying nothing.
 
+## Every claim carries the URL of the source it came from
+
+A claim's \`sourceUrl\` is what makes it evidence rather than your assertion. The
+gate's first condition is a canonical source URL, so a claim submitted without
+one is **rejected** — however true it is, and however carefully you worked it
+out.
+
+**And a rejected claim is not free.** A fragment whose claims are *mostly*
+rejected fails its integrity check outright, and that throws away the
+well-sourced claims beside them: the fragment is blocked, its report is never
+written, and the accepted evidence in it contributes nothing. Production did
+exactly this on 2026-09-11 — seventeen claims, seven of them properly sourced
+and accepted, ten submitted as bare assertions, so the majority rule blocked the
+whole fragment and seven good findings were lost with them.
+
+So there are exactly three honest things to do with something you believe:
+
+- **You opened a source that says it.** Submit the claim with its \`sourceUrl\`,
+  its excerpt and its locator. This is the ordinary case.
+- **You found the source and could not read it.** Submit the claim with the
+  \`sourceUrl\` you found *and* its retrieval state (PAYWALLED, ROBOTS_BLOCKED,
+  JS_ONLY, NOT_REACHABLE). These are recorded as unresolved rather than
+  refused, and they are **excluded** from the rejection rate — which is why
+  naming the source you could not open is always better than leaving it out.
+- **You have no source at all.** It is not a finding. Say it in the summary of
+  what you did, or report it with \`brain_report_blocker\`, and do not submit it
+  as a claim. Background knowledge, a reasonable inference and a figure you
+  worked out in your head are all this case.
+
+None of that is a bar you can lower by wording, and none of it asks you to
+submit less. It asks you to submit assertions **as** assertions and claims as
+claims, because the cost of confusing the two is paid by the sourced work
+sitting next to them.
+
 ## Say which declared lane every claim fills
 Each lane in your assignment has three parts: an **\`id\`** like
 \`operative_authority\`, a **\`description\`** saying what it is asking for, and a
@@ -98,10 +132,11 @@ question that may have no answer — a regulator advisory, if one exists — and
 reporting honestly that nothing exists is a complete answer to it, not a
 failure. An **OPTIONAL** lane is enrichment.
 
-This applies to claims that could be accepted. A claim with no usable source, or
-one whose source you could not read, is still submitted **without** a lane and
-is still kept — recorded as unsourced or unresolved rather than dropped. It
-fills no lane either way.
+This applies to claims that could be accepted. A claim whose source you found
+and could not read is still submitted **without** a lane — recorded as
+unresolved rather than dropped, and excluded from the rejection rate. A claim
+with no source at all is not submitted; see the section above for why, and for
+what to do with it instead.
 
 A submission with a missing or undeclared lane is refused whole, before anything
 is stored and without spending your attempt: fix the field and submit the same
@@ -135,7 +170,13 @@ that hides them. Name what is unresolved, and why.
 
 /** The compact form, for the MCP `instructions` field every client already reads. */
 export const RESEARCH_METHOD_SUMMARY =
-  'When you research: set every claim\'s evidence_lane to one of the fragment\'s declared lane **ids** (never a description), or the submission is refused whole before anything is stored; search broadly, then open full sources rather than quoting snippets; ' +
+  'When you research: give every claim the sourceUrl of the source it came from — a claim '
+  + 'without one is rejected by the gate, and a fragment whose claims are mostly rejected is '
+  + 'blocked outright, which discards the well-sourced claims beside them; something you have '
+  + 'no source for at all is not a claim, so report it rather than submitting it. Set every '
+  + "claim's evidence_lane to one of the fragment's declared lane **ids** (never a "
+  + 'description), or the submission is refused whole before anything is stored; search '
+  + 'broadly, then open full sources rather than quoting snippets; ' +
   'prefer primary evidence and classify each source PRIMARY, SECONDARY or ANECDOTAL; when a ' +
   'source is paywalled, robots-blocked, JavaScript-only or unreachable, try an official ' +
   'alternative and, if it is still unreadable, submit the claim with its retrieval state set ' +

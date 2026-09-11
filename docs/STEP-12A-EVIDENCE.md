@@ -9077,3 +9077,102 @@ recorded in the ledger but have not been re-read by a reporter run.
 `step10.yml` and `packet-report.yml` declare no environment and still run, which
 is why every production row quoted above is a current reading rather than a
 remembered one.
+
+## 93. The contract that stated a requirement and not its cost — 2026-09-11
+
+### Why `followOn` was null, end to end
+
+`A13_AUTO_NEXT` counts `russell_missions.next_mission_id IS NOT NULL`. Walking
+backwards from that column, the production path is:
+
+```
+judge records a gap          audit_gaps row, classification + researchQuestion
+  → packet COMPLETE_WITH_GAPS  requires unresolved_gap_policy = 'RECORD_GAPS'
+  → writeback                  mission DONE, writeback_at set
+  → followOnsToCreate          state DONE, writeback_at NOT NULL,
+                               next_mission_id NULL, no candidate already
+                               carrying this mission, parent not itself a
+                               follow-on
+  → unresolvedFollowOn         requirement route, then the audit-gap route
+  → candidate created          statement = the judge's own researchQuestion
+  → judged, compiled, launched
+  → setNextMission             the column A13 reads
+```
+
+Two routes exist inside `unresolvedFollowOn` and **a compiled mission can only
+take the second**. The requirement route looks for a MANDATORY requirement no
+`ACCEPTED` fragment carries; `compileMission` makes exactly one fragment per
+idea, and a packet only reaches `COMPLETE_WITH_GAPS` with that fragment
+accepted, so its one requirement is answered by construction. The audit-gap
+route is therefore the whole of it in production, and it needs a
+`FOUNDATIONAL_GAP` or `TARGETED_RESEARCH_GAP` carrying a written question.
+
+`tests/russellRecovery.test.ts` proved the *idea* is derived from the judge's
+own words and never invented from prose. It stopped there. Between the idea and
+the column sit the archive check, the compiler and the authority reservation —
+any of which may decline — so **an idea that exists is not a follow-on that
+happened**, and that stretch had no test. It does now: one walks from a
+judge-recorded `TARGETED_RESEARCH_GAP` to a launched mission, asserts the
+parent's `next_mission_id`, the child's `followOnOfMissionId`, the judge's exact
+question on the child, and then runs three more ticks requiring that nothing
+further is created or linked and the parent still names the same mission. It
+fails with *"the follow-on never launched"* when `TARGETED_RESEARCH_GAP` is
+taken out of `RESEARCH_JUSTIFYING_GAPS`.
+
+### The stop that was actually in the way
+
+ACC-13 reached the gate with seventeen claims. Seven were properly sourced and
+accepted; ten were submitted as bare assertions and rejected for having no
+source URL. `mostlyRejected` is `judged >= 2 && rejectionRate > 0.5`, and 10/17
+is 0.588 — so the fragment's integrity failed, nothing was synthesized, and the
+seven good findings were discarded with the ten.
+
+Both rules are right. "There is no source" is not evidence, and a fragment whose
+sourcing is mostly refused cannot be relied on where it happened to hold up —
+the gate says so in its own comment. What was wrong is the **execution
+contract**. `RESEARCH_METHOD` said a great deal about lanes and about sources it
+could not read, and never once said that a claim needs a URL to be accepted. It
+went further in the wrong direction:
+
+> A claim with no usable source, or one whose source you could not read, is
+> still submitted **without** a lane and is still kept — recorded as unsourced
+> or unresolved rather than dropped.
+
+A worker reading that submits its unsourced beliefs, which is exactly what
+happened. The requirement lived in the gate and in the assignment's completion
+standard; the *consequence* lived nowhere a worker would read before submitting.
+
+So the consequence is stated, in both places a worker sees it — the method
+constant served through `brain_research_method` and abridged into the MCP
+`instructions` every client reads at connect, and the compiled fragment's own
+completion criteria — with three honest options and the reason the third one
+matters:
+
+- opened a source that says it → submit with `sourceUrl`, excerpt and locator;
+- found the source, could not read it → submit with that URL **and** its
+  retrieval state, which is recorded as unresolved and **excluded** from the
+  rejection rate;
+- no source at all → it is not a finding. Report it; do not submit it.
+
+**No bar moved.** The gate's seven conditions, the majority rule, the evidence
+standard and the integrity check are untouched, and `sourceUrl` is deliberately
+*not* made a required field in the submission schema — doing that would refuse
+the legitimate unreadable-source path the method already describes. What changed
+is that the worker is told the bar it is being held to, at the moment it is
+held to it. `RESEARCH_METHOD_VERSION` moves to `2026-09-11.1` and
+`docs/workers/WORKER-CONTRACT.md` is regenerated from the constant, which a test
+enforces.
+
+### S12A-ACC-14, declared before it ran
+
+Whether a Michigan county accepts electronic recording decides whether a deal
+closes the same day or waits on paper — a first-order commercial fact about Deal
+Dispatch's own operating surface, and one published by many registers of deeds
+and by no means all. Both halves are genuine: an office that publishes its
+e-recording page and fee is ordinary quotable evidence, and an office that
+publishes nothing is §14's negative-existence case, where the honest outcome is
+a named unresolved part rather than an inference from silence.
+
+**Nothing about it manufactures a gap.** If every county turns out to publish
+one, the packet settles its goal, files `COMPLETE` and correctly produces no
+follow-on — and that is the answer, reported as the answer.

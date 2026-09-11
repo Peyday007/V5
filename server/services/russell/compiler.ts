@@ -438,11 +438,35 @@ export async function compileMission(input: {
     },
   ];
 
+  /*
+   * What "done" means, and — since 2026-09-11 — what a claim without a source
+   * costs, in the place the worker reads before it starts.
+   *
+   * The second criterion already said every source carries its URL. It did not
+   * say what happens to one that does not, and the honest reading of that
+   * silence is the one a worker took: seventeen claims submitted, ten of them
+   * bare assertions, so the gate's majority-rejection rule blocked the fragment
+   * and threw away the seven that *were* sourced. Neither rule is wrong —
+   * "there is no source" is not evidence, and a fragment whose sourcing is
+   * mostly refused cannot be relied on where it happened to hold up — but a
+   * contract that states a requirement without its consequence is one a
+   * reasonable worker under-reads.
+   *
+   * So the consequence is stated, and nothing is relaxed: the gate, the
+   * majority rule and the evidence standard are untouched, and the escape for
+   * a source found but unreadable is the one the method already describes.
+   */
   const completionCriteria = [
     'Every part of the question is answered from a quoted official source, or recorded as ' +
       'unresolved naming the offices searched and what was not found.',
     'Every source carries its URL, the office or authority that publishes it, and the date ' +
       'it was published or last updated.',
+    'Every claim carries the URL of the source it came from. A claim submitted without one ' +
+      'is rejected, and a fragment whose claims are mostly rejected is blocked outright — ' +
+      'which discards the well-sourced claims beside them. If you found the source but could ' +
+      'not read it, submit the claim with that URL and its retrieval state, which is recorded ' +
+      'as unresolved rather than rejected. If you have no source at all, it is not a claim: ' +
+      'report it instead of submitting it.',
     `Every finding is about ${jurisdiction.value}; anything found about anywhere else is ` +
       'reported as out of scope rather than used.',
   ];

@@ -350,6 +350,30 @@ export const ACCEPTANCE_SUITE = [
    * follow-on — which is the acceptance rule, not a failure of it.
    */
   /*
+   * The mixed packet, with ACC-13's stop repaired at its cause.
+   *
+   * ACC-13 launched, researched, and submitted seventeen claims of which seven
+   * were properly sourced and ten were bare assertions — so the gate's
+   * majority-rejection rule blocked the fragment and discarded the seven with
+   * them. Neither rule is wrong. What was wrong is that the execution contract
+   * stated the source-URL requirement and never its consequence, so the method
+   * and the compiled fragment's completion criteria now say what an unsourced
+   * claim costs. No bar moved.
+   *
+   * Whether a Michigan county accepts electronic recording decides whether a
+   * deal closes the same day or waits on paper — a first-order commercial fact
+   * about Deal Dispatch's own operating surface — and it is published by many
+   * registers of deeds and by no means all. If every county turns out to
+   * publish one, the packet settles its goal, files COMPLETE and correctly
+   * produces no follow-on.
+   */
+  {
+    scenarioId: 'S12A-ACC-14',
+    purpose:
+      "a county-records question whose answer is published by some Michigan offices and by no means all: a packet that files what it established and names what it could not, the person's decision to record that, and the one follow-on it leaves behind",
+    conversationTitle: 'S12A-ACC-14',
+  },
+  /*
    * The same request against the gate ACC-12 found.
    *
    * ACC-12 was answered in eighty-six seconds and Brain's own capture gate

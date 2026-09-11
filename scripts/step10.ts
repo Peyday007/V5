@@ -427,6 +427,73 @@ const ACCEPTANCE_SCENARIOS = {
    * Deal Dispatch's freshness promise actually rests on.
    */
   /*
+   * The mixed packet, asked so that both halves are real.
+   *
+   * Four scenarios have been declared for `A13_AUTO_NEXT` and each was stopped
+   * by a different rule working correctly — the semantic dedupe (ACC-4), the
+   * compiler's evidence standard (ACC-6), the capture gate (ACC-12), and
+   * ACC-13's integrity bar, where seventeen claims arrived, seven properly
+   * sourced and ten as bare assertions, so the majority-rejection rule blocked
+   * the fragment and the seven good ones went with it.
+   *
+   * ACC-13's stop is repaired at its cause rather than worked around: the
+   * execution contract now states, in `RESEARCH_METHOD` and in the compiled
+   * fragment's own completion criteria, that a claim without a source URL is
+   * rejected and that a mostly-rejected fragment is blocked outright. No bar
+   * moved. What changed is that the worker is told the bar it is being held to,
+   * at the point where it submits.
+   *
+   * **This question is chosen for what it is, not for the gate.** Whether a
+   * Michigan county accepts electronic recording decides whether a deal can
+   * close without posting paper, which is the difference between same-day and
+   * next-week for every transaction Deal Dispatch touches. It is a first-order
+   * commercial fact about the product's own operating surface.
+   *
+   * Its two halves are both genuine, and neither is arranged:
+   *
+   *   - Many registers of deeds publish an e-recording page naming the
+   *     submitters they accept and the fees they charge. That is an official
+   *     record, quotable, with a URL and a date — ordinary accepted evidence,
+   *     and enough for a report to be written and filed.
+   *   - Some publish nothing about it at all. §14 is explicit that a claim
+   *     something does not exist is established by a documented search of the
+   *     places it would be, or not at all — so for those counties the honest
+   *     outcome is a named unresolved part rather than an inference from
+   *     silence, and "go and establish it for the counties that publish
+   *     nothing" is exactly the bounded question a judge may legitimately write
+   *     as a `TARGETED_RESEARCH_GAP`.
+   *
+   * **Nothing about that manufactures the gap.** If every county turns out to
+   * publish an e-recording page, the packet settles its goal, files `COMPLETE`
+   * and correctly produces no follow-on — and that is the answer, reported as
+   * the answer. The instruction to say so plainly where a county publishes
+   * nothing is the negative-existence rule, not an invitation to come back
+   * short.
+   *
+   * Distinct where the dedupe looks: not bulk access, not licence or
+   * redistribution terms, not fee schedules for records, not whether a
+   * statewide parcel layer is published, not success-fee licensure, and not
+   * recording-to-availability lag. Whether a county accepts an electronic
+   * submission at all is a different fact from all of them.
+   */
+  'S12A-ACC-14': {
+    purpose:
+      'a county-records question whose answer is published by some Michigan offices and by no ' +
+      'means all: a packet that files what it established and names what it could not, the ' +
+      "person's decision to record that, and the one follow-on it leaves behind",
+    statement:
+      'establish which Michigan county registers of deeds accept electronic recording, through which submitters, and at what published fee',
+    question:
+      'Whether a county accepts electronic recording decides whether one of our deals can close ' +
+      'the same day or has to wait on paper, and we have never established it for Michigan. ' +
+      'Please go and establish, county by county for Michigan, whether the register of deeds ' +
+      'accepts electronic recording of deeds and mortgages, which submitters it names as ' +
+      'approved, and what its own published schedule says the e-recording fee is. Take each ' +
+      "answer from that office's own page or published schedule with the date it was last " +
+      'updated, and where a county publishes nothing about electronic recording at all, say so ' +
+      'plainly and name where you looked rather than inferring it either way.',
+  },
+  /*
    * The same request, against the gate `S12A-ACC-12` found.
    *
    * ACC-12's message was answered in eighty-six seconds, the worker proposed a

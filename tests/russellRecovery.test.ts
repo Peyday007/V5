@@ -516,6 +516,76 @@ describe('a packet that filed short leaves the question the judge named', () => 
     expect(again.followOns.map((entry) => entry.missionId)).not.toContain(mission.id);
   });
 
+  it('carries that gap all the way to a launched mission, exactly once', async () => {
+    /*
+     * The whole of `A13_AUTO_NEXT`, on the route production actually takes.
+     *
+     * The test above proves the *idea* is derived from the judge's own
+     * question. The gate counts something further along:
+     * `russell_missions.next_mission_id IS NOT NULL`, which is written only
+     * when that idea has been judged, specified and **launched**. Between the
+     * two sit the archive check, the compiler and the authority reservation,
+     * and any one of them can decline — so an idea that exists is not yet a
+     * follow-on that happened.
+     *
+     * The integration pass walks this for the *requirement* route. A compiled
+     * mission cannot take that route at all — one fragment, one requirement,
+     * and a packet that files has it accepted — so the audit-gap route is the
+     * only one production can use, and it had no test past the idea.
+     *
+     * Exactly once is asserted the way it can actually fail: not by counting
+     * one tick, but by running several more and requiring that nothing further
+     * is created, nothing further is linked, and the parent still names the one
+     * mission it named the first time.
+     */
+    const { mission } = await filedShort([
+      {
+        classification: 'TARGETED_RESEARCH_GAP',
+        title: 'The counties that publish nothing',
+        detail: 'The report covers the offices that publish a schedule and names the rest.',
+        justification: 'The decision needs the ones it could not settle.',
+        researchQuestion:
+          'For the Michigan counties that publish nothing about electronic recording, what ' +
+          'does each office say when its own recording page is read in full?',
+        expectedContribution: 'It completes the county coverage the decision rests on.',
+      },
+    ]);
+
+    // As many ticks as it takes: the idea is created, judged, specified and
+    // launched by the loop, and which tick each step lands in is an
+    // implementation detail rather than the property.
+    let followOnMissionId: string | null = null;
+    for (let round = 0; round < 6 && !followOnMissionId; round += 1) {
+      await tick('follow-on');
+      followOnMissionId = (await getMission(mission.id))!.nextMissionId;
+    }
+
+    expect(followOnMissionId, 'the follow-on never launched').toBeTruthy();
+
+    // It is a real mission, on the child idea, and the child knows its parent.
+    const child = (await listMissions({ projectId })).find(
+      (entry) => entry.id === followOnMissionId,
+    );
+    expect(child).toBeTruthy();
+    const childIdea = (await getCandidate(child!.candidateId!))!;
+    expect(childIdea.followOnOfMissionId).toBe(mission.id);
+    // The judge's own bounded question, not the parent's and not a summary.
+    expect(childIdea.statement).toContain('publish nothing about electronic recording');
+
+    // Exactly once, and it stays that way.
+    const missionsAfterLaunch = (await listMissions({ projectId })).length;
+    for (let round = 0; round < 3; round += 1) {
+      const settled = await tick('follow-on');
+      expect(settled.followOns).toHaveLength(0);
+      expect(settled.linkedNext).toHaveLength(0);
+    }
+    expect((await listMissions({ projectId }))).toHaveLength(missionsAfterLaunch);
+    expect((await getMission(mission.id))!.nextMissionId).toBe(followOnMissionId);
+
+    // And the chain stops here: a follow-on does not itself produce one.
+    expect(child!.nextMissionId).toBeNull();
+  }, 60_000);
+
   it('creates nothing from a gap the judge stated no question for', async () => {
     /*
      * A finding is not a follow-on. `FOUNDATIONAL_GAP` may keep research open,
