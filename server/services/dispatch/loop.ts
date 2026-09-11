@@ -60,6 +60,7 @@ import {
   markDispatchDeferred,
   markDispatchFailed,
   markDispatchSent,
+  rearmSurfaceDeferredIntents,
   recordBinEvent,
   supersedeStaleIntents,
   reopenNoShowDispatches,
@@ -112,6 +113,14 @@ export const DISPATCH_BURST = 5;
 
 export interface TickResult {
   superseded: number;
+  /**
+   * Intents whose surface-specific backoff was put back because the fleet changed.
+   *
+   * Its own number rather than folded into `superseded`, because the two answer
+   * different questions: one says an intent stopped being about the bin's current
+   * generation, this says an intent stopped being blocked.
+   */
+  rearmed: number;
   /** Fires nobody answered, put back in the queue or given up on. */
   reopenedNoShows: number;
   abandonedNoShows: number;
@@ -143,6 +152,7 @@ export async function dispatchTick(
 ): Promise<TickResult> {
   const result: TickResult = {
     superseded: 0,
+    rearmed: 0,
     reopenedNoShows: 0,
     abandonedNoShows: 0,
     intentsCreated: 0,
@@ -155,6 +165,16 @@ export async function dispatchTick(
   };
 
   result.superseded = await supersedeStaleIntents();
+
+  /*
+   * And put back anything deferred on a condition the fleet has since changed.
+   *
+   * Before routing, because this decides what there is to route. See
+   * `rearmSurfaceDeferredIntents`: a backoff is a timestamp and the condition it
+   * stands for — one Routine's token, its state, its capabilities — can stop being
+   * true long before the timestamp lapses.
+   */
+  result.rearmed = await rearmSurfaceDeferredIntents();
 
   /*
    * Put back a fire nobody answered.

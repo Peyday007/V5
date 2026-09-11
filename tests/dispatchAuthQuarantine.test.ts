@@ -18,7 +18,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
-import { createAccount, createRoutine, listRoutines } from '../server/repos/fleet.ts';
+import { createAccount, createRoutine, listRoutines, setRoutineState } from '../server/repos/fleet.ts';
 import { createBin } from '../server/repos/bins.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import type { BinManifest } from '../server/domain/types.ts';
@@ -130,6 +130,45 @@ describe('a fire refused for authentication', () => {
     expect(bad?.stateReason ?? '').toContain('AUTH');
     // And the healthy surface is untouched: a 401 is a fact about one secret.
     expect(good?.state).toBe('ENABLED');
+  });
+
+  /*
+   * And the intent it deferred is put back once the fleet changes — which is the
+   * fix-after-the-damage case and its own defect. The first dispatcher wrote a
+   * twenty-four-hour backoff for every non-retryable failure; shortening that
+   * helped every future failure and left the intents already written behind a wall,
+   * with a factory review bin READY and nothing anywhere able to answer it.
+   */
+  it('puts a surface-deferred intent back once a Routine row changes', async () => {
+    await readyBin('only');
+    // Fire, be refused, and be deferred with the error recorded against the intent.
+    await dispatchTick({ burst: 4, projectIds: [projectId] });
+
+    const { getDb } = await import('../server/db/database.ts');
+    const deferred = await getDb().get<{ next_attempt_at: string; last_error_kind: string }>(
+      `SELECT next_attempt_at, last_error_kind FROM bin_dispatch WHERE state = 'PENDING'`,
+    );
+    expect(deferred?.last_error_kind).toBe('AUTH');
+    // Pushed out beyond now, so nothing would claim it on the next tick.
+    await getDb().run(
+      `UPDATE bin_dispatch SET next_attempt_at = ?, updated_at = ? WHERE state = 'PENDING'`,
+      [new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), '2000-01-01T00:00:00.000Z'],
+    );
+
+    // A person corrects the fleet: any write to a Routine row is the condition.
+    const routines = await listRoutines();
+    const bad = routines.find((routine) => routine.routineRef === 'trig_bad_token')!;
+    await setRoutineState({
+      routineId: bad.id,
+      from: bad.state,
+      to: 'ENABLED',
+      reason: 'the deployment secret was corrected',
+    });
+
+    refuseRef = 'trig_nothing_refuses_this';
+    const second = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(second.rearmed).toBeGreaterThanOrEqual(1);
+    expect(second.fired).toBeGreaterThanOrEqual(1);
   });
 
   it('leaves every surface enabled when the provider accepts', async () => {

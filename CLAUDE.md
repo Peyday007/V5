@@ -926,6 +926,19 @@ a value the claimant does not supply.**
   same reason. `fleet set-state` is the answering transition once the secret is
   fixed. Only `NOT_CONFIGURED` is genuinely fleet-wide.
 
+  **And a fix deployed after the damage does not undo the damage, which is its own
+  defect.** The backoff that correction shortened is a *timestamp*, so every intent
+  already written kept its twenty-four-hour wall — in production a factory review
+  bin sat `READY` with its only intent deferred until the following day, and no
+  transition anywhere could answer it. A remedy that cannot reach the state it
+  exists for is not a remedy. `rearmSurfaceDeferredIntents` derives the condition
+  instead of scheduling it: an intent deferred on `AUTH`, `NOT_FOUND` or `PAUSED` is
+  put back when any Routine row has been written since that intent was — an operator
+  correcting a secret, re-enabling a surface, declaring a capability or registering
+  a Routine are all that same fact. It is self-limiting, because the re-arm stamps
+  the intent; it never revives an abandoned one, never touches an intent deferred
+  for another reason, and never changes an attempt count.
+
   **The same sentence is true one level down, about bins, and it was not.**
   `assignNextBin` charged a bin an attempt in the very statement that handed it
   over, so a session refused by the audit independence guard still cost the bin

@@ -2322,6 +2322,47 @@ export async function markDispatchFailed(
 }
 
 /**
+ * Put back a dispatch intent whose blocker was about a *surface*, once the fleet
+ * has changed.
+ *
+ * `AUTH`, `NOT_FOUND` and `PAUSED` are facts about one Routine, and the dispatcher
+ * defers an intent that meets one — briefly, because it also takes that surface
+ * out of routing, so the next decision is a different one. But a backoff is a
+ * *timestamp*, and the condition it stands for can stop being true long before it
+ * lapses: an operator corrects the deployment secret and re-enables the surface, a
+ * capability is declared, a new Routine is registered. None of those can reach into
+ * a row that says "try again in a day".
+ *
+ * **This is the fix-after-the-damage case, which is its own defect.** The first
+ * version of the dispatcher wrote a twenty-four-hour backoff for every
+ * non-retryable failure. Correcting that to thirty seconds helped every *future*
+ * failure and left the intents already written sitting behind a wall — in
+ * production, a factory review bin `READY` with its only intent deferred until the
+ * following day, and no transition anywhere that could answer it. A remedy that
+ * cannot reach the state it exists for is not a remedy.
+ *
+ * So the condition is derived rather than scheduled: an intent deferred on a
+ * surface-specific error is re-armed when any Routine row has been written since
+ * that intent was. It is self-limiting — the re-arm stamps the intent, so it cannot
+ * fire again until the fleet changes again — and it never touches an intent
+ * deferred for any other reason, never revives an `ABANDONED` one, and never
+ * changes an attempt count.
+ */
+export async function rearmSurfaceDeferredIntents(): Promise<number> {
+  const at = binNow();
+  const result = await getDb().run(
+    `UPDATE bin_dispatch
+        SET next_attempt_at = ?, updated_at = ?
+      WHERE state = 'PENDING'
+        AND last_error_kind IN ('AUTH', 'NOT_FOUND', 'PAUSED')
+        AND next_attempt_at > ?
+        AND updated_at < (SELECT MAX(updated_at) FROM fleet_routines)`,
+    [at, at, at],
+  );
+  return result.changes;
+}
+
+/**
  * Retire intents for bins that have moved on.
  *
  * A bin that was leased, completed or cancelled while an intent sat pending no
