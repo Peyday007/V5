@@ -18,6 +18,7 @@ import { resolveToken } from './fire.ts';
 import type { RoutingCandidate } from './router.ts';
 import type { FleetAccount, FleetPolicy } from '../../domain/types.ts';
 import { getWorkerRouting, listMembershipsForPrincipal } from '../../repos/identity.ts';
+import { derivedFamiliesFrom } from '../bins/routing.ts';
 
 /**
  * How long a sent activation counts as in flight.
@@ -199,13 +200,8 @@ async function servedFamiliesForWorker(workerId: string): Promise<string[]> {
   try {
     const explicit = await getWorkerRouting(workerId);
     if (explicit) return explicit.families;
-    const memberships = await listMembershipsForPrincipal('WORKER', workerId);
-    const scopes = new Set<string>();
-    for (const membership of memberships) {
-      if (!membership.active) continue;
-      for (const scope of membership.scopes) scopes.add(scope);
-    }
-    return scopes.has('research:write') ? ['RESEARCH', 'GENERAL'] : ['GENERAL'];
+    // The derived default, from the one function that defines it.
+    return derivedFamiliesFrom(await listMembershipsForPrincipal('WORKER', workerId));
   } catch {
     return ['RESEARCH', 'GENERAL'];
   }

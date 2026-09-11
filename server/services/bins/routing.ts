@@ -168,10 +168,25 @@ export interface WorkerRouting {
  * serves general work, and **no** scope implies a repository family.
  */
 export function derivedFamilies(principal: Principal): WorkloadFamily[] {
-  const scopes = new Set<WorkerScope>();
-  for (const membership of principal.memberships) {
+  return derivedFamiliesFrom(principal.memberships);
+}
+
+/**
+ * The same rule, over a membership list rather than a principal.
+ *
+ * One function with two callers rather than two functions with one rule, because
+ * the fire router reads memberships straight from the repository (it has no
+ * principal — nobody has authenticated) and a second copy of this would be a rule
+ * applied by one of two readers, which is worse than none: the two would disagree
+ * about the same worker and the disagreement would look like a routing bug.
+ */
+export function derivedFamiliesFrom(
+  memberships: ReadonlyArray<{ active: boolean; scopes: readonly string[] }>,
+): WorkloadFamily[] {
+  const scopes = new Set<string>();
+  for (const membership of memberships) {
     if (!membership.active) continue;
-    for (const scope of membership.scopes as WorkerScope[]) scopes.add(scope);
+    for (const scope of membership.scopes) scopes.add(scope);
   }
   const families: WorkloadFamily[] = ['GENERAL'];
   if (scopes.has('research:write')) families.unshift('RESEARCH');

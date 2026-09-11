@@ -84,6 +84,14 @@ Two enforcement points that agree are the requirement, not one: a guard on the
 query alone hides a bin the hook would admit, and a guard on the hook alone
 hands out a lease attempt for work the surface can never do.
 
+They are allowed to disagree in exactly one direction. The query filters on
+`workload_class`; the hook reads the manifest first. So the query may be **more**
+permissive than the hook — an unlabelled bin whose manifest names a repository is
+offered by the query and refused by the hook, which costs nothing because the
+refusal is ahead of the compare-and-swap. The reverse would be the bug: a query
+narrower than the hook makes a bin invisible to the very caller the hook would
+admit, and nothing anywhere would say why.
+
 ## Onboarding a repository
 
 Three things, and any one of them missing authorizes nothing:
