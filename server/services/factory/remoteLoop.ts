@@ -56,6 +56,7 @@ import { gatingFindings, queueRepairs } from './repair.ts';
 import { recordCampaignOutcome } from './writeback.ts';
 import {
   acceptIntegration,
+  integrationBranchDrift,
   acceptUnitReport,
   binBaseOf,
   binIdentity,
@@ -1033,7 +1034,37 @@ async function runRemoteTick(
         return report;
       }
     }
-    const bin = await createIntegrateBin(fresh, changeRequest, implemented);
+    /*
+     * And whether anybody moved the branch Brain is about to move.
+     *
+     * Read before the bin is created, recorded whatever it says, and never a
+     * refusal — see `integrationBranchDrift`. A prohibition in a manifest is not a
+     * control, so the control is that Brain knows, says so on the campaign's own
+     * ledger, and tells the integrator.
+     */
+    const forge = parseRemote(changeRequest.repository);
+    const drift = forge ? await integrationBranchDrift(forge, fresh) : null;
+    if (drift) {
+      await recordFactoryEvent({
+        campaignId: fresh.id,
+        kind: FACTORY_EVENT_KINDS.staleBase,
+        evidenceClass: 'MEASURED',
+        detail: {
+          branch: fresh.integrationBranch,
+          brainLeftItAt: drift.expected,
+          forgeSaysItIsAt: drift.actual,
+          note:
+            'Something other than an integration moved the campaign branch. The integration ' +
+            'still judges the whole range from the base Brain recorded, and delivery still ' +
+            'refuses a pull request whose head is not the commit Brain integrated.',
+        },
+      });
+      report.notes.push(
+        `${fresh.integrationBranch} is at ${drift.actual.slice(0, 12)} and Brain left it at ` +
+          `${drift.expected.slice(0, 12)}; recorded, and the integrator is told`,
+      );
+    }
+    const bin = await createIntegrateBin(fresh, changeRequest, implemented, drift);
     if (bin) {
       report.created.push(`integrate:${bin.id}`);
       await noteBin(fresh, bin, `${implemented.length} implemented unit(s) to integrate`);

@@ -1623,6 +1623,169 @@ describe('an integration blocked before the work was judged costs the work nothi
 
 /* ========================================================================= */
 
+describe('a branch nobody was supposed to move is noticed, not punished', () => {
+  /*
+   * Every units bin's manifest prohibits pushing, merging into or otherwise moving
+   * the campaign's integration branch, names the branch, and says integrating is a
+   * separate bin judged by a session that implemented none of it. In production a
+   * unit worker pushed its commit to its own branch *and* fast-forwarded the
+   * campaign branch onto it. The content was exactly what the unit declared and
+   * exactly what Brain would have integrated; the route was one nothing reviewed.
+   *
+   * **A prohibition in a prompt is not a control**, and Brain cannot make one — push
+   * access is granted where the worker runs. So the control is that Brain reads the
+   * branch, records what it finds on the campaign's own ledger, and tells the
+   * integrator. It does not refuse: the integration still judges the whole range
+   * from the base Brain recorded against the union of declared paths, and delivery
+   * still refuses a pull request whose head is not the commit Brain integrated.
+   */
+  let campaignId = '';
+  let workerId = '';
+  const unitHead = 'a'.repeat(39) + '1';
+  const moved = 'a'.repeat(39) + '2';
+  let unitBranch = '';
+  let integrationBranch = '';
+
+  beforeEach(async () => {
+    workerId = (await createWorker({ name: 'drift', createdByType: 'SYSTEM', createdById: 't' })).id;
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: `drift-${Math.random()}`,
+      objective: 'Guard the published tree.',
+      expectedOutcome: 'The suite fails when it breaks.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'the suite asserts it', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    campaignId = campaign.id;
+    await ensureUnit({
+      campaignId,
+      unitKey: 'only-unit',
+      kind: 'TEST',
+      role: 'IMPLEMENTER',
+      title: 'Assert the published tree',
+      objective: 'Assert the build publishes the site only.',
+      acceptance: ['the suite fails when a repository-only file is published'],
+      ownedPaths: ['test/only.test.js'],
+      requiredContext: [],
+      verification: ['npm test'],
+      expectedArtifact: 'a test file',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+    });
+    const { promoteReadyUnits } = await import('../server/repos/factory.ts');
+    await promoteReadyUnits(campaignId);
+
+    // One unit implemented and confirmed, so the next stage is the integration.
+    stubForge({});
+    await tickRemoteCampaign(campaignId);
+    const assigned = await assignNextBin({ workerId, projectIds: [fixture.project.id] });
+    const { declaredBranchFor } = await import('../server/services/factory/remote.ts');
+    unitBranch = declaredBranchFor(assigned!.bin, 'only-unit')!;
+    integrationBranch = (await getCampaign(campaignId))!.integrationBranch;
+    stubForge({
+      branches: { [unitBranch]: unitHead },
+      compares: { [`${BASE}...${unitHead}`]: { files: ['test/only.test.js'], status: 'ahead' } },
+    });
+    await putBinUnitResult({
+      binId: assigned!.bin.id,
+      unitKey: 'only-unit',
+      value: JSON.stringify({
+        unitKey: 'only-unit',
+        outcome: 'IMPLEMENTED',
+        branch: unitBranch,
+        headSha: unitHead,
+        filesChanged: ['test/only.test.js'],
+        commands: [{ command: 'npm test', exitCode: 0 }],
+        summary: 'implemented',
+      }),
+      contentHash: 'h-drift',
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    await finishBin(
+      {
+        binId: assigned!.bin.id,
+        leaseId: assigned!.leaseId,
+        leaseGeneration: assigned!.leaseGeneration,
+        workerId,
+      },
+      { state: 'COMPLETE', reason: 'implemented' },
+    );
+  });
+
+  it('records the branch being somewhere Brain did not leave it, and still hands the stage out', async () => {
+    // The integration branch has been moved by somebody who was not an integrator.
+    stubForge({
+      branches: { [unitBranch]: unitHead, [integrationBranch]: moved },
+      compares: { [`${BASE}...${unitHead}`]: { files: ['test/only.test.js'], status: 'ahead' } },
+    });
+    const report = await tickRemoteCampaign(campaignId);
+    expect(report.created.some((entry) => entry.startsWith('integrate:'))).toBe(true);
+    expect(report.state).not.toBe('BLOCKED');
+    expect(report.notes.some((note) => note.includes('Brain left it at'))).toBe(true);
+
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+    const events = await listFactoryEvents(campaignId, {
+      kinds: ['STALE_BASE_DETECTED'],
+      limit: 10,
+    });
+    expect(events.length).toBe(1);
+    const detail = events[0]!.detail as { brainLeftItAt?: unknown; forgeSaysItIsAt?: unknown };
+    expect(detail.brainLeftItAt).toBe(BASE);
+    expect(detail.forgeSaysItIsAt).toBe(moved);
+
+    // And the integrator is told, in the bin it was handed.
+    const assigned = await assignNextBin({ workerId, projectIds: [fixture.project.id] });
+    expect(assigned?.bin.kind).toBe('FACTORY_INTEGRATE');
+    const spec = (assigned!.bin.manifest.units ?? [])[0];
+    expect(spec?.establishes).toContain('Brain left it at');
+  });
+
+  it('says nothing when the branch is exactly where Brain left it', async () => {
+    stubForge({
+      branches: { [unitBranch]: unitHead, [integrationBranch]: BASE },
+      compares: { [`${BASE}...${unitHead}`]: { files: ['test/only.test.js'], status: 'ahead' } },
+    });
+    const report = await tickRemoteCampaign(campaignId);
+    expect(report.created.some((entry) => entry.startsWith('integrate:'))).toBe(true);
+    expect(report.notes.some((note) => note.includes('Brain left it at'))).toBe(false);
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+    expect(
+      (await listFactoryEvents(campaignId, { kinds: ['STALE_BASE_DETECTED'], limit: 10 })).length,
+    ).toBe(0);
+  });
+});
+
+/* ========================================================================= */
+
 describe('a check-in derives the next stage rather than saying there is nothing', () => {
   /*
    * The defect this pins cost an hour per stage in production, and nothing about

@@ -2011,6 +2011,17 @@ remote.
   worker cannot declare itself surface-blocked to escape a failed verification,
   because the exit codes it reported about what it ran are what decide — prose
   never does.
+- **A prohibition in a prompt is not a control, and Brain cannot make one.** Every
+  units bin forbids pushing to or moving the campaign's integration branch, names
+  it, and says integrating is a separate bin — and a unit worker pushed its commit
+  to its own branch *and* fast-forwarded the campaign branch onto it. The content
+  was exactly what the unit declared; the route was one nothing reviewed. Push
+  access is granted where the worker runs, so Brain cannot prevent it and instead
+  **notices**: the branch is read before the stage is handed out, both commits go
+  on the ledger as `STALE_BASE_DETECTED`, and the integrator is told. Not a
+  refusal — the integration still judges the whole range from Brain's recorded base
+  against the declared paths, and delivery still refuses a pull request whose head
+  is not the commit Brain integrated.
 - **A timer is the wrong place to answer a question somebody is asking right
   now.** A stage becomes available only when a tick reads what the last one
   finished, and the twenty-second loop exists so a stage becoming ready inside an

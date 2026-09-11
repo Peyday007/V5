@@ -469,6 +469,12 @@ export async function createIntegrateBin(
   campaign: FactoryCampaign,
   changeRequest: FactoryChangeRequest,
   units: FactoryWorkUnit[],
+  /**
+   * What the integration branch is actually at, when that is not where Brain left
+   * it. Told to the integrator so it can say so rather than discover a merge that
+   * is already up to date and have no words for why.
+   */
+  drift?: { expected: string; actual: string } | null,
 ): Promise<Bin | null> {
   const mergeable = units.filter((unit) => unit.branch !== null && unit.headSha !== null);
   if (mergeable.length === 0) return null;
@@ -527,6 +533,17 @@ export async function createIntegrateBin(
           'Brain confirms with the forge that the branch is at the commit you report, that it ' +
             'carries every branch you say it merged, and that the whole range from the base ' +
             'touches no path outside the union of those units\' declared paths.',
+          ...(drift
+            ? [
+                '',
+                `**${campaign.integrationBranch} is at ${drift.actual.slice(0, 12)} and Brain ` +
+                  `left it at ${drift.expected.slice(0, 12)}.** Somebody other than an ` +
+                  'integration moved it. Do not reset or force it: merge as instructed from the ' +
+                  'base above, and if a merge is already up to date say so in the summary. The ' +
+                  'range Brain judges still starts at the base it recorded, so anything that ' +
+                  'arrived by another route is held to the same declared paths as everything else.',
+              ]
+            : []),
         ].join('\n'),
         input: JSON.stringify({
           integrationBranch: campaign.integrationBranch,
@@ -1070,6 +1087,40 @@ export async function verifyIntegrationReport(
   }
 
   return { ok: problems.length === 0, problems, files: comparison.body.files, carried };
+}
+
+/**
+ * Is the campaign's integration branch where Brain left it?
+ *
+ * A reading rather than a rule, because a rule is what this already had and it did
+ * not hold. Every units bin's manifest prohibits pushing, merging into or
+ * otherwise moving the integration branch, names it, and says integrating is a
+ * separate bin — and in production a unit worker pushed its own commit to the unit
+ * branch *and* fast-forwarded the campaign branch onto it. The content was exactly
+ * what the unit declared and exactly what Brain would have integrated; the route
+ * was one nothing had reviewed. **A prohibition in a prompt is not a control**, and
+ * Brain cannot make one: push access is granted where the worker runs, which is
+ * §22's rule and the reason Brain holds no credential.
+ *
+ * What Brain can do is notice. `null` when the branch is where it should be or
+ * does not exist yet; both commits when it is somewhere else, so the tick can
+ * record the fact, the integrator can be told, and a person can read it.
+ *
+ * It deliberately does not refuse. The integration that follows still judges the
+ * whole range from the base Brain recorded against the union of declared paths, so
+ * content that arrived by another route is held to exactly the same bar — and
+ * delivery still refuses a pull request whose head is not the commit Brain
+ * integrated. Stopping the campaign instead would punish it for a procedural
+ * overreach the evidence says changed nothing about the tree.
+ */
+export async function integrationBranchDrift(
+  repository: ForgeRepository,
+  campaign: FactoryCampaign,
+): Promise<{ expected: string; actual: string } | null> {
+  const expected = roundBaseFor(campaign);
+  const head = await resolveBranch(repository, campaign.integrationBranch);
+  if (!head.ok || head.body === null) return null;
+  return head.body.sha === expected ? null : { expected, actual: head.body.sha };
 }
 
 /**

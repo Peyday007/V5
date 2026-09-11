@@ -553,6 +553,28 @@ timestamp, because two rows written in the same millisecond are a tie a timestam
 cannot break — and a re-authorization that sorted before the refusals it answers
 would count for nothing.
 
+**A prohibition in a prompt is not a control, and Brain cannot make one.** Every
+units bin's manifest prohibits pushing to, merging into or otherwise moving the
+campaign's integration branch, names the branch, and says integrating is a
+separate bin judged by a session that implemented none of it. In production a unit
+worker pushed its commit to its own branch **and** fast-forwarded the campaign
+branch onto it. The content was exactly what the unit declared and exactly what
+Brain would have integrated; the route was one nothing had reviewed. Push access
+is granted where the worker runs — that is §22's rule and the reason Brain holds
+no repository credential — so Brain cannot prevent this. It can notice.
+
+`integrationBranchDrift` reads the branch before the integration stage is handed
+out and records both commits on the campaign's own ledger as
+`STALE_BASE_DETECTED`, and the integrator is told in its manifest so it can say
+what it found rather than discover a merge that is already up to date and have no
+words for why. **It deliberately does not refuse.** The integration that follows
+still judges the whole range from the base Brain recorded against the union of
+declared paths, so content that arrived by another route is held to exactly the
+same bar; and delivery still refuses a pull request whose head is not the commit
+Brain integrated, which is the guard that actually protects the artifact. Stopping
+the campaign instead would punish it for a procedural overreach the evidence says
+changed nothing about the tree.
+
 **A timer is the wrong place to answer a question somebody is asking right now.**
 A factory stage becomes available only when a tick reads what the last one
 finished, and the loop ticks every twenty seconds — `index.ts` says that interval
