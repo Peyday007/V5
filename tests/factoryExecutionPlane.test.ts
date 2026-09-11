@@ -28,10 +28,13 @@ import {
 } from '../server/repos/factory.ts';
 import {
   assignNextBin,
+  createBin,
   finishBin,
+  getBin,
   listBins,
   putBinUnitResult,
 } from '../server/repos/bins.ts';
+import { binAdmission } from '../server/services/bins/service.ts';
 import { recordFactoryEvent } from '../server/repos/factoryFleet.ts';
 import {
   decideRepository,
@@ -54,6 +57,7 @@ import { parseRemote } from '../server/services/factory/forge.ts';
 import { validatePlan } from '../server/services/factory/planner.ts';
 import { tickRemoteCampaign } from '../server/services/factory/remoteLoop.ts';
 import type { FactoryChangeRequest } from '../server/domain/factory.ts';
+import type { Principal } from '../server/domain/types.ts';
 
 const OAKWOOD = 'https://github.com/Peyday007/oakwood-junk-removal';
 const BASE = 'a'.repeat(40);
@@ -900,5 +904,60 @@ describe('a reviewer is independent by lineage, or it is refused', () => {
     });
     expect(stronger.ok).toBe(true);
     expect(stronger.independence).toBe('WORKER_SEPARATED');
+  });
+});
+
+/* ========================================================================= */
+
+describe('a bin is not handed to a surface that cannot do it', () => {
+  it('refuses a worker whose Routine lacks a capability the bin requires', async () => {
+    const workerId = (
+      await createWorker({ name: 'no-push', createdByType: 'SYSTEM', createdById: 't' })
+    ).id;
+    const credential = 'cred-no-push';
+    const bin = await createBin({
+      projectId: fixture.project.id,
+      kind: 'FACTORY_UNITS',
+      title: 'Work that needs a push',
+      objective: 'Implement something and push it.',
+      manifest: {
+        objective: 'Implement something and push it.',
+        why: 'a test',
+        lineage: { projectId: fixture.project.id, layerId: null, goal: null, orchestrationId: null },
+        units: [{ key: 'u', establishes: 'a branch', input: '{}', transform: 'FACTORY_UNIT', dependsOn: [] }],
+        acceptableSources: [],
+        excludedSources: [],
+        evidence: ['a pushed branch'],
+        outputs: ['one result'],
+        authorizedActions: ['push the branch Brain named'],
+        prohibitedActions: ['anything else'],
+        budgetUnits: null,
+        retry: { maxAttempts: 2, backoffSeconds: 60 },
+        stoppingConditions: ['a result per unit'],
+      },
+      completionContract: 'FACTORY_UNITS_V1',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      requiredCapabilities: ['repository', 'repository-write'],
+      ready: true,
+    });
+
+    const admit = await binAdmission({
+      workerId,
+      principal: {
+        type: 'WORKER',
+        id: workerId,
+        credentialId: credential,
+        displayName: 'no-push',
+        isBrainAdmin: false,
+        scopes: [],
+        memberships: [],
+      } as unknown as Principal,
+    });
+    const verdict = await admit((await getBin(bin.id))!);
+    // No registered Routine resolves for this worker, so what it can reach is
+    // unknown — and unknown is refused rather than assumed.
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toContain('repository-write');
   });
 });

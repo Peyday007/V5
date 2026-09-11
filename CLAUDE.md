@@ -1875,6 +1875,15 @@ remote.
   `repository-write`, exist for exactly this: a reviewer needs to read and run,
   and only the bins that push need a surface that can push, so a one-pushing-
   surface fleet does not make the reviewer the implementer.
+- **A capability gates the fire *and* the assignment.**
+  `requiredCapabilities` was read only by the router, which chooses which Routine
+  to fire — not the same question as which bin an arriving worker may be handed,
+  since any authenticated worker is offered the oldest ready bin in its scopes.
+  Harmless while no bin required anything; not harmless for one that must push,
+  which a surface without the credential would take, fail, and charge an attempt
+  for against a condition that was never about the work. Refused at assignment as
+  well, from the Routine the authenticated worker resolves to, with unknown
+  failing closed.
 - **A finished bin cannot say who finished it**, because `finishBin` clears the
   worker, the lease and the credential in the same statement. `worker_sessions`
   can, written from Brain's own dispatch row, and that is what every factory

@@ -154,13 +154,47 @@ export async function binAdmission(input: {
   workerId: string;
   principal: Principal;
 }): Promise<(bin: Bin) => Promise<{ ok: boolean; reason?: string }>> {
-  const admit = auditAdmission(
-    await lineageForWorker({
-      workerId: input.workerId,
-      credentialId: input.principal.credentialId,
-    }),
-  );
+  const lineage = await lineageForWorker({
+    workerId: input.workerId,
+    credentialId: input.principal.credentialId,
+  });
+  const admit = auditAdmission(lineage);
   return async (bin: Bin): Promise<{ ok: boolean; reason?: string }> => {
+    /*
+     * Can this surface do what the bin needs at all?
+     *
+     * `requiredCapabilities` was only ever read by the *router*, which decides
+     * which Routine to fire. That is not the same question as which bin an
+     * arriving worker may be handed: any authenticated worker that checks in is
+     * offered the oldest ready bin in its scopes, so a surface fired for one bin
+     * could be handed another it has no way of doing. For a research bin that
+     * was harmless, because none required anything. A factory bin that needs to
+     * push a branch is not harmless — the worker would take it, fail to push,
+     * and charge the work an attempt against a condition that was never about
+     * the work.
+     *
+     * Read from the Routine the authenticated worker resolves to, never from
+     * anything the caller sent, and unknown fails closed: a worker whose surface
+     * cannot be established has not been shown to be able to do this.
+     */
+    if (bin.requiredCapabilities.length > 0) {
+      const { getRoutine } = await import('../../repos/fleet.ts');
+      const routine = lineage.routineId ? await getRoutine(lineage.routineId) : null;
+      const has = new Set(routine?.capabilities ?? []);
+      const missing = bin.requiredCapabilities.filter((tag) => !has.has(tag));
+      if (missing.length > 0) {
+        return {
+          ok: false,
+          reason:
+            `This surface does not carry ${missing.join(', ')}, which this bin needs. ` +
+            (routine
+              ? 'Declaring it is an operator decision about what the surface can actually reach.'
+              : 'It resolves to no registered Routine, so what it can reach is unknown, and ' +
+                'unknown is refused rather than assumed.'),
+        };
+      }
+    }
+
     /*
      * A factory review is refused here, before the lease, for §23's reason.
      *

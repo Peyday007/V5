@@ -437,7 +437,18 @@ set by a tick that then dies, rows cannot.
 A campaign is COMPLETE only when a review passed, nothing is gating, **and** the
 forge confirms a pull request carrying the integrated commit.
 
-Two capabilities gate which surface gets which bin, and the split is what makes
+Two capabilities gate which surface gets which bin, and the gate is at **both**
+ends. `requiredCapabilities` was only ever read by the router, which decides
+which Routine to *fire* — and that is a different question from which bin an
+arriving worker may be *handed*, because any authenticated worker that checks in
+is offered the oldest ready bin in its scopes. For a research bin that was
+harmless, since none required anything; for a bin that has to push a branch it is
+not, because the surface would take it, fail to push, and charge the work an
+attempt against a condition that was never about the work. So `binAdmission`
+refuses it at assignment too, read from the Routine the authenticated worker
+resolves to and never from anything the caller sent, with unknown failing closed.
+
+The split itself is what makes
 an independent review possible on a fleet where only some surfaces can push.
 `repository` is reading and running; `repository-write` is pushing a branch, and
 only the three bins that actually write require it. Collapsing them would force
