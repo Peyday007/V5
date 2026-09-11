@@ -54,10 +54,30 @@ export const FACTORY_EVENT_KINDS = {
   findingResolved: 'FINDING_RESOLVED',
   laneTargetChanged: 'LANE_TARGET_CHANGED',
   prAssembled: 'PR_ASSEMBLED',
+  /**
+   * A pull request now exists, carrying a commit Brain integrated.
+   *
+   * Separate from `prAssembled`, which is Brain composing the artifact from rows.
+   * This one is the forge's own answer to "is it there", read back after a worker
+   * said it had done it — so the ledger can distinguish the factory having written
+   * a pull request body from a person being able to read one.
+   */
+  prDelivered: 'PR_DELIVERED',
   writeback: 'BRAIN_WRITEBACK',
   releaseRequested: 'RELEASE_REQUESTED',
   staleBase: 'STALE_BASE_DETECTED',
   rebased: 'CAMPAIGN_REBASED',
+  /**
+   * A stage's work was handed to the fleet as a bin.
+   *
+   * Its own kind rather than a detail on `CAMPAIGN_STATE`, because the question
+   * it answers is one somebody asks on its own — *what did Brain actually give a
+   * worker, and when* — and a ledger that could only answer it by parsing the
+   * detail of another row is a ledger nobody reads for it.
+   */
+  binCreated: 'FACTORY_BIN_CREATED',
+  /** A completed bin's reports were read, verified and turned into rows. */
+  binIngested: 'FACTORY_BIN_INGESTED',
 } as const;
 
 export interface RoleMetrics {

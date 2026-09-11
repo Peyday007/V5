@@ -323,3 +323,210 @@ exactly one guarantee:
   publishing it. Turning that artifact into an actual pull request against a
   real remote stays a separately authorized action a person performs, exactly
   as it already is for the diff and body `assemble.ts` produces.
+
+---
+
+## The execution plane: a factory with no checkout of its own
+
+Everything above describes the factory's **control plane** — the contract, the
+plan, the ownership of a mutation surface, the independent review, the repair of
+a finding, the evidence class on every number. None of it changes in this
+section. What changes is *where the work happens*, and the reason it had to is
+one fact about the deployed Brain: **it has no `.git`, deliberately.** The image
+is copied to registries and pulled by machines nobody here controls, so the
+repository is not in it. The first executor handed a worker the Brain's own
+checkout, which works exactly once — on a laptop — and the hosted factory could
+therefore only refuse an objective. That refusal was an honest diagnosis and a
+dead end.
+
+The way out is not to give production a checkout. It is that Brain already has a
+machinery for *work a permanent worker does somewhere else*: Step 10's bins.
+
+### Two planes, and which one a campaign is on
+
+`factory_campaigns.execution_mode` says which, and it is **derived rather than
+chosen**. A contract pinned from a checkout has a `repositoryRoot`; one pinned
+through the forge does not, because the checkout belongs to whichever worker
+takes the work. So the absence of a root *is* the statement that execution is
+remote, and both entrances — the HTTP route and the operator command — read it
+from `executionModeFor` rather than each deciding for itself.
+
+| | `LOCAL` | `REMOTE` |
+|---|---|---|
+| pin comes from | `inspectRepository` on a checkout | the forge, over HTTPS |
+| work is handed out as | a unit assigned to a `factory_workers` row | a **bin** the Step 10/11 dispatcher fires |
+| the worker's checkout | a worktree Brain created | the worker's own, on its own machine |
+| `IMPLEMENTED` is proved by | a diff Brain read | the forge's account of the branch |
+| integration | a merge Brain performed | a push Brain confirmed |
+| the pull request | composed and **not** published | composed here, opened by the worker |
+
+### How a worker is kept honest without a diff
+
+§25's rule is that a worker's summary is never evidence. Brain cannot read a
+diff it does not have, so the rule is kept by asking the **forge**:
+`services/factory/forge.ts` is a read-only client over the repository's own API,
+and every belief in this plane resolves to one of its answers.
+
+- **The branch is at the commit reported.** `resolveBranch`. A report that
+  disagrees with the repository loses; the message says so in those words.
+- **The files that moved are inside the unit's declared paths.**
+  `compareCommits` over the range, held against `ownedPaths`. The worker's own
+  file list is parsed, stored, and then *not used* for the decision — it is kept
+  so a later reader can see whether the worker knew what it had done.
+- **A truncated file list fails closed.** The compare endpoint caps its list at
+  300 files, and a capped list cannot prove a diff stayed inside a scope.
+  Treating it as clean would invent the one guarantee the check exists to give.
+- **An integration really carries the work it names.** `compareCommits` between
+  a unit's verified head and the integration commit: the forge's own `identical`
+  or `ahead` is containment, and anything else is refused by name.
+- **The tests really passed.** The repository's own continuous integration is
+  read for the integrated commit (`readChecks`). Its three answers are kept
+  apart, because they have different consequences: a failure is a refusal, a
+  pending run is *not yet*, and **no check at all is an absence** recorded as
+  `UNKNOWN` rather than as a pass.
+- **The pull request really exists, at this commit.** `readPullRequest` after
+  the worker says it opened or updated one.
+
+A repository Brain cannot read is a refusal, never an assumption. There is no
+path here by which an unverifiable push becomes an integrated unit.
+
+### The five stages, as bins
+
+One bin per stage, at most one live bin per stage per campaign, and every step
+idempotent **by its own rows** rather than by a cursor or a flag — a flag can be
+set by a tick that then dies, rows cannot.
+
+1. **`FACTORY_PLAN`** — read the pinned repository and propose a decomposition.
+   Authorized to read and to run read-only commands; explicitly prohibited from
+   writing anything, because a plan is a proposal. `validatePlan` judges it at
+   the bin boundary *and again* before installing it, since an amendment between
+   the two would make the installed plan answer a contract nobody approved.
+2. **`FACTORY_UNITS`** — implement the units whose dependencies have landed.
+   Every unit branches from the same commit and owns paths no sibling owns, so
+   they may be implemented concurrently. Prohibited from touching the
+   integration branch or any pull request.
+3. **`FACTORY_INTEGRATE`** — the campaign's one branch, moved once, by a session
+   that implemented none of it. Merge the verified unit branches in Brain's
+   order, run the contract's commands on the merged tree, and **push only if
+   they pass.** A conflict or a red command is reported `BLOCKED` and nothing is
+   pushed — the remote shape of the local integrator rolling a failed merge
+   back, and for the same reason: a branch carrying a tree the contract rejects
+   is worse than a branch that did not move.
+4. **`FACTORY_REVIEW`** — judged against the objective as approved. A separate
+   bin is a separate lease is a separate session, which is what makes
+   independence a property of the execution rather than a rule in a prompt.
+5. **`FACTORY_DELIVER`** — open or update exactly one pull request, using a
+   title and body Brain composed from rows. The worker performs it because the
+   credential that may write to the repository lives where the worker runs; it
+   is prohibited from merging, approving, closing or changing a single file.
+
+A campaign is COMPLETE only when a review passed, nothing is gating, **and** the
+forge confirms a pull request carrying the integrated commit.
+
+### Why a dependency is still satisfied by integration
+
+A unit confirmed on its own branch is `IMPLEMENTED`, never `INTEGRATED`. Nothing
+downstream starts until those branches have been brought together on one tree
+and the contract's commands have passed on it — the same rule the local plane
+keeps, enforced in the one place the campaign's head is allowed to move. The
+head moves in `acceptIntegration` and nowhere else, so there is no path by which
+a pull request carries a commit no integration produced.
+
+### Updating a pull request rather than duplicating it
+
+**A campaign pinned at a branch that is already an open pull request's head
+continues that request.** It is derived from the forge
+(`findPullRequestForBranch`) and never supplied: a number in a request body
+would be a caller choosing which open request the factory writes into, and an
+open request is somebody's reading surface. A branch that is nobody's head means
+open a new one.
+
+That is also what makes continuing one possible without a special case —
+continuing it means landing the work on the branch it already points at, so the
+campaign's integration branch *is* that branch, and the request updates because
+its head moved. The one check that applies to an opening and not to an update is
+the base: the factory must never retarget somebody else's open request.
+
+### Where repository access comes from, and where it does not
+
+**Brain holds no credential for any repository.** The manifest names a remote and
+never a secret, and every bin's first authorized action says where the access
+comes from: *obtain access to the repository named above through your own
+execution surface — Brain holds no credential for it and will never send you
+one.* That is §22's rule applied to a repository, and it is also the cheapest
+possible answer to "credentials must never appear in prompts, logs, database
+content or browser output": there is nothing on this side to put anywhere.
+
+`services/factory/repositoryEnvelope.ts` is the other half. It is a list in
+code, named by id, of the repositories this factory may be pointed at — the same
+shape and the same argument as `services/russell/probeEnvelope.ts`: nobody
+supplies the limits their own work is judged against, and a list in a table is a
+list a caller with write access could extend. It is **not** a security boundary
+and must not be read as one: Brain holds no credential, so it cannot grant
+access and removing an entry cannot revoke it. What it does is stop a campaign
+being *created* against a repository nobody authorized, which is the moment the
+decision is cheap and reversible. Each grant also carries `forbiddenPaths`,
+which `validatePlan` applies — a different authority from the contract's
+mutation scope, kept apart so that a contract cannot widen it by asking.
+
+**`V5` is deliberately absent.** The factory lives in it, and a campaign that
+could rewrite the machinery executing it is the one campaign whose failure mode
+is not contained by declining a pull request.
+
+### What recovers, and how
+
+Nothing here needs a new recovery mechanism, which is the point of having built
+it on bins.
+
+- **A worker dies.** Its bin lease expires and the bin is claimable work again;
+  the next session takes it over from its checkpoint. No sweeper is required for
+  correctness.
+- **Brain restarts.** The tick is a pure function of rows. An interrupted stage
+  is a bin in some state and a campaign in some state, and both are read fresh.
+- **Two dispatchers tick one campaign.** `claimCampaignTick` is the same
+  compare-and-swap the local loop takes, and the loser is refused rather than
+  retried.
+- **A response is lost.** The stage is decided from bins and units, so a report
+  that arrived and a report that did not look different in rows.
+- **The provider refuses the fire.** Step 11's router defers and the fleet keeps
+  every bin; an account at its ceiling is busy rather than broken.
+- **A stage cannot be done as specified.** `MAX_BINS_PER_STAGE` stops the loop
+  handing it out forever — `liveBinOfKind` deliberately ignores a FAILED bin, so
+  without the cap a stage would be re-created on the very next tick, and a
+  campaign spinning is harder to notice than one that stopped. The campaign goes
+  BLOCKED with the reason and is re-examined every tick, so cancelling the stuck
+  bins or amending the contract starts it moving again.
+- **A refused unit report costs an attempt.** Locally an attempt is charged when
+  a worker is handed the unit, because the process doing the work *is* the
+  claim. Remotely the unit row is not claimed until a report comes back and is
+  believed, so without `advanceUnitAttempt` a refusal would cost nothing and the
+  next round would hand out the identical branch name over commits Brain had
+  already rejected.
+
+### `COWORK_ROUTINE`, and why the handshake is not an executor
+
+The `COWORK_ROUTINE` executor used to be a refusal that said the unit-level
+handshake did not exist. It exists now, and it is **not an executor** — the
+correction is recorded in that file rather than by deleting it.
+
+An `Executor` is a function Brain *calls* and waits on, holding a worktree path
+it can see. A Routine activation is not a call: it is a fire that may be
+refused, may arrive minutes later, may be taken over by a different session, and
+must survive Brain restarting in the middle. Squeezing that into
+`execute(request): Promise<ExecutionResult>` would have meant either a
+long-lived promise nothing could recover or a fake synchronous answer. A bin has
+all four properties already — durable, leased, fenced, resumable. So the
+permanent subscription-backed executor *is* the fleet, reached through the
+dispatcher, and the executor's `probe` answers the question that actually
+matters: whether any enabled Routine with a present deployment secret could take
+repository work. A Brain with none reports no capacity rather than claiming some.
+
+### The surface a person uses
+
+`/build` in the Russell shell. A person says what should become true, picks one
+of the authorized repositories, sees the commit that is about to be pinned, and
+approves — which is what freezes the objective and starts the campaign. There is
+no control there for decomposition, worker count, branches, retries, integration
+order, review rounds or repairs, because none of them is a decision a person
+should be asked to take. The two decisions it does offer are the two the server
+guards by principal type. It is not `/operator`, which remains deleted.

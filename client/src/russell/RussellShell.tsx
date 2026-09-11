@@ -23,6 +23,7 @@ import { RussellApi } from '../lib/russellApi.ts';
 import { navigationMode } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { Conversation } from './Conversation.tsx';
+import { BuildView } from './Build.tsx';
 import {
   FleetView,
   IdeasView,
@@ -38,6 +39,7 @@ import type { Navigation, Route } from '../lib/router.ts';
 const SECTIONS = [
   { name: 'HOME' as const, label: 'Russell' },
   { name: 'WORK' as const, label: 'Work' },
+  { name: 'BUILD' as const, label: 'Build' },
   { name: 'PROJECTS' as const, label: 'Ideas' },
   { name: 'KNOWLEDGE' as const, label: 'Knows' },
   { name: 'FLEET' as const, label: 'Who' },
@@ -285,6 +287,7 @@ export function RussellShell({
           )
         ) : null}
         {route.name === 'WORK' ? <WorkView projectId={projectId} /> : null}
+        {route.name === 'BUILD' ? <BuildView projectId={projectId} /> : null}
         {route.name === 'PROJECTS' ? <IdeasView projectId={projectId} /> : null}
         {route.name === 'KNOWLEDGE' ? <KnowledgeView projectId={projectId} /> : null}
         {route.name === 'FLEET' ? (

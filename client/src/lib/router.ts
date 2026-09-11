@@ -18,6 +18,7 @@ export type Route =
   | { name: 'HOME' }
   | { name: 'CONVERSATION'; conversationId: string }
   | { name: 'WORK' }
+  | { name: 'BUILD' }
   | { name: 'PROJECTS' }
   | { name: 'KNOWLEDGE' }
   | { name: 'FLEET' }
@@ -40,6 +41,8 @@ export function parseRoute(pathname: string): Route {
       return parts[1] ? { name: 'CONVERSATION', conversationId: parts[1] } : { name: 'HOME' };
     case 'work':
       return { name: 'WORK' };
+    case 'build':
+      return { name: 'BUILD' };
     case 'projects':
       return { name: 'PROJECTS' };
     case 'knowledge':
@@ -65,6 +68,8 @@ export function pathFor(route: Route): string {
       return `/conversation/${route.conversationId}`;
     case 'WORK':
       return '/work';
+    case 'BUILD':
+      return '/build';
     case 'PROJECTS':
       return '/projects';
     case 'KNOWLEDGE':

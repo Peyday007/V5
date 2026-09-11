@@ -42,6 +42,7 @@ import { installPlan, validatePlan } from '../server/services/factory/planner.ts
 import { runCampaign, tickAllCampaigns, tickCampaign } from '../server/services/factory/loop.ts';
 import { campaignMetrics } from '../server/services/factory/metrics.ts';
 import type { FactoryCapability, FactoryWorkerKind } from '../server/domain/factory.ts';
+import { campaignSpecFor } from '../server/services/factory/remote.ts';
 
 interface Args {
   command: string;
@@ -142,6 +143,12 @@ async function main(): Promise<void> {
         // resolves the same checkout without being told again.
         repositoryRoot:
           flagString(flags, 'repo') ?? (spec['repositoryRoot'] as string | undefined),
+        // Or the repository as a remote, which is what makes the submission
+        // remote: everything is pinned through the forge and the checkout belongs
+        // to whichever worker takes the work.
+        repositoryRemote:
+          flagString(flags, 'repository') ?? (spec['repository'] as string | undefined),
+        baseBranch: flagString(flags, 'base') ?? (spec['baseBranch'] as string | undefined),
       });
       process.stdout.write(
         `${result.created ? 'created' : 'already existed'} ${result.changeRequest.id}\n` +
@@ -169,12 +176,17 @@ async function main(): Promise<void> {
       });
       if (!approved.ok) fail(approved.reason ?? 'refused');
       const changeRequest = approved.changeRequest;
+      const spec = await campaignSpecFor(changeRequest);
       const { campaign, created } = await ensureCampaign({
         changeRequestId: changeRequest.id,
         projectId: changeRequest.projectId,
         baseSha: changeRequest.baseSha,
         laneTarget: INITIAL_LANE_TARGET,
         laneTargetReason: 'initial',
+        // The same derivation the HTTP route uses, from the same function.
+        executionMode: spec.executionMode,
+        integrationBranch: spec.integrationBranch,
+        pullRequest: spec.pullRequest,
       });
       process.stdout.write(
         `approved by ${user.email}\ncampaign ${campaign.id} ${created ? '(created)' : '(already existed)'}\n`,

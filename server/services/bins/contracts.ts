@@ -503,11 +503,347 @@ export async function readSurfaceProbe(bin: Bin): Promise<SurfaceProbeReading[]>
   return readings;
 }
 
+
+/* ------------------------------------------------------------------------- */
+/* FACTORY_PLAN_V1 and FACTORY_UNITS_V1                                       */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * A proposed decomposition, judged by the validator that will have to install it.
+ *
+ * The structural check alone would be almost worthless here: a plan is refused for
+ * an unknown field, an invented verification command, a path outside the approved
+ * scope, a dependency cycle or a mandatory condition no unit serves, and a worker
+ * told only "that was not an object" would have to guess which. So the evaluator
+ * runs `validatePlan` — the same function that installs it — and hands the
+ * worker its reasons verbatim.
+ *
+ * `RETRY` rather than `HUMAN` for every refusal: a plan is a proposal, and a
+ * worker that read the repository can propose a better one. Only a campaign whose
+ * contract has vanished is a decision for a person.
+ */
+async function evaluateFactoryPlan(bin: Bin): Promise<ContractVerdict> {
+  const { readPlanProposal } = await import('../factory/remote.ts');
+  const { validatePlan } = await import('../factory/planner.ts');
+  const { getCampaign, getChangeRequest } = await import('../../repos/factory.ts');
+
+  const campaignId = bin.factoryCampaignId;
+  if (!campaignId) {
+    return refuse('HUMAN', ['This plan bin names no campaign, so there is nothing to plan for.'], {});
+  }
+  const campaign = await getCampaign(campaignId);
+  const changeRequest = campaign ? await getChangeRequest(campaign.changeRequestId) : null;
+  if (!campaign || !changeRequest) {
+    return refuse(
+      'HUMAN',
+      ['The campaign or its approved contract could not be read, so a plan cannot be judged.'],
+      { campaignId },
+    );
+  }
+
+  const proposal = await readPlanProposal(bin.id);
+  if (proposal === null) {
+    return refuse(
+      'RETRY',
+      [
+        'No plan was submitted under unit key `plan`, or it was not valid JSON. Submit the ' +
+          'decomposition and Brain will tell you whether it is installable.',
+      ],
+      { campaignId },
+    );
+  }
+
+  const validation = validatePlan(proposal, changeRequest);
+  if (!validation.ok) {
+    return refuse('RETRY', validation.errors, {
+      campaignId,
+      unitsProposed: validation.units.length,
+      uncoveredConditions: validation.uncoveredConditions,
+    });
+  }
+  return satisfied({
+    campaignId,
+    unitsProposed: validation.units.length,
+    warnings: validation.warnings,
+  });
+}
+
+/**
+ * Software, judged by asking the repository rather than the worker.
+ *
+ * One contract serves both the implementation bins and the review bins, because
+ * the thing being checked is the same in both: *is there a structurally valid
+ * report for every unit this bin declared*. What differs is what a report is, and
+ * that is decided by the bin's kind rather than by anything the worker says about
+ * itself.
+ *
+ * For an implementation bin the check goes further than structure and asks the
+ * forge whether the branch is really at the commit reported and whether the files
+ * that moved are inside the paths the unit declared. That is the whole of how
+ * §27's rule — a worker's summary is never evidence — survives Brain not having
+ * the checkout. A forge that cannot be read is a refusal, never an assumption.
+ *
+ * `RETRY` throughout, with one exception: a report that is structurally wrong in a
+ * way a worker can fix is a retry, and a bin whose campaign has gone is a person's
+ * problem.
+ */
+async function evaluateFactoryUnits(bin: Bin): Promise<ContractVerdict> {
+  const declared = (bin.manifest.units ?? []).map((unit) => unit.key);
+  const observedBase = { kind: bin.kind, declared: declared.length };
+
+  if (bin.kind === 'FACTORY_REVIEW') {
+    const { readReviewReport } = await import('../factory/remote.ts');
+    const review = await readReviewReport(bin.id);
+    if (!review.ok) {
+      return refuse('RETRY', review.errors, observedBase);
+    }
+    return satisfied({
+      ...observedBase,
+      verdict: review.value.verdict,
+      findings: review.value.findings.length,
+    });
+  }
+
+  const { readUnitReports, verifyUnitReport, remoteBranchFor, binBaseOf } = await import(
+    '../factory/remote.ts'
+  );
+  const { getCampaign, getChangeRequest, listUnits } = await import('../../repos/factory.ts');
+  const { parseRemote } = await import('../factory/forge.ts');
+
+  const campaignId = bin.factoryCampaignId;
+  const campaign = campaignId ? await getCampaign(campaignId) : null;
+  const changeRequest = campaign ? await getChangeRequest(campaign.changeRequestId) : null;
+  if (!campaign || !changeRequest) {
+    return refuse(
+      'HUMAN',
+      ['The campaign or its approved contract could not be read, so this work cannot be judged.'],
+      observedBase,
+    );
+  }
+  const repository = parseRemote(changeRequest.repository);
+  if (!repository) {
+    return refuse(
+      'HUMAN',
+      [
+        `"${changeRequest.repository}" is not a repository this Brain can read, so nothing a ` +
+          'worker pushes to it could be verified.',
+      ],
+      observedBase,
+    );
+  }
+
+  const { reports, problems } = await readUnitReports(bin.id);
+  const reasons = [...problems];
+  const missing = declared.filter((key) => !reports.has(key));
+  if (missing.length > 0) {
+    reasons.push(
+      `No result has been submitted for: ${missing.join(', ')}. Every unit this bin declared ` +
+        'needs one, including a unit you are reporting as BLOCKED.',
+    );
+  }
+
+  const units = await listUnits(campaign.id);
+  const verifiedUnits: string[] = [];
+  const blocked: string[] = [];
+  for (const key of declared) {
+    const report = reports.get(key);
+    if (!report) continue;
+    if (report.outcome === 'BLOCKED') {
+      // A declared blockage is a legitimate outcome of a bin rather than a
+      // failure of it: the unit keeps its reason and the campaign decides what
+      // to do. It is not verified against the forge, because nothing was pushed.
+      blocked.push(key);
+      continue;
+    }
+    const unit = units.find((candidate) => candidate.unitKey === key);
+    if (!unit) {
+      reasons.push(`This bin declared unit "${key}", which the campaign no longer has.`);
+      continue;
+    }
+    const verdict = await verifyUnitReport(
+      repository,
+      {
+        branch: remoteBranchFor(campaign, unit),
+        // The base this bin was created against, not the campaign's head now: a
+        // round that has integrated since would make the range wrong and the
+        // ownership question unanswerable.
+        baseSha: binBaseOf(bin, campaign),
+        ownedPaths: unit.ownedPaths,
+      },
+      report,
+    );
+    if (!verdict.ok) {
+      reasons.push(...verdict.problems);
+      continue;
+    }
+    verifiedUnits.push(key);
+  }
+
+  const observed = {
+    ...observedBase,
+    submitted: reports.size,
+    verifiedByForge: verifiedUnits.length,
+    blocked: blocked.length,
+  };
+  if (reasons.length > 0) return refuse('RETRY', reasons, observed);
+  return satisfied(observed);
+}
+
+
+/**
+ * An integration, judged by asking the repository whether it carries the work.
+ *
+ * The same shape as the unit contract and a different question. A unit is asked
+ * whether it stayed inside its own paths; an integration is asked whether the
+ * campaign's one branch now contains every unit branch it claims and touched
+ * nothing outside the union of their paths. Both are answered by the forge,
+ * because the alternative is taking a worker's word about a tree Brain does not
+ * have.
+ *
+ * A BLOCKED integration **satisfies** the bin. That is deliberate and is the
+ * remote shape of the local integrator rolling a failed merge back: the honest
+ * outcome of a conflict or a red verification is that the branch did not move,
+ * and a worker that reported it correctly did its job. What happens next is the
+ * campaign's decision — the units are reopened with the reason — and making the
+ * bin fail instead would spend its attempts on a correct report.
+ */
+async function evaluateFactoryIntegration(bin: Bin): Promise<ContractVerdict> {
+  const { readIntegrationReport, verifyIntegrationReport, binBaseOf } = await import(
+    '../factory/remote.ts'
+  );
+  const { getCampaign, getChangeRequest, listUnits } = await import('../../repos/factory.ts');
+  const { parseRemote } = await import('../factory/forge.ts');
+
+  const campaignId = bin.factoryCampaignId;
+  const campaign = campaignId ? await getCampaign(campaignId) : null;
+  const changeRequest = campaign ? await getChangeRequest(campaign.changeRequestId) : null;
+  if (!campaign || !changeRequest) {
+    return refuse(
+      'HUMAN',
+      ['The campaign or its approved contract could not be read, so an integration cannot be judged.'],
+      { kind: bin.kind },
+    );
+  }
+  const repository = parseRemote(changeRequest.repository);
+  if (!repository) {
+    return refuse(
+      'HUMAN',
+      [`"${changeRequest.repository}" is not a repository this Brain can read.`],
+      { kind: bin.kind },
+    );
+  }
+
+  const report = await readIntegrationReport(bin.id);
+  if (!report.ok) return refuse('RETRY', report.errors, { kind: bin.kind });
+
+  if (report.value.outcome === 'BLOCKED') {
+    return satisfied({
+      kind: bin.kind,
+      outcome: 'BLOCKED',
+      conflicts: report.value.conflicts.length,
+      failedCommands: report.value.commands.filter((command) => command.exitCode !== 0).length,
+    });
+  }
+
+  const units = await listUnits(campaign.id);
+  const implemented = units
+    .filter((unit) => unit.state === 'IMPLEMENTED' && unit.headSha !== null)
+    .map((unit) => ({
+      unitKey: unit.unitKey,
+      headSha: unit.headSha as string,
+      ownedPaths: unit.ownedPaths,
+    }));
+
+  const verdict = await verifyIntegrationReport(
+    repository,
+    {
+      integrationBranch: campaign.integrationBranch,
+      baseSha: binBaseOf(bin, campaign),
+      units: implemented,
+    },
+    report.value,
+  );
+  const observed = {
+    kind: bin.kind,
+    merged: report.value.merged.length,
+    carried: verdict.carried.length,
+    filesForgeReported: verdict.files.length,
+  };
+  if (!verdict.ok) return refuse('RETRY', verdict.problems, observed);
+  return satisfied(observed);
+}
+
+/**
+ * A delivery, judged by reading the pull request back.
+ *
+ * The one fact that matters is whether a person can now read this campaign's work
+ * at a request whose head is the commit Brain integrated — so that is read from
+ * the forge, and the worker's account of having done it contributes nothing but
+ * the number to look up. A report that names a *different* request than the one
+ * this campaign updates is refused: opening a second request beside the one
+ * somebody is already reading is the failure this check exists for.
+ */
+async function evaluateFactoryDelivery(bin: Bin): Promise<ContractVerdict> {
+  const { readDeliveryReport, verifyDelivery, pullRequestNumber } = await import(
+    '../factory/remote.ts'
+  );
+  const { getCampaign, getChangeRequest } = await import('../../repos/factory.ts');
+  const { parseRemote } = await import('../factory/forge.ts');
+
+  const campaignId = bin.factoryCampaignId;
+  const campaign = campaignId ? await getCampaign(campaignId) : null;
+  const changeRequest = campaign ? await getChangeRequest(campaign.changeRequestId) : null;
+  if (!campaign || !changeRequest) {
+    return refuse(
+      'HUMAN',
+      ['The campaign or its approved contract could not be read, so a delivery cannot be judged.'],
+      { kind: bin.kind },
+    );
+  }
+  const repository = parseRemote(changeRequest.repository);
+  if (!repository) {
+    return refuse(
+      'HUMAN',
+      [`"${changeRequest.repository}" is not a repository this Brain can read.`],
+      { kind: bin.kind },
+    );
+  }
+
+  const report = await readDeliveryReport(bin.id);
+  if (!report.ok) return refuse('RETRY', report.errors, { kind: bin.kind });
+  if (report.value.outcome === 'BLOCKED') {
+    // A delivery nobody could perform is a fact about the worker's surface — a
+    // missing permission, a repository that refuses the push — and no number of
+    // retries changes it. It is a person's to resolve, and the reason is recorded.
+    return refuse('HUMAN', [report.value.blockedReason ?? 'The delivery was reported blocked.'], {
+      kind: bin.kind,
+      outcome: 'BLOCKED',
+    });
+  }
+
+  const verdict = await verifyDelivery(
+    repository,
+    {
+      headSha: campaign.integrationSha ?? campaign.baseSha,
+      baseBranch: changeRequest.baseBranch,
+      pullRequest: pullRequestNumber(campaign),
+    },
+    report.value,
+  );
+  const observed = { kind: bin.kind, pullRequest: verdict.number, action: report.value.action };
+  if (!verdict.ok) return refuse('RETRY', verdict.problems, observed);
+  return satisfied(observed);
+}
+
 const EVALUATORS: Record<string, Evaluator> = {
   DETERMINISTIC_UNITS_V1: evaluateDeterministicUnits,
   RESEARCH_PACKET_V1: evaluateResearchPacket,
   SURFACE_PROBE_V1: evaluateSurfaceProbe,
   RUSSELL_TURN_V1: evaluateRussellTurn,
+  FACTORY_PLAN_V1: evaluateFactoryPlan,
+  FACTORY_UNITS_V1: evaluateFactoryUnits,
+  FACTORY_INTEGRATION_V1: evaluateFactoryIntegration,
+  FACTORY_DELIVERY_V1: evaluateFactoryDelivery,
 };
 
 /**

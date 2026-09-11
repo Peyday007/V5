@@ -2920,3 +2920,127 @@ legend {
     gap: 2px;
   }
 }
+
+/* ------------------------------------------------------------ Build (the factory) */
+
+/*
+ * Deliberately plain. The screen's job is to make one decision readable, so the
+ * only things given any visual weight are the pinned commit a person is about to
+ * freeze and the single button that freezes it.
+ */
+
+.rs-view-build {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.rs-lede {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--fg-dim);
+}
+
+.rs-card {
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--bg-2, transparent);
+}
+
+.rs-hint {
+  margin: 4px 0 0;
+  color: var(--fg-muted);
+  font-size: 13px;
+  max-width: 68ch;
+}
+
+.rs-build-submit fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.rs-build-submit label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rs-build-submit label > span {
+  color: var(--fg-dim);
+  font-size: 13px;
+}
+
+.rs-build-submit textarea,
+.rs-build-submit input,
+.rs-build-submit select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-3);
+  color: var(--fg);
+  font: inherit;
+}
+
+.rs-build-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-left: 2px solid var(--border-strong);
+}
+
+.rs-build-pinned {
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.rs-build-pinned h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.rs-primary {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--accent, var(--bg-3));
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rs-link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-dim);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.rs-build-campaign h4 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.rs-build-stage {
+  margin: 0;
+  color: var(--fg-dim);
+}
+
+.rs-findings {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}

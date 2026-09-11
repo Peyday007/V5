@@ -37,6 +37,8 @@ import {
 import { recordFactoryEvent } from '../../repos/factoryFleet.ts';
 import { inspectRepository } from './git.ts';
 import { FACTORY_DEFAULT_REPO_ROOT } from '../../env.ts';
+import { checkReadable, readFile, resolveBranch } from './forge.ts';
+import { REPOSITORY_ENVELOPE_ID, decideRepository } from './repositoryEnvelope.ts';
 
 /** A contract field nothing but a person may change. */
 export const IMMUTABLE_FIELDS = [
@@ -84,6 +86,20 @@ export interface ObjectiveSubmission {
   acceptanceConditions?: { statement: string; verification: string; mandatory?: boolean }[];
   /** Defaults to the repository this server is running from. */
   repositoryRoot?: string;
+  /**
+   * The repository this objective is about, as a remote the forge can read.
+   *
+   * Supplying it is what makes a submission *remote*: the pin, the default branch
+   * and the repository's own verification commands are read through the forge
+   * instead of from a checkout, so a Brain with no `.git` can accept an objective
+   * and a worker somewhere else can do the work. A submission with neither this
+   * nor a readable local checkout is refused, with the remedy named.
+   */
+  repositoryRemote?: string;
+  /** The branch to pin against. Defaults to the repository's own default branch. */
+  baseBranch?: string;
+  /** An existing pull request this campaign should update rather than duplicate. */
+  pullRequest?: number | null;
   /** Defaults to a digest of the objective, so resubmitting the same ask collides. */
   submissionKey?: string;
   environment?: FactoryEnvironment;
@@ -130,6 +146,98 @@ export interface DerivedDefaults {
  * factory that invented its own commands would verify something the project does
  * not actually require, and pass.
  */
+/**
+ * The same defaults, read from the forge instead of from a checkout.
+ *
+ * Every field has the same meaning as the local path's; only the source differs.
+ * The pin is the branch head the forge reports, and the verification commands come
+ * from the repository's own `package.json` — read over HTTPS, at the pinned ref, so
+ * they are the commands that commit actually declares rather than the ones the
+ * Brain's own repository happens to have.
+ *
+ * A repository with no `package.json` declares no commands, and that is recorded
+ * as the fact it is rather than filled in with a guess. The campaign can be
+ * amended later — `amendContract` may add a verification command and may never
+ * remove one — which is exactly what happened the first time a campaign was run
+ * against a repository that had no manifest yet.
+ */
+export async function deriveFromForge(
+  submission: ObjectiveSubmission & { repositoryRemote: string },
+): Promise<DerivedDefaults> {
+  /*
+   * Is this a repository the factory may be pointed at at all?
+   *
+   * Asked first, before the forge is touched, because the cheapest place to refuse
+   * is before anything exists. The list is in code and named by id — the same
+   * argument `services/russell/probeEnvelope.ts` makes and for the same reason:
+   * nobody supplies the limits their own work is judged against, and a list a
+   * caller with write access could extend is not a limit.
+   *
+   * It is not the security boundary and must not be read as one. Brain holds no
+   * credential for any repository here, so this cannot grant access and removing
+   * an entry cannot revoke it. What it does is stop a campaign being *created*
+   * against a repository nobody authorized, which is the moment the decision is
+   * cheap and reversible.
+   */
+  const authorized = decideRepository(submission.repositoryRemote);
+  if (!authorized.ok || !authorized.grant) {
+    throw new ContractError(authorized.reason ?? 'That repository is not authorized.', {
+      reason: 'REPOSITORY_NOT_AUTHORIZED',
+      envelope: REPOSITORY_ENVELOPE_ID,
+    });
+  }
+
+  const readable = await checkReadable(submission.repositoryRemote);
+  if (!readable.ok) throw new ContractError(readable.reason, { reason: 'FORGE_UNREADABLE' });
+
+  const branch = submission.baseBranch?.trim() || readable.defaultBranch;
+  const head = await resolveBranch(readable.repository, branch);
+  if (!head.ok || !head.body) {
+    throw new ContractError(
+      `The forge could not resolve ${branch} in ${readable.repository.slug}: ` +
+        `${head.reason ?? 'no answer'}. A campaign needs a real commit to pin.`,
+      { reason: 'FORGE_NO_REF' },
+    );
+  }
+
+  const commands: string[] = [];
+  const manifest = await readFile(readable.repository, 'package.json', head.body.sha);
+  if (manifest.ok && manifest.body) {
+    try {
+      const parsed = JSON.parse(manifest.body) as { scripts?: Record<string, string> };
+      const scripts = parsed.scripts ?? {};
+      // Cheapest first, exactly as the local deriver orders them, so a campaign
+      // learns it is broken as early as it can.
+      for (const candidate of ['typecheck', 'lint']) {
+        if (scripts[candidate]) commands.push(`npm run ${candidate}`);
+      }
+      if (scripts['test']) commands.push('npm test');
+      if (scripts['build']) commands.push('npm run build');
+    } catch {
+      // A manifest that does not parse declares nothing. Refusing the whole
+      // submission for it would be refusing an objective because of a file the
+      // objective may well be about fixing.
+    }
+  }
+
+  return {
+    repository: `https://github.com/${readable.repository.slug}`,
+    // There is no checkout on this side, and saying so by omission is honest: the
+    // worker that takes the work supplies its own, and `repositoryRoot` is the
+    // path of a machine this Brain is not.
+    repositoryRoot: '',
+    baseBranch: branch,
+    baseSha: head.body.sha,
+    mutationScope: submission.mutationScope ?? ['**'],
+    verificationCommands: commands,
+    rollbackRequirement:
+      'Every change lands as commits on a branch the factory pushes and never merges to the ' +
+      'protected branch. Rolling back is declining the pull request, or reverting the merge ' +
+      'commit if a person has already taken it.',
+    riskClass: submission.riskClass ?? inferRisk(submission.objective),
+  };
+}
+
 export async function deriveDefaults(
   submission: ObjectiveSubmission,
 ): Promise<DerivedDefaults> {
@@ -282,7 +390,12 @@ export async function submitObjective(
     );
   }
 
-  const derived = await deriveDefaults(submission);
+  // Remote when the submission names a repository the forge can read; local only
+  // when it does not. A Brain with no checkout and no remote is refused with the
+  // remedy rather than with a git error, which is what it used to answer.
+  const derived = submission.repositoryRemote
+    ? await deriveFromForge({ ...submission, repositoryRemote: submission.repositoryRemote })
+    : await deriveDefaults(submission);
   const conditions = validateConditions(submission.acceptanceConditions ?? []);
   const submissionKey =
     submission.submissionKey ?? submissionKeyFor(submission.projectId, objective);

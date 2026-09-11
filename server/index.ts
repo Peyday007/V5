@@ -50,6 +50,7 @@ import { recoverInterruptedResearch } from './services/research/queue.ts';
 import { recoverDispatchAtBoot, startDispatcher } from './services/dispatch/loop.ts';
 import { startRussell } from './services/russell/loop.ts';
 import { startConnectRefresh } from './services/connect/loop.ts';
+import { startFactoryRemoteLoop } from './services/factory/remoteLoop.ts';
 import { repairLaunches } from './services/russell/launch.ts';
 import { describeFireTarget } from './services/dispatch/fire.ts';
 import { resumePulledPackets } from './services/research/packetRunner.ts';
@@ -555,6 +556,22 @@ async function main(): Promise<void> {
   // socket: it reads two indexed tables and occasionally makes one HTTP call.
   // An idle Brain spends essentially nothing here.
   startDispatcher();
+
+  /*
+   * The factory's own loop, beside the dispatcher.
+   *
+   * It creates no workers and runs no commands: each tick reads what a worker
+   * finished, believes the forge rather than the worker about what is in the
+   * repository, and makes the next stage available as a bin. That is why it is
+   * safe on a machine with no checkout, and why a campaign keeps moving while the
+   * session that submitted it is long gone.
+   *
+   * Twenty seconds matters more than it looks: a worker's activation lasts minutes,
+   * so a stage that becomes ready inside one is taken by the worker that is still
+   * there — which is how a whole campaign finishes inside one firing instead of one
+   * stage per firing.
+   */
+  startFactoryRemoteLoop();
 
   /*
    * Russell's loop, beside the dispatcher and after recovery.

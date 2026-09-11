@@ -166,6 +166,7 @@ export function mapBin(row: BinRow): Bin {
     updatedAt: row.updated_at,
     readyAt: row.ready_at,
     completedAt: row.completed_at,
+    factoryCampaignId: row.factory_campaign_id ?? null,
   };
 }
 
@@ -442,6 +443,14 @@ export interface CreateBinInput {
    */
   requiredCapabilities?: string[];
   workloadClass?: string | null;
+  /**
+   * The factory campaign this bin serves, for a bin that is software work.
+   *
+   * Its own field rather than `orchestrationId`, which already means a research
+   * packet: one column carrying two meanings makes every query about either
+   * ambiguous, and the one nobody reads is the one that drifts.
+   */
+  factoryCampaignId?: string | null;
   /** Author it already dispatchable. Used by every caller that has finished planning. */
   ready?: boolean;
 }
@@ -466,11 +475,11 @@ export async function createBin(input: CreateBinInput): Promise<Bin> {
        attempt_count, max_attempts, lease_generation, lease_id, worker_id, lease_credential_id,
        lease_session_ref, leased_at, heartbeat_at, lease_expires_at, lease_renewals,
        checkpoint, checkpoint_at, terminal_reason, last_refusal, refusal_count,
-       required_capabilities, workload_class,
+       required_capabilities, workload_class, factory_campaign_id,
        created_by_type, created_by_id, created_at, updated_at, ready_at, completed_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL, NULL, NULL,
              NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, 0,
-             ?, ?,
+             ?, ?, ?,
              ?, ?, ?, ?, ?, NULL)`,
     [
       id,
@@ -490,6 +499,7 @@ export async function createBin(input: CreateBinInput): Promise<Bin> {
       Math.max(1, input.maxAttempts ?? 3),
       toJson(input.requiredCapabilities ?? []),
       input.workloadClass ?? null,
+      input.factoryCampaignId ?? null,
       input.createdByType,
       input.createdById ?? null,
       at,

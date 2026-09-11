@@ -268,6 +268,19 @@ export interface FactoryChangeRequest {
   updatedAt: string;
 }
 
+/**
+ * How a campaign's work is actually executed.
+ *
+ * `LOCAL` is the original: a process beside the Brain, holding the same checkout.
+ * `REMOTE` is the execution plane — the work becomes bins, permanent workers with
+ * their own checkouts drain them, and Brain verifies what they pushed by asking
+ * the forge rather than by reading a diff it has. The two are verified
+ * differently, so a campaign records which it is rather than leaving it to be
+ * inferred from whether a checkout happened to exist.
+ */
+export const FACTORY_EXECUTION_MODES = ['LOCAL', 'REMOTE'] as const;
+export type FactoryExecutionMode = (typeof FACTORY_EXECUTION_MODES)[number];
+
 export interface FactoryChangeRequestRow {
   id: string;
   project_id: string;
@@ -358,6 +371,8 @@ export interface FactoryCampaign {
   finishedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** How this campaign's work reaches a worker, and therefore how it is verified. */
+  executionMode: FactoryExecutionMode;
 }
 
 export interface FactoryCampaignRow {
@@ -383,6 +398,7 @@ export interface FactoryCampaignRow {
   finished_at: string | null;
   created_at: string;
   updated_at: string;
+  execution_mode: string;
 }
 
 /* ------------------------------------------------------------------------- */

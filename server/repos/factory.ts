@@ -34,6 +34,7 @@ import type {
   FactoryAmendmentRow,
   FactoryCampaign,
   FactoryCampaignRow,
+  FactoryExecutionMode,
   FactoryCampaignState,
   FactoryChangeRequest,
   FactoryChangeRequestRow,
@@ -167,6 +168,7 @@ export function mapCampaign(row: FactoryCampaignRow): FactoryCampaign {
     leaseOwner: row.lease_owner,
     leaseExpiresAt: row.lease_expires_at,
     reviewRounds: row.review_rounds,
+    executionMode: (row.execution_mode === 'REMOTE' ? 'REMOTE' : 'LOCAL'),
     prRef: row.pr_ref,
     prUrl: row.pr_url,
     startedAt: row.started_at,
@@ -480,6 +482,26 @@ export interface EnsureCampaignInput {
   baseSha: string;
   laneTarget: number;
   laneTargetReason: string;
+  /**
+   * How this campaign's work reaches a worker.
+   *
+   * Defaults to `LOCAL` so every existing caller keeps the behaviour it had. A
+   * campaign created from a forge-pinned objective passes `REMOTE`, and the two
+   * are verified differently — one against a branch the forge confirms, the other
+   * against a merge Brain performed.
+   */
+  executionMode?: FactoryExecutionMode;
+  /** An existing pull request to update rather than duplicate. */
+  pullRequest?: number | null;
+  /**
+   * The branch this campaign's work lands on, when it is not a fresh one.
+   *
+   * Derived, never chosen: a campaign pinned at a branch that is already an open
+   * pull request's head *continues that request*, which means its work has to land
+   * on that same branch or the request would never see it. Everything else gets
+   * `integrationBranchFor(id)`, which cannot collide because the id cannot.
+   */
+  integrationBranch?: string | null;
 }
 
 /**
@@ -515,21 +537,26 @@ export async function ensureCampaign(
        id, change_request_id, project_id, state, stage_detail, base_sha,
        integration_branch, integration_sha, lane_target, lane_target_reason,
        blocker_kind, blocker_detail, generation, lease_owner, lease_expires_at,
-       review_rounds, pr_ref, pr_url, started_at, finished_at, created_at, updated_at)
+       review_rounds, pr_ref, pr_url, started_at, finished_at, created_at, updated_at,
+       execution_mode)
      VALUES (?, ?, ?, 'PLANNING', NULL, ?, ?, NULL, ?, ?, NULL, NULL, 0, NULL, NULL,
-             0, NULL, NULL, ?, NULL, ?, ?)
+             0, ?, NULL, ?, NULL, ?, ?, ?)
      ON CONFLICT (change_request_id) DO NOTHING`,
     [
       id,
       input.changeRequestId,
       input.projectId,
       input.baseSha,
-      integrationBranchFor(id),
+      input.integrationBranch?.trim() || integrationBranchFor(id),
       input.laneTarget,
       input.laneTargetReason,
+      // An existing pull request this campaign updates rather than duplicates,
+      // recorded before any work starts so no worker has to be told it twice.
+      input.pullRequest ? `#${input.pullRequest}` : null,
       at,
       at,
       at,
+      input.executionMode ?? 'LOCAL',
     ],
   );
 
@@ -1413,6 +1440,31 @@ export async function reopenUnit(
         SET state = ?, failure_category = ?, failure_detail = ?, updated_at = ?
       WHERE id = ? AND state IN ('IMPLEMENTED','READY')`,
     [exhausted ? 'FAILED' : 'READY', category, bound(detail), factoryNow(), unitId],
+  );
+  return result.changes === 1;
+}
+
+/**
+ * Charge a READY unit one attempt.
+ *
+ * The remote plane needs this and the local one does not, and the reason is
+ * worth writing down: locally an attempt is charged when a worker is handed the
+ * unit, because the process that does the work *is* the claim. Remotely the work
+ * is handed out as a bin and the unit row is not claimed until a report comes
+ * back and is believed — so a report Brain refuses would otherwise cost nothing,
+ * and the next round would hand out the identical branch name over commits that
+ * were already rejected.
+ *
+ * Guarded on `READY` and on having an attempt left, so two dispatchers charging
+ * the same refusal charge it once. A unit with no attempts left is left alone for
+ * `reopenUnit` to fail, which is where that decision already lives.
+ */
+export async function advanceUnitAttempt(unitId: string): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE factory_work_units
+        SET attempt = attempt + 1, updated_at = ?
+      WHERE id = ? AND state = 'READY' AND attempt < max_attempts`,
+    [factoryNow(), unitId],
   );
   return result.changes === 1;
 }

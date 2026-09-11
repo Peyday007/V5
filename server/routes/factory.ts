@@ -51,6 +51,8 @@ import { capacity, readiness } from '../services/factory/registry.ts';
 import { campaignBriefing } from '../services/factory/projections.ts';
 import { throughputReport } from '../services/factory/throughput.ts';
 import { pullRequestFor } from '../services/factory/pullRequest.ts';
+import { campaignSpecFor } from '../services/factory/remote.ts';
+import { listRepositoryGrants } from '../services/factory/repositoryEnvelope.ts';
 import {
   authorizeProject,
   badRequest,
@@ -182,6 +184,17 @@ factoryRouter.post(
       acceptanceConditions: conditions,
       mutationScope: optionalStringArray(body['mutationScope'], 'mutationScope'),
       submissionKey: optionalString(body['submissionKey'], 'submissionKey'),
+      /*
+       * The repository, as a remote rather than a path.
+       *
+       * This is what lets a Brain with no checkout accept an objective: the pin,
+       * the default branch and the repository's own verification commands are read
+       * through the forge. A path is deliberately *not* accepted from a caller —
+       * §18's rule that a request never chooses a location — and a remote is not a
+       * location on this machine.
+       */
+      repositoryRemote: optionalString(body['repository'], 'repository'),
+      baseBranch: optionalString(body['baseBranch'], 'baseBranch'),
       // Whether this campaign's result needs a release decision is a person's
       // call rather than a technical field: it says who is allowed to let the
       // work out, which is exactly the question a person is here to answer.
@@ -200,6 +213,28 @@ factoryRouter.post(
       created: result.created,
       derived: result.derived,
     });
+  }),
+);
+
+/**
+ * The repositories this factory may be pointed at.
+ *
+ * Read straight from the envelope in code, which is why it is safe to serve: it
+ * contains no credential, and it cannot be extended by anything that happens over
+ * HTTP. A person needs it to submit an objective at all — naming a repository by
+ * hand and being refused is a worse way to learn the list than being given it.
+ *
+ * Project-scoped on purpose. The grants are global, but the question "what may I
+ * submit here" belongs to somebody who may already write to this project, and a
+ * route that answered it to anyone would be describing the factory's reach to
+ * callers with no business knowing it.
+ */
+factoryRouter.get(
+  '/projects/:projectId/factory/repositories',
+  handler(async (req, res) => {
+    const projectId = pathId(req, 'projectId');
+    await projectForFactory(projectId, 'write');
+    res.json({ repositories: listRepositoryGrants() });
   }),
 );
 
@@ -238,14 +273,29 @@ factoryRouter.post(
     // change request, decided by the database, so a second approval — or a
     // retried request — joins the campaign that exists instead of forking it.
     const approved = result.changeRequest;
+    /*
+     * How this campaign runs, and whether it continues a pull request somebody is
+     * already reading — both derived from the contract and the forge rather than
+     * chosen here, so this route and the operator command cannot disagree about
+     * the same campaign.
+     */
+    const spec = await campaignSpecFor(approved);
     const { campaign, created } = await ensureCampaign({
       changeRequestId: approved.id,
       projectId: approved.projectId,
       baseSha: approved.baseSha,
       laneTarget: INITIAL_LANE_TARGET,
       laneTargetReason: 'initial',
+      executionMode: spec.executionMode,
+      integrationBranch: spec.integrationBranch,
+      pullRequest: spec.pullRequest,
     });
-    res.json({ changeRequest: approved, campaign, campaignCreated: created });
+    res.json({
+      changeRequest: approved,
+      campaign,
+      campaignCreated: created,
+      execution: { mode: spec.executionMode, note: spec.note },
+    });
   }),
 );
 

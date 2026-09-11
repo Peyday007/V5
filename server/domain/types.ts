@@ -3855,6 +3855,30 @@ export const COMPLETION_CONTRACTS = [
   // priority with `judge()`. Brain asks its own archive first and never asks
   // the worker whether the project already answers the question; see
   // `services/russell/planning.ts`.
+  //
+  // A software objective, decomposed. The worker reads the pinned repository and
+  // proposes work units; Brain validates the proposal with `validatePlan`, which
+  // refuses the whole plan for an unknown field, an invented verification
+  // command, a path outside the approved scope, a dependency cycle or a mandatory
+  // condition no unit serves. A plan is a proposal, and this is the contract that
+  // says so at the bin boundary.
+  'FACTORY_PLAN_V1',
+  // Software, written. Each unit in the manifest is one bounded change with its
+  // own branch and its own declared paths; the worker implements it in a checkout
+  // Brain does not have and pushes it. Brain judges the bin by asking the *forge*
+  // what moved — never by reading the worker's summary of what it did.
+  'FACTORY_UNITS_V1',
+  // Software, assembled. One bin moves the campaign's one branch: it merges the
+  // unit branches Brain verified, runs the contract's own commands on the merged
+  // tree, and pushes only if they pass. Brain confirms with the forge that the
+  // branch is where the report says, that it contains every unit branch it names,
+  // and that the whole range touched no path outside those units' declared ones.
+  'FACTORY_INTEGRATION_V1',
+  // Software, delivered. The worker opens or updates exactly one pull request,
+  // using a title and body Brain composed from rows, and Brain reads the request
+  // back from the forge to confirm it points at the commit that was integrated.
+  // It stops there: merging is a person's decision and no worker scope grants it.
+  'FACTORY_DELIVERY_V1',
 ] as const;
 export type CompletionContract = (typeof COMPLETION_CONTRACTS)[number];
 
@@ -3885,9 +3909,36 @@ export interface BinUnitSpec {
  * own stopping condition would be planning, and planning is not what an
  * interchangeable worker is for.
  */
+/**
+ * The repository a bin's work happens in, for the bins that have one.
+ *
+ * Optional because most bins are about a question rather than a codebase, and a
+ * required field every research manifest had to fill with a placeholder would be
+ * a field nobody could trust. Present, it is the whole of what a worker is told
+ * about where to stand: a remote, the ref and commit the contract pinned, the
+ * branch Brain named for the integration, and the pull request to update rather
+ * than duplicate.
+ *
+ * There is deliberately **no credential here**. A manifest is stored, shown and
+ * read back; requirement 9's "never in prompts, logs, database content or
+ * browser output" is satisfied by there being nothing to put anywhere. How a
+ * worker comes to be able to push is granted where the worker runs — §22's rule,
+ * and the reason Brain must never mint its own workers.
+ */
+export interface BinRepository {
+  remote: string;
+  ref: string;
+  baseSha: string;
+  integrationBranch: string;
+  /** An existing pull request to update, or null to open one. */
+  pullRequest: number | null;
+}
+
 export interface BinManifest {
   objective: string;
   why: string;
+  /** Set for a bin whose work is a change to a repository. */
+  repository?: BinRepository;
   lineage: {
     projectId: string;
     layerId: string | null;
@@ -3954,6 +4005,7 @@ export interface BinRow {
   updated_at: string;
   ready_at: string | null;
   completed_at: string | null;
+  factory_campaign_id: string | null;
 }
 
 export interface Bin {
@@ -4007,6 +4059,14 @@ export interface Bin {
   updatedAt: string;
   readyAt: string | null;
   completedAt: string | null;
+  /**
+   * The factory campaign this bin serves, or null.
+   *
+   * Its own column rather than a second meaning on `orchestrationId`, which
+   * already means a research packet: one column with two meanings makes every
+   * query about either of them ambiguous.
+   */
+  factoryCampaignId: string | null;
 }
 
 export interface BinDispatchRow {

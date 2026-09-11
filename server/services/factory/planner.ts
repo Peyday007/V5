@@ -42,6 +42,8 @@ import {
 import { recordFactoryEvent } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { narrowsOrEqual } from './contract.ts';
+import { matchesGlob } from './integrate.ts';
+import { decideRepository } from './repositoryEnvelope.ts';
 
 /** The only shape a proposed unit may have. An unknown field refuses the plan. */
 export interface UnitSpec {
@@ -113,6 +115,9 @@ export function validatePlan(
   const errors: string[] = [];
   const warnings: string[] = [];
   const maxUnits = options.maxUnits ?? MAX_PLAN_UNITS;
+  // Empty for a repository with no grant — the local bootstrap path, which runs
+  // from a checkout a person is watching. A grant that exists is applied.
+  const forbiddenHere = decideRepository(changeRequest.repository).grant?.forbiddenPaths ?? [];
 
   if (typeof proposed !== 'object' || proposed === null || Array.isArray(proposed)) {
     return { ok: false, units: [], errors: ['The plan is not an object.'], warnings, uncoveredConditions: [] };
@@ -185,6 +190,24 @@ export function validatePlan(
         `${key}: owns paths outside the approved mutation scope. A plan cannot widen the ` +
           'authority of the change request it implements.',
       );
+    }
+    /*
+     * And the paths the repository's own grant puts out of reach.
+     *
+     * A mutation scope says what this contract narrowed itself to; this says what
+     * the repository never allows whatever a contract says — a deployment
+     * workflow, the git directory itself. The two are different authorities and
+     * are kept apart: one a person wrote on a submission, the other lives in the
+     * envelope in code, so a contract cannot widen it by asking.
+     */
+    for (const path of ownedPaths) {
+      const forbidden = forbiddenHere.find((glob) => matchesGlob(path, glob) || path === glob);
+      if (forbidden) {
+        errors.push(
+          `${key}: \`${path}\` is inside \`${forbidden}\`, which this repository's grant puts ` +
+            'out of the factory\'s reach whatever a contract says.',
+        );
+      }
     }
 
     const verification = asStringArray(record['verification']);

@@ -1808,6 +1808,73 @@ winning.
   "waiting for a person" which that person cannot resolve is not waiting; §24's
   sentence, at a fourth altitude.
 
+### The factory runs where the repository is, not where Brain is.
+
+The deployed Brain has no `.git` and must not acquire one. So the factory has two
+planes over one control plane: the contract, the plan, the ownership of a
+mutation surface, the independent review and the repair of a finding are
+identical in both, and only *where the work happens* differs.
+`factory_campaigns.execution_mode` says which, **derived and never chosen** — a
+contract pinned from a checkout has a `repositoryRoot`, one pinned through the
+forge does not, so the absence of a root *is* the statement that execution is
+remote.
+
+- **A stage is a bin, and the fleet is the executor.** Plan, implement,
+  integrate, review, deliver — one bin each, at most one live per stage, every
+  step idempotent by its own rows rather than by a cursor or a flag. A flag can
+  be set by a tick that then dies; rows cannot. Nothing here needed a new
+  recovery mechanism, which is the whole reason it is built on Step 10's bins
+  rather than beside them.
+- **A worker's summary is still never evidence, and the forge is how.** The
+  branch is at the commit reported, the files that moved are inside the unit's
+  declared paths, the integration commit *contains* each unit branch it names,
+  and a pull request exists at the integrated commit — every one of them read
+  from the repository's own account of itself. The worker's file list is stored
+  and deliberately not used for the decision. A truncated compare fails closed,
+  because a capped list cannot prove the one thing the check exists to prove.
+- **The tests passing is read rather than taken.** A project whose CI runs on
+  every push has already produced an account of the same commit, so it is read.
+  Its three answers stay apart: a failure is a refusal, a pending run is *not
+  yet*, and **no check at all is an absence** recorded as `UNKNOWN` — never as a
+  pass.
+- **The campaign's head moves in one place.** A unit confirmed on its own branch
+  is `IMPLEMENTED` and never `INTEGRATED`, so a dependency is still satisfied by
+  integration; the head advances only when an integration is confirmed, and a
+  failed verification leaves the branch exactly where it was. An integrator is
+  told not to push a tree the contract rejects, which is the remote shape of the
+  local integrator rolling the merge back.
+- **A campaign pinned at a branch that is already an open pull request's head
+  continues that request.** Derived from the forge, never supplied: a number in a
+  request body would be a caller choosing which open request the factory writes
+  into. Continuing one means landing the work on the branch it already points at.
+  The factory may retarget the base of a request it opened and never of one it is
+  continuing.
+- **Brain holds no credential for any repository, and that is the mechanism
+  rather than a promise.** The manifest names a remote and never a secret, and
+  every bin's first authorized action says the access is granted where the worker
+  runs. There is nothing on this side to leak into a prompt, a log, a row or a
+  browser. `services/factory/repositoryEnvelope.ts` is the other half: the
+  repositories the factory may be *pointed at*, in code, named by id, for
+  §24's reason — nobody supplies the limits their own work is judged against. It
+  is not a security boundary and cannot grant or revoke access; it stops a
+  campaign being created against a repository nobody authorized, which is when
+  the decision is cheap. **`V5` is deliberately absent:** a campaign that could
+  rewrite the machinery executing it is the one whose failure mode is not
+  contained by declining a pull request.
+- **Every stage still has an answering transition, including the new ones.** A
+  refused unit report costs an attempt, so the next round is different work
+  rather than the same branch over rejected commits — remotely the unit row is
+  not claimed until a report is believed, so without that a refusal would cost
+  nothing and the loop would offer the identical unit forever. A stage that
+  burns through `MAX_BINS_PER_STAGE` blocks the campaign with the reason instead
+  of being handed out again, and a blocked campaign is re-examined every tick.
+- **`COWORK_ROUTINE` is not an executor, and the earlier claim that the handshake
+  was missing is recorded rather than deleted.** An `Executor` is something Brain
+  calls and waits on, holding a worktree it can see. A Routine activation is a
+  fire that may be refused, may arrive late, may be taken over, and must survive
+  a restart — which is a bin, not a promise. The permanent subscription-backed
+  executor is the fleet.
+
 A worktree is the one factory path that is deliberately *not* authoritative
 state in either mode: it is execution scratch, the evidence is the commits, the
 rows and the artifacts, and retiring one destroys nothing that mattered. It
@@ -2056,6 +2123,7 @@ server/
 client/                 React UI
   src/Root.tsx          which shell this address wants, and who is signed in
   src/russell/          the whole product: conversation, thin views, states
+  src/russell/Build.tsx the factory, as a person uses it: one objective, one approval
   src/App.tsx           the legacy console, at /legacy
 scripts/
   factory.ts                the operator's factory surface: register, submit, run
