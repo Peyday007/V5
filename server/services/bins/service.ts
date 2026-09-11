@@ -475,6 +475,8 @@ export type SubmitUnitResult =
       unknownUnit: boolean;
       /** True when this replaced a different value the same unit already held. */
       corrected: boolean;
+      /** Set when the value was refused for its size, with the limit and what arrived. */
+      tooLarge?: { limit: number; received: number };
     };
 
 /**
@@ -527,15 +529,25 @@ export async function submitUnit(input: {
       bytes: input.value.length,
       ...(outcome.previousHash ? { replacedContentHash: outcome.previousHash } : {}),
     },
-    outcome: outcome.corrected ? 'CORRECTED' : outcome.stored ? 'STORED' : 'DUPLICATE',
+    outcome: outcome.tooLarge
+      ? 'REFUSED'
+      : outcome.corrected
+        ? 'CORRECTED'
+        : outcome.stored
+          ? 'STORED'
+          : 'DUPLICATE',
   });
 
   return {
     held: true,
     stored: outcome.stored,
-    alreadyStored: !outcome.stored,
+    // A refusal is not "already stored". Reporting it as one is what made the
+    // truncation unrecoverable: the worker had no way to tell a duplicate
+    // submission from an answer Brain would not take.
+    alreadyStored: !outcome.stored && !outcome.tooLarge,
     unknownUnit: false,
     corrected: outcome.corrected,
+    ...(outcome.tooLarge ? { tooLarge: outcome.tooLarge } : {}),
   };
 }
 

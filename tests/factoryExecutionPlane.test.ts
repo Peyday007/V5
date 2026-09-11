@@ -1275,3 +1275,110 @@ describe('accepting a unit does not undo itself', () => {
     expect(afterMore?.failureCategory).toBeNull();
   });
 });
+
+/* ========================================================================= */
+
+describe('a unit value too large is refused, never truncated', () => {
+  /*
+   * The defect this pins cost a correct plan two attempts and a bin.
+   * `putBinUnitResult` sliced the value to the cap, so a three-unit factory
+   * decomposition was cut mid-JSON; the contract then told the worker "no plan was
+   * submitted under unit key `plan`, or it was not valid JSON" — true of what was
+   * stored and useless about why — and the worker re-submitted the same correct
+   * plan until the bin retired at NEEDS_HUMAN.
+   *
+   * Truncation is the one outcome a worker cannot recover from, because it is
+   * reported as success.
+   */
+  it('stores nothing and says what the limit is', async () => {
+    const { putBinUnitResult, MAX_UNIT_VALUE_CHARS, listBinUnitResults } = await import(
+      '../server/repos/bins.ts'
+    );
+    const workerId = (
+      await createWorker({ name: 'verbose', createdByType: 'SYSTEM', createdById: 't' })
+    ).id;
+    const bin = await createBin({
+      projectId: fixture.project.id,
+      kind: 'FACTORY_PLAN',
+      title: 'Plan something',
+      objective: 'Propose a decomposition.',
+      manifest: {
+        objective: 'Propose a decomposition.',
+        why: 'a test',
+        lineage: { projectId: fixture.project.id, layerId: null, goal: null, orchestrationId: null },
+        units: [{ key: 'plan', establishes: 'a decomposition', input: '{}', transform: 'FACTORY_PLAN', dependsOn: [] }],
+        acceptableSources: [],
+        excludedSources: [],
+        evidence: ['a submitted plan'],
+        outputs: ['one result'],
+        authorizedActions: ['read the repository'],
+        prohibitedActions: ['write anything'],
+        budgetUnits: null,
+        retry: { maxAttempts: 2, backoffSeconds: 60 },
+        stoppingConditions: ['a plan is stored'],
+      },
+      completionContract: 'FACTORY_PLAN_V1',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+    });
+    const assigned = await assignNextBin({ workerId, projectIds: [fixture.project.id] });
+    expect(assigned?.bin.id).toBe(bin.id);
+
+    // A value one character past the limit, and valid JSON right up to the end.
+    const filler = 'x'.repeat(MAX_UNIT_VALUE_CHARS);
+    const oversized = JSON.stringify({ units: [], note: filler });
+    expect(oversized.length).toBeGreaterThan(MAX_UNIT_VALUE_CHARS);
+
+    const outcome = await putBinUnitResult({
+      binId: bin.id,
+      unitKey: 'plan',
+      value: oversized,
+      contentHash: 'h-big',
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    expect(outcome.stored).toBe(false);
+    expect(outcome.tooLarge?.limit).toBe(MAX_UNIT_VALUE_CHARS);
+    expect(outcome.tooLarge?.received).toBe(oversized.length);
+    // Nothing was written, so there is no half a plan for anything to misread.
+    expect(await listBinUnitResults(bin.id)).toHaveLength(0);
+
+    // And a value inside the limit still stores whole.
+    const fits = JSON.stringify({ units: [], note: 'x'.repeat(100) });
+    const stored = await putBinUnitResult({
+      binId: bin.id,
+      unitKey: 'plan',
+      value: fits,
+      contentHash: 'h-small',
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    expect(stored.stored).toBe(true);
+    expect((await listBinUnitResults(bin.id))[0]?.value).toBe(fits);
+  });
+
+  it('is large enough for a realistic factory plan', async () => {
+    const { MAX_UNIT_VALUE_CHARS } = await import('../server/repos/bins.ts');
+    // Three units, each with the fields `validatePlan` requires, is the shape that
+    // did not fit. The number is not sacred; being bigger than the thing it has to
+    // hold is the point.
+    const unit = {
+      key: 'a-bounded-unit-key',
+      kind: 'IMPLEMENTATION',
+      title: 'A title a person would recognise',
+      objective: 'x'.repeat(600),
+      acceptance: ['y'.repeat(300), 'z'.repeat(300)],
+      ownedPaths: ['scripts/build.mjs', 'test/**', 'package.json'],
+      requiredContext: ['w'.repeat(200)],
+      verification: ['npm test', 'npm run build'],
+      expectedArtifact: 'v'.repeat(200),
+      risk: 'LOW',
+      criticalPath: true,
+      dependsOn: [],
+      serves: ['A01', 'A02'],
+    };
+    const plan = JSON.stringify({ units: [unit, unit, unit] });
+    expect(plan.length).toBeLessThan(MAX_UNIT_VALUE_CHARS);
+  });
+});

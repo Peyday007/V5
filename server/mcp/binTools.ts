@@ -333,6 +333,24 @@ const submitUnitTool: McpTool = {
           'satisfy the completion contract; read brain_bin_manifest for the declared units.',
       );
     }
+    /*
+     * A value too large to store is refused here, with the limit.
+     *
+     * It used to be silently truncated, which is the one outcome a worker cannot
+     * recover from: it was told the answer was stored, Brain could not parse what
+     * was left, and the reason named the symptom — "not valid JSON". In production
+     * a correct three-unit factory plan was cut mid-object and re-submitted
+     * unchanged until the bin ran out of attempts. A refusal that says how much
+     * arrived and how much may is something a worker can act on.
+     */
+    if (result.tooLarge) {
+      throw invalidInput(
+        `That value is ${result.tooLarge.received} characters and the limit is ` +
+          `${result.tooLarge.limit}. Nothing was stored, so the attempt is still yours: submit a ` +
+          'shorter answer for this unit — the same content with the prose trimmed, not a ' +
+          'placeholder and not a fragment.',
+      );
+    }
     return {
       value: {
         held: true,

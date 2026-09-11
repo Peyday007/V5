@@ -1943,6 +1943,19 @@ remote.
   nothing and the loop would offer the identical unit forever. A stage that
   burns through `MAX_BINS_PER_STAGE` blocks the campaign with the reason instead
   of being handed out again, and a blocked campaign is re-examined every tick.
+- **A cap that truncates is worse than a cap that refuses.**
+  `MAX_UNIT_VALUE_CHARS` sliced a submitted value to 4 000 characters — right for
+  the short research answer that was the only thing submitting one when it was
+  written, and wrong for a factory plan, which is a decomposition carrying an
+  objective, acceptance statements, owned paths and verification commands *per
+  unit*. In production a correct three-unit plan was cut mid-JSON, the contract
+  then told the worker "no plan was submitted … or it was not valid JSON" — true of
+  what was stored and useless about why — and the worker re-submitted the same
+  correct plan until the bin retired at `NEEDS_HUMAN`. **Truncation is the one
+  outcome a worker cannot recover from, because it is reported as success.** It is
+  refused now, with the limit and what arrived, nothing is written, and the attempt
+  is still there to spend on a shorter answer. The cap is 64 000, inside
+  `MAX_REQUEST_BYTES` so a value that size can actually arrive.
 - **A name derived from a mutable counter cannot be the contract.** The branch a
   unit must push to was derived from its attempt, and `acceptUnitReport` claims the
   unit — a claim increments the attempt. So the instant a report was accepted, the

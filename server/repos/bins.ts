@@ -86,7 +86,22 @@ export const DEFAULT_BIN_LEASE_MS = 15 * 60 * 1000;
 
 export const MAX_MANIFEST_BYTES = 64 * 1024;
 export const MAX_CHECKPOINT_BYTES = 8 * 1024;
-export const MAX_UNIT_VALUE_CHARS = 4_000;
+/*
+ * How much one unit's answer may be.
+ *
+ * 4 000 was right for the only thing that submitted one when it was written — a
+ * research unit's short answer — and wrong for a factory plan, which is a
+ * decomposition of an objective into units each carrying an objective, acceptance
+ * statements, owned paths and verification commands. A realistic three-unit plan
+ * is several times that, so in production the value was silently cut mid-JSON and
+ * Brain then told the worker "no plan was submitted … or it was not valid JSON"
+ * — true of what was stored and useless about why. The worker re-submitted the
+ * same correct plan until the bin ran out of attempts.
+ *
+ * Raised, and still bounded well inside `MAX_REQUEST_BYTES`, so a value this large
+ * can actually arrive. What matters more than the number is the sentence below it.
+ */
+export const MAX_UNIT_VALUE_CHARS = 64_000;
 export const MAX_REASON_CHARS = 2_000;
 
 export function clampBinLeaseMs(ms: number | undefined): number {
@@ -1760,6 +1775,8 @@ export interface PutUnitResultOutcome {
   stored: boolean;
   corrected: boolean;
   previousHash: string | null;
+  /** Set when the value was refused for its size, with the limit that refused it. */
+  tooLarge?: { limit: number; received: number };
 }
 
 /**
@@ -1796,7 +1813,24 @@ export async function putBinUnitResult(
 ): Promise<PutUnitResultOutcome> {
   const db = getDb();
   const at = binNow();
-  const value = input.value.slice(0, MAX_UNIT_VALUE_CHARS);
+  /*
+   * Refused rather than truncated.
+   *
+   * Truncating is the one behaviour that cannot be recovered from: the worker is
+   * told its answer is stored, Brain cannot read it, and the reason it gives names
+   * the symptom. A refusal that carries the limit is something a worker can act
+   * on, and nothing is written — so the attempt it would otherwise have spent on
+   * an unreadable value is still there to spend on a shorter one.
+   */
+  if (input.value.length > MAX_UNIT_VALUE_CHARS) {
+    return {
+      stored: false,
+      corrected: false,
+      previousHash: null,
+      tooLarge: { limit: MAX_UNIT_VALUE_CHARS, received: input.value.length },
+    };
+  }
+  const value = input.value;
 
   const inserted = await db.run(
     `INSERT INTO bin_unit_results (id, bin_id, unit_key, work_item_id, value, content_hash,
