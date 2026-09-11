@@ -1943,6 +1943,18 @@ remote.
   nothing and the loop would offer the identical unit forever. A stage that
   burns through `MAX_BINS_PER_STAGE` blocks the campaign with the reason instead
   of being handed out again, and a blocked campaign is re-examined every tick.
+- **A name derived from a mutable counter cannot be the contract.** The branch a
+  unit must push to was derived from its attempt, and `acceptUnitReport` claims the
+  unit — a claim increments the attempt. So the instant a report was accepted, the
+  name Brain expected no longer matched the branch it had just accepted: the next
+  tick re-verified the same report, refused it for naming the previous attempt's
+  branch, reopened the unit and charged another attempt, and three passes later a
+  unit whose work sat correctly on a confirmed commit had retired as FAILED. The
+  bin recorded the name when it handed the work out, so the bin is asked — the
+  same "read it back from the row Brain wrote" this loop already uses for the base
+  commit, and for the same reason. And the ingest acts only on a unit still
+  *waiting* for a report; it skipped INTEGRATED alone, which left IMPLEMENTED — the
+  state a successful acceptance produces — being judged again.
 - **A refusal is recognised, not repeated.** An *accepted* report is idempotent by
   its own effect: the unit is `IMPLEMENTED`, so the next tick skips it. A refused
   one puts the unit back to `READY`, which is the state the next tick offers the

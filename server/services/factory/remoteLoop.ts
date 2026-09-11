@@ -61,6 +61,7 @@ import {
   binIdentity,
   campaignBins,
   createDeliverBin,
+  declaredBranchFor,
   createIntegrateBin,
   createPlanBin,
   createReviewBin,
@@ -198,9 +199,18 @@ async function ingestUnitsBin(
   for (const [key, unitReport] of reports) {
     const unit = units.find((candidate) => candidate.unitKey === key);
     if (!unit) continue;
-    // Already integrated by an earlier tick: the second pass is a no-op, which is
-    // the idempotency this loop relies on instead of a cursor.
-    if (unit.state === 'INTEGRATED') continue;
+    /*
+     * Only a unit still waiting for a report is acted on.
+     *
+     * This said `state === 'INTEGRATED'` and nothing else, which left IMPLEMENTED
+     * — the state a *successful* acceptance produces — being re-verified on the
+     * very next tick. With the expected branch derived from the attempt counter
+     * that the acceptance itself had just incremented, the re-verification refused
+     * the report it had accepted a second earlier. Both halves are fixed; this one
+     * is the idempotency, and it is the same shape as every other step here: a
+     * no-op the second time because of what the first one changed.
+     */
+    if (unit.state !== 'READY') continue;
     if (unitReport.outcome === 'BLOCKED') {
       report.notes.push(`${key} reported blocked: ${unitReport.blockedReason ?? 'no reason given'}`);
       if (!(await alreadyRefused(campaign.id, unit.id, bin.id))) {
@@ -218,7 +228,9 @@ async function ingestUnitsBin(
     const verdict = await verifyUnitReport(
       repository,
       {
-        branch: remoteBranchFor(campaign, unit),
+        // The name this bin handed out, not one derived now from a counter the
+        // acceptance is about to change.
+        branch: declaredBranchFor(bin, key) ?? remoteBranchFor(campaign, unit),
         baseSha: binBaseOf(bin, campaign),
         ownedPaths: unit.ownedPaths,
       },

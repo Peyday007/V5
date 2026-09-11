@@ -150,6 +150,33 @@ export function binBaseOf(bin: Bin, campaign: FactoryCampaign): string {
     : campaign.baseSha;
 }
 
+/**
+ * The branch this bin told a unit to use, read back from the bin.
+ *
+ * `remoteBranchFor` *derives* the name from the unit's attempt, and that was
+ * self-destroying: `acceptUnitReport` claims the unit, a claim increments the
+ * attempt, so the moment a report was accepted the name Brain expected no longer
+ * matched the branch it had just accepted. The next tick re-verified the same
+ * report, refused it for naming `a1` when the unit was now on `a2`, reopened the
+ * unit, charged another attempt — and three passes later a unit whose work was
+ * sitting correctly on a confirmed commit had retired as FAILED.
+ *
+ * A derivation over a mutable counter cannot be the contract. The bin recorded
+ * the name when it handed the work out, so the bin is asked — the same "read it
+ * back from the row Brain wrote" this loop uses for the base commit, and for the
+ * same reason.
+ */
+export function declaredBranchFor(bin: Bin, unitKey: string): string | null {
+  const spec = (bin.manifest.units ?? []).find((unit) => unit.key === unitKey);
+  if (!spec) return null;
+  try {
+    const parsed = JSON.parse(spec.input) as { branch?: unknown };
+    return typeof parsed.branch === 'string' && parsed.branch.length > 0 ? parsed.branch : null;
+  } catch {
+    return null;
+  }
+}
+
 function repositoryFor(
   campaign: FactoryCampaign,
   changeRequest: FactoryChangeRequest,

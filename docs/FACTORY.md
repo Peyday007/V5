@@ -554,6 +554,12 @@ it on bins.
   believed, so without `advanceUnitAttempt` a refusal would cost nothing and the
   next round would hand out the identical branch name over commits Brain had
   already rejected.
+- **The branch a unit pushes to is read back from the bin, never derived.** It
+  was derived from the unit's attempt, and accepting a report claims the unit,
+  which increments the attempt — so every acceptance invalidated the name it had
+  just accepted and the next tick refused its own work. The ingest also acts only
+  on a unit still waiting for a report: skipping INTEGRATED alone left IMPLEMENTED,
+  the state a successful acceptance produces, being judged a second time.
 - **And it costs exactly one.** An accepted report is idempotent by its own
   effect; a refused one leaves the unit READY, which is the state the next tick
   offers the same completed bin for again. `UNIT_FAILED` carries the bin id, so a

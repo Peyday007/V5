@@ -1138,3 +1138,140 @@ describe('a unit out of attempts stops the campaign before any review', () => {
     expect(after?.blockerDetail).toContain('declared paths');
   });
 });
+
+/* ========================================================================= */
+
+describe('accepting a unit does not undo itself', () => {
+  /*
+   * The defect this pins, from the first real hosted campaign: the expected branch
+   * name was derived from the unit's attempt, `acceptUnitReport` claims the unit,
+   * and a claim increments the attempt — so the next tick re-verified the report
+   * it had just accepted, refused it for naming the previous attempt's branch,
+   * reopened the unit and charged another attempt. Three passes later a unit whose
+   * work sat correctly on a confirmed commit had retired as FAILED.
+   *
+   * Two things make it impossible now, and both are asserted: the branch is read
+   * back from the bin that handed it out, and only a unit still waiting for a
+   * report is acted on.
+   */
+  let campaignId = '';
+  let workerId = '';
+  const unitHead = 'f'.repeat(40);
+
+  beforeEach(async () => {
+    workerId = (await createWorker({ name: 'impl', createdByType: 'SYSTEM', createdById: 't' })).id;
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'no-self-undo',
+      objective: 'Guard the quote form against silent breakage.',
+      expectedOutcome: 'The suite fails when it breaks.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'the suite asserts it', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    campaignId = campaign.id;
+    await ensureUnit({
+      campaignId,
+      unitKey: 'form-contract',
+      kind: 'TEST',
+      role: 'IMPLEMENTER',
+      title: 'Assert the form contract',
+      objective: 'Assert the quote form posts over https to an absolute endpoint.',
+      acceptance: ['the suite fails when the endpoint is relative'],
+      ownedPaths: ['test/form.test.js'],
+      requiredContext: [],
+      verification: ['npm test'],
+      expectedArtifact: 'a test file',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+    });
+    const { promoteReadyUnits } = await import('../server/repos/factory.ts');
+    await promoteReadyUnits(campaignId);
+  });
+
+  it('leaves the unit implemented across repeated ticks over one completed bin', async () => {
+    stubForge({});
+    // One tick to hand the work out, so the bin records the branch it named.
+    const handed = await tickRemoteCampaign(campaignId);
+    expect(handed.created.some((entry) => entry.startsWith('units:'))).toBe(true);
+
+    const assigned = await assignNextBin({ workerId, projectIds: [fixture.project.id] });
+    expect(assigned?.bin.kind).toBe('FACTORY_UNITS');
+    const bin = assigned!.bin;
+    const { declaredBranchFor } = await import('../server/services/factory/remote.ts');
+    const branch = declaredBranchFor(bin, 'form-contract')!;
+    expect(branch).toContain('form-contract');
+
+    // The repository agrees with the report, on the branch the bin named.
+    stubForge({
+      branches: { [branch]: unitHead },
+      compares: { [`${BASE}...${unitHead}`]: { files: ['test/form.test.js'], status: 'ahead' } },
+    });
+    await putBinUnitResult({
+      binId: bin.id,
+      unitKey: 'form-contract',
+      value: JSON.stringify({
+        unitKey: 'form-contract',
+        outcome: 'IMPLEMENTED',
+        branch,
+        headSha: unitHead,
+        filesChanged: ['test/form.test.js'],
+        commands: [{ command: 'npm test', exitCode: 0 }],
+        summary: 'added the contract test',
+      }),
+      contentHash: 'h-impl',
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    expect(
+      await finishBin(
+        { binId: bin.id, leaseId: assigned!.leaseId, leaseGeneration: assigned!.leaseGeneration, workerId },
+        { state: 'COMPLETE', reason: 'implemented' },
+      ),
+    ).toBe('OK');
+
+    // First ingest accepts it.
+    const first = await tickRemoteCampaign(campaignId);
+    expect(first.ingested.some((entry) => entry.startsWith('units:'))).toBe(true);
+    const { getUnitByKey } = await import('../server/repos/factory.ts');
+    const afterFirst = await getUnitByKey(campaignId, 'form-contract');
+    expect(afterFirst?.state).toBe('IMPLEMENTED');
+    const chargedOnce = afterFirst!.attempt;
+
+    // Two more ticks over the same completed bin change nothing: no second
+    // verification, no refusal, no further attempt.
+    await tickRemoteCampaign(campaignId);
+    await tickRemoteCampaign(campaignId);
+    const afterMore = await getUnitByKey(campaignId, 'form-contract');
+    expect(afterMore?.state).toBe('IMPLEMENTED');
+    expect(afterMore?.attempt).toBe(chargedOnce);
+    expect(afterMore?.failureCategory).toBeNull();
+  });
+});
