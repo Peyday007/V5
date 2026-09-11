@@ -8962,3 +8962,54 @@ taken by a **different session** from the first, which is what
 `auditEligibility` requires and the whole reason the bin had refused one
 arrival; the fix restored the fire, and the independence floor did what it
 already did.
+
+## 91. The verb the rule described and the list did not hold — 2026-09-11
+
+`A13_AUTO_NEXT` needs a packet at `COMPLETE_WITH_GAPS`, which needs a person's
+RECORD_GAPS, which `choicesFor` offers only when something was **accepted**. So
+the packet has to finish *mixed*: part of the goal settled from sources the
+compiler's own evidence standard accepts, and a mandatory part the official
+record does not hold. Two scenarios were declared for that shape and neither
+reached it, both for reasons already recorded — ACC-4 was correctly merged by
+the semantic dedupe, ACC-6 was correctly refused because private marketplace
+economics are not a county-records question however the compiler is asked.
+
+`S12A-ACC-12` was declared for it in code before a row existed, as a
+county-records question whose answer some Michigan registers of deeds publish
+and plenty do not. The turn was answered in **eighty-six seconds**:
+
+```
+2026-09-11T01:00:00.096Z  RUSSELL COMPLETE  449 chars  rcv_a38e708da7204f84bdfa
+    settled: 2026-09-11T01:01:56.220Z
+    produced: {"captureDeclined":true,"gateReason":"nothing here proposes work"}
+    bin bin_3bc2d14dd64e4a32af44 COMPLETE gen 2  BIN_ASSIGNED 01:00:18  BIN_TERMINAL 01:01:25
+```
+
+The worker read it as a request for work and proposed a capture. **Brain
+declined it.** `PROPOSAL_MARKERS` holds `check`, `verify`, `confirm`,
+`look into`, `look up`, `find out` and `see`. The sentence said *"Please go and
+**establish**, county by county for Michigan, how long after recording a new
+document becomes available electronically"*.
+
+The list's own comment states the rule it is trying to apply:
+
+> the verb has to be asked of somebody, or followed by the thing to be
+> established
+
+— and the verb for **establishing** something was in neither alternation. That
+is the third time this list has been the thing, after ACC-8's *"Please check
+something for me"* and the hedged/plain split before it, and it is the same
+defect every time: a direct request for work, in a verb the list happened not
+to hold.
+
+`establish` and `determine` join both alternations and nothing further. The
+documented failure mode is unchanged and is what the test pins: *"We established
+that yesterday and it has not changed since"* still matches neither, because the
+word boundary excludes `established` and nobody is being asked; *"That determined
+the shape of the whole pricing page"* likewise.
+
+**`S12A-ACC-13` is the same request against the repaired gate, and the question
+is deliberately unchanged** — the identical text, exactly as it was between
+ACC-8 and ACC-9. Rewording it to hit a marker the list already held would have
+been gaming the list rather than fixing it, which is the choice this file
+recorded the first time and the reason it is worth recording again.

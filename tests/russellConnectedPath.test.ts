@@ -744,6 +744,39 @@ describe('the capture gate judges the question, not the restatement', () => {
     expect(shouldCapture('Thanks, that all makes sense to me now.').capture).toBe(false);
   });
 
+  it('captures a request to establish something, which is the verb the rule describes', () => {
+    /*
+     * The third time this list has been the thing, and the same defect each
+     * time: a direct request for work, in a verb the list happened not to hold.
+     *
+     * Its own comment says the rule is *"the verb has to be asked of somebody,
+     * or followed by the thing to be established"* — and the verb for
+     * establishing something was in neither alternation. Production on
+     * 2026-09-11: S12A-ACC-12's message was answered in eighty-six seconds, the
+     * worker proposed a capture, and Brain declined it with
+     * `{"captureDeclined":true,"gateReason":"nothing here proposes work"}`.
+     */
+    const ASKED =
+      "Deal Dispatch's freshness promise depends on how quickly a newly recorded instrument " +
+      "shows up in a county's electronic records, and we have never established that for " +
+      'Michigan. Please go and establish, county by county for Michigan, how long after ' +
+      'recording a new document becomes available electronically.';
+    expect(shouldCapture(ASKED).capture).toBe(true);
+    expect(shouldCapture(ASKED).reason).toBe('it proposes work');
+
+    // The other half of the alternation, and `determine` alongside it.
+    expect(shouldCapture('Establish whether the office still publishes that schedule.').capture)
+      .toBe(true);
+    expect(shouldCapture('Could you determine what each county charges for it?').capture).toBe(true);
+
+    // The failure mode is unchanged: a past-tense report is still not a request,
+    // because the word boundary excludes it and nobody is being asked.
+    expect(shouldCapture('We established that yesterday and it has not changed since.').capture)
+      .toBe(false);
+    expect(shouldCapture('That determined the shape of the whole pricing page.').capture)
+      .toBe(false);
+  });
+
   it('reproduces the defect: the statement alone would be refused', () => {
     // The gate, unchanged, applied to the wrong input. This is not a claim
     // about what the code now does — it is why the code had to change.

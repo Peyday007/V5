@@ -349,6 +349,20 @@ export const ACCEPTANCE_SUITE = [
    * statement the packet settles its goal, files `COMPLETE`, and produces no
    * follow-on — which is the acceptance rule, not a failure of it.
    */
+  /*
+   * The same request against the gate ACC-12 found.
+   *
+   * ACC-12 was answered in eighty-six seconds and Brain's own capture gate
+   * declined it — the marker list held `check`, `verify`, `confirm`,
+   * `look into`, `find out` and `see`, and the sentence said *"Please go and
+   * establish"*. Repaired narrowly at the gate; the question is unchanged, the
+   * same way it was between ACC-8 and ACC-9. What changed is Brain.
+   */
+  {
+    scenarioId: 'S12A-ACC-13',
+    purpose: 'the ACC-12 request again, against the capture gate it found',
+    conversationTitle: 'S12A-ACC-13',
+  },
   {
     scenarioId: 'S12A-ACC-12',
     purpose:

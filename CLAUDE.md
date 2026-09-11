@@ -1300,6 +1300,18 @@ rules.
   to hit an existing keyword was the alternative and would have been gaming the
   list rather than fixing it.
 
+- **The capture list's rule was right and its alphabet was short, three times
+  over.** It held every hedged form and not the plain one; then it held
+  `check` and `see` and not `establish` — the verb in its own stated rule,
+  *"asked of somebody, or followed by the thing to be established"* — so
+  production declined *"Please go and establish, county by county for
+  Michigan…"* with "nothing here proposes work" eighty-six seconds after asking.
+  Each widening is two verbs and no more, and the failure mode is what the tests
+  pin rather than the successes: a past-tense report still matches nothing,
+  because the word boundary excludes it and nobody is being asked. The question
+  that found the gap is never reworded to fit the list — rewording is gaming the
+  list, and what changes is Brain.
+
 - **A coverage score whose denominator is the question measures how the question
   was asked.** `relevance` is `hits / wanted.size` over the *requirement's*
   vocabulary, so a longer requirement scores lower against the identical claim.

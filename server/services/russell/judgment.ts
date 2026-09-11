@@ -67,9 +67,23 @@ const PROPOSAL_MARKERS = [
    * yesterday" matches neither — the word boundary excludes "checked" — and
    * "please look at this file" matches neither, because bare `look` is not in
    * the second alternation.
+   *
+   * **And `establish`, which is the sentence the comment above describes.**
+   * The rule it states is *"the verb has to be asked of somebody, or followed
+   * by the thing to be established"* — and the verb for establishing something
+   * was not in either alternation, so production declined *"Please go and
+   * establish, county by county for Michigan, how long after recording a new
+   * document becomes available electronically"* on 2026-09-11 with "nothing
+   * here proposes work". That is the third time this list has been the thing,
+   * and each time it has been the same defect: a direct request for work, in a
+   * verb the list happened not to hold.
+   *
+   * `determine` joins it for the same reason and no further. The failure mode
+   * is unchanged: "we established that yesterday" matches neither, because the
+   * word boundary excludes "established" and it is not asked of anybody.
    */
-  /\b(?:please|can you|could you|would you)\s+(?:go\s+(?:and\s+)?)?(?:check|verify|confirm|look\s+(?:into|up)|find\s+out|see)\b/i,
-  /\b(?:check|verify|confirm|find\s+out|look\s+up|see)\s+(?:whether|if)\b/i,
+  /\b(?:please|can you|could you|would you)\s+(?:go\s+(?:and\s+)?)?(?:check|verify|confirm|establish|determine|look\s+(?:into|up)|find\s+out|see)\b/i,
+  /\b(?:check|verify|confirm|establish|determine|find\s+out|look\s+up|see)\s+(?:whether|if)\b/i,
 ];
 
 /** Openers that mark a genuine unresolved question about the work. */

@@ -426,6 +426,36 @@ const ACCEPTANCE_SCENARIOS = {
    * instrument appears is a different fact from all of them, and it is the one
    * Deal Dispatch's freshness promise actually rests on.
    */
+  /*
+   * The same request, against the gate `S12A-ACC-12` found.
+   *
+   * ACC-12's message was answered in eighty-six seconds, the worker proposed a
+   * capture, and Brain's own `shouldCapture` declined it:
+   * `{"captureDeclined":true,"gateReason":"nothing here proposes work"}`. The
+   * marker list holds `check`, `verify`, `confirm`, `look into`, `find out` and
+   * `see`, and the sentence said *"Please go and establish"*. Its own comment
+   * states the rule as *"the verb has to be asked of somebody, or followed by
+   * the thing to be established"* — and the verb for establishing something was
+   * in neither alternation.
+   *
+   * Third time that list has been the thing, and the same defect each time. It
+   * is repaired narrowly at the gate — `establish` and `determine`, nothing
+   * further — and **the question is deliberately unchanged**, exactly as it was
+   * between ACC-8 and ACC-9. What changed is Brain.
+   */
+  'S12A-ACC-13': {
+    purpose:
+      'the ACC-12 request again, against the capture gate it found',
+    statement:
+      'establish how soon after recording each Michigan county makes a new instrument available electronically',
+    question:
+      "Deal Dispatch's freshness promise depends on how quickly a newly recorded instrument shows " +
+      'up in a county\'s electronic records, and we have never established that for Michigan. ' +
+      'Please go and establish, county by county for Michigan, how long after recording a new ' +
+      "document becomes available electronically — take it from each register of deeds' own " +
+      "published statement or its portal's stated update schedule, and where a county states " +
+      'nothing at all, say so plainly rather than estimating it.',
+  },
   'S12A-ACC-12': {
     purpose:
       "a county-records question the official record answers for some counties and not for others: " +
