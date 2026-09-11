@@ -9013,3 +9013,67 @@ is deliberately unchanged** — the identical text, exactly as it was between
 ACC-8 and ACC-9. Rewording it to hit a marker the list already held would have
 been gaming the list rather than fixing it, which is the choice this file
 recorded the first time and the reason it is worth recording again.
+
+## 92. Where A13 stands, and the rule that stopped the reader — 2026-09-11
+
+### Four honest attempts at one shape, and what each of them was
+
+`A13_AUTO_NEXT` needs a packet at `COMPLETE_WITH_GAPS` whose judge left a
+`FOUNDATIONAL_GAP` or `TARGETED_RESEARCH_GAP` with a written question. That
+requires a packet that finishes **mixed** — enough accepted for `choicesFor` to
+offer RECORD_GAPS, and a mandatory part the official record does not settle.
+Four scenarios have now been declared for it and none reached it, each stopped
+by a different rule working correctly:
+
+| scenario | what stopped it |
+|---|---|
+| `S12A-ACC-4` | the semantic dedupe merged it into the completed idea that had asked about bulk access *"and on what terms"* |
+| `S12A-ACC-6` | private marketplace economics are not a county-records question, so the compiler's standard did not fit and nothing was accepted |
+| `S12A-ACC-12` | Brain's own capture gate declined *"Please go and establish…"* — `establish` was not in the verb list (§91) |
+| `S12A-ACC-13` | the same request against the repaired gate: it launched, researched, and produced **17 claims of which 7 were accepted and 10 rejected** — nine for having no source URL — so the fragment failed its integrity bar and nothing could be synthesized |
+
+ACC-13 is the closest anything has come and it is worth stating precisely what
+happened, because it is the evidence gate doing its job rather than failing:
+
+```
+FRAGMENTS (1)
+  official-record  BLOCKED  attempt 1/2  integrity FAIL  sufficiency SUFFICIENT
+      claims 17 (7 accepted)
+      rejected  9 × No source URL was given, so this is the tool's assertion rather than evidence
+      rejected  1 × This is a calculation or inference with no stated inputs
+      because   10 of 17 claims were rejected, so the evidence in this fragment cannot
+                be relied on even where …
+```
+
+Seven genuinely sourced claims existed. The fragment was still blocked, because
+a fragment that got more than half its claims refused is not one a report may be
+built on — §12's rule, applied. The mission then failed rather than parking,
+which is §87's rule, applied: a packet with nothing accepted at the fragment
+level has one answer on offer, and a decision with one option is not a decision.
+
+**Three ways to make A13 pass from here were available and none was taken.**
+Reclassifying the judge's `PATCH` gap on `orc_164bbf76e40b4fa88bd1`; lowering
+the integrity bar so ACC-13's seven sourced claims carried the fragment; or
+writing a question designed to come back short. The first is model prose
+becoming state, the second is weakening a gate to pass a gate, and the third is
+falsifying a gap. A13 is `NOT_RUN` and that is the honest reading.
+
+### And the reader itself is now gated
+
+```
+2026-09-11T02:28:47Z  Step 12A acceptance  failure  (3 seconds, no steps ran)
+  failure | .github#L1 | Branch "claude/zealous-hypatia-78a2yp" is not allowed
+                         to deploy to production due to environment protection rules.
+```
+
+Five workflows declare `environment: production` — `deploy`, `chain-watch`,
+`step10-activation`, `step12a-inspect` and the acceptance reporter. The last
+deploy from this branch succeeded at **01:52:02Z** and the acceptance was
+refused at **02:28:47Z**, so the rule changed inside that window. It is a
+repository setting, so the last verified acceptance reading is
+**34537334227 at 2026-09-10T22:26:18Z**, and the three deployments since are
+recorded in the ledger but have not been re-read by a reporter run.
+
+`step10.yml` and `packet-report.yml` declare no environment and still run, which
+is why every production row quoted above is a current reading rather than a
+remembered one.
