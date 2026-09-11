@@ -553,6 +553,24 @@ timestamp, because two rows written in the same millisecond are a tie a timestam
 cannot break — and a re-authorization that sorted before the refusals it answers
 would count for nothing.
 
+**A contract that lies about its own inputs refuses work and says nothing.**
+`brain_check_in`'s `session_ref` is an optional argument and its schema said it was
+"never used to decide anything" — while the review-independence floor decided on
+it, because the MCP credential is per-connector and the provider session id is the
+finest identity this surface exposes. A worker that omitted the field was refused
+every review, silently: `bin_session_refusals` is keyed by the session, so the
+missing one left no row to read. Production showed it exactly: Brain chose the
+right surface, fired it, the provider created the session, the review bin stayed
+`READY` at nought attempts, and nothing anywhere named a reason.
+
+Brain knew which session it had fired the whole time — `bin_dispatch` carries it —
+so `dispatchedSessionForBin` is the fallback. That is **stronger** than the
+reported value rather than a relaxation: it is Brain's own record of the fire,
+which is where §24 says a session identity comes from. The worker's value is still
+preferred, because a scheduled arrival Brain did not fire has no dispatch row, and
+when neither exists the floor fails closed as before. The schema now says what the
+field is for.
+
 **A prohibition in a prompt is not a control, and Brain cannot make one.** Every
 units bin's manifest prohibits pushing to, merging into or otherwise moving the
 campaign's integration branch, names the branch, and says integrating is a

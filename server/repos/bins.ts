@@ -2065,6 +2065,40 @@ export async function listDispatchesForBin(binId: string): Promise<BinDispatch[]
 }
 
 /**
+ * The session Brain itself fired for this bin at the generation it is on.
+ *
+ * Read from Brain's own `bin_dispatch` row rather than from anything the arriving
+ * worker says about itself — the same linkage `creditDispatchArrival` already
+ * credits an arrival from, and §24's rule in one line: *Brain fired one Routine for
+ * one bin, and the session that arrived and took that bin is that fire's session.*
+ *
+ * It exists because `brain_check_in`'s `session_ref` is an **optional** argument,
+ * and the factory's review-independence floor decides on it. A worker that simply
+ * omits the field is therefore refused every review, silently and for ever, with
+ * nothing in `bin_session_refusals` to say so because that table is keyed by the
+ * session that is missing. In production a fired reviewer did exactly that: Brain
+ * chose the surface correctly, fired it, the provider created the session, and the
+ * bin stayed `READY` at nought attempts with no row anywhere naming the reason.
+ *
+ * Null when Brain did not fire this generation — an arrival nobody sent, which is
+ * ordinary for a scheduled worker — so it supplements the reported session and
+ * never replaces a judgement. It is deliberately scoped to `SENT`: a `PENDING` or
+ * `SENDING` intent has no session yet, and one at another generation belongs to a
+ * different assignment.
+ */
+export async function dispatchedSessionForBin(
+  binId: string,
+  leaseGeneration: number,
+): Promise<string | null> {
+  const row = await getDb().get<{ session_ref: string | null }>(
+    `SELECT session_ref FROM bin_dispatch
+      WHERE bin_id = ? AND lease_generation = ? AND state = 'SENT'`,
+    [binId, leaseGeneration],
+  );
+  return row?.session_ref ?? null;
+}
+
+/**
  * How long a tick may hold an intent while it makes the HTTP call.
  *
  * Doubles as the recovery bound: a SENDING intent older than this is claimable

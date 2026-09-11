@@ -85,11 +85,28 @@ const checkInTool: McpTool = {
   inputSchema: {
     type: 'object',
     properties: {
-      // Telemetry only, and it says so. Nothing about the assignment depends on
-      // it, so a worker that lies here changes nothing but its own audit trail.
+      /*
+       * **Not telemetry only, and this description used to say it was.**
+       *
+       * The factory's review-independence floor decides on it: a session that
+       * implemented part of a campaign must not be handed the bin that judges it,
+       * and the provider session id is the finest identity this surface exposes —
+       * the MCP credential is per-connector, so every session an account fires
+       * presents the same one. A schema that told a worker the field changed
+       * nothing, while a guard refused every review without it, is a contract
+       * lying about its own inputs; in production a fired reviewer omitted it and
+       * the bin stayed ready with nothing anywhere naming the reason.
+       *
+       * Brain now also falls back to the session it recorded on the dispatch it
+       * sent, which is stronger than anything a worker reports. Sending it is
+       * still worth doing: an arrival Brain did not fire has no such row.
+       */
       session_ref: {
         type: 'string',
-        description: 'Your provider session id, for telemetry. Never used to decide anything.',
+        description:
+          'Your provider session id. Always send it. It is how Brain tells one session from ' +
+          'another, and a review cannot be handed to a session it cannot identify — the factory ' +
+          'refuses a verdict from whoever wrote the code being judged.',
       },
       lease_ms: { type: 'integer', minimum: 0, description: 'Requested lease; the server clamps it.' },
     },

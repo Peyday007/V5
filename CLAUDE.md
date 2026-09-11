@@ -2044,6 +2044,21 @@ remote.
   worker cannot declare itself surface-blocked to escape a failed verification,
   because the exit codes it reported about what it ran are what decide — prose
   never does.
+- **A contract that lies about its own inputs refuses work and says nothing.**
+  `brain_check_in`'s `session_ref` is an *optional* argument, and its schema said it
+  was "never used to decide anything" — while the factory's review-independence
+  floor decided on it, because the provider session id is the finest identity the
+  surface exposes. A worker that simply omitted the field was therefore refused
+  every review, silently: `bin_session_refusals` is keyed by the session, so the
+  missing one left no row. In production Brain chose the right surface, fired it,
+  the provider created the session, and the review bin sat `READY` at nought
+  attempts with nothing anywhere naming a reason. **Brain knew which session it
+  had fired the whole time** — it is on the `bin_dispatch` row Brain wrote — so
+  that is the fallback, which is §24's own rule rather than a softening of the
+  floor: a session identity comes from Brain's record of the fire, never from
+  what a worker says about itself. The reported value is still preferred, because
+  an arrival Brain did not fire has no such row, and with neither the floor still
+  fails closed. The schema now says what the field does.
 - **A prohibition in a prompt is not a control, and Brain cannot make one.** Every
   units bin forbids pushing to or moving the campaign's integration branch, names
   it, and says integrating is a separate bin — and a unit worker pushed its commit

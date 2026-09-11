@@ -38,6 +38,7 @@ import {
   countBinEvents,
   finishBin,
   creditRefusedAssignments,
+  dispatchedSessionForBin,
   getBin,
   heartbeatBin,
   listBins,
@@ -216,8 +217,27 @@ export async function binAdmission(input: {
        * worker reports, validated against the presenting worker — which is
        * exactly what §24's own independence evidence settles for, and it says so.
        */
+      /*
+       * And when the worker reported none, the session Brain itself fired.
+       *
+       * `session_ref` is an *optional* argument on `brain_check_in`, so a worker
+       * that simply omits it was refused every review — silently, and with nothing
+       * in `bin_session_refusals` to say so, because that table is keyed by the
+       * session that is missing. A fired reviewer did exactly that in production:
+       * Brain chose the surface, fired it, the provider created the session, and
+       * the bin sat `READY` at nought attempts with no row naming a reason.
+       *
+       * `dispatchedSessionForBin` is strictly stronger than the reported value
+       * rather than a softening of the floor: it is Brain's own record of which
+       * session it fired for this bin at this generation, which is where §24 says
+       * a session identity comes from. The worker's value is still preferred when
+       * present, because a scheduled arrival Brain did not fire has no dispatch row
+       * — and if neither exists the floor still fails closed.
+       */
+      const reportedSession =
+        input.sessionRef ?? (await dispatchedSessionForBin(bin.id, bin.leaseGeneration));
       const lineage = await reviewLineage(bin.factoryCampaignId, {
-        sessionId: input.sessionRef ?? null,
+        sessionId: reportedSession,
         workerId: input.workerId,
       });
       if (!lineage.ok) return { ok: false, reason: lineage.reason ?? 'not independent of the work' };

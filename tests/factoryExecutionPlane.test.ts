@@ -1623,6 +1623,134 @@ describe('an integration blocked before the work was judged costs the work nothi
 
 /* ========================================================================= */
 
+describe('a reviewer Brain fired is identified by the fire, not by what it says', () => {
+  /*
+   * `brain_check_in`'s `session_ref` is an **optional** argument whose schema used to
+   * say it was "never used to decide anything" — while the review-independence floor
+   * decided on it. So a worker that simply omitted the field was refused every
+   * review, silently, with nothing in `bin_session_refusals` to say so because that
+   * table is keyed by the session that is missing.
+   *
+   * Production did exactly that: Brain chose the right surface, fired it, the
+   * provider created the session, and the review bin sat READY at nought attempts
+   * with no row anywhere naming a reason. Brain knew which session it had fired the
+   * whole time — it is on the dispatch row it wrote — which is where §24 says a
+   * session identity comes from in the first place.
+   */
+  let campaignId = '';
+  let workerId = '';
+  let reviewBinId = '';
+
+  beforeEach(async () => {
+    workerId = (await createWorker({ name: 'rev-id', createdByType: 'SYSTEM', createdById: 't' })).id;
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: `review-id-${Math.random()}`,
+      objective: 'Guard the published tree.',
+      expectedOutcome: 'The suite fails when it breaks.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'the suite asserts it', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    campaignId = campaign.id;
+    const { createReviewBin } = await import('../server/services/factory/remote.ts');
+    const bin = await createReviewBin(campaign, changeRequest, BASE, 1);
+    reviewBinId = bin.id;
+  });
+
+  it('takes the session from the dispatch Brain sent when the worker reports none', async () => {
+    const { ensureDispatchIntent, claimDispatchIntent, markDispatchSent, getBin } = await import(
+      '../server/repos/bins.ts'
+    );
+    const bin = (await getBin(reviewBinId))!;
+
+    // With no dispatch and nothing reported, the floor fails closed — it cannot
+    // establish independence, so it does not assert it.
+    const closed = await binAdmission({
+      workerId,
+      principal: { credentialId: 'cred-x' } as unknown as Parameters<typeof binAdmission>[0]['principal'],
+      sessionRef: null,
+    });
+    expect((await closed(bin)).ok).toBe(false);
+
+    // Brain fires, and the provider's session id lands on Brain's own row.
+    await ensureDispatchIntent(bin);
+    const intent = await claimDispatchIntent();
+    expect(intent).not.toBeNull();
+    await markDispatchSent(intent!.id, {
+      routineRef: 'trig_test',
+      sessionRef: 'cse_fired_reviewer',
+      fireEventId: 'cse_fired_reviewer',
+    });
+
+    // The same arrival, reporting nothing, is now identifiable and admitted.
+    const admit = await binAdmission({
+      workerId,
+      principal: { credentialId: 'cred-x' } as unknown as Parameters<typeof binAdmission>[0]['principal'],
+      sessionRef: null,
+    });
+    expect((await admit((await getBin(reviewBinId))!)).ok).toBe(true);
+  });
+
+  it('still refuses the session that implemented the work, however it is identified', async () => {
+    const { recordFactoryEvent: record } = await import('../server/repos/factoryFleet.ts');
+    const { FACTORY_EVENT_KINDS } = await import('../server/services/factory/metrics.ts');
+    await record({
+      campaignId,
+      kind: FACTORY_EVENT_KINDS.unitImplemented,
+      evidenceClass: 'MEASURED',
+      sessionId: 'cse_fired_reviewer',
+      detail: { unitKey: 'u', binId: 'bin_x' },
+    });
+    const { ensureDispatchIntent, claimDispatchIntent, markDispatchSent, getBin } = await import(
+      '../server/repos/bins.ts'
+    );
+    const bin = (await getBin(reviewBinId))!;
+    await ensureDispatchIntent(bin);
+    const intent = await claimDispatchIntent();
+    await markDispatchSent(intent!.id, {
+      routineRef: 'trig_test',
+      sessionRef: 'cse_fired_reviewer',
+      fireEventId: 'cse_fired_reviewer',
+    });
+    const admit = await binAdmission({
+      workerId,
+      principal: { credentialId: 'cred-x' } as unknown as Parameters<typeof binAdmission>[0]['principal'],
+      sessionRef: null,
+    });
+    const verdict = await admit((await getBin(reviewBinId))!);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason ?? '').toContain('implemented part of this campaign');
+  });
+});
+
+/* ========================================================================= */
+
 describe('a branch nobody was supposed to move is noticed, not punished', () => {
   /*
    * Every units bin's manifest prohibits pushing, merging into or otherwise moving
