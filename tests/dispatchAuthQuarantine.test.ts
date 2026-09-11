@@ -19,7 +19,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createAccount, createRoutine, listRoutines, setRoutineState } from '../server/repos/fleet.ts';
-import { createBin } from '../server/repos/bins.ts';
+import {
+  claimDispatchIntent,
+  createBin,
+  ensureDispatchIntent,
+  getBin,
+  markDispatchFailed,
+  rearmSurfaceDeferredIntents,
+} from '../server/repos/bins.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import type { BinManifest } from '../server/domain/types.ts';
 
@@ -138,50 +145,56 @@ describe('a fire refused for authentication', () => {
    * twenty-four-hour backoff for every non-retryable failure; shortening that
    * helped every future failure and left the intents already written behind a wall,
    * with a factory review bin READY and nothing anywhere able to answer it.
+   *
+   * Asked of `rearmSurfaceDeferredIntents` rather than through a whole tick, and
+   * that is a correction to this test rather than to the code. The first version
+   * drove it with `dispatchTick`, which reads the *global* fleet — and the suite's
+   * files share one database and each calls `freshProject()`, so a sibling file
+   * wiping rows mid-test made it pass locally and fail in CI on state that was
+   * never this test's. A test that needs the whole world to hold still is testing
+   * the scheduler, not the rule.
    */
   it('puts a surface-deferred intent back once a Routine row changes', async () => {
     const binId = await readyBin('only');
-    // Fire, be refused, and be deferred with the error recorded against the intent.
-    await dispatchTick({ burst: 4, projectIds: [projectId] });
+    const bin = (await getBin(binId))!;
+    await ensureDispatchIntent(bin);
+    const claimed = await claimDispatchIntent();
+    expect(claimed).not.toBeNull();
 
+    // Deferred the way the old dispatcher deferred it: a day away.
+    await markDispatchFailed(claimed!.id, {
+      kind: 'AUTH',
+      message: 'Token is not authorized for this routine',
+      retryAfterMs: 24 * 60 * 60 * 1000,
+    });
+    // And stamped as written before the fleet was last touched, which is the
+    // condition — a clock the test controls rather than one it waits for.
     const { getDb } = await import('../server/db/database.ts');
-    /*
-     * Scoped to this test's own bin. The first version asked `bin_dispatch` for
-     * "the PENDING row", which is true of a file running alone and not of a suite
-     * where other files share the database — it passed locally and failed in CI on
-     * a row that was never this test's to read.
-     */
-    const deferred = await getDb().get<{ next_attempt_at: string; last_error_kind: string }>(
-      `SELECT next_attempt_at, last_error_kind FROM bin_dispatch
-        WHERE bin_id = ? AND state = 'PENDING'`,
-      [binId],
-    );
-    expect(deferred?.last_error_kind).toBe('AUTH');
-    // Pushed out beyond now, so nothing would claim it on the next tick.
-    await getDb().run(
-      `UPDATE bin_dispatch SET next_attempt_at = ?, updated_at = ?
-        WHERE bin_id = ? AND state = 'PENDING'`,
-      [
-        new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        '2000-01-01T00:00:00.000Z',
-        binId,
-      ],
-    );
+    await getDb().run(`UPDATE bin_dispatch SET updated_at = ? WHERE id = ?`, [
+      '2000-01-01T00:00:00.000Z',
+      claimed!.id,
+    ]);
+    expect(await claimDispatchIntent()).toBeNull();
 
     // A person corrects the fleet: any write to a Routine row is the condition.
     const routines = await listRoutines();
     const bad = routines.find((routine) => routine.routineRef === 'trig_bad_token')!;
-    await setRoutineState({
-      routineId: bad.id,
-      from: bad.state,
-      to: 'ENABLED',
-      reason: 'the deployment secret was corrected',
-    });
+    expect(
+      await setRoutineState({
+        routineId: bad.id,
+        from: bad.state,
+        to: 'QUARANTINED',
+        reason: 'its deployment secret does not authorize it',
+      }),
+    ).toBe(true);
 
-    refuseRef = 'trig_nothing_refuses_this';
-    const second = await dispatchTick({ burst: 4, projectIds: [projectId] });
-    expect(second.rearmed).toBeGreaterThanOrEqual(1);
-    expect(second.fired).toBeGreaterThanOrEqual(1);
+    expect(await rearmSurfaceDeferredIntents()).toBeGreaterThanOrEqual(1);
+    const again = await claimDispatchIntent();
+    expect(again?.id).toBe(claimed!.id);
+
+    // Self-limiting: the re-arm stamped the intent, so a second pass finds nothing
+    // until the fleet changes again.
+    expect(await rearmSurfaceDeferredIntents()).toBe(0);
   });
 
   it('leaves every surface enabled when the provider accepts', async () => {
