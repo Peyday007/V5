@@ -2152,6 +2152,7 @@ client/                 React UI
   src/russell/          the whole product: conversation, thin views, states
   src/russell/Build.tsx the factory, as a person uses it: one objective, one approval
   src/App.tsx           the legacy console, at /legacy
+objectives/             software objectives a person approved, in the image by design
 scripts/
   factory.ts                the operator's factory surface: register, submit, run
   connect-site.ts           a site's worker and grant, made without a browser

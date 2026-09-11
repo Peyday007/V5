@@ -24,10 +24,15 @@
 #
 # An objective is prose — several paragraphs and a list of acceptance
 # conditions — and prose in a workflow input is prose that has to survive a
-# dispatcher, a shell and an SSH session. The same text in a file under
-# `docs/objectives/` is reviewable in a diff, is already inside the image, and
-# cannot be mangled on the way. So `--file` names a path in the repository and
-# nothing long is ever interpolated.
+# dispatcher, a shell and an SSH session. The same text in a committed file is
+# reviewable in a diff and cannot be mangled on the way. So `--file` names a path
+# in the repository and nothing long is ever interpolated.
+#
+# It lives in `objectives/` at the root and not under `docs/`, which
+# `.dockerignore` excludes — a container image is copied and pulled by machines
+# nobody here controls, so the documentation stays out of it. The first objective
+# was written under `docs/` and the deployed Brain answered ENOENT: a path that
+# exists only in the repository is a path the container cannot open.
 name: Factory
 
 on:
@@ -38,7 +43,7 @@ on:
         required: true
         default: status
       file:
-        description: '--file (a path in this repository, for submit)'
+        description: '--file (a path in the image, e.g. objectives/x.json, for submit)'
         required: false
         default: ''
       change_request:
