@@ -9203,3 +9203,52 @@ had rather than submitting assertions beside them.
 That is the whole of the repair the user named: *valid research is not discarded
 merely because the execution contract omitted the requirement.* Fifty-seven
 sourced findings survived a bar that had discarded seven.
+
+## 94. The judge wrote the question A13 needs — 2026-09-11
+
+`S12A-ACC-14` ran to a verdict on the canonical deployment. Three audit roles,
+three distinct sessions, and `aud_bb7dcba8c56043c2836c` recorded
+**`MORE_RESEARCH` with seven gaps**:
+
+```
+0. [TARGETED_RESEARCH_GAP] Approved-submitter rosters and county fee figures are not
+                           in the quoted evidence
+   asks: For each Michigan county already recorded as accepting e-recording, what
+         passage on that county's own page names its approved submitters and states…
+1. [TARGETED_RESEARCH_GAP] Montmorency, Oakland and Ottawa were identified but never read
+   asks: Do the Montmorency, Oakland and Ottawa Register of Deeds pages state whether
+         the office accepts e-recording…
+2. [TARGETED_RESEARCH_GAP] 27 counties with no located statement, and no record of where
+                           they were searched
+   asks: For each of the 27 named counties, what does the Register of Deeds or combined
+         Clerk and Register of Deeds office publish about electronic recording…
+3. [PATCH]        Composite claims assert facts their single quoted source cannot support
+4. [PATCH]        Descriptive summaries are presented in the Passage field as if quoted
+5. [PATCH]        Page-level silence is reported as office-level absence
+6. [OTHER_LAYER]  Jurisdiction-specific recording operations belong to Execution Playbooks
+```
+
+**Three research-justifying gaps, each carrying a bounded question the judge
+wrote.** Gap 2 is precisely the half S12A-ACC-14 was declared for, before it ran:
+*"where a county publishes nothing about electronic recording at all, say so
+plainly and name where you looked rather than inferring it either way"* — and
+the judge's own reading is that twenty-seven counties have neither a located
+statement nor a recorded search, which §14 says is exactly when a negative
+existence claim is not established.
+
+Nothing here was reclassified, composed or arranged. The gap rows are the
+judge's validated structured output, and what makes them the right ones is that
+the question asked for a fact the public record holds for some offices and not
+others.
+
+Gaps 3 to 5 are worth reading beside the 57/60 acceptance: the adversarial pass
+found composite claims resting on one quote, descriptions formatted as passages,
+and page-level silence reported as office-level absence. The evidence gate
+accepted the claims; the audit still caught how three of them were *presented*.
+That is the two mechanisms doing different jobs, which is the point of having
+both.
+
+Gap 6 put the packet into §22's `OTHER_LAYER` handoff — the artifact is a
+county-by-county operational fact-set and belongs to Execution Playbooks — so a
+second audit round is queued under the receiving layer. That is the handoff
+working, and `completionLinks.ts` is the module written for exactly this shape.
