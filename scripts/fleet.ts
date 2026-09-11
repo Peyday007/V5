@@ -37,7 +37,7 @@ import { resolveToken } from '../server/services/dispatch/fire.ts';
 import { proposeScale, shouldQuarantine } from '../server/services/dispatch/scaler.ts';
 import { referenceFleet, REFERENCE_SIZES, simulate } from '../server/services/dispatch/simulate.ts';
 import { activationTrace, workloadProfile } from '../server/services/dispatch/profiles.ts';
-import { listBins } from '../server/repos/bins.ts';
+import { getBin, listBins } from '../server/repos/bins.ts';
 import { FLEET_STATES } from '../server/domain/types.ts';
 import type { FleetState } from '../server/domain/types.ts';
 
@@ -454,8 +454,15 @@ async function main(): Promise<void> {
     // passes every value as a named flag.
     const binId = option('ref') ?? arg(0);
     if (!binId) return refuse('pass a bin id.');
-    const bins = await listBins({ limit: 500 });
-    const bin = bins.find((b) => b.id === binId);
+    /*
+     * By id, not by scanning a page of them.
+     *
+     * It listed 500 bins ordered by priority and looked for the id in that page,
+     * so a Brain with more than 500 bins answered "no bin <id>" about a bin that
+     * plainly exists — and a diagnostic that misnames the cause sends whoever ran
+     * it looking for the wrong thing, which is worse than no diagnostic.
+     */
+    const bin = await getBin(binId);
     if (!bin) return refuse(`no bin ${binId}.`);
     const snapshot = await fleetSnapshot();
     const decision = routeBin({

@@ -335,3 +335,34 @@ both directions rather than only in the direction that refuses:
 Each refusal names the dimension and says the list is exhaustive. The fourth row
 is what makes the second and third rows meaningful: the boundary refuses
 crossings, not work.
+
+## The same question, asked of production rows
+
+A real bin from the proof campaign — `bin_9844af85486b46fa9635`, `FACTORY_UNITS`,
+requiring `repository` and `repository-write`:
+
+```
+admin routing check airynworker2 bin_9844af85486b46fa9635
+
+  bin        bin_9844af85486b46fa9635  FACTORY_UNITS  COMPLETE  class=FACTORY_UNIT
+  family     FACTORY  repository=peyday007/oakwood-junk-removal
+  worker     airynworker2  explicit families=[RESEARCH,GENERAL] repositories=[]
+  decision   FAMILY_NOT_SERVED
+  reason     This worker serves [RESEARCH, GENERAL] and this is FACTORY work.
+             Its routing row lists the families it may be handed, and that list
+             is exhaustive.
+```
+
+That is the crossing, refused by name, for the worker that actually made it. The
+campaign's own bin listing still shows what it was:
+
+```
+bin_fa83dcb76e014cde8a11 FACTORY_REVIEW COMPLETE needs [repository]
+    dispatch routine=trig_01CBLu5oCZziEwznw5q9xU7g session=session_01V3cbgyvfUFtU1hLQodBYdj
+    refused  session_01QqzXX3V2AvkUVAfN3H9Mc2 x4: implemented part of this campaign ...
+    refused  session_01GaLvNxKKPK9aieV4FBsS16 x3: implemented part of this campaign ...
+```
+
+A factory review bin fired at the *research* Routine, and the two Oakwood
+sessions refused on independence rather than on scope — because there was no
+scope to refuse them on.
