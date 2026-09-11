@@ -58,6 +58,17 @@ somebody with admin rights:
 > **Settings → Environments → `production` → Deployment branches and tags**
 > → **Selected branches and tags** → **Add rule** → `production`
 
+### And make `production` the default branch
+
+**Settings → General → Default branch → switch to `production`.**
+
+Two things depend on it, and neither is cosmetic. GitHub runs `schedule`
+workflows only on the default branch and registers `workflow_dispatch` from it,
+so `production-guard.yml` below does nothing at all until the default moves —
+and a new workflow added on the canonical branch is not dispatchable until then
+either. Second, a branch cut from the default inherits the `canonical` guard,
+so the guardless-older-copy problem stops being created going forward.
+
 Once that is in place, dispatching `Deploy` on any other branch fails at the
 environment gate with *"Branch is not allowed to deploy to production"*, whatever
 that branch's workflow file says.
@@ -106,3 +117,19 @@ The suite deliberately checks for a `flyctl deploy` **command** at the start of 
 line rather than the phrase, because one workflow quotes a product owner's
 authorization that contains those words. A check that goes red on correct
 content teaches people to delete it.
+
+## And what is checked against production itself
+
+A suite reads the repository, and when this went wrong **the repository was
+correct the whole time** — production was running a build from before the
+removal. Nothing in a test could have seen that.
+
+So `.github/workflows/production-guard.yml` asks the deployment, hourly: that
+`/operator` answers 404 at every old address, does not redirect and returns no
+form; that `/healthz` is up and `/api/projects` still refuses an anonymous
+caller; that Connected sites answers **401 rather than 404**, because a 404
+there means the route is not deployed; and that the client bundle carries no
+`/operator`. It holds no secret, changes nothing and cannot deploy.
+
+If it goes red, production does not match the canonical branch — re-deploy the
+canonical branch, and set the environment policy above so it cannot recur.

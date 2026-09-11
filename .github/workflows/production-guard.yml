@@ -1,0 +1,118 @@
+name: Production guard
+
+# Does production still look the way the canonical branch says it should?
+#
+# This exists because of a failure that was completely silent. Three branches
+# deployed to one Fly app, and a branch that predated `/operator`'s removal
+# deployed after the branch that removed it — so a deleted surface came back
+# twice in one evening and nothing anywhere went red. The repository was
+# correct the whole time; production was not.
+#
+# A test in the suite cannot catch that: it reads the repository, and the
+# repository was fine. Only asking production can.
+#
+# Everything here is an unauthenticated GET. It holds no secret, changes
+# nothing, and deploys nothing — it is the smallest thing that turns "somebody
+# overwrote production" from invisible into a red run.
+#
+# **It is inert until the canonical branch is the default branch.** GitHub runs
+# `schedule` only on the default branch and registers `workflow_dispatch` from
+# it too, so while the default is something else this file is a file. That is
+# not a reason to write it differently; it is a reason the default branch and
+# the canonical branch should be the same branch. `docs/DEPLOYMENT.md` says so.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Hourly, at :17 so it does not join everything else on the hour.
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-guard
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Ask production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The operator console must not answer
+        run: |
+          set -uo pipefail
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          base="https://$app.fly.dev"
+          failed=0
+
+          for path in /operator /operator/ /operator/workers /operator/credentials; do
+            code=$(curl -s -o /tmp/body -w '%{http_code}' "$base$path" || echo 000)
+            echo "GET $path -> $code"
+            if [ "$code" != "404" ]; then
+              echo "::error::$path answered $code. The operator console is gone; anything but 404 means production is running a build from before its removal — almost certainly a deploy from a non-canonical branch. See docs/DEPLOYMENT.md."
+              failed=1
+            fi
+            if grep -qi '<form' /tmp/body 2>/dev/null; then
+              echo "::error::$path returned a form. That is the console."
+              failed=1
+            fi
+          done
+
+          # A redirect is not a removal either: it is a working link somebody
+          # can still be told to follow.
+          location=$(curl -s -o /dev/null -D - "$base/operator" | grep -i '^location:' || true)
+          if [ -n "$location" ]; then
+            echo "::error::/operator redirects ($location). It should not exist, not move."
+            failed=1
+          fi
+
+          exit $failed
+
+      - name: The surfaces that replaced it must still be there
+        run: |
+          set -uo pipefail
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          base="https://$app.fly.dev"
+          failed=0
+
+          # Liveness, and the gate still shut.
+          health=$(curl -s -o /dev/null -w '%{http_code}' "$base/healthz" || echo 000)
+          [ "$health" = "200" ] || { echo "::error::/healthz answered $health"; failed=1; }
+
+          anon=$(curl -s -o /dev/null -w '%{http_code}' "$base/api/projects" || echo 000)
+          [ "$anon" = "401" ] || { echo "::error::/api/projects answered $anon to an anonymous caller; expected 401"; failed=1; }
+
+          # Connected sites exists and refuses an anonymous caller. A 404 here
+          # would mean the route is absent — the connector deployed away again.
+          sites=$(curl -s -o /dev/null -w '%{http_code}' "$base/api/russell/projects/x/sites" || echo 000)
+          echo "GET /api/russell/projects/x/sites -> $sites"
+          [ "$sites" = "401" ] || { echo "::error::Connected sites answered $sites; expected 401. A 404 means the route is not deployed."; failed=1; }
+
+          # The client bundle must not mention the console.
+          asset=$(curl -s "$base/" | grep -oE '/assets/index-[A-Za-z0-9]+\.js' | head -1)
+          if [ -n "$asset" ]; then
+            if curl -s "$base$asset" | grep -q '/operator'; then
+              echo "::error::The deployed client bundle still references /operator."
+              failed=1
+            fi
+            echo "bundle $asset carries no /operator reference"
+          else
+            echo "::warning::Could not find the client bundle to check."
+          fi
+
+          exit $failed
+
+      - name: What to do if this went red
+        if: failure()
+        run: |
+          echo "Production does not match the canonical branch."
+          echo ""
+          echo "The usual cause is a Deploy dispatched on a branch that is not"
+          echo "the one named in .github/CANONICAL_BRANCH. Re-deploy the"
+          echo "canonical branch, then set the deployment branch policy on the"
+          echo "production environment so it cannot happen again —"
+          echo "docs/DEPLOYMENT.md says how."

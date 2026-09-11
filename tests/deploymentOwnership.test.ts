@@ -81,6 +81,25 @@ describe('one branch owns production', () => {
     expect(deploy).toMatch(/environment: production/);
   });
 
+  it('asks production itself, because the repository being right proved nothing', () => {
+    /*
+     * The failure this catches was completely silent. The repository was
+     * correct the whole time; production was running a build from before the
+     * removal, and no suite could see that because a suite reads the
+     * repository. Only asking the deployment can.
+     */
+    const guard = read('.github/workflows/production-guard.yml');
+    expect(guard).toContain('/operator');
+    expect(guard).toMatch(/schedule:/);
+    expect(guard).toMatch(/cron:/);
+    // It must not be able to change anything it is watching.
+    expect(guard).not.toMatch(/^\s*flyctl\s+deploy\b/m);
+    expect(guard).not.toContain('FLY_API_TOKEN');
+    // And it checks the replacement is still there, not only that the old
+    // thing is gone — a blank Brain would pass the first check alone.
+    expect(guard).toContain('/api/russell/projects/x/sites');
+  });
+
   it('tells a future session the rule, in the file sessions are told to read', () => {
     const claude = read('CLAUDE.md');
     expect(claude).toContain('.github/CANONICAL_BRANCH');
