@@ -909,12 +909,21 @@ describe('a reviewer is independent by lineage, or it is refused', () => {
 
 /* ========================================================================= */
 
-describe('a bin is not handed to a surface that cannot do it', () => {
-  it('refuses a worker whose Routine lacks a capability the bin requires', async () => {
+describe('a bin is handed out even when Brain cannot tell which surface arrived', () => {
+  /*
+   * The opposite of what this file asserted twice, and the reason is the premise
+   * rather than the rule: Brain cannot attribute an arrival to a Routine before
+   * that arrival takes a bin, because `worker_sessions` is keyed by the
+   * credential and the credential is per-connector rather than per-session. A
+   * gate on that attribution refused the only surface that could do the work.
+   *
+   * What remains is the router's own check at fire time, and a worker that
+   * cannot push reporting BLOCKED with the operation that was refused.
+   */
+  it('admits a bin whose capabilities this arrival cannot be shown to carry', async () => {
     const workerId = (
-      await createWorker({ name: 'no-push', createdByType: 'SYSTEM', createdById: 't' })
+      await createWorker({ name: 'unknown-surface', createdByType: 'SYSTEM', createdById: 't' })
     ).id;
-    const credential = 'cred-no-push';
     const bin = await createBin({
       projectId: fixture.project.id,
       kind: 'FACTORY_UNITS',
@@ -941,131 +950,20 @@ describe('a bin is not handed to a surface that cannot do it', () => {
       requiredCapabilities: ['repository', 'repository-write'],
       ready: true,
     });
-
     const admit = await binAdmission({
       workerId,
       principal: {
         type: 'WORKER',
         id: workerId,
-        credentialId: credential,
-        displayName: 'no-push',
+        credentialId: 'cred-unknown',
+        displayName: 'unknown-surface',
         isBrainAdmin: false,
         scopes: [],
         memberships: [],
       } as unknown as Principal,
+      sessionRef: 'provider-session-1',
     });
-    const verdict = await admit((await getBin(bin.id))!);
-    /*
-     * No registered Routine resolves for this worker, so what it can reach is
-     * unknown — and unknown **admits** here, deliberately. The gate prevents a
-     * wasted fire rather than an unauthorized one, and failing closed made it
-     * unreachable on a first arrival: lineage exists only after a bin has been
-     * assigned, so refusing without it refused every bin forever.
-     */
-    expect(verdict.ok).toBe(true);
-  });
-
-  it('refuses only a surface it has observed arriving, and admits one that can push', async () => {
-    const { createAccount, createRoutine, bindRoutineWorker, recordWorkerSession } =
-      await import('../server/repos/fleet.ts');
-    const account = await createAccount({ name: `acct-${Math.random().toString(36).slice(2)}` });
-    const readOnly = await createRoutine({
-      accountId: account.id,
-      routineRef: `trig_read_${Math.random().toString(36).slice(2)}`,
-      name: 'reads only',
-      tokenSecretName: 'NEVER_SET',
-      tokenDigest: null,
-      capabilities: ['repository'],
-    });
-    const workerId = (
-      await createWorker({ name: 'reader', createdByType: 'SYSTEM', createdById: 't' })
-    ).id;
-    await bindRoutineWorker(readOnly.id, workerId);
-
-    const bin = await createBin({
-      projectId: fixture.project.id,
-      kind: 'FACTORY_UNITS',
-      title: 'Work that needs a push',
-      objective: 'Implement something and push it.',
-      manifest: {
-        objective: 'Implement something and push it.',
-        why: 'a test',
-        lineage: { projectId: fixture.project.id, layerId: null, goal: null, orchestrationId: null },
-        units: [{ key: 'u', establishes: 'a branch', input: '{}', transform: 'FACTORY_UNIT', dependsOn: [] }],
-        acceptableSources: [],
-        excludedSources: [],
-        evidence: ['a pushed branch'],
-        outputs: ['one result'],
-        authorizedActions: ['push the branch Brain named'],
-        prohibitedActions: ['anything else'],
-        budgetUnits: null,
-        retry: { maxAttempts: 2, backoffSeconds: 60 },
-        stoppingConditions: ['a result per unit'],
-      },
-      completionContract: 'FACTORY_UNITS_V1',
-      createdByType: 'SYSTEM',
-      createdById: 'test',
-      requiredCapabilities: ['repository', 'repository-write'],
-      ready: true,
-    });
-
-    const principal = {
-      type: 'WORKER',
-      id: workerId,
-      credentialId: 'cred-reader',
-      displayName: 'reader',
-      isBrainAdmin: false,
-      scopes: [],
-      memberships: [],
-    } as unknown as Principal;
-
-    /*
-     * A binding alone is not evidence about an arriving session: one worker
-     * identity may serve several Routines, so the static binding names whichever
-     * is enabled rather than the one that turned up. Admitted.
-     */
-    const bound = await (await binAdmission({ workerId, principal }))(
-      (await getBin(bin.id))!,
-    );
-    expect(bound.ok).toBe(true);
-
-    // Observed arrival from a surface that cannot push: now it is known, and
-    // refused.
-    await recordWorkerSession({
-      sessionRef: 'cred-reader',
-      workerId,
-      routineId: readOnly.id,
-      accountId: account.id,
-      binId: bin.id,
-      leaseGeneration: 1,
-    });
-    const refused = await (await binAdmission({ workerId, principal }))(
-      (await getBin(bin.id))!,
-    );
-    expect(refused.ok).toBe(false);
-    expect(refused.reason).toContain('repository-write');
-
-    const writer = await createRoutine({
-      accountId: account.id,
-      routineRef: `trig_write_${Math.random().toString(36).slice(2)}`,
-      name: 'can push',
-      tokenSecretName: 'NEVER_SET',
-      tokenDigest: null,
-      capabilities: ['repository', 'repository-write'],
-    });
-    await recordWorkerSession({
-      sessionRef: 'cred-writer',
-      workerId,
-      routineId: writer.id,
-      accountId: account.id,
-      binId: bin.id,
-      leaseGeneration: 1,
-    });
-    const admitted = await (await binAdmission({
-      workerId,
-      principal: { ...principal, credentialId: 'cred-writer' } as unknown as Principal,
-    }))((await getBin(bin.id))!);
-    expect(admitted.ok).toBe(true);
+    expect((await admit((await getBin(bin.id))!)).ok).toBe(true);
   });
 });
 

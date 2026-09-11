@@ -153,6 +153,8 @@ export type CheckInResult =
 export async function binAdmission(input: {
   workerId: string;
   principal: Principal;
+  /** The session the arriving worker reported, for the review-independence floor. */
+  sessionRef?: string | null;
 }): Promise<(bin: Bin) => Promise<{ ok: boolean; reason?: string }>> {
   const lineage = await lineageForWorker({
     workerId: input.workerId,
@@ -161,89 +163,32 @@ export async function binAdmission(input: {
   const admit = auditAdmission(lineage);
   return async (bin: Bin): Promise<{ ok: boolean; reason?: string }> => {
     /*
-     * Can this surface do what the bin needs at all?
+     * There is no capability check here, and that is the end of two corrections
+     * rather than an omission.
      *
-     * `requiredCapabilities` was only ever read by the *router*, which decides
-     * which Routine to fire. That is not the same question as which bin an
-     * arriving worker may be handed: any authenticated worker that checks in is
-     * offered the oldest ready bin in its scopes, so a surface fired for one bin
-     * could be handed another it has no way of doing. For a research bin that
-     * was harmless, because none required anything. A factory bin that needs to
-     * push a branch is not harmless — the worker would take it, fail to push,
-     * and charge the work an attempt against a condition that was never about
-     * the work.
+     * `requiredCapabilities` decides which Routine Brain *fires*, and it was
+     * tempting to read it again when deciding which bin an arriving worker may be
+     * *handed* — any authenticated worker is offered the oldest ready bin in its
+     * scopes, so a surface fired for one bin can be handed another it cannot do.
+     * Twice that check refused the only surface that could do the work, for two
+     * different reasons, and the second one is why it cannot exist:
      *
-     * Read from the Routine the authenticated worker resolves to, never from
-     * anything the caller sent — and **unknown admits**, which is the opposite of
-     * what the first version of this did and is the correction recorded rather
-     * than quietly applied.
+     *   * reading the *static* worker → Routine binding attributes an arrival to
+     *     whichever Routine is enabled, which in a fleet sharing one worker
+     *     identity is the wrong one; and
+     *   * reading the *observed* lineage does not help either, because
+     *     `worker_sessions` is keyed by the credential and **the credential is
+     *     per-connector rather than per-session**. Every session this account
+     *     fires presents the same one, so the row describes the fleet and not the
+     *     arrival.
      *
-     * It failed closed, and that made the gate unreachable on a first arrival.
-     * An arriving session's Routine is knowable only from `worker_sessions`,
-     * which is written by `creditDispatchArrival` *after* a bin is assigned — so
-     * the very first session from a newly registered Routine has no lineage,
-     * falls back to the static worker binding, and resolves to nothing whenever
-     * one worker identity serves more than one Routine, which is the shape this
-     * fleet is in. In production that refused every factory bin to the only
-     * surface that could do it: Brain fired the right Routine, the session
-     * arrived, and Brain answered NO_READY_BINS while its own bin sat READY.
-     * Nothing could ever clear it, because clearing it required taking a bin.
-     *
-     * The failure direction follows from what the gate protects, and that is
-     * worth stating because this codebase fails closed nearly everywhere: **fail
-     * closed when the unknown could let something false be recorded; fail open
-     * when the unknown could only waste a fire.** A capability grants no access —
-     * the manifest says in its own first authorized action that the access comes
-     * from where the worker runs — so the worst an admitted surface can do is
-     * report BLOCKED honestly, which every stage already handles. The
-     * independence gate below keeps failing closed, because a verdict from the
-     * session that wrote the code is exactly something false being recorded.
-     *
-     * So it refuses only what it *knows* is wrong, and the honest limitation is
-     * that in a fleet where several Routines share one worker identity it can
-     * know that about no arrival. What still decides which surface Brain
-     * *starts* is the router's own check on the same field; the remedy for the
-     * rest is a distinct worker identity per Routine, which is granted where the
-     * worker runs.
+     * So Brain cannot tell, before handing out a bin, which surface has turned
+     * up. The cost of admitting one that cannot push is a fire and an attempt,
+     * and the worker reports BLOCKED with the operation that was refused, which
+     * every stage already handles. The cost of refusing wrongly was a campaign
+     * that could never move. Between a gate that sometimes wastes a fire and one
+     * that sometimes stops all work, only the first is tolerable.
      */
-    if (bin.requiredCapabilities.length > 0 && input.principal.credentialId) {
-      const { getRoutine, getWorkerSession } = await import('../../repos/fleet.ts');
-      /*
-       * The *observed* surface only, and never the static worker binding.
-       *
-       * `lineageForWorker` prefers the observation and falls back to
-       * `fleet_routines.worker_id` for "a worker that reached Brain without an
-       * assignment" — which is every check-in, because the assignment is what
-       * this decision gates. That fallback is not evidence about an arriving
-       * session: where one worker identity serves several Routines it names
-       * whichever of them is enabled, so in production it told Brain that a
-       * session holding the oakwood repository was the V5 Routine and refused it
-       * the only bins it could actually do. **A binding is a fact about a
-       * Routine; it is not a fact about who just turned up.**
-       *
-       * `worker_sessions` is, because Brain wrote it from its own dispatch row
-       * when that credential last arrived and took a bin. No row means this
-       * credential has never been seen taking work, which is unknown — and
-       * unknown admits, for the reason above.
-       */
-      const observed = await getWorkerSession(input.principal.credentialId);
-      const routine =
-        observed && observed.workerId === input.workerId && observed.routineId
-          ? await getRoutine(observed.routineId)
-          : null;
-      if (routine) {
-        const has = new Set(routine.capabilities);
-        const missing = bin.requiredCapabilities.filter((tag) => !has.has(tag));
-        if (missing.length > 0) {
-          return {
-            ok: false,
-            reason:
-              `This surface does not carry ${missing.join(', ')}, which this bin needs. ` +
-              'Declaring it is an operator decision about what the surface can actually reach.',
-          };
-        }
-      }
-    }
 
     /*
      * A factory review is refused here, before the lease, for §23's reason.
@@ -259,13 +204,20 @@ export async function binAdmission(input: {
     if (bin.kind === 'FACTORY_REVIEW' && bin.factoryCampaignId) {
       const { reviewLineage } = await import('../factory/remote.ts');
       /*
-       * The *credential* this request authenticated with, never the `session_ref`
-       * the caller sent. That field is telemetry and its own tool says so; an
-       * independence decision taken on it would be a worker declaring itself
-       * independent. §23, at the factory's boundary.
+       * The session the worker reported, and the worker from the principal.
+       *
+       * I wrote the opposite first — the credential, never the `session_ref`,
+       * because that field is telemetry and a decision taken on it would be a
+       * worker declaring itself independent. The reasoning was right and the
+       * premise was wrong: **the credential is per-connector, not per-session**,
+       * so every session this account fires presents the same one and comparing
+       * credentials would make every reviewer look like the implementer. The
+       * finest identity this surface exposes is the provider session id the
+       * worker reports, validated against the presenting worker — which is
+       * exactly what §24's own independence evidence settles for, and it says so.
        */
       const lineage = await reviewLineage(bin.factoryCampaignId, {
-        sessionId: input.principal.credentialId,
+        sessionId: input.sessionRef ?? null,
         workerId: input.workerId,
       });
       if (!lineage.ok) return { ok: false, reason: lineage.reason ?? 'not independent of the work' };
@@ -330,7 +282,11 @@ export async function checkIn(input: {
      * earns a recorded refusal plus a fire backoff — so the next arrival is a
      * fresh session rather than the same one a second later.
      */
-    admit: await binAdmission({ workerId: input.workerId, principal: input.principal }),
+    admit: await binAdmission({
+      workerId: input.workerId,
+      principal: input.principal,
+      sessionRef: input.sessionRef ?? null,
+    }),
   });
   if (!assigned) return { assigned: false, reason: 'NO_READY_BINS' };
 

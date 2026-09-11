@@ -1457,33 +1457,43 @@ export async function campaignSpecFor(
 }
 
 /**
- * Who produced a bin's results, from the row Brain wrote rather than the one the
- * worker filled in.
+ * Who produced a bin's results: the session from the worker, the account and the
+ * worker identity from Brain's own dispatch row.
  *
- * `bin.leaseSessionRef` is telemetry the worker supplied — the tool that takes it
- * says so in those words — and the whole of §23 is that a compare-and-swap, and
- * an independence decision, must be on a value the claimant does not supply. So
- * the identity used for every factory event and for the review-independence floor
- * comes from `worker_sessions`, which Brain writes from its own dispatch row.
+ * The split is not a compromise, it is what the two facts are. Brain wrote
+ * `worker_sessions` from the dispatch it sent, so the account and the worker come
+ * from there and from nothing the worker said. But that row is keyed by the
+ * *credential*, and the credential is per-connector rather than per-session — so
+ * it cannot say which of an account's sessions this was, and the only thing that
+ * can is the session reference the worker reported.
  *
- * A bin with no observed arrival returns nulls, and every caller treats that as
- * unknown rather than as a pass.
+ * I had this the other way round first, on the reasoning that an independence
+ * decision must never rest on a value the claimant supplies. The reasoning holds
+ * and the premise did not: comparing credentials would have made every reviewer
+ * identical to every implementer and refused every review for ever. §24 settled
+ * the same question the same way and says so — a reported session, validated
+ * against a real credential of the presenting worker.
  */
 export async function binIdentity(
   bin: Bin,
 ): Promise<{ sessionId: string | null; workerId: string | null; accountId: string | null }> {
   const { workerSessionForBin } = await import('../../repos/fleet.ts');
   const observed = await workerSessionForBin(bin.id);
-  if (observed) {
-    return {
-      sessionId: observed.sessionRef,
-      workerId: observed.workerId,
-      accountId: observed.accountId,
-    };
-  }
-  // A live bin still carries its lease, which is the same fact from the other
-  // side. A finished one carries neither, and that is reported as unknown.
-  return { sessionId: bin.leaseCredentialId, workerId: bin.workerId, accountId: null };
+  return {
+    /*
+     * The session the worker reported, which is the finest identity this surface
+     * exposes. `worker_sessions.session_ref` is the *credential*, and the
+     * credential is per-connector rather than per-session — every session this
+     * account fires presents the same one — so it answers "which account and
+     * Routine" and cannot answer "which session". `bins.lease_session_ref` can,
+     * and unlike the lease itself it survives `finishBin`.
+     */
+    sessionId: bin.leaseSessionRef,
+    // These two are Brain's own: written from the dispatch row it sent, never
+    // from anything the worker said about itself.
+    workerId: observed?.workerId ?? bin.workerId,
+    accountId: observed?.accountId ?? null,
+  };
 }
 
 /**

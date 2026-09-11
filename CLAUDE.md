@@ -1887,42 +1887,41 @@ remote.
   `repository-write`, exist for exactly this: a reviewer needs to read and run,
   and only the bins that push need a surface that can push, so a one-pushing-
   surface fleet does not make the reviewer the implementer.
-- **A capability gates the fire, and the assignment only where the surface is
-  known.** `requiredCapabilities` was read by the router, which chooses which
-  Routine to fire — not the same question as which bin an arriving worker may be
-  handed, since any authenticated worker is offered the oldest ready bin in its
-  scopes. So it is checked at assignment too, from the Routine the authenticated
-  worker resolves to and never from anything the caller sent.
+- **A capability gates the fire, and nothing gates the assignment — after two
+  corrections, both recorded rather than quietly applied.**
+  `requiredCapabilities` decides which Routine Brain *fires*. Reading it again to
+  decide which bin an arriving worker may be *handed* is tempting, because any
+  authenticated worker is offered the oldest ready bin in its scopes and so a
+  surface fired for one bin can be handed another it cannot do. It was added, it
+  refused the only surface that could do the work, twice, for two different
+  reasons — and the second reason is why it cannot exist.
 
-  **It failed closed on unknown lineage, and that was wrong; the correction is
-  recorded rather than quietly applied.** An arriving session's Routine is
-  knowable only from `worker_sessions`, which is written *after* a bin is
-  assigned — so a first arrival has no lineage, falls back to the static worker
-  binding, and resolves to nothing whenever one worker identity serves several
-  Routines. In production that refused every factory bin to the only surface that
-  could do it: Brain fired the right Routine, the session arrived, and Brain
-  answered NO_READY_BINS over its own READY bin, with nothing able to clear it
-  because clearing it required taking a bin.
+  Failing closed on unknown lineage made it unreachable: an arrival has no lineage
+  until it takes a bin, which is the thing being gated. Then reading the *static*
+  worker → Routine binding attributed the arrival to whichever Routine is enabled,
+  which in a fleet sharing one worker identity is the wrong one. And reading the
+  *observed* lineage does not help either, because **`worker_sessions` is keyed by
+  the credential and the credential is per-connector rather than per-session** —
+  every session an account fires presents the same one, so the row describes the
+  fleet and cannot describe the arrival.
 
-  **Fail closed when the unknown could let something false be recorded; fail open
-  when the unknown could only waste a fire.** A capability grants no access — the
-  manifest's own first authorized action says the access comes from where the
-  worker runs — so the worst an admitted surface can do is report BLOCKED, which
-  every stage handles. Review independence keeps failing closed, because a
-  verdict from the session that wrote the code *is* something false being
-  recorded.
-
-  **And the attribution is the observation, never the binding.**
-  `lineageForWorker` prefers the observed session and falls back to
-  `fleet_routines.worker_id` for "a worker that reached Brain without an
-  assignment" — which is *every* check-in, because the assignment is what this
-  gate decides. That fallback is not evidence about who turned up: where one
-  worker identity serves several Routines it names whichever of them is enabled,
-  and in production it told Brain that a session holding the target repository
-  was the Routine that holds a different one, and refused it the only bins it
-  could do. **A binding is a fact about a Routine, not a fact about an arrival.**
-  So this reads `worker_sessions` — written by Brain from its own dispatch row
-  when that credential last took a bin — and no row means unknown, which admits.
+  So Brain cannot tell which surface has turned up before it hands out work. The
+  cost of admitting one that cannot push is a fire and an attempt, and the worker
+  reports BLOCKED naming the operation that was refused, which every stage
+  handles. The cost of refusing wrongly was a campaign that could never move.
+  **Between a gate that sometimes wastes a fire and one that sometimes stops all
+  work, only the first is tolerable** — and the rule it is an instance of is: fail
+  closed when the unknown could let something false be recorded, fail open when it
+  could only waste a fire.
+- **Review independence rests on the reported session, validated against a real
+  credential of the presenting worker.** I wrote the opposite first — the
+  credential, never the `session_ref`, because a decision on a value the claimant
+  supplies is a worker declaring itself independent. The reasoning holds; the
+  premise was wrong for the same reason as above. Comparing credentials would make
+  every reviewer identical to every implementer and refuse every review for ever.
+  §24 settled the same question the same way, and the account and worker identity
+  still come from Brain's own dispatch row rather than from anything the worker
+  said.
 - **A finished bin cannot say who finished it**, because `finishBin` clears the
   worker, the lease and the credential in the same statement. `worker_sessions`
   can, written from Brain's own dispatch row, and that is what every factory

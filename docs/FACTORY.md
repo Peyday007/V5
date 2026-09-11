@@ -442,31 +442,26 @@ set by a tick that then dies, rows cannot.
 A campaign is COMPLETE only when a review passed, nothing is gating, **and** the
 forge confirms a pull request carrying the integrated commit.
 
-Two capabilities gate which surface gets which bin. `requiredCapabilities` was
-only ever read by the router, which decides which Routine to *fire* — and that is
-a different question from which bin an arriving worker may be *handed*, because
-any authenticated worker that checks in is offered the oldest ready bin in its
-scopes. So `binAdmission` checks it at assignment too, read from the Routine the
-authenticated worker resolves to and never from anything the caller sent.
+Two capabilities decide which surface Brain *fires* for a factory bin:
+`repository` is reading and running, `repository-write` is pushing a branch, and
+only the three bins that write require it.
 
-It refuses only a surface it has **observed arriving** and knows lacks the
-capability, and the two halves of that sentence were each wrong once.
+**Nothing gates the assignment, and that is the end of two corrections.** Reading
+`requiredCapabilities` again when deciding which bin an arriving worker may be
+handed is tempting — any authenticated worker is offered the oldest ready bin in
+its scopes — and it was added, and it refused the only surface that could do the
+work twice. Failing closed on unknown lineage made it unreachable, because an
+arrival has no lineage until it takes a bin. Reading the static worker → Routine
+binding attributed the arrival to whichever Routine is enabled, which in a fleet
+sharing one worker identity is the wrong one. And the observed lineage cannot
+help either: `worker_sessions` is keyed by the credential, and **the credential is
+per-connector rather than per-session**, so the row describes the fleet.
 
-Failing closed on unknown lineage made the gate unreachable: an arriving
-session's Routine comes from `worker_sessions`, written *after* a bin is
-assigned, so a first arrival has none. The rule the direction follows from is
-worth stating, because this codebase fails closed nearly everywhere: **fail
-closed when the unknown could let something false be recorded; fail open when the
-unknown could only waste a fire.** A capability grants no access, so the worst an
-admitted surface can do is report BLOCKED honestly.
-
-Reading the *static* worker → Routine binding as the attribution was the second
-error. `lineageForWorker` falls back to it for "a worker that reached Brain
-without an assignment", which is every check-in — and where one worker identity
-serves several Routines it names whichever is enabled. In production that told
-Brain a session holding the target repository was the Routine that holds a
-different one, and refused it the only bins it could do. A binding is a fact
-about a Routine, not about who just turned up, so only the observation counts.
+Brain therefore cannot tell which surface has turned up before handing out work.
+Admitting one that cannot push costs a fire and an attempt, and the worker reports
+BLOCKED naming the refused operation. Refusing wrongly cost a campaign that could
+never move. Between a gate that sometimes wastes a fire and one that sometimes
+stops all work, only the first is tolerable.
 
 The split itself is what makes
 an independent review possible on a fleet where only some surfaces can push.
