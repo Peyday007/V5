@@ -432,7 +432,12 @@ set by a tick that then dies, rows cannot.
 5. **`FACTORY_DELIVER`** — open or update exactly one pull request, using a
    title and body Brain composed from rows. The worker performs it because the
    credential that may write to the repository lives where the worker runs; it
-   is prohibited from merging, approving, closing or changing a single file.
+   is prohibited from merging, approving, closing or changing a single file. A
+   bin that *finished* and still left no request Brain can confirm blocks the
+   campaign with the reason rather than reading as patience — the contract
+   verified the request before letting the bin complete, so a completed bin means
+   it was right then and is not right now. The block clears by itself: ingestion
+   runs at the top of every tick.
 
 A campaign is COMPLETE only when a review passed, nothing is gating, **and** the
 forge confirms a pull request carrying the integrated commit.

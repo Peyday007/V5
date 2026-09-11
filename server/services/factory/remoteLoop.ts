@@ -757,9 +757,10 @@ async function runRemoteTick(
    * rule is that a dependency is satisfied by integration rather than by
    * implementation, so nothing downstream may start until these branches have
    * been brought together on one tree and the contract's commands have passed on
-   * it. The integrator is a different session from every implementer, which is
-   * what makes the commit a pull request carries one nobody who wrote it
-   * assembled.
+   * it. It is also a separate lease, so on a fleet with more than one surface
+   * that can push it is a separate session — which is a property of the fleet
+   * rather than a guarantee of this stage, and is never reported as one. What the
+   * stage does guarantee is that only it moves the campaign's branch.
    */
   if (implemented.length > 0) {
     if (liveBinOfKind(liveBins, 'FACTORY_INTEGRATE')) {
@@ -890,6 +891,32 @@ async function runRemoteTick(
       return report;
     }
     if (fresh.prUrl === null) {
+      /*
+       * A delivery bin that *finished* and still left no pull request Brain can
+       * confirm is not patience, it is stuck — and stuck has to say so.
+       *
+       * The contract verifies the request before it lets the bin complete, so a
+       * completed bin means the request was right at that moment and is not right
+       * now: something moved its head, retargeted it or closed it. That is a
+       * person's to look at, and the block clears by itself — ingestion runs at
+       * the top of every tick, so the next pass after the request is sound again
+       * records it and the campaign carries on.
+       */
+      const finished = usable.filter((bin) => bin.state === 'COMPLETE');
+      if (finished.length > 0) {
+        await patchCampaign(fresh.id, {
+          state: 'BLOCKED',
+          blockerKind: 'EXTERNAL_CREDENTIAL_REQUIRED',
+          blockerDetail:
+            `Bin ${finished[0]?.id} delivered a pull request that Brain can no longer confirm ` +
+            `points at ${head.slice(0, 12)}. Its head may have been moved, its base retargeted ` +
+            'or the request closed. Brain will record it again by itself once it is sound; ' +
+            'nothing here needs repeating.',
+          stageDetail: 'the pull request no longer matches the work',
+        });
+        report.notes.push(`the delivered pull request no longer matches ${head.slice(0, 12)}`);
+        return report;
+      }
       report.notes.push('waiting for the pull request to be opened or updated');
       await patchCampaign(fresh.id, {
         state: 'ASSEMBLING',
