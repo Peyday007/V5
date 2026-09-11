@@ -314,6 +314,65 @@ slot, fired, and the worker that arrived was the one registered for that family.
 Item 8's failure mode — a ready eligible bin waiting on an unrelated cron — is
 not reachable from this fleet, because there is no unrelated cron.
 
+## The boundary as production holds it
+
+```
+admin routing show
+
+  airynworker2   wkr_1cdd82cfb2a54faf8edd  families=[RESEARCH,GENERAL] repositories=[] capabilities=[]
+      Deal Dispatch research, audit roles and Russell turns only; no repository work.
+      ACC-14 showed one worker identity serving every surface, so Factory sessions
+      claimed Step 12A research and audit bins.  (set by admin:usr_14439966398243339341)
+  calebworker1   wkr_1db1193323454ee69bb1  families=[RESEARCH,GENERAL] repositories=[] capabilities=[]
+      Research and Russell work only; no repository work. Registered explicitly so
+      the boundary is a row rather than an implication.  (set by admin:usr_14439966398243339341)
+  derived (no explicit row — scopes imply the family, never repository work):
+      deal-dispatch                        wkr_02392cb548e14f8e96db
+      verification-worker-research-audit-a wkr_f316703921d14060ae2c
+      verification-worker-research-audit-b wkr_a1b5b1d1cd4c472e8632
+```
+
+**No worker in this Brain carries a `FACTORY` family or any repository.** The
+listing shows the derived workers too, because "nothing is listed" and "nothing
+is scoped" would otherwise read the same — and a worker with no row is not
+unrestricted, it serves what its scopes imply and no repository work.
+
+## Both directions, in production, about the same worker
+
+The bin Brain had fired and completed twenty minutes earlier:
+
+```
+admin routing check airynworker2 bin_a3eed54362ef4281b3b0
+
+  bin        bin_a3eed54362ef4281b3b0  DETERMINISTIC_CHECK  COMPLETE  class=—
+  family     GENERAL  repository=—
+  worker     airynworker2  explicit families=[RESEARCH,GENERAL] repositories=[]
+  decision   WOULD BE HANDED IT
+  reason     Deal Dispatch research, audit roles and Russell turns only; no
+             repository work. ACC-14 showed one worker identity serving every
+             surface, so Factory sessions claimed Step 12A research and audit bins.
+```
+
+Same worker, same Brain, same minute: handed its own work, refused the
+repository bin. A boundary that only ever refuses is indistinguishable from one
+that refuses everything, and this is the half that shows the difference.
+
+## And the fire, refused by name
+
+```
+fleet explain-route bin_9844af85486b46fa9635
+  decision   NO_SURFACE_SERVES_THIS_FAMILY
+  reason     No enabled Routine is bound to a worker that may be handed FACTORY
+             work. That is a routing scope an operator sets, not a capacity
+             problem: register a worker for this family, or widen one whose
+             scope was narrowed too far.
+```
+
+Both halves, then: the claim is refused at the admission hook and the fire is
+refused at the router, and each names the dimension rather than the nearest
+available excuse. An operator reading "no capable surface" would go and look at
+capabilities; this one is told it is a scope and how to set it.
+
 ## How to read a refusal, later
 
 When a bin is sitting `READY` and nobody is taking it, the question is which
@@ -328,25 +387,6 @@ fleet explain-route <bin>              # which surface Brain would fire, and wha
 cannot describe a scope the claim would not apply. Neither writes anything, and
 neither authenticates anything: a real claim is still decided inside the claim
 loop at the moment it is made.
-
-## The checks
-
-- **SQLite suite**: 2143 passed, 37 skipped, 98 files (1 skipped).
-- **Postgres suite**: the same suite against the other backend,
-  run 34646667102 — `completed success`. `040_worker_routing.sql` and its
-  Postgres twin `031_worker_routing.sql` both apply, and `worker_routing`
-  carries the `seq` identity column every cursor-ordered query needs.
-- **Both boot paths**: a fresh database applied every migration and answered
-  `healthz`; an existing database migrated forward and answered after a
-  restart. `Deploy` does the second one for real on every release — it removes
-  a secret, which restarts the machine, and then re-runs the hosted
-  verification against what came back.
-- **Deployed only from canonical `production`**, through `Deploy`, with the
-  first job refusing any other ref and the `production` environment's branch
-  policy refusing one the workflow guard would miss.
-- **Paid API executions recorded: 0.** Nothing here added a provider, a key or a
-  spend path; the deployed Brain still has no `ANTHROPIC_API_KEY` and no
-  `BRAIN_PROVIDER`.
 
 ## The decision matrix, rehearsed before it was taken
 
@@ -394,3 +434,42 @@ bin_fa83dcb76e014cde8a11 FACTORY_REVIEW COMPLETE needs [repository]
 A factory review bin fired at the *research* Routine, and the two Oakwood
 sessions refused on independence rather than on scope — because there was no
 scope to refuse them on.
+
+## The checks
+
+- **SQLite suite**: 2143 passed, 37 skipped, 98 files (1 skipped).
+- **Postgres suite**: the same suite against the other backend,
+  run 34646667102 — `completed success`. `040_worker_routing.sql` and its
+  Postgres twin `031_worker_routing.sql` both apply, and `worker_routing`
+  carries the `seq` identity column every cursor-ordered query needs.
+- **Both boot paths**: a fresh database applied every migration and answered
+  `healthz`; an existing database migrated forward and answered after a
+  restart. `Deploy` does the second one for real on every release — it removes
+  a secret, which restarts the machine, and then re-runs the hosted
+  verification against what came back.
+- **Deployed only from canonical `production`**, through `Deploy`, with the
+  first job refusing any other ref and the `production` environment's branch
+  policy refusing one the workflow guard would miss.
+- **Paid API executions recorded: 0.** Nothing here added a provider, a key or a
+  spend path; the deployed Brain still has no `ANTHROPIC_API_KEY` and no
+  `BRAIN_PROVIDER`.
+- **Production runs commit `3ba54e9`**, deployed 21:27–21:42Z from `production`.
+  Commits after it on that branch are this file and nothing else.
+
+## What is left for a person, and what is not
+
+Nothing in this correction is waiting on anybody. Two things a person *may*
+choose to do, neither of which is a completion dependency:
+
+- **Fix `friend-2`'s deployment secret** and `fleet set-state --kind routine
+  --ref trig_01HR74TmLtm8L21sh2Xryqhq --to ENABLED`. That surface is quarantined
+  on its own account's `AUTH 401`, which is a fact about its credential. Brain
+  runs on one healthy Routine without it.
+- **Bind a second worker to a second healthy Routine**, which raises the reported
+  audit-independence tier from `SESSION_SEPARATED` to `WORKER_SEPARATED` or
+  `ACCOUNT_SEPARATED` with no code change and no deployment.
+
+And one rule for whoever authorizes the next repository: a grant in
+`repositoryEnvelope.ts`, a `worker_routing` row naming that repository, and push
+access where that worker runs. Three acts, reviewed separately, and Oakwood is
+not the executor of any of them.
