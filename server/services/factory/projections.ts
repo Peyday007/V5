@@ -51,7 +51,14 @@ const BLOCKER_REMEDIES: Record<FactoryBlockerKind, string> = {
   UNIT_EXHAUSTED_ATTEMPTS: 'A unit exhausted its attempts; raise its ceiling or replan the work.',
   CONTRADICTORY_CONTRACT: 'Resolve the contradiction in the change request before continuing.',
   AWAITING_HUMAN_RELEASE: 'A person needs to approve or refuse the release.',
-  EXTERNAL_CREDENTIAL_REQUIRED: 'Provide the external credential this campaign needs.',
+  /*
+   * Not "give Brain the credential". Brain holds none and must not: access to a
+   * repository is granted where the worker runs, which is §27's mechanism rather
+   * than a preference. The remedy has to name the place a person can actually act.
+   */
+  EXTERNAL_CREDENTIAL_REQUIRED:
+    'Grant the repository where the workers run — attach it to a worker surface. ' +
+    'Brain holds no repository credential and must not.',
 };
 
 /** A unit somebody is actually working on right now, as opposed to waiting or done. */
