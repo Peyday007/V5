@@ -86,22 +86,31 @@ jobs:
           anon=$(curl -s -o /dev/null -w '%{http_code}' "$base/api/projects" || echo 000)
           [ "$anon" = "401" ] || { echo "::error::/api/projects answered $anon to an anonymous caller; expected 401"; failed=1; }
 
-          # Connected sites exists and refuses an anonymous caller. A 404 here
-          # would mean the route is absent — the connector deployed away again.
-          sites=$(curl -s -o /dev/null -w '%{http_code}' "$base/api/russell/projects/x/sites" || echo 000)
-          echo "GET /api/russell/projects/x/sites -> $sites"
-          [ "$sites" = "401" ] || { echo "::error::Connected sites answered $sites; expected 401. A 404 means the route is not deployed."; failed=1; }
-
-          # The client bundle must not mention the console.
+          # The client bundle is the only unauthenticated evidence of what
+          # actually shipped.
+          #
+          # An /api/... probe cannot be that evidence, and the first version of
+          # this file wrongly thought it could: the authentication gate answers
+          # before routing, so a path that does not exist at all returns 401
+          # exactly like one that does. Asserting "401 means the route is
+          # deployed" would have been a check that passes on a Brain with no
+          # Connected sites in it — worse than no check, because it reads as
+          # proof.
           asset=$(curl -s "$base/" | grep -oE '/assets/index-[A-Za-z0-9]+\.js' | head -1)
-          if [ -n "$asset" ]; then
-            if curl -s "$base$asset" | grep -q '/operator'; then
+          if [ -z "$asset" ]; then
+            echo "::error::Could not find the client bundle, so nothing below could be checked."
+            failed=1
+          else
+            body=$(curl -s "$base$asset")
+            if grep -q '/operator' <<<"$body"; then
               echo "::error::The deployed client bundle still references /operator."
               failed=1
             fi
-            echo "bundle $asset carries no /operator reference"
-          else
-            echo "::warning::Could not find the client bundle to check."
+            if ! grep -q 'Connected sites' <<<"$body"; then
+              echo "::error::The deployed client bundle has no Connected sites section, so this build predates the replacement."
+              failed=1
+            fi
+            echo "bundle $asset: no /operator, and Connected sites present"
           fi
 
           exit $failed

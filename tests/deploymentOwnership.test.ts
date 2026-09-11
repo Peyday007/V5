@@ -95,9 +95,17 @@ describe('one branch owns production', () => {
     // It must not be able to change anything it is watching.
     expect(guard).not.toMatch(/^\s*flyctl\s+deploy\b/m);
     expect(guard).not.toContain('FLY_API_TOKEN');
-    // And it checks the replacement is still there, not only that the old
-    // thing is gone — a blank Brain would pass the first check alone.
-    expect(guard).toContain('/api/russell/projects/x/sites');
+    /*
+     * And it checks the replacement is still there, not only that the old thing
+     * is gone — a Brain with neither would pass the first check alone.
+     *
+     * The evidence is the deployed client bundle, not an API probe. The
+     * authentication gate answers before routing, so a path that does not exist
+     * returns 401 exactly like one that does; asserting otherwise would be a
+     * check that passes on a build with no Connected sites in it.
+     */
+    expect(guard).toContain("grep -q 'Connected sites'");
+    expect(guard).not.toContain('/api/russell/projects/x/sites');
   });
 
   it('tells a future session the rule, in the file sessions are told to read', () => {
