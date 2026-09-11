@@ -479,6 +479,41 @@ malformed is still refused, and every consumer reads the outcome before the sha.
 The correction is recorded rather than quietly applied, because the original
 reasoning was half right and the half that was wrong is the half worth keeping.
 
+**And a blocker about the surface is not a blocker about the work.** A `BLOCKED`
+integration refused every implemented unit and charged each one an attempt,
+whatever had gone wrong. That is right for a conflict or a command that exited
+non-zero on the merged tree: the branches disagree, or the contract rejects the
+tree they make, and the thing that has to change is the code. It is wrong for a
+blocker the integrator hit *before* judging anything, because nothing examined
+the work — so two forge-confirmed commits were being charged for a condition that
+was never about them. §23's correction, one altitude down: **a refusal is not
+misconduct.**
+
+Which one it is, is **derived from the rows rather than read out of the sentence
+about it**: no conflict and no non-zero exit code means nothing judged the tree. A
+worker cannot declare itself surface-blocked to escape a failed verification,
+because the exit codes it reported about what it ran are what decide. A surface
+block leaves every unit `IMPLEMENTED`, spends no attempt, and offers the stage
+again so a surface that *can* push may take it — bounded at three, after which the
+campaign is `EXTERNAL_CREDENTIAL_REQUIRED` with the remedy named: grant the
+repository where the workers run. Brain holds no credential and must not.
+
+**The bound is load-bearing, and so is its twin one move along.** A work-related
+block stops by itself, because refusing the units spends their attempts. A surface
+block deliberately spends nothing, so without a ceiling the stage would be handed
+out for ever to surfaces that cannot perform it.
+
+And returning a unit to `READY` is exactly the state the implementation ingest
+acts on. **An acceptance is not idempotent by its own effect**, and believing it
+was is the same mistake the refusal already taught: the guard "the unit is no
+longer READY" holds only while nothing else can write that state, and a refused
+integration writes it. The completed implementation bin still held the report
+Brain had believed, so the next tick read it again and put the unit straight back
+to `IMPLEMENTED` at the commit the integration had just refused — refuse,
+re-accept, integrate, refuse, for ever. **A loop that looks like progress is worse
+than a stop.** Both answers are now idempotent by the **bin**, which cannot
+change, rather than by a state two other transitions can write.
+
 The split itself is what makes
 an independent review possible on a fleet where only some surfaces can push.
 `repository` is reading and running; `repository-write` is pushing a branch, and

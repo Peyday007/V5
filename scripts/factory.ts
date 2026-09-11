@@ -512,10 +512,95 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * Answer a factory stage bin that parked, when the platform is what spent its
+     * attempts.
+     *
+     * Two guarded transitions in one command, because either alone leaves the bin
+     * stuck: an exhausted bin cannot be reopened (`reopenNeedsHumanBin` refuses it
+     * by name, because reopening it would produce a bin nothing can assign), and a
+     * regranted bin that is still NEEDS_HUMAN is not handed out. Neither resets
+     * anything — the attempt count, the completion refusals, the unit results and
+     * every event stay exactly where they are, and the generation advances so every
+     * worker that held the bin before is fenced.
+     *
+     * The reason is a code from a closed set rather than free text, for the reason
+     * `step10.ts` already wrote down: a caller that can write its own audit trail
+     * is a caller whose audit trail says whatever it wanted. An operator action
+     * with no truthful cause recorded is invariant 3 again.
+     */
+    case 'answer-bin': {
+      const binId = flagString(flags, 'bin') ?? fail('--bin is required');
+      const to = Number(flagString(flags, 'to') ?? '0');
+      if (!Number.isInteger(to) || to < 1 || to > 40) {
+        fail('--to must be a new assignment ceiling between 1 and 40');
+      }
+      const REASONS: Record<string, string> = {
+        /*
+         * The first one, and the defect it is named for: the completion contract
+         * could not express the outcome the worker actually had. It reported
+         * BLOCKED with the operation its surface had refused, the schema demanded
+         * a commit sha for a branch it had deliberately not pushed, and the bin
+         * retired having said exactly the right thing on every attempt. An honest
+         * blocker is a result; a contract that cannot accept one turns it into an
+         * exhausted bin.
+         */
+        'contract-refused-honest-report':
+          'Attempts spent being refused for a report that was correct — the completion contract ' +
+          'could not express the outcome the worker actually had, so the honest answer was ' +
+          'unsubmittable. Fixed in the platform. Not spent on the work failing.',
+        'platform-defect':
+          'Attempts spent on a Brain-side defect that left the bin nothing it could satisfy. ' +
+          'Not spent on the work failing.',
+        'surface-blocked':
+          'Attempts spent on an execution-surface failure — the worker could reach Brain and not ' +
+          'the repository — which the operator has since corrected where the workers run. Not ' +
+          'spent on the work failing.',
+      };
+      const code = flagString(flags, 'why') ?? 'platform-defect';
+      const reason = REASONS[code];
+      if (!reason) fail(`unknown reason code "${code}". One of: ${Object.keys(REASONS).join(', ')}`);
+      const { describeBin, reopenParkedBin } = await import('../server/services/bins/service.ts');
+      const { regrantBinAttempts } = await import('../server/repos/bins.ts');
+      const before = await describeBin(binId);
+      if (!before) fail('no such bin');
+      const users = await listUsers();
+      const operator = users.find((candidate) => candidate.isBrainAdmin && !candidate.disabled);
+      if (!operator) fail('no administrator exists to attribute this to');
+      const regranted = await regrantBinAttempts({ binId, maxAttempts: to, reason: reason! });
+      process.stdout.write(
+        `regrant raised=${regranted.raised} attempts ` +
+          `${before!.attemptCount}/${before!.maxAttempts} -> ` +
+          `${regranted.bin?.attemptCount ?? '—'}/${regranted.bin?.maxAttempts ?? '—'}\n`,
+      );
+      if (before!.state !== 'NEEDS_HUMAN') {
+        process.stdout.write(`bin is ${before!.state}; only a parked bin is reopened\n`);
+        break;
+      }
+      const reopened = await reopenParkedBin({
+        binId,
+        // The id rather than the address: an audit row needs an author it can
+        // resolve, and never a personal detail it has no use for.
+        operator: `operator:${operator!.id}`,
+        reason: reason!,
+      });
+      if (!reopened.ok) {
+        process.stdout.write(`FACTORY REFUSED: reopen ${reopened.refusal} — ${reopened.reason}\n`);
+        process.exitCode = 1;
+        break;
+      }
+      process.stdout.write(
+        `reopened ${binId} ${reopened.previousState} -> ${reopened.bin.state}, ` +
+          `generation ${reopened.previousGeneration} -> ${reopened.generation}, ` +
+          `attempts ${reopened.bin.attemptCount}/${reopened.bin.maxAttempts} unchanged\n`,
+      );
+      break;
+    }
+
     default:
       process.stdout.write(
         'commands: fleet, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
-          '  remote-tick, campaigns, bins, status, release\n',
+          '  remote-tick, campaigns, bins, status, answer-bin, release\n',
       );
   }
 

@@ -825,6 +825,15 @@ export async function acceptUnitReport(input: {
   files: string[];
   workerId: string;
   sessionId: string | null;
+  /**
+   * The bin whose report this is, recorded so the acceptance is idempotent by the
+   * bin rather than by the unit's state. "It is no longer READY" was the only
+   * guard, and it holds exactly while nothing else can return a unit to READY — a
+   * refused integration does, and then this bin's old report was read again and
+   * accepted the unit straight back to the commit the integration had just
+   * refused. A loop that looks like progress is worse than a stop.
+   */
+  binId: string;
 }): Promise<{ accepted: boolean; reason: string }> {
   const claimed = await claimUnits({
     campaignId: input.campaign.id,
@@ -874,6 +883,7 @@ export async function acceptUnitReport(input: {
     evidenceClass: 'MEASURED',
     detail: {
       unitKey: input.unit.unitKey,
+      binId: input.binId,
       branch: input.report.branch,
       headSha: input.report.headSha,
       filesForgeReported: input.files.length,

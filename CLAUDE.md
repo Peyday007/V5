@@ -1976,6 +1976,36 @@ remote.
   third refusals were for the branch *name*, which the attempt counter had just
   changed underneath them. The ledger is the guard: `UNIT_FAILED` carries the bin,
   and a bin's report for a unit is refused once however many ticks read it.
+
+  **And an acceptance is not idempotent by its own effect either — believing it
+  was is the same mistake one move later, and the correction is recorded rather
+  than quietly applied.** "The unit is no longer READY" holds only while nothing
+  else can write that state, and a refused integration writes it. The completed
+  implementation bin still held the report Brain had believed, so the next tick
+  read it again and put the unit straight back to `IMPLEMENTED` at the commit the
+  integration had just refused: refuse, re-accept, integrate, refuse, for ever. **A
+  loop that looks like progress is worse than a stop.** Both answers are keyed on
+  the **bin**, which cannot change, rather than on a state two other transitions
+  can write.
+- **An honest blocker is a result, and a contract that cannot accept one turns it
+  into an exhausted bin.** `headSha` was required of every report, on the reasoning
+  that a worker which got far enough to push has a commit. Some do; one blocked
+  *before* pushing has nothing to name, and the first hosted integration reported
+  `BLOCKED` with the operation its surface had refused, was told to produce a
+  40-character commit for a branch it had deliberately not pushed, and retired at
+  `NEEDS_HUMAN` having said exactly the right thing on both attempts. Required of
+  `IMPLEMENTED`, optional of `BLOCKED`, still refused when present and malformed.
+- **A blocker about the surface is not a blocker about the work**, and which one it
+  is, is derived from the rows. A conflict, or a command that exited non-zero on
+  the merged tree, is a fact about the code and the units go back and are charged
+  for it. A blocker with neither means nothing judged the tree, so there is nothing
+  for the work to answer: every unit keeps its commit, no attempt is spent, and the
+  stage is offered again for a surface that can push — bounded at three, after
+  which the campaign is `EXTERNAL_CREDENTIAL_REQUIRED` naming a remedy where the
+  workers run. §23's sentence one altitude down: **a refusal is not misconduct.** A
+  worker cannot declare itself surface-blocked to escape a failed verification,
+  because the exit codes it reported about what it ran are what decide — prose
+  never does.
 - **A unit out of attempts stops the campaign before any review.** `outstanding`
   excludes FAILED, correctly — nothing more is going to happen to it — and the
   effect of that alone was a campaign whose only unit had retired walking into the

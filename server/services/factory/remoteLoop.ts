@@ -30,7 +30,7 @@
  * then dies before doing the work it claimed; rows cannot.
  */
 import type { Bin } from '../../domain/types.ts';
-import type { FactoryCampaign, FactoryChangeRequest } from '../../domain/factory.ts';
+import type { FactoryBlockerKind, FactoryCampaign, FactoryChangeRequest } from '../../domain/factory.ts';
 import {
   advanceUnitAttempt,
   claimCampaignTick,
@@ -211,18 +211,19 @@ async function ingestUnitsBin(
      * no-op the second time because of what the first one changed.
      */
     if (unit.state !== 'READY') continue;
+    // And this bin's report for this unit has not already been acted on. The state
+    // alone is not the guard: a refused integration returns a unit to READY.
+    if (await alreadyActedOn(campaign.id, unit.id, bin.id)) continue;
     if (unitReport.outcome === 'BLOCKED') {
       report.notes.push(`${key} reported blocked: ${unitReport.blockedReason ?? 'no reason given'}`);
-      if (!(await alreadyRefused(campaign.id, unit.id, bin.id))) {
-        await refuseUnit(
-          campaign,
-          unit,
-          'WORKER_ERROR',
-          unitReport.blockedReason ?? 'The worker reported it blocked without a reason.',
-          report,
-          bin.id,
-        );
-      }
+      await refuseUnit(
+        campaign,
+        unit,
+        'WORKER_ERROR',
+        unitReport.blockedReason ?? 'The worker reported it blocked without a reason.',
+        report,
+        bin.id,
+      );
       continue;
     }
     const verdict = await verifyUnitReport(
@@ -238,16 +239,14 @@ async function ingestUnitsBin(
     );
     if (!verdict.ok) {
       report.notes.push(`${key} was not confirmed by the forge: ${verdict.problems.join(' ')}`);
-      if (!(await alreadyRefused(campaign.id, unit.id, bin.id))) {
-        await refuseUnit(
-          campaign,
-          unit,
-          'OUT_OF_SCOPE_MUTATION',
-          verdict.problems.join(' '),
-          report,
-          bin.id,
-        );
-      }
+      await refuseUnit(
+        campaign,
+        unit,
+        'OUT_OF_SCOPE_MUTATION',
+        verdict.problems.join(' '),
+        report,
+        bin.id,
+      );
       continue;
     }
     const accepted = await acceptUnitReport({
@@ -257,6 +256,7 @@ async function ingestUnitsBin(
       files: verdict.files,
       workerId: who.workerId ?? 'unknown-worker',
       sessionId: who.sessionId,
+      binId: bin.id,
     });
     if (!accepted.accepted) {
       report.notes.push(`${key} could not be recorded: ${accepted.reason}`);
@@ -409,24 +409,32 @@ async function refuseUnit(
 }
 
 /**
- * Has this bin's report for this unit already been refused?
+ * Has this bin's report for this unit already been acted on, either way?
  *
- * Read from the ledger, because a refusal is not idempotent by its own effect the
- * way an acceptance is. An accepted report leaves the unit `IMPLEMENTED`, so the
- * next tick skips it; a refused one puts the unit back to `READY`, which is
- * exactly the state the next tick offers the same completed bin for again. In
- * production that charged three attempts in one pass and retired the unit
- * `FAILED` before any worker had a second go — and the second and third refusals
- * were for the branch *name*, which the attempt counter had just changed
- * underneath them. A refusal has to be recognised rather than repeated.
+ * Read from the ledger, because neither outcome is idempotent by its own effect.
+ *
+ * A refusal puts the unit back to `READY`, which is exactly the state the next
+ * tick offers the same completed bin for again. In production that charged three
+ * attempts in one pass and retired the unit `FAILED` before any worker had a
+ * second go — and the second and third refusals were for the branch *name*, which
+ * the attempt counter had just changed underneath them.
+ *
+ * **An acceptance is not idempotent by its effect either, and believing it was is
+ * the same mistake one move later.** It leaves the unit `IMPLEMENTED`, so the
+ * state guard holds while nothing else returns it to `READY` — and a refused
+ * integration does precisely that. Then this bin's old report is read again and
+ * accepts the unit straight back to the commit the integration just refused, on
+ * the next tick, for ever: refuse, re-accept, integrate, refuse. So the question
+ * is asked of the bin, which cannot change, rather than of a state two other
+ * transitions can write.
  */
-async function alreadyRefused(
+async function alreadyActedOn(
   campaignId: string,
   unitId: string,
   binId: string,
 ): Promise<boolean> {
   const events = await listFactoryEvents(campaignId, {
-    kinds: [FACTORY_EVENT_KINDS.unitFailed],
+    kinds: [FACTORY_EVENT_KINDS.unitFailed, FACTORY_EVENT_KINDS.unitImplemented],
     limit: 500,
   });
   return events.some((event) => {
@@ -479,16 +487,42 @@ async function ingestIntegrateBin(
       (failed.length > 0
         ? `\`${failed[0]?.command}\` exited ${failed[0]?.exitCode} on the merged tree.`
         : 'The integration was reported blocked.');
-    for (const unit of implemented) {
-      if (await alreadyRefused(campaign.id, unit.id, bin.id)) continue;
-      await refuseUnit(
-        campaign,
-        unit,
-        parsed.value.conflicts.length > 0 ? 'INTEGRATION_CONFLICT' : 'VERIFICATION_FAILED',
-        why,
-        report,
-        bin.id,
-      );
+    /*
+     * Which of the two things went wrong, derived from the rows rather than read
+     * out of the sentence about it.
+     *
+     * A conflict, or a command that exited non-zero on the merged tree, is a fact
+     * about the *work*: the branches disagree, or the contract rejects the tree
+     * they make, and the thing that has to change is the code. Sending the units
+     * back is right, and costing them an attempt is right.
+     *
+     * A blocker with neither is a fact about the *surface*. The integrator never
+     * got as far as judging anything — no credential for the remote, a host that
+     * refused it, a checkout it could not make — so nothing examined the work and
+     * there is nothing for the work to answer. Refusing the units there charges
+     * two forge-confirmed commits for a condition that was never about them,
+     * which is §23's correction one altitude down: a refusal is not misconduct.
+     * The units stay IMPLEMENTED, the stage becomes available again, and a
+     * surface that *can* push may take it.
+     *
+     * Derived, never declared: a worker saying "this is a surface problem" would
+     * be model prose deciding state, and a worker that wanted to avoid the cost
+     * of a failed verification could say it. The conflict list and the exit codes
+     * are things it reported about what it ran, and Brain reads them.
+     */
+    const aboutTheWork = parsed.value.conflicts.length > 0 || failed.length > 0;
+    if (aboutTheWork) {
+      for (const unit of implemented) {
+        if (await alreadyActedOn(campaign.id, unit.id, bin.id)) continue;
+        await refuseUnit(
+          campaign,
+          unit,
+          parsed.value.conflicts.length > 0 ? 'INTEGRATION_CONFLICT' : 'VERIFICATION_FAILED',
+          why,
+          report,
+          bin.id,
+        );
+      }
     }
     await recordFactoryEvent({
       campaignId: campaign.id,
@@ -498,13 +532,22 @@ async function ingestIntegrateBin(
       evidenceClass: 'MEASURED',
       detail: {
         reason: why.slice(0, 500),
+        // The discriminator, on the row, so the ceiling below counts the same
+        // fact this ingest decided on rather than re-deriving it from prose.
+        surface: !aboutTheWork,
+        binId: bin.id,
         conflicts: parsed.value.conflicts,
         failedCommands: failed.map((command) => command.command),
         units: implemented.map((unit) => unit.unitKey),
       },
     });
     report.ingested.push(`integrate:${bin.id}`);
-    report.notes.push(`the integration did not land: ${why}`);
+    report.notes.push(
+      aboutTheWork
+        ? `the integration did not land: ${why}`
+        : `the integration did not land and the work was never judged: ${why} ` +
+            'The units keep their commits and the stage is offered again.',
+    );
     return true;
   }
 
@@ -687,16 +730,49 @@ function stalledStage(bins: Bin[], kind: string): { detail: string } | null {
   return null;
 }
 
-/** Stop, with a reason somebody can act on, rather than handing a stage out again. */
+/**
+ * How many integrations have been blocked by the surface rather than by the work.
+ *
+ * Read from the ledger, on the discriminator the ingest wrote, because the bound
+ * has to exist: a work-related block refuses the units and spends their attempts,
+ * so it stops by itself, and a surface block deliberately spends nothing — which
+ * without a ceiling is a stage handed out for ever to surfaces that cannot
+ * perform it. Three is the same number `MAX_BINS_PER_STAGE` uses, and the fourth
+ * is a person's: grant the repository where the workers run, or stop.
+ */
+async function surfaceBlockedIntegrations(campaignId: string): Promise<number> {
+  const events = await listFactoryEvents(campaignId, {
+    kinds: [FACTORY_EVENT_KINDS.integrationRejected],
+    limit: 200,
+  });
+  const bins = new Set<string>();
+  for (const event of events) {
+    const detail = (event.detail ?? {}) as { surface?: unknown; binId?: unknown };
+    if (detail.surface !== true) continue;
+    bins.add(typeof detail.binId === 'string' ? detail.binId : event.id);
+  }
+  return bins.size;
+}
+
+/**
+ * Stop, with a reason somebody can act on, rather than handing a stage out again.
+ *
+ * The kind is a parameter because the two reasons a stage stops have different
+ * remedies and a blocker row naming the wrong one is the row somebody will
+ * believe later: a stage the fleet cannot do *as specified* is the contract's
+ * problem, and a stage no surface can perform is an access problem wherever the
+ * workers run.
+ */
 async function blockStage(
   campaign: FactoryCampaign,
   stage: string,
   stall: { detail: string },
   report: RemoteTickReport,
+  kind: FactoryBlockerKind = 'UNIT_EXHAUSTED_ATTEMPTS',
 ): Promise<RemoteTickReport> {
   await patchCampaign(campaign.id, {
     state: 'BLOCKED',
-    blockerKind: 'UNIT_EXHAUSTED_ATTEMPTS',
+    blockerKind: kind,
     blockerDetail: stall.detail,
     stageDetail: `${stage} cannot be handed out again`,
   });
@@ -831,6 +907,23 @@ async function runRemoteTick(
     }
     const stall = stalledStage(liveBins, 'FACTORY_INTEGRATE');
     if (stall) return await blockStage(fresh, 'integration', stall, report);
+    const surfaceBlocks = await surfaceBlockedIntegrations(fresh.id);
+    if (surfaceBlocks >= MAX_BINS_PER_STAGE) {
+      return await blockStage(
+        fresh,
+        'integration',
+        {
+          detail:
+            `${surfaceBlocks} integrations were blocked before the work was judged — the surfaces ` +
+            'that took this stage could not push to the remote. The units keep their commits and ' +
+            'nothing about the work is in question. The remedy is where the workers run: attach ' +
+            'the repository to a worker surface, or grant it a credential there. Brain holds none ' +
+            'and must not.',
+        },
+        report,
+        'EXTERNAL_CREDENTIAL_REQUIRED',
+      );
+    }
     const bin = await createIntegrateBin(fresh, changeRequest, implemented);
     if (bin) {
       report.created.push(`integrate:${bin.id}`);

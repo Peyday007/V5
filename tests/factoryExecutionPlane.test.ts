@@ -1321,6 +1321,247 @@ describe('accepting a unit does not undo itself', () => {
 
 /* ========================================================================= */
 
+describe('an integration blocked before the work was judged costs the work nothing', () => {
+  /*
+   * The defect this pins is §23's correction one altitude down.
+   *
+   * A BLOCKED integration refused every implemented unit and charged each one an
+   * attempt, whatever the blocker was. That is right for a conflict or a red
+   * command: the branches disagree, or the contract rejects the tree they make,
+   * and the thing that has to change is the code. It is wrong for a blocker the
+   * integrator hit *before* judging anything — no credential for the remote, a
+   * host that refused it — because nothing examined the work, so there is nothing
+   * for the work to answer, and two forge-confirmed commits were being charged for
+   * a condition that was never about them.
+   *
+   * Derived from the rows rather than from the sentence: no conflict and no
+   * non-zero exit code means nothing judged the tree. A worker cannot declare
+   * itself surface-blocked to dodge a failed verification, because the exit codes
+   * it reported are what decide.
+   */
+  let campaignId = '';
+  let implementer = '';
+  let integrator = '';
+  const unitHead = 'c'.repeat(40);
+
+  async function implementOneUnit(): Promise<void> {
+    stubForge({});
+    await tickRemoteCampaign(campaignId);
+    const assigned = await assignNextBin({ workerId: implementer, projectIds: [fixture.project.id] });
+    expect(assigned?.bin.kind).toBe('FACTORY_UNITS');
+    const { declaredBranchFor } = await import('../server/services/factory/remote.ts');
+    const branch = declaredBranchFor(assigned!.bin, 'only-unit')!;
+    stubForge({
+      branches: { [branch]: unitHead },
+      compares: { [`${BASE}...${unitHead}`]: { files: ['test/only.test.js'], status: 'ahead' } },
+    });
+    await putBinUnitResult({
+      binId: assigned!.bin.id,
+      unitKey: 'only-unit',
+      value: JSON.stringify({
+        unitKey: 'only-unit',
+        outcome: 'IMPLEMENTED',
+        branch,
+        headSha: unitHead,
+        filesChanged: ['test/only.test.js'],
+        commands: [{ command: 'npm test', exitCode: 0 }],
+        summary: 'implemented',
+      }),
+      contentHash: 'h-only',
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    expect(
+      await finishBin(
+        {
+          binId: assigned!.bin.id,
+          leaseId: assigned!.leaseId,
+          leaseGeneration: assigned!.leaseGeneration,
+          workerId: implementer,
+        },
+        { state: 'COMPLETE', reason: 'implemented' },
+      ),
+    ).toBe('OK');
+    await tickRemoteCampaign(campaignId);
+  }
+
+  /** Hand the integrate bin to the integrator and complete it with this report. */
+  async function integrateReporting(report: Record<string, unknown>): Promise<void> {
+    const created = await tickRemoteCampaign(campaignId);
+    expect(
+      created.created.some((entry) => entry.startsWith('integrate:')) ||
+        created.notes.some((note) => note.includes('integrator')),
+    ).toBe(true);
+    const assigned = await assignNextBin({ workerId: integrator, projectIds: [fixture.project.id] });
+    expect(assigned?.bin.kind).toBe('FACTORY_INTEGRATE');
+    await putBinUnitResult({
+      binId: assigned!.bin.id,
+      unitKey: 'integrate',
+      value: JSON.stringify(report),
+      contentHash: `h-int-${Math.random()}`,
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    expect(
+      await finishBin(
+        {
+          binId: assigned!.bin.id,
+          leaseId: assigned!.leaseId,
+          leaseGeneration: assigned!.leaseGeneration,
+          workerId: integrator,
+        },
+        { state: 'COMPLETE', reason: 'reported' },
+      ),
+    ).toBe('OK');
+    await tickRemoteCampaign(campaignId);
+  }
+
+  beforeEach(async () => {
+    implementer = (await createWorker({ name: 'impl-i', createdByType: 'SYSTEM', createdById: 't' })).id;
+    integrator = (await createWorker({ name: 'int-i', createdByType: 'SYSTEM', createdById: 't' })).id;
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: `surface-block-${Math.random()}`,
+      objective: 'Keep the published site free of repository-only files.',
+      expectedOutcome: 'The suite fails when they appear.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'the suite asserts it', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    campaignId = campaign.id;
+    await ensureUnit({
+      campaignId,
+      unitKey: 'only-unit',
+      kind: 'TEST',
+      role: 'IMPLEMENTER',
+      title: 'Assert the published tree',
+      objective: 'Assert the build publishes the site only.',
+      acceptance: ['the suite fails when a repository-only file is published'],
+      ownedPaths: ['test/only.test.js'],
+      requiredContext: [],
+      verification: ['npm test'],
+      expectedArtifact: 'a test file',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+    });
+    const { promoteReadyUnits } = await import('../server/repos/factory.ts');
+    await promoteReadyUnits(campaignId);
+    await implementOneUnit();
+  });
+
+  it('keeps the unit implemented when nothing judged the tree', async () => {
+    const { getUnitByKey } = await import('../server/repos/factory.ts');
+    const before = await getUnitByKey(campaignId, 'only-unit');
+    expect(before?.state).toBe('IMPLEMENTED');
+
+    await integrateReporting({
+      outcome: 'BLOCKED',
+      integrationBranch: 'factory/campaign/only',
+      merged: [],
+      conflicts: [],
+      commands: [],
+      summary: 'nothing was merged',
+      blockedReason: 'This execution surface has no credential for the remote.',
+    });
+
+    const after = await getUnitByKey(campaignId, 'only-unit');
+    expect(after?.state).toBe('IMPLEMENTED');
+    expect(after?.attempt).toBe(before?.attempt);
+    expect(after?.failureCategory).toBeNull();
+
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+    const events = await listFactoryEvents(campaignId, { kinds: ['INTEGRATION_REJECTED'], limit: 20 });
+    expect(events.length).toBe(1);
+    expect((events[0]!.detail as { surface?: unknown }).surface).toBe(true);
+  });
+
+  it('still refuses the unit when a command failed on the merged tree', async () => {
+    const { getUnitByKey } = await import('../server/repos/factory.ts');
+    const before = await getUnitByKey(campaignId, 'only-unit');
+
+    await integrateReporting({
+      outcome: 'BLOCKED',
+      integrationBranch: 'factory/campaign/only',
+      merged: [],
+      conflicts: [],
+      commands: [{ command: 'npm test', exitCode: 1 }],
+      summary: 'the suite failed on the merged tree',
+      blockedReason: '`npm test` exited 1 on the merged tree.',
+    });
+
+    const after = await getUnitByKey(campaignId, 'only-unit');
+    expect(after?.state).toBe('READY');
+    expect(after?.attempt).toBeGreaterThan(before!.attempt);
+    expect(after?.failureCategory).toBe('VERIFICATION_FAILED');
+
+    /*
+     * And it stays refused. The implementation bin is still COMPLETE and still
+     * holds the report Brain believed, and READY is exactly the state the ingest
+     * acts on — so before the acceptance became idempotent by the bin, the very
+     * next tick read that old report again and put the unit straight back to
+     * IMPLEMENTED at the commit the integration had just refused. Refuse,
+     * re-accept, integrate, refuse: a loop that looks like progress.
+     */
+    await tickRemoteCampaign(campaignId);
+    await tickRemoteCampaign(campaignId);
+    const later = await getUnitByKey(campaignId, 'only-unit');
+    expect(later?.state).toBe('READY');
+    expect(later?.attempt).toBe(after?.attempt);
+  });
+
+  it('stops the stage once no surface has been able to push three times', async () => {
+    for (let round = 0; round < 3; round += 1) {
+      await integrateReporting({
+        outcome: 'BLOCKED',
+        integrationBranch: 'factory/campaign/only',
+        merged: [],
+        conflicts: [],
+        commands: [],
+        summary: 'nothing was merged',
+        blockedReason: 'This execution surface has no credential for the remote.',
+      });
+    }
+    const report = await tickRemoteCampaign(campaignId);
+    expect(report.state).toBe('BLOCKED');
+    const { getCampaign } = await import('../server/repos/factory.ts');
+    const campaign = await getCampaign(campaignId);
+    expect(campaign?.blockerKind).toBe('EXTERNAL_CREDENTIAL_REQUIRED');
+    expect(campaign?.blockerDetail).toContain('could not push');
+    // And the work is untouched: nothing about it was ever in question.
+    const { getUnitByKey } = await import('../server/repos/factory.ts');
+    expect((await getUnitByKey(campaignId, 'only-unit'))?.state).toBe('IMPLEMENTED');
+  });
+});
+
+/* ========================================================================= */
+
 describe('a unit value too large is refused, never truncated', () => {
   /*
    * The defect this pins cost a correct plan two attempts and a bin.
