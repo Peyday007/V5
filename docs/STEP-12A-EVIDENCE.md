@@ -8924,3 +8924,41 @@ Four properties, and three of them are refusals:
 Nothing else moves. The bin keeps its state, its generation, its attempts and
 its refusals; the intent keeps its `session_ref` and its attempt count, so the
 fire that went unanswered is still in the record as a fire that went unanswered.
+
+### It unstranded the packet, in production, with nobody involved
+
+Deployed as `34541967955`. Then, from the rows:
+
+```
+IN FLIGHT  as at 2026-09-10T23:54:47Z
+  COUNTS  23:29:00.320Z  bin bin_99775b55ce7d40549287  READY  gen 4
+          session session_01Hegjgg8vd2cAMneKomxdSm
+  COUNTS  23:28:59.255Z  bin bin_7e4b9543427d462f9f78  READY  gen 0
+          session session_01EQWsV7rJSG1JpZ2VVWTtMF
+```
+
+**A second fire at generation 4** — the thing that was structurally impossible an
+hour earlier — and a second stranded bin, `bin_7e4b9543427d462f9f78`, which had
+been sitting at generation 0 since the step-11 acceptance and which nothing in
+the previous design could ever have fired again either. Neither was named by
+anybody; both were derived.
+
+The session arrived and did the work:
+
+```
+PACKET  orc_0804d6046c054dd4bf87   AUDITING
+  RESEARCH_AUDIT SUCCEEDED  2        RESEARCH_AUDIT QUEUED 1
+  passes  audit role ordinal 5 COMPLETE 2026-09-10T22:21:28.841Z
+          audit role ordinal 6 COMPLETE 2026-09-10T23:32:05.445Z
+  BIN     bin_99775b55ce7d40549287  READY  gen 6  ready 23:32:39.367Z
+```
+
+Two of the three audit roles recorded, the judge's item queued, and the bin back
+in the ordinary cycle at a new generation. The packet had been one role short of
+a verdict for seventy minutes with a filed report sitting under it.
+
+Nothing about the audit contract moved to achieve that. The second role was
+taken by a **different session** from the first, which is what
+`auditEligibility` requires and the whole reason the bin had refused one
+arrival; the fix restored the fire, and the independence floor did what it
+already did.
