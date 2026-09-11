@@ -514,6 +514,37 @@ re-accept, integrate, refuse, for ever. **A loop that looks like progress is wor
 than a stop.** Both answers are now idempotent by the **bin**, which cannot
 change, rather than by a state two other transitions can write.
 
+**And the stage above it needed the same guard for the same reason.** A confirmed
+integration moves its units to `INTEGRATED`, so the bin is skipped next pass by
+its own effect; a surface block deliberately changes nothing, which is the point
+of it — so by that test the same completed bin was read again on every tick and
+recorded a fresh refusal nothing new had happened to produce. The ledger filled
+with rejections, and the ceiling counted from them tripped on its own. Keyed on
+the bin now, both ways.
+
+**The ceiling itself needed a way out, and a count that only rises is not one.**
+Granting the repository to a worker surface is the remedy the blocker names, and
+it happens somewhere else entirely — it cannot change a number in this database.
+So the count is taken from the newest `FACTORY_STAGE_REAUTHORIZED` row: a person
+says the operational condition is fixed, with a reason from a closed set and
+their id on the row, and the next tick re-derives everything as usual. If it was
+*not* fixed the stage blocks again with the same words, which is the difference
+between a way out and an override. It re-authorizes a stage and never the work:
+no unit, commit, finding, verdict or attempt counter moves. §24's sentence for
+the fifth time.
+
+The rows are read in the ledger's own `at, rowid` order rather than re-sorted by
+timestamp, because two rows written in the same millisecond are a tie a timestamp
+cannot break — and a re-authorization that sorted before the refusals it answers
+would count for nothing.
+
+**A tick also has to describe the campaign it just changed.** `report.state` was
+read once at the start of the pass and updated again only on the paths that
+*block*, so every pass that made progress reported the state from before its own
+work: a tick that created an integration bin announced `BLOCKED` because that is
+what the row had said a second earlier. One re-read, at the single place every
+path returns through.
+
 The split itself is what makes
 an independent review possible on a fleet where only some surfaces can push.
 `repository` is reading and running; `repository-write` is pushing a branch, and

@@ -1500,6 +1500,19 @@ describe('an integration blocked before the work was judged costs the work nothi
     const events = await listFactoryEvents(campaignId, { kinds: ['INTEGRATION_REJECTED'], limit: 20 });
     expect(events.length).toBe(1);
     expect((events[0]!.detail as { surface?: unknown }).surface).toBe(true);
+
+    /*
+     * And the same completed bin is not read again. A surface block deliberately
+     * changes nothing, so "the units are no longer implemented" cannot be the
+     * guard: without one keyed on the bin, every tick recorded another refusal
+     * nothing new had happened to produce, and the ceiling counted from them would
+     * trip on its own.
+     */
+    await tickRemoteCampaign(campaignId);
+    await tickRemoteCampaign(campaignId);
+    expect(
+      (await listFactoryEvents(campaignId, { kinds: ['INTEGRATION_REJECTED'], limit: 20 })).length,
+    ).toBe(1);
   });
 
   it('still refuses the unit when a command failed on the merged tree', async () => {
@@ -1557,6 +1570,45 @@ describe('an integration blocked before the work was judged costs the work nothi
     // And the work is untouched: nothing about it was ever in question.
     const { getUnitByKey } = await import('../server/repos/factory.ts');
     expect((await getUnitByKey(campaignId, 'only-unit'))?.state).toBe('IMPLEMENTED');
+  });
+
+  /*
+   * And the stop has a way out, which is the whole difference between a ceiling and
+   * a dead end. The count of surface-blocked integrations only ever rises, so
+   * granting the repository somewhere else — the remedy the blocker itself names —
+   * could not by itself change anything in this database. A person says it is
+   * fixed, the count is taken from that moment, and the next tick re-derives
+   * everything: if it was not fixed, the stage blocks again with the same reason.
+   */
+  it('hands the stage out again once a person says the condition is fixed', async () => {
+    for (let round = 0; round < 3; round += 1) {
+      await integrateReporting({
+        outcome: 'BLOCKED',
+        integrationBranch: 'factory/campaign/only',
+        merged: [],
+        conflicts: [],
+        commands: [],
+        summary: 'nothing was merged',
+        blockedReason: 'This execution surface has no credential for the remote.',
+      });
+    }
+    expect((await tickRemoteCampaign(campaignId)).state).toBe('BLOCKED');
+
+    const { recordFactoryEvent } = await import('../server/repos/factoryFleet.ts');
+    const { FACTORY_EVENT_KINDS } = await import('../server/services/factory/metrics.ts');
+    await recordFactoryEvent({
+      campaignId,
+      kind: FACTORY_EVENT_KINDS.stageReauthorized,
+      evidenceClass: 'MEASURED',
+      detail: { operator: 'operator:test', code: 'repository-granted' },
+    });
+
+    const after = await tickRemoteCampaign(campaignId);
+    expect(after.state).not.toBe('BLOCKED');
+    expect(
+      after.created.some((entry) => entry.startsWith('integrate:')) ||
+        after.notes.some((note) => note.includes('integrator')),
+    ).toBe(true);
   });
 });
 

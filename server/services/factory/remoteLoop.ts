@@ -476,9 +476,20 @@ async function ingestIntegrateBin(
   const who = await binIdentity(bin);
   const units = await listUnits(campaign.id);
   const implemented = units.filter((unit) => unit.state === 'IMPLEMENTED' && unit.headSha !== null);
-  // Already ingested: the campaign's head is the commit this report names, or
-  // there is nothing left in the state this bin was about. Rows, not a cursor.
+  /*
+   * Already ingested, asked two ways, and the second one is not redundant.
+   *
+   * A confirmed integration moves its units to INTEGRATED, so `implemented` is
+   * empty on the next pass and the bin is skipped by its own effect. A *surface*
+   * blocker deliberately changes nothing — that is the point of it — so by that
+   * test the same completed bin is ingested again on every tick, recording a fresh
+   * refusal each time: the ledger fills with rejections nothing new happened to
+   * produce, and the ceiling counted from them trips immediately. So the question
+   * is also asked of the bin, which cannot change. Same correction as the unit
+   * ingest, at the stage above it.
+   */
   if (implemented.length === 0) return false;
+  if (await integrationAlreadyIngested(campaign.id, bin.id)) return false;
 
   if (parsed.value.outcome === 'BLOCKED') {
     const failed = parsed.value.commands.filter((command) => command.exitCode !== 0);
@@ -578,6 +589,7 @@ async function ingestIntegrateBin(
     baseSha: base,
     workerId: who.workerId ?? 'unknown-worker',
     sessionId: who.sessionId,
+    binId: bin.id,
   });
   if (accepted.integrated.length === 0) {
     report.notes.push('the integration was confirmed but no unit moved; nothing recorded.');
@@ -730,6 +742,18 @@ function stalledStage(bins: Bin[], kind: string): { detail: string } | null {
   return null;
 }
 
+/** Has this integration bin's report already become rows, either way? */
+async function integrationAlreadyIngested(campaignId: string, binId: string): Promise<boolean> {
+  const events = await listFactoryEvents(campaignId, {
+    kinds: [FACTORY_EVENT_KINDS.integrationRejected, FACTORY_EVENT_KINDS.integrationMerged],
+    limit: 200,
+  });
+  return events.some((event) => {
+    const detail = (event.detail ?? {}) as { binId?: unknown };
+    return detail.binId === binId;
+  });
+}
+
 /**
  * How many integrations have been blocked by the surface rather than by the work.
  *
@@ -742,11 +766,32 @@ function stalledStage(bins: Bin[], kind: string): { detail: string } | null {
  */
 async function surfaceBlockedIntegrations(campaignId: string): Promise<number> {
   const events = await listFactoryEvents(campaignId, {
-    kinds: [FACTORY_EVENT_KINDS.integrationRejected],
+    kinds: [FACTORY_EVENT_KINDS.integrationRejected, FACTORY_EVENT_KINDS.stageReauthorized],
     limit: 200,
   });
+  /*
+   * Counted from the newest re-authorization, not from the beginning of the
+   * campaign.
+   *
+   * Without that, the ceiling is a permanent stop: the count never falls, so
+   * granting the repository to a worker surface — the remedy the blocker itself
+   * names — could not start the campaign again, and a person would have fixed the
+   * thing and watched nothing happen. §24's sentence for the fifth time, and the
+   * same answer: the escalation gets a guarded transition rather than none.
+   */
+  /*
+   * In the order the ledger returns them, which is `at, rowid` ascending — not
+   * re-sorted here by `at` alone. Two rows written in the same millisecond are a
+   * tie that a timestamp cannot break, and a re-authorization that sorted before
+   * the refusals it answers would count for nothing. The row order is the one
+   * monotonic fact available, so it is the one used.
+   */
   const bins = new Set<string>();
   for (const event of events) {
+    if (event.kind === FACTORY_EVENT_KINDS.stageReauthorized) {
+      bins.clear();
+      continue;
+    }
     const detail = (event.detail ?? {}) as { surface?: unknown; binId?: unknown };
     if (detail.surface !== true) continue;
     bins.add(typeof detail.binId === 'string' ? detail.binId : event.id);
@@ -1205,7 +1250,24 @@ export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTick
     void extendCampaignTick(campaignId, owner, claim.generation);
   }, TICK_HEARTBEAT_MS);
   try {
-    return await runRemoteTick(campaign, changeRequest);
+    const report = await runRemoteTick(campaign, changeRequest);
+    /*
+     * What the report says the campaign is, read back from the row rather than
+     * carried from the start of the tick.
+     *
+     * `report.state` was set once from the campaign as it was *before* the pass and
+     * updated again only on the paths that block — so every pass that made progress
+     * described the campaign it had just changed using the state it had before the
+     * change. A tick that creates an integration bin and reports BLOCKED because
+     * that is what the row said a second ago is an operator surface lying about the
+     * thing it just did. One re-read, at the one place every path returns through.
+     */
+    const after = await getCampaign(campaignId);
+    if (after) {
+      report.state = after.state;
+      report.stage = after.stageDetail ?? after.state;
+    }
+    return report;
   } finally {
     clearInterval(keep);
     await releaseCampaignTick(campaignId, owner, claim.generation);

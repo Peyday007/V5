@@ -597,10 +597,80 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * A person says the operational condition a stage stopped on has been fixed.
+     *
+     * This is the answering transition for a stage ceiling, and it exists because
+     * the ceiling would otherwise be permanent: the count of surface-blocked
+     * integrations only ever rises, so granting the repository to a worker surface
+     * — the remedy the blocker itself names — could not start the campaign again.
+     * A state that says "waiting for a person" which that person cannot resolve is
+     * not waiting, it is stuck.
+     *
+     * It re-authorizes the stage and nothing else. No unit, commit, finding,
+     * verdict or attempt counter moves; the append-only row names who said it and
+     * why; and the next tick re-derives everything from rows as usual, so if the
+     * condition has *not* been fixed the stage simply blocks again with the same
+     * reason. That is the difference between a way out and an override.
+     */
+    case 'reauthorize': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const REASONS: Record<string, string> = {
+        'repository-granted':
+          'The repository has been attached to a worker surface, so a session that can push is ' +
+          'now reachable. Brain holds no credential and issued none.',
+        'surface-restored':
+          'The execution surface that could not reach the repository has been restored where the ' +
+          'workers run.',
+      };
+      const code = flagString(flags, 'why') ?? 'repository-granted';
+      const reason = REASONS[code];
+      if (!reason) fail(`unknown reason code "${code}". One of: ${Object.keys(REASONS).join(', ')}`);
+      const campaign = await getCampaign(campaignId);
+      if (!campaign) fail('no such campaign');
+      const users = await listUsers();
+      const operator = users.find((candidate) => candidate.isBrainAdmin && !candidate.disabled);
+      if (!operator) fail('no administrator exists to attribute this to');
+      const { recordFactoryEvent } = await import('../server/repos/factoryFleet.ts');
+      const { FACTORY_EVENT_KINDS } = await import('../server/services/factory/metrics.ts');
+      await recordFactoryEvent({
+        campaignId,
+        kind: FACTORY_EVENT_KINDS.stageReauthorized,
+        evidenceClass: 'MEASURED',
+        detail: {
+          operator: `operator:${operator!.id}`,
+          reason,
+          code,
+          blockerKind: campaign!.blockerKind,
+          blockerDetail: campaign!.blockerDetail,
+        },
+      });
+      /*
+       * And the campaign comes out of BLOCKED, because the tick is what re-derives
+       * the stage and a BLOCKED campaign is still ticked. The state is a projection
+       * either way — whatever is actually true is established again on the next
+       * pass — so this is the honest starting point rather than an assertion.
+       */
+      if (campaign!.state === 'BLOCKED') {
+        const { patchCampaign } = await import('../server/repos/factory.ts');
+        await patchCampaign(campaignId, {
+          state: 'INTEGRATING',
+          blockerKind: null,
+          blockerDetail: null,
+          stageDetail: 'the stage was re-authorized; the next tick decides what is true',
+        });
+      }
+      process.stdout.write(
+        `reauthorized ${campaignId} (${code}); was ${campaign!.state}` +
+          `${campaign!.blockerKind ? ` [${campaign!.blockerKind}]` : ''}\n`,
+      );
+      break;
+    }
+
     default:
       process.stdout.write(
         'commands: fleet, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
-          '  remote-tick, campaigns, bins, status, answer-bin, release\n',
+          '  remote-tick, campaigns, bins, status, answer-bin, reauthorize, release\n',
       );
   }
 

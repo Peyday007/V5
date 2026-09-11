@@ -78,6 +78,21 @@ export const FACTORY_EVENT_KINDS = {
   binCreated: 'FACTORY_BIN_CREATED',
   /** A completed bin's reports were read, verified and turned into rows. */
   binIngested: 'FACTORY_BIN_INGESTED',
+  /**
+   * A person says the operational condition a stage stopped on has been fixed.
+   *
+   * The stage's own ceiling is counted *from the newest of these*, which is what
+   * makes the ceiling a stop with a way out rather than a permanent one. A count
+   * that only ever rises is §24's sentence again: a state that says "waiting for a
+   * person" which that person cannot resolve is not waiting, it is stuck — and
+   * granting the repository somewhere else cannot change a number in this
+   * database by itself.
+   *
+   * It re-authorizes a *stage*, never the work: nothing about a unit, a commit, a
+   * finding or a verdict moves, and the reason is recorded because an operator
+   * action with no author answers nothing later.
+   */
+  stageReauthorized: 'FACTORY_STAGE_REAUTHORIZED',
 } as const;
 
 export interface RoleMetrics {

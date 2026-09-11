@@ -1088,6 +1088,8 @@ export async function acceptIntegration(input: {
   baseSha: string;
   workerId: string;
   sessionId: string | null;
+  /** The bin this report came from, so the ingest is idempotent by the bin. */
+  binId: string;
 }): Promise<{ integrated: string[] }> {
   const integrated: string[] = [];
   const byKey = new Map(input.units.map((unit) => [unit.unitKey, unit]));
@@ -1127,6 +1129,7 @@ export async function acceptIntegration(input: {
       evidenceClass: 'MEASURED',
       detail: {
         integrationBranch: input.report.integrationBranch,
+        binId: input.binId,
         beforeSha: input.baseSha,
         afterSha: input.report.headSha,
         units: integrated,
