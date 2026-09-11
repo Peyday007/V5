@@ -44,7 +44,12 @@ import {
   releaseCampaignTick,
   reopenUnit,
 } from '../../repos/factory.ts';
-import { listReviews, recordFactoryEvent, recordReview } from '../../repos/factoryFleet.ts';
+import {
+  listFactoryEvents,
+  listReviews,
+  recordFactoryEvent,
+  recordReview,
+} from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { installPlan, validatePlan } from './planner.ts';
 import { gatingFindings, queueRepairs } from './repair.ts';
@@ -198,13 +203,16 @@ async function ingestUnitsBin(
     if (unit.state === 'INTEGRATED') continue;
     if (unitReport.outcome === 'BLOCKED') {
       report.notes.push(`${key} reported blocked: ${unitReport.blockedReason ?? 'no reason given'}`);
-      await refuseUnit(
-        campaign,
-        unit,
-        'WORKER_ERROR',
-        unitReport.blockedReason ?? 'The worker reported it blocked without a reason.',
-        report,
-      );
+      if (!(await alreadyRefused(campaign.id, unit.id, bin.id))) {
+        await refuseUnit(
+          campaign,
+          unit,
+          'WORKER_ERROR',
+          unitReport.blockedReason ?? 'The worker reported it blocked without a reason.',
+          report,
+          bin.id,
+        );
+      }
       continue;
     }
     const verdict = await verifyUnitReport(
@@ -218,7 +226,16 @@ async function ingestUnitsBin(
     );
     if (!verdict.ok) {
       report.notes.push(`${key} was not confirmed by the forge: ${verdict.problems.join(' ')}`);
-      await refuseUnit(campaign, unit, 'OUT_OF_SCOPE_MUTATION', verdict.problems.join(' '), report);
+      if (!(await alreadyRefused(campaign.id, unit.id, bin.id))) {
+        await refuseUnit(
+          campaign,
+          unit,
+          'OUT_OF_SCOPE_MUTATION',
+          verdict.problems.join(' '),
+          report,
+          bin.id,
+        );
+      }
       continue;
     }
     const accepted = await acceptUnitReport({
@@ -363,6 +380,7 @@ async function refuseUnit(
   category: 'OUT_OF_SCOPE_MUTATION' | 'VERIFICATION_FAILED' | 'WORKER_ERROR' | 'INTEGRATION_CONFLICT',
   detail: string,
   report: RemoteTickReport,
+  binId: string,
 ): Promise<void> {
   const reopened = await reopenUnit(unit.id, category, detail);
   if (reopened) await advanceUnitAttempt(unit.id);
@@ -371,9 +389,39 @@ async function refuseUnit(
     unitId: unit.id,
     kind: FACTORY_EVENT_KINDS.unitFailed,
     evidenceClass: 'MEASURED',
-    detail: { unitKey: unit.unitKey, category, detail: detail.slice(0, 500) },
+    // The bin is part of the record because it is what makes the refusal
+    // idempotent: one bin's report is refused once, however many ticks read it.
+    detail: { unitKey: unit.unitKey, category, binId, detail: detail.slice(0, 500) },
   });
   report.notes.push(`${unit.unitKey} goes back for another attempt: ${category}.`);
+}
+
+/**
+ * Has this bin's report for this unit already been refused?
+ *
+ * Read from the ledger, because a refusal is not idempotent by its own effect the
+ * way an acceptance is. An accepted report leaves the unit `IMPLEMENTED`, so the
+ * next tick skips it; a refused one puts the unit back to `READY`, which is
+ * exactly the state the next tick offers the same completed bin for again. In
+ * production that charged three attempts in one pass and retired the unit
+ * `FAILED` before any worker had a second go — and the second and third refusals
+ * were for the branch *name*, which the attempt counter had just changed
+ * underneath them. A refusal has to be recognised rather than repeated.
+ */
+async function alreadyRefused(
+  campaignId: string,
+  unitId: string,
+  binId: string,
+): Promise<boolean> {
+  const events = await listFactoryEvents(campaignId, {
+    kinds: [FACTORY_EVENT_KINDS.unitFailed],
+    limit: 500,
+  });
+  return events.some((event) => {
+    if (event.unitId !== unitId) return false;
+    const detail = (event.detail ?? {}) as { binId?: unknown };
+    return detail.binId === binId;
+  });
 }
 
 /**
@@ -420,12 +468,14 @@ async function ingestIntegrateBin(
         ? `\`${failed[0]?.command}\` exited ${failed[0]?.exitCode} on the merged tree.`
         : 'The integration was reported blocked.');
     for (const unit of implemented) {
+      if (await alreadyRefused(campaign.id, unit.id, bin.id)) continue;
       await refuseUnit(
         campaign,
         unit,
         parsed.value.conflicts.length > 0 ? 'INTEGRATION_CONFLICT' : 'VERIFICATION_FAILED',
         why,
         report,
+        bin.id,
       );
     }
     await recordFactoryEvent({
@@ -786,6 +836,43 @@ async function runRemoteTick(
   if (outstanding.length > 0) {
     report.notes.push(`${outstanding.length} unit(s) still in flight`);
     await patchCampaign(fresh.id, { state: 'EXECUTING', stageDetail: 'units in flight' });
+    return report;
+  }
+
+  /*
+   * A unit that has used every attempt stops the campaign, and it has to be
+   * looked at *before* the review.
+   *
+   * `outstanding` excludes FAILED, correctly — nothing is going to happen to it —
+   * and the effect of that alone was a campaign whose only unit had retired
+   * walking straight into the review stage with nothing integrated, asking a
+   * reviewer to judge the base commit against a contract nothing had implemented.
+   * A verdict on that would have been a verdict about the wrong tree.
+   *
+   * It is BLOCKED with the unit's own recorded reason rather than failed: the
+   * work is intact, every attempt kept its row, and the ways out are a person's —
+   * amend the contract, which may narrow a scope or add a verification command
+   * and may never change what success is, or stop. Re-examined every tick, so
+   * either one starts it moving without anybody reaching into a row.
+   */
+  const failed = units.filter((unit) => unit.state === 'FAILED');
+  if (failed.length > 0) {
+    await patchCampaign(fresh.id, {
+      state: 'BLOCKED',
+      blockerKind: 'UNIT_EXHAUSTED_ATTEMPTS',
+      blockerDetail: failed
+        .map(
+          (unit) =>
+            `${unit.unitKey} used all ${unit.maxAttempts} attempts` +
+            `${unit.failureCategory ? ` (${unit.failureCategory})` : ''}: ` +
+            `${unit.failureDetail ?? 'no reason was recorded'}`,
+        )
+        .join(' — '),
+      stageDetail: `${failed.length} unit(s) out of attempts`,
+    });
+    report.notes.push(`${failed.length} unit(s) out of attempts; the campaign is blocked`);
+    report.state = 'BLOCKED';
+    report.stage = `${failed.length} unit(s) out of attempts`;
     return report;
   }
 

@@ -474,7 +474,12 @@ async function main(): Promise<void> {
       for (const unit of units) {
         process.stdout.write(
           `  ${unit.state.padEnd(12)} ${unit.unitKey} (attempt ${unit.attempt}/${unit.maxAttempts})` +
-            `${unit.failureCategory ? ` ${unit.failureCategory}` : ''}\n`,
+            `${unit.failureCategory ? ` ${unit.failureCategory}` : ''}\n` +
+            // The reason, not only the category. A category names the kind of
+            // refusal and the detail names the file that caused it, and an
+            // operator with only the first has to redeploy to learn the second.
+            `${unit.failureDetail ? `        ${unit.failureDetail.slice(0, 400)}\n` : ''}` +
+            `${unit.branch ? `        branch ${unit.branch}${unit.headSha ? ` @ ${unit.headSha.slice(0, 12)}` : ''}\n` : ''}`,
         );
       }
       break;

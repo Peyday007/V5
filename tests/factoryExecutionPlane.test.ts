@@ -1064,3 +1064,77 @@ describe('who produced a bin result is read from the row Brain wrote', () => {
     expect(observed?.accountId).toBe(account.id);
   });
 });
+
+/* ========================================================================= */
+
+describe('a unit out of attempts stops the campaign before any review', () => {
+  it('blocks with the unit\'s own reason rather than reviewing an unimplemented tree', async () => {
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'exhausted',
+      objective: 'Something whose only unit will run out of attempts.',
+      expectedOutcome: 'A person sees why it stopped.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'it works', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    const created = await ensureUnit({
+      campaignId: campaign.id,
+      unitKey: 'doomed',
+      kind: 'IMPLEMENTATION',
+      role: 'IMPLEMENTER',
+      title: 'A unit that will not land',
+      objective: 'Do one bounded thing that will keep being refused.',
+      acceptance: ['it is done'],
+      ownedPaths: ['index.html'],
+      requiredContext: [],
+      verification: [],
+      expectedArtifact: 'a change',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+      state: 'FAILED',
+    });
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run(
+      `UPDATE factory_work_units SET failure_category = ?, failure_detail = ? WHERE id = ?`,
+      ['OUT_OF_SCOPE_MUTATION', '3 file(s) changed outside this unit\'s declared paths', created.unit.id],
+    );
+
+    stubForge({});
+    const report = await tickRemoteCampaign(campaign.id);
+    // Not a review: a reviewer asked to judge a tree nothing implemented would be
+    // judging the base commit against a contract nobody satisfied.
+    expect(report.created.some((entry) => entry.startsWith('review:'))).toBe(false);
+    const after = await getCampaign(campaign.id);
+    expect(after?.state).toBe('BLOCKED');
+    expect(after?.blockerKind).toBe('UNIT_EXHAUSTED_ATTEMPTS');
+    expect(after?.blockerDetail).toContain('declared paths');
+  });
+});

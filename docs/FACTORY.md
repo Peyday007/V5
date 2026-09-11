@@ -554,6 +554,14 @@ it on bins.
   believed, so without `advanceUnitAttempt` a refusal would cost nothing and the
   next round would hand out the identical branch name over commits Brain had
   already rejected.
+- **And it costs exactly one.** An accepted report is idempotent by its own
+  effect; a refused one leaves the unit READY, which is the state the next tick
+  offers the same completed bin for again. `UNIT_FAILED` carries the bin id, so a
+  bin's report for a unit is refused once however many ticks read it.
+- **A unit out of attempts blocks the campaign before the review stage**, with the
+  unit's own recorded reason. `outstanding` excludes FAILED because nothing more
+  will happen to it, and without this that meant a reviewer being asked to judge
+  the base commit against a contract nothing had implemented.
 
 ### `COWORK_ROUTINE`, and why the handshake is not an executor
 

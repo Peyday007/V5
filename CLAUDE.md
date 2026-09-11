@@ -1943,6 +1943,22 @@ remote.
   nothing and the loop would offer the identical unit forever. A stage that
   burns through `MAX_BINS_PER_STAGE` blocks the campaign with the reason instead
   of being handed out again, and a blocked campaign is re-examined every tick.
+- **A refusal is recognised, not repeated.** An *accepted* report is idempotent by
+  its own effect: the unit is `IMPLEMENTED`, so the next tick skips it. A refused
+  one puts the unit back to `READY`, which is the state the next tick offers the
+  same completed bin for again — so in production it charged three attempts in one
+  pass and retired the unit before any worker had a second go, and the second and
+  third refusals were for the branch *name*, which the attempt counter had just
+  changed underneath them. The ledger is the guard: `UNIT_FAILED` carries the bin,
+  and a bin's report for a unit is refused once however many ticks read it.
+- **A unit out of attempts stops the campaign before any review.** `outstanding`
+  excludes FAILED, correctly — nothing more is going to happen to it — and the
+  effect of that alone was a campaign whose only unit had retired walking into the
+  review stage with nothing integrated, asking a reviewer to judge the base commit
+  against a contract nothing had implemented. A verdict on that is a verdict about
+  the wrong tree. BLOCKED with the unit's own recorded reason, the work intact and
+  every attempt still on its row, and the ways out are a person's: amend the
+  contract, or stop.
 - **`COWORK_ROUTINE` is not an executor, and the earlier claim that the handshake
   was missing is recorded rather than deleted.** An `Executor` is something Brain
   calls and waits on, holding a worktree it can see. A Routine activation is a
