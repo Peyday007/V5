@@ -161,6 +161,32 @@ export async function binAdmission(input: {
     }),
   );
   return async (bin: Bin): Promise<{ ok: boolean; reason?: string }> => {
+    /*
+     * A factory review is refused here, before the lease, for §23's reason.
+     *
+     * A session that implemented part of a campaign must not be handed the bin
+     * that judges it. Checked at assignment rather than only when the verdict
+     * arrives, because a refusal after the fact costs the bin an attempt and
+     * hands the same bin straight back to the same session — the loop §23's
+     * `bin_session_refusals` exists to stop. The verdict is checked again before
+     * storage anyway: a lease can expire and be retaken, so eligible at claim
+     * time is not eligible at submit time.
+     */
+    if (bin.kind === 'FACTORY_REVIEW' && bin.factoryCampaignId) {
+      const { reviewLineage } = await import('../factory/remote.ts');
+      /*
+       * The *credential* this request authenticated with, never the `session_ref`
+       * the caller sent. That field is telemetry and its own tool says so; an
+       * independence decision taken on it would be a worker declaring itself
+       * independent. §23, at the factory's boundary.
+       */
+      const lineage = await reviewLineage(bin.factoryCampaignId, {
+        sessionId: input.principal.credentialId,
+        workerId: input.workerId,
+      });
+      if (!lineage.ok) return { ok: false, reason: lineage.reason ?? 'not independent of the work' };
+    }
+
     const now = new Date().toISOString();
     const items = await listWorkItemsForBin(confinementFor(bin));
     const claimable = items.filter(

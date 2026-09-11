@@ -93,8 +93,21 @@ import {
 export const FACTORY_BIN_ROLES = ['PLAN', 'IMPLEMENT', 'INTEGRATE', 'REVIEW', 'DELIVER'] as const;
 export type FactoryBinRole = (typeof FACTORY_BIN_ROLES)[number];
 
-/** The capability a Routine must carry to be handed repository work. */
+/**
+ * The capabilities a Routine must carry to be handed factory work.
+ *
+ * Two, not one, and the distinction is what makes an independent review possible
+ * on a fleet where only some surfaces can push. Reading a repository and running
+ * its tests needs nothing but network; pushing a branch needs a credential the
+ * surface was granted where it runs. So a reviewer may be any surface that can
+ * read, and only the bins that actually write require the stronger one.
+ *
+ * Collapsing them would force every factory bin onto the pushing surfaces, and
+ * with one such surface that makes the reviewer the implementer — which is the
+ * single property review independence exists to prevent.
+ */
 export const FACTORY_CAPABILITY = 'repository';
+export const FACTORY_WRITE_CAPABILITY = 'repository-write';
 
 /**
  * The branch a unit's work belongs on, derived rather than chosen.
@@ -398,7 +411,7 @@ export async function createUnitsBin(
     priority: 7,
     createdByType: 'SYSTEM',
     createdById: `factory:units:${campaign.id}`,
-    requiredCapabilities: [FACTORY_CAPABILITY],
+    requiredCapabilities: [FACTORY_CAPABILITY, FACTORY_WRITE_CAPABILITY],
     workloadClass: 'FACTORY_UNIT',
     factoryCampaignId: campaign.id,
     ready: true,
@@ -412,11 +425,13 @@ export async function createUnitsBin(
  * Three reasons it is its own bin rather than a last step of the implementation
  * bin. It is a different question — a unit is judged for staying inside its own
  * paths, an integration for carrying every unit and nothing else, and the two are
- * answered against different commit ranges. It is a different session, so the
- * commit a pull request will carry was assembled by somebody who did not write
- * any of it. And it is the only bin authorized to move the integration branch,
- * which is what makes "the branch moved once per round" a property of the work
- * rather than a hope about a worker.
+ * answered against different commit ranges. It is a separate lease, so on a fleet
+ * with more than one surface that can push it is a separate session, and the
+ * commit a pull request carries was assembled by somebody who wrote none of it —
+ * a property of the fleet rather than a guarantee of this design, and never
+ * reported as one. And it is the only bin authorized to move the integration
+ * branch, which *is* a guarantee: "the branch moved once per round" is a property
+ * of the work rather than a hope about a worker.
  *
  * The integrator is told not to push a tree the contract's own commands reject.
  * That is the remote shape of what the local integrator did by rolling the merge
@@ -515,7 +530,7 @@ export async function createIntegrateBin(
     priority: 8,
     createdByType: 'SYSTEM',
     createdById: `factory:integrate:${campaign.id}:${base.slice(0, 12)}`,
-    requiredCapabilities: [FACTORY_CAPABILITY],
+    requiredCapabilities: [FACTORY_CAPABILITY, FACTORY_WRITE_CAPABILITY],
     workloadClass: 'FACTORY_INTEGRATE',
     factoryCampaignId: campaign.id,
     ready: true,
@@ -1192,7 +1207,7 @@ export async function createDeliverBin(
     priority: 9,
     createdByType: 'SYSTEM',
     createdById: `factory:deliver:${campaign.id}:${head.slice(0, 12)}`,
-    requiredCapabilities: [FACTORY_CAPABILITY],
+    requiredCapabilities: [FACTORY_CAPABILITY, FACTORY_WRITE_CAPABILITY],
     workloadClass: 'FACTORY_DELIVER',
     factoryCampaignId: campaign.id,
     ready: true,
@@ -1438,6 +1453,120 @@ export async function campaignSpecFor(
     integrationBranch: null,
     pullRequest: null,
     note: 'No open pull request has this branch as its head, so one will be opened.',
+  };
+}
+
+/**
+ * Who produced a bin's results, from the row Brain wrote rather than the one the
+ * worker filled in.
+ *
+ * `bin.leaseSessionRef` is telemetry the worker supplied — the tool that takes it
+ * says so in those words — and the whole of §23 is that a compare-and-swap, and
+ * an independence decision, must be on a value the claimant does not supply. So
+ * the identity used for every factory event and for the review-independence floor
+ * comes from `worker_sessions`, which Brain writes from its own dispatch row.
+ *
+ * A bin with no observed arrival returns nulls, and every caller treats that as
+ * unknown rather than as a pass.
+ */
+export async function binIdentity(
+  bin: Bin,
+): Promise<{ sessionId: string | null; workerId: string | null; accountId: string | null }> {
+  const { workerSessionForBin } = await import('../../repos/fleet.ts');
+  const observed = await workerSessionForBin(bin.id);
+  if (observed) {
+    return {
+      sessionId: observed.sessionRef,
+      workerId: observed.workerId,
+      accountId: observed.accountId,
+    };
+  }
+  // A live bin still carries its lease, which is the same fact from the other
+  // side. A finished one carries neither, and that is reported as unknown.
+  return { sessionId: bin.leaseCredentialId, workerId: bin.workerId, accountId: null };
+}
+
+/**
+ * Who actually did the implementing, read from the ledger.
+ *
+ * Every accepted unit report writes a `UNIT_IMPLEMENTED` row carrying the bin's
+ * worker and lease session, so the set of sessions that wrote this campaign's
+ * code is a query rather than an assumption. That is the whole input to the
+ * review-independence decision below, and it is deliberately the recorded
+ * lineage rather than a role name: §23's rule, at the factory's boundary.
+ */
+export async function implementingSessions(
+  campaignId: string,
+): Promise<{ sessions: Set<string>; workers: Set<string> }> {
+  const { listFactoryEvents } = await import('../../repos/factoryFleet.ts');
+  const events = await listFactoryEvents(campaignId, {
+    kinds: [FACTORY_EVENT_KINDS.unitImplemented, FACTORY_EVENT_KINDS.integrationMerged],
+  });
+  const sessions = new Set<string>();
+  const workers = new Set<string>();
+  for (const event of events) {
+    if (event.sessionId) sessions.add(event.sessionId);
+    if (event.workerId) workers.add(event.workerId);
+  }
+  return { sessions, workers };
+}
+
+export interface ReviewLineage {
+  ok: boolean;
+  /** The tier actually achieved, never rounded up. */
+  independence: 'SESSION_SEPARATED' | 'WORKER_SEPARATED' | 'ACCOUNT_SEPARATED';
+  reason: string | null;
+}
+
+/**
+ * Is this reviewer independent of the work it is judging, and how independent?
+ *
+ * The floor is a **different session** from every session that implemented the
+ * work, and it is a refusal rather than a label: a verdict from the context that
+ * wrote the code is the one thing an independent review exists to prevent, so
+ * nothing is recorded at all. `WORKER_SEPARATED` is reported when the reviewer's
+ * worker identity also differs, which is a stronger assurance the fleet either
+ * supplies or does not.
+ *
+ * Unknown lineage fails closed. A review bin that records no session cannot be
+ * shown to be independent, and "we could not tell" must never read the same as
+ * "we checked" — §23's sentence, which this codebase has now needed at four
+ * altitudes.
+ *
+ * `ACCOUNT_SEPARATED` is deliberately not derivable here. It would need the
+ * account each session's Routine resolves to, and claiming it from a worker id
+ * would be reporting a separation the fleet may not have.
+ */
+export async function reviewLineage(
+  campaignId: string,
+  reviewer: { sessionId: string | null; workerId: string | null },
+): Promise<ReviewLineage> {
+  if (!reviewer.sessionId) {
+    return {
+      ok: false,
+      independence: 'SESSION_SEPARATED',
+      reason:
+        'The review bin recorded no session, so its independence from the work cannot be ' +
+        'established. An audit whose independence cannot be established did not establish it.',
+    };
+  }
+  const { sessions, workers } = await implementingSessions(campaignId);
+  if (sessions.has(reviewer.sessionId)) {
+    return {
+      ok: false,
+      independence: 'SESSION_SEPARATED',
+      reason:
+        `Session ${reviewer.sessionId} implemented part of this campaign, so its verdict on the ` +
+        'same work is not an independent review. Nothing is recorded. The remedy is operational: ' +
+        'a fleet surface that can read the repository and did not write this work.',
+    };
+  }
+  const workerSeparated =
+    reviewer.workerId !== null && !workers.has(reviewer.workerId) && workers.size > 0;
+  return {
+    ok: true,
+    independence: workerSeparated ? 'WORKER_SEPARATED' : 'SESSION_SEPARATED',
+    reason: null,
   };
 }
 

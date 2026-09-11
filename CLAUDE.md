@@ -1861,6 +1861,24 @@ remote.
   the decision is cheap. **`V5` is deliberately absent:** a campaign that could
   rewrite the machinery executing it is the one whose failure mode is not
   contained by declining a pull request.
+- **Review independence is derived from lineage and enforced twice.** The review
+  bin is refused at assignment to any session that implemented part of the
+  campaign — before the lease, so the refusal costs no attempt — and the verdict
+  is checked again before storage, because a lease can expire and be retaken. The
+  session is the *credential the request authenticated with*, never the
+  `session_ref` a worker sends: that field is telemetry and its own tool says so,
+  and deciding on it would be a worker declaring itself independent. The tier
+  recorded is the one the lineage supports and is never rounded up; unknown
+  lineage is a refusal. An earlier version of the remote ingest recorded
+  `SESSION_SEPARATED` unconditionally, which is a claim rather than a reading —
+  recorded here rather than quietly applied. Two capabilities, `repository` and
+  `repository-write`, exist for exactly this: a reviewer needs to read and run,
+  and only the bins that push need a surface that can push, so a one-pushing-
+  surface fleet does not make the reviewer the implementer.
+- **A finished bin cannot say who finished it**, because `finishBin` clears the
+  worker, the lease and the credential in the same statement. `worker_sessions`
+  can, written from Brain's own dispatch row, and that is what every factory
+  event and the independence floor read.
 - **Every stage still has an answering transition, including the new ones.** A
   refused unit report costs an attempt, so the next round is different work
   rather than the same branch over rejected commits — remotely the unit row is

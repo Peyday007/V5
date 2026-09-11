@@ -379,6 +379,12 @@ and every belief in this plane resolves to one of its answers.
 - **An integration really carries the work it names.** `compareCommits` between
   a unit's verified head and the integration commit: the forge's own `identical`
   or `ahead` is containment, and anything else is refused by name.
+- **Who produced a result.** `finishBin` clears the worker, the lease and the
+  credential in the statement that finishes a bin, so a completed bin can no
+  longer say who produced its results. `worker_sessions` can, and it is written
+  from Brain's own dispatch row rather than from anything the worker said about
+  itself — which is why it, and not the bin, is what every factory event and the
+  review-independence floor are read from.
 - **The tests really passed.** The repository's own continuous integration is
   read for the integrated commit (`readChecks`). Its three answers are kept
   apart, because they have different consequences: a failure is a refusal, a
@@ -412,9 +418,17 @@ set by a tick that then dies, rows cannot.
    pushed — the remote shape of the local integrator rolling a failed merge
    back, and for the same reason: a branch carrying a tree the contract rejects
    is worse than a branch that did not move.
-4. **`FACTORY_REVIEW`** — judged against the objective as approved. A separate
-   bin is a separate lease is a separate session, which is what makes
-   independence a property of the execution rather than a rule in a prompt.
+4. **`FACTORY_REVIEW`** — judged against the objective as approved. Its
+   independence is **derived from recorded lineage and enforced twice**: the bin
+   is refused at assignment to any session that implemented part of this campaign
+   (before the lease, so the refusal costs no attempt), and the verdict is checked
+   again before it is stored, because a lease can expire and be retaken. The
+   session identity used for that decision is the *credential the request
+   authenticated with*, never the `session_ref` a worker sends — that field is
+   telemetry and its own tool says so, and a decision taken on it would be a
+   worker declaring itself independent. The tier recorded is the one the lineage
+   supports: `SESSION_SEPARATED` at the floor, `WORKER_SEPARATED` when the fleet
+   supplies it, never rounded up. Unknown lineage is a refusal.
 5. **`FACTORY_DELIVER`** — open or update exactly one pull request, using a
    title and body Brain composed from rows. The worker performs it because the
    credential that may write to the repository lives where the worker runs; it
@@ -422,6 +436,14 @@ set by a tick that then dies, rows cannot.
 
 A campaign is COMPLETE only when a review passed, nothing is gating, **and** the
 forge confirms a pull request carrying the integrated commit.
+
+Two capabilities gate which surface gets which bin, and the split is what makes
+an independent review possible on a fleet where only some surfaces can push.
+`repository` is reading and running; `repository-write` is pushing a branch, and
+only the three bins that actually write require it. Collapsing them would force
+every factory bin onto the pushing surfaces, and with one such surface that makes
+the reviewer the implementer — the single property review independence exists to
+prevent.
 
 ### Why a dependency is still satisfied by integration
 

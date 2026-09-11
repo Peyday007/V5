@@ -53,6 +53,7 @@ import {
   acceptIntegration,
   acceptUnitReport,
   binBaseOf,
+  binIdentity,
   campaignBins,
   createDeliverBin,
   createIntegrateBin,
@@ -65,6 +66,7 @@ import {
   readDeliveryReport,
   readIntegrationReport,
   readPlanProposal,
+  reviewLineage,
   readReviewReport,
   readUnitReports,
   remoteBranchFor,
@@ -184,6 +186,7 @@ async function ingestUnitsBin(
   const { reports, problems } = await readUnitReports(bin.id);
   for (const problem of problems) report.notes.push(problem);
   if (reports.size === 0) return false;
+  const who = await binIdentity(bin);
 
   const units = await listUnits(campaign.id);
   let moved = 0;
@@ -223,8 +226,8 @@ async function ingestUnitsBin(
       unit,
       report: unitReport,
       files: verdict.files,
-      workerId: bin.workerId ?? 'unknown-worker',
-      sessionId: bin.leaseSessionRef,
+      workerId: who.workerId ?? 'unknown-worker',
+      sessionId: who.sessionId,
     });
     if (!accepted.accepted) {
       report.notes.push(`${key} could not be recorded: ${accepted.reason}`);
@@ -264,14 +267,39 @@ async function ingestReviewBin(
   );
   if (already) return false;
 
+  /*
+   * Is the reviewer independent of the work, and how independent?
+   *
+   * Refused rather than labelled when it is not: a verdict from a session that
+   * wrote the code is the one thing an independent review exists to prevent, so
+   * nothing is recorded and the bin's own reasons say why. The tier that *is*
+   * recorded is the one the lineage actually supports — this used to be a
+   * hard-coded `SESSION_SEPARATED`, which is a claim rather than a reading, and
+   * the correction is recorded here rather than quietly applied.
+   */
+  const reviewer = await binIdentity(bin);
+  const lineage = await reviewLineage(campaign.id, reviewer);
+  if (!lineage.ok) {
+    report.notes.push(lineage.reason ?? 'the reviewer was not independent of the work');
+    await recordFactoryEvent({
+      campaignId: campaign.id,
+      sessionId: reviewer.sessionId,
+      workerId: reviewer.workerId,
+      kind: FACTORY_EVENT_KINDS.unitRefused,
+      evidenceClass: 'MEASURED',
+      detail: { stage: 'REVIEW', binId: bin.id, reason: lineage.reason },
+    });
+    return false;
+  }
+
   const recorded = await recordReview({
     campaignId: campaign.id,
     round,
     scope: 'CAMPAIGN',
-    reviewerSessionId: bin.leaseSessionRef,
+    reviewerSessionId: reviewer.sessionId,
     reviewedSha: review.value.reviewedSha,
     verdict: review.value.verdict === 'BLOCKED' ? 'BLOCKED' : review.value.verdict,
-    independence: 'SESSION_SEPARATED',
+    independence: lineage.independence,
     summary: review.value.summary,
     findings: review.value.findings.map((finding) => ({
       key: finding.key,
@@ -284,8 +312,8 @@ async function ingestReviewBin(
   });
   await recordFactoryEvent({
     campaignId: campaign.id,
-    sessionId: bin.leaseSessionRef,
-    workerId: bin.workerId,
+    sessionId: reviewer.sessionId,
+    workerId: reviewer.workerId,
     kind: FACTORY_EVENT_KINDS.reviewCompleted,
     evidenceClass: 'MEASURED',
     detail: {
@@ -377,6 +405,7 @@ async function ingestIntegrateBin(
     report.notes.push(`The integration bin ${bin.id} completed without a usable report.`);
     return false;
   }
+  const who = await binIdentity(bin);
   const units = await listUnits(campaign.id);
   const implemented = units.filter((unit) => unit.state === 'IMPLEMENTED' && unit.headSha !== null);
   // Already ingested: the campaign's head is the commit this report names, or
@@ -401,8 +430,8 @@ async function ingestIntegrateBin(
     }
     await recordFactoryEvent({
       campaignId: campaign.id,
-      sessionId: bin.leaseSessionRef,
-      workerId: bin.workerId,
+      sessionId: who.sessionId,
+      workerId: who.workerId,
       kind: FACTORY_EVENT_KINDS.integrationRejected,
       evidenceClass: 'MEASURED',
       detail: {
@@ -442,8 +471,8 @@ async function ingestIntegrateBin(
     report: parsed.value,
     verdict,
     baseSha: base,
-    workerId: bin.workerId ?? 'unknown-worker',
-    sessionId: bin.leaseSessionRef,
+    workerId: who.workerId ?? 'unknown-worker',
+    sessionId: who.sessionId,
   });
   if (accepted.integrated.length === 0) {
     report.notes.push('the integration was confirmed but no unit moved; nothing recorded.');
@@ -527,10 +556,11 @@ async function ingestDeliverBin(
     prRef: verdict.number === null ? null : `#${verdict.number}`,
     prUrl: verdict.url,
   });
+  const deliverer = await binIdentity(bin);
   await recordFactoryEvent({
     campaignId: campaign.id,
-    sessionId: bin.leaseSessionRef,
-    workerId: bin.workerId,
+    sessionId: deliverer.sessionId,
+    workerId: deliverer.workerId,
     kind: FACTORY_EVENT_KINDS.prDelivered,
     evidenceClass: 'MEASURED',
     detail: {

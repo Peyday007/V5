@@ -32,6 +32,7 @@ import {
   listBins,
   putBinUnitResult,
 } from '../server/repos/bins.ts';
+import { recordFactoryEvent } from '../server/repos/factoryFleet.ts';
 import {
   decideRepository,
   listRepositoryGrants,
@@ -44,6 +45,7 @@ import {
 import {
   campaignSpecFor,
   executionModeFor,
+  reviewLineage,
   roundBaseFor,
   verifyIntegrationReport,
   verifyUnitReport,
@@ -817,5 +819,86 @@ describe('a worker that finishes a factory bin has its report read from rows', (
     expect(report.ingested.some((entry) => entry.startsWith('plan:'))).toBe(true);
     const units = await listUnits(campaign.id);
     expect(units.map((unit) => unit.unitKey)).toEqual(['form-contract']);
+  });
+});
+
+/* ========================================================================= */
+
+describe('a reviewer is independent by lineage, or it is refused', () => {
+  let campaignId = '';
+
+  beforeEach(async () => {
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'lineage',
+      objective: 'Something with a review to judge it.',
+      expectedOutcome: 'A person sees it.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'it works', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    campaignId = campaign.id;
+    // One unit implemented by session A, on worker W1. This is the ledger the
+    // independence decision is read from.
+    await recordFactoryEvent({
+      campaignId,
+      kind: 'UNIT_IMPLEMENTED',
+      evidenceClass: 'MEASURED',
+      sessionId: 'cred-session-A',
+      workerId: 'wkr-one',
+      detail: { unitKey: 'u' },
+    });
+  });
+
+  it('refuses the session that wrote the code', async () => {
+    const verdict = await reviewLineage(campaignId, {
+      sessionId: 'cred-session-A',
+      workerId: 'wkr-one',
+    });
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toContain('cred-session-A');
+  });
+
+  it('refuses a reviewer whose session cannot be established at all', async () => {
+    // Unknown lineage fails closed: "we could not tell" must never read the same
+    // as "we checked".
+    const verdict = await reviewLineage(campaignId, { sessionId: null, workerId: 'wkr-two' });
+    expect(verdict.ok).toBe(false);
+  });
+
+  it('accepts a different session and reports only the tier it earned', async () => {
+    const same = await reviewLineage(campaignId, {
+      sessionId: 'cred-session-B',
+      workerId: 'wkr-one',
+    });
+    expect(same.ok).toBe(true);
+    // Same worker identity, different session: the floor, and not rounded up.
+    expect(same.independence).toBe('SESSION_SEPARATED');
+
+    const stronger = await reviewLineage(campaignId, {
+      sessionId: 'cred-session-B',
+      workerId: 'wkr-two',
+    });
+    expect(stronger.ok).toBe(true);
+    expect(stronger.independence).toBe('WORKER_SEPARATED');
   });
 });

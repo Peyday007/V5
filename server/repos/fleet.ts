@@ -765,6 +765,46 @@ export async function recordWorkerSession(input: {
 }
 
 /** The surface one authenticated session came from, or null if unobserved. */
+/**
+ * Which session Brain observed taking this bin, newest first.
+ *
+ * The companion to `getWorkerSession`, asked from the other end. A completed bin
+ * no longer carries its lease — `finishBin` clears the worker, the lease id and
+ * the credential in the same statement that finishes it — so by the time anything
+ * reads the bin's *results*, the bin itself can no longer say who produced them.
+ * This row can, and it is the authoritative answer rather than the convenient
+ * one: `worker_sessions` is written from the dispatch row Brain wrote itself,
+ * never from anything the worker said about itself.
+ *
+ * Newest first because a takeover is a second arrival on one bin, and the session
+ * that finished it is the last one that took it.
+ */
+export async function workerSessionForBin(binId: string): Promise<WorkerSession | null> {
+  const row = await getDb().get<{
+    session_ref: string;
+    worker_id: string;
+    routine_id: string;
+    account_id: string;
+    bin_id: string;
+    lease_generation: number;
+    observed_at: string;
+  }>(
+    `SELECT * FROM worker_sessions WHERE bin_id = ? ORDER BY observed_at DESC, rowid DESC LIMIT 1`,
+    [binId],
+  );
+  return row
+    ? {
+        sessionRef: row.session_ref,
+        workerId: row.worker_id,
+        routineId: row.routine_id,
+        accountId: row.account_id,
+        binId: row.bin_id,
+        leaseGeneration: Number(row.lease_generation),
+        observedAt: row.observed_at,
+      }
+    : null;
+}
+
 export async function getWorkerSession(sessionRef: string): Promise<WorkerSession | null> {
   const row = await getDb().get<{
     session_ref: string;
