@@ -62,6 +62,12 @@ COPY server ./server
 # that can both mint a test principal and reach the public URL. See
 # scripts/verify-hosted.ts for why that combination is the whole point.
 COPY scripts ./scripts
+# The objectives a person approved for the Software Factory. They are inputs the
+# deployed Brain reads by path, so a directory that exists only in the repository
+# is a path the container cannot open — which is exactly how the first one failed,
+# twice: once for living under `docs/` (excluded) and once for this COPY being
+# absent. Prose a person approved, no secrets, and no authority of its own.
+COPY objectives ./objectives
 COPY --from=build /app/client/dist ./client/dist
 
 # Not root. The process needs no privilege: it opens a socket and talks to two
