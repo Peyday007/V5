@@ -1009,3 +1009,58 @@ describe('the local loop does not tick a campaign the fleet is executing', () =>
     expect((await getCampaign(campaign.id))?.state).toBe('PLANNING');
   });
 });
+
+/* ========================================================================= */
+
+describe('who produced a bin result is read from the row Brain wrote', () => {
+  /*
+   * This test exists to be run against **Postgres**, where it earns its place.
+   * `workerSessionForBin` ordered by `rowid`, which `dialect.ts` rewrites to
+   * `seq` — a column `worker_sessions` does not have on the cloud backend. Every
+   * SQLite run passed and the statement threw in production, which made the
+   * hosted factory's tick throw on every pass and left a completed bin
+   * un-ingested with nothing saying why.
+   */
+  it('returns the newest observed arrival for a bin, in both dialects', async () => {
+    const { recordWorkerSession, workerSessionForBin, createAccount, createRoutine } = await import(
+      '../server/repos/fleet.ts'
+    );
+    const account = await createAccount({ name: `acct-${Math.random().toString(36).slice(2)}` });
+    const routine = await createRoutine({
+      accountId: account.id,
+      routineRef: `trig_${Math.random().toString(36).slice(2)}`,
+      name: 'a surface',
+      tokenSecretName: 'NEVER_SET',
+      tokenDigest: null,
+      capabilities: ['repository'],
+    });
+    const workerId = (
+      await createWorker({ name: 'arriver', createdByType: 'SYSTEM', createdById: 't' })
+    ).id;
+
+    expect(await workerSessionForBin('bin_nothing_here')).toBeNull();
+
+    await recordWorkerSession({
+      sessionRef: 'cred-first',
+      workerId,
+      routineId: routine.id,
+      accountId: account.id,
+      binId: 'bin_shared',
+      leaseGeneration: 1,
+    });
+    await recordWorkerSession({
+      sessionRef: 'cred-second',
+      workerId,
+      routineId: routine.id,
+      accountId: account.id,
+      binId: 'bin_shared',
+      leaseGeneration: 2,
+    });
+
+    const observed = await workerSessionForBin('bin_shared');
+    // A takeover is a second arrival on one bin, and the session that finished it
+    // is the last one that took it.
+    expect(observed?.leaseGeneration).toBe(2);
+    expect(observed?.accountId).toBe(account.id);
+  });
+});

@@ -1924,8 +1924,18 @@ remote.
   said.
 - **A finished bin cannot say who finished it**, because `finishBin` clears the
   worker, the lease and the credential in the same statement. `worker_sessions`
-  can, written from Brain's own dispatch row, and that is what every factory
-  event and the independence floor read.
+  can, written from Brain's own dispatch row, and that is where the account and
+  the worker identity come from.
+
+  **Reading it is the third time an `ORDER BY` has been true in one dialect
+  only.** `workerSessionForBin` tiebroke on `rowid`, which `dialect.ts` rewrites
+  to `seq`, and `worker_sessions` has no such column on Postgres. Every SQLite
+  test passed; in production the statement threw, so the hosted factory's tick
+  threw on every pass and a completed bin sat un-ingested with nothing on the
+  campaign saying why. `012_checkpoint_seq.sql` was the first instance and §25's
+  three connect tables the second. **An `ORDER BY` must be sayable in both
+  dialects, and a tiebreak on a column only one of them has is the easiest way to
+  write one that is not.**
 - **Every stage still has an answering transition, including the new ones.** A
   refused unit report costs an attempt, so the next round is different work
   rather than the same branch over rejected commits — remotely the unit row is
