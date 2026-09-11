@@ -26,6 +26,7 @@ import {
   listRoutines,
   policyHistory,
   repointRoutineWorker,
+  setRoutineCapabilities,
   setAccountState,
   setPolicy,
   setRoutineState,
@@ -127,6 +128,44 @@ async function main(): Promise<void> {
     return ok(
       `register-routine ${routine.id} ref=${routine.routineRef} account=${account.name} ` +
         `secret=${secret} digest=${routine.tokenDigest?.slice(0, 12)}…`,
+    );
+  }
+
+  /*
+   * What a Routine may be given, corrected without SQL.
+   *
+   * `register-routine` takes a capability list and there was no way to change it
+   * afterwards, which made a row that had become wrong permanent — and the only
+   * remedies left were manual SQL, which invariant 2 forbids, or retiring a
+   * healthy surface. A capability is an operational fact that changes.
+   *
+   * It declares nothing about access. Brain holds no credential for anything a
+   * capability names; what this changes is which bins Brain will route here.
+   */
+  if (command === 'set-capabilities') {
+    const ref = option('ref');
+    const list = option('capabilities');
+    if (!ref || list === undefined || list === null) {
+      return refuse('pass --ref <trig_…> --capabilities <comma,separated> (empty clears them).');
+    }
+    const routine = await getRoutineByRef(ref);
+    if (!routine) return refuse(`no Routine registered as ${ref}.`);
+    const capabilities = list.split(',').map((tag) => tag.trim()).filter(Boolean);
+    if (flag('dry-run')) {
+      return ok(
+        `dry-run set-capabilities ${ref} [${routine.capabilities.join(',')}] -> ` +
+          `[${capabilities.join(',')}] (nothing written)`,
+      );
+    }
+    const updated = await setRoutineCapabilities({
+      routineId: routine.id,
+      capabilities,
+      actor: 'fleet-cli',
+      reason: option('reason') ?? 'operator set the capabilities this surface may be given',
+    });
+    if (!updated) return refuse(`${ref} could not be updated.`);
+    return ok(
+      `set-capabilities ${ref} [${routine.capabilities.join(',')}] -> [${updated.capabilities.join(',')}]`,
     );
   }
 

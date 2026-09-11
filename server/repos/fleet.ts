@@ -356,6 +356,50 @@ export async function repointRoutineWorker(input: {
   return true;
 }
 
+/**
+ * Declare what a Routine can be given.
+ *
+ * A separate operation from registration because a capability is an operational
+ * fact that changes — a Routine that gains a repository, a surface that loses
+ * one — and the alternative to having this is either a row nobody can correct or
+ * manual SQL, and invariant 2 admits no manual SQL in ordinary operation.
+ *
+ * It is a declaration and never a grant. Brain holds no credential for anything
+ * a capability names; what the Routine may actually reach is decided where the
+ * Routine runs. So this changes *what work Brain will route there*, which is a
+ * narrowing or a widening of Brain's own dispatch and nothing else — and it is
+ * audited, with both the old set and the new one, because a reader asking why a
+ * bin went somewhere needs to know what the row said at the time.
+ */
+export async function setRoutineCapabilities(input: {
+  routineId: string;
+  capabilities: string[];
+  actor: string;
+  reason: string;
+}): Promise<FleetRoutine | null> {
+  const before = await getRoutine(input.routineId);
+  if (!before) return null;
+  const wanted = [...new Set(input.capabilities.map((tag) => tag.trim()).filter(Boolean))].sort();
+  await getDb().run(
+    `UPDATE fleet_routines SET capabilities = ?, updated_at = ? WHERE id = ?`,
+    [JSON.stringify(wanted), nowIso(), input.routineId],
+  );
+  await recordIdentityEvent({
+    actorType: 'SYSTEM',
+    actorId: input.actor,
+    action: 'SET_ROUTINE_CAPABILITIES',
+    targetType: 'FLEET_ROUTINE',
+    targetId: input.routineId,
+    result: 'SUCCESS',
+    metadata: {
+      from: before.capabilities,
+      to: wanted,
+      reason: input.reason,
+    },
+  });
+  return await getRoutine(input.routineId);
+}
+
 /** A Routine's session arrived. Health counters reset on evidence, not on hope. */
 export async function recordRoutineCheckIn(routineId: string): Promise<void> {
   const at = nowIso();
