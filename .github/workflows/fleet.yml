@@ -46,6 +46,14 @@ on:
         description: '--target (a concurrency target, or a boost target)'
         required: false
         default: ''
+      capabilities:
+        # Its own input rather than part of `extra`, because the one value that
+        # matters here is the empty one: `set-capabilities --capabilities ""`
+        # is how a capability is taken away, and an empty value cannot be
+        # expressed by a flag/value pair appended only when non-blank.
+        description: '--capabilities (comma separated, for set-capabilities; empty clears them)'
+        required: false
+        default: ''
       extra:
         description: 'Any further --flag value pairs, e.g. "--plan Max_20x --kind ROUTINE"'
         required: false
@@ -85,6 +93,7 @@ jobs:
           FLEET_SECRET: ${{ inputs.secret }}
           FLEET_SCOPE: ${{ inputs.scope }}
           FLEET_TARGET: ${{ inputs.target }}
+          FLEET_CAPABILITIES: ${{ inputs.capabilities }}
           FLEET_EXTRA: ${{ inputs.extra }}
           FLEET_DRY_RUN: ${{ inputs.dry_run }}
         run: |
@@ -104,9 +113,18 @@ jobs:
                 ;;
             esac
           done
+          # A capability list is one value with commas in it.
+          case "$FLEET_CAPABILITIES" in
+            ''|*[!A-Za-z0-9_.:,-]*)
+              if [ -n "$FLEET_CAPABILITIES" ]; then
+                echo "::error::Refusing the capability list: letters, digits, dot, colon, dash, underscore and comma."
+                exit 1
+              fi
+              ;;
+          esac
           # `extra` additionally allows spaces, because it is a sequence of
-          # flag/value pairs, and commas, because a capability list is one value
-          # with commas in it. Everything a shell could act on is still refused.
+          # flag/value pairs, and commas, because one of its values may be a
+          # list. Everything a shell could act on is still refused.
           case "$FLEET_EXTRA" in
             *[!A-Za-z0-9_.:,\ -]*)
               echo "::error::Refusing the extra flags: same character class, plus spaces and commas."
@@ -124,6 +142,12 @@ jobs:
           if [ -n "$FLEET_SECRET" ];  then args="$args --secret $FLEET_SECRET"; fi
           if [ -n "$FLEET_SCOPE" ];   then args="$args --scope $FLEET_SCOPE"; fi
           if [ -n "$FLEET_TARGET" ];  then args="$args --target $FLEET_TARGET"; fi
+          # Always, for set-capabilities, and quoted: the empty list is the
+          # one that clears a capability, and a flag appended only when the
+          # value is non-blank can never express it.
+          if [ "$FLEET_COMMAND" = "set-capabilities" ]; then
+            args="$args --capabilities \"$FLEET_CAPABILITIES\""
+          fi
           if [ -n "$FLEET_EXTRA" ];   then args="$args $FLEET_EXTRA"; fi
           if [ "$FLEET_DRY_RUN" = "true" ]; then args="$args --dry-run"; fi
 
