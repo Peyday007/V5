@@ -286,6 +286,34 @@ with bytes — and it passes after the change. The two `NOT_RUN` gates
 a follow-on exists only for a packet that filed short, and filing short is a
 decision the domain reserves to a person. Nothing here closed or changed them.
 
+## The automatic path, with no cron anywhere
+
+One bin seeded into Deal Dispatch and then left alone — the harness creates and
+reads, and never fires, assigns or nudges (run 34648950815, 21:21Z, after both
+hourly schedules were disabled):
+
+```
+STEP10 RAMP rung=1 units=3 deadline=600s
+  +  20s  bin_a3eed54362ef4281b3b0  READY   -> LEASED    gen 1
+  +  40s  bin_a3eed54362ef4281b3b0  LEASED  -> COMPLETE  gen 2 units 3  DETERMINISTIC_UNITS_V1 v1 evaluated true.
+
+  bin                       ready→fired  ready→assigned  drain  ready→done  units  gen
+  bin_a3eed54362ef4281b3b0         3.9s             17s    17s         34s      3  2
+
+  assignments 1   takeovers 0   duplicate activations 0   completion refusals 0
+  lease expiries 0   fenced stale writes 0   not complete 0   provider errors none
+  dispatch intents 1  sent 1
+
+STEP10: OK ramp=1 complete=1 settled=true wall=40.4s
+```
+
+**Ready to fired: 3.9 seconds. Ready to terminal: 34 seconds.** The only fire
+surface left has no schedule, so nothing here could have been an hourly
+activation — Brain saw a `READY` bin on its own tick, routed it, claimed the
+slot, fired, and the worker that arrived was the one registered for that family.
+Item 8's failure mode — a ready eligible bin waiting on an unrelated cron — is
+not reachable from this fleet, because there is no unrelated cron.
+
 ## How to read a refusal, later
 
 When a bin is sitting `READY` and nobody is taking it, the question is which
