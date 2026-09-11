@@ -463,6 +463,18 @@ BLOCKED naming the refused operation. Refusing wrongly cost a campaign that coul
 never move. Between a gate that sometimes wastes a fire and one that sometimes
 stops all work, only the first is tolerable.
 
+**That holds for capabilities and not for scope, and the difference is the subject
+of the sentence.** Brain cannot identify the arriving *Routine*, for the three
+reasons above. It can identify the arriving *worker*, because that is the
+authenticated principal — the one identity in the exchange the caller does not
+supply. So what a worker may be handed is decided from `worker_routing`, a row
+Brain wrote, by `services/bins/routing.ts`, and a factory bin is offered only to a
+worker registered for the repository its manifest names. Registration is three
+deliberate acts — the envelope grant, the routing row, and push access where the
+worker runs — and any one of them missing authorizes nothing. See
+`docs/ROUTING.md`; the defect it was written from is in
+`docs/OAKWOOD-RETIREMENT.md`.
+
 **And the report it produces has to be submittable.** `headSha` was required of
 every unit and integration report, on the reasoning that a worker which got far
 enough to push has a commit. Some do. A worker blocked *before* pushing — no

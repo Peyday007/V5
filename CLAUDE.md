@@ -734,6 +734,13 @@ for somebody to say go.
 > **This is not Step 10 and does not close it.** It is a temporary operational
 > measure and, if it holds up, evidence toward a mechanism — recorded as
 > evidence only after an unattended run has actually happened, never before.
+>
+> **Spent and withdrawn, 2026-09-11.** Brain fires on demand now, so an hourly
+> timer is no longer the thing that starts a worker — and a timer is the wrong
+> answer to a question somebody is asking right now. Both hourly Cowork
+> schedules are disabled: the Oakwood one and the generic Factory one. What
+> remains is `trig_01CBLu5oCZziEwznw5q9xU7g`, which carries no cron at all. See
+> `docs/OAKWOOD-RETIREMENT.md`.
 
 **Step 10 must implement and prove automatic worker activation or scheduling.**
 It has implemented it, and it has proven activation, draining, takeover,
