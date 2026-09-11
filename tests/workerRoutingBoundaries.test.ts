@@ -16,7 +16,13 @@ import { freshProject, type TestProject } from './helpers.ts';
 import { createWorker, setWorkerRouting } from '../server/repos/identity.ts';
 import { createBin, getBin, listBins } from '../server/repos/bins.ts';
 import { binAdmission, checkIn, workerRoutingFor } from '../server/services/bins/service.ts';
-import { familyOf, decideBinRouting, repositoryIdOf } from '../server/services/bins/routing.ts';
+import {
+  allAdmissions,
+  decideBinRouting,
+  familyOf,
+  repositoryIdOf,
+  workloadAdmission,
+} from '../server/services/bins/routing.ts';
 import { routeBin } from '../server/services/dispatch/router.ts';
 import type {
   Bin,
@@ -568,6 +574,76 @@ describe('a correctly scoped worker is still handed its own work', () => {
     expect(handed.assigned).toBe(false);
     // The bin is still ready: it was not consumed, refused or retired by asking.
     expect((await getBin(bin.id))!.state).toBe('READY');
+  });
+});
+
+describe('the queue is the other entrance, and it asks the same question', () => {
+  /*
+   * A bin is not the only way a worker reaches research work. The Step 5 queue
+   * hands out RESEARCH_AUDIT and RESEARCH_FRAGMENT items directly — at the MCP
+   * tool, the HTTP route and the bin drain — so a worker registered for one
+   * repository could otherwise have claimed a Step 12A audit role by asking the
+   * queue for it instead of waiting to be handed a bin. That is the same crossing
+   * one layer down, and a guard on one entrance is not a guard.
+   */
+  it('refuses a research work item to a worker registered for the factory', async () => {
+    const { enqueueWork, claimWork, getWorkItem } = await import('../server/repos/workQueue.ts');
+    const workerId = await worker('wkr-queue-factory');
+    await setWorkerRouting({
+      workerId,
+      families: ['FACTORY'],
+      repositories: [OAKWOOD],
+      capabilities: [],
+      reason: 'one repository, and no research',
+      setBy: 'test',
+    });
+    const principal = principalFor(workerId, ['queue:claim', 'research:write']);
+    const item = await enqueueWork({
+      projectId: fixture.project.id,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'PRIMARY' },
+      requiredScopes: ['queue:claim', 'research:write'],
+      createdByType: 'SYSTEM',
+    });
+
+    const routing = await workerRoutingFor(workerId, principal);
+    const refusals: string[] = [];
+    const claimed = await claimWork({
+      admit: allAdmissions([workloadAdmission(routing)]),
+      onSkip: (skipped, reason) => refusals.push(`${skipped.id}: ${reason}`),
+      workerId,
+      credentialId: `cred_${workerId}`,
+      scopes: [{ projectId: fixture.project.id, scopes: ['queue:claim', 'research:write'] }],
+      limit: 1,
+    });
+    expect(claimed).toHaveLength(0);
+    expect(refusals.join(' ')).toContain('RESEARCH_AUDIT is RESEARCH work');
+
+    // And the refusal cost the item nothing: no lease, no attempt, no generation.
+    const after = (await getWorkItem(item.id))!;
+    expect(after.state).toBe('QUEUED');
+    expect(after.attemptCount).toBe(0);
+    expect(after.leaseGeneration).toBe(item.leaseGeneration);
+  });
+
+  it('hands the same item to the research worker', async () => {
+    const { enqueueWork, claimWork } = await import('../server/repos/workQueue.ts');
+    const workerId = await worker('wkr-queue-research');
+    const principal = principalFor(workerId, ['queue:claim', 'research:write']);
+    await enqueueWork({
+      projectId: fixture.project.id,
+      workType: 'RESEARCH_FRAGMENT',
+      requiredScopes: ['queue:claim', 'research:write'],
+      createdByType: 'SYSTEM',
+    });
+    const claimed = await claimWork({
+      admit: allAdmissions([workloadAdmission(await workerRoutingFor(workerId, principal))]),
+      workerId,
+      credentialId: `cred_${workerId}`,
+      scopes: [{ projectId: fixture.project.id, scopes: ['queue:claim', 'research:write'] }],
+      limit: 1,
+    });
+    expect(claimed).toHaveLength(1);
   });
 });
 

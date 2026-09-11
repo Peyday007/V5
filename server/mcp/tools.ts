@@ -329,6 +329,8 @@ const getWorkItemTool: McpTool = {
 };
 
 import { auditAdmission, lineageForWorker } from '../services/research/auditAdmission.ts';
+import { allAdmissions, workloadAdmission } from '../services/bins/routing.ts';
+import { workerRoutingFor } from '../services/bins/service.ts';
 
 const claimWorkTool: McpTool = {
   name: 'brain_claim_work',
@@ -419,8 +421,14 @@ const claimWorkTool: McpTool = {
       credentialId: principal.credentialId,
     });
     const refusals: string[] = [];
+    /*
+     * Scope, then independence. The queue is the other entrance to the same
+     * separation — a worker registered for one repository must not reach a Step
+     * 12A audit role by asking the queue for it instead of being handed a bin.
+     */
+    const workerRouting = await workerRoutingFor(workerId, principal);
     const claimed = await claimWork({
-      admit: auditAdmission(executorLineage),
+      admit: allAdmissions([workloadAdmission(workerRouting), auditAdmission(executorLineage)]),
       onSkip: (item, reason) => refusals.push(`${item.id}: ${reason}`),
       workerId,
       credentialId: principal.credentialId,

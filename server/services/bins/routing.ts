@@ -75,7 +75,7 @@
  * work is never implicit — and derived from existing rows for the rest. Nothing
  * halts, and no worker gains reach it did not already have.
  */
-import type { Bin, Principal, WorkerScope } from '../../domain/types.ts';
+import type { Bin, Principal, WorkItemRow, WorkerScope } from '../../domain/types.ts';
 
 /**
  * The families Brain routes by.
@@ -304,4 +304,64 @@ export function decideBinRouting(input: {
   }
 
   return { ok: true, family };
+}
+
+/**
+ * The family of a queue work item, from its work type.
+ *
+ * The queue is the other entrance to the same separation. A bin carries a
+ * manifest; a work item carries only a type, so that is what is read — and
+ * nothing at the item level is repository work, because repository work is
+ * described by a bin's manifest and never by a queue row. So the honest
+ * mapping is research prefixes to RESEARCH and everything else to GENERAL.
+ */
+export function familyOfWorkType(workType: string): WorkloadFamily {
+  if (workType.startsWith('RESEARCH') || workType.startsWith('RUSSELL')) return 'RESEARCH';
+  return 'GENERAL';
+}
+
+/**
+ * The same boundary, as a `claimWork` admission hook.
+ *
+ * `assignNextBin` is not the only way a worker reaches research work: the Step 5
+ * queue hands out `RESEARCH_AUDIT` and `RESEARCH_FRAGMENT` items directly, at
+ * the MCP tool, the HTTP route and the bin drain. A guard on the bin alone would
+ * leave a worker registered for one repository able to claim a Step 12A audit
+ * role by asking the queue for it instead — and that is the crossing this whole
+ * boundary exists to stop, one layer down.
+ *
+ * It refuses *before* the compare-and-swap like every other admission hook, so a
+ * refused worker spends no attempt, no lease and no generation.
+ */
+export function workloadAdmission(routing: WorkerRouting) {
+  return async (item: WorkItemRow): Promise<{ ok: boolean; reason?: string }> => {
+    const family = familyOfWorkType(item.work_type);
+    if (routing.families.includes(family)) return { ok: true };
+    return {
+      ok: false,
+      reason:
+        `this worker serves [${routing.families.join(', ') || 'nothing'}] and ` +
+        `${item.work_type} is ${family} work`,
+    };
+  };
+}
+
+/**
+ * Ask every admission rule, in order, and stop at the first refusal.
+ *
+ * Scope before independence, for the reason the bin path gives: a worker that
+ * may not be handed this class of work at all should be refused for that, and
+ * told that, rather than being told something about an audit role it was never
+ * eligible to hold.
+ */
+export function allAdmissions(
+  hooks: ReadonlyArray<(item: WorkItemRow) => Promise<{ ok: boolean; reason?: string }>>,
+) {
+  return async (item: WorkItemRow): Promise<{ ok: boolean; reason?: string }> => {
+    for (const hook of hooks) {
+      const verdict = await hook(item);
+      if (!verdict.ok) return verdict;
+    }
+    return { ok: true };
+  };
 }

@@ -28,6 +28,8 @@ import type {
 import { WORK_FAILURE_CATEGORIES, WORK_ITEM_STATES } from '../domain/types.ts';
 import { currentContext, currentPrincipal } from '../services/identity/context.ts';
 import { auditAdmission, lineageForWorker } from '../services/research/auditAdmission.ts';
+import { allAdmissions, workloadAdmission } from '../services/bins/routing.ts';
+import { workerRoutingFor } from '../services/bins/service.ts';
 import { recordIdentityEvent } from '../repos/identity.ts';
 import {
   PayloadTooLarge,
@@ -409,13 +411,18 @@ workRouter.post(
     }
 
     const claimed = await claimWork({
-      // The HTTP entrance to the same queue, and therefore the same rule.
-      admit: auditAdmission(
-        await lineageForWorker({
-          workerId: principal.id,
-          credentialId: principal.credentialId,
-        }),
-      ),
+      // The HTTP entrance to the same queue, and therefore the same rules —
+      // both of them: the workload scope this worker is registered for, then
+      // audit independence. A guard on one entrance is not a guard.
+      admit: allAdmissions([
+        workloadAdmission(await workerRoutingFor(principal.id, principal)),
+        auditAdmission(
+          await lineageForWorker({
+            workerId: principal.id,
+            credentialId: principal.credentialId,
+          }),
+        ),
+      ]),
       workerId: principal.id,
       credentialId: principal.credentialId,
       scopes: eligible,

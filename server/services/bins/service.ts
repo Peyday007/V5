@@ -65,9 +65,11 @@ import {
 import { evaluateContract, hashUnitValue, type ContractVerdict } from './contracts.ts';
 import { getWorkerRouting } from '../../repos/identity.ts';
 import {
+  allAdmissions,
   classesForFamilies,
   decideBinRouting,
   derivedFamilies,
+  workloadAdmission,
   WORKLOAD_FAMILIES,
   type WorkerRouting,
   type WorkloadFamily,
@@ -538,12 +540,18 @@ export async function nextItemInBin(input: {
   // still a worker, and an audit item inside that bin is still an audit item —
   // a guard on one entrance only is not a guard.
   const claimed = await claimWork({
-    admit: auditAdmission(
-      await lineageForWorker({
-        workerId: input.workerId,
-        credentialId: input.principal.credentialId,
-      }),
-    ),
+    // Both rules, as at every other entrance: the workload scope this worker is
+    // registered for, then audit independence. A worker draining a bin is still
+    // a worker, and an audit item inside that bin is still an audit item.
+    admit: allAdmissions([
+      workloadAdmission(await workerRoutingFor(input.workerId, input.principal)),
+      auditAdmission(
+        await lineageForWorker({
+          workerId: input.workerId,
+          credentialId: input.principal.credentialId,
+        }),
+      ),
+    ]),
     workerId: input.workerId,
     credentialId: input.principal.credentialId,
     scopes,
