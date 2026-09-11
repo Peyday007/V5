@@ -961,3 +961,46 @@ describe('a bin is not handed to a surface that cannot do it', () => {
     expect(verdict.reason).toContain('repository-write');
   });
 });
+
+/* ========================================================================= */
+
+describe('the local loop does not tick a campaign the fleet is executing', () => {
+  it('says so rather than looking for a checkout that is not there', async () => {
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'two-loops',
+      objective: 'Something the fleet is doing somewhere else.',
+      expectedOutcome: 'A person sees it.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'it works', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+
+    const { tickCampaign } = await import('../server/services/factory/loop.ts');
+    const report = await tickCampaign(campaign.id);
+    expect(report.notes.join(' ')).toContain('executed by the fleet');
+    // And it took no tick claim, so the remote loop's next pass is not blocked by
+    // a lease this one left behind.
+    expect(report.tickHeld).toBe(false);
+    expect((await getCampaign(campaign.id))?.state).toBe('PLANNING');
+  });
+});

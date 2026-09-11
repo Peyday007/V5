@@ -523,6 +523,10 @@ it on bins.
   that arrived and a report that did not look different in rows.
 - **The provider refuses the fire.** Step 11's router defers and the fleet keeps
   every bin; an account at its ceiling is busy rather than broken.
+- **Two loops tick nothing twice.** A campaign in `REMOTE` mode is refused by
+  the local loop before it even claims the tick, in those words rather than as a
+  git error about a worktree on a machine with no checkout — and it costs the
+  campaign nothing, because the remote loop is already ticking it.
 - **A stage cannot be done as specified.** `MAX_BINS_PER_STAGE` stops the loop
   handing it out forever — `liveBinOfKind` deliberately ignores a FAILED bin, so
   without the cap a stage would be re-created on the very next tick, and a

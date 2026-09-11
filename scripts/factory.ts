@@ -25,6 +25,7 @@ import {
   getCampaign,
   getCampaignByChangeRequest,
   getChangeRequest,
+  listCampaigns,
   listUnits,
 } from '../server/repos/factory.ts';
 import {
@@ -43,6 +44,10 @@ import { runCampaign, tickAllCampaigns, tickCampaign } from '../server/services/
 import { campaignMetrics } from '../server/services/factory/metrics.ts';
 import type { FactoryCapability, FactoryWorkerKind } from '../server/domain/factory.ts';
 import { campaignSpecFor } from '../server/services/factory/remote.ts';
+import {
+  tickAllRemoteCampaigns,
+  tickRemoteCampaign,
+} from '../server/services/factory/remoteLoop.ts';
 
 interface Args {
   command: string;
@@ -349,6 +354,52 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * One tick of the hosted loop, on demand.
+     *
+     * The deployed Brain already ticks every remote campaign every twenty
+     * seconds, so this is never needed to make one progress. It exists so that a
+     * person can *see* one tick's decision — what it ingested, what it created,
+     * and why it did neither — which a loop writing to a log nobody reads does
+     * not give you.
+     */
+    case 'remote-tick': {
+      const campaignId = flagString(flags, 'campaign');
+      const reports = campaignId
+        ? [await tickRemoteCampaign(campaignId)]
+        : await tickAllRemoteCampaigns();
+      if (reports.length === 0) process.stdout.write('no live remote campaign\n');
+      for (const report of reports) {
+        process.stdout.write(
+          `${report.campaignId} ${report.state} — ${report.stage}\n` +
+            (report.ingested.length > 0 ? `    ingested ${report.ingested.join(', ')}\n` : '') +
+            (report.created.length > 0 ? `    created ${report.created.join(', ')}\n` : '') +
+            report.notes.map((note) => `    ${note}\n`).join(''),
+        );
+      }
+      break;
+    }
+
+    /** Every campaign in a project, newest first, in one line each. */
+    case 'campaigns': {
+      const projectFlag = flagString(flags, 'project');
+      const projects = await listProjects();
+      const projectId = projectFlag ?? projects[0]?.id ?? fail('no project exists');
+      const campaigns = await listCampaigns(projectId);
+      if (campaigns.length === 0) process.stdout.write('no campaign in this project\n');
+      for (const campaign of campaigns) {
+        const changeRequest = await getChangeRequest(campaign.changeRequestId);
+        process.stdout.write(
+          `${campaign.id} ${campaign.executionMode} ${campaign.state} ` +
+            `${campaign.prRef ?? '(no pull request)'} — ` +
+            `${(changeRequest?.objective ?? '').slice(0, 70)}\n` +
+            `    ${campaign.stageDetail ?? ''}` +
+            `${campaign.blockerKind ? ` [${campaign.blockerKind}]` : ''}\n`,
+        );
+      }
+      break;
+    }
+
     case 'status': {
       const campaignId =
         flagString(flags, 'campaign') ??
@@ -407,7 +458,8 @@ async function main(): Promise<void> {
 
     default:
       process.stdout.write(
-        'commands: fleet, register, submit, approve, plan, run, tick, tick-all, status, release\n',
+        'commands: fleet, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
+          '  remote-tick, campaigns, status, release\n',
       );
   }
 

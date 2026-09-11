@@ -172,6 +172,37 @@ export async function tickCampaign(
 ): Promise<TickReport> {
   const owner = options.owner ?? `tick-${process.pid}`;
 
+  /*
+   * A campaign the fleet is executing is not this loop's to tick.
+   *
+   * Refused before the tick is even claimed, because the two loops verify
+   * differently: this one reads a diff it holds and that one asks a forge, and a
+   * local tick against a remote campaign would look for a worktree on a machine
+   * that has no checkout. It is said in those words rather than discovered as a
+   * git error, and it costs the campaign nothing — the remote loop is already
+   * ticking it every twenty seconds.
+   */
+  const before = await getCampaign(campaignId);
+  if (before && before.executionMode === 'REMOTE') {
+    return {
+      campaignId,
+      state: before.state,
+      stage: before.stageDetail ?? before.state,
+      dispatched: 0,
+      integrated: 0,
+      rejected: 0,
+      reviewed: false,
+      repairsQueued: 0,
+      blocker: null,
+      progress: false,
+      tickHeld: false,
+      notes: [
+        'This campaign is executed by the fleet rather than from a checkout here, so the local ' +
+          'loop does not tick it. `services/factory/remoteLoop.ts` owns it; nothing needs doing.',
+      ],
+    };
+  }
+
   const claim = await claimCampaignTick(campaignId, owner);
   if (!claim.ok) {
     const campaign = await getCampaign(campaignId);

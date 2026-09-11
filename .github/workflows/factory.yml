@@ -34,7 +34,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'submit | approve | status | campaigns | amend | pull-request | workers'
+        description: 'submit | approve | status | campaigns | remote-tick | amend | plan | release'
         required: true
         default: status
       file:
