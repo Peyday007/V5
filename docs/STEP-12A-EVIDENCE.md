@@ -9252,3 +9252,51 @@ Gap 6 put the packet into §22's `OTHER_LAYER` handoff — the artifact is a
 county-by-county operational fact-set and belongs to Execution Playbooks — so a
 second audit round is queued under the receiving layer. That is the handoff
 working, and `completionLinks.ts` is the module written for exactly this shape.
+
+## 95. A13, reduced to one decision — 2026-09-11
+
+`S12A-ACC-14` is parked exactly where the contract says it should be:
+
+```
+MISSIONS
+  rms_aca21b51ac6b41cb8472  NEEDS_HUMAN  packet orc_08b94f87a71a4b588829 NEEDS_HUMAN
+                            verdict MORE_RESEARCH  gapPolicy —  next —  writeback no
+OPEN DECISIONS
+  rhr_36a4f59793274ac08598  mission rms_aca21b51ac6b41cb8472  urgency BLOCKING
+                            choices [RECORD_GAPS STOP]
+```
+
+Every link in A13's chain now exists and has been verified, in this order:
+
+1. **A question whose unresolved portion legitimately justifies research**,
+   declared in code before it ran — §93.
+2. **An execution contract that does not discard valid work**, so the fragment
+   reached `ACCEPTED` with 57 of 60 claims and a 42,621-byte report filed with
+   30 citations resolving to accepted evidence — §93, and the 7/17 → 57/60
+   measurement that proves it.
+3. **A judge-recorded gap of the right class**, with a bounded question the
+   judge wrote: three `TARGETED_RESEARCH_GAP` entries on
+   `aud_bb7dcba8c56043c2836c` — §94.
+4. **The derivation, end to end, under test**: from a judge-recorded
+   `TARGETED_RESEARCH_GAP` through the archive check, the compiler and the
+   authority reservation to a launched mission and the parent's
+   `next_mission_id`, asserted exactly once over several further ticks, and
+   failing with *"the follow-on never launched"* when `TARGETED_RESEARCH_GAP`
+   is removed from `RESEARCH_JUSTIFYING_GAPS` — §93.
+5. **The scenario inside the acceptance scope**: the reporter resolves
+   `S12A-ACC-14 rcv_cd79bff8d3e941fda5e0`, so a follow-on on this mission is
+   one A13 counts.
+
+What is left is `unresolved_gap_policy = 'RECORD_GAPS'`, and the only writer of
+that column is `authorizeUnresolvedGaps` on the RECORD_GAPS answer to a Needs
+You request. `A14_HUMAN_RESUME` additionally requires
+`o.unresolved_gap_authorized_by = r.answered_by_user_id`, so **nothing a script
+or a worker submits can produce it** — which is the property that makes A14
+meaningful and is therefore not one to route around in order to pass A13.
+
+**A13 is not logically impossible.** It is one decision away, the decision is
+open, and the same operator answered the identical decision on
+`rhr_54180dd1d28646e89ef8` a day earlier — which is what closed A14. Filing a
+report short of its goal is a judgement the domain reserves to a person
+(invariant 20, §16, §24), and that reservation is the reason the gate is worth
+passing.
