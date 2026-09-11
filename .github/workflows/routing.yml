@@ -1,0 +1,138 @@
+# What a worker may be handed, on the deployed Brain.
+#
+# Narrow on purpose. `scripts/admin.ts` is the whole terminal surface — it can
+# create a project, queue an item, approve a packet and archive an identity —
+# and a workflow that exposed all of it would be §26's console again with a
+# YAML file instead of a page. This one reaches exactly one area, `routing`,
+# because that is the boundary this repository needs to be able to set and read
+# in production, and because a surface that can only do one thing is a surface
+# whose blast radius you can state in a sentence.
+#
+# Reaching this is still the authentication: dispatching it needs write access
+# to the repository and the Fly token, the same pair `Fleet` and `Factory`
+# already run on. `--admin` is the attribution, and `admin.ts` resolves it
+# against the database rather than trusting it.
+name: Routing
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'show | set | retire | clear | workers'
+        required: true
+        default: show
+      worker:
+        description: 'The worker name (set | retire | clear)'
+        required: false
+        default: ''
+      families:
+        description: '--families, comma separated: RESEARCH | FACTORY | GENERAL. Empty means serves nothing.'
+        required: false
+        default: ''
+      repositories:
+        description: '--repositories, comma separated owner/name. Required for FACTORY.'
+        required: false
+        default: ''
+      capabilities:
+        description: '--capabilities, comma separated. Empty means do not check capabilities.'
+        required: false
+        default: ''
+      reason:
+        description: '--reason: why this scope, recorded on the identity event'
+        required: false
+        default: ''
+      admin:
+        description: '--admin <email>: the administrator the change is recorded against'
+        required: false
+        default: ''
+
+# Never at the same time as a deploy: the machine is being replaced during one.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  routing:
+    name: Worker routing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Run
+        timeout-minutes: 10
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Through the environment, never interpolated into the shell. An input
+          # pasted into a command line is an injection whatever the dispatcher
+          # intended, and "only I can run this workflow" is not a guard.
+          ROUTING_COMMAND: ${{ inputs.command }}
+          ROUTING_WORKER: ${{ inputs.worker }}
+          ROUTING_FAMILIES: ${{ inputs.families }}
+          ROUTING_REPOSITORIES: ${{ inputs.repositories }}
+          ROUTING_CAPABILITIES: ${{ inputs.capabilities }}
+          ROUTING_REASON: ${{ inputs.reason }}
+          ROUTING_ADMIN: ${{ inputs.admin }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+
+          case "$ROUTING_COMMAND" in
+            show|set|retire|clear|workers) ;;
+            *)
+              echo "::error::Refusing '$ROUTING_COMMAND': one of show, set, retire, clear, workers."
+              exit 1
+              ;;
+          esac
+
+          # Identifiers: letters, digits, dot, colon, dash, underscore, slash
+          # (a repository is owner/name) and comma (a list is one value).
+          for value in "$ROUTING_WORKER" "$ROUTING_FAMILIES" \
+                       "$ROUTING_REPOSITORIES" "$ROUTING_CAPABILITIES"; do
+            case "$value" in
+              '') ;;
+              *[!A-Za-z0-9_.:,/-]*)
+                echo "::error::Refusing '$value': letters, digits, dot, colon, dash, underscore, slash and comma."
+                exit 1
+                ;;
+            esac
+          done
+          # An address additionally needs @ and +.
+          case "$ROUTING_ADMIN" in
+            '') ;;
+            *[!A-Za-z0-9_.@+-]*)
+              echo "::error::Refusing the administrator address: that is not an address."
+              exit 1
+              ;;
+          esac
+          # A reason is a sentence, so it allows spaces and ordinary punctuation
+          # and still refuses everything a shell could act on.
+          case "$ROUTING_REASON" in
+            *[!A-Za-z0-9_.:,\;\(\)\ /-]*)
+              echo "::error::Refusing the reason: letters, digits, spaces and ordinary punctuation."
+              exit 1
+              ;;
+          esac
+
+          if [ "$ROUTING_COMMAND" = workers ]; then
+            args="workers list"
+          else
+            args="routing $ROUTING_COMMAND"
+            if [ -n "$ROUTING_WORKER" ]; then args="$args $ROUTING_WORKER"; fi
+            if [ -n "$ROUTING_FAMILIES" ]; then args="$args --families $ROUTING_FAMILIES"; fi
+            if [ -n "$ROUTING_REPOSITORIES" ]; then args="$args --repositories $ROUTING_REPOSITORIES"; fi
+            if [ -n "$ROUTING_CAPABILITIES" ]; then args="$args --capabilities $ROUTING_CAPABILITIES"; fi
+            if [ -n "$ROUTING_ADMIN" ]; then args="$args --admin $ROUTING_ADMIN"; fi
+          fi
+          # The reason is quoted because it is the one value with spaces in it.
+          if [ -n "$ROUTING_REASON" ] && [ "$ROUTING_COMMAND" != show ] \
+             && [ "$ROUTING_COMMAND" != workers ] && [ "$ROUTING_COMMAND" != clear ]; then
+            args="$args --reason \"$ROUTING_REASON\""
+          fi
+
+          echo "admin $args"
+          set +e
+          flyctl ssh console --app "$app" -C "sh /app/scripts/admin.sh $args" 2>&1 | tee routing.txt
+          set -e
+          # The verdict comes from a line the command printed, not from an exit
+          # code that had to survive an SSH session, a shell and a CLI.
+          grep -q '^ADMIN: OK' routing.txt
