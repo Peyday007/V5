@@ -970,7 +970,11 @@ a value the claimant does not supply.**
   knew the answer could not change until the token aged out. Production measured
   it on `bin_aa20917c0c1a418895cd` — six recorded session refusals, and
   consecutive roles completing 53, 57, 36 and 61 minutes apart on work that
-  takes minutes. So `recordSessionRefusal` takes an upper bound and clamps the
+  takes minutes. **The 53 is the ladder to the digit**: `1 + 2 + 5 + 15 + 30`.
+  The token's hour bounds when a distinct session can first *exist*; the ladder
+  decides when Brain next *asks*, and only the second is Brain's to fix — a
+  session that became distinct at minute twelve was not asked about until minute
+  fifty-three. So `recordSessionRefusal` takes an upper bound and clamps the
   rung to it: the ladder, the refusal and every comparison are untouched, the
   bound exists only for a session-dimension refusal on a credential that
   actually expires, and it can only ever move a retry *earlier*, never later.

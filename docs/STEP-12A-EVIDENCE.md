@@ -9338,6 +9338,16 @@ Six session refusals, and consecutive roles 53, 57, 36 and 61 minutes apart on
 work that takes minutes. Two complete audit rounds cost the best part of four
 hours, almost all of it Brain waiting on its own clock.
 
+**The first gap is the ladder, exactly.** `REFUSAL_BACKOFF_MS` is
+`[60, 120, 300, 900, 1800]` seconds, so five refusals put the next question
+`1 + 2 + 5 + 15 + 30 = 53` minutes after the first — and PRIMARY completed at
+05:35:49 with ADVERSARIAL completing at 06:28:19, **53 minutes later**, against
+a bin carrying six refusals. That is worth stating precisely rather than
+attributing the whole delay to the token: the token's hour is the outer bound on
+*when a distinct session can first exist*, and the ladder is what decides *when
+Brain next asks*. The two compound, and only the second is Brain's to fix. A
+session that became distinct at minute 12 was not asked about until minute 53.
+
 **What was changed.** `recordSessionRefusal` now takes an upper bound and clamps
 the rung to it (`retryAtWithin` in `repos/util.ts`), and
 `services/research/sessionWindow.ts` answers where the bound comes from: the
