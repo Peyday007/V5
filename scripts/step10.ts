@@ -382,6 +382,95 @@ const ACCEPTANCE_SCENARIOS = {
    * Michigan publishes such a layer decides whether Deal Dispatch can build on
    * one, and "is it published" is exactly and only a presence question.
    */
+  /*
+   * The shape ACC-4 and ACC-6 were both declared for, and the reason neither
+   * reached it.
+   *
+   * `A13_AUTO_NEXT` needs a packet at `COMPLETE_WITH_GAPS` whose judge left a
+   * `FOUNDATIONAL_GAP` or `TARGETED_RESEARCH_GAP` with a written question, and
+   * `COMPLETE_WITH_GAPS` needs a person's RECORD_GAPS — which `choicesFor` only
+   * offers when something was **accepted**. So the packet has to finish
+   * *mixed*: part of the goal settled from sources the compiler's own evidence
+   * standard accepts, and a mandatory part the official record does not hold.
+   *
+   * Neither predecessor got there, for two different reasons that are both
+   * recorded rather than repaired:
+   *
+   *   - `S12A-ACC-4` asked what the written redistribution terms on the county
+   *     feeds are, and `capture`'s semantic dedupe merged it into the completed
+   *     idea, which had asked about bulk access *"and on what terms"*. The
+   *     dedupe was right.
+   *   - `S12A-ACC-6` asked for the realised net take-rate of comparable
+   *     marketplaces. That answer is private financial data, so the compiler
+   *     specified county-records sources for a question about private
+   *     marketplace economics, the worker reported the domain mismatch, and
+   *     nothing was accepted — a packet that fails rather than one that files
+   *     short. Refusing was correct at every step.
+   *
+   * This asks a **county-records** question, so the standard the compiler picks
+   * genuinely fits, and one whose answer the official record holds for some
+   * counties and not others. Registers of deeds and their portals do publish
+   * update cadences and availability statements — and plenty publish nothing at
+   * all about it, which §14 says is established by a documented search of the
+   * places it would be, or not at all.
+   *
+   * **Nothing manufactures the gap.** The instruction to say so plainly where a
+   * county states nothing is the negative-existence rule, not an invitation to
+   * come back short: if every county turns out to publish one, the packet
+   * settles its goal, files `COMPLETE`, and correctly produces no follow-on —
+   * and that is the answer, reported as the answer.
+   *
+   * Distinct where the dedupe looks: not bulk access, not licence or
+   * redistribution terms, not fee schedules, not whether a statewide parcel
+   * layer is published, not success-fee licensure. How *soon* a recorded
+   * instrument appears is a different fact from all of them, and it is the one
+   * Deal Dispatch's freshness promise actually rests on.
+   */
+  /*
+   * The same request, against the gate `S12A-ACC-12` found.
+   *
+   * ACC-12's message was answered in eighty-six seconds, the worker proposed a
+   * capture, and Brain's own `shouldCapture` declined it:
+   * `{"captureDeclined":true,"gateReason":"nothing here proposes work"}`. The
+   * marker list holds `check`, `verify`, `confirm`, `look into`, `find out` and
+   * `see`, and the sentence said *"Please go and establish"*. Its own comment
+   * states the rule as *"the verb has to be asked of somebody, or followed by
+   * the thing to be established"* — and the verb for establishing something was
+   * in neither alternation.
+   *
+   * Third time that list has been the thing, and the same defect each time. It
+   * is repaired narrowly at the gate — `establish` and `determine`, nothing
+   * further — and **the question is deliberately unchanged**, exactly as it was
+   * between ACC-8 and ACC-9. What changed is Brain.
+   */
+  'S12A-ACC-13': {
+    purpose:
+      'the ACC-12 request again, against the capture gate it found',
+    statement:
+      'establish how soon after recording each Michigan county makes a new instrument available electronically',
+    question:
+      "Deal Dispatch's freshness promise depends on how quickly a newly recorded instrument shows " +
+      'up in a county\'s electronic records, and we have never established that for Michigan. ' +
+      'Please go and establish, county by county for Michigan, how long after recording a new ' +
+      "document becomes available electronically — take it from each register of deeds' own " +
+      "published statement or its portal's stated update schedule, and where a county states " +
+      'nothing at all, say so plainly rather than estimating it.',
+  },
+  'S12A-ACC-12': {
+    purpose:
+      "a county-records question the official record answers for some counties and not for others: " +
+      "a packet that files short, the person's decision to record what is unresolved, and the one " +
+      'follow-on that leaves behind',
+    statement:
+      'establish how soon after recording each Michigan county makes a new instrument available electronically',
+    question:
+      "Deal Dispatch's freshness promise depends on how quickly a newly recorded instrument shows " +
+      'up in a county\'s electronic records, and we have never established that for Michigan. ' +
+      'Please go and establish, county by county for Michigan, how long after recording a new ' +
+      "document becomes available electronically — take it from each register of deeds' own " +
+      "published statement or its portal's stated update schedule, and where a county states " +
+      'nothing at all, say so plainly rather than estimating it.',
+  },
   'S12A-ACC-11': {
     purpose: 'a bounded cheap look, on a claim no other idea already covers',
     statement:
