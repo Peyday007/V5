@@ -667,10 +667,98 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * Retire a campaign whose work is obsolete, and everything still claimable in
+     * it.
+     *
+     * Two halves, and doing one without the other is what leaves a worker Brain
+     * can still be sent for a settled question (§24, three times). Cancelling the
+     * campaign stops the tick creating anything new; retiring its non-terminal
+     * bins stops an arriving worker being handed what is already there — an
+     * expired lease is claimable work, so a `LEASED` bin whose session is gone is
+     * not finished just because nothing is running.
+     *
+     * **It destroys nothing.** `CANCELLED` rather than `FAILED`, because the work
+     * did not fail — something stopped wanting it; the campaign's own recorded
+     * reason, every unit, commit, review, finding, bin result and event stays
+     * exactly as written, and the fencing generation advances so a late completion
+     * from a previous owner matches nothing. A terminal campaign is already out of
+     * `listLiveCampaigns`, so this is also what "archived" means here: nothing
+     * ticks it, and all of it is still readable.
+     */
+    case 'retire': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const reason = flagString(flags, 'reason') ?? fail('--reason is required: why this work is obsolete');
+      const campaign = await getCampaign(campaignId);
+      if (!campaign) fail('no such campaign');
+      const { campaignBins } = await import('../server/services/factory/remote.ts');
+      const { retireBin } = await import('../server/repos/bins.ts');
+      const users = await listUsers();
+      const operator = users.find((candidate) => candidate.isBrainAdmin && !candidate.disabled);
+      if (!operator) fail('no administrator exists to attribute this to');
+
+      const wasTerminal = campaign!.state === 'COMPLETE' || campaign!.state === 'CANCELLED';
+      let retired = 0;
+      let alreadyDone = 0;
+      for (const bin of await campaignBins(campaignId)) {
+        const outcome = await retireBin({
+          binId: bin.id,
+          leaseGeneration: bin.leaseGeneration,
+          operator: `operator:${operator!.id}`,
+          reason: `Campaign retired: ${reason}`,
+        });
+        if (outcome.ok) {
+          retired += 1;
+          process.stdout.write(`  retired ${bin.id} ${bin.kind} (was ${bin.state})\n`);
+        } else if (outcome.refusal === 'ALREADY_TERMINAL') {
+          alreadyDone += 1;
+        } else {
+          process.stdout.write(`  REFUSED ${bin.id}: ${outcome.refusal}\n`);
+        }
+      }
+
+      /*
+       * The campaign's own state moves only if it was still live. A COMPLETE
+       * campaign stays COMPLETE — rewriting a finished campaign as cancelled would
+       * assert that its work was abandoned, which is a different and untrue thing.
+       */
+      if (!wasTerminal) {
+        const { patchCampaign } = await import('../server/repos/factory.ts');
+        await patchCampaign(campaignId, {
+          state: 'CANCELLED',
+          stageDetail: 'retired by an operator; the work is obsolete',
+          blockerKind: null,
+          blockerDetail: null,
+        });
+      }
+      const { recordFactoryEvent } = await import('../server/repos/factoryFleet.ts');
+      const { FACTORY_EVENT_KINDS } = await import('../server/services/factory/metrics.ts');
+      await recordFactoryEvent({
+        campaignId,
+        kind: FACTORY_EVENT_KINDS.campaignState,
+        evidenceClass: 'MEASURED',
+        detail: {
+          operator: `operator:${operator!.id}`,
+          retired: true,
+          reason,
+          wasState: campaign!.state,
+          nowState: wasTerminal ? campaign!.state : 'CANCELLED',
+          binsRetired: retired,
+          binsAlreadyTerminal: alreadyDone,
+        },
+      });
+      process.stdout.write(
+        `retired ${campaignId}: was ${campaign!.state}, now ` +
+          `${wasTerminal ? campaign!.state : 'CANCELLED'}; ${retired} bin(s) retired, ` +
+          `${alreadyDone} already terminal\n`,
+      );
+      break;
+    }
+
     default:
       process.stdout.write(
         'commands: fleet, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
-          '  remote-tick, campaigns, bins, status, answer-bin, reauthorize, release\n',
+          '  remote-tick, campaigns, bins, status, answer-bin, reauthorize, retire, release\n',
       );
   }
 

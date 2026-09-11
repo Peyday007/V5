@@ -874,6 +874,79 @@ export async function reopenNeedsHumanBin(input: {
 }
 
 /**
+ * Take a bin out of service, whatever state it is in, and fence its last owner.
+ *
+ * The existing terminal transitions are each guarded on the one state they are
+ * about: `terminateUnleasedBin` matches `READY`/`DRAFT`, `resolveNeedsHumanBin`
+ * matches `NEEDS_HUMAN`, and `finishBin` needs the lease. None of them is what an
+ * operator retiring obsolete work has — a bin may be `LEASED` to a session that
+ * will never come back, and the operator holds no lease to prove.
+ *
+ * Four properties make it a retirement rather than an override, and they are the
+ * same four the reopen has:
+ *
+ *   - **It matches only non-terminal states.** A `COMPLETE`, `CANCELLED` or
+ *     `FAILED` bin matches nothing, so this can never rewrite a finished one or
+ *     turn a completion into a cancellation.
+ *   - **It is a compare-and-swap on the generation**, so an operator acting on a
+ *     bin that has since moved writes nothing and is told to look again.
+ *   - **It advances the generation**, which is what makes it win: a late
+ *     completion from the session that held it matches nothing, exactly as
+ *     cancellation fences one everywhere else in this file.
+ *   - **It records why, with the actor.** `BIN_TERMINAL` carries both, because a
+ *     bin that stopped for a reason nobody wrote down is a bin somebody will
+ *     reopen by mistake.
+ *
+ * Nothing is deleted. The unit results, the completion refusals, the dispatch
+ * rows and every event stay exactly where they are — §5 — so a retired bin is
+ * still readable as the history of what was attempted.
+ */
+export async function retireBin(input: {
+  binId: string;
+  /** The generation the caller believes it is acting on. */
+  leaseGeneration: number;
+  operator: string;
+  reason: string;
+}): Promise<{ ok: boolean; refusal?: 'NOT_FOUND' | 'ALREADY_TERMINAL' | 'STALE_GENERATION'; bin?: Bin }> {
+  const before = await getBin(input.binId);
+  if (!before) return { ok: false, refusal: 'NOT_FOUND' };
+  if (['COMPLETE', 'CANCELLED', 'FAILED'].includes(before.state)) {
+    return { ok: false, refusal: 'ALREADY_TERMINAL', bin: before };
+  }
+  const at = binNow();
+  const result = await getDb().run(
+    `UPDATE bins
+        SET state = 'CANCELLED', lease_generation = lease_generation + 1,
+            lease_id = NULL, worker_id = NULL, lease_credential_id = NULL,
+            lease_session_ref = NULL, leased_at = NULL, heartbeat_at = NULL,
+            lease_expires_at = NULL, dispatch_not_before = NULL,
+            terminal_reason = ?, completed_at = ?, updated_at = ?
+      WHERE id = ? AND lease_generation = ?
+        AND state NOT IN ('COMPLETE', 'CANCELLED', 'FAILED')`,
+    [bounded(input.reason, MAX_REASON_CHARS), at, at, input.binId, input.leaseGeneration],
+  );
+  if (result.changes !== 1) return { ok: false, refusal: 'STALE_GENERATION', bin: before };
+
+  await recordBinEvent({
+    eventType: 'BIN_TERMINAL',
+    binId: before.id,
+    projectId: before.projectId,
+    orchestrationId: before.orchestrationId,
+    leaseGeneration: before.leaseGeneration + 1,
+    attempt: before.attemptCount,
+    outcome: 'CANCELLED',
+    reason: input.reason,
+    measures: {
+      operator: input.operator,
+      previousState: before.state,
+      previousGeneration: before.leaseGeneration,
+      retired: true,
+    },
+  });
+  return { ok: true, bin: (await getBin(input.binId)) ?? undefined };
+}
+
+/**
  * Make a drafted bin dispatchable.
  *
  * Guarded on `DRAFT` so two callers cannot both "make it ready" and both

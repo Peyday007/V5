@@ -562,3 +562,65 @@ describe('a repository id comes from the manifest, not from a name', () => {
     expect(verdict.reason).toContain('REPOSITORY_NOT_NAMED');
   });
 });
+
+describe('retiring obsolete work leaves the history and takes the claim away', () => {
+  /*
+   * Both halves, because doing one without the other is what leaves a worker Brain
+   * can still be sent for a settled question: an expired lease is claimable work,
+   * so a LEASED bin whose session is gone is not finished just because nothing is
+   * running.
+   */
+  it('cancels a non-terminal bin, fences its last owner, and keeps every row', async () => {
+    const { retireBin, listBinEvents } = await import('../server/repos/bins.ts');
+    const bin = await researchBin();
+
+    const outcome = await retireBin({
+      binId: bin.id,
+      leaseGeneration: bin.leaseGeneration,
+      operator: 'operator:test',
+      reason: 'the project this belonged to is retired',
+    });
+    expect(outcome.ok).toBe(true);
+    const after = (await getBin(bin.id))!;
+    expect(after.state).toBe('CANCELLED');
+    // Fenced: a late completion from whoever held it matches nothing.
+    expect(after.leaseGeneration).toBe(bin.leaseGeneration + 1);
+    expect(after.terminalReason).toContain('retired');
+    // And the reason is on the ledger with the actor.
+    const events = await listBinEvents(bin.id, 20);
+    expect(events.some((event) => event.eventType === 'BIN_TERMINAL')).toBe(true);
+  });
+
+  it('refuses a finished bin rather than rewriting it', async () => {
+    const { retireBin } = await import('../server/repos/bins.ts');
+    const bin = await researchBin();
+    await retireBin({
+      binId: bin.id,
+      leaseGeneration: bin.leaseGeneration,
+      operator: 'operator:test',
+      reason: 'first time',
+    });
+    const again = await retireBin({
+      binId: bin.id,
+      leaseGeneration: bin.leaseGeneration + 1,
+      operator: 'operator:test',
+      reason: 'second time',
+    });
+    expect(again.ok).toBe(false);
+    expect(again.refusal).toBe('ALREADY_TERMINAL');
+  });
+
+  it('refuses a generation the operator was not reasoning about', async () => {
+    const { retireBin } = await import('../server/repos/bins.ts');
+    const bin = await researchBin();
+    const stale = await retireBin({
+      binId: bin.id,
+      leaseGeneration: bin.leaseGeneration + 7,
+      operator: 'operator:test',
+      reason: 'acting on a bin that has moved',
+    });
+    expect(stale.ok).toBe(false);
+    expect(stale.refusal).toBe('STALE_GENERATION');
+    expect((await getBin(bin.id))!.state).toBe('READY');
+  });
+});
