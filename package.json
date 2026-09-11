@@ -28,7 +28,10 @@
     "admin": "tsx scripts/admin.ts",
     "report:packet": "tsx scripts/packet-report.ts",
     "verify:capability": "tsx scripts/verify-research-capability.ts",
-    "step12a:acceptance": "tsx --env-file-if-exists=.env scripts/step12a-acceptance.ts"
+    "step12a:acceptance": "tsx --env-file-if-exists=.env scripts/step12a-acceptance.ts",
+    "factory": "tsx --env-file-if-exists=.env scripts/factory.ts",
+    "factory:acceptance": "tsx --env-file-if-exists=.env scripts/factory-acceptance.ts",
+    "factory:verify": "tsx --env-file-if-exists=.env scripts/factory-verify.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

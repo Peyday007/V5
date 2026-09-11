@@ -1,0 +1,148 @@
+# The Postgres half of the test contract, in CI.
+#
+# ---------------------------------------------------------------------------
+# Why this exists
+# ---------------------------------------------------------------------------
+#
+# CLAUDE.md says the Postgres run "is the only thing that proves one repository
+# layer over two databases is true rather than merely compiling", and `Deploy`'s
+# own verify job says, accurately, that it does not run it: "The Postgres run
+# needs a server and is a local/pre-merge concern". That left the stronger of the
+# two gates reachable only from whichever machine happened to have a cluster on
+# it, which is the same as saying it was reachable on trust.
+#
+# So it runs here, on demand, against the commit you name. `workflow_dispatch`
+# only, for the reason `Deploy` gives: this suite takes the best part of twenty
+# minutes and a push is not a request to spend that.
+#
+# ---------------------------------------------------------------------------
+# Why there is no password anywhere in this file
+# ---------------------------------------------------------------------------
+#
+# The obvious shape is a `services: postgres` container with POSTGRES_PASSWORD
+# written in, and the obvious shape puts a credential — a throwaway one, but a
+# credential — into a file that outlives every run of it. Invariant 22 admits no
+# exception for a credential that is convenient, and there is a better option on
+# this runner: PostgreSQL is already installed, and Debian's default `pg_hba`
+# authenticates local socket connections by *peer*, which is to say by the
+# operating-system user. So the job creates a role named after the user it is
+# already running as and connects over the socket. Nothing is stored, nothing is
+# echoed, and there is no value for a later reader of this file to find.
+name: Postgres suite
+
+# ---------------------------------------------------------------------------
+# Why a tag as well as a button
+# ---------------------------------------------------------------------------
+#
+# `workflow_dispatch` can only be *called* for a workflow that already exists on
+# the default branch — the API answers 404 for one that lives on a feature branch,
+# however correct the file is. That makes the button useless for exactly the case
+# it is most needed in: verifying the branch that introduces the workflow.
+#
+# A push trigger runs the workflow from the pushed tree itself, so the branch that
+# adds this file is gated by it immediately. It is scoped to the branch that needs
+# it rather than to everything, because this suite takes the best part of twenty
+# minutes and most branches already have a cheaper answer. Once this reaches the
+# default branch the button works everywhere and the branch list below is the part
+# to delete.
+#
+# (A tag trigger would be tidier and is not available here: the environment this
+# was written in can push a branch and is refused a tag.)
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'What is being verified, for the run log'
+        required: false
+        default: 'the repository layer against the other backend'
+  push:
+    branches:
+      - 'claude/pensive-bell-dr81a4'
+
+# One at a time, and the newest commit is the one worth the twenty minutes: a
+# push that supersedes the commit a run is verifying makes that run's answer
+# about a tree nobody is shipping.
+concurrency:
+  group: postgres-suite-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    name: The whole suite, against Postgres
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # The same two binaries the runtime image and the Deploy gate install, for
+      # the same reason: a suite that skips its OCR tests is honest and is not a
+      # run of the program being shipped.
+      - name: Install the OCR tooling the runtime image has
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            poppler-utils tesseract-ocr tesseract-ocr-eng
+          tesseract --version | head -1
+
+      - name: Start the cluster already on this runner, and make a database for it
+        run: |
+          set -euo pipefail
+          # The image ships a cluster that is installed and stopped.
+          sudo systemctl start postgresql || sudo pg_ctlcluster "$(pg_lsclusters -h | awk 'NR==1{print $1}')" main start
+          for attempt in $(seq 1 30); do
+            pg_isready -q && break
+            sleep 1
+          done
+          pg_isready
+          # Peer authentication over the socket: the role is named after the user
+          # this job already runs as, so the operating system is the credential
+          # and there is nothing to store. CREATEDB rather than SUPERUSER — the
+          # suite creates and drops its own schemas and needs no more than that.
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c \
+            "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$(whoami)') THEN CREATE ROLE \"$(whoami)\" LOGIN CREATEDB; END IF; END \$\$;"
+          # `createdb` rather than a `\gexec` one-liner: `\gexec` is a psql
+          # meta-command read from stdin and is a syntax error inside `-c`, which
+          # is how the first run of this workflow failed.
+          if ! sudo -u postgres psql -tAc \
+            "SELECT 1 FROM pg_database WHERE datname = 'brain_test'" | grep -q 1; then
+            sudo -u postgres createdb -O "$(whoami)" brain_test
+          fi
+          # Proof it answers as this user, before twenty minutes are spent finding out.
+          psql "postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable" -tAc \
+            "select 'connected as ' || current_user || ' to ' || current_database()"
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      # `sslmode=disable` is required rather than tidy: a unix socket cannot do
+      # TLS, and the Postgres adapter asks for it by default whenever the URL
+      # does not say otherwise.
+      - name: The suite
+        env:
+          BRAIN_TEST_DATABASE_URL: postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable
+        run: npm test
+
+      # Useful on a failure, and quiet about the ordinary case.
+      #
+      # The suite drops the schemas it created when it finishes, so on a green run
+      # `schema_migrations` is *correctly* gone — and asking for it anyway printed
+      # `ERROR: relation "schema_migrations" does not exist` into an otherwise
+      # passing log. A green log with an error in it costs somebody ten minutes
+      # the next time they read one.
+      - name: What the database ended up holding
+        if: always()
+        run: |
+          present=$(psql "postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable" -tAc \
+            "select to_regclass('public.schema_migrations') is not null" 2>/dev/null || echo f)
+          if [ "$present" = "t" ]; then
+            psql "postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable" -tAc \
+              "select 'schema version ' || coalesce(max(version)::text, 'none') from schema_migrations"
+          else
+            echo "No schema left, which is what a finished run should leave: the suite drops what it created."
+          fi

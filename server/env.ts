@@ -22,6 +22,30 @@ export const TMP_ROOT = path.join(DATA_ROOT, 'tmp');
 export const PROJECT_STATE_FILE = path.join(RUNTIME_ROOT, 'project-state.json');
 
 /**
+ * Where the Software Factory puts the worktrees its workers run in.
+ *
+ * Disposable by design: a worktree is execution scratch, and the evidence a
+ * campaign keeps is its commits, its rows and its artifacts. So this is the one
+ * factory path that is deliberately *not* authoritative state in either mode —
+ * retiring a worktree after a campaign destroys nothing that mattered.
+ *
+ * Overridable because a factory needs somewhere on a local disk to check code
+ * out, and the data root is not always the right disk for that.
+ */
+export const FACTORY_ROOT = path.resolve(
+  process.env.BRAIN_FACTORY_ROOT ?? path.join(DATA_ROOT, 'factory'),
+);
+
+/**
+ * The repository the factory operates on when a change request does not name
+ * one. The checkout this server is running from, which is the only repository a
+ * local factory can reach without being given a clone.
+ */
+export const FACTORY_DEFAULT_REPO_ROOT = path.resolve(
+  process.env.BRAIN_FACTORY_REPO_ROOT ?? REPO_ROOT,
+);
+
+/**
  * `??` does not catch an empty string, and `Number('')` is 0 — which binds a
  * random ephemeral port while the banner cheerfully prints localhost:0 and the
  * Vite proxy points nowhere. Treat anything unusable as "not set".

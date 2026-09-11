@@ -1714,6 +1714,103 @@ deliberately *classifies* rather than bans — this file records its own
 corrections, and a sentence like "it was on the operator console, and that was
 wrong" is history worth keeping. What must not exist is somewhere to go.
 
+## 27. The factory is an entrance to the same machinery, and its evidence is the repository.
+
+The Software Factory (`server/services/factory/`, `server/repos/factory.ts`,
+`server/repos/factoryFleet.ts`, `docs/FACTORY.md`) converts an approved software
+objective into verified, reviewable code. It is the same shape every step since 5
+has had — a claim is a compare-and-swap on a generation, a refusal is the same
+deny-by-default decision `services/identity/policy.ts` already makes, and the
+metrics are one append-only ledger rather than a second table that must agree
+with it. **There is no second orchestration universe beside Brain**, and a
+factory that grew one would be a second security model with the weaker half
+winning.
+
+- **A worker's summary is never evidence.** `IMPLEMENTED` means a branch moved;
+  `MERGED` means the diff stayed inside the paths the unit declared *and* the
+  repository's own commands passed on the merged tree. A worker that wrote a
+  confident report and no code has not done the work, and the branch is how the
+  factory knows. Every sentence the factory says about what happened resolves to
+  a commit, a diff, an exit code or a row.
+- **A unit owns a mutation surface, declared before it runs.** Two units whose
+  surfaces intersect are never leased at once, and the check is in the claim loop
+  *ahead of* the swap — so a refusal costs no attempt, no lease and no
+  generation, exactly as §23's correction requires. A diff that reached outside
+  its surface is rejected whole rather than cherry-picked: a diff the unit did
+  not declare is a diff nobody reviewed the scope of.
+- **A dependency is satisfied by integration, not by implementation.** A worker's
+  worktree is pinned to the campaign base or to an explicitly recorded
+  integration descendant of it, never to a sibling's unmerged branch. Nothing
+  uncommitted is ever a channel between workers.
+- **The contract is immutable where it says what success is.** Objective,
+  expected outcome and approved acceptance conditions cannot be amended by a
+  FACTORY actor at all; a mutation scope may only narrow and a verification
+  command may only be added. Every permitted amendment is an append-only row
+  carrying both values, the reason, the affected units and whether
+  re-verification is required. A factory that could edit its acceptance
+  conditions would be grading its own exam.
+- **A plan is a proposal.** `planner.ts` refuses the whole plan for an unknown
+  field, an invented verification command, a path outside the approved scope, a
+  dependency cycle, or a mandatory condition no unit claims to serve. A
+  partially-installed plan is a graph with holes in it, and a campaign built on
+  one runs happily and produces something nobody asked for.
+- **A provider refusal is backpressure, not failure.** The unit is deferred, the
+  attempt it spent is refunded, and the worker is marked rate-limited rather than
+  quarantined. §23's sentence, one altitude down: an account at its ceiling is
+  busy rather than broken, and a refusal recorded as a failure walks a healthy
+  unit toward exhaustion against a condition that was never about the work.
+- **Review independence is execution lineage.** The floor is a different
+  *session* from the one that implemented the work, refused from recorded
+  lineage rather than from a role label. Worker and account separation are
+  stronger tiers that are reported when the fleet supplies them and never
+  rounded up. A reviewer's worktree is detached at the reviewed commit and its
+  tool allowance contains no writing tool, so "a reviewer cannot silently mutate
+  reviewed work" is a property of the execution rather than a rule in a prompt.
+  A verdict is matched exactly; `PASS` alongside a BLOCKER is refused outright
+  and nothing is recorded.
+- **A finding becomes work without anybody carrying it.** Each one becomes a
+  repair unit in the same campaign, exactly once, with ownership derived from the
+  reviewer's hint held against the approved scope — a hint can narrow a repair's
+  reach and can never widen it. A finding is REPAIRED when its unit integrated
+  and the verification passed, never because a worker said so.
+- **Adding a worker is a row.** `factory_workers.kind` selects an executor that
+  already exists, and a kind nothing implements is refused at registration rather
+  than discovered at dispatch. Scaling the fleet is never a factory code change.
+  The registry holds the *name* of a secret and a digest taken once; no
+  projection recovers a value from one.
+- **Lane count is measured, not configured.** `scheduler.ts` is a pure function
+  over a recorded snapshot — so "why did this unit go to that worker" is
+  answerable afterwards — and being pure makes it useless as a safety mechanism:
+  the exclusion is the compare-and-swap, and this can under-assign and cannot
+  over-assign. The tuner reads first-pass success, contention and provider
+  refusals. A person is never asked for a worker count.
+- **Concurrency is reported as what overlapped.** `maxObservedConcurrency` is the
+  true maximum overlap of real session intervals; the sum of declared concurrency
+  is a projection and is never reported as throughput. A ceiling nobody has
+  observed reads UNKNOWN and stays UNKNOWN.
+- **No paid model API can be activated by accident.** The local executor removes
+  every API-key variable from the child's environment, so the guarantee is the
+  spawn rather than a promise in a comment. A worker authenticates the way the
+  session that launched it does, against the subscription already in place.
+- **Two decisions belong to a person, and the factory has no path around
+  either.** Approving the objective, and approving the release. Both are guarded
+  single-shot transitions; a worker principal is refused at both by principal
+  type. The factory may open a reviewable pull request and may never merge to a
+  protected branch or deploy a product change to production. `assemble.ts`
+  produces the branch, the patch and the body and **stops** — a function that
+  quietly published would make that boundary depend on nobody calling it.
+- **Every escalation has an answering transition.** `BLOCKED` names an
+  operational fact from a closed vocabulary and a remedy somebody can apply, and
+  a blocked campaign is re-examined on the next tick rather than retired.
+  `AWAITING_RELEASE` has a guarded answer a route can deliver. A state that says
+  "waiting for a person" which that person cannot resolve is not waiting; §24's
+  sentence, at a fourth altitude.
+
+A worktree is the one factory path that is deliberately *not* authoritative
+state in either mode: it is execution scratch, the evidence is the commits, the
+rows and the artifacts, and retiring one destroys nothing that mattered. It
+carries a symlink to the repository's `node_modules` because a worktree that
+cannot run the repository's own commands cannot be verified.
 
 ---
 
@@ -1744,6 +1841,8 @@ server/
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
+    factory.ts          the contract, the campaign, and units that own a surface
+    factoryFleet.ts     factory workers, sessions, reviews, findings, the ledger
     externalRecords.ts  a site's record, its version guard, and its refusals
   services/
     storage.ts          document keys, confinement, and writing through the store
@@ -1793,6 +1892,22 @@ server/
       scaler.ts         raise, lower, quarantine — proposals, never actions
       simulate.ts       a deterministic projection, structurally labelled
       profiles.ts       workload cost and activation traces, as queries
+    factory/
+      contract.ts       the change request, and what may never happen to it
+      planner.ts        a proposed plan, validated to death before a row is written
+      architect.ts      the decomposition pass, and the plan it is refused for
+      registry.ts       the worker registry, and what the fleet can currently run
+      scheduler.ts      a pure decision, and the lane count it measures
+      git.ts            worktrees, diffs and merges — the factory's only evidence
+      dispatch.ts       one unit on one worker, and the four ways it can end
+      integrate.ts      ownership, the merge, and the verification that follows it
+      review.ts         the independent verdict, and the lineage that makes it one
+      repair.ts         a finding becomes work, exactly once
+      assemble.ts       the reviewable artifact, and the publishing it refuses
+      metrics.ts        throughput from the ledger, with an evidence class
+      prompts.ts        every assignment, compiled from rows
+      loop.ts           the tick, and every stage's answering transition
+      executors/        how a worker is actually run; adding one is a row
     connect/
       sites.ts          a connected site's identity, credential and status, as one action
       contract.ts       the frozen wire contract, and nothing about it trusted
@@ -1870,6 +1985,7 @@ server/
     legacy.ts           the 2025-11-25 front-end, over the official SDK
     endpoint.ts         POST /mcp: auth, origin, limits, era selection
   routes/               HTTP API
+    factory.ts          the Software Factory: objective, stage, evidence, release
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
     russell.ts          Russell's surface: threads, briefing, work, ideas, sites, Needs You
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
@@ -1884,6 +2000,7 @@ client/                 React UI
   src/russell/          the whole product: conversation, thin views, states
   src/App.tsx           the legacy console, at /legacy
 scripts/
+  factory.ts                the operator's factory surface: register, submit, run
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
   admin.ts                  emergency administration, on a terminal rather than a page
