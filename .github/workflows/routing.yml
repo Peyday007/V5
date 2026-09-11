@@ -18,11 +18,15 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'show | set | retire | clear | workers'
+        description: 'show | check | set | retire | clear | workers'
         required: true
         default: show
       worker:
-        description: 'The worker name (set | retire | clear)'
+        description: 'The worker name (check | set | retire | clear)'
+        required: false
+        default: ''
+      bin:
+        description: 'A bin id (check): would this worker be handed it?'
         required: false
         default: ''
       families:
@@ -68,6 +72,7 @@ jobs:
           # intended, and "only I can run this workflow" is not a guard.
           ROUTING_COMMAND: ${{ inputs.command }}
           ROUTING_WORKER: ${{ inputs.worker }}
+          ROUTING_BIN: ${{ inputs.bin }}
           ROUTING_FAMILIES: ${{ inputs.families }}
           ROUTING_REPOSITORIES: ${{ inputs.repositories }}
           ROUTING_CAPABILITIES: ${{ inputs.capabilities }}
@@ -77,16 +82,16 @@ jobs:
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
 
           case "$ROUTING_COMMAND" in
-            show|set|retire|clear|workers) ;;
+            show|check|set|retire|clear|workers) ;;
             *)
-              echo "::error::Refusing '$ROUTING_COMMAND': one of show, set, retire, clear, workers."
+              echo "::error::Refusing '$ROUTING_COMMAND': one of show, check, set, retire, clear, workers."
               exit 1
               ;;
           esac
 
           # Identifiers: letters, digits, dot, colon, dash, underscore, slash
           # (a repository is owner/name) and comma (a list is one value).
-          for value in "$ROUTING_WORKER" "$ROUTING_FAMILIES" \
+          for value in "$ROUTING_WORKER" "$ROUTING_BIN" "$ROUTING_FAMILIES" \
                        "$ROUTING_REPOSITORIES" "$ROUTING_CAPABILITIES"; do
             case "$value" in
               '') ;;
@@ -118,6 +123,7 @@ jobs:
           else
             args="routing $ROUTING_COMMAND"
             if [ -n "$ROUTING_WORKER" ]; then args="$args $ROUTING_WORKER"; fi
+            if [ -n "$ROUTING_BIN" ]; then args="$args $ROUTING_BIN"; fi
             if [ -n "$ROUTING_FAMILIES" ]; then args="$args --families $ROUTING_FAMILIES"; fi
             if [ -n "$ROUTING_REPOSITORIES" ]; then args="$args --repositories $ROUTING_REPOSITORIES"; fi
             if [ -n "$ROUTING_CAPABILITIES" ]; then args="$args --capabilities $ROUTING_CAPABILITIES"; fi

@@ -26,6 +26,8 @@
  * fewer witnesses.
  *
  *   npm run admin -- workers list
+ *   npm run admin -- routing show
+ *   npm run admin -- routing check <worker> <bin>
  *   npm run admin -- workers disable <name> --admin someone@example.com
  *   npm run admin -- workers archive <name> --admin someone@example.com
  *   npm run admin -- projects list
@@ -61,8 +63,13 @@ import { listOrchestrationsByProject, currentFragments } from '../server/repos/r
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import { reissueMissingVerification, retryFragment } from '../server/services/research/reissue.ts';
 import { CONNECTOR_SCOPES } from '../server/domain/types.ts';
-import { WORKLOAD_FAMILIES } from '../server/services/bins/routing.ts';
-import type { User } from '../server/domain/types.ts';
+import {
+  WORKLOAD_FAMILIES,
+  decideBinRouting,
+  familyOf,
+  repositoryIdOf,
+} from '../server/services/bins/routing.ts';
+import type { Principal, User } from '../server/domain/types.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -161,7 +168,8 @@ async function workerFrom(ref: string) {
 const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@example.com]
 
   workers   list | disable <name> | enable <name> | archive <name>
-  routing   show | set <worker> --families A,B [--repositories o/r,...]
+  routing   show | check <worker> <bin>
+            set <worker> --families A,B [--repositories o/r,...]
                    [--capabilities a,b] --reason "why"
             clear <worker> | retire <worker> --reason "why"
   projects  list | create <name>
@@ -233,6 +241,47 @@ async function main(): Promise<void> {
         console.log('  derived (no explicit row — scopes imply the family, never repository work):');
         for (const worker of implicit) console.log(`      ${worker.name}`);
       }
+      break;
+    }
+    /*
+     * Would this worker be handed this bin? A projection, and it says so: it reads
+     * the worker's current memberships and routing row and asks the same function
+     * the admission hook asks, so the answer is about production rows rather than
+     * about a guess — but it authenticates nothing and claims nothing, and a real
+     * claim is still decided inside the claim loop at the time it is made.
+     */
+    case 'routing check': {
+      const worker = await workerFrom(rest[0] ?? fail('Name a worker.'));
+      const binId = rest[1] ?? fail('Name a bin.');
+      const { getBin } = await import('../server/repos/bins.ts');
+      const bin = await getBin(binId);
+      if (!bin) fail(`No bin ${binId}.`);
+      const memberships = await listMembershipsForPrincipal('WORKER', worker.id);
+      const principal = {
+        type: 'WORKER',
+        id: worker.id,
+        handle: worker.name,
+        displayName: worker.name,
+        isBrainAdmin: false,
+        mustChangePassword: false,
+        credentialId: null,
+        authMethod: 'WORKER_BEARER',
+        memberships,
+        requestId: 'admin-routing-check',
+      } as unknown as Principal;
+      // The same reader the admission hook uses, so this cannot describe a scope
+      // the claim would not apply.
+      const { workerRoutingFor } = await import('../server/services/bins/service.ts');
+      const routing = await workerRoutingFor(worker.id, principal);
+      const decision = decideBinRouting({ bin, principal, routing });
+      console.log(`  bin        ${bin.id}  ${bin.kind}  ${bin.state}  class=${bin.workloadClass ?? '—'}`);
+      console.log(`  family     ${familyOf(bin)}  repository=${repositoryIdOf(bin) ?? '—'}`);
+      console.log(`  worker     ${worker.name}  ${routing.explicit ? 'explicit' : 'derived'} ` +
+        `families=[${routing.families.join(',')}] repositories=[${routing.repositories.join(',')}]`);
+      console.log(`  decision   ${decision.ok ? 'WOULD BE HANDED IT' : decision.refusal}`);
+      // A refusal names itself; an admission has nothing to explain beyond the
+      // scope it was judged against, so that is what is printed.
+      console.log(`  reason     ${decision.reason ?? routing.reason}`);
       break;
     }
     case 'routing set': {
