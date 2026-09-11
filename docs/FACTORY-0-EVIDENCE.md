@@ -334,6 +334,58 @@ in different states, a takeover on the ledger, and the writeback — left before
 production restart the deploy pipeline performs and checked afterwards by a process
 that created none of it.
 
+### A production campaign against a repository the factory does not live in
+
+`fcr_c09304a05b8f4138824c` / `fcp_4b7d0487f2f342069687`, against
+`Peyday007/oakwood-junk-removal` — a live 804-line single-file marketing site with
+a Formspree quote form, one commit, and no build, tests or CI. Pinned at
+`584bfd2`; integrated at `7d6b2adf`; pull request
+[#1](https://github.com/Peyday007/oakwood-junk-removal/pull/1). Nothing was
+merged or deployed.
+
+Measured, from rows: 11 units (7 planned, 4 repairs), all integrated. 20 worker
+sessions across 6 workers; **maximum observed concurrency 4, MEASURED**, and the
+role breakdown attributes that peak to `IMPLEMENTER` rather than to the campaign
+in general — the figure the closed A03 finding added. 53.3 minutes wall clock,
+1.22 worker-hours. 11 merges, 2 rejections, 3 verification failures. Verification
+ran 17 times: 14 passed, 3 failed. First-pass success 72.7%. Two review rounds,
+6 findings, 2 of them BLOCKER, 4 repaired and re-reviewed without anybody
+carrying a finding anywhere. **Paid model API executions: 0.**
+
+Three things it proved that the bootstrap campaign could not.
+
+**The architect's graph was real, and the ownership partition was its own idea.**
+One INTERFACE unit owning `package.json`, the lockfile, `.gitignore` and the test
+helpers; four units behind it owning disjoint paths; one independent unit owning
+`index.html`; one DOCS unit depending on all six. Four lanes ran at the same
+instant, and the tuner raised the lane target from 3 to 4 on its own, citing four
+independent units waiting on six free slots with no refusals.
+
+**The reviewer caught two blocking defects that reading the diff would not.** No
+`package-lock.json` was committed, so the CI workflow's `npm ci` would have failed
+on every push and the guard would never have run — a change that looks complete
+and silently does nothing. And the `npm test` entry point every acceptance
+condition is checked through could not run at all: `node --test test/` resolves
+the directory as a module on Node 22. I had independently confirmed that failure
+by running the suite myself before the review reported it, which is the only
+reason I can say the reviewer was right rather than plausible.
+
+**Two defects in the factory came out of it, and both are fixed forward.** A
+repair whose whole job was to add `package-lock.json` was refused twice with
+"untracked working tree files would be overwritten by merge" — because
+verification runs `npm install` in the integration worktree, and git refuses a
+merge that would overwrite an untracked file. Nothing uncommitted there is ever
+evidence, so the worktree is reset before each merge. And a contract had nowhere
+to record which checkout it worked in, so the path came from whoever started the
+tick; migration 038 puts it on the contract and `runTick` reads it from there.
+Neither was findable by reading: both needed a campaign against a repository that
+started with no `package.json`.
+
+The dispatcher was also killed mid-campaign to land the first of those fixes, and
+the recovery worked as designed: the tick lease expired, a second dispatcher
+claimed it, closed the orphaned session, reclaimed the lease, and the three
+repairs then merged on the next tick.
+
 ## 4. What is not proven
 
 **Every one of the twenty-four production-shaped conditions passes**, read from
@@ -364,6 +416,23 @@ That is a credential boundary, not a missing capability.
 a real second worker kind and its probe reports itself unusable, because the
 factory-unit handshake for Brain's dispatch fleet is not built. It is UNKNOWN
 capacity rather than available capacity, and the scheduler will not route to it.
+
+**The hosted control plane is deployed and verified either side of a real
+restart.** Deploy run 164, commit `3101b16`, to `northline-brain.fly.dev`:
+typecheck, the SQLite suite and the client build in CI; the image released; the
+hosted verification **193/193**; the bootstrap secrets spent; the machine
+restarted on purpose; and **193/193 again afterwards**, from a process that
+created none of what it was checking. Among those are ten checks on the factory's
+own boundary at the edge and thirteen on a beacon left before the restart — a
+campaign, three units including one holding a live hour-long lease, two sessions,
+a review with its verdict and tier, two findings in different states, a takeover
+on the ledger, and the writeback, still exactly one of it.
+
+**What the deployed factory deliberately cannot do is accept an objective**, and
+it now says so properly: the production image contains no `.git`, so there is no
+commit to pin, and the route answers 422 naming the remedy instead of the 500
+carrying a git error it used to answer. Execution lives where a worker and a
+checkout are, which is §22's rule rather than a gap.
 
 **Five MINOR findings are open on the bootstrap campaign.** They are in the
 artifact, verbatim, and three of them say that a repair is asserted by no test.
