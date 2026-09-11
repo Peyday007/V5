@@ -142,7 +142,16 @@ async function main(): Promise<void> {
           (spec['acceptanceConditions'] as { statement: string; verification: string }[]) ?? [],
         mutationScope: spec['mutationScope'] as string[] | undefined,
         deploymentPolicy: spec['deploymentPolicy'] as undefined,
-        submissionKey: spec['submissionKey'] as string | undefined,
+        /*
+         * The key decides whether this is the same ask or a new one, and a flag
+         * can override the file's because a second attempt at the same objective
+         * is an ordinary thing. The first hosted campaign for this objective
+         * retired against a defect in the execution plane rather than against the
+         * work; the objective did not change, so rewriting the file to say it had
+         * would have been the wrong record.
+         */
+        submissionKey:
+          flagString(flags, 'submission-key') ?? (spec['submissionKey'] as string | undefined),
         // The repository this objective is about, when it is not the one the
         // factory itself lives in. Recorded on the contract, so every later tick
         // resolves the same checkout without being told again.
