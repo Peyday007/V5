@@ -331,6 +331,30 @@ export const ACCEPTANCE_SUITE = [
    *
    * `exc_ea5e2781bb60440183c8` is that claim.
    */
+  /*
+   * The mixed packet `A13_AUTO_NEXT` has always needed, declared before it ran.
+   *
+   * A follow-on comes from `COMPLETE_WITH_GAPS`, which comes from a person's
+   * RECORD_GAPS, which `choicesFor` offers only when something was accepted. So
+   * the packet has to finish *mixed*: part of the goal settled from sources the
+   * compiler's own standard accepts, and a mandatory part the official record
+   * does not hold. `S12A-ACC-4` never reached it (correctly merged by the
+   * semantic dedupe) and `S12A-ACC-6` never reached it either (correctly
+   * refused, because private marketplace economics are not a county-records
+   * question however the compiler is asked).
+   *
+   * This one is a county-records question, so the standard fits, and its answer
+   * is published by some Michigan registers of deeds and by no means all.
+   * Nothing manufactures the gap: if every county publishes an availability
+   * statement the packet settles its goal, files `COMPLETE`, and produces no
+   * follow-on — which is the acceptance rule, not a failure of it.
+   */
+  {
+    scenarioId: 'S12A-ACC-12',
+    purpose:
+      "a county-records question the official record answers for some counties and not for others: a packet that files short, the person's decision to record what is unresolved, and the one follow-on that leaves behind",
+    conversationTitle: 'S12A-ACC-12',
+  },
   {
     scenarioId: 'S12A-ACC-11',
     purpose: 'a bounded cheap look, on a claim no other idea already covers',
