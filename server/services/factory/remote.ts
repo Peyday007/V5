@@ -505,6 +505,20 @@ export async function createIntegrateBin(
             'and enough of its output to act on. A branch that carries a tree the contract ' +
             'rejects is worse than a branch that did not move.',
           '',
+          /*
+           * The fields are how Brain tells the two kinds of blocker apart, so the
+           * contract says so rather than leaving it to be inferred. Brain reads the
+           * `conflicts` list and the exit codes — never the prose — to decide
+           * whether the work was judged at all, and therefore whether the units go
+           * back for another attempt or keep their commits untouched.
+           */
+          'If you report BLOCKED, the fields decide what happens next, so fill them in. A merge ' +
+            'conflict belongs in `conflicts`; a command that failed belongs in `commands` with ' +
+            'its real exit code. **A BLOCKED report carrying neither tells Brain you never got ' +
+            'as far as judging the work** — which is the right answer when the repository refused ' +
+            'you, and the wrong one when a command failed, because then the work goes back ' +
+            'unchanged and the next integrator meets the same failure.',
+          '',
           'Then submit a result for unit key `integrate` with a JSON value of the shape ' +
             '{"outcome":"IMPLEMENTED"|"BLOCKED","integrationBranch","headSha",' +
             '"merged":[{"unitKey","branch","headSha"}],"conflicts":[],' +
