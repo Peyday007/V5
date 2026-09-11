@@ -224,6 +224,18 @@ grant, a `worker_routing` row, and push access where that worker runs — and an
 one of them missing authorizes nothing. Oakwood is not the executor of any of
 them.
 
+## The one Oakwood file still in the image, and why it is harmless
+
+`objectives/oakwood-dist-and-node-floor.json` is the objective a person approved
+for the proof campaign. It stays: it is the reviewable record of what was asked
+for, and `objectives/README.md` already says what it is — *"nothing here
+authorizes anything"*. Submitting it again would record a change request and pin
+a commit, and then `repositoryEnvelope.ts` would refuse the campaign, because
+Oakwood has no grant. Even with a grant, no worker is registered for that
+repository, so nothing could claim the work. Three independent refusals stand
+between that file and a running campaign, which is why deleting history is not
+the control.
+
 ## What is not Oakwood, and is left alone
 
 - **`friend-2` / `V2` is QUARANTINED** on repeated `AUTH 401` against its own
