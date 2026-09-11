@@ -142,7 +142,16 @@ async function main(): Promise<void> {
           (spec['acceptanceConditions'] as { statement: string; verification: string }[]) ?? [],
         mutationScope: spec['mutationScope'] as string[] | undefined,
         deploymentPolicy: spec['deploymentPolicy'] as undefined,
-        submissionKey: spec['submissionKey'] as string | undefined,
+        /*
+         * The key decides whether this is the same ask or a new one, and a flag
+         * can override the file's because a second attempt at the same objective
+         * is an ordinary thing. The first hosted campaign for this objective
+         * retired against a defect in the execution plane rather than against the
+         * work; the objective did not change, so rewriting the file to say it had
+         * would have been the wrong record.
+         */
+        submissionKey:
+          flagString(flags, 'submission-key') ?? (spec['submissionKey'] as string | undefined),
         // The repository this objective is about, when it is not the one the
         // factory itself lives in. Recorded on the contract, so every later tick
         // resolves the same checkout without being told again.
@@ -380,6 +389,48 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * Every bin a campaign has, and what happened when Brain tried to fire one.
+     *
+     * The one thing neither `campaigns` nor `status` could answer: a campaign can
+     * read EXECUTING while its bin has been refused by every surface, and the
+     * reason lives on the dispatch row rather than on the campaign. Read-only,
+     * and it prints no credential — a dispatch row holds the Routine's reference
+     * and the provider's own error, never a token.
+     */
+    case 'bins': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const { campaignBins } = await import('../server/services/factory/remote.ts');
+      const { listDispatchesForBin, listSessionRefusals } = await import(
+        '../server/repos/bins.ts'
+      );
+      const bins = await campaignBins(campaignId);
+      if (bins.length === 0) process.stdout.write('no bin for this campaign\n');
+      for (const bin of bins) {
+        process.stdout.write(
+          `${bin.id} ${bin.kind} ${bin.state} gen ${bin.leaseGeneration} ` +
+            `attempts ${bin.attemptCount}/${bin.maxAttempts} ` +
+            `needs [${bin.requiredCapabilities.join(',')}]` +
+            `${bin.workerId ? ` worker=${bin.workerId}` : ''}\n`,
+        );
+        for (const dispatch of await listDispatchesForBin(bin.id)) {
+          process.stdout.write(
+            `    dispatch gen ${dispatch.leaseGeneration} ${dispatch.state} ` +
+              `attempt ${dispatch.attemptCount}/${dispatch.maxAttempts} ` +
+              `routine=${dispatch.routineRef ?? '—'} session=${dispatch.sessionRef ?? '—'}` +
+              `${dispatch.lastErrorKind ? ` ${dispatch.lastErrorKind}: ${(dispatch.lastError ?? '').slice(0, 200)}` : ''}\n`,
+          );
+        }
+        for (const refusal of await listSessionRefusals(bin.id)) {
+          process.stdout.write(
+            `    refused  ${refusal.sessionRef} x${refusal.refusals} ` +
+              `until ${refusal.retryAt}: ${refusal.reason.slice(0, 220)}\n`,
+          );
+        }
+      }
+      break;
+    }
+
     /** Every campaign in a project, newest first, in one line each. */
     case 'campaigns': {
       const projectFlag = flagString(flags, 'project');
@@ -432,7 +483,12 @@ async function main(): Promise<void> {
       for (const unit of units) {
         process.stdout.write(
           `  ${unit.state.padEnd(12)} ${unit.unitKey} (attempt ${unit.attempt}/${unit.maxAttempts})` +
-            `${unit.failureCategory ? ` ${unit.failureCategory}` : ''}\n`,
+            `${unit.failureCategory ? ` ${unit.failureCategory}` : ''}\n` +
+            // The reason, not only the category. A category names the kind of
+            // refusal and the detail names the file that caused it, and an
+            // operator with only the first has to redeploy to learn the second.
+            `${unit.failureDetail ? `        ${unit.failureDetail.slice(0, 400)}\n` : ''}` +
+            `${unit.branch ? `        branch ${unit.branch}${unit.headSha ? ` @ ${unit.headSha.slice(0, 12)}` : ''}\n` : ''}`,
         );
       }
       break;
@@ -459,7 +515,7 @@ async function main(): Promise<void> {
     default:
       process.stdout.write(
         'commands: fleet, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
-          '  remote-tick, campaigns, status, release\n',
+          '  remote-tick, campaigns, bins, status, release\n',
       );
   }
 

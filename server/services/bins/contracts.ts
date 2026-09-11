@@ -604,9 +604,8 @@ async function evaluateFactoryUnits(bin: Bin): Promise<ContractVerdict> {
     });
   }
 
-  const { readUnitReports, verifyUnitReport, remoteBranchFor, binBaseOf } = await import(
-    '../factory/remote.ts'
-  );
+  const { readUnitReports, verifyUnitReport, remoteBranchFor, binBaseOf, declaredBranchFor } =
+    await import('../factory/remote.ts');
   const { getCampaign, getChangeRequest, listUnits } = await import('../../repos/factory.ts');
   const { parseRemote } = await import('../factory/forge.ts');
 
@@ -663,7 +662,10 @@ async function evaluateFactoryUnits(bin: Bin): Promise<ContractVerdict> {
     const verdict = await verifyUnitReport(
       repository,
       {
-        branch: remoteBranchFor(campaign, unit),
+        // The branch this bin handed out, read back from it. Deriving the name
+        // here would make the judgement depend on the unit's attempt counter,
+        // which moves for reasons that have nothing to do with this report.
+        branch: declaredBranchFor(bin, key) ?? remoteBranchFor(campaign, unit),
         // The base this bin was created against, not the campaign's head now: a
         // round that has integrated since would make the range wrong and the
         // ownership question unanswerable.

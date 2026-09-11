@@ -909,12 +909,21 @@ describe('a reviewer is independent by lineage, or it is refused', () => {
 
 /* ========================================================================= */
 
-describe('a bin is not handed to a surface that cannot do it', () => {
-  it('refuses a worker whose Routine lacks a capability the bin requires', async () => {
+describe('a bin is handed out even when Brain cannot tell which surface arrived', () => {
+  /*
+   * The opposite of what this file asserted twice, and the reason is the premise
+   * rather than the rule: Brain cannot attribute an arrival to a Routine before
+   * that arrival takes a bin, because `worker_sessions` is keyed by the
+   * credential and the credential is per-connector rather than per-session. A
+   * gate on that attribution refused the only surface that could do the work.
+   *
+   * What remains is the router's own check at fire time, and a worker that
+   * cannot push reporting BLOCKED with the operation that was refused.
+   */
+  it('admits a bin whose capabilities this arrival cannot be shown to carry', async () => {
     const workerId = (
-      await createWorker({ name: 'no-push', createdByType: 'SYSTEM', createdById: 't' })
+      await createWorker({ name: 'unknown-surface', createdByType: 'SYSTEM', createdById: 't' })
     ).id;
-    const credential = 'cred-no-push';
     const bin = await createBin({
       projectId: fixture.project.id,
       kind: 'FACTORY_UNITS',
@@ -941,116 +950,20 @@ describe('a bin is not handed to a surface that cannot do it', () => {
       requiredCapabilities: ['repository', 'repository-write'],
       ready: true,
     });
-
     const admit = await binAdmission({
       workerId,
       principal: {
         type: 'WORKER',
         id: workerId,
-        credentialId: credential,
-        displayName: 'no-push',
+        credentialId: 'cred-unknown',
+        displayName: 'unknown-surface',
         isBrainAdmin: false,
         scopes: [],
         memberships: [],
       } as unknown as Principal,
+      sessionRef: 'provider-session-1',
     });
-    const verdict = await admit((await getBin(bin.id))!);
-    /*
-     * No registered Routine resolves for this worker, so what it can reach is
-     * unknown — and unknown **admits** here, deliberately. The gate prevents a
-     * wasted fire rather than an unauthorized one, and failing closed made it
-     * unreachable on a first arrival: lineage exists only after a bin has been
-     * assigned, so refusing without it refused every bin forever.
-     */
-    expect(verdict.ok).toBe(true);
-  });
-
-  it('refuses one whose Routine is known and lacks it, and admits one that has it', async () => {
-    const { createAccount, createRoutine, bindRoutineWorker } = await import(
-      '../server/repos/fleet.ts'
-    );
-    const { recordWorkerSession } = await import('../server/repos/fleet.ts');
-    const account = await createAccount({ name: `acct-${Math.random().toString(36).slice(2)}` });
-    const readOnly = await createRoutine({
-      accountId: account.id,
-      routineRef: `trig_read_${Math.random().toString(36).slice(2)}`,
-      name: 'reads only',
-      tokenSecretName: 'NEVER_SET',
-      tokenDigest: null,
-      capabilities: ['repository'],
-    });
-    const workerId = (
-      await createWorker({ name: 'reader', createdByType: 'SYSTEM', createdById: 't' })
-    ).id;
-    await bindRoutineWorker(readOnly.id, workerId);
-
-    const bin = await createBin({
-      projectId: fixture.project.id,
-      kind: 'FACTORY_UNITS',
-      title: 'Work that needs a push',
-      objective: 'Implement something and push it.',
-      manifest: {
-        objective: 'Implement something and push it.',
-        why: 'a test',
-        lineage: { projectId: fixture.project.id, layerId: null, goal: null, orchestrationId: null },
-        units: [{ key: 'u', establishes: 'a branch', input: '{}', transform: 'FACTORY_UNIT', dependsOn: [] }],
-        acceptableSources: [],
-        excludedSources: [],
-        evidence: ['a pushed branch'],
-        outputs: ['one result'],
-        authorizedActions: ['push the branch Brain named'],
-        prohibitedActions: ['anything else'],
-        budgetUnits: null,
-        retry: { maxAttempts: 2, backoffSeconds: 60 },
-        stoppingConditions: ['a result per unit'],
-      },
-      completionContract: 'FACTORY_UNITS_V1',
-      createdByType: 'SYSTEM',
-      createdById: 'test',
-      requiredCapabilities: ['repository', 'repository-write'],
-      ready: true,
-    });
-
-    const principal = {
-      type: 'WORKER',
-      id: workerId,
-      credentialId: 'cred-reader',
-      displayName: 'reader',
-      isBrainAdmin: false,
-      scopes: [],
-      memberships: [],
-    } as unknown as Principal;
-
-    // One Routine, unambiguously bound: the surface is known, and it is known to
-    // be unable to push.
-    const refused = await (await binAdmission({ workerId, principal }))(
-      (await getBin(bin.id))!,
-    );
-    expect(refused.ok).toBe(false);
-    expect(refused.reason).toContain('repository-write');
-
-    // Observed lineage wins over the static binding, so a session recorded
-    // against a surface that can push is admitted.
-    const writer = await createRoutine({
-      accountId: account.id,
-      routineRef: `trig_write_${Math.random().toString(36).slice(2)}`,
-      name: 'can push',
-      tokenSecretName: 'NEVER_SET',
-      tokenDigest: null,
-      capabilities: ['repository', 'repository-write'],
-    });
-    await recordWorkerSession({
-      sessionRef: 'cred-reader',
-      workerId,
-      routineId: writer.id,
-      accountId: account.id,
-      binId: bin.id,
-      leaseGeneration: 1,
-    });
-    const admitted = await (await binAdmission({ workerId, principal }))(
-      (await getBin(bin.id))!,
-    );
-    expect(admitted.ok).toBe(true);
+    expect((await admit((await getBin(bin.id))!)).ok).toBe(true);
   });
 });
 
@@ -1094,5 +1007,271 @@ describe('the local loop does not tick a campaign the fleet is executing', () =>
     // a lease this one left behind.
     expect(report.tickHeld).toBe(false);
     expect((await getCampaign(campaign.id))?.state).toBe('PLANNING');
+  });
+});
+
+/* ========================================================================= */
+
+describe('who produced a bin result is read from the row Brain wrote', () => {
+  /*
+   * This test exists to be run against **Postgres**, where it earns its place.
+   * `workerSessionForBin` ordered by `rowid`, which `dialect.ts` rewrites to
+   * `seq` — a column `worker_sessions` does not have on the cloud backend. Every
+   * SQLite run passed and the statement threw in production, which made the
+   * hosted factory's tick throw on every pass and left a completed bin
+   * un-ingested with nothing saying why.
+   */
+  it('returns the newest observed arrival for a bin, in both dialects', async () => {
+    const { recordWorkerSession, workerSessionForBin, createAccount, createRoutine } = await import(
+      '../server/repos/fleet.ts'
+    );
+    const account = await createAccount({ name: `acct-${Math.random().toString(36).slice(2)}` });
+    const routine = await createRoutine({
+      accountId: account.id,
+      routineRef: `trig_${Math.random().toString(36).slice(2)}`,
+      name: 'a surface',
+      tokenSecretName: 'NEVER_SET',
+      tokenDigest: null,
+      capabilities: ['repository'],
+    });
+    const workerId = (
+      await createWorker({ name: 'arriver', createdByType: 'SYSTEM', createdById: 't' })
+    ).id;
+
+    expect(await workerSessionForBin('bin_nothing_here')).toBeNull();
+
+    await recordWorkerSession({
+      sessionRef: 'cred-first',
+      workerId,
+      routineId: routine.id,
+      accountId: account.id,
+      binId: 'bin_shared',
+      leaseGeneration: 1,
+    });
+    await recordWorkerSession({
+      sessionRef: 'cred-second',
+      workerId,
+      routineId: routine.id,
+      accountId: account.id,
+      binId: 'bin_shared',
+      leaseGeneration: 2,
+    });
+
+    const observed = await workerSessionForBin('bin_shared');
+    // A takeover is a second arrival on one bin, and the session that finished it
+    // is the last one that took it.
+    expect(observed?.leaseGeneration).toBe(2);
+    expect(observed?.accountId).toBe(account.id);
+  });
+});
+
+/* ========================================================================= */
+
+describe('a unit out of attempts stops the campaign before any review', () => {
+  it('blocks with the unit\'s own reason rather than reviewing an unimplemented tree', async () => {
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'exhausted',
+      objective: 'Something whose only unit will run out of attempts.',
+      expectedOutcome: 'A person sees why it stopped.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'it works', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    const created = await ensureUnit({
+      campaignId: campaign.id,
+      unitKey: 'doomed',
+      kind: 'IMPLEMENTATION',
+      role: 'IMPLEMENTER',
+      title: 'A unit that will not land',
+      objective: 'Do one bounded thing that will keep being refused.',
+      acceptance: ['it is done'],
+      ownedPaths: ['index.html'],
+      requiredContext: [],
+      verification: [],
+      expectedArtifact: 'a change',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+      state: 'FAILED',
+    });
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run(
+      `UPDATE factory_work_units SET failure_category = ?, failure_detail = ? WHERE id = ?`,
+      ['OUT_OF_SCOPE_MUTATION', '3 file(s) changed outside this unit\'s declared paths', created.unit.id],
+    );
+
+    stubForge({});
+    const report = await tickRemoteCampaign(campaign.id);
+    // Not a review: a reviewer asked to judge a tree nothing implemented would be
+    // judging the base commit against a contract nobody satisfied.
+    expect(report.created.some((entry) => entry.startsWith('review:'))).toBe(false);
+    const after = await getCampaign(campaign.id);
+    expect(after?.state).toBe('BLOCKED');
+    expect(after?.blockerKind).toBe('UNIT_EXHAUSTED_ATTEMPTS');
+    expect(after?.blockerDetail).toContain('declared paths');
+  });
+});
+
+/* ========================================================================= */
+
+describe('accepting a unit does not undo itself', () => {
+  /*
+   * The defect this pins, from the first real hosted campaign: the expected branch
+   * name was derived from the unit's attempt, `acceptUnitReport` claims the unit,
+   * and a claim increments the attempt — so the next tick re-verified the report
+   * it had just accepted, refused it for naming the previous attempt's branch,
+   * reopened the unit and charged another attempt. Three passes later a unit whose
+   * work sat correctly on a confirmed commit had retired as FAILED.
+   *
+   * Two things make it impossible now, and both are asserted: the branch is read
+   * back from the bin that handed it out, and only a unit still waiting for a
+   * report is acted on.
+   */
+  let campaignId = '';
+  let workerId = '';
+  const unitHead = 'f'.repeat(40);
+
+  beforeEach(async () => {
+    workerId = (await createWorker({ name: 'impl', createdByType: 'SYSTEM', createdById: 't' })).id;
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'no-self-undo',
+      objective: 'Guard the quote form against silent breakage.',
+      expectedOutcome: 'The suite fails when it breaks.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'the suite asserts it', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    campaignId = campaign.id;
+    await ensureUnit({
+      campaignId,
+      unitKey: 'form-contract',
+      kind: 'TEST',
+      role: 'IMPLEMENTER',
+      title: 'Assert the form contract',
+      objective: 'Assert the quote form posts over https to an absolute endpoint.',
+      acceptance: ['the suite fails when the endpoint is relative'],
+      ownedPaths: ['test/form.test.js'],
+      requiredContext: [],
+      verification: ['npm test'],
+      expectedArtifact: 'a test file',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+    });
+    const { promoteReadyUnits } = await import('../server/repos/factory.ts');
+    await promoteReadyUnits(campaignId);
+  });
+
+  it('leaves the unit implemented across repeated ticks over one completed bin', async () => {
+    stubForge({});
+    // One tick to hand the work out, so the bin records the branch it named.
+    const handed = await tickRemoteCampaign(campaignId);
+    expect(handed.created.some((entry) => entry.startsWith('units:'))).toBe(true);
+
+    const assigned = await assignNextBin({ workerId, projectIds: [fixture.project.id] });
+    expect(assigned?.bin.kind).toBe('FACTORY_UNITS');
+    const bin = assigned!.bin;
+    const { declaredBranchFor } = await import('../server/services/factory/remote.ts');
+    const branch = declaredBranchFor(bin, 'form-contract')!;
+    expect(branch).toContain('form-contract');
+
+    // The repository agrees with the report, on the branch the bin named.
+    stubForge({
+      branches: { [branch]: unitHead },
+      compares: { [`${BASE}...${unitHead}`]: { files: ['test/form.test.js'], status: 'ahead' } },
+    });
+    await putBinUnitResult({
+      binId: bin.id,
+      unitKey: 'form-contract',
+      value: JSON.stringify({
+        unitKey: 'form-contract',
+        outcome: 'IMPLEMENTED',
+        branch,
+        headSha: unitHead,
+        filesChanged: ['test/form.test.js'],
+        commands: [{ command: 'npm test', exitCode: 0 }],
+        summary: 'added the contract test',
+      }),
+      contentHash: 'h-impl',
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    expect(
+      await finishBin(
+        { binId: bin.id, leaseId: assigned!.leaseId, leaseGeneration: assigned!.leaseGeneration, workerId },
+        { state: 'COMPLETE', reason: 'implemented' },
+      ),
+    ).toBe('OK');
+
+    // First ingest accepts it.
+    const first = await tickRemoteCampaign(campaignId);
+    expect(first.ingested.some((entry) => entry.startsWith('units:'))).toBe(true);
+    const { getUnitByKey } = await import('../server/repos/factory.ts');
+    const afterFirst = await getUnitByKey(campaignId, 'form-contract');
+    expect(afterFirst?.state).toBe('IMPLEMENTED');
+    const chargedOnce = afterFirst!.attempt;
+
+    // Two more ticks over the same completed bin change nothing: no second
+    // verification, no refusal, no further attempt.
+    await tickRemoteCampaign(campaignId);
+    await tickRemoteCampaign(campaignId);
+    const afterMore = await getUnitByKey(campaignId, 'form-contract');
+    expect(afterMore?.state).toBe('IMPLEMENTED');
+    expect(afterMore?.attempt).toBe(chargedOnce);
+    expect(afterMore?.failureCategory).toBeNull();
   });
 });

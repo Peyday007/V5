@@ -442,23 +442,26 @@ set by a tick that then dies, rows cannot.
 A campaign is COMPLETE only when a review passed, nothing is gating, **and** the
 forge confirms a pull request carrying the integrated commit.
 
-Two capabilities gate which surface gets which bin. `requiredCapabilities` was
-only ever read by the router, which decides which Routine to *fire* — and that is
-a different question from which bin an arriving worker may be *handed*, because
-any authenticated worker that checks in is offered the oldest ready bin in its
-scopes. So `binAdmission` checks it at assignment too, read from the Routine the
-authenticated worker resolves to and never from anything the caller sent.
+Two capabilities decide which surface Brain *fires* for a factory bin:
+`repository` is reading and running, `repository-write` is pushing a branch, and
+only the three bins that write require it.
 
-It refuses only a surface it **knows** lacks the capability. Failing closed on
-unknown lineage made the gate unreachable: an arriving session's Routine comes
-from `worker_sessions`, which is written after a bin is assigned, so a first
-arrival has none — and in a fleet where one worker identity serves several
-Routines the static fallback is ambiguous and resolves to nothing. In production
-that refused every factory bin to the only surface that could do it. The rule the
-direction follows from is worth stating, because this codebase fails closed nearly
-everywhere: **fail closed when the unknown could let something false be recorded;
-fail open when the unknown could only waste a fire.** A capability grants no
-access, so the worst an admitted surface can do is report BLOCKED honestly.
+**Nothing gates the assignment, and that is the end of two corrections.** Reading
+`requiredCapabilities` again when deciding which bin an arriving worker may be
+handed is tempting — any authenticated worker is offered the oldest ready bin in
+its scopes — and it was added, and it refused the only surface that could do the
+work twice. Failing closed on unknown lineage made it unreachable, because an
+arrival has no lineage until it takes a bin. Reading the static worker → Routine
+binding attributed the arrival to whichever Routine is enabled, which in a fleet
+sharing one worker identity is the wrong one. And the observed lineage cannot
+help either: `worker_sessions` is keyed by the credential, and **the credential is
+per-connector rather than per-session**, so the row describes the fleet.
+
+Brain therefore cannot tell which surface has turned up before handing out work.
+Admitting one that cannot push costs a fire and an attempt, and the worker reports
+BLOCKED naming the refused operation. Refusing wrongly cost a campaign that could
+never move. Between a gate that sometimes wastes a fire and one that sometimes
+stops all work, only the first is tolerable.
 
 The split itself is what makes
 an independent review possible on a fleet where only some surfaces can push.
@@ -551,6 +554,20 @@ it on bins.
   believed, so without `advanceUnitAttempt` a refusal would cost nothing and the
   next round would hand out the identical branch name over commits Brain had
   already rejected.
+- **The branch a unit pushes to is read back from the bin, never derived.** It
+  was derived from the unit's attempt, and accepting a report claims the unit,
+  which increments the attempt — so every acceptance invalidated the name it had
+  just accepted and the next tick refused its own work. The ingest also acts only
+  on a unit still waiting for a report: skipping INTEGRATED alone left IMPLEMENTED,
+  the state a successful acceptance produces, being judged a second time.
+- **And it costs exactly one.** An accepted report is idempotent by its own
+  effect; a refused one leaves the unit READY, which is the state the next tick
+  offers the same completed bin for again. `UNIT_FAILED` carries the bin id, so a
+  bin's report for a unit is refused once however many ticks read it.
+- **A unit out of attempts blocks the campaign before the review stage**, with the
+  unit's own recorded reason. `outstanding` excludes FAILED because nothing more
+  will happen to it, and without this that meant a reviewer being asked to judge
+  the base commit against a contract nothing had implemented.
 
 ### `COWORK_ROUTINE`, and why the handshake is not an executor
 

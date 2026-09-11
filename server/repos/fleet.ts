@@ -789,7 +789,15 @@ export async function workerSessionForBin(binId: string): Promise<WorkerSession 
     lease_generation: number;
     observed_at: string;
   }>(
-    `SELECT * FROM worker_sessions WHERE bin_id = ? ORDER BY observed_at DESC, rowid DESC LIMIT 1`,
+    /*
+     * `session_ref` rather than `rowid` as the tiebreak, and that is not a style
+     * choice: `dialect.ts` rewrites `rowid` to `seq`, `worker_sessions` has no
+     * such column on Postgres, and the statement therefore threw on the backend
+     * production runs while passing every SQLite test. The primary key makes the
+     * order total and is sayable in both dialects.
+     */
+    `SELECT * FROM worker_sessions WHERE bin_id = ?
+      ORDER BY observed_at DESC, session_ref DESC LIMIT 1`,
     [binId],
   );
   return row

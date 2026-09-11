@@ -1887,36 +1887,55 @@ remote.
   `repository-write`, exist for exactly this: a reviewer needs to read and run,
   and only the bins that push need a surface that can push, so a one-pushing-
   surface fleet does not make the reviewer the implementer.
-- **A capability gates the fire, and the assignment only where the surface is
-  known.** `requiredCapabilities` was read by the router, which chooses which
-  Routine to fire — not the same question as which bin an arriving worker may be
-  handed, since any authenticated worker is offered the oldest ready bin in its
-  scopes. So it is checked at assignment too, from the Routine the authenticated
-  worker resolves to and never from anything the caller sent.
+- **A capability gates the fire, and nothing gates the assignment — after two
+  corrections, both recorded rather than quietly applied.**
+  `requiredCapabilities` decides which Routine Brain *fires*. Reading it again to
+  decide which bin an arriving worker may be *handed* is tempting, because any
+  authenticated worker is offered the oldest ready bin in its scopes and so a
+  surface fired for one bin can be handed another it cannot do. It was added, it
+  refused the only surface that could do the work, twice, for two different
+  reasons — and the second reason is why it cannot exist.
 
-  **It failed closed on unknown lineage, and that was wrong; the correction is
-  recorded rather than quietly applied.** An arriving session's Routine is
-  knowable only from `worker_sessions`, which is written *after* a bin is
-  assigned — so a first arrival has no lineage, falls back to the static worker
-  binding, and resolves to nothing whenever one worker identity serves several
-  Routines. In production that refused every factory bin to the only surface that
-  could do it: Brain fired the right Routine, the session arrived, and Brain
-  answered NO_READY_BINS over its own READY bin, with nothing able to clear it
-  because clearing it required taking a bin.
+  Failing closed on unknown lineage made it unreachable: an arrival has no lineage
+  until it takes a bin, which is the thing being gated. Then reading the *static*
+  worker → Routine binding attributed the arrival to whichever Routine is enabled,
+  which in a fleet sharing one worker identity is the wrong one. And reading the
+  *observed* lineage does not help either, because **`worker_sessions` is keyed by
+  the credential and the credential is per-connector rather than per-session** —
+  every session an account fires presents the same one, so the row describes the
+  fleet and cannot describe the arrival.
 
-  **Fail closed when the unknown could let something false be recorded; fail open
-  when the unknown could only waste a fire.** A capability grants no access — the
-  manifest's own first authorized action says the access comes from where the
-  worker runs — so the worst an admitted surface can do is report BLOCKED, which
-  every stage handles. Review independence keeps failing closed, because a
-  verdict from the session that wrote the code *is* something false being
-  recorded. The honest limitation is that in a fleet sharing one worker identity
-  across Routines this gate can know that about no arrival; the remedy is a
-  distinct worker identity per Routine, granted where the worker runs.
+  So Brain cannot tell which surface has turned up before it hands out work. The
+  cost of admitting one that cannot push is a fire and an attempt, and the worker
+  reports BLOCKED naming the operation that was refused, which every stage
+  handles. The cost of refusing wrongly was a campaign that could never move.
+  **Between a gate that sometimes wastes a fire and one that sometimes stops all
+  work, only the first is tolerable** — and the rule it is an instance of is: fail
+  closed when the unknown could let something false be recorded, fail open when it
+  could only waste a fire.
+- **Review independence rests on the reported session, validated against a real
+  credential of the presenting worker.** I wrote the opposite first — the
+  credential, never the `session_ref`, because a decision on a value the claimant
+  supplies is a worker declaring itself independent. The reasoning holds; the
+  premise was wrong for the same reason as above. Comparing credentials would make
+  every reviewer identical to every implementer and refuse every review for ever.
+  §24 settled the same question the same way, and the account and worker identity
+  still come from Brain's own dispatch row rather than from anything the worker
+  said.
 - **A finished bin cannot say who finished it**, because `finishBin` clears the
   worker, the lease and the credential in the same statement. `worker_sessions`
-  can, written from Brain's own dispatch row, and that is what every factory
-  event and the independence floor read.
+  can, written from Brain's own dispatch row, and that is where the account and
+  the worker identity come from.
+
+  **Reading it is the third time an `ORDER BY` has been true in one dialect
+  only.** `workerSessionForBin` tiebroke on `rowid`, which `dialect.ts` rewrites
+  to `seq`, and `worker_sessions` has no such column on Postgres. Every SQLite
+  test passed; in production the statement threw, so the hosted factory's tick
+  threw on every pass and a completed bin sat un-ingested with nothing on the
+  campaign saying why. `012_checkpoint_seq.sql` was the first instance and §25's
+  three connect tables the second. **An `ORDER BY` must be sayable in both
+  dialects, and a tiebreak on a column only one of them has is the easiest way to
+  write one that is not.**
 - **Every stage still has an answering transition, including the new ones.** A
   refused unit report costs an attempt, so the next round is different work
   rather than the same branch over rejected commits — remotely the unit row is
@@ -1924,6 +1943,34 @@ remote.
   nothing and the loop would offer the identical unit forever. A stage that
   burns through `MAX_BINS_PER_STAGE` blocks the campaign with the reason instead
   of being handed out again, and a blocked campaign is re-examined every tick.
+- **A name derived from a mutable counter cannot be the contract.** The branch a
+  unit must push to was derived from its attempt, and `acceptUnitReport` claims the
+  unit — a claim increments the attempt. So the instant a report was accepted, the
+  name Brain expected no longer matched the branch it had just accepted: the next
+  tick re-verified the same report, refused it for naming the previous attempt's
+  branch, reopened the unit and charged another attempt, and three passes later a
+  unit whose work sat correctly on a confirmed commit had retired as FAILED. The
+  bin recorded the name when it handed the work out, so the bin is asked — the
+  same "read it back from the row Brain wrote" this loop already uses for the base
+  commit, and for the same reason. And the ingest acts only on a unit still
+  *waiting* for a report; it skipped INTEGRATED alone, which left IMPLEMENTED — the
+  state a successful acceptance produces — being judged again.
+- **A refusal is recognised, not repeated.** An *accepted* report is idempotent by
+  its own effect: the unit is `IMPLEMENTED`, so the next tick skips it. A refused
+  one puts the unit back to `READY`, which is the state the next tick offers the
+  same completed bin for again — so in production it charged three attempts in one
+  pass and retired the unit before any worker had a second go, and the second and
+  third refusals were for the branch *name*, which the attempt counter had just
+  changed underneath them. The ledger is the guard: `UNIT_FAILED` carries the bin,
+  and a bin's report for a unit is refused once however many ticks read it.
+- **A unit out of attempts stops the campaign before any review.** `outstanding`
+  excludes FAILED, correctly — nothing more is going to happen to it — and the
+  effect of that alone was a campaign whose only unit had retired walking into the
+  review stage with nothing integrated, asking a reviewer to judge the base commit
+  against a contract nothing had implemented. A verdict on that is a verdict about
+  the wrong tree. BLOCKED with the unit's own recorded reason, the work intact and
+  every attempt still on its row, and the ways out are a person's: amend the
+  contract, or stop.
 - **`COWORK_ROUTINE` is not an executor, and the earlier claim that the handshake
   was missing is recorded rather than deleted.** An `Executor` is something Brain
   calls and waits on, holding a worktree it can see. A Routine activation is a
