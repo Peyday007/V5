@@ -2000,9 +2000,14 @@ remote.
   the merged tree, is a fact about the code and the units go back and are charged
   for it. A blocker with neither means nothing judged the tree, so there is nothing
   for the work to answer: every unit keeps its commit, no attempt is spent, and the
-  stage is offered again for a surface that can push — bounded at three, after
-  which the campaign is `EXTERNAL_CREDENTIAL_REQUIRED` naming a remedy where the
-  workers run. §23's sentence one altitude down: **a refusal is not misconduct.** A
+  stage is offered again for a surface that can push — **deferred for a cool-off
+  rather than stopped**, because Brain cannot tell which surface will arrive, so a
+  hard ceiling counted in surface blocks is reached by the surface that *cannot*
+  push before the one that can has had a turn. That is a livelock with a tidy
+  blocker row on it, and the first version of this rule had it. A far higher
+  ceiling remains and is answered by `FACTORY_STAGE_REAUTHORIZED` — a person saying
+  the operational condition is fixed, from which the count and the cool-off are
+  both taken, so a condition that was not actually fixed simply defers again. §23's sentence one altitude down: **a refusal is not misconduct.** A
   worker cannot declare itself surface-blocked to escape a failed verification,
   because the exit codes it reported about what it ran are what decide — prose
   never does.

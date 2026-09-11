@@ -755,16 +755,41 @@ async function integrationAlreadyIngested(campaignId: string, binId: string): Pr
 }
 
 /**
- * How many integrations have been blocked by the surface rather than by the work.
+ * How long to leave a stage alone after a surface blocked it, and how many of
+ * those are too many.
  *
- * Read from the ledger, on the discriminator the ingest wrote, because the bound
- * has to exist: a work-related block refuses the units and spends their attempts,
- * so it stops by itself, and a surface block deliberately spends nothing — which
- * without a ceiling is a stage handed out for ever to surfaces that cannot
- * perform it. Three is the same number `MAX_BINS_PER_STAGE` uses, and the fourth
- * is a person's: grant the repository where the workers run, or stop.
+ * The cool-off is the load-bearing half, and the first version of this had only
+ * the ceiling — which was wrong in a way worth recording rather than quietly
+ * fixing. **Brain cannot tell which surface will arrive**, because the MCP
+ * credential is per-connector rather than per-session, so a stage that only some
+ * surfaces can perform is offered to whichever one turns up. On a fleet where the
+ * surface Brain can *fire* cannot push and the ones that can push arrive on their
+ * own schedule, a hard ceiling counted in surface blocks is reached by the wrong
+ * surface in minutes — and then the stage is blocked before the right surface has
+ * had a single turn. That is not a ceiling, it is a livelock with a tidy blocker
+ * row on it.
+ *
+ * So a surface block *defers* the stage rather than stopping it: the waste is
+ * bounded to one fire per cool-off instead of one per tick, and the stage is still
+ * there when a surface that can push asks. A ceiling remains, far above anything
+ * ordinary, because a campaign that has been refused this many times really is
+ * something a person must fix — and it has `FACTORY_STAGE_REAUTHORIZED` as its
+ * answer.
  */
-async function surfaceBlockedIntegrations(campaignId: string): Promise<number> {
+const SURFACE_BLOCK_COOLOFF_MS = 5 * 60_000;
+const SURFACE_BLOCK_CEILING = 20;
+
+/**
+ * The surface-blocked integrations since the last re-authorization, and when the
+ * newest of them was.
+ *
+ * Read from the ledger, on the discriminator the ingest wrote. A work-related
+ * block refuses the units and spends their attempts, so it bounds itself; a
+ * surface block deliberately spends nothing, so the bound has to be here.
+ */
+async function surfaceBlockedIntegrations(
+  campaignId: string,
+): Promise<{ count: number; newestAt: string | null }> {
   const events = await listFactoryEvents(campaignId, {
     kinds: [FACTORY_EVENT_KINDS.integrationRejected, FACTORY_EVENT_KINDS.stageReauthorized],
     limit: 200,
@@ -787,16 +812,19 @@ async function surfaceBlockedIntegrations(campaignId: string): Promise<number> {
    * monotonic fact available, so it is the one used.
    */
   const bins = new Set<string>();
+  let newestAt: string | null = null;
   for (const event of events) {
     if (event.kind === FACTORY_EVENT_KINDS.stageReauthorized) {
       bins.clear();
+      newestAt = null;
       continue;
     }
     const detail = (event.detail ?? {}) as { surface?: unknown; binId?: unknown };
     if (detail.surface !== true) continue;
     bins.add(typeof detail.binId === 'string' ? detail.binId : event.id);
+    newestAt = event.at;
   }
-  return bins.size;
+  return { count: bins.size, newestAt };
 }
 
 /**
@@ -952,22 +980,42 @@ async function runRemoteTick(
     }
     const stall = stalledStage(liveBins, 'FACTORY_INTEGRATE');
     if (stall) return await blockStage(fresh, 'integration', stall, report);
-    const surfaceBlocks = await surfaceBlockedIntegrations(fresh.id);
-    if (surfaceBlocks >= MAX_BINS_PER_STAGE) {
+    const surface = await surfaceBlockedIntegrations(fresh.id);
+    if (surface.count >= SURFACE_BLOCK_CEILING) {
       return await blockStage(
         fresh,
         'integration',
         {
           detail:
-            `${surfaceBlocks} integrations were blocked before the work was judged — the surfaces ` +
+            `${surface.count} integrations were blocked before the work was judged — every surface ` +
             'that took this stage could not push to the remote. The units keep their commits and ' +
             'nothing about the work is in question. The remedy is where the workers run: attach ' +
-            'the repository to a worker surface, or grant it a credential there. Brain holds none ' +
-            'and must not.',
+            'the repository to a worker surface. Brain holds no repository credential and must ' +
+            'not. Then say so, and the stage is handed out again.',
         },
         report,
         'EXTERNAL_CREDENTIAL_REQUIRED',
       );
+    }
+    if (surface.newestAt !== null) {
+      const since = Date.now() - Date.parse(surface.newestAt);
+      if (Number.isFinite(since) && since < SURFACE_BLOCK_COOLOFF_MS) {
+        const wait = Math.ceil((SURFACE_BLOCK_COOLOFF_MS - since) / 1000);
+        const detail =
+          `${surface.count} integration(s) blocked before the work was judged; waiting ${wait}s ` +
+          'for a surface that can push';
+        report.notes.push(detail);
+        // `cleared` for the same reason every other live-stage patch carries it: a
+        // blocker left behind beside a stage that is working reads stuck while it
+        // runs, and a person who learns to ignore that line stops reading the one
+        // that matters.
+        await patchCampaign(fresh.id, {
+          state: 'INTEGRATING',
+          stageDetail: detail,
+          ...cleared,
+        });
+        return report;
+      }
     }
     const bin = await createIntegrateBin(fresh, changeRequest, implemented);
     if (bin) {

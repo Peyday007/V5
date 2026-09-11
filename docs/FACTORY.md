@@ -522,16 +522,31 @@ recorded a fresh refusal nothing new had happened to produce. The ledger filled
 with rejections, and the ceiling counted from them tripped on its own. Keyed on
 the bin now, both ways.
 
-**The ceiling itself needed a way out, and a count that only rises is not one.**
-Granting the repository to a worker surface is the remedy the blocker names, and
-it happens somewhere else entirely — it cannot change a number in this database.
-So the count is taken from the newest `FACTORY_STAGE_REAUTHORIZED` row: a person
-says the operational condition is fixed, with a reason from a closed set and
-their id on the row, and the next tick re-derives everything as usual. If it was
-*not* fixed the stage blocks again with the same words, which is the difference
-between a way out and an override. It re-authorizes a stage and never the work:
-no unit, commit, finding, verdict or attempt counter moves. §24's sentence for
-the fifth time.
+**A surface block defers the stage; it does not stop it.** The first version of
+this was a hard ceiling at three, and that was wrong in a way worth recording
+rather than quietly fixing. Brain cannot tell which surface will arrive — the MCP
+credential is per-connector rather than per-session — so a stage only some
+surfaces can perform is offered to whichever one turns up. On a fleet where the
+surface Brain can *fire* cannot push and the ones that can push arrive on their
+own schedule, a ceiling counted in surface blocks is reached by the wrong surface
+within minutes, and the stage is then blocked before the right surface has had a
+single turn. **That is not a ceiling, it is a livelock with a tidy blocker row on
+it.** So the newest surface block defers the stage for a cool-off: the waste falls
+to one fire per cool-off instead of one per tick, and the stage is still there
+when a surface that can push asks for work. The stage detail says so in those
+words, because a campaign quietly waiting is the thing a person needs to see.
+
+**The ceiling that remains is far above anything ordinary, and it needed a way
+out, because a count that only rises is not one.** Granting the repository to a
+worker surface is the remedy the blocker names, and it happens somewhere else
+entirely — it cannot change a number in this database. So the count, and the
+cool-off with it, are taken from the newest `FACTORY_STAGE_REAUTHORIZED` row: a
+person says the operational condition is fixed, with a reason from a closed set
+and their id on the row, and the next tick re-derives everything as usual. If it
+was *not* fixed the stage defers again with the same words, which is the
+difference between a way out and an override. It re-authorizes a stage and never
+the work: no unit, commit, finding, verdict or attempt counter moves. §24's
+sentence for the fifth time.
 
 The rows are read in the ledger's own `at, rowid` order rather than re-sorted by
 timestamp, because two rows written in the same millisecond are a tie a timestamp

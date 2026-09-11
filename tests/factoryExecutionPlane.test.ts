@@ -1549,26 +1549,32 @@ describe('an integration blocked before the work was judged costs the work nothi
     expect(later?.attempt).toBe(after?.attempt);
   });
 
-  it('stops the stage once no surface has been able to push three times', async () => {
-    for (let round = 0; round < 3; round += 1) {
-      await integrateReporting({
-        outcome: 'BLOCKED',
-        integrationBranch: 'factory/campaign/only',
-        merged: [],
-        conflicts: [],
-        commands: [],
-        summary: 'nothing was merged',
-        blockedReason: 'This execution surface has no credential for the remote.',
-      });
-    }
+  /*
+   * Deferred, never stopped — and this is the correction to the first version of
+   * this rule rather than a softening of it. Brain cannot tell which surface will
+   * arrive, so a stage only some surfaces can perform is offered to whoever turns
+   * up. A hard ceiling counted in surface blocks is therefore reached by the
+   * surface that *cannot* push, in minutes, before the one that can has had a
+   * single turn — a livelock with a tidy blocker row on it. The stage has to still
+   * be there when the right surface asks.
+   */
+  it('defers the stage after a surface block rather than stopping it', async () => {
+    await integrateReporting({
+      outcome: 'BLOCKED',
+      integrationBranch: 'factory/campaign/only',
+      merged: [],
+      conflicts: [],
+      commands: [],
+      summary: 'nothing was merged',
+      blockedReason: 'This execution surface has no credential for the remote.',
+    });
     const report = await tickRemoteCampaign(campaignId);
-    expect(report.state).toBe('BLOCKED');
-    const { getCampaign } = await import('../server/repos/factory.ts');
-    const campaign = await getCampaign(campaignId);
-    expect(campaign?.blockerKind).toBe('EXTERNAL_CREDENTIAL_REQUIRED');
-    expect(campaign?.blockerDetail).toContain('could not push');
-    // And the work is untouched: nothing about it was ever in question.
-    const { getUnitByKey } = await import('../server/repos/factory.ts');
+    expect(report.state).not.toBe('BLOCKED');
+    expect(report.notes.some((note) => note.includes('waiting'))).toBe(true);
+    // Nothing new was handed out inside the cool-off, and nothing was destroyed.
+    expect(report.created.length).toBe(0);
+    const { getCampaign, getUnitByKey } = await import('../server/repos/factory.ts');
+    expect((await getCampaign(campaignId))?.blockerKind).toBeNull();
     expect((await getUnitByKey(campaignId, 'only-unit'))?.state).toBe('IMPLEMENTED');
   });
 
@@ -1580,19 +1586,19 @@ describe('an integration blocked before the work was judged costs the work nothi
    * fixed, the count is taken from that moment, and the next tick re-derives
    * everything: if it was not fixed, the stage blocks again with the same reason.
    */
-  it('hands the stage out again once a person says the condition is fixed', async () => {
-    for (let round = 0; round < 3; round += 1) {
-      await integrateReporting({
-        outcome: 'BLOCKED',
-        integrationBranch: 'factory/campaign/only',
-        merged: [],
-        conflicts: [],
-        commands: [],
-        summary: 'nothing was merged',
-        blockedReason: 'This execution surface has no credential for the remote.',
-      });
-    }
-    expect((await tickRemoteCampaign(campaignId)).state).toBe('BLOCKED');
+  it('hands the stage out again at once when a person says the condition is fixed', async () => {
+    await integrateReporting({
+      outcome: 'BLOCKED',
+      integrationBranch: 'factory/campaign/only',
+      merged: [],
+      conflicts: [],
+      commands: [],
+      summary: 'nothing was merged',
+      blockedReason: 'This execution surface has no credential for the remote.',
+    });
+    expect((await tickRemoteCampaign(campaignId)).notes.some((n) => n.includes('waiting'))).toBe(
+      true,
+    );
 
     const { recordFactoryEvent } = await import('../server/repos/factoryFleet.ts');
     const { FACTORY_EVENT_KINDS } = await import('../server/services/factory/metrics.ts');
@@ -1603,8 +1609,11 @@ describe('an integration blocked before the work was judged costs the work nothi
       detail: { operator: 'operator:test', code: 'repository-granted' },
     });
 
+    // The cool-off is counted from the newest surface block since the newest
+    // re-authorization, so answering it clears the wait as well as the ceiling.
     const after = await tickRemoteCampaign(campaignId);
     expect(after.state).not.toBe('BLOCKED');
+    expect(after.notes.some((note) => note.includes('waiting'))).toBe(false);
     expect(
       after.created.some((entry) => entry.startsWith('integrate:')) ||
         after.notes.some((note) => note.includes('integrator')),
