@@ -140,19 +140,32 @@ describe('a fire refused for authentication', () => {
    * with a factory review bin READY and nothing anywhere able to answer it.
    */
   it('puts a surface-deferred intent back once a Routine row changes', async () => {
-    await readyBin('only');
+    const binId = await readyBin('only');
     // Fire, be refused, and be deferred with the error recorded against the intent.
     await dispatchTick({ burst: 4, projectIds: [projectId] });
 
     const { getDb } = await import('../server/db/database.ts');
+    /*
+     * Scoped to this test's own bin. The first version asked `bin_dispatch` for
+     * "the PENDING row", which is true of a file running alone and not of a suite
+     * where other files share the database — it passed locally and failed in CI on
+     * a row that was never this test's to read.
+     */
     const deferred = await getDb().get<{ next_attempt_at: string; last_error_kind: string }>(
-      `SELECT next_attempt_at, last_error_kind FROM bin_dispatch WHERE state = 'PENDING'`,
+      `SELECT next_attempt_at, last_error_kind FROM bin_dispatch
+        WHERE bin_id = ? AND state = 'PENDING'`,
+      [binId],
     );
     expect(deferred?.last_error_kind).toBe('AUTH');
     // Pushed out beyond now, so nothing would claim it on the next tick.
     await getDb().run(
-      `UPDATE bin_dispatch SET next_attempt_at = ?, updated_at = ? WHERE state = 'PENDING'`,
-      [new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), '2000-01-01T00:00:00.000Z'],
+      `UPDATE bin_dispatch SET next_attempt_at = ?, updated_at = ?
+        WHERE bin_id = ? AND state = 'PENDING'`,
+      [
+        new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        '2000-01-01T00:00:00.000Z',
+        binId,
+      ],
     );
 
     // A person corrects the fleet: any write to a Routine row is the condition.
@@ -176,7 +189,10 @@ describe('a fire refused for authentication', () => {
     await readyBin('only');
     const result = await dispatchTick({ burst: 4, projectIds: [projectId] });
     expect(result.fired).toBeGreaterThanOrEqual(1);
+    // This test's own two surfaces, not every row in a shared database.
     const routines = await listRoutines();
-    for (const routine of routines) expect(routine.state).toBe('ENABLED');
+    for (const ref of ['trig_bad_token', 'trig_good_token']) {
+      expect(routines.find((routine) => routine.routineRef === ref)?.state).toBe('ENABLED');
+    }
   });
 });
