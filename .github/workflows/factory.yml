@@ -1,0 +1,119 @@
+# Operating the Software Factory in the deployed Brain, without a terminal.
+#
+# ---------------------------------------------------------------------------
+# What this is and is not
+# ---------------------------------------------------------------------------
+#
+# It is the same mechanism `fleet.yml` and `step10.yml` use, for the same
+# reason: submitting an objective, approving it and reading a campaign's stage
+# are things done repeatedly against the machine that holds the rows, and doing
+# them through the deploy pipeline would cost a build and a restart every time.
+#
+# It is **not** the normal route. The normal route is `/build` in the Russell
+# shell, where a person says what should become true, picks one of the
+# authorized repositories and approves. This exists for the case that surface is
+# for the operator rather than the product: repairing access, reading a stage
+# when the client bundle will not load, and running a campaign that was
+# authorized in writing somewhere other than a browser.
+#
+# It is also not `/operator`, which stays deleted. Nothing here renders a page.
+#
+# ---------------------------------------------------------------------------
+# Why an objective arrives as a committed file
+# ---------------------------------------------------------------------------
+#
+# An objective is prose — several paragraphs and a list of acceptance
+# conditions — and prose in a workflow input is prose that has to survive a
+# dispatcher, a shell and an SSH session. The same text in a file under
+# `docs/objectives/` is reviewable in a diff, is already inside the image, and
+# cannot be mangled on the way. So `--file` names a path in the repository and
+# nothing long is ever interpolated.
+name: Factory
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'submit | approve | status | campaigns | amend | pull-request | workers'
+        required: true
+        default: status
+      file:
+        description: '--file (a path in this repository, for submit)'
+        required: false
+        default: ''
+      change_request:
+        description: '--change-request (an fcr_… id)'
+        required: false
+        default: ''
+      campaign:
+        description: '--campaign (an fcp_… id)'
+        required: false
+        default: ''
+      extra:
+        description: 'Any further --flag value pairs, e.g. "--project prj_x --base main"'
+        required: false
+        default: ''
+
+# Never at the same time as a deploy: the machine is being replaced during one.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  factory:
+    name: Factory operator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Run
+        timeout-minutes: 20
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Through the environment, never interpolated into the shell: an input
+          # pasted into a command line is an injection whatever the dispatcher
+          # intended, and "only I can run this workflow" is not a guard.
+          FACTORY_COMMAND: ${{ inputs.command }}
+          FACTORY_FILE: ${{ inputs.file }}
+          FACTORY_CR: ${{ inputs.change_request }}
+          FACTORY_CAMPAIGN: ${{ inputs.campaign }}
+          FACTORY_EXTRA: ${{ inputs.extra }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+
+          # Letters, digits, dot, colon, dash, underscore and — for the file
+          # path only — a forward slash. Everything a shell could act on is
+          # refused rather than escaped.
+          for value in "$FACTORY_COMMAND" "$FACTORY_CR" "$FACTORY_CAMPAIGN"; do
+            case "$value" in
+              ''|*[!A-Za-z0-9_.:-]*)
+                if [ -n "$value" ]; then
+                  echo "::error::Refusing '$value': letters, digits, dot, colon, dash, underscore."
+                  exit 1
+                fi
+                ;;
+            esac
+          done
+          case "$FACTORY_FILE" in
+            '') ;;
+            *[!A-Za-z0-9_./-]*)
+              echo "::error::Refusing the file path: letters, digits, dot, slash, dash, underscore."
+              exit 1
+              ;;
+          esac
+          case "$FACTORY_EXTRA" in
+            *[!A-Za-z0-9_.:/\ -]*)
+              echo "::error::Refusing the extra flags: the same class, plus spaces and slashes."
+              exit 1
+              ;;
+          esac
+
+          args="$FACTORY_COMMAND"
+          if [ -n "$FACTORY_FILE" ];     then args="$args --file $FACTORY_FILE"; fi
+          if [ -n "$FACTORY_CR" ];       then args="$args --change-request $FACTORY_CR"; fi
+          if [ -n "$FACTORY_CAMPAIGN" ]; then args="$args --campaign $FACTORY_CAMPAIGN"; fi
+          if [ -n "$FACTORY_EXTRA" ];    then args="$args $FACTORY_EXTRA"; fi
+
+          echo "factory $args"
+          flyctl ssh console --app "$app" -C "sh /app/scripts/factory.sh $args" 2>&1 | tee factory.txt

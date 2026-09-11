@@ -1,0 +1,38 @@
+{
+  "objective": "Close the two limitations the last review left open on the Oakwood Junk Removal guard, in the same pull request a person is already reading. First: the build ships the repository's own manifest to the public site — dist/ receives package.json, package-lock.json and README.md, so a deployed visitor can fetch the project's dependency list and its internal notes at public URLs. A built site should contain the site and nothing else. Second: package.json declares support for Node 20 and above while continuous integration only ever runs Node 22, so the declared floor is never exercised — and the test script depends on `node --test` taking a glob, which Node 20 does not support. One of those two statements is wrong and the repository does not know which, which is the worst of the three possible states.",
+  "expectedOutcome": "A visitor of the deployed site cannot fetch package.json, package-lock.json or README.md from it, and the suite fails if any of them reappears in dist/. The Node version the repository says it supports is the version its own continuous integration actually runs the suite on, so the declaration and the evidence agree. Everything the existing suite already asserts about index.html and about the built dist/index.html still passes, and the page a visitor sees is unchanged.",
+  "nonGoals": [
+    "Changing anything a visitor sees. index.html's content, markup and styling stay as they are.",
+    "Adding a bundler, a framework, a minifier or any runtime dependency. The site is one hand-written page and this change must not make it a build system.",
+    "Touching the Formspree endpoint, the form's fields, or the post-submit redirect.",
+    "Deploying anything, or changing how the site is deployed."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "npm run build writes a dist/ that contains the site and nothing else: no package.json, no package-lock.json, no README.md, and no file whose purpose is the repository rather than the site. The suite asserts it by listing what dist/ actually contains after a build, so a future file added to the repository root cannot silently start being published either.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The Node version package.json declares in engines is a version the suite is actually run on in continuous integration, and the test script works on it. Either the floor is raised to the version the script genuinely needs, or the script is changed to work on the declared floor and CI exercises that floor as well as the current version — and whichever is chosen, the declaration and what CI runs agree rather than contradicting each other.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Everything the suite already asserted still passes, against both index.html and the built dist/index.html, with both targets still mandatory. index.html itself is unchanged apart from nothing at all.",
+      "verification": "npm test",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "scripts/build.mjs",
+    "test/**",
+    "package.json",
+    "package-lock.json",
+    ".github/workflows/ci.yml",
+    "README.md"
+  ],
+  "repository": "https://github.com/Peyday007/oakwood-junk-removal",
+  "baseBranch": "factory/campaign/fcp_4b7d0487f2f342069687",
+  "submissionKey": "oakwood-dist-and-node-floor"
+}
