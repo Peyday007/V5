@@ -186,6 +186,27 @@ async function principalFor(workerId: string): Promise<Principal> {
   } as unknown as Principal;
 }
 
+/**
+ * Wait until the wall clock reports a different ISO instant.
+ *
+ * `rearmSurfaceDeferredIntents` compares an intent's `updated_at` against the
+ * newest `fleet_routines` / `worker_routing` write and re-arms only what was
+ * deferred **strictly before** it. Timestamps are ISO-8601 with millisecond
+ * resolution, so a fixture that defers an intent and then onboards inside the
+ * same millisecond has not set up the condition it means to test — it has set up
+ * the boundary case, and the assertion then fails on a fast machine and passes on
+ * a slow one. This makes the ordering the fixture claims actually true.
+ *
+ * The production path never needs it: a tick is ten seconds and an operator's
+ * write is minutes from a deferral.
+ */
+async function afterThisInstant(): Promise<void> {
+  const started = new Date().toISOString();
+  while (new Date().toISOString() === started) {
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+}
+
 async function onboard(grantId: string) {
   const outcome = await onboardRepository({
     projectId: fixture.project.id,
@@ -366,6 +387,7 @@ describe('two repositories, two workers, and no crossing between them', () => {
       });
     }
 
+    await afterThisInstant();
     const mount = await onboard(MOUNT().id);
     await surface(mount.onboarding.workerId!, 'MOUNT_SECRET', 'mount-account');
     await dispatchTick();
@@ -479,6 +501,7 @@ describe('a temporary fleet condition is a wait, and a permanent refusal is not'
 
     // Onboarding alone changes `worker_routing`, which is a write the re-arm
     // watches — and the recheck still refuses, because there is nowhere to fire.
+    await afterThisInstant();
     const mount = await onboard(MOUNT().id);
     for (let pass = 0; pass < 4; pass += 1) await dispatchTick();
     let now = (await getDispatch(intent!.id))!;
@@ -584,6 +607,7 @@ describe('an onboarding whose response was lost', () => {
     });
     const before = (await getDispatch(intent!.id))!;
 
+    await afterThisInstant();
     await onboard(MOUNT().id);
     await onboard(MOUNT().id);
     await onboard(MOUNT().id);
@@ -609,6 +633,7 @@ describe('an onboarding whose response was lost', () => {
       message: 'nobody is registered for this repository',
       retryAfterMs: 24 * 60 * 60 * 1000,
     });
+    await afterThisInstant();
     await onboard(MOUNT().id);
     await onboard(MOUNT().id);
     expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(1);
