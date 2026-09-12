@@ -31,7 +31,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { ModernMcpClient } from '../scripts/mcpModernClient.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 6300 + Math.floor(Math.random() * 150);
+const PORT = 6000 + Math.floor(Math.random() * 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 const MCP_URL = `${BASE}/mcp`;
 

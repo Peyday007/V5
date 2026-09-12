@@ -34,7 +34,7 @@ import os from 'node:os';
 const REPO_ROOT_FOR_SITES = fileURLToPath(new URL('..', import.meta.url));
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 6300 + Math.floor(Math.random() * 200);
+const PORT = 6300 + Math.floor(Math.random() * 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 let server: ChildProcessByStdio<null, Readable, Readable> | null = null;

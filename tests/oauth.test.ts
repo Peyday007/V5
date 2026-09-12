@@ -27,7 +27,7 @@ import { CONNECTOR_SCOPES, WORKER_SCOPES } from '../server/domain/types.ts';
 import type { WorkerScope } from '../server/domain/types.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 6500 + Math.floor(Math.random() * 150);
+const PORT = 6500 + Math.floor(Math.random() * 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 const REDIRECT = 'https://claude.ai/api/mcp/auth_callback';
 

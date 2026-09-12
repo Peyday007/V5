@@ -20,7 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 5399 + Math.floor(Math.random() * 120);
+const PORT = 5400 + Math.floor(Math.random() * 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 // stdin is 'ignore', so only stdout and stderr are streams.

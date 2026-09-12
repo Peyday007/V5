@@ -220,4 +220,39 @@ describe('every workstream is present in the canonical tree', () => {
       }
     }
   });
+  /**
+   * A suite that drives a real server binds a port, and `/healthz` is
+   * deliberately unauthenticated — so a colliding port does not fail loudly.
+   * The second suite's readiness probe finds the *first* suite's server, waits
+   * happily for it, and then signs in against a Brain that has a different
+   * bootstrap administrator. What it reports is `401`, which reads as a broken
+   * sign-in rather than as two suites sharing a number.
+   *
+   * That is the same shape as the migration collision directly above: two
+   * parallel workstreams picking a number, with nothing in either one able to
+   * see the other's choice. It happened — `mcp`, `idempotencyHttp` and
+   * `russellHttp` held the identical range, and four more pairs overlapped —
+   * and it cost a full-suite run before the cause was legible.
+   */
+  it('gives every HTTP suite a port range no other suite can reach', () => {
+    const pattern = /const PORT = (\d+) \+ Math\.floor\(Math\.random\(\) \* (\d+)\);/;
+    const ranges: { file: string; from: number; to: number }[] = [];
+    for (const file of tracked().filter((f) => f.startsWith('tests/') && f.endsWith('.ts'))) {
+      const match = pattern.exec(read(file));
+      if (!match) continue;
+      const from = Number(match[1]);
+      ranges.push({ file, from, to: from + Number(match[2]) - 1 });
+    }
+    expect(ranges.length, 'no suite declares a port at all').toBeGreaterThan(5);
+
+    ranges.sort((a, b) => a.from - b.from);
+    for (let i = 1; i < ranges.length; i += 1) {
+      const earlier = ranges[i - 1]!;
+      const later = ranges[i]!;
+      expect(
+        later.from,
+        `${later.file} (${later.from}-${later.to}) can collide with ${earlier.file} (${earlier.from}-${earlier.to})`,
+      ).toBeGreaterThan(earlier.to);
+    }
+  });
 });

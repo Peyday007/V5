@@ -22,7 +22,7 @@ import { createProject } from '../server/repos/projects.ts';
 import { DENIAL_REASONS } from '../server/domain/types.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 6100 + Math.floor(Math.random() * 150);
+const PORT = 5900 + Math.floor(Math.random() * 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 const MCP = `${BASE}/mcp`;
 const MODERN = '2026-07-28';
