@@ -2408,3 +2408,67 @@ describe('the acceptance reporter writes to a scratch database, never the config
     expect(source).toContain('await closeDatabase()');
   });
 });
+
+/**
+ * The reporter runs where the production database is, which is inside the
+ * deployed image — and `.dockerignore` deliberately excludes `tests`, `docs`,
+ * `*.md` and `client/src` from that image, because an image is copied, pushed
+ * to a registry and pulled by machines nobody controls.
+ *
+ * So several of its rows are facts about the repository that a production run
+ * genuinely cannot see. Two ways that can go wrong, and this pins both:
+ *
+ *  - **It can crash.** Gate K read `client/src` with an unguarded
+ *    `readdirSync`, which throws where the image carries only `client/dist`.
+ *    The whole report would have died there rather than printing the eleven
+ *    rows it had already established, and the workflow would have said only
+ *    "the reporter never ran".
+ *  - **It can lie by omission.** An absent `docs/evidence` is not evidence of
+ *    absence; it is this run being unable to look. A row that reported it as a
+ *    finding would read as a regression to anybody who did not know which
+ *    environment produced the reading.
+ */
+describe('the acceptance reporter, read where the image cannot see the repository', () => {
+  const source = fs.readFileSync(
+    path.join(fileURLToPath(new URL('..', import.meta.url)), 'scripts', 'step12b-acceptance.ts'),
+    'utf8',
+  );
+  const ignore = fs.readFileSync(
+    path.join(fileURLToPath(new URL('..', import.meta.url)), '.dockerignore'),
+    'utf8',
+  );
+
+  it('still knows which paths the image leaves out', () => {
+    // If one of these stops being excluded the rows below can simply read it,
+    // and this suite should be the thing that says so.
+    for (const excluded of ['tests', 'docs', 'client/dist']) {
+      expect(ignore.split('\n').map((line) => line.trim()), excluded).toContain(excluded);
+    }
+  });
+
+  it('reads no directory without first asking whether it is there', () => {
+    for (const [, before] of source.matchAll(/([\s\S]{0,400})fs\s*\n?\s*\.?readdirSync/g)) {
+      expect(before, 'an unguarded readdirSync is how gate K crashed in the container').toMatch(
+        /existsSync/,
+      );
+    }
+  });
+
+  it('names the half it could not see rather than reporting an absence', () => {
+    expect(source).toContain('const REPO_VISIBLE =');
+    expect(source).toContain('NOT_FROM_A_CHECKOUT');
+    // Printed before the rows, not buried in the ones it affects.
+    expect(source).toMatch(/repository facts \(H, J, K, O\)/);
+    // Every row that depends on an excluded path must consult it.
+    const rows = source.slice(source.indexOf("/* -- H."));
+    for (const gate of ['H', 'J', 'K', 'O']) {
+      const start = rows.indexOf(`/* -- ${gate}.`);
+      expect(start, `gate ${gate} is not where this test expects it`).toBeGreaterThan(-1);
+      const end = rows.indexOf('/* --', start + 6);
+      const body = end === -1 ? rows.slice(start) : rows.slice(start, end);
+      expect(body, `gate ${gate} does not say when it could not look`).toMatch(
+        /REPO_VISIBLE|NOT_FROM_A_CHECKOUT|clientHasOperator === null/,
+      );
+    }
+  });
+});

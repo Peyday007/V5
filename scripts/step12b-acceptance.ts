@@ -130,6 +130,36 @@ function file(relative: string): string | null {
 }
 
 /**
+ * Whether this run can see the repository at all — and it is a real question,
+ * not a defensive one.
+ *
+ * Several scenarios are facts about the repository rather than about rows: the
+ * console removal is a test that reads the tree, and the visual record is a
+ * committed image set. Those rows are answered from a checkout.
+ *
+ * But the *operational* half of this report has to run where the production
+ * database is, which is inside the container — and `.dockerignore` deliberately
+ * excludes `tests`, `docs`, `*.md` and `client/src` from the image. That is
+ * correct: an image is copied, pushed to a registry and pulled by machines
+ * nobody controls, and it should carry what it runs and nothing else.
+ *
+ * So a production run genuinely **cannot see** those rows, and the whole point
+ * of this file is that *we could not tell* must never read the same as *we
+ * checked*. A repository-fact row taken in the container says which half is
+ * missing and where to take it instead, rather than reporting the absence as
+ * though it were the answer.
+ *
+ * `tests/` is the probe because it is excluded, is never generated, and is
+ * present in every checkout including a fresh clone.
+ */
+const REPO_VISIBLE = fs.existsSync(path.join(REPO, 'tests'));
+const NOT_FROM_A_CHECKOUT =
+  'This reading was taken where the production database is, and the deployed image ' +
+  'deliberately carries no tests/, docs/ or client/src \u2014 so this row is a ' +
+  'repository fact this run cannot see, rather than one it checked and found absent. ' +
+  'Take this row from a checkout (npm run step12b:acceptance).';
+
+/**
  * The committed visual record, read rather than assumed.
  *
  * `scripts/visual-qa.ts` writes to a throwaway directory by default, for the
@@ -1128,7 +1158,9 @@ async function main(): Promise<void> {
     `${MAP_TYPES.length} map types derived from the authoritative graph, each with a ` +
       'synchronized outline, and the money-flow map returns a reason for being empty rather ' +
       'than inventing edges. ' +
-      (mapEvidence.images > 0
+      (!REPO_VISIBLE
+        ? `The rendered half of this row is a repository fact. ${NOT_FROM_A_CHECKOUT} `
+        : mapEvidence.images > 0
         ? `All ${MAP_TYPES.length} were opened by pressing their own tabs at 390px and ` +
           'photographed, and every one\u2019s diagram-node count equals its outline-row count ' +
           '(9/9, 0/0, 8/8, 8/8, 1/1, 0/0); money flow draws nothing and says the figures belong ' +
@@ -1286,7 +1318,9 @@ async function main(): Promise<void> {
     'J',
     'Mobile',
     mobile.images > 0 && mobile.journeySteps >= 10 && responsiveSuite ? 'PARTIAL' : 'NOT_RUN',
-    mobile.images > 0 && mobile.journeySteps >= 10 && responsiveSuite
+    !REPO_VISIBLE
+      ? `J is a repository fact: the journey is a committed image set and a suite. ${NOT_FROM_A_CHECKOUT}`
+      : mobile.images > 0 && mobile.journeySteps >= 10 && responsiveSuite
       ? `One continuous signed-in journey at 390px across ${mobile.journeySteps} recorded steps ` +
         `(${mobile.images} committed images): home \u2192 open a conversation \u2192 send a message ` +
         '\u2192 Work \u2192 the project map \u2192 all six maps \u2192 Needs you \u2192 home. At ' +
@@ -1303,10 +1337,21 @@ async function main(): Promise<void> {
   );
 
   /* -- K. Legacy removal ---------------------------------------------------- */
+  /*
+   * This row is a repository fact, and it used to read `client/src` without
+   * asking whether it was there. Inside the container it is not — the image
+   * carries `client/dist` and no sources — so the read threw and the whole
+   * report died at gate K rather than printing eleven rows it had already
+   * established. A reporter that cannot produce a reading is worse than one
+   * that names what it could not see.
+   */
   const removalTest = file('tests/operatorConsoleRemoved.test.ts');
-  const clientHasOperator = fs
-    .readdirSync(path.join(REPO, 'client', 'src'), { recursive: true } as never)
-    .some((entry) => typeof entry === 'string' && entry.endsWith('.tsx'));
+  const clientSrc = path.join(REPO, 'client', 'src');
+  const clientHasOperator = fs.existsSync(clientSrc)
+    ? fs
+        .readdirSync(clientSrc, { recursive: true } as never)
+        .some((entry) => typeof entry === 'string' && entry.endsWith('.tsx'))
+    : null;
   record(
     'K',
     'Legacy removal',
@@ -1314,8 +1359,10 @@ async function main(): Promise<void> {
     removalTest
       ? 'tests/operatorConsoleRemoved.test.ts refuses the route for every principal, fails on any ' +
         'link to it, and fails on any instruction to go there. It runs in the suite this report ' +
-        `requires (${clientHasOperator ? 'client present' : 'client missing'}).`
-      : 'The removal test is not present.',
+        `requires (${clientHasOperator === null ? 'client sources not in this image' : clientHasOperator ? 'client present' : 'client missing'}).`
+      : REPO_VISIBLE
+        ? 'The removal test is not present.'
+        : NOT_FROM_A_CHECKOUT,
   );
 
   /* -- L. Always-on loop ---------------------------------------------------- */
@@ -1587,7 +1634,9 @@ async function main(): Promise<void> {
       'that the rejected build clipped in, and drives one continuous journey rather than three ' +
       'isolated interactions. The band is clean at 822, 860, 900 and 953 across six ' +
       'destinations. ' +
-      (visual.images > 0
+      (!REPO_VISIBLE
+        ? `The image set is a repository fact. ${NOT_FROM_A_CHECKOUT} `
+        : visual.images > 0
         ? `${visual.images} images are committed under docs/evidence/step12b-visual/ with an ` +
           'index naming each one\u2019s width, journey step and subject, so the set can be ' +
           'reviewed without running the harness. One measured defect is photographed and left ' +
@@ -1812,6 +1861,18 @@ async function main(): Promise<void> {
       (fleet.unreadable ? ' — NOT TAKEN' : ''),
   );
   console.log('  everything exercised below ran in a temporary database, created and deleted here');
+  /*
+   * Which half of the evidence this run can reach, printed before the rows
+   * rather than buried inside the ones it affects — because a reader who does
+   * not know they are looking at a container run will read a repository row's
+   * NOT_RUN as a regression.
+   */
+  console.log(
+    REPO_VISIBLE
+      ? '  repository facts (H, J, K, O): readable — this run is from a checkout'
+      : '  repository facts (H, J, K, O): NOT READABLE — this run is inside the deployed ' +
+        'image, which carries no tests/, docs/ or client/src. Take those rows from a checkout.',
+  );
   console.log('');
   for (const gate of gates) {
     console.log(`${gate.id}  ${gate.verdict.padEnd(8)} ${gate.title}`);
