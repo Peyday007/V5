@@ -1008,6 +1008,40 @@ constant, because a caller that could choose the level is a caller that could
 lower it, and **no count of accounts, workers or Routines appears anywhere in
 it.**
 
+**The author of the report is a party to its own audit, and for a long time it
+was not. The correction is recorded rather than quietly applied.**
+`lineageFromPasses` has always returned `{ synthesis, audits }` — the intent
+written down, in a field labelled and typed — and **every caller destructured
+`{ audits }` and dropped the other half**, while the separation matrix had no
+entry a synthesis could be compared under. So the three reviewers were
+separated from each other and **none of them was separated from the session
+that wrote the thing they were reviewing**. §23's own sentence states the
+threat exactly — *one model context reviewing its own work* — and a session
+that files the synthesis and then files the PRIMARY audit on it is the literal
+instance of it. `independence.ts` does hold a self-audit rule; it is called by
+tests and by nothing in production, which is the fourth time this file has had
+to write that **a mechanism nothing calls is not a mechanism**.
+
+Three matrix entries became six — `SYNTHESIS_PRIMARY`, `SYNTHESIS_ADVERSARIAL`
+and `SYNTHESIS_JUDGE`, all three named because an adversarial critic of its own
+report and a judge of its own report are the same defect one step along. The
+**level did not move**: every pair is still `SESSION` and still names no
+topology, so the correction that removed the two-account requirement is not
+reintroduced by this one — the same account may still review its own author's
+work from a different activation, which is what keeps the floor reachable on a
+one-Routine fleet. What changed is the set of parties, not the bar.
+
+Two readers had to change with it or the entries would have been enforced by
+nothing: `auditMatrixVerdict` looks each party up in a map, so a matrix key
+naming `SYNTHESIS` with no row for it would `continue` past both new pairs
+silently. And the two things that could *answer* the question could not: `step10
+audit-lineage` filtered to `passKey === 'AUDIT'` one line before the matrix
+could have used the author's row, and `packet-report` read the synthesis pass
+only for its cited claim ids. Both print the author beside the reviewers now.
+`independenceEvidence.ts` gained the pair as a per-packet condition
+(`AUTHOR_IS_NOT_A_REVIEWER`) and a live probe of the refusal, because a
+strengthened constant that nothing exercises is a claim rather than a reading.
+
 **This is a recorded correction to the original two-account requirement, not a
 silent weakening.** The threat an independent audit exists to defeat is *one
 model context reviewing its own work*. Three separate sessions defeat it. Two

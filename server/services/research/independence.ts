@@ -230,12 +230,27 @@ const ROLE_BY_ORDINAL: Record<number, AuditLineage['role']> = {
   7: 'JUDGE',
 };
 
-/** Read lineage out of the recorded passes. Nothing is inferred or defaulted. */
+/**
+ * Read lineage out of the recorded passes. Nothing is inferred or defaulted.
+ *
+ * Three things come back, and the third is not a duplicate of the second.
+ * `synthesis` is the report as it now stands — the newest completed attempt —
+ * which is what `checkIndependence` has always compared. `synthesisAttempts` is
+ * **every** completed attempt, and that is what the separation matrix reads.
+ *
+ * The difference is a redo. A packet re-synthesised after a handoff has two
+ * completed synthesis passes, and a session that wrote the superseded one
+ * argued the report into the shape the newest one inherits — so it is an author
+ * of what is being reviewed, whatever the ordering of the rows says. Superseded
+ * attempts keep their rows (§5); this is what makes them mean something.
+ */
 export function lineageFromPasses(passes: ResearchPass[]): {
   synthesis: AuditLineage | null;
+  synthesisAttempts: AuditLineage[];
   audits: AuditLineage[];
 } {
   const audits: AuditLineage[] = [];
+  const synthesisAttempts: AuditLineage[] = [];
   let synthesis: AuditLineage | null = null;
 
   for (const pass of passes) {
@@ -250,6 +265,7 @@ export function lineageFromPasses(passes: ResearchPass[]): {
     };
     if (pass.passKey === 'SYNTHESIS' && pass.status === 'COMPLETE') {
       synthesis = { role: 'PRIMARY', ...lineage };
+      synthesisAttempts.push(synthesis);
       continue;
     }
     if (pass.passKey !== 'AUDIT' || pass.status !== 'COMPLETE') continue;
@@ -257,5 +273,5 @@ export function lineageFromPasses(passes: ResearchPass[]): {
     if (!role) continue;
     audits.push({ role, ...lineage });
   }
-  return { synthesis, audits };
+  return { synthesis, synthesisAttempts, audits };
 }

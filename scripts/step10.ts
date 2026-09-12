@@ -1629,24 +1629,46 @@ async function main(): Promise<void> {
      */
     const orchestrationId = arg(0);
     if (!orchestrationId) return refuseStep10('pass an orchestration id.');
-    const passes = (await listPasses(orchestrationId)).filter((pass) => pass.passKey === 'AUDIT');
+    /*
+     * The author is printed beside the reviewers, and is handed to the matrix.
+     *
+     * This used to filter to `passKey === 'AUDIT'` before doing either, which
+     * made the one question a reader most wants to ask unanswerable from here:
+     * *did the session that wrote this report also review it?* The rows held
+     * the answer the whole time — `research_passes` records the executor of the
+     * synthesis exactly as it records the executor of an audit — and the filter
+     * threw it away one line before the matrix could have used it.
+     *
+     * Passing the whole list is also what makes the printed verdict the same
+     * verdict production applies: `lineageFromPasses` reads the synthesis out
+     * of it, and `auditMatrixVerdict` now compares against it.
+     */
+    const all = await listPasses(orchestrationId);
+    const passes = all.filter((pass) => pass.passKey === 'AUDIT');
+    const synthesis = all.filter((pass) => pass.passKey === 'SYNTHESIS');
     const roleOf: Record<number, string> = { 5: 'PRIMARY', 6: 'ADVERSARIAL', 7: 'JUDGE' };
+    const lineageLine = (label: string, pass: (typeof all)[number]): string =>
+      `  ${label}  ${pass.status}` +
+      `  worker=${pass.executorWorkerId ?? '—'}` +
+      `  routine=${pass.executorRoutineId ?? '—'}` +
+      `  account=${pass.executorAccountId ?? '—'}` +
+      `  session=${pass.executorSessionRef ?? '—'}`;
     console.log('STEP11 AUDIT LINEAGE');
-    for (const pass of passes) {
-      console.log(
-        `  ${roleOf[pass.ordinal] ?? `ordinal ${pass.ordinal}`}  ${pass.status}` +
-          `  worker=${pass.executorWorkerId ?? '—'}` +
-          `  routine=${pass.executorRoutineId ?? '—'}` +
-          `  account=${pass.executorAccountId ?? '—'}` +
-          `  session=${pass.executorSessionRef ?? '—'}`,
-      );
+    for (const pass of synthesis) {
+      console.log(lineageLine(`SYNTHESIS (author, attempt ${pass.attempt})`, pass));
     }
-    const verdict = auditMatrixVerdict(passes);
+    for (const pass of passes) {
+      console.log(lineageLine(roleOf[pass.ordinal] ?? `ordinal ${pass.ordinal}`, pass));
+    }
+    const verdict = auditMatrixVerdict(all);
     for (const applied of verdict.applied) {
       console.log(`  applied    ${applied.pair} at ${applied.level}`);
     }
     for (const reason of verdict.reasons) console.log(`  VIOLATION  ${reason}`);
-    console.log(`STEP10: OK audit-lineage compliant=${verdict.eligible} passes=${passes.length}`);
+    console.log(
+      `STEP10: OK audit-lineage compliant=${verdict.eligible} audits=${passes.length} ` +
+        `synthesis=${synthesis.length}`,
+    );
     if (!verdict.eligible) process.exitCode = 1;
     return;
   }

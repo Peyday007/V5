@@ -25,13 +25,30 @@
  * There is no verdict meaning "probably". A scenario this run could not
  * establish says so, and the report's last line is the count of what it could.
  *
+ * ---------------------------------------------------------------------------
+ * Where each verdict's evidence comes from
+ * ---------------------------------------------------------------------------
+ *
+ * Two sources, read in two phases, and the report names which one it used. The
+ * **operational** reading is two `SELECT`s against the configured Brain, taken
+ * first and then closed — that is where "can this fleet fire anything" is
+ * answered, and it cannot be answered anywhere else. The **exercising** half
+ * then runs against a temporary database this script creates and deletes,
+ * because it writes, and a reporter that wrote to a real Brain would be a
+ * mutation rather than a reading. See `readOperationalFleet`.
+ *
  *   npx tsx scripts/step12b-acceptance.ts
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
+import {
+  activeDatabaseConfig,
+  closeDatabase,
+  getDb,
+  initDatabase,
+} from '../server/db/database.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { createWorker, grantMembership } from '../server/repos/identity.ts';
 import { listRoutines, listAccounts } from '../server/repos/fleet.ts';
@@ -67,14 +84,75 @@ function file(relative: string): string | null {
 }
 
 /**
+ * The fleet as the configured Brain actually holds it, read before anything
+ * else opens a database.
+ *
+ * ---------------------------------------------------------------------------
+ * Two databases, on purpose, and in this order
+ * ---------------------------------------------------------------------------
+ *
+ * The exercising half of this report runs against a **temporary** database it
+ * creates and deletes, because it writes: it registers a project, a hundred
+ * candidates, an inquiry and a Capability Lab experiment, and doing any of that
+ * to a real Brain would make the reporter a mutation. But several scenarios are
+ * not about a mechanism at all — they are about whether the deployed fleet can
+ * run anything — and against a scratch database that question has no answer.
+ *
+ * So the operational reading is taken first, from the **configured** database,
+ * read-only: two `SELECT`s and a close. Then the temp database is opened and
+ * everything that writes happens there. A reading that could not be taken is
+ * reported as *not taken* rather than as a healthy or an unhealthy fleet, which
+ * is the same three-answer rule the verdicts themselves follow.
+ */
+interface FleetReading {
+  routines: Awaited<ReturnType<typeof listRoutines>>;
+  accounts: Awaited<ReturnType<typeof listAccounts>>;
+  /** Why the reading could not be taken, or null when it was. */
+  unreadable: string | null;
+  /** What was read: the configured Brain, named without its credential. */
+  source: string;
+}
+
+async function readOperationalFleet(): Promise<FleetReading> {
+  try {
+    await initDatabase();
+    const config = activeDatabaseConfig();
+    const [routines, accounts] = await Promise.all([listRoutines(), listAccounts()]);
+    // Named by provider, never by connection string — §18's rule, and this
+    // output goes into a CI log.
+    const source = config?.provider === 'postgres' ? 'the cloud database' : 'the local database';
+    await closeDatabase();
+    return { routines, accounts, unreadable: null, source };
+  } catch (error) {
+    // A developer machine with nothing configured is the ordinary case here,
+    // and it is not a finding about the fleet.
+    return {
+      routines: [],
+      accounts: [],
+      unreadable: error instanceof Error ? error.message : String(error),
+      source: 'nothing — no database was configured for this run',
+    };
+  }
+}
+
+/**
  * The one operational fact that blocks several scenarios, read from rows.
  *
  * Named once and referenced, so five gates cannot drift into five different
  * descriptions of the same condition — and so a reader can see immediately
  * that they are one problem rather than five.
  */
-async function surfaceBlocker(): Promise<{ verdict: Verdict; detail: string }> {
-  const [routines, accounts] = await Promise.all([listRoutines(), listAccounts()]);
+function surfaceBlocker(reading: FleetReading): { verdict: Verdict; detail: string } {
+  const { routines, accounts } = reading;
+
+  if (reading.unreadable) {
+    return {
+      verdict: 'NOT_RUN',
+      detail:
+        'No configured database could be read, so this run can say nothing either way ' +
+        `about a surface: ${reading.unreadable}`,
+    };
+  }
 
   /*
    * No fleet at all is not a blocked fleet, and saying so would be the exact
@@ -91,10 +169,10 @@ async function surfaceBlocker(): Promise<{ verdict: Verdict; detail: string }> {
     return {
       verdict: 'NOT_RUN',
       detail:
-        'This run holds no fleet rows at all, so it can say nothing either way about a ' +
-        'surface. Run against a database that has one — or read the deployed fleet with ' +
-        '`fleet show`, which prints each surface and, when it is not ENABLED, the reason ' +
-        'recorded when it was taken out of routing.',
+        `${reading.source} holds no fleet rows at all, so this run can say nothing either ` +
+        'way about a surface. Run against a Brain that has one — or read the deployed ' +
+        'fleet with `fleet show`, which prints each surface and, when it is not ENABLED, ' +
+        'the reason recorded when it was taken out of routing.',
     };
   }
 
@@ -106,7 +184,9 @@ async function surfaceBlocker(): Promise<{ verdict: Verdict; detail: string }> {
   if (usable.length > 0) {
     return {
       verdict: 'NOT_RUN',
-      detail: `${usable.length} Routine(s) can be fired; this scenario still has to be driven end to end.`,
+      detail:
+        `${usable.length} of ${routines.length} Routine(s) in ${reading.source} can be fired; ` +
+        'this scenario still has to be driven end to end.',
     };
   }
 
@@ -114,17 +194,19 @@ async function surfaceBlocker(): Promise<{ verdict: Verdict; detail: string }> {
   return {
     verdict: 'BLOCKED',
     detail:
-      `NO_HEALTHY_EXECUTION_SURFACE — ${routines.length} Routine(s) are registered and none can ` +
-      'be fired, so nothing that needs a worker can run. ' +
+      `NO_HEALTHY_EXECUTION_SURFACE — ${routines.length} Routine(s) are registered in ` +
+      `${reading.source} and none can be fired, so nothing that needs a worker can run. ` +
       (held?.stateReason ? `Recorded reason: ${held.stateReason.slice(0, 220)}` : ''),
   };
 }
 
 async function main(): Promise<void> {
+  // Read the real fleet first, then close it. Everything after this line writes.
+  const fleet = await readOperationalFleet();
+  const blocker = surfaceBlocker(fleet);
+
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-12b-acc-'));
   await initDatabase({ dbPath: path.join(dataDir, 'acceptance.db') });
-
-  const blocker = await surfaceBlocker();
 
   /* -- A. Conversation routing and continuity ----------------------------- */
   // Needs a worker to answer a turn: no inference is bought (§24), so a turn is
@@ -405,6 +487,12 @@ async function main(): Promise<void> {
   /* ------------------------------------------------------------------------ */
   console.log('STEP 12B — acceptance, A to Q');
   console.log('  (separate from the Step 12A reporter, which answers a different, closed question)');
+  console.log(
+    `  operational reading from ${fleet.source}: ` +
+      `${fleet.routines.length} Routine(s), ${fleet.accounts.length} account(s)` +
+      (fleet.unreadable ? ' — NOT TAKEN' : ''),
+  );
+  console.log('  everything exercised below ran in a temporary database, created and deleted here');
   console.log('');
   for (const gate of gates) {
     console.log(`${gate.id}  ${gate.verdict.padEnd(8)} ${gate.title}`);

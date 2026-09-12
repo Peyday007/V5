@@ -93,7 +93,49 @@ export const AUDIT_SEPARATION_MINIMUM: Record<string, IndependenceLevel> = {
   PRIMARY_ADVERSARIAL: 'SESSION',
   JUDGE_PRIMARY: 'SESSION',
   JUDGE_ADVERSARIAL: 'SESSION',
+  /*
+   * ---------------------------------------------------------------------
+   * The author of the report is a party to its audit, and was not.
+   * ---------------------------------------------------------------------
+   *
+   * These three are a **strengthening**, added after a production reading
+   * asked a question the matrix could not answer: the recovered session
+   * reported completing "synthesis redo and PRIMARY audit", and nothing in
+   * this file could say whether that was one context reviewing its own work.
+   *
+   * It could not say because the matrix had no entry for it.
+   * `lineageFromPasses` has always extracted the SYNTHESIS pass's lineage —
+   * and labelled it `role: 'PRIMARY'`, which is the original intent written
+   * down — but all three of its callers destructured `{ audits }` and threw
+   * the synthesis away. So the three audit roles were separated from each
+   * other and **none of them was separated from the author of the thing they
+   * were auditing.** A mechanism nothing calls is not a mechanism; this one
+   * was extracted, typed, and read by nobody.
+   *
+   * That is not a subtle gap. §23 states the threat in one sentence — *one
+   * model context reviewing its own work* — and a session that writes the
+   * synthesis and then files the PRIMARY audit is the literal instance of it.
+   * The three-way separation made the *reviewers* independent of each other
+   * while leaving every one of them free to be the author.
+   *
+   * All three roles are named rather than just PRIMARY, because the reason is
+   * about authorship rather than about which role happens to read first: an
+   * adversarial critic of its own report and a judge of its own report are the
+   * same defect one step along.
+   */
+  SYNTHESIS_PRIMARY: 'SESSION',
+  SYNTHESIS_ADVERSARIAL: 'SESSION',
+  SYNTHESIS_JUDGE: 'SESSION',
 };
+
+/**
+ * Everyone the matrix can separate: the three audit roles and the author.
+ *
+ * `AuditRole` stays exactly what it was — the roles a worker can be *assigned*
+ * — because SYNTHESIS is not one of those. Widening it would make
+ * `brain_claim_work` able to ask for a role that does not exist.
+ */
+export type SeparationParty = AuditRole | 'SYNTHESIS';
 
 /**
  * Kept as an alias so nothing that read the old name silently reads nothing.
@@ -128,8 +170,14 @@ export interface EligibilityVerdict {
    * dimension is a credential identifier.
    */
   reasons: string[];
-  /** The pairs that were compared and the dimension each used. */
-  applied: { pair: string; level: IndependenceLevel; against: AuditRole }[];
+  /**
+   * The pairs that were compared and the dimension each used.
+   *
+   * `against` is a `SeparationParty` rather than an `AuditRole` because the
+   * author of the report is one of the parties now. It is not a role anything
+   * can be assigned — see `SeparationParty` — it is a party to the comparison.
+   */
+  applied: { pair: string; level: IndependenceLevel; against: SeparationParty }[];
   /** The offending values, for Brain's own log. Never returned to a caller. */
   conflicts: { pair: string; level: IndependenceLevel; dimension: string; value: string }[];
 }
@@ -161,12 +209,17 @@ function noun(level: IndependenceLevel): string {
         : 'session';
 }
 
-/** Which matrix entry governs this pair of roles, in either order. */
-function pairKey(a: AuditRole, b: AuditRole): string | null {
-  const set = new Set([a, b]);
+/** Which matrix entry governs this pair of parties, in either order. */
+function pairKey(a: SeparationParty, b: SeparationParty): string | null {
+  const set = new Set<SeparationParty>([a, b]);
   if (set.has('PRIMARY') && set.has('ADVERSARIAL')) return 'PRIMARY_ADVERSARIAL';
   if (set.has('JUDGE') && set.has('PRIMARY')) return 'JUDGE_PRIMARY';
   if (set.has('JUDGE') && set.has('ADVERSARIAL')) return 'JUDGE_ADVERSARIAL';
+  // The author against each reviewer. Order-independent like the rest: the
+  // question is whether two parties are the same context, not who asked first.
+  if (set.has('SYNTHESIS') && set.has('PRIMARY')) return 'SYNTHESIS_PRIMARY';
+  if (set.has('SYNTHESIS') && set.has('ADVERSARIAL')) return 'SYNTHESIS_ADVERSARIAL';
+  if (set.has('SYNTHESIS') && set.has('JUDGE')) return 'SYNTHESIS_JUDGE';
   return null;
 }
 
@@ -192,7 +245,28 @@ export function auditEligibility(input: {
   requiredTier?: SeparationTier;
 }): EligibilityVerdict {
   const { role, executor, passes, requiredTier } = input;
-  const { audits } = lineageFromPasses(passes);
+  /*
+   * The author is read out alongside the reviewers, and that is the whole of
+   * the correction this file's matrix comment records. `lineageFromPasses` has
+   * always returned both; every caller took `{ audits }` and dropped the other
+   * half on the floor, so the three reviewers were separated from each other
+   * and none of them from the session that wrote the thing being reviewed.
+   */
+  const { audits, synthesisAttempts } = lineageFromPasses(passes);
+  /*
+   * `lineageFromPasses` labels the synthesis lineage `role: 'PRIMARY'` — the
+   * original intent, written into a field nothing read. It is relabelled here
+   * rather than there, because `checkIndependence` compares that object's
+   * `sessionRef` and never its role, and changing the shared shape to fix a
+   * label would be a change to a module this one only reads from.
+   */
+  const parties: { party: SeparationParty; lineage: AuditLineage }[] = [
+    ...audits.map((a) => ({ party: a.role as SeparationParty, lineage: a })),
+    // Every completed attempt, not only the newest. A session that wrote a
+    // superseded synthesis argued the report into the shape the current one
+    // inherits, so it is an author of what is being reviewed.
+    ...synthesisAttempts.map((a) => ({ party: 'SYNTHESIS' as SeparationParty, lineage: a })),
+  ];
   const reasons: string[] = [];
   const applied: EligibilityVerdict['applied'] = [];
   const conflicts: EligibilityVerdict['conflicts'] = [];
@@ -224,9 +298,9 @@ export function auditEligibility(input: {
     }
   }
 
-  for (const recorded of audits) {
-    if (recorded.role === role) continue;
-    const key = pairKey(role, recorded.role);
+  for (const { party, lineage: recorded } of parties) {
+    if (party === role) continue;
+    const key = pairKey(role, party);
     if (!key) continue;
     const floor = AUDIT_SEPARATION_MINIMUM[key]!;
     /*
@@ -235,7 +309,7 @@ export function auditEligibility(input: {
      * floor, which is why this is a max rather than an assignment.
      */
     const level: IndependenceLevel = requiredTier && stricter(requiredTier, floor) ? requiredTier : floor;
-    applied.push({ pair: key, level, against: recorded.role });
+    applied.push({ pair: key, level, against: party });
 
     const read = dimensionOf(level);
     /*
@@ -255,7 +329,7 @@ export function auditEligibility(input: {
 
     if (mine === null || theirs === null) {
       reasons.push(
-        `${role} cannot be compared with ${recorded.role}: one of them has no ${noun(level)} ` +
+        `${role} cannot be compared with ${party}: one of them has no ${noun(level)} ` +
           `recorded, and unrecorded lineage is not evidence of independence.`,
       );
       continue;
@@ -272,7 +346,7 @@ export function auditEligibility(input: {
        * and never returns.
        */
       reasons.push(
-        `${role} would share the same ${noun(level)} as ${recorded.role}, ` +
+        `${role} would share the same ${noun(level)} as ${party}, ` +
           `which ${key} requires to differ.`,
       );
       conflicts.push({ pair: key, level, dimension: noun(level), value: mine });
@@ -307,37 +381,54 @@ export function auditMatrixVerdict(
    */
   requiredTier?: SeparationTier,
 ): EligibilityVerdict {
-  const { audits } = lineageFromPasses(passes);
+  const { audits, synthesisAttempts } = lineageFromPasses(passes);
   const reasons: string[] = [];
   const applied: EligibilityVerdict['applied'] = [];
   const conflicts: EligibilityVerdict['conflicts'] = [];
-  const byRole = new Map<AuditRole, AuditLineage>();
-  for (const lineage of audits) byRole.set(lineage.role, lineage);
+  /*
+   * Keyed by party, not by role, and the author is in it.
+   *
+   * The matrix is walked by splitting each key on `_`, so a `SYNTHESIS_*` entry
+   * looks up `SYNTHESIS` here. Without a row for it both sides of every author
+   * pair would be `undefined` and the loop would `continue` — the three new
+   * entries would be in the constant, reported as applied by nothing, and
+   * enforced nowhere. That is the same shape as the defect they exist to fix,
+   * one file along, which is why it is written down rather than assumed.
+   */
+  const byParty = new Map<SeparationParty, AuditLineage[]>();
+  for (const lineage of audits) byParty.set(lineage.role, [lineage]);
+  // Several, because a redo leaves more than one completed synthesis and each
+  // of them is an author. A role is singular within a round by construction.
+  if (synthesisAttempts.length > 0) byParty.set('SYNTHESIS', synthesisAttempts);
 
   for (const [key, floor] of Object.entries(SIGNED_AUDIT_MATRIX)) {
     const level: IndependenceLevel =
       requiredTier && stricter(requiredTier, floor!) ? requiredTier : floor!;
-    const [left, right] = key.split('_') as [AuditRole, AuditRole];
-    const a = byRole.get(left);
-    const b = byRole.get(right);
-    if (!a || !b) continue;
+    const [left, right] = key.split('_') as [SeparationParty, SeparationParty];
+    const lefts = byParty.get(left) ?? [];
+    const rights = byParty.get(right) ?? [];
+    if (lefts.length === 0 || rights.length === 0) continue;
     applied.push({ pair: key, level, against: right });
     const read = dimensionOf(level);
+    for (const a of lefts) {
+      for (const b of rights) {
     // The third site that must agree that empty is absent. Three comparisons
     // of the same rule is two too many, and this is the one that guards
     // storage — the one it would be worst to leave behind.
     const blank = (value: string | null): string | null => (value === '' ? null : value);
-    const ka = blank(read(a));
-    const kb = blank(read(b));
-    if (ka === null || kb === null) {
-      reasons.push(
-        `${left} and ${right} cannot be compared: one recorded no ${noun(level)}.`,
-      );
-      continue;
-    }
-    if (ka === kb) {
-      reasons.push(`${left} and ${right} shared the same ${noun(level)}.`);
-      conflicts.push({ pair: key, level, dimension: noun(level), value: ka });
+        const ka = blank(read(a));
+        const kb = blank(read(b));
+        if (ka === null || kb === null) {
+          reasons.push(
+            `${left} and ${right} cannot be compared: one recorded no ${noun(level)}.`,
+          );
+          continue;
+        }
+        if (ka === kb) {
+          reasons.push(`${left} and ${right} shared the same ${noun(level)}.`);
+          conflicts.push({ pair: key, level, dimension: noun(level), value: ka });
+        }
+      }
     }
   }
 

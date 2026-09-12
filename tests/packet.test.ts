@@ -2909,7 +2909,18 @@ describe('the audit passes', () => {
 
   it('refuses a role\'s findings submitted against another role\'s item', async () => {
     const orchestration = await filedPacket();
-    const primary = await claimNext('RESEARCH_AUDIT');
+    /*
+     * A different session from the one `filedPacket` wrote the report in.
+     *
+     * This used to claim as the default identity, which is also the identity
+     * that submitted the synthesis — so the report's own author took the
+     * PRIMARY role, and the queue handed it over. The separation matrix now
+     * refuses that pairing before the lease, so the claim returns nothing and
+     * this test failed at its *setup*, on an assertion about something else
+     * entirely. Fixed where it was wrong: the fixture, not the rule.
+     */
+    const fleet = await auditFleet();
+    const primary = await as(fleet.primary, () => claimNext('RESEARCH_AUDIT'));
 
     // The adversarial body against the primary item. The work item says which
     // role this is; the payload does not get to say otherwise.
