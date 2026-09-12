@@ -365,8 +365,28 @@ async function main(): Promise<void> {
     console.log(
       `          rerun ${entry.rolesRerun.join(', ') || '—'}  ` +
         `carried ${entry.rolesCarried.map((role) => role.role).join(', ') || '—'}  ` +
-        `asked by ${entry.requestedById}  at ${entry.createdAt}`,
+        `at ${entry.createdAt}`,
     );
+    /*
+     * Two facts on two lines, because they are not the same fact.
+     *
+     * `authorized by` is whose authority the recovery carries, resolved from
+     * `users`. `authenticated by` is how the call got in. A terminal recovery
+     * carries an impeccable administrator's id and was typed by somebody Brain
+     * cannot name — and printing only the first would make it read, later, as
+     * though that person had approved it in a browser.
+     */
+    console.log(
+      `          authorized by ${entry.requestedById}  ` +
+        `authenticated by ${
+          entry.authorityChannel === 'BROWSER_SESSION'
+            ? 'a signed-in browser session'
+            : 'a shell inside the deployment (Brain cannot identify who reached it)'
+        }`,
+    );
+    if (entry.executedByRef) {
+      console.log(`          executed by (reported, unverified) ${entry.executedByRef}`);
+    }
   }
 
   const separation = auditMatrixVerdict(passes);

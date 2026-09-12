@@ -916,9 +916,117 @@ async function recordGaps(
  * The guard is a compare-and-swap on the status the select read, so a packet a
  * person answers in the same instant is never reached back through.
  */
+/**
+ * Put back a park this cancelled before it learned a reopen is an asker too.
+ *
+ * A fix deployed after the damage does not undo the damage, and §23 has already
+ * written that sentence twice: a remedy that cannot reach the state it exists
+ * for is not a remedy. The guard above stops the next one; this reaches the one
+ * that already happened.
+ *
+ * Derived from rows rather than hooked to the moment, for the reason
+ * `rearmSurfaceDeferredIntents` is: a hook fixes one entrance and the rows reach
+ * every entrance plus everything already stranded.
+ *
+ * Narrow by construction, and every clause is load-bearing:
+ *
+ *   - only a packet this function itself cancelled, proven by its own recorded
+ *     `cancel_reason` rather than by a flag somebody could set;
+ *   - only one whose current round genuinely has a non-mission asker, which is
+ *     the identical predicate the guard uses;
+ *   - guarded on `status = 'CANCELLED'`, so a packet somebody has since moved is
+ *     never reached back through.
+ *
+ * It restores `NEEDS_HUMAN` and nothing else. The `RESEARCH_CANCELLED` event
+ * stays exactly where it is — history does not mutate — and an append-only
+ * `RESEARCH_PARK_RESTORED` row carries why it came back. `cancel_reason` is
+ * cleared because it is current state rather than history, and leaving a
+ * sentence that says nobody will answer on a packet waiting for an answer is
+ * the contradiction this whole repair is about.
+ */
+export async function restoreWronglyConcludedParks(
+  limit: number,
+): Promise<{ orchestrationId: string; reopenId: string }[]> {
+  const rows = await getDb().all<{
+    orchestration_id: string;
+    run_id: string;
+    layer_id: string;
+    project_id: string;
+    reopen_id: string;
+  }>(
+    `SELECT o.id AS orchestration_id,
+            o.run_id AS run_id,
+            o.layer_id AS layer_id,
+            o.project_id AS project_id,
+            r.id AS reopen_id
+       FROM research_orchestrations o
+       JOIN audit_integrity_reopens r ON r.orchestration_id = o.id
+      WHERE o.status = 'CANCELLED'
+        -- Its own handwriting. Nothing else in this codebase writes this phrase,
+        -- so a packet cancelled for any other reason is untouched.
+        AND o.cancel_reason LIKE 'The mission that asked this question is%'
+        AND (r.state = 'OPEN'
+             OR (r.resolved_audit_id IS NOT NULL AND r.resolved_audit_id = o.audit_id))
+      ORDER BY o.id
+      LIMIT ?`,
+    [Math.max(1, limit)] as never[],
+  );
+
+  const restored: { orchestrationId: string; reopenId: string }[] = [];
+  for (const row of rows) {
+    const at = nowIso();
+    const result = await getDb().run(
+      `UPDATE research_orchestrations
+          SET status = 'NEEDS_HUMAN', cancelled_at = NULL, cancel_reason = NULL, updated_at = ?
+        WHERE id = ? AND status = 'CANCELLED'`,
+      [at, row.orchestration_id] as never[],
+    );
+    if (result.changes !== 1) continue;
+    await recordEvent({
+      projectId: row.project_id,
+      layerId: row.layer_id,
+      entityType: 'RUN',
+      entityId: row.run_id,
+      eventType: 'RESEARCH_PARK_RESTORED',
+      payload: {
+        orchestrationId: row.orchestration_id,
+        reopenId: row.reopen_id,
+        reason:
+          'This packet was cancelled as an abandoned park because its mission is terminal. ' +
+          'Its current audit round was begun by an integrity reopen, so the decision it ' +
+          'stopped at belongs to whoever asked for that reopen rather than to the mission. ' +
+          'Restored to the decision it was waiting on; every row it recorded is unchanged, ' +
+          'and the cancellation itself stays on the history.',
+        surface: 'RUSSELL',
+      },
+    });
+    restored.push({ orchestrationId: row.orchestration_id, reopenId: row.reopen_id });
+  }
+  return restored;
+}
+
 export async function concludeAbandonedParks(
   limit: number,
 ): Promise<{ orchestrationId: string; missionId: string; missionState: string }[]> {
+  /*
+   * Reading the mission as the only asker cancelled a correction somebody had
+   * requested that same afternoon, and the correction is recorded rather than
+   * quietly applied.
+   *
+   * `orc_abab7d7130d545eaa1a1` was reopened by an administrator at 13:31:53 on
+   * 2026-09-12 under `air_fdf0af5981c0404389e6`; three genuinely independent
+   * roles ran; the fresh judge recorded PATCH at 17:30:08; the packet went to
+   * NEEDS_HUMAN because PATCH is not an advancing verdict — and this query
+   * cancelled it, saying *"The mission that asked this question is DONE, so
+   * nobody is going to answer the decision this packet stopped at."* Every word
+   * of that was false of this packet. The thing that asked was the reopen, it
+   * asked four hours earlier, and it was waiting for precisely this answer.
+   *
+   * So the `NOT EXISTS` below is not a tuning decision: it names the two row
+   * shapes that say a non-mission asker owns the current round. Both are facts
+   * Brain wrote. This is the same family as every other correction in this
+   * file — a rule that read one owner when there were two.
+   */
   const rows = await getDb().all<{
     orchestration_id: string;
     run_id: string;
@@ -939,6 +1047,17 @@ export async function concludeAbandonedParks(
        JOIN russell_missions m ON m.orchestration_id = o.id
       WHERE o.status = 'NEEDS_HUMAN'
         AND m.state IN ('DONE', 'FAILED', 'CANCELLED')
+        -- A mission is not the only thing that can ask a packet a question.
+        -- An OPEN integrity reopen is a correction still in flight; a RESOLVED
+        -- one whose audit is this packet's current verdict means its standing
+        -- conclusion is that reopen's product. Either way the decision it stops
+        -- at belongs to whoever asked for the reopen, not to the mission.
+        AND NOT EXISTS (
+          SELECT 1 FROM audit_integrity_reopens r
+           WHERE r.orchestration_id = o.id
+             AND (r.state = 'OPEN'
+                  OR (r.resolved_audit_id IS NOT NULL AND r.resolved_audit_id = o.audit_id))
+        )
       ORDER BY o.id
       LIMIT ?`,
     [Math.max(1, limit)] as never[],

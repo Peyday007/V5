@@ -317,6 +317,14 @@ export const EVENT_TYPES = [
   // hash it is about, which roles run again and which are carried forward with
   // why, the verdict it supersedes, and the authenticated person who asked.
   'AUDIT_ROUND_REOPENED',
+  /*
+   * A park put back after it was cancelled as abandoned.
+   *
+   * Its own type rather than a flag on the cancellation, because both happened
+   * and history does not mutate: the `RESEARCH_CANCELLED` row stays exactly
+   * where it is and this says why the packet came back.
+   */
+  'RESEARCH_PARK_RESTORED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

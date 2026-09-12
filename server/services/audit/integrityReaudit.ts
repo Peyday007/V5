@@ -84,6 +84,7 @@ import {
   type CarriedRole,
   type IntegrityFinding,
 } from '../../repos/auditReopens.ts';
+import type { AuthorityChannel } from '../../repos/auditReopens.ts';
 
 /** Bumped when the reuse rule or the transition's shape changes. */
 export const REAUDIT_DECIDER_VERSION = '2026-09-12.1';
@@ -247,9 +248,28 @@ export interface ReauditOutcome {
  */
 export async function requestIntegrityReaudit(input: {
   orchestrationId: string;
-  /** The authenticated person asking. Re-authorized here, on every attempt. */
+  /**
+   * Whose authority this recovery carries. Re-authorized here, on every attempt.
+   *
+   * **Not the same fact as who authenticated.** See `authority` below.
+   */
   personId: string;
+  /**
+   * How this call got in, and what it says about itself.
+   *
+   * Defaults to `DELEGATED_TERMINAL`, the weaker and unverifiable claim, because
+   * Brain cannot check a channel and must never assume the stronger one — the
+   * same shape as unknown lineage failing closed. Only a caller that genuinely
+   * holds an authenticated HTTP principal may assert `BROWSER_SESSION`, and
+   * nothing in this repository does yet: the sole entrance is `npm run admin`,
+   * where reaching the shell is the authentication and `--admin <email>` is the
+   * attribution.
+   *
+   * `executedByRef` is stored exactly as offered and read back as *reported*.
+   */
+  authority?: { channel: AuthorityChannel; executedByRef?: string | null };
 }): Promise<ReauditOutcome> {
+  const authority = input.authority ?? { channel: 'DELEGATED_TERMINAL' as const };
   const orchestration = await getOrchestration(input.orchestrationId);
   if (!orchestration) {
     return refuse(input.orchestrationId, 'NO_SUCH_PACKET', 'No such packet.');
@@ -408,6 +428,8 @@ export async function requestIntegrityReaudit(input: {
     rolesRerun: reuse.rerun,
     rolesCarried: reuse.carried,
     requestedById: input.personId,
+    authorityChannel: authority.channel,
+    executedByRef: authority.executedByRef ?? null,
     requestKey,
     roundStartedAt,
   });

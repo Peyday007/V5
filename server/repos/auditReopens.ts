@@ -30,6 +30,26 @@ export type IntegrityFinding = (typeof INTEGRITY_FINDINGS)[number];
 export const REOPEN_STATES = ['OPEN', 'RESOLVED', 'SUPERSEDED_BY_VERSION'] as const;
 export type ReopenState = (typeof REOPEN_STATES)[number];
 
+/**
+ * How the call that opened a reopen was authenticated — never who authorized it.
+ *
+ * These are two different facts and conflating them is the thing this vocabulary
+ * exists to stop. `requested_by_id` is *whose authority the recovery carries*,
+ * resolved from `users`. This is *how the request got in*:
+ *
+ *   `BROWSER_SESSION`     an authenticated HTTP principal held a live session.
+ *   `DELEGATED_TERMINAL`  a shell inside the deployment, reached by somebody
+ *                         holding the credential that grants shell access.
+ *                         Brain cannot identify that party any further and does
+ *                         not pretend to.
+ *
+ * `--admin <email>` resolves an enabled administrator and proves such a person
+ * exists and may authorize this. It proves nothing about who typed the command,
+ * so a terminal recovery is `DELEGATED_TERMINAL` however impeccable the email.
+ */
+export const AUTHORITY_CHANNELS = ['BROWSER_SESSION', 'DELEGATED_TERMINAL'] as const;
+export type AuthorityChannel = (typeof AUTHORITY_CHANNELS)[number];
+
 /** A role kept from the previous round, and the reason it may be kept. */
 export interface CarriedRole {
   role: AuditRole;
@@ -49,7 +69,18 @@ export interface AuditIntegrityReopen {
   rolesRerun: AuditRole[];
   rolesCarried: CarriedRole[];
   requestedByType: 'PERSON';
+  /** Whose authority this recovery carries, resolved from `users`. */
   requestedById: string;
+  /** How the call was authenticated. Never the same fact as `requestedById`. */
+  authorityChannel: AuthorityChannel;
+  /**
+   * What the caller said it was, unverified.
+   *
+   * A terminal can name a workflow run or a session and Brain cannot check one
+   * word of it, so every reader prints this as *reported* rather than as
+   * established. Null when nothing was offered, which is the ordinary case.
+   */
+  executedByRef: string | null;
   requestKey: string;
   roundStartedAt: string;
   state: ReopenState;
@@ -72,6 +103,8 @@ interface Row {
   roles_carried: string;
   requested_by_type: string;
   requested_by_id: string;
+  authority_channel: string;
+  executed_by_ref: string | null;
   request_key: string;
   round_started_at: string;
   state: string;
@@ -95,6 +128,8 @@ function toView(row: Row): AuditIntegrityReopen {
     rolesCarried: parseJson<CarriedRole[]>(row.roles_carried, []),
     requestedByType: 'PERSON',
     requestedById: row.requested_by_id,
+    authorityChannel: row.authority_channel as AuthorityChannel,
+    executedByRef: row.executed_by_ref,
     requestKey: row.request_key,
     roundStartedAt: row.round_started_at,
     state: row.state as ReopenState,
@@ -106,7 +141,8 @@ function toView(row: Row): AuditIntegrityReopen {
 
 const COLUMNS = `id, orchestration_id, project_id, document_id, document_version, document_hash,
   finding, finding_detail, superseded_audit_id, roles_rerun, roles_carried,
-  requested_by_type, requested_by_id, request_key, round_started_at, state,
+  requested_by_type, requested_by_id, authority_channel, executed_by_ref,
+  request_key, round_started_at, state,
   resolved_audit_id, resolved_at, created_at`;
 
 export interface OpenReopenInput {
@@ -121,6 +157,8 @@ export interface OpenReopenInput {
   rolesRerun: AuditRole[];
   rolesCarried: CarriedRole[];
   requestedById: string;
+  authorityChannel: AuthorityChannel;
+  executedByRef?: string | null;
   requestKey: string;
   roundStartedAt: string;
 }
@@ -143,9 +181,10 @@ export async function openReopen(
     `INSERT INTO audit_integrity_reopens
        (id, orchestration_id, project_id, document_id, document_version, document_hash,
         finding, finding_detail, superseded_audit_id, roles_rerun, roles_carried,
-        requested_by_type, requested_by_id, request_key, round_started_at, state,
+        requested_by_type, requested_by_id, authority_channel, executed_by_ref,
+        request_key, round_started_at, state,
         resolved_audit_id, resolved_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PERSON', ?, ?, ?, 'OPEN', NULL, NULL, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PERSON', ?, ?, ?, ?, ?, 'OPEN', NULL, NULL, ?)
      ON CONFLICT DO NOTHING`,
     [
       id,
@@ -160,6 +199,8 @@ export async function openReopen(
       toJson(input.rolesRerun),
       toJson(input.rolesCarried),
       input.requestedById,
+      input.authorityChannel,
+      input.executedByRef ?? null,
       input.requestKey,
       input.roundStartedAt,
       at,

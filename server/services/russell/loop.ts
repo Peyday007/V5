@@ -118,6 +118,7 @@ import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
 import {
   concludeAbandonedParks,
+  restoreWronglyConcludedParks,
   parkStoppedMissions,
   reopenAnswered,
   resumeAnsweredRequest,
@@ -254,6 +255,8 @@ export interface TickReport {
    */
   retiredPacketWork: { orchestrationId: string; retired: number }[];
   abandonedParks: { orchestrationId: string; missionId: string; missionState: string }[];
+  /** Parks put back after being cancelled while a reopen was their asker. */
+  restoredParks: { orchestrationId: string; reopenId: string }[];
   /**
    * Follow-on ideas created from a mission that finished and filed.
    *
@@ -339,6 +342,7 @@ const EMPTY: TickReport = {
   lineageUnresolved: [],
   retiredPacketWork: [],
   abandonedParks: [],
+  restoredParks: [],
   followOns: [],
   linkedNext: [],
   needsHuman: [],
@@ -388,6 +392,7 @@ export async function tick(owner: string): Promise<TickReport> {
     linksUnreconciled: [],
     retiredPacketWork: [],
     abandonedParks: [],
+    restoredParks: [],
     followOns: [],
     linkedNext: [],
     needsHuman: [],
@@ -535,6 +540,18 @@ export async function tick(owner: string): Promise<TickReport> {
      */
     for (const entry of await concludeAbandonedParks(cycle.maxEventsPerCycle)) {
       report.abandonedParks.push(entry);
+    }
+
+    /*
+     * And put back the ones cancelled before that rule knew a reopen is an
+     * asker too. A fix deployed after the damage does not undo the damage, so
+     * the remedy is derived from rows rather than hooked to the moment — the
+     * same shape as `rearmSurfaceDeferredIntents`. It is self-limiting: a
+     * restored packet is `NEEDS_HUMAN`, which the sweep above no longer
+     * matches, so the two cannot trade a row back and forth.
+     */
+    for (const entry of await restoreWronglyConcludedParks(cycle.maxEventsPerCycle)) {
+      report.restoredParks.push(entry);
     }
 
     /*

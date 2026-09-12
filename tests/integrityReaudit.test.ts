@@ -44,8 +44,19 @@ import {
   requestKeyFor,
   scanAuthorReviewerOverlap,
 } from '../server/services/audit/integrityReaudit.ts';
-import { listOpenReopens, listReopens } from '../server/repos/auditReopens.ts';
+import {
+  AUTHORITY_CHANNELS,
+  listOpenReopens,
+  listReopens,
+  resolveReopen,
+} from '../server/repos/auditReopens.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
+import { listEvents } from '../server/repos/events.ts';
+import { newId } from '../server/repos/util.ts';
+import {
+  concludeAbandonedParks,
+  restoreWronglyConcludedParks,
+} from '../server/services/russell/needsHuman.ts';
 import { binForOrchestration, getBin } from '../server/repos/bins.ts';
 import { auditRoundFor, auditRoundStartedAt } from '../server/services/research/auditRound.ts';
 import { earlierAuditRole } from '../server/services/research/auditBrief.ts';
@@ -458,6 +469,54 @@ describe('the transition itself', () => {
     expect(chosen?.id).toBe(replay.binId);
   });
 
+  /*
+   * Attribution is not authentication, and the record must not blur them.
+   *
+   * `--admin <email>` resolves an enabled administrator from `users`. That
+   * proves such a person exists and may authorize this; it proves nothing about
+   * who typed the command. What authenticated the only entrance that exists is
+   * reaching the shell — and Brain cannot identify the party that reached it.
+   *
+   * Recording a delegated terminal action as though a person had approved it in
+   * a browser is the kind of quiet overstatement that is impossible to detect
+   * afterwards, which is exactly why it is two columns and two assertions.
+   */
+  it('records how the call was authenticated apart from whose authority it carries', async () => {
+    await authorReviewedItsOwnWork();
+    const outcome = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    expect(outcome.ok).toBe(true);
+    // Whose authority.
+    expect(outcome.reopen?.requestedById).toBe(adminId);
+    // How it got in — defaulted to the weaker, unverifiable claim.
+    expect(outcome.reopen?.authorityChannel).toBe('DELEGATED_TERMINAL');
+    expect(outcome.reopen?.executedByRef).toBeNull();
+  });
+
+  it('never assumes a browser session, because Brain cannot check one', async () => {
+    await authorReviewedItsOwnWork();
+    // The service is called with no authority at all, which is what the terminal
+    // entrance does. The stronger claim must not appear by default.
+    const outcome = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    expect(outcome.reopen?.authorityChannel).not.toBe('BROWSER_SESSION');
+  });
+
+  it('stores a reported execution reference without believing it', async () => {
+    await authorReviewedItsOwnWork();
+    const outcome = await requestIntegrityReaudit({
+      orchestrationId,
+      personId: adminId,
+      authority: { channel: 'DELEGATED_TERMINAL', executedByRef: 'workflow Packets run 123' },
+    });
+    // Kept verbatim as a lead for a person reading the record later. Nothing
+    // verifies it, and every reader prints it as reported.
+    expect(outcome.reopen?.executedByRef).toBe('workflow Packets run 123');
+    expect(outcome.reopen?.authorityChannel).toBe('DELEGATED_TERMINAL');
+  });
+
+  it('the vocabulary is closed, so a channel nobody defined cannot be stored', () => {
+    expect([...AUTHORITY_CHANNELS].sort()).toEqual(['BROWSER_SESSION', 'DELEGATED_TERMINAL']);
+  });
+
   it('a replay reuses a bin that can still deliver, rather than building a second', async () => {
     await authorReviewedItsOwnWork();
     const first = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
@@ -747,5 +806,150 @@ describe('the scope report', () => {
     await recordPass({ passKey: 'AUDIT', ordinal: 6, sessionRef: THIRD });
 
     expect(await scanAuthorReviewerOverlap()).toHaveLength(0);
+  });
+});
+
+/* =========================================================================
+ * A reopen is an asker, so a reopened round is not an abandoned park
+ * ========================================================================= */
+
+/*
+ * The defect production produced four hours after the first reopen.
+ *
+ * `concludeAbandonedParks` reads the *mission* to decide whether anybody is
+ * still waiting: a packet at NEEDS_HUMAN under a terminal mission is cancelled,
+ * on the sentence "the thing which asked the question stopped wanting the
+ * answer". That is right when the mission is the only asker, and wrong the
+ * moment an administrator reopens a round on a packet whose mission finished
+ * this morning.
+ *
+ * `orc_abab7d7130d545eaa1a1` was reopened at 13:31:53, three independent roles
+ * ran, the fresh judge recorded PATCH at 17:30:08 — a verdict that does not
+ * advance — and the packet was cancelled saying nobody would answer. Somebody
+ * had asked, four hours earlier, and was waiting for exactly that answer.
+ */
+describe('a packet whose round a reopen asked for', () => {
+  beforeEach(async () => {
+    await authorReviewedItsOwnWork();
+  });
+
+  /** Put the packet where the sweep looks: parked, under a finished mission. */
+  async function parkUnderTerminalMission(): Promise<string> {
+    const mission = newId('rms');
+    await getDb().run(
+      `INSERT INTO russell_missions
+         (id, project_id, orchestration_id, state, objective, why_now, idempotency_key,
+          created_at, updated_at)
+       VALUES (?, ?, ?, 'DONE', ?, ?, ?, ?, ?)`,
+      [
+        mission,
+        projectId,
+        orchestrationId,
+        'A mission that finished before the round began',
+        'It was the only thing asking, until an administrator reopened the round.',
+        `test:${mission}`,
+        new Date().toISOString(),
+        new Date().toISOString(),
+      ],
+    );
+    await updateOrchestration(orchestrationId, { status: 'NEEDS_HUMAN' });
+    return mission;
+  }
+
+  it('is not cancelled while its reopen is open', async () => {
+    await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    await parkUnderTerminalMission();
+
+    const concluded = await concludeAbandonedParks(50);
+    expect(concluded.map((entry) => entry.orchestrationId)).not.toContain(orchestrationId);
+    expect((await getOrchestration(orchestrationId))?.status).toBe('NEEDS_HUMAN');
+  });
+
+  it('is not cancelled when its current verdict is that reopen’s product', async () => {
+    const outcome = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    const fresh = await createAudit({
+      projectId,
+      layerId,
+      runId: (await getOrchestration(orchestrationId))!.runId,
+      auditedDocumentId: document.id,
+      result: {
+        verdict: 'PATCH',
+        summary: 'The independent round asked for a patch.',
+        failures: [],
+        missingDocuments: [],
+        requiredResearchRuns: [],
+        requiredPatches: [],
+        synthesisRequired: false,
+        freezeEligible: false,
+        nextVersion: null,
+        nextAction: 'A person decides.',
+      },
+    });
+    await updateOrchestration(orchestrationId, { auditId: fresh.id, verdict: 'PATCH' });
+    await resolveReopen({ id: outcome.reopen!.id, auditId: fresh.id });
+    await parkUnderTerminalMission();
+
+    const concluded = await concludeAbandonedParks(50);
+    expect(concluded.map((entry) => entry.orchestrationId)).not.toContain(orchestrationId);
+    expect((await getOrchestration(orchestrationId))?.status).toBe('NEEDS_HUMAN');
+  });
+
+  it('a packet with no reopen at all is still concluded, because that rule was right', async () => {
+    await parkUnderTerminalMission();
+    const concluded = await concludeAbandonedParks(50);
+    expect(concluded.map((entry) => entry.orchestrationId)).toContain(orchestrationId);
+    expect((await getOrchestration(orchestrationId))?.status).toBe('CANCELLED');
+  });
+
+  it('puts back one that was cancelled before the rule knew, and keeps the history', async () => {
+    // Exactly the production shape: cancelled first, reopened round second.
+    await parkUnderTerminalMission();
+    expect(await concludeAbandonedParks(50)).toHaveLength(1);
+    expect((await getOrchestration(orchestrationId))?.status).toBe('CANCELLED');
+
+    await updateOrchestration(orchestrationId, { status: 'NEEDS_HUMAN' });
+    const outcome = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    await updateOrchestration(orchestrationId, {
+      status: 'CANCELLED',
+      cancelReason:
+        'The mission that asked this question is DONE, so nobody is going to answer the decision this packet stopped at.',
+    });
+
+    const restored = await restoreWronglyConcludedParks(50);
+    expect(restored.map((entry) => entry.orchestrationId)).toContain(orchestrationId);
+    expect(restored[0]?.reopenId).toBe(outcome.reopen!.id);
+
+    const packet = await getOrchestration(orchestrationId);
+    expect(packet?.status).toBe('NEEDS_HUMAN');
+    // The sentence that said nobody would answer is current state, not history,
+    // and it contradicted the packet it was written on.
+    expect(packet?.cancelReason ?? null).toBeNull();
+
+    // History does not mutate: the cancellation stays on the record beside the
+    // restoration.
+    const events = await listEvents(projectId, 200);
+    const kinds = events.map((event) => event.eventType);
+    expect(kinds).toContain('RESEARCH_CANCELLED');
+    expect(kinds).toContain('RESEARCH_PARK_RESTORED');
+  });
+
+  it('never puts back a packet cancelled for any other reason', async () => {
+    await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    await updateOrchestration(orchestrationId, {
+      status: 'CANCELLED',
+      cancelReason: 'A person stopped this deliberately.',
+    });
+    expect(await restoreWronglyConcludedParks(50)).toHaveLength(0);
+    expect((await getOrchestration(orchestrationId))?.status).toBe('CANCELLED');
+  });
+
+  it('the two sweeps cannot trade a packet back and forth', async () => {
+    await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    await parkUnderTerminalMission();
+    for (let pass = 0; pass < 3; pass += 1) {
+      await concludeAbandonedParks(50);
+      await restoreWronglyConcludedParks(50);
+    }
+    expect((await getOrchestration(orchestrationId))?.status).toBe('NEEDS_HUMAN');
   });
 });

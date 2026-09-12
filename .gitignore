@@ -19,3 +19,4 @@ data/factory/
 *.log
 .DS_Store
 .vitest/
+.claude/worktrees/
