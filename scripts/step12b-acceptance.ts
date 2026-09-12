@@ -69,7 +69,8 @@ import { LAB_MODES, declareExperiment, runExperiment } from '../server/services/
 import { MAP_TYPES } from '../server/services/russell/maps.ts';
 import { PREFERENCES, checkPreference, defaults } from '../server/services/russell/preferences.ts';
 import { SEARCH_KINDS, search } from '../server/services/russell/search.ts';
-import { usability } from '../server/services/fleet/view.ts';
+import { explainSlowness, usability } from '../server/services/fleet/view.ts';
+import type { SlownessExplanation } from '../server/services/fleet/view.ts';
 import { CANDIDATE_PRIORITIES } from '../server/domain/types.ts';
 import { choicesFor } from '../server/services/russell/needsHuman.ts';
 import { projectProgress } from '../server/services/russell/progress.ts';
@@ -125,6 +126,15 @@ interface FleetReading {
   unreadable: string | null;
   /** What was read: the configured Brain, named without its credential. */
   source: string;
+  /**
+   * One real dispatch, traced from the Brain's own `bin_events`.
+   *
+   * Taken in the same read-only phase as the fleet rows, because N is a fact
+   * about a dispatch that actually happened and no scratch database has one.
+   * Null where the Brain has never fired anything, which is *not run* rather
+   * than a finding.
+   */
+  trace: SlownessExplanation | null;
 }
 
 async function readOperationalFleet(): Promise<FleetReading> {
@@ -135,8 +145,26 @@ async function readOperationalFleet(): Promise<FleetReading> {
     // Named by provider, never by connection string — §18's rule, and this
     // output goes into a CI log.
     const source = config?.provider === 'postgres' ? 'the cloud database' : 'the local database';
+
+    /*
+     * The most recent bin Brain actually fired a worker for.
+     *
+     * `DISPATCH_SENT` is the event that makes it a real dispatch rather than an
+     * intent, and `MAX(at)` picks the newest without needing a tiebreak on a
+     * column only one dialect has — the `ORDER BY` rule this repository has
+     * been caught by three times.
+     */
+    const fired = await getDb().get<{ bin_id: string; last_at: string }>(
+      `SELECT bin_id, MAX(at) AS last_at FROM bin_events
+        WHERE event_type = 'DISPATCH_SENT'
+        GROUP BY bin_id
+        ORDER BY last_at DESC
+        LIMIT 1`,
+    );
+    const trace = fired ? await explainSlowness(fired.bin_id) : null;
+
     await closeDatabase();
-    return { routines, accounts, unreadable: null, source };
+    return { routines, accounts, unreadable: null, source, trace };
   } catch (error) {
     // A developer machine with nothing configured is the ordinary case here,
     // and it is not a finding about the fleet.
@@ -145,6 +173,7 @@ async function readOperationalFleet(): Promise<FleetReading> {
       accounts: [],
       unreadable: error instanceof Error ? error.message : String(error),
       source: 'nothing — no database was configured for this run',
+      trace: null,
     };
   }
 }
@@ -678,14 +707,35 @@ async function main(): Promise<void> {
   );
 
   /* -- N. Routing and latency ----------------------------------------------- */
+  /*
+   * The trace is the scenario. A real bin Brain fired a worker for, its own
+   * recorded chain, and the largest gap named from the two events either side
+   * of it — read in the operational phase above, because no scratch database
+   * has a dispatch in it.
+   */
   const routing = file('server/services/bins/routing.ts');
+  const trace = fleet.trace;
   record(
     'N',
     'Routing and latency explanation',
-    routing ? 'PARTIAL' : 'NOT_RUN',
-    'One routing decision is read by the candidate query, the admission hook and the fire ' +
-      'router, and a refusal costs no claim state. NOT established here: a traced real dispatch, ' +
-      'which needs a surface.',
+    trace && trace.steps.length > 1 ? 'PARTIAL' : 'NOT_RUN',
+    trace && trace.steps.length > 1
+      ? `One real dispatch traced from ${fleet.source}: ${trace.steps.length} recorded steps ` +
+        `(${trace.steps.map((step) => step.label).slice(0, 4).join(' → ')}` +
+        `${trace.steps.length > 4 ? ' → …' : ''}), and the largest gap is ` +
+        (trace.largestGap
+          ? `${Math.round(trace.largestGap.ms / 1000)}s between ${trace.largestGap.from} and ` +
+            `${trace.largestGap.to} — "${trace.largestGap.meaning}"`
+          : 'not nameable from this chain') +
+        `. ${trace.unknowns.length} thing(s) are reported as undetermined rather than guessed. ` +
+        'One routing decision is read by the candidate query, the admission hook and the fire ' +
+        'router, and a refusal costs no claim state. NOT established here: the same reading ' +
+        'across a workload mix rather than one bin.'
+      : routing
+        ? 'One routing decision is read by the candidate query, the admission hook and the fire ' +
+          'router, and a refusal costs no claim state. NOT established here: a traced real ' +
+          `dispatch — ${fleet.source} holds no bin that was ever fired.`
+        : 'The routing decision could not be read.',
   );
 
   /* -- O. Visual and interaction approval ------------------------------------ */
