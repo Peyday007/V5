@@ -78,6 +78,40 @@ discarded the eleven rows it had already established.
 
 ---
 
+## What each scenario is still waiting on, and who can supply it
+
+Every entry below is taken from the reporter's own **NOT established** clause
+for that row, not composed here — so if a row's remaining condition changes,
+this table is stale and the reporter wins. Four kinds of dependency, and only
+one of them is a person's:
+
+| # | Still waiting on | Who or what supplies it |
+| --- | --- | --- |
+| A | A fleet reading, and a restart driven deliberately mid-turn | Production read; then a driven restart |
+| B | A fleet reading, and a judgment a person disagreed with and overrode end to end | Production read; then a person |
+| C | A worker naming the repeat from a live conversation — the one string the server does not supply itself | A worker session |
+| D | The five *asked* discovery lenses | A reader, by design — §29 refuses to fill them in |
+| E | A command driven from the site through to a launched mission in one observed pass | Deal Dispatch sending one |
+| F | A real packet parking on a production boundary and a person answering it | A packet, then a person |
+| G | — | Closed |
+| H | Map behaviour at desktop and intermediate widths; whether the maps are *good* | The second half is O |
+| I | An invitation anybody received; the same journey on the deployed product | No invitation mechanism exists here — the email is outside Brain |
+| J | A mission on a phone; orientation, device pixel ratio and browser coverage; the constellation's dense-phone layout | A worker; then an owner's visual decision |
+| K | — | Closed |
+| L | A measured uptime window rather than one reading | Time |
+| M | The same four-reader comparison over HTTP against versioned production state | Production read |
+| N | The same trace across a workload mix rather than one bin | Production read |
+| O | **Your review of the images against the approved direction** | **Only you.** No reading in this report can stand in for it |
+| P | The hosted pre- and post-restart checks | The Deploy workflow, which runs them every deploy |
+| Q | The canary cycle against the deployed fleet | Would displace a policy somebody is actually running on |
+
+**Three of these are genuinely person-only** — D's asked lenses, F's answer and
+O's approval — and O is the only one that is a person-only *gate* rather than a
+person-only *event*: the other two wait for something to happen, and O waits for
+a judgment nothing else can make.
+
+---
+
 ## The scenarios, as the reporter reads them
 
 The reading below is from the reporter against a Brain with **no fleet rows**
