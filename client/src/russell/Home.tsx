@@ -74,6 +74,7 @@ export function RussellHome({
       <Hero view={view} />
       <Maturity view={view} />
       <Changes view={view} />
+      <WhyThisMatters projectId={projectId} />
       <Threads
         collections={collections.data?.collections ?? []}
         loading={collections.loading}
@@ -256,6 +257,54 @@ function Changes({ view }: { view: HomeView }): JSX.Element | null {
               {gap}
             </li>
           ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * Why this matters.
+ *
+ * §19's Easter egg, and the shape of it is the whole point: it is absent far
+ * more often than it is present, it has no badge, streak, point or confetti in
+ * it, and every line is something that genuinely happened with the row behind
+ * it. The server returns null unless there is enough to be worth a person's
+ * attention, so this renders nothing at all most of the time.
+ */
+function WhyThisMatters({ projectId }: { projectId: string | null }): JSX.Element | null {
+  const query = useAsync(
+    () => (projectId ? RussellApi.whyThisMatters(projectId) : Promise.resolve(null)),
+    [projectId],
+  );
+  const view = query.data?.whyThisMatters ?? null;
+  // Silence is the common case and the correct one. A section that always had
+  // something to say would be the productivity cliché §19 rules out.
+  if (!view) return null;
+  return (
+    <section className="rs-why" aria-label="Why this matters">
+      <h3>Why this matters</h3>
+      {view.ambition ? <p>{view.ambition}</p> : null}
+      {view.note ? <p>{view.note}</p> : null}
+      {view.connection ? <p className="rs-hint">{view.connection}</p> : null}
+      {view.milestones.length > 0 ? (
+        <ul className="rs-why-milestones rs-at-interested">
+          {view.milestones.map((milestone) => {
+            const when = humanWhen(milestone.at);
+            return (
+              <li key={`${milestone.kind}:${milestone.sourceId}`}>
+                {milestone.what}
+                {when ? (
+                  <>
+                    {' — '}
+                    <time dateTime={milestone.at} title={when.exact}>
+                      {when.text}
+                    </time>
+                  </>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </section>

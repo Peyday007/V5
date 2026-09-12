@@ -63,6 +63,14 @@ import {
   type LabMode,
 } from '../services/fleet/lab.ts';
 import { setPolicy } from '../repos/fleet.ts';
+import { MAP_LABELS, MAP_TYPES, mapFor, type MapType } from '../services/russell/maps.ts';
+import { whyThisMatters, worthSurfacing } from '../services/russell/whyThisMatters.ts';
+import {
+  PREFERENCES,
+  isPreferenceKey,
+  preferencesFor,
+  setPreference,
+} from '../services/russell/preferences.ts';
 import { dismissFrontierItem } from '../repos/russellFrontier.ts';
 import {
   fileConversation,
@@ -386,6 +394,89 @@ russellRouter.get(
     });
     if (!view) throw notFound('No project with that id.');
     return { home: view, project: { id: project.id, name: project.name } };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Maps, preferences, and why this matters
+ * ------------------------------------------------------------------------ */
+
+/**
+ * One of the six specialized maps, over the authoritative graph.
+ *
+ * A map draws only relationships that are recorded. Where a project holds
+ * nothing of that kind the map comes back empty *with the reason*, which is the
+ * honest output — inventing edges to make a diagram look finished is an
+ * invented citation one altitude down.
+ */
+russellRouter.get(
+  '/projects/:projectId/maps/:type',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const type = pathId(req, 'type').toUpperCase();
+    if (!(MAP_TYPES as readonly string[]).includes(type)) {
+      throw notFound('There is no map of that kind.');
+    }
+    return {
+      map: await mapFor({
+        type: type as MapType,
+        projectId: project.id,
+        projectName: project.name,
+        includePrivate: false,
+      }),
+      types: MAP_TYPES.map((key) => ({ key, label: MAP_LABELS[key] })),
+    };
+  }),
+);
+
+/**
+ * Why this matters — a private, non-gamified reading of what has happened.
+ *
+ * Returns nothing at all when nothing has. A quiet screen is the honest one,
+ * and an encouraging screen over an empty project is what makes a person stop
+ * believing the rest of the product.
+ */
+russellRouter.get(
+  '/projects/:projectId/why-this-matters',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const view = await whyThisMatters({
+      projectId: project.id,
+      projectName: project.name,
+      includePrivate: false,
+    });
+    return { whyThisMatters: worthSurfacing(view) ? view : null };
+  }),
+);
+
+/**
+ * This person's own preferences.
+ *
+ * The user comes from the authenticated principal, never from the body or the
+ * path: a preference route that took a user id would be a way to change
+ * somebody else's screen. Every key is presentational by construction — nothing
+ * here can change a fact, an evidence standard, or what anybody may do.
+ */
+russellRouter.get(
+  '/preferences',
+  handler(async () => {
+    const principal = requirePerson();
+    return { preferences: await preferencesFor(principal.id), declared: PREFERENCES };
+  }),
+);
+
+russellRouter.patch(
+  '/preferences',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const body = bodyOf(req);
+    const key = requiredString(body['key'], 'key');
+    if (!isPreferenceKey(key)) throw badRequest('That is not a preference Brain keeps.');
+    const outcome = await setPreference({ userId: principal.id, key, value: body['value'] });
+    if (!outcome.ok) throw badRequest(outcome.reason);
+    return { preferences: await preferencesFor(principal.id) };
   }),
 );
 

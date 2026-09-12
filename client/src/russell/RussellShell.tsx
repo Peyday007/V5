@@ -80,12 +80,17 @@ export function useViewportWidth(): number {
 }
 
 /**
- * The reader's chosen depth, remembered.
+ * The reader's chosen depth, remembered in two places on purpose.
  *
- * `localStorage` is the right store for exactly this: it is a per-viewer
- * convenience, it is not state anything reasons about, and it is read inside a
- * try because a private window or blocked site data makes the accessor throw
- * rather than return nothing.
+ * `localStorage` answers instantly so the first paint is right, and the
+ * server's per-account preference is what makes the choice follow a person to
+ * another browser. The local value is the optimistic one and the account's is
+ * authoritative: when they differ on load, the account wins.
+ *
+ * Both reads are guarded. A private window or blocked site data makes the
+ * storage accessor throw rather than return nothing, and a failed preference
+ * read must leave a usable shell rather than an unusable one — §18's rule that
+ * every account works with strong defaults, applied to its own mechanism.
  */
 function useDepth(): [Depth, (next: Depth) => void] {
   const [depth, setDepth] = useState<Depth>(() => {
@@ -96,6 +101,23 @@ function useDepth(): [Depth, (next: Depth) => void] {
       return 'NORMAL';
     }
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    void RussellApi.preferences().then(
+      (answer) => {
+        const stored = answer.preferences.depth;
+        if (!cancelled && isDepth(stored)) setDepth(stored);
+      },
+      () => {
+        /* the shell still works at the depth this browser remembers */
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const choose = useCallback((next: Depth) => {
     setDepth(next);
     try {
@@ -104,7 +126,12 @@ function useDepth(): [Depth, (next: Depth) => void] {
       /* a viewer whose browser refuses storage still gets the depth they chose,
          for this visit. Losing it on reload is a smaller harm than throwing. */
     }
+    // Nothing optimistic depends on this: the screen has already changed, and
+    // a failed write means the choice does not follow them to another browser
+    // rather than that it did not happen.
+    void RussellApi.setPreference('depth', next).catch(() => undefined);
   }, []);
+
   return [depth, choose];
 }
 

@@ -12,6 +12,7 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { Constellation } from './Constellation.tsx';
 import { Frontier } from './Frontier.tsx';
+import { Maps } from './Maps.tsx';
 import { freshnessLabel, humanWhen, listState, priorityTone, readingState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { RussellApi } from '../lib/russellApi.ts';
@@ -362,6 +363,7 @@ function plainWorkState(entry: WorkEntry): string {
 const PROJECT_TABS = [
   { key: 'MAP' as const, label: 'Map' },
   { key: 'OVERVIEW' as const, label: 'Overview' },
+  { key: 'MAPS' as const, label: 'Other maps' },
   { key: 'FRONTIER' as const, label: 'Frontier' },
   { key: 'WORK' as const, label: 'Work' },
   { key: 'KNOWLEDGE' as const, label: 'Knowledge' },
@@ -398,6 +400,7 @@ export function ProjectView({
         <IdeasView projectId={projectId} focusId={focusId} onFocus={onFocus} />
       ) : null}
       {tab === 'OVERVIEW' ? <ProjectOverview projectId={projectId} /> : null}
+      {tab === 'MAPS' ? <Maps projectId={projectId} /> : null}
       {tab === 'FRONTIER' ? <Frontier projectId={projectId} /> : null}
       {tab === 'WORK' ? <WorkView projectId={projectId} /> : null}
       {tab === 'KNOWLEDGE' ? <KnowledgeView projectId={projectId} /> : null}

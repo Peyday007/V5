@@ -36,6 +36,9 @@ import type { FrontierView, FrontierRegionView } from '../../../server/services/
 import type { SearchHit, SearchKind, SearchResult } from '../../../server/services/russell/search.ts';
 import type { FleetView as FleetReading, SlownessExplanation } from '../../../server/services/fleet/view.ts';
 import type { LabExperiment, LabMode, TestEnvelope } from '../../../server/services/fleet/lab.ts';
+import type { MapType, MapView } from '../../../server/services/russell/maps.ts';
+import type { WhyThisMatters } from '../../../server/services/russell/whyThisMatters.ts';
+import type { Preferences, PreferenceKey } from '../../../server/services/russell/preferences.ts';
 import type {
   AuthorityView,
   AuthorityLimitKey,
@@ -52,6 +55,11 @@ export type {
   FleetReading,
   LabExperiment,
   LabMode,
+  MapType,
+  MapView,
+  PreferenceKey,
+  Preferences,
+  WhyThisMatters,
   SearchHit,
   SearchKind,
   SearchResult,
@@ -241,6 +249,28 @@ export const RussellApi = {
     home: HomeView;
     project: { id: string; name: string };
   }> => api(`/api/russell/projects/${encodeURIComponent(projectId)}/home`),
+
+  /** One of the six specialized maps, over the authoritative graph. */
+  map: (
+    projectId: string,
+    type: MapType,
+  ): Promise<{ map: MapView; types: { key: MapType; label: string }[] }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/maps/${encodeURIComponent(type)}`,
+    ),
+
+  /** Why this matters, or null when there is nothing true to say. */
+  whyThisMatters: (projectId: string): Promise<{ whyThisMatters: WhyThisMatters | null }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/why-this-matters`),
+
+  /** This person's own preferences. Presentational by construction. */
+  preferences: (): Promise<{ preferences: Preferences }> => api('/api/russell/preferences'),
+
+  setPreference: (key: PreferenceKey, value: unknown): Promise<{ preferences: Preferences }> =>
+    api('/api/russell/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ key, value }),
+    }),
 
   /**
    * How much usable power exists, where it is going, and what should change.

@@ -52,6 +52,19 @@ import {
 } from '../server/services/fleet/lab.ts';
 import { currentPolicy, policyHistory } from '../server/repos/fleet.ts';
 import { createProject } from '../server/repos/projects.ts';
+import { mapFor, outlineOf } from '../server/services/russell/maps.ts';
+import { decideBrainAdmin, decideProjectAccess } from '../server/services/identity/policy.ts';
+import {
+  checkPreference,
+  isPreferenceKey,
+  preferencesFor,
+  setPreference,
+} from '../server/services/russell/preferences.ts';
+import {
+  noteFor,
+  whyThisMatters,
+  worthSurfacing,
+} from '../server/services/russell/whyThisMatters.ts';
 import { parseRoute } from '../client/src/lib/router.ts';
 import type { Principal, Project } from '../server/domain/types.ts';
 
@@ -1141,5 +1154,306 @@ describe('the Capability Lab is bounded before it runs', () => {
     const history = await policyHistory('FLEET', null, 10);
     expect(history.length).toBeGreaterThanOrEqual(2);
     expect(history[0]?.reason).toMatch(/Rolled back/);
+  });
+});
+
+/* ==========================================================================
+ * Maps
+ * ========================================================================== */
+
+describe('a map draws only relationships that are recorded', () => {
+  it('builds the system map from foundations the project actually declares', async () => {
+    const view = await mapFor({
+      type: 'SYSTEM',
+      projectId: project.id,
+      projectName: project.name,
+    });
+    expect(view.nodes.some((node) => node.kind === 'PROJECT')).toBe(true);
+    expect(view.nodes.some((node) => node.kind === 'FOUNDATION')).toBe(true);
+    // Plain names, never the internal key.
+    expect(view.nodes.map((node) => node.label)).not.toContain('Monetization Logic');
+    // Every edge joins two nodes that exist.
+    const ids = new Set(view.nodes.map((node) => node.id));
+    for (const edge of view.edges) {
+      expect(ids.has(edge.from)).toBe(true);
+      expect(ids.has(edge.to)).toBe(true);
+    }
+  });
+
+  it('says the money-flow map has nothing to draw rather than drawing plausible arrows', async () => {
+    const view = await mapFor({
+      type: 'MONEY_FLOW',
+      projectId: project.id,
+      projectName: project.name,
+    });
+    // The honest output: Brain holds no money for this project, so the map
+    // reports that instead of inventing a financial model.
+    expect(view.emptyReason).toMatch(/no money|nothing here to draw/i);
+    expect(view.edges).toHaveLength(0);
+  });
+
+  it('says why every empty map is empty', async () => {
+    for (const type of ['SYSTEM', 'WORKFLOW', 'KNOWLEDGE', 'DECISIONS', 'TIMELINE', 'MONEY_FLOW'] as const) {
+      const view = await mapFor({ type, projectId: project.id, projectName: project.name });
+      // A blank canvas with no sentence is the same failure as an empty list
+      // that does not say whether it is loading, forbidden or genuinely empty.
+      if (view.nodes.length === 0) expect(view.emptyReason).toBeTruthy();
+    }
+  });
+
+  it('hands back an outline that is the same graph, not a second derivation', async () => {
+    const view = await mapFor({
+      type: 'SYSTEM',
+      projectId: project.id,
+      projectName: project.name,
+    });
+    expect(view.outline.length).toBe(view.nodes.length);
+    const outlineIds = new Set(view.outline.map((row) => row.id));
+    for (const node of view.nodes) expect(outlineIds.has(node.id)).toBe(true);
+    // The root sits at depth zero, and children below it.
+    expect(view.outline[0]?.depth).toBe(0);
+  });
+
+  it('survives a cycle in a recorded graph rather than looping for ever', () => {
+    const outline = outlineOf(
+      [
+        { id: 'a', label: 'A', kind: 'X', state: null, detail: null, sourceId: 'a', at: null },
+        { id: 'b', label: 'B', kind: 'X', state: null, detail: null, sourceId: 'b', at: null },
+      ],
+      [
+        { from: 'a', to: 'b', kind: 'K', label: null },
+        { from: 'b', to: 'a', kind: 'K', label: null },
+      ],
+    );
+    // A contradiction can genuinely point both ways, so the guard is on having
+    // seen the node rather than on depth — and both nodes still appear.
+    expect(outline).toHaveLength(2);
+  });
+});
+
+/* ==========================================================================
+ * Preferences, and the line around them
+ * ========================================================================== */
+
+describe('a preference may never change a fact', () => {
+  it('refuses a key that is not a declared preference', () => {
+    expect(isPreferenceKey('depth')).toBe(true);
+    // The keys somebody would reach for if this were a place to weaken a rule.
+    expect(isPreferenceKey('evidenceFloor')).toBe(false);
+    expect(isPreferenceKey('auditSeparation')).toBe(false);
+    expect(isPreferenceKey('maxSpend')).toBe(false);
+  });
+
+  it('holds every declared key to its declared shape', () => {
+    expect(checkPreference('depth', 'TECHNICAL').ok).toBe(true);
+    expect(checkPreference('depth', 'ANYTHING').ok).toBe(false);
+    expect(checkPreference('showPulse', true).ok).toBe(true);
+    expect(checkPreference('showPulse', 'yes').ok).toBe(false);
+  });
+
+  it('gives every account a usable default with nothing stored', async () => {
+    const preferences = await preferencesFor(userId);
+    expect(preferences.depth).toBe('NORMAL');
+    expect(preferences.showPulse).toBe(true);
+    // Nobody has to be configured by an owner for the product to work.
+    expect(Object.keys(preferences).length).toBeGreaterThan(0);
+  });
+
+  it('stores and reads back one person’s choice, and only theirs', async () => {
+    const other = await createUser({
+      email: `pref-${Date.now()}@test.local`,
+      displayName: 'Someone else',
+      password: 'correct horse battery staple',
+    });
+    await setPreference({ userId, key: 'depth', value: 'TECHNICAL' });
+    expect((await preferencesFor(userId)).depth).toBe('TECHNICAL');
+    // Nobody else's screen moved.
+    expect((await preferencesFor(other.id)).depth).toBe('NORMAL');
+  });
+
+  it('is idempotent, so setting the same value twice is not two rows', async () => {
+    await setPreference({ userId, key: 'depth', value: 'INTERESTED' });
+    await setPreference({ userId, key: 'depth', value: 'INTERESTED' });
+    expect((await preferencesFor(userId)).depth).toBe('INTERESTED');
+  });
+});
+
+/* ==========================================================================
+ * Why this matters
+ * ========================================================================== */
+
+describe('why this matters is grounded, quiet, and absent when there is nothing', () => {
+  it('says nothing at all about a project where nothing has happened', async () => {
+    const view = await whyThisMatters({ projectId: project.id, projectName: project.name });
+    // An encouraging screen over an empty project is what makes a person stop
+    // believing the rest of the product.
+    expect(worthSurfacing(view)).toBe(false);
+  });
+
+  it('needs two milestones, or one and an ambition, before it surfaces', () => {
+    const milestone = { kind: 'LAYER_SETTLED', what: 'How the market works', at: '2026-09-01T00:00:00.000Z', sourceId: 'l1' };
+    expect(
+      worthSurfacing({ ambition: null, milestones: [milestone], connection: null, note: null }),
+    ).toBe(false);
+    expect(
+      worthSurfacing({ ambition: 'To find deals worth doing.', milestones: [milestone], connection: null, note: null }),
+    ).toBe(true);
+    expect(
+      worthSurfacing({
+        ambition: null,
+        milestones: [milestone, { ...milestone, sourceId: 'l2' }],
+        connection: null,
+        note: null,
+      }),
+    ).toBe(true);
+  });
+
+  it('writes a note only from something countable, and otherwise none', () => {
+    expect(noteFor({ milestones: [], ambition: null, workingNow: 0 })).toBeNull();
+    const note = noteFor({
+      milestones: [
+        { kind: 'LAYER_SETTLED', what: 'How the market works', at: 'x', sourceId: 'a' },
+        { kind: 'LAYER_SETTLED', what: 'How the money works', at: 'y', sourceId: 'b' },
+      ],
+      ambition: null,
+      workingNow: 0,
+    });
+    expect(note).toMatch(/How the market works/);
+    expect(note).toMatch(/How the money works/);
+  });
+
+  it('has no streak, badge, point, confetti or generic encouragement in it', () => {
+    const notes = [
+      noteFor({
+        milestones: [
+          { kind: 'LAYER_SETTLED', what: 'A', at: 'x', sourceId: 'a' },
+          { kind: 'LAYER_SETTLED', what: 'B', at: 'y', sourceId: 'b' },
+        ],
+        ambition: null,
+        workingNow: 0,
+      }),
+      noteFor({
+        milestones: [
+          { kind: 'REPORT_FILED', what: 'A', at: 'x', sourceId: 'a' },
+          { kind: 'REPORT_FILED', what: 'B', at: 'y', sourceId: 'b' },
+        ],
+        ambition: null,
+        workingNow: 0,
+      }),
+      noteFor({
+        milestones: [
+          { kind: 'EDGE_CLOSED', what: 'A', at: 'x', sourceId: 'a' },
+          { kind: 'EDGE_CLOSED', what: 'B', at: 'y', sourceId: 'b' },
+        ],
+        ambition: 'To find deals worth doing.',
+        workingNow: 0,
+      }),
+    ].filter((note): note is string => note !== null);
+    expect(notes.length).toBeGreaterThan(0);
+    for (const note of notes) {
+      expect(note).not.toMatch(/streak|badge|points?\b|congratulations|great job|keep it up|🎉/i);
+    }
+  });
+});
+
+/* ==========================================================================
+ * Collaboration — the capability matrix, tested rather than described
+ * ========================================================================== */
+
+describe('Owner, Member, Viewer and machine roles have a concrete matrix', () => {
+  function human(role: string | null, projectId: string, isBrainAdmin = false): Principal {
+    return {
+      type: 'HUMAN',
+      id: `usr_${role ?? 'none'}`,
+      handle: 'a@b.test',
+      displayName: 'A person',
+      isBrainAdmin,
+      mustChangePassword: false,
+      credentialId: 'ses_1',
+      authMethod: 'SESSION_COOKIE',
+      memberships: role
+        ? ([{ projectId, role, scopes: [], active: true }] as unknown as Principal['memberships'])
+        : [],
+      requestId: 'test',
+    };
+  }
+
+  function worker(projectId: string, scopes: string[]): Principal {
+    return {
+      type: 'WORKER',
+      id: 'wrk_1',
+      handle: 'worker',
+      displayName: 'A worker',
+      isBrainAdmin: false,
+      mustChangePassword: false,
+      credentialId: 'cred_1',
+      authMethod: 'WORKER_BEARER',
+      memberships: [
+        { projectId, role: null, scopes, active: true },
+      ] as unknown as Principal['memberships'],
+      requestId: 'test',
+    };
+  }
+
+  it('lets a viewer read and nothing else', () => {
+    const viewer = human('VIEWER', project.id);
+    expect(decideProjectAccess(viewer, project.id, 'READ').allowed).toBe(true);
+    // A viewer reads only permitted content and cannot direct work.
+    expect(decideProjectAccess(viewer, project.id, 'WRITE').allowed).toBe(false);
+    expect(decideProjectAccess(viewer, project.id, 'ADMIN').allowed).toBe(false);
+  });
+
+  it('lets a member work but not administer', () => {
+    const member = human('MEMBER', project.id);
+    expect(decideProjectAccess(member, project.id, 'READ').allowed).toBe(true);
+    expect(decideProjectAccess(member, project.id, 'WRITE').allowed).toBe(true);
+    // Membership is not blanket authority to administer workers or change
+    // who may do what.
+    expect(decideProjectAccess(member, project.id, 'ADMIN').allowed).toBe(false);
+  });
+
+  it('lets an owner administer', () => {
+    const owner = human('OWNER', project.id);
+    for (const level of ['READ', 'WRITE', 'ADMIN'] as const) {
+      expect(decideProjectAccess(owner, project.id, level).allowed).toBe(true);
+    }
+  });
+
+  it('refuses somebody with no membership at all, at every level', () => {
+    const stranger = human(null, project.id);
+    for (const level of ['READ', 'WRITE', 'ADMIN'] as const) {
+      const decision = decideProjectAccess(stranger, project.id, level);
+      expect(decision.allowed).toBe(false);
+      expect(decision.reason).toBe('NOT_A_MEMBER');
+    }
+  });
+
+  it('never lets a machine administer a project, however it is configured', () => {
+    // Every scope there is, and it still cannot administer: project
+    // administration is changing who may do what, and a machine credential
+    // that could widen its own access is one whose theft is unbounded.
+    const powerful = worker(project.id, ['project:read', 'project:write', 'external:sync']);
+    expect(decideProjectAccess(powerful, project.id, 'READ').allowed).toBe(true);
+    expect(decideProjectAccess(powerful, project.id, 'ADMIN').allowed).toBe(false);
+    expect(decideProjectAccess(powerful, project.id, 'ADMIN').reason).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('refuses a machine write that did not name the scope it needs', () => {
+    const machine = worker(project.id, ['project:read']);
+    // Membership says which project; scopes say what. An unnamed write is
+    // refused rather than waved through on the strength of membership.
+    expect(decideProjectAccess(machine, project.id, 'WRITE').reason).toBe('MISSING_SCOPE');
+  });
+
+  it('refuses everybody with no credentials at all', () => {
+    const decision = decideProjectAccess(null, project.id, 'READ');
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toBe('NO_CREDENTIALS');
+  });
+
+  it('never lets a machine be a Brain administrator', () => {
+    expect(decideBrainAdmin(worker(project.id, ['project:read'])).allowed).toBe(false);
+    expect(decideBrainAdmin(human('OWNER', project.id, true)).allowed).toBe(true);
+    expect(decideBrainAdmin(human('OWNER', project.id, false)).allowed).toBe(false);
   });
 });

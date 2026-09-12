@@ -1922,3 +1922,87 @@ button.rs-card:hover {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ------------------------------------------------------------------- maps --
+ *
+ * A layered diagram rather than a force graph: the depth is a fact the server
+ * computed from the recorded edges, so the picture and the outline beside it
+ * are the same graph arranged differently. Rows wrap, which is what makes it
+ * survive a phone without a second layout.
+ */
+
+.rs-map {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-4);
+  padding: var(--gap-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--surface);
+  overflow-x: auto;
+}
+
+.rs-map-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  align-items: center;
+}
+
+.rs-map-row + .rs-map-row {
+  padding-top: var(--gap-3);
+  border-top: 1px dashed var(--rule-soft);
+}
+
+.rs-map-node {
+  display: inline-flex;
+  align-items: center;
+  max-width: 32ch;
+  padding: var(--gap-1) var(--gap-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--paper);
+  color: var(--ink);
+  font: var(--step--1) / 1.35 var(--body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------- why this matters ------
+ *
+ * Quiet by construction. No badge, no streak, no confetti: a rule, a heading
+ * and a list of things that actually happened. It is absent far more often
+ * than it is present, which is what stops it becoming noise.
+ */
+
+.rs-why {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+  padding: var(--gap-4);
+  border-left: 2px solid var(--moss);
+  border-radius: 0 var(--r-2) var(--r-2) 0;
+  background: var(--moss-wash);
+}
+
+.rs-why h3 {
+  margin: 0;
+  font: 600 var(--step-1) / 1.3 var(--display);
+  color: var(--moss);
+}
+
+.rs-why p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.rs-why-milestones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--step--1);
+}
