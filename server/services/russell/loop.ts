@@ -70,7 +70,8 @@ import {
 } from '../../repos/russellMissions.ts';
 import { currentFragments, getOrchestration, updateOrchestration } from '../../repos/research.ts';
 import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
-import { getProject } from '../../repos/projects.ts';
+import { getProject, listProjects } from '../../repos/projects.ts';
+import { refreshFrontier } from './frontier.ts';
 import { recordEvent } from '../../repos/events.ts';
 import {
   createCandidate,
@@ -271,6 +272,21 @@ export interface TickReport {
    * the owner's allowance by the passage of time.
    */
   renewedReservations: string[];
+  /**
+   * Projects whose Discovery Frontier was re-read this tick, with what changed.
+   *
+   * §12's loop opens with *observe, then update understanding*, and the
+   * frontier is that reading: where a project's understanding runs out. It is
+   * refreshed here rather than only when somebody opens the page, because
+   * "Brain should continue operating without the site being open" is exactly
+   * the property a read-path-only derivation would not have.
+   *
+   * It creates nothing and spends nothing. Turning a frontier item into work
+   * still goes through the ordinary judgment, coverage check and standing
+   * authority — a loop that queued research from its own observation would be
+   * Brain creating its own work.
+   */
+  frontier: { projectId: string; observed: number; resolved: number }[];
   /** True when a bound stopped the tick short, with work preserved. */
   bounded: boolean;
 }
@@ -305,6 +321,7 @@ const EMPTY: TickReport = {
   needsHuman: [],
   unresolvedAnswers: [],
   renewedReservations: [],
+  frontier: [],
   bounded: false,
 };
 
@@ -352,6 +369,7 @@ export async function tick(owner: string): Promise<TickReport> {
     needsHuman: [],
     unresolvedAnswers: [],
   renewedReservations: [],
+    frontier: [],
   };
 
   try {
@@ -671,6 +689,33 @@ export async function tick(owner: string): Promise<TickReport> {
      */
     for (const id of await renewLiveMissionReservations(cycle.maxEventsPerCycle)) {
       report.renewedReservations.push(id);
+    }
+
+    /*
+     * 1e-iii. Re-read where each project's understanding runs out.
+     *
+     * A pure read plus an upsert: it observes what is true now, resolves what
+     * has stopped being true, and creates no work of any kind. A frontier that
+     * only refreshed when somebody opened the page would mean Brain stopped
+     * noticing its own edges the moment nobody was watching — which is the
+     * one thing §12's always-on loop exists to prevent.
+     *
+     * Failures here are contained to the project: a frontier is a reading, and
+     * losing one must never stop the tick from finishing missions.
+     */
+    for (const project of await listProjects()) {
+      try {
+        const counts = await refreshFrontier(project.id);
+        if (counts.observed > 0 || counts.resolved > 0) {
+          report.frontier.push({
+            projectId: project.id,
+            observed: counts.observed,
+            resolved: counts.resolved,
+          });
+        }
+      } catch {
+        /* a project whose frontier could not be read is left as it was */
+      }
     }
 
     /*

@@ -50,6 +50,9 @@ import { withPendingDetail } from '../services/russell/pending.ts';
 import { briefing, focusLayer } from '../services/russell/projections.ts';
 import { homeFor } from '../services/russell/home.ts';
 import { collectionsFor } from '../services/russell/collections.ts';
+import { frontierFor } from '../services/russell/frontier.ts';
+import { SAVED_VIEWS, SEARCH_KINDS, search, type SearchKind } from '../services/russell/search.ts';
+import { dismissFrontierItem } from '../repos/russellFrontier.ts';
 import {
   fileConversation,
   getCollection,
@@ -372,6 +375,100 @@ russellRouter.get(
     });
     if (!view) throw notFound('No project with that id.');
     return { home: view, project: { id: project.id, name: project.name } };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Search
+ * ------------------------------------------------------------------------ */
+
+/**
+ * One search, over everything this person may see.
+ *
+ * Scope is decided inside the service from the authenticated principal, never
+ * from anything the caller sent — there is no `projectId` parameter here on
+ * purpose, because a search that took one would be a way to ask whether a
+ * project exists. A query the caller has no access to simply returns nothing,
+ * which is the same answer a genuine miss gives.
+ */
+russellRouter.get(
+  '/search',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const query = optionalString(queryOf(req)['q'], 'q') ?? '';
+    const kinds = optionalString(queryOf(req)['kinds'], 'kinds');
+    const wanted = kinds
+      ? kinds
+          .split(',')
+          .map((kind) => kind.trim().toUpperCase())
+          .filter((kind): kind is SearchKind => (SEARCH_KINDS as readonly string[]).includes(kind))
+      : undefined;
+    return {
+      results: await search({ principal, query, kinds: wanted }),
+      // The saved views travel with the response so the client renders the
+      // server's own set rather than keeping a second copy that drifts.
+      savedViews: SAVED_VIEWS,
+    };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The Discovery Frontier
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Where this project's understanding runs out.
+ *
+ * Refreshed on the read path, so what a person sees is what is true now rather
+ * than what was true the last time something happened to run. Private knowledge
+ * stays the owner's: the API view is the shared one, so two people reading the
+ * same project see the same frontier.
+ */
+russellRouter.get(
+  '/projects/:projectId/frontier',
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    return {
+      frontier: await frontierFor({
+        projectId: project.id,
+        projectName: project.name,
+        includePrivate: false,
+      }),
+    };
+  }),
+);
+
+/**
+ * A person saying an area is deliberately not required — or taking it back.
+ *
+ * A reason is required in both directions, because a scope decision with no
+ * stated reason is indistinguishable from somebody tidying the screen. It is
+ * reversible for the same reason every other escalation here has an answering
+ * transition: a judgment about scope is exactly the kind that changes.
+ */
+russellRouter.patch(
+  '/projects/:projectId/frontier/:itemId',
+  handler(async (req) => {
+    const principal = requirePerson();
+    // The access level comes from the request method — a PATCH already
+    // requires WRITE through `requirementForCurrentRequest`, so asking for it
+    // again here would be a second place to get it wrong.
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const dismissed = body['dismissed'] === true;
+    const reason = (optionalString(body['reason'], 'reason') ?? '').trim();
+    if (reason.length === 0) {
+      throw badRequest('Say why this area is or is not required.');
+    }
+    const changed = await dismissFrontierItem({
+      id: pathId(req, 'itemId'),
+      projectId: project.id,
+      userId: principal.id,
+      reason,
+      dismissed,
+    });
+    if (!changed) throw notFound('No frontier item with that id.');
+    return { ok: true, dismissed };
   }),
 );
 

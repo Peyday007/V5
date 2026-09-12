@@ -11,6 +11,7 @@
  */
 import { Fragment, useState, type ReactNode } from 'react';
 import { Constellation } from './Constellation.tsx';
+import { Frontier } from './Frontier.tsx';
 import { freshnessLabel, humanWhen, listState, priorityTone, readingState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { RussellApi } from '../lib/russellApi.ts';
@@ -361,6 +362,7 @@ function plainWorkState(entry: WorkEntry): string {
 const PROJECT_TABS = [
   { key: 'MAP' as const, label: 'Map' },
   { key: 'OVERVIEW' as const, label: 'Overview' },
+  { key: 'FRONTIER' as const, label: 'Frontier' },
   { key: 'WORK' as const, label: 'Work' },
   { key: 'KNOWLEDGE' as const, label: 'Knowledge' },
   { key: 'SYSTEM' as const, label: 'System' },
@@ -396,6 +398,7 @@ export function ProjectView({
         <IdeasView projectId={projectId} focusId={focusId} onFocus={onFocus} />
       ) : null}
       {tab === 'OVERVIEW' ? <ProjectOverview projectId={projectId} /> : null}
+      {tab === 'FRONTIER' ? <Frontier projectId={projectId} /> : null}
       {tab === 'WORK' ? <WorkView projectId={projectId} /> : null}
       {tab === 'KNOWLEDGE' ? <KnowledgeView projectId={projectId} /> : null}
       {tab === 'SYSTEM' ? <SitesView projectId={projectId} /> : null}
@@ -826,32 +829,122 @@ export function KnowledgeView({ projectId }: { projectId: string | null }): JSX.
     // rendered as "nothing yet".
     noun: query.data?.knows?.explanation ?? 'findings',
   });
+  /*
+   * Understanding, organized — not a prettier document library (§10).
+   *
+   * The six kinds are grouped because they answer different questions and a
+   * flat list makes a person read every line to find the one they wanted: what
+   * is concluded, what is decided, what is assumed, what is unknown, what
+   * contradicts, and what remains a gap. The order is what somebody is most
+   * likely to want first.
+   *
+   * The grouping is over the *kind the server sent*. Nothing here reclassifies
+   * anything — a knowledge row's kind is a fact about the row.
+   */
+  const groups = KNOWLEDGE_ORDER.map((kind) => ({
+    kind,
+    label: KNOWLEDGE_WORDS[kind],
+    meaning: KNOWLEDGE_MEANINGS[kind],
+    items: state.items.filter((entry) => entry.kind === kind),
+  })).filter((group) => group.items.length > 0);
+
   return (
     <Panel title="What Russell knows" state={state} onRetry={query.reload}>
-      <ul className="rs-list">
-        {state.items.map((entry) => (
-          <li key={entry.id}>
-            <span className="rs-item-title">{entry.statement}</span>
-            <span className="rs-item-meta">
-              {entry.status.toLowerCase()} · {entry.confidence.toLowerCase()}
-              {entry.provenance.sourceUrl ? ' · cited' : ''}
-            </span>
-            {/*
-              A provisional entry says what it is short of. Hiding that would
-              make it read like an accepted one, which is the single thing this
-              surface must never do.
-            */}
-            {entry.missingEvidence.length > 0 && (
-              <span className="rs-item-meta">
-                still missing: {entry.missingEvidence.join('; ')}
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
+      {groups.map((group) => (
+        <section key={group.kind} className="rs-group">
+          <h3 className="rs-group-title">
+            {group.label}
+            <span className="rs-count">{group.items.length}</span>
+          </h3>
+          <p className="rs-hint">{group.meaning}</p>
+          <ul className="rs-list">
+            {group.items.map((entry) => (
+              <li key={entry.id}>
+                <article className="rs-card">
+                  <div className="rs-row">
+                    <span className="rs-item-title">{entry.statement}</span>
+                    <span className={`rs-pill ${CONFIDENCE_TONE[entry.confidence] ?? ''}`.trim()}>
+                      {CONFIDENCE_WORDS[entry.confidence] ?? entry.confidence}
+                    </span>
+                  </div>
+                  {entry.detail ? <p className="rs-item-meta">{entry.detail}</p> : null}
+                  <p className="rs-item-meta">
+                    {STATUS_WORDS[entry.status] ?? entry.status.toLowerCase()}
+                    {entry.provenance.sourceUrl ? ' · has a source' : ' · no source recorded'}
+                    {entry.asOf ? ` · true as of ${entry.asOf.slice(0, 10)}` : ''}
+                  </p>
+                  {/*
+                    A provisional entry says what it is short of. Hiding that
+                    would make it read like an accepted one, which is the single
+                    thing this surface must never do.
+                  */}
+                  {entry.missingEvidence.length > 0 ? (
+                    <p className="rs-item-meta">
+                      Still missing: {entry.missingEvidence.join('; ')}
+                    </p>
+                  ) : null}
+                </article>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </Panel>
   );
 }
+
+/** The six kinds, in the order a person is most likely to want them. */
+const KNOWLEDGE_ORDER = [
+  'CONCLUSION',
+  'DECISION',
+  'CONTRADICTION',
+  'ASSUMPTION',
+  'UNKNOWN',
+  'GAP',
+] as const;
+
+const KNOWLEDGE_WORDS: Record<string, string> = {
+  CONCLUSION: 'Conclusions',
+  DECISION: 'Decisions',
+  CONTRADICTION: 'Contradictions',
+  ASSUMPTION: 'Assumptions',
+  UNKNOWN: 'Unknowns',
+  GAP: 'Gaps',
+};
+
+const KNOWLEDGE_MEANINGS: Record<string, string> = {
+  CONCLUSION: 'What the evidence supports.',
+  DECISION: 'What was chosen, and by whom.',
+  CONTRADICTION: 'Where the evidence disagrees with itself.',
+  ASSUMPTION: 'Taken as true without being established.',
+  UNKNOWN: 'Known not to be known.',
+  GAP: 'Something an audit said is missing.',
+};
+
+/** Confidence follows evidence, never tone — so the words do too. */
+const CONFIDENCE_WORDS: Record<string, string> = {
+  ESTABLISHED: 'Established',
+  SUPPORTED: 'Supported',
+  UNCERTAIN: 'Uncertain',
+  DISPUTED: 'Disputed',
+};
+
+const CONFIDENCE_TONE: Record<string, string> = {
+  ESTABLISHED: 'rs-pill-good',
+  SUPPORTED: 'rs-pill-good',
+  UNCERTAIN: 'rs-pill-watch',
+  DISPUTED: 'rs-pill-bad',
+};
+
+const STATUS_WORDS: Record<string, string> = {
+  ACCEPTED: 'Accepted',
+  PROVISIONAL: 'Provisional',
+  UNDER_REVIEW: 'Under review',
+  CONTRADICTED: 'Contradicted',
+  STALE: 'Stale',
+  SUPERSEDED: 'Superseded',
+  REFUSED: 'Refused by an audit',
+};
 
 /**
  * The fleet, as one honest sentence.

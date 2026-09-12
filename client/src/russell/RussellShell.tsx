@@ -33,6 +33,7 @@ import { DEPTHS, DEPTH_LABELS, isDepth, navigationMode, type Depth } from './pre
 import { useAsync } from './useAsync.ts';
 import { Conversation } from './Conversation.tsx';
 import { RussellHome } from './Home.tsx';
+import { Search } from './Search.tsx';
 import { BuildView } from './Build.tsx';
 import {
   FleetView,
@@ -43,7 +44,7 @@ import {
   WhoView,
   WorkView,
 } from './Views.tsx';
-import type { Navigation, Route } from '../lib/router.ts';
+import { parseRoute, type Navigation, type Route } from '../lib/router.ts';
 
 /**
  * The six, and then the two.
@@ -265,6 +266,18 @@ export function RussellShell({
         </ul>
 
         <div className="rs-rail-foot">
+          {/* Search is a destination rather than a box in the chrome: at phone
+              width a persistent field would take the room the conversation
+              needs, and the command bar is already where a person types. */}
+          <button
+            type="button"
+            className="rs-rail-item"
+            aria-current={route.name === 'SEARCH' ? 'page' : undefined}
+            onClick={() => go({ name: 'SEARCH' })}
+          >
+            Search
+          </button>
+
           <div
             className="rs-depth"
             role="group"
@@ -366,6 +379,16 @@ export function RussellShell({
           </>
         ) : null}
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
+        {route.name === 'SEARCH' ? (
+          <Search
+            onOpen={(href) => {
+              // The server sends a real address in this application, so the
+              // shell navigates rather than reconstructing a route from a kind.
+              window.history.pushState({}, '', href);
+              go(parseRoute(href));
+            }}
+          />
+        ) : null}
         {route.name === 'NEEDS_YOU' ? (
           <NeedsYouView projectId={projectId} onAnswered={needsYou.reload} />
         ) : null}

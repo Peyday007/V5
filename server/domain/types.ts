@@ -4939,6 +4939,88 @@ export interface RussellKnowledge {
   updatedAt: string;
 }
 
+/* --------------------------------------------------------------------------
+ * The Discovery Frontier (Step 12B, S11)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The five regions of a project's edge.
+ *
+ * They are not a gradient. Solid and weak are both *believed*; an open question
+ * is known to be unanswered; an unexamined area is one nobody has looked at at
+ * all; and a new path is something Brain found rather than something anybody
+ * asked for. Collapsing any two of them loses the difference that decides what
+ * to do next.
+ */
+export const FRONTIER_REGIONS = [
+  'SOLID_GROUND',
+  'WEAK_GROUND',
+  'OPEN_QUESTION',
+  'UNEXAMINED',
+  'NEW_PATH',
+] as const;
+export type FrontierRegion = (typeof FRONTIER_REGIONS)[number];
+
+/** What a person reads for each. One mapping, not scattered through the UI. */
+export const FRONTIER_REGION_LABELS: Record<FrontierRegion, string> = {
+  SOLID_GROUND: 'Solid ground',
+  WEAK_GROUND: 'Weak ground',
+  OPEN_QUESTION: 'Open questions',
+  UNEXAMINED: 'Unexamined',
+  NEW_PATH: 'New paths',
+};
+
+/** Which authoritative row a reading was derived from. `ABSENCE` is a real one. */
+export const FRONTIER_SOURCE_KINDS = [
+  'KNOWLEDGE',
+  'LAYER',
+  'AUDIT_GAP',
+  'CANDIDATE',
+  'CONTRADICTION',
+  'ABSENCE',
+] as const;
+export type FrontierSourceKind = (typeof FRONTIER_SOURCE_KINDS)[number];
+
+export interface RussellFrontierItem {
+  id: string;
+  projectId: string;
+  region: FrontierRegion;
+  subject: string;
+  detail: string | null;
+  sourceKind: FrontierSourceKind;
+  sourceId: string | null;
+  lens: string | null;
+  fingerprint: string;
+  visibility: RussellVisibility;
+  dismissedAt: string | null;
+  dismissedByUserId: string | null;
+  dismissedReason: string | null;
+  resolvedAt: string | null;
+  version: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface RussellFrontierRow {
+  id: string;
+  project_id: string;
+  region: string;
+  subject: string;
+  detail: string | null;
+  source_kind: string;
+  source_id: string | null;
+  lens: string | null;
+  fingerprint: string;
+  visibility: string;
+  dismissed_at: string | null;
+  dismissed_by_user_id: string | null;
+  dismissed_reason: string | null;
+  resolved_at: string | null;
+  version: number;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
 export interface RussellHumanRequest {
   id: string;
   projectId: string;

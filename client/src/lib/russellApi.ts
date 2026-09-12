@@ -32,6 +32,8 @@ import type { IdeaEdge, IdeaMap, IdeaNode } from '../../../server/services/russe
 import type { WhoView } from '../../../server/services/russell/who.ts';
 import type { HomeView } from '../../../server/services/russell/home.ts';
 import type { CollectionView, RankedThread, Starter } from '../../../server/services/russell/collections.ts';
+import type { FrontierView, FrontierRegionView } from '../../../server/services/russell/frontier.ts';
+import type { SearchHit, SearchKind, SearchResult } from '../../../server/services/russell/search.ts';
 import type {
   AuthorityView,
   AuthorityLimitKey,
@@ -42,7 +44,12 @@ export type {
   AuthorityView,
   Briefing,
   CollectionView,
+  FrontierRegionView,
+  FrontierView,
   HomeView,
+  SearchHit,
+  SearchKind,
+  SearchResult,
   RankedThread,
   Starter,
   CandidatePriority,
@@ -227,6 +234,46 @@ export const RussellApi = {
     home: HomeView;
     project: { id: string; name: string };
   }> => api(`/api/russell/projects/${encodeURIComponent(projectId)}/home`),
+
+  /**
+   * Search, as this person.
+   *
+   * There is no project parameter: the scope is decided on the server from the
+   * authenticated principal, so a client cannot ask about a project it may not
+   * read — not even to learn whether it exists.
+   */
+  search: (
+    query: string,
+    kinds?: SearchKind[],
+  ): Promise<{
+    results: SearchResult;
+    savedViews: readonly { key: string; label: string; kinds: SearchKind[] }[];
+  }> =>
+    api(
+      `/api/russell/search?q=${encodeURIComponent(query)}` +
+        (kinds && kinds.length > 0 ? `&kinds=${encodeURIComponent(kinds.join(','))}` : ''),
+    ),
+
+  /**
+   * Where this project's understanding runs out.
+   *
+   * Refreshed on the server's read path, so this is a reading of now rather
+   * than of whenever something last ran.
+   */
+  frontier: (projectId: string): Promise<{ frontier: FrontierView }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/frontier`),
+
+  /** Say an area is deliberately not required, or take that back. */
+  setFrontierDismissed: (
+    projectId: string,
+    itemId: string,
+    dismissed: boolean,
+    reason: string,
+  ): Promise<{ ok: true; dismissed: boolean }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/frontier/${encodeURIComponent(itemId)}`,
+      { method: 'PATCH', body: JSON.stringify({ dismissed, reason }) },
+    ),
 
   /** A person's threads, organized and ranked by meaning. */
   collections: (projectId: string | null): Promise<{ collections: CollectionView[] }> =>

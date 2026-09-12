@@ -29,7 +29,20 @@ import {
 import { describe as describeProgress, progressOf, type Milestone } from '../server/services/russell/progress.ts';
 import { projectProgress } from '../server/services/russell/progress.ts';
 import { pulseOf, stateOf } from '../server/services/russell/home.ts';
-import type { Project } from '../server/domain/types.ts';
+import {
+  classify,
+  couldBecomeWork,
+  frontierFor,
+  refreshFrontier,
+} from '../server/services/russell/frontier.ts';
+import {
+  dismissFrontierItem,
+  listFrontier,
+  observeFrontierItem,
+} from '../server/repos/russellFrontier.ts';
+import { search } from '../server/services/russell/search.ts';
+import { parseRoute } from '../client/src/lib/router.ts';
+import type { Principal, Project } from '../server/domain/types.ts';
 
 let project: Project;
 let userId: string;
@@ -473,5 +486,358 @@ describe('Russell’s own state, and the one live line', () => {
       stateOf({ cycleState: 'RUNNING', cycleError: null, power: 'READY', working: 0, decisionsWaiting: 2 })
         .state,
     ).toBe('WAITING');
+  });
+});
+
+/* ==========================================================================
+ * The Discovery Frontier
+ * ========================================================================== */
+
+describe('the frontier reads a project’s edges from its own rows', () => {
+  const knowledge = (
+    kind: string,
+    statement: string,
+    confidence = 'SUPPORTED',
+  ): {
+    id: string;
+    kind: string;
+    statement: string;
+    detail: string | null;
+    confidence: string;
+    visibility: 'PRIVATE' | 'SHARED';
+  } => ({
+    id: `k-${statement.slice(0, 8)}`,
+    kind,
+    statement,
+    detail: null,
+    confidence,
+    visibility: 'SHARED',
+  });
+
+  it('separates what is believed well from what is believed thinly', () => {
+    const items = classify({
+      knowledge: [
+        knowledge('CONCLUSION', 'Recording fees are set per instrument', 'ESTABLISHED'),
+        knowledge('CONCLUSION', 'Most counties accept e-recording', 'UNCERTAIN'),
+      ],
+      layers: [],
+      gaps: [],
+      candidates: [],
+    });
+    expect(items.find((item) => item.subject.startsWith('Recording fees'))?.region).toBe(
+      'SOLID_GROUND',
+    );
+    expect(items.find((item) => item.subject.startsWith('Most counties'))?.region).toBe(
+      'WEAK_GROUND',
+    );
+  });
+
+  it('does not confuse something believed on thin evidence with something unanswered', () => {
+    const items = classify({
+      knowledge: [
+        knowledge('ASSUMPTION', 'Volume scales with population', 'UNCERTAIN'),
+        knowledge('UNKNOWN', 'Whether fee schedules are published centrally'),
+      ],
+      layers: [],
+      gaps: [],
+      candidates: [],
+    });
+    // The project believes the first and does not believe the second. A
+    // frontier that showed them the same way could not tell a person what
+    // needs shoring up from what needs answering.
+    expect(items[0]?.region).toBe('WEAK_GROUND');
+    expect(items[1]?.region).toBe('OPEN_QUESTION');
+  });
+
+  it('reads a declared region nobody has started as unexamined, in plain words', () => {
+    const items = classify({
+      knowledge: [],
+      layers: [
+        { id: 'l1', name: 'Monetization Logic', status: 'NOT_STARTED' },
+        { id: 'l2', name: 'World Model', status: 'FROZEN' },
+      ],
+      gaps: [],
+      candidates: [],
+    });
+    const unexamined = items.filter((item) => item.region === 'UNEXAMINED');
+    expect(unexamined).toHaveLength(1);
+    expect(unexamined[0]?.subject).toBe('How the money works');
+    expect(unexamined[0]?.sourceKind).toBe('LAYER');
+  });
+
+  it('counts only ideas Russell had itself as new paths', () => {
+    const items = classify({
+      knowledge: [],
+      layers: [],
+      gaps: [],
+      candidates: [
+        {
+          id: 'c1',
+          title: 'A second business model in rejected leads',
+          statement: 'Rejected leads may cluster',
+          conversationId: null,
+          state: 'CAPTURED',
+          visibility: 'SHARED',
+        },
+        {
+          id: 'c2',
+          title: 'Something a person asked for',
+          statement: 'Please look at this',
+          conversationId: 'rcv_1',
+          state: 'CAPTURED',
+          visibility: 'SHARED',
+        },
+      ],
+    });
+    const paths = items.filter((item) => item.region === 'NEW_PATH');
+    expect(paths).toHaveLength(1);
+    expect(paths[0]?.sourceId).toBe('c1');
+  });
+
+  it('never invents a finding: every item names the row it came from', () => {
+    const items = classify({
+      knowledge: [knowledge('CONTRADICTION', 'Two sources disagree about the fee')],
+      layers: [{ id: 'l1', name: 'Taxonomy', status: 'NOT_STARTED' }],
+      gaps: [{ id: 'g1', title: 'No primary source for the fee', detail: null, classification: 'FOUNDATIONAL' }],
+      candidates: [],
+    });
+    for (const item of items) {
+      expect(item.sourceKind).toBeTruthy();
+      expect(item.sourceId).toBeTruthy();
+    }
+  });
+
+  it('puts the judgment questions rather than answering them', async () => {
+    const view = await frontierFor({ projectId: project.id, projectName: project.name });
+    // Every asked lens is a question, and none of them comes back with an
+    // answer attached — a discovery engine that filled these in would be
+    // manufacturing insight.
+    expect(view.openLenses.length).toBeGreaterThan(0);
+    for (const lens of view.openLenses) {
+      expect(lens.question.endsWith('?')).toBe(true);
+    }
+  });
+
+  it('is a reading of now: it refreshes, and reports what it produced', async () => {
+    const first = await refreshFrontier(project.id);
+    expect(first.observed).toBeGreaterThan(0);
+    // Every declared layer that nobody has started is on the frontier.
+    expect(first.byRegion.UNEXAMINED).toBeGreaterThan(0);
+
+    const again = await refreshFrontier(project.id);
+    // Idempotent: the same pass twice observes the same items and resolves none.
+    expect(again.observed).toBe(first.observed);
+    expect(again.resolved).toBe(0);
+  });
+
+  it('resolves an area that stops being true rather than deleting it', async () => {
+    await observeFrontierItem({
+      projectId: project.id,
+      region: 'OPEN_QUESTION',
+      subject: 'Something that will stop being true',
+      sourceKind: 'KNOWLEDGE',
+      sourceId: 'k-gone',
+    });
+    // A pass that does not observe it resolves it — and it is still readable,
+    // because a delete would make a dark spot look like progress.
+    await refreshFrontier(project.id);
+    const all = await listFrontier({ projectId: project.id, includeResolved: true });
+    const gone = all.find((item) => item.subject === 'Something that will stop being true');
+    expect(gone).toBeTruthy();
+    expect(gone?.resolvedAt).not.toBeNull();
+
+    const live = await listFrontier({ projectId: project.id });
+    expect(live.find((item) => item.subject === 'Something that will stop being true')).toBeUndefined();
+  });
+
+  it('remembers when an area first appeared, across re-readings', async () => {
+    await refreshFrontier(project.id);
+    const before = (await listFrontier({ projectId: project.id }))[0];
+    expect(before).toBeTruthy();
+    await refreshFrontier(project.id);
+    const after = (await listFrontier({ projectId: project.id })).find(
+      (item) => item.id === before!.id,
+    );
+    // "This has been open since March" has to stay answerable.
+    expect(after?.firstSeenAt).toBe(before!.firstSeenAt);
+  });
+
+  it('lets a person say an area is deliberately not required, with a reason, reversibly', async () => {
+    await refreshFrontier(project.id);
+    const item = (await listFrontier({ projectId: project.id })).find(
+      (entry) => entry.region === 'UNEXAMINED',
+    );
+    expect(item).toBeTruthy();
+
+    const marked = await dismissFrontierItem({
+      id: item!.id,
+      projectId: project.id,
+      userId,
+      reason: 'Out of scope for this business',
+      dismissed: true,
+    });
+    expect(marked).toBe(true);
+
+    const after = (await listFrontier({ projectId: project.id })).find((e) => e.id === item!.id);
+    // Still on the frontier, and now carrying the decision. Hiding it would
+    // recreate the silent dark spot the dismissal exists to make explicit.
+    expect(after?.dismissedAt).not.toBeNull();
+    expect(after?.dismissedReason).toBe('Out of scope for this business');
+    expect(after?.dismissedByUserId).toBe(userId);
+
+    await dismissFrontierItem({
+      id: item!.id,
+      projectId: project.id,
+      userId,
+      reason: 'It is required after all',
+      dismissed: false,
+    });
+    const back = (await listFrontier({ projectId: project.id })).find((e) => e.id === item!.id);
+    expect(back?.dismissedAt).toBeNull();
+  });
+
+  it('refuses to dismiss an item belonging to another project', async () => {
+    await refreshFrontier(project.id);
+    const item = (await listFrontier({ projectId: project.id }))[0];
+    const refused = await dismissFrontierItem({
+      id: item!.id,
+      projectId: 'prj_somebody_else',
+      userId,
+      reason: 'should not work',
+      dismissed: true,
+    });
+    expect(refused).toBe(false);
+  });
+
+  it('says which regions could justify a look, and forms no opinion about value', async () => {
+    await refreshFrontier(project.id);
+    const items = await listFrontier({ projectId: project.id });
+    for (const item of items) {
+      const could = couldBecomeWork(item);
+      if (item.region === 'SOLID_GROUND' || item.region === 'NEW_PATH') expect(could).toBe(false);
+      if (item.region === 'UNEXAMINED') expect(could).toBe(true);
+    }
+  });
+});
+
+/* ==========================================================================
+ * Search
+ * ========================================================================== */
+
+describe('search is scoped before it runs, never filtered after', () => {
+  let person: Principal;
+  let outsider: Principal;
+
+  /**
+   * A person, built the way `authenticate.ts` builds one.
+   *
+   * Memberships are the whole point of the scoping tests below, so they are
+   * real rather than stubbed: the outsider has none, which is what makes
+   * "nothing found" and "nothing you can see" indistinguishable.
+   */
+  function personWith(id: string, projectIds: string[]): Principal {
+    return {
+      type: 'HUMAN',
+      id,
+      handle: `${id}@test.local`,
+      displayName: 'A person',
+      isBrainAdmin: false,
+      mustChangePassword: false,
+      credentialId: `ses-${id}`,
+      authMethod: 'SESSION_COOKIE',
+      memberships: projectIds.map((projectId) => ({
+        projectId,
+        role: 'OWNER',
+        scopes: [],
+        active: true,
+      })) as unknown as Principal['memberships'],
+      requestId: 'test-request',
+    };
+  }
+
+  beforeEach(() => {
+    person = personWith(userId, [project.id]);
+    outsider = personWith('usr_outsider', []);
+  });
+
+  it('returns nothing for a one-character query rather than a page of noise', async () => {
+    const result = await search({ principal: person, query: 'a' });
+    expect(result.hits).toHaveLength(0);
+    expect(result.scopedProjects).toBe(0);
+  });
+
+  it('finds a person’s own conversation by title', async () => {
+    await createConversation({
+      ownerUserId: userId,
+      title: 'County recording fees',
+      projectId: project.id,
+    });
+    const result = await search({ principal: person, query: 'recording' });
+    const titles = result.hits.map((hit) => hit.title);
+    expect(titles).toContain('County recording fees');
+  });
+
+  it('never returns another person’s private conversation, whatever their project rights', async () => {
+    const other = await createUser({
+      email: `s-other-${Date.now()}@test.local`,
+      displayName: 'Someone else',
+      password: 'correct horse battery staple',
+    });
+    await createConversation({
+      ownerUserId: other.id,
+      title: 'A secret about recording',
+      projectId: project.id,
+    });
+    const result = await search({ principal: person, query: 'secret' });
+    expect(result.hits.map((hit) => hit.title)).not.toContain('A secret about recording');
+  });
+
+  it('shows a caller with no readable project the same answer as a genuine miss', async () => {
+    await createConversation({
+      ownerUserId: userId,
+      title: 'County recording fees',
+      projectId: project.id,
+    });
+    const result = await search({ principal: outsider, query: 'recording' });
+    // No hits, and no count that would reveal how many projects exist.
+    expect(result.hits).toHaveLength(0);
+    expect(result.scopedProjects).toBe(0);
+  });
+
+  it('returns nothing at all for an unauthenticated caller', async () => {
+    const result = await search({ principal: null, query: 'recording' });
+    expect(result.hits).toHaveLength(0);
+  });
+
+  it('treats a wildcard as text rather than as a pattern', async () => {
+    await createConversation({ ownerUserId: userId, title: 'Ordinary title', projectId: project.id });
+    const result = await search({ principal: person, query: '%%' });
+    // `%%` matching everything would be the classic injection-by-metacharacter;
+    // it searches for two per-cent signs, and finds none.
+    expect(result.hits).toHaveLength(0);
+  });
+
+  it('ranks a title match above a body match', async () => {
+    await createConversation({
+      ownerUserId: userId,
+      title: 'Margins',
+      projectId: project.id,
+    });
+    await createConversation({
+      ownerUserId: userId,
+      title: 'Something else entirely',
+      projectId: project.id,
+    });
+    const result = await search({ principal: person, query: 'margins' });
+    expect(result.hits[0]?.title).toBe('Margins');
+  });
+
+  it('hands back a real address for every hit', async () => {
+    await createConversation({ ownerUserId: userId, title: 'Recording fees', projectId: project.id });
+    const result = await search({ principal: person, query: 'recording' });
+    for (const hit of result.hits) {
+      expect(hit.href.startsWith('/')).toBe(true);
+      expect(parseRoute(hit.href).name).not.toBe('NOT_FOUND');
+    }
   });
 });
