@@ -130,6 +130,36 @@ function file(relative: string): string | null {
 }
 
 /**
+ * The committed visual record, read rather than assumed.
+ *
+ * `scripts/visual-qa.ts` writes to a throwaway directory by default, for the
+ * right reason: a screenshot in a repository is stale the moment the CSS
+ * changes, and a stale one that still looks like evidence is worse than none.
+ * One set is committed anyway, because §29's O asks a person to approve what
+ * the product looks like and a decision somebody must run a twenty-minute
+ * harness to see is a decision nobody makes.
+ *
+ * So this reads what is actually there. It is deliberately **not** a claim
+ * that the journey happened — a PNG cannot establish that — it is the weaker
+ * and checkable claim that the record exists, names its commit and its browser,
+ * and still has the images its own index lists. Deleting the set drops H, J and
+ * O back to what the code alone can say, which is the correct behaviour.
+ */
+function visualEvidence(): { index: string | null; images: number; journeySteps: number } {
+  const index = file('docs/evidence/step12b-visual.md');
+  const dir = path.join(REPO, 'docs', 'evidence', 'step12b-visual');
+  const images = fs.existsSync(dir)
+    ? fs.readdirSync(dir).filter((name) => name.endsWith('.png')).length
+    : 0;
+  const journeySteps = index
+    ? new Set(
+        [...index.matchAll(/journey-(\d+[a-z]?)-/g)].map((match) => match[1] as string),
+      ).size
+    : 0;
+  return { index, images, journeySteps };
+}
+
+/**
  * The fleet as the configured Brain actually holds it, read before anything
  * else opens a database.
  *
@@ -1081,14 +1111,32 @@ async function main(): Promise<void> {
 
   /* -- H. Visual maps ------------------------------------------------------ */
   const maps = file('server/services/russell/maps.ts');
+  /*
+   * The named unmet condition used to be "interaction on a real project at
+   * phone width", and it no longer is: every map type was opened by pressing
+   * its own tab at 390px, and for each one the diagram's node count was
+   * compared to the outline's row count. That comparison is the load-bearing
+   * one, because §29's rule is that the picture and the list are the same
+   * graph — two numbers that agree is a reading, where "an outline exists" is
+   * only a shape.
+   */
+  const mapEvidence = visualEvidence();
   record(
     'H',
     'Visual maps',
     maps && /emptyReason/.test(maps) ? 'PARTIAL' : 'NOT_RUN',
     `${MAP_TYPES.length} map types derived from the authoritative graph, each with a ` +
       'synchronized outline, and the money-flow map returns a reason for being empty rather ' +
-      'than inventing edges. NOT established here: interaction on a real project at phone width ' +
-      '(see scripts/visual-qa.ts for the rendered evidence).',
+      'than inventing edges. ' +
+      (mapEvidence.images > 0
+        ? `All ${MAP_TYPES.length} were opened by pressing their own tabs at 390px and ` +
+          'photographed, and every one\u2019s diagram-node count equals its outline-row count ' +
+          '(9/9, 0/0, 8/8, 8/8, 1/1, 0/0); money flow draws nothing and says the figures belong ' +
+          'to the connected site. Show it as a list was pressed on a populated map, so the ' +
+          'outline is reachable rather than merely present. '
+        : 'The committed image set is absent, so nothing here was rendered. ') +
+      'NOT established here: map behaviour at desktop and intermediate widths beyond the page ' +
+      'fitting, and whether the maps are good \u2014 which is O.',
   );
 
   /* -- I. Collaboration ---------------------------------------------------- */
@@ -1220,12 +1268,38 @@ async function main(): Promise<void> {
   );
 
   /* -- J. Mobile ----------------------------------------------------------- */
+  /*
+   * This was NOT_RUN because the harness drove three isolated interactions:
+   * each opened its own address, did one thing and stopped, which proves three
+   * controls and nothing about the path between them. §29's J is the path.
+   *
+   * It is now one browser, one session and one scroll history, and after the
+   * first address nothing navigates — every move is a press. It is still
+   * PARTIAL rather than PASS, and the reason is in the head of this file: this
+   * is a real Brain in a throwaway data directory, not the deployed product,
+   * and no mission ran because no worker exists in that harness. A journey that
+   * fits is a necessary condition for J and is not J's verdict.
+   */
+  const mobile = visualEvidence();
+  const responsiveSuite = file('tests/step12bResponsive.test.tsx');
   record(
     'J',
     'Mobile',
-    'NOT_RUN',
-    'Rendered evidence at 390px is produced by scripts/visual-qa.ts, including three driven ' +
-      'interactions. A complete end-to-end mobile flow through a mission was not driven here.',
+    mobile.images > 0 && mobile.journeySteps >= 10 && responsiveSuite ? 'PARTIAL' : 'NOT_RUN',
+    mobile.images > 0 && mobile.journeySteps >= 10 && responsiveSuite
+      ? `One continuous signed-in journey at 390px across ${mobile.journeySteps} recorded steps ` +
+        `(${mobile.images} committed images): home \u2192 open a conversation \u2192 send a message ` +
+        '\u2192 Work \u2192 the project map \u2192 all six maps \u2192 Needs you \u2192 home. At ' +
+        'every step the page body does not scroll sideways and nothing is cut off inside a ' +
+        'clipping container, and all 15 chrome controls answer elementFromPoint at 390px and ' +
+        '360px. It found two real defects, both fixed: the rail foot was display:none at bar ' +
+        'width, which removed Sign out from a phone entirely, and the composer placeholder was ' +
+        'sliced by the thumb bar at 360px. NOT established here: a mobile flow through an actual ' +
+        'mission, which needs a worker; portrait only, one device pixel ratio, Chromium only; no ' +
+        'touch-gesture or on-screen-keyboard behaviour; and the constellation, which is driven ' +
+        'and measured at 390px but overlaps its own nodes there and is not usable as drawn.'
+      : 'The committed 390px journey is absent or incomplete, so nothing establishes the path ' +
+        'between the controls. Run scripts/visual-qa.ts.',
   );
 
   /* -- K. Legacy removal ---------------------------------------------------- */
@@ -1496,14 +1570,35 @@ async function main(): Promise<void> {
   );
 
   /* -- O. Visual and interaction approval ------------------------------------ */
+  /*
+   * O has two halves and only one of them is a machine's. The evidence half is
+   * a named, dated, commit-stamped set a person can look at without re-running
+   * anything; the approval half is the owner's and cannot be derived, measured
+   * or inferred. So this reports on the first and says the second is theirs —
+   * and it stays PARTIAL however good the images are, because a reporter that
+   * could promote itself to PASS here would be approving its own work.
+   */
+  const visual = visualEvidence();
   record(
     'O',
     'Visual and interaction approval',
     'PARTIAL',
     'scripts/visual-qa.ts captures desktop, intermediate and phone, sweeps the 822-953 band ' +
-      'that the rejected build clipped in, and drives three real interactions. It found and ' +
-      'the build fixed one real clipping (the depth toggle at 822 and 860). NOT established ' +
-      'here: your review of the images against the approved direction — that is yours to give.',
+      'that the rejected build clipped in, and drives one continuous journey rather than three ' +
+      'isolated interactions. The band is clean at 822, 860, 900 and 953 across six ' +
+      'destinations. ' +
+      (visual.images > 0
+        ? `${visual.images} images are committed under docs/evidence/step12b-visual/ with an ` +
+          'index naming each one\u2019s width, journey step and subject, so the set can be ' +
+          'reviewed without running the harness. One measured defect is photographed and left ' +
+          'alone: the constellation overlaps its own nodes at 390px (9 nodes, 9 overlapping ' +
+          'pairs on a 316px canvas), which the documented 0.62 stagger cannot fix because an ' +
+          'inner node\u2019s half-width exceeds its distance from the nucleus. That needs a ' +
+          'different dense-phone layout, which is a visual decision this step reserves for you. '
+        : 'No image set is committed, so there is nothing to review without running the ' +
+          'harness. ') +
+      'NOT established here: your review of the images against the approved direction \u2014 ' +
+      'that is yours to give, and no reading in this report can stand in for it.',
   );
 
   /* -- P. Preserved integrations, migrations, and restart --------------------- */

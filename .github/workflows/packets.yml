@@ -2,11 +2,20 @@
 #
 # Narrow for the reason `routing.yml` is narrow. `scripts/admin.ts` is the whole
 # terminal surface, and a workflow that exposed all of it would be §26's console
-# again with a YAML file instead of a page. This one reaches exactly two
+# again with a YAML file instead of a page. This one reaches exactly three
 # commands in one area:
 #
 #   packets independence [project]   read-only; opens nothing, proposes nothing
+#   packets scope [project]          read-only; the same rows, triaged
 #   packets reaudit <orchestration>  the §23 integrity transition, guarded
+#
+# `scope` is what makes `independence`'s output decidable: the bare scan names
+# every packet whose reviewer shared a session with its author, which against a
+# long history reads as that many approvals and is not one. It separates a
+# demonstrated pairing from a packet that recorded no session at all, from one a
+# reopen is already re-running, from history a later round replaced — and says,
+# per packet, whether the conclusion is still in use. It takes no `--admin`,
+# because it changes nothing.
 #
 # `reaudit` is the only write here, and every control it has is in the service
 # rather than in this file: the principal is resolved from `--admin` against the
@@ -24,11 +33,11 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'independence | reaudit'
+        description: 'independence | scope | reaudit'
         required: true
         default: independence
       target:
-        description: 'independence: a project slug or id (optional). reaudit: the orchestration id.'
+        description: 'independence/scope: a project slug or id (optional). reaudit: the orchestration id.'
         required: false
         default: ''
       admin:
@@ -63,9 +72,9 @@ jobs:
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
 
           case "$PACKETS_COMMAND" in
-            independence|reaudit) ;;
+            independence|scope|reaudit) ;;
             *)
-              echo "::error::Refusing '$PACKETS_COMMAND': one of independence, reaudit."
+              echo "::error::Refusing '$PACKETS_COMMAND': one of independence, scope, reaudit."
               exit 1
               ;;
           esac
