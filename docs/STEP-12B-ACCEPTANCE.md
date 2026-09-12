@@ -47,6 +47,37 @@ with the reporter is this file being stale, and the reporter wins.
 
 ---
 
+## One reporter, two environments, and four rows that only one of them can see
+
+The reporter has two halves. The **operational** half must run where the
+production database is, which is inside the deployed container. The
+**repository** half — the console removal test, the committed image set, the
+responsive suite — is a fact about the tree.
+
+`.dockerignore` excludes `tests`, `docs`, `*.md` and `client/src` from the
+image, deliberately and correctly: an image is copied, pushed to a registry and
+pulled by machines nobody controls, and it should carry what it runs. So **H, J,
+K and O cannot be read from a production run**, and the reporter now says so in
+those words rather than reporting the absence as a finding. It prints which half
+it could reach before the rows, because a reader who does not know which
+environment produced a reading will take a repository row's `NOT_RUN` for a
+regression.
+
+This is why the two readings below are kept apart rather than merged. Neither is
+the whole answer:
+
+- A **checkout run** (`npm run step12b:acceptance`) answers H, J, K and O, and
+  reads `NOT_RUN` for every row that needs a fleet.
+- A **production run** (the *Step 12B acceptance* workflow) answers A, B, E, L
+  and N from real rows, and cannot see the four above.
+
+An earlier version of the reporter would not have survived the production run at
+all: gate K read `client/src` with an unguarded `readdirSync`, and the image
+carries `client/dist` and no sources, so the report would have died at K and
+discarded the eleven rows it had already established.
+
+---
+
 ## The scenarios, as the reporter reads them
 
 The reading below is from the reporter against a Brain with **no fleet rows**
