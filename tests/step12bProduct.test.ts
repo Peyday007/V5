@@ -57,6 +57,7 @@ import { openInquiry, validateLensReply } from '../server/services/russell/inqui
 import { getDb } from '../server/db/database.ts';
 import { createWorker, grantMembership } from '../server/repos/identity.ts';
 import {
+  DEFAULT_TARGET_WITH_NO_PRIOR_POLICY,
   applyFinding,
   checkEnvelope,
   declareExperiment,
@@ -64,7 +65,23 @@ import {
   runExperiment,
   stalenessOf,
 } from '../server/services/fleet/lab.ts';
-import { currentPolicy, policyHistory } from '../server/repos/fleet.ts';
+import { currentPolicy, policyHistory, setPolicy } from '../server/repos/fleet.ts';
+import { listLayers, updateLayer } from '../server/repos/layers.ts';
+import { briefing } from '../server/services/russell/projections.ts';
+import { compileHat } from '../server/services/conversation/contextHat.ts';
+import { ideaMapForProject } from '../server/services/russell/ideas.ts';
+import {
+  activeWorkProgress,
+  buildProgress,
+  milestoneStateOfLayer,
+} from '../server/services/russell/progress.ts';
+import { capture } from '../server/services/russell/judgment.ts';
+import {
+  getCandidate,
+  listCandidates,
+  listMergeHistory,
+  splitCandidate,
+} from '../server/repos/russellCandidates.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { mapFor, outlineOf } from '../server/services/russell/maps.ts';
 import { decideBrainAdmin, decideProjectAccess } from '../server/services/identity/policy.ts';
@@ -81,6 +98,7 @@ import {
 } from '../server/services/russell/whyThisMatters.ts';
 import { parseRoute } from '../client/src/lib/router.ts';
 import type { Principal, Project } from '../server/domain/types.ts';
+import { RESEARCH_JUSTIFYING_GAPS } from '../server/domain/types.ts';
 
 let project: Project;
 let userId: string;
@@ -550,6 +568,63 @@ describe('the frontier reads a project’s edges from its own rows', () => {
     detail: null,
     confidence,
     visibility: 'SHARED',
+  });
+
+  /*
+   * The two regions a reader most needs kept apart, and a whole class of gap
+   * was in the wrong one.
+   *
+   * `classify` compared `gap.classification === 'FOUNDATIONAL'`, which is not a
+   * member of `GAP_CLASSIFICATIONS` — the vocabulary has `FOUNDATIONAL_GAP` —
+   * so the branch was unreachable and every judge-classified gap was recorded as
+   * WEAK_GROUND, "believed on evidence that would not survive much scrutiny",
+   * when a foundational gap is precisely OPEN_QUESTION, "known to be
+   * unanswered".
+   *
+   * The set was wrong as well as the spelling: the domain says **two**
+   * classifications may keep a layer open, and `RESEARCH_JUSTIFYING_GAPS` has
+   * held both since the audit engine was written. Asserted against that
+   * constant rather than against a list here, so a classification added to it
+   * reaches this reading without anybody remembering to update a test.
+   */
+  it('files a gap that may keep research open as an open question, not as thin belief', () => {
+    const items = classify({
+      knowledge: [],
+      candidates: [],
+      layers: [],
+      gaps: [
+        {
+          id: 'gap-foundational',
+          title: 'Nobody has established how the fee is set',
+          detail: 'The layer cannot be relied on until this is answered.',
+          classification: 'FOUNDATIONAL_GAP',
+        },
+        {
+          id: 'gap-targeted',
+          title: 'One bounded unknown needs a focused run',
+          detail: 'Architecture is sound; this is a single question.',
+          classification: 'TARGETED_RESEARCH_GAP',
+        },
+        {
+          id: 'gap-patch',
+          title: 'The summary overclaims one county',
+          detail: 'Evidence already suffices; correct it in synthesis.',
+          classification: 'PATCH',
+        },
+      ],
+    });
+
+    const region = (id: string): string | undefined =>
+      items.find((item) => item.sourceId === id)?.region;
+
+    // Both classifications the domain says may keep a layer open.
+    for (const classification of RESEARCH_JUSTIFYING_GAPS) {
+      const id = classification === 'FOUNDATIONAL_GAP' ? 'gap-foundational' : 'gap-targeted';
+      expect(region(id)).toBe('OPEN_QUESTION');
+    }
+    // And one it does not: still weak ground, because it describes something
+    // believed that the audit was not satisfied by.
+    expect(region('gap-patch')).toBe('WEAK_GROUND');
   });
 
   it('separates what is believed well from what is believed thinly', () => {
@@ -1904,6 +1979,378 @@ describe('a pressure test that actually runs', () => {
  * opened a Postgres database to prove it would need one, and the property being
  * pinned is "this script states its provider", which is readable.
  */
+/* ==========================================================================
+ * Deduplication by meaning
+ *
+ * `russell_candidate_merges.method` has carried `'SEMANTIC'` in its CHECK
+ * constraint since migration 027, and for a long time nothing wrote one. These
+ * drive the path production takes — `capture`, with the claim a worker would
+ * have made — because §24 is explicit that the claim decides nothing on its
+ * own: the scope, the chain and the floor are all checked against rows, and all
+ * three are reachable without a worker.
+ * ========================================================================== */
+
+const CANONICAL_QUESTION =
+  'Establish how long after a deed is recorded it becomes available electronically in ' +
+  'Michigan county register offices, before a title search can rely on it.';
+const REWORDED_QUESTION =
+  'How long does it take for a recorded deed to become electronically available in the ' +
+  'county register offices of Michigan?';
+
+describe('an idea is folded into another only when the server agrees it is the same one', () => {
+  it('merges a genuine rewording, and records that meaning decided it', async () => {
+    const first = await capture({
+      title: 'Electronic availability of a recorded deed',
+      statement: CANONICAL_QUESTION,
+      projectId: project.id,
+      visibility: 'SHARED',
+    });
+    const second = await capture({
+      title: 'How quickly a recorded deed appears online',
+      statement: REWORDED_QUESTION,
+      projectId: project.id,
+      visibility: 'SHARED',
+      duplicateOf: first.candidate?.id ?? null,
+    });
+
+    expect(second.merged).toBe(true);
+    // The canonical comes back, not the row that folded into it.
+    expect(second.candidate?.id).toBe(first.candidate?.id);
+
+    const history = await listMergeHistory(first.candidate!.id);
+    const merge = history.find((row) => row.action === 'MERGE');
+    expect(merge?.method).toBe('SEMANTIC');
+    // The score is in the reason, so a merge can be argued with rather than
+    // only believed.
+    expect(merge?.reason).toMatch(/subject overlap/);
+  });
+
+  it('refuses two ideas that share their subject but not their question', async () => {
+    const first = await capture({
+      title: 'Electronic availability of a recorded deed',
+      statement: CANONICAL_QUESTION,
+      projectId: project.id,
+      visibility: 'SHARED',
+    });
+    const second = await capture({
+      title: 'Ranking the register offices',
+      statement:
+        'Decide whether the Michigan county register offices should be ranked by staffing ' +
+        'levels, opening hours, budget, telephone response times, walk-in volume, parking ' +
+        'and signage before any outreach campaign begins.',
+      projectId: project.id,
+      visibility: 'SHARED',
+      duplicateOf: first.candidate?.id ?? null,
+    });
+
+    expect(second.merged).toBe(false);
+    expect(second.reason).toMatch(/overlap/);
+    // Refused is not lost: the idea it was captured from is still its own row.
+    expect(second.candidate?.id).not.toBe(first.candidate?.id);
+    expect(second.candidate?.state).toBe('CAPTURED');
+  });
+
+  it('refuses one word in common, before the ratio is even reached', async () => {
+    const first = await capture({
+      title: 'Electronic availability of a recorded deed',
+      statement: CANONICAL_QUESTION,
+      projectId: project.id,
+      visibility: 'SHARED',
+    });
+    const second = await capture({
+      title: 'Billing order on the pricing page',
+      statement: 'Decide whether the pricing page should show annual billing before monthly billing.',
+      projectId: project.id,
+      visibility: 'SHARED',
+      duplicateOf: first.candidate?.id ?? null,
+    });
+    expect(second.merged).toBe(false);
+    expect(second.reason).toMatch(/subject word/);
+  });
+
+  it('will not reach into another project, or into a row already folded away', async () => {
+    const elsewhere = await createProject({
+      name: 'Another project entirely',
+      slug: `elsewhere-${Date.now()}`,
+      purpose: 'PROJECT',
+    });
+    // The *same* question over there, so the refusal below is attributable to
+    // the scope and to nothing else.
+    const foreign = await capture({
+      title: 'Electronic availability of a recorded deed',
+      statement: CANONICAL_QUESTION,
+      projectId: elsewhere.id,
+      visibility: 'SHARED',
+    });
+    const here = await capture({
+      title: 'Electronic availability of a recorded deed',
+      statement: CANONICAL_QUESTION,
+      projectId: project.id,
+      visibility: 'SHARED',
+    });
+    const folded = await capture({
+      title: 'How quickly a recorded deed appears online',
+      statement: REWORDED_QUESTION,
+      projectId: project.id,
+      visibility: 'SHARED',
+      duplicateOf: here.candidate?.id ?? null,
+    });
+    expect(folded.merged).toBe(true);
+    const foldedRow = (await listCandidates({ projectId: project.id, limit: 50 })).find(
+      (row) => row.state === 'MERGED',
+    );
+    expect(foldedRow).toBeTruthy();
+
+    const crossScope = await capture({
+      title: 'When a recorded deed appears online',
+      statement:
+        'When does a recorded deed become electronically available in a Michigan county ' +
+        'register office?',
+      projectId: project.id,
+      visibility: 'SHARED',
+      duplicateOf: foreign.candidate?.id ?? null,
+    });
+    const intoMerged = await capture({
+      title: 'Electronic publication after recording',
+      statement:
+        'After a deed is recorded in Michigan, how long until the county register office ' +
+        'publishes it electronically?',
+      projectId: project.id,
+      visibility: 'SHARED',
+      duplicateOf: foldedRow!.id,
+    });
+
+    expect(crossScope.merged).toBe(false);
+    expect(intoMerged.merged).toBe(false);
+    /*
+     * And in the same words. "You may not merge into that" and "there is
+     * nothing there to merge into" are invariant 23's pair: a reason that
+     * separated them would confirm a candidate exists in a scope the asker
+     * cannot read.
+     */
+    expect(crossScope.reason).toBe(intoMerged.reason);
+  });
+
+  it('lets a person undo a merge, keeping both the merge and the split', async () => {
+    const first = await capture({
+      title: 'Electronic availability of a recorded deed',
+      statement: CANONICAL_QUESTION,
+      projectId: project.id,
+      visibility: 'SHARED',
+    });
+    await capture({
+      title: 'How quickly a recorded deed appears online',
+      statement: REWORDED_QUESTION,
+      projectId: project.id,
+      visibility: 'SHARED',
+      duplicateOf: first.candidate?.id ?? null,
+    });
+    const foldedRow = (await listCandidates({ projectId: project.id, limit: 50 })).find(
+      (row) => row.state === 'MERGED',
+    );
+
+    expect(await splitCandidate({ candidateId: foldedRow!.id, reason: 'Two questions after all.' })).toBe(true);
+    const after = await getCandidate(foldedRow!.id);
+    expect(after?.state).toBe('CAPTURED');
+    expect(after?.canonicalCandidateId).toBeNull();
+    // The idea it had been folded into is untouched by the undo.
+    expect((await getCandidate(first.candidate!.id))?.state).toBe('CAPTURED');
+
+    const history = await listMergeHistory(foldedRow!.id);
+    expect(history.map((row) => row.action)).toEqual(['MERGE', 'SPLIT']);
+  });
+});
+
+/* ==========================================================================
+ * One projection, every surface
+ * ========================================================================== */
+
+describe('one projection answers every surface that reads it', () => {
+  it('gives the briefing, the conversation hat and the constellation one answer', async () => {
+    /*
+     * Three different states, because an empty project makes every reading
+     * trivially equal — and a check that cannot fail proves nothing about the
+     * surfaces that could disagree.
+     */
+    const layers = await listLayers(project.id);
+    expect(layers.length).toBeGreaterThan(2);
+    await updateLayer(layers[0]!.id, { status: 'FROZEN', statusSource: 'DERIVED' });
+    await updateLayer(layers[1]!.id, { status: 'RESEARCHING', statusSource: 'DERIVED' });
+    await updateLayer(layers[2]!.id, { status: 'BLOCKED', statusSource: 'DERIVED' });
+
+    const direct = await projectProgress({ projectId: project.id, projectName: project.name });
+    const brief = await briefing({ projectId: project.id, projectName: project.name });
+    expect(brief.progress).toEqual(direct);
+
+    /*
+     * The hat embeds the sentence rather than the object, so what matters is
+     * that the sentence *is* the projection's own — a hat that reworded it
+     * would be a second opinion arriving where nobody could see it.
+     */
+    const conversation = await createConversation({
+      ownerUserId: userId,
+      title: 'About this project',
+      projectId: project.id,
+      visibility: 'SHARED',
+    });
+    const hat = await compileHat({
+      conversationId: conversation.id,
+      projectId: project.id,
+      projectName: project.name,
+      ownerUserId: userId,
+    });
+    const state = hat.parts.find((part) => part.section === 'PROJECT_STATE');
+    expect(state?.text).toContain(direct.headline);
+
+    /*
+     * The constellation builds its own Progress per node out of a layer's
+     * declared versions, so what is compared is the thing both must agree
+     * about — each foundation's milestone state — rather than two fractions
+     * over different denominators.
+     */
+    const map = await ideaMapForProject({
+      projectId: project.id,
+      viewerUserId: userId,
+      includePrivate: false,
+    });
+    const majors = (map?.nodes ?? []).filter((node) => node.level === 'MAJOR');
+    expect(majors.length).toBe(direct.milestones.length);
+    const byLayer = new Map(direct.milestones.map((milestone) => [milestone.key, milestone]));
+    for (const node of majors) {
+      const milestone = byLayer.get(node.links.layerId ?? '');
+      expect(milestone).toBeTruthy();
+      expect(milestoneStateOfLayer(node.state as never)).toBe(milestone!.state);
+    }
+    const blocked = majors.find((node) => node.links.layerId === layers[2]!.id);
+    expect(blocked?.progress.stage).toBe('BLOCKED');
+  });
+
+  it('keeps the three numbers on the progress route from being read as one', async () => {
+    const direct = await projectProgress({ projectId: project.id, projectName: project.name });
+    const work = await activeWorkProgress(project.id);
+    const build = buildProgress();
+    // Work's milestone set is not closed, so it reports no fraction at all.
+    expect(work.ratio).toBeNull();
+    const denominators = [direct.denominator, work.denominator, build.denominator];
+    expect(new Set(denominators).size).toBe(denominators.length);
+    for (const headline of [direct.headline, work.headline, build.headline]) {
+      expect(headline).not.toMatch(/\d+\s*%/);
+    }
+  });
+});
+
+/* ==========================================================================
+ * The canary, in the direction that was silently broken
+ * ========================================================================== */
+
+describe('a canary rolls back to what it displaced, never to its own number', () => {
+  const canaryEnvelope = {
+    ceiling: 4,
+    durationMinutes: 1,
+    stopConditions: ['the ceiling is reached'],
+    cleanup: 'Nothing is created.',
+    rollback: 'The displaced policy version is written forward again.',
+    workloadClass: 'RESEARCH',
+    workKind: 'REAL_CANARY' as const,
+  };
+
+  it('allows real work as a canary for a reading that spends nothing', async () => {
+    const declared = await declareExperiment({
+      projectId: project.id,
+      mode: 'CALIBRATION',
+      title: 'A ledger reading, applied as a canary',
+      envelope: canaryEnvelope,
+      actor: 'A person',
+    });
+    // The refusal in `checkEnvelope` is about pressure on a real surface, not
+    // about the words REAL_CANARY: a reading of rows applies no pressure.
+    expect(declared.state).toBe('DECLARED');
+    expect(declared.refusalReason).toBeNull();
+  });
+
+  it('records the displaced target before it is replaced, and restores it', async () => {
+    const prior = await setPolicy({
+      scope: 'FLEET',
+      target: 3,
+      actor: 'A person',
+      reason: 'The target a person set before any canary',
+    });
+    const ran = await runExperiment({
+      id: (
+        await declareExperiment({
+          projectId: project.id,
+          mode: 'CALIBRATION',
+          title: 'What has the fleet done?',
+          envelope: canaryEnvelope,
+          actor: 'A person',
+        })
+      ).id,
+      pressureAuthorized: false,
+    });
+    expect(ran.state).toBe('COMPLETE');
+
+    const applied = await applyFinding({
+      experimentId: ran.id,
+      target: 11,
+      actor: 'A person',
+      reason: 'Canary',
+    });
+    /*
+     * The whole of the fix this pins: read *before* the write. Afterwards,
+     * "the newest policy that is not this one" answers a different question and
+     * is wrong in both directions — over an empty history it finds nothing and
+     * falls back to the canary itself.
+     */
+    expect(applied.displacedPolicyId).toBe(prior.id);
+    expect(applied.displacedTarget).toBe(3);
+    expect(applied.displacedTarget).not.toBe(11);
+    expect((await currentPolicy('FLEET', null))?.target).toBe(11);
+
+    const back = await rollbackFinding({
+      experimentId: ran.id,
+      actor: 'A person',
+      reason: 'Canary complete',
+    });
+    expect(back.rolledBackAt).toBeTruthy();
+    const now = await currentPolicy('FLEET', null);
+    expect(now?.target).toBe(3);
+    expect(now?.reason).toMatch(/displaced \(3\)/);
+    // Written forward, not deleted: the canary's own version is still there.
+    const history = await policyHistory('FLEET', null, 10);
+    expect(history.some((row) => row.target === 11)).toBe(true);
+  });
+
+  it('says it displaced nothing rather than reporting a number', async () => {
+    const ran = await runExperiment({
+      id: (
+        await declareExperiment({
+          projectId: project.id,
+          mode: 'CALIBRATION',
+          title: 'What has the fleet done?',
+          envelope: canaryEnvelope,
+          actor: 'A person',
+        })
+      ).id,
+      pressureAuthorized: false,
+    });
+    expect(await currentPolicy('FLEET', null)).toBeNull();
+    const applied = await applyFinding({
+      experimentId: ran.id,
+      target: 9,
+      actor: 'A person',
+      reason: 'Canary',
+    });
+    expect(applied.displacedPolicyId).toBeNull();
+    expect(applied.displacedTarget).toBeNull();
+
+    await rollbackFinding({ experimentId: ran.id, actor: 'A person', reason: 'Canary complete' });
+    const now = await currentPolicy('FLEET', null);
+    expect(now?.target).toBe(DEFAULT_TARGET_WITH_NO_PRIOR_POLICY);
+    expect(now?.target).not.toBe(9);
+    expect(now?.reason).toMatch(/no prior policy/);
+  });
+});
+
 describe('the acceptance reporter writes to a scratch database, never the configured one', () => {
   const source = fs.readFileSync(
     path.join(REPO_ROOT, 'scripts', 'step12b-acceptance.ts'),
@@ -1921,6 +2368,33 @@ describe('the acceptance reporter writes to a scratch database, never the config
     for (const call of writing) {
       expect(call).toContain("provider: 'sqlite'");
     }
+  });
+
+  /*
+   * Asserted on the source, like the two above, and for the same reason: what
+   * is being pinned is a decision about how the reporter is written. It is not
+   * evidence for any verdict — the verdicts come from what the run does, which
+   * is the whole point of the script. What this stops is a later edit quietly
+   * turning an exercised scenario back into a described one.
+   */
+  it('drives C, D, M and Q through the services rather than describing them', () => {
+    // C: the merge is made, refused and undone through the production path.
+    expect(source).toContain("from '../server/services/russell/judgment.ts'");
+    expect(source).toContain('splitCandidate');
+    // D: the frontier is read back from rows, never inserted into directly.
+    expect(source).toContain('frontierFor');
+    expect(source).toContain('recordKnowledge');
+    expect(source).toContain('createAudit');
+    expect(source).not.toMatch(/INSERT INTO russell_frontier/i);
+    // M: every reader of the one projection, including the two that could
+    // genuinely disagree with it.
+    expect(source).toContain('compileHat');
+    expect(source).toContain('ideaMapForProject');
+    expect(source).toContain('activeWorkProgress');
+    // Q: the canary cycle, both ways round.
+    expect(source).toContain('applyFinding');
+    expect(source).toContain('rollbackFinding');
+    expect(source).toContain('DEFAULT_TARGET_WITH_NO_PRIOR_POLICY');
   });
 
   it('takes its operational reading before it opens anything it writes to', () => {

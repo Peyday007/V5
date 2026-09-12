@@ -2652,7 +2652,11 @@ and a tab strip to scroll sideways, each inside its own container.
   *stopped* being on the frontier, and hold a person's statement that one is
   deliberately not required. An item that stops being derived is **resolved,
   never deleted**, because a delete makes a dark spot look like progress.
-- **Five discovery lenses are answered and four are asked.** Which assumptions
+- **Five discovery lenses are answered and five are asked.** An earlier version
+  of this line said four asked, and `LENSES` has always declared five
+  (`MISSING_MECHANISM`, `FIXED_VARIABLE`, `TRANSFERABLE_LESSON`,
+  `ADJACENT_POSSIBILITY`, `WHAT_THE_MAP_HIDES`). The count is corrected rather
+  than a lens removed to match the sentence. Which assumptions
   have nothing supporting them, which findings contradict each other, which
   declared region has no work in it — those are rows. What adjacent possibility
   is absent, what lesson transfers from another project, what the current map

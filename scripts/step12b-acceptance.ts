@@ -62,19 +62,50 @@ import {
 import { decideProjectAccess } from '../server/services/identity/policy.ts';
 import { conversationIsReadable, ownerPrincipal } from '../server/services/russell/turn.ts';
 import { createConversation } from '../server/repos/russellConversations.ts';
-import { listRoutines, listAccounts } from '../server/repos/fleet.ts';
-import { LENSES } from '../server/services/russell/frontier.ts';
+import {
+  currentPolicy,
+  listAccounts,
+  listRoutines,
+  policyHistory,
+  setPolicy,
+} from '../server/repos/fleet.ts';
+import { LENSES, frontierFor } from '../server/services/russell/frontier.ts';
 import { askableLenses, openInquiry, validateLensReply } from '../server/services/russell/inquiry.ts';
-import { LAB_MODES, declareExperiment, runExperiment } from '../server/services/fleet/lab.ts';
+import {
+  DEFAULT_TARGET_WITH_NO_PRIOR_POLICY,
+  LAB_MODES,
+  applyFinding,
+  declareExperiment,
+  rollbackFinding,
+  runExperiment,
+} from '../server/services/fleet/lab.ts';
 import { MAP_TYPES } from '../server/services/russell/maps.ts';
 import { PREFERENCES, checkPreference, defaults } from '../server/services/russell/preferences.ts';
 import { SEARCH_KINDS, search } from '../server/services/russell/search.ts';
 import { explainSlowness, usability } from '../server/services/fleet/view.ts';
 import type { SlownessExplanation } from '../server/services/fleet/view.ts';
 import { CANDIDATE_PRIORITIES } from '../server/domain/types.ts';
+import type { FrontierRegion } from '../server/domain/types.ts';
 import { choicesFor } from '../server/services/russell/needsHuman.ts';
-import { projectProgress } from '../server/services/russell/progress.ts';
+import {
+  activeWorkProgress,
+  buildProgress,
+  milestoneStateOfLayer,
+  projectProgress,
+} from '../server/services/russell/progress.ts';
 import { homeFor } from '../server/services/russell/home.ts';
+import { capture } from '../server/services/russell/judgment.ts';
+import { SEMANTIC_MERGE_FLOOR } from '../server/services/russell/similarity.ts';
+import {
+  getCandidate,
+  listCandidates,
+  listMergeHistory,
+  splitCandidate,
+} from '../server/repos/russellCandidates.ts';
+import { recordKnowledge } from '../server/repos/russellMissions.ts';
+import { createAudit } from '../server/repos/audits.ts';
+import { compileHat } from '../server/services/conversation/contextHat.ts';
+import { ideaMapForProject } from '../server/services/russell/ideas.ts';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 
@@ -107,11 +138,13 @@ function file(relative: string): string | null {
  * ---------------------------------------------------------------------------
  *
  * The exercising half of this report runs against a **temporary** database it
- * creates and deletes, because it writes: it registers a project, a hundred
- * candidates, an inquiry and a Capability Lab experiment, and doing any of that
- * to a real Brain would make the reporter a mutation. But several scenarios are
- * not about a mechanism at all — they are about whether the deployed fleet can
- * run anything — and against a scratch database that question has no answer.
+ * creates and deletes, because it writes: it registers four projects, a hundred
+ * candidates, knowledge rows, an audit with classified gaps, merges and their
+ * undo, a frontier reading, an inquiry, a dozen Capability Lab experiments and
+ * five fleet policy versions — and doing any of that to a real Brain would make
+ * the reporter a mutation. But several scenarios are not about a mechanism at
+ * all — they are about whether the deployed fleet can run anything — and
+ * against a scratch database that question has no answer.
  *
  * So the operational reading is taken first, from the **configured** database,
  * read-only: two `SELECT`s and a close. Then the temp database is opened and
@@ -155,6 +188,12 @@ interface FleetReading {
     /** B: ideas Russell formed its own priority on, and audit passes recorded. */
     judgedCandidates: number;
     auditPasses: number;
+    /** E: what the connected site has actually delivered. */
+    externalRecords: number;
+    externalRejections: number;
+    connectorEvents: number;
+    connectorCommands: number;
+    lastRecordAt: string | null;
     /** L: the durable tick, as its own row states it. */
     cycleState: string | null;
     cycleLastRanAt: string | null;
@@ -210,6 +249,29 @@ async function readOperationalFleet(): Promise<FleetReading> {
     const auditPasses = await one(
       "SELECT COUNT(*) AS total FROM research_passes WHERE pass_key = 'AUDIT' AND status = 'COMPLETE'",
     );
+    /*
+     * What the connected site has actually done, counted in the same read-only
+     * phase — because E is a fact about a live site and no scratch database has
+     * one. Keyed on the canonical vocabulary rather than a lower-cased spelling:
+     * `external_records.source_system` stores `DEAL_DISPATCH`, and a reader that
+     * lower-cased it reported a live site as holding nothing.
+     */
+    const externalRecords = await one(
+      'SELECT COUNT(*) AS total FROM external_records',
+    );
+    const externalRejections = await one(
+      'SELECT COUNT(*) AS total FROM external_record_rejections',
+    );
+    const connectorEvents = await one(
+      "SELECT COUNT(*) AS total FROM project_events WHERE event_type LIKE 'EXTERNAL_%'",
+    );
+    const connectorCommands = await one(
+      "SELECT COUNT(*) AS total FROM project_events WHERE event_type = 'EXTERNAL_COMMAND_ACCEPTED'",
+    );
+    const lastRecord = await getDb().get<{ last_at: string | null }>(
+      "SELECT MAX(created_at) AS last_at FROM project_events WHERE event_type LIKE 'EXTERNAL_RECORD_%'",
+    );
+
     const cycle = await getDb().get<{
       state: string;
       last_ran_at: string | null;
@@ -223,6 +285,11 @@ async function readOperationalFleet(): Promise<FleetReading> {
       routedConversations,
       judgedCandidates,
       auditPasses,
+      externalRecords,
+      externalRejections,
+      connectorEvents,
+      connectorCommands,
+      lastRecordAt: lastRecord?.last_at ?? null,
       cycleState: cycle?.state ?? null,
       cycleLastRanAt: cycle?.last_ran_at ?? null,
       cycleLastError: cycle?.last_error ?? null,
@@ -256,6 +323,11 @@ async function readOperationalFleet(): Promise<FleetReading> {
         routedConversations: 0,
         judgedCandidates: 0,
         auditPasses: 0,
+        externalRecords: 0,
+        externalRejections: 0,
+        connectorEvents: 0,
+        connectorCommands: 0,
+        lastRecordAt: null,
         cycleState: null,
         cycleLastRanAt: null,
         cycleLastError: null,
@@ -340,10 +412,12 @@ async function main(): Promise<void> {
    * `dbPath` is honoured **only in local mode**: `initDatabase` reads the
    * configured provider first, so against a Postgres-configured Brain it is
    * ignored entirely and every write below lands in the real database. This
-   * script registers a project, four foundations, two people, a hundred
-   * candidates, a lens inquiry and eight Capability Lab experiments — so in
-   * cloud mode the reporter would have been a mutation, which is precisely what
-   * its own header says it is not.
+   * script registers four projects, seven foundations, two people, a hundred
+   * candidates and a handful more it merges and splits, five knowledge rows, an
+   * audit with two classified gaps, a frontier reading, a lens inquiry, a dozen
+   * Capability Lab experiments and five fleet policy versions — so in cloud
+   * mode the reporter would have been a mutation, which is precisely what its
+   * own header says it is not.
    *
    * Caught by running it twice against a Postgres test database: the second run
    * collided on `rc_acc_0`, because the first had written it. The production
@@ -442,23 +516,382 @@ async function main(): Promise<void> {
     [project.id],
   );
   const classified = ranked.reduce((sum, row) => sum + Number(row.total), 0);
+
+  /*
+   * The semantic merge, driven rather than described.
+   *
+   * This was the named unmet condition of C, and the sentence it was reported
+   * under — "which needs a worker to name the repeat" — was true of only half
+   * of it. §24 is explicit that the merge needs **both** a claim and a floor,
+   * and that the claim decides nothing on its own: `capture` re-resolves the
+   * named id against rows, refuses one outside this scope or already merged,
+   * and puts the two statements under `clearsFloor` before anything moves. All
+   * of that is server code and all of it is reachable without a worker — what a
+   * worker supplies is one string, which is exactly the part §8 says may not
+   * decide anything.
+   *
+   * So the claim is supplied here in the worker's place and every guard behind
+   * it is exercised for real: one genuine rewording that merges, four claims
+   * refused for four different reasons, and the split that puts a merged row
+   * back. What this still does not establish is a worker naming a repeat in a
+   * live conversation, and that is what C now says.
+   */
+  const mergeScope = await createProject({
+    name: 'Step 12B acceptance duplicates',
+    slug: `s12b-dup-${Date.now()}`,
+    purpose: 'PROJECT',
+  });
+  const CANONICAL =
+    'Establish how long after a deed is recorded it becomes available electronically in ' +
+    'Michigan county register offices, before a title search can rely on it.';
+  const REWORD =
+    'How long does it take for a recorded deed to become electronically available in the ' +
+    'county register offices of Michigan?';
+  const canonical = await capture({
+    title: 'Electronic availability of a recorded deed',
+    statement: CANONICAL,
+    projectId: mergeScope.id,
+    visibility: 'SHARED',
+  });
+  const canonicalId = canonical.candidate?.id ?? null;
+
+  /*
+   * The same question in a different project, so the scope refusal below is
+   * attributable to the scope alone.
+   *
+   * Naming an unrelated candidate would be refused by the floor first and would
+   * prove nothing about the boundary — and the boundary is the part that
+   * matters: a merge reaching across projects would confirm a candidate exists
+   * to somebody who cannot read it.
+   */
+  const foreignTwin = await capture({
+    title: 'Electronic availability of a recorded deed',
+    statement: CANONICAL,
+    projectId: project.id,
+    visibility: 'SHARED',
+  });
+
+  // 1. A genuine rewording, which merges.
+  const merged = await capture({
+    title: 'How quickly a recorded deed appears online',
+    statement: REWORD,
+    projectId: mergeScope.id,
+    visibility: 'SHARED',
+    duplicateOf: canonicalId,
+  });
+  const foldedRow =
+    (await listCandidates({ projectId: mergeScope.id, limit: 50 })).find(
+      (row) => row.state === 'MERGED' && row.canonicalCandidateId === canonicalId,
+    ) ?? null;
+
+  // 2. The same subject words, a different question: refused by the floor.
+  const nearby = await capture({
+    title: 'Ranking the register offices',
+    statement:
+      'Decide whether the Michigan county register offices should be ranked by staffing ' +
+      'levels, opening hours, budget, telephone response times, walk-in volume, parking ' +
+      'and signage before any outreach campaign begins.',
+    projectId: mergeScope.id,
+    visibility: 'SHARED',
+    duplicateOf: canonicalId,
+  });
+
+  // 3. Nothing in common at all: refused before the ratio is reached.
+  const unrelated = await capture({
+    title: 'Billing order on the pricing page',
+    statement: 'Decide whether the pricing page should show annual billing before monthly billing.',
+    projectId: mergeScope.id,
+    visibility: 'SHARED',
+    duplicateOf: canonicalId,
+  });
+
+  // 4. A rewording that would clear the floor, naming a candidate in another project.
+  const crossScope = await capture({
+    title: 'When a recorded deed appears online',
+    statement:
+      'When does a recorded deed become electronically available in a Michigan county ' +
+      'register office?',
+    projectId: mergeScope.id,
+    visibility: 'SHARED',
+    duplicateOf: foreignTwin.candidate?.id ?? null,
+  });
+
+  // 5. And one naming a row that has already been folded away, so no chains.
+  const intoMerged = await capture({
+    title: 'Electronic publication after recording',
+    statement:
+      'After a deed is recorded in Michigan, how long until the county register office ' +
+      'publishes it electronically?',
+    projectId: mergeScope.id,
+    visibility: 'SHARED',
+    duplicateOf: foldedRow?.id ?? null,
+  });
+
+  // And the undo, which is what makes the merge safe to make at all.
+  const splitOk = foldedRow
+    ? await splitCandidate({
+        candidateId: foldedRow.id,
+        reason: 'A person said these were two questions after all.',
+      })
+    : false;
+  const afterSplit = foldedRow ? await getCandidate(foldedRow.id) : null;
+  const canonicalAfter = canonicalId ? await getCandidate(canonicalId) : null;
+  const mergeHistory = foldedRow ? await listMergeHistory(foldedRow.id) : [];
+  const mergeRow = mergeHistory.find((row) => row.action === 'MERGE') ?? null;
+  const splitRow = mergeHistory.find((row) => row.action === 'SPLIT') ?? null;
+
+  const dedupe = [
+    [
+      'a rewording merges into the idea it repeats',
+      merged.merged && merged.candidate?.id === canonicalId,
+    ],
+    ['and it is recorded as decided by meaning', mergeRow?.method === 'SEMANTIC'],
+    [
+      'the same subject words with a different question are refused by the floor',
+      !nearby.merged && /overlap/.test(nearby.reason),
+    ],
+    [
+      'two unrelated ideas are refused before the ratio',
+      !unrelated.merged && /subject word/.test(unrelated.reason),
+    ],
+    /*
+     * Both of these get the *same* sentence, and that is the design rather than
+     * an imprecision: "you may not merge into that" and "there is nothing there
+     * to merge into" are invariant 23's pair, and a reason that separated them
+     * would say whether a candidate exists in a scope the asker cannot read.
+     * So each is asserted on the outcome and on that one shared sentence.
+     */
+    [
+      'a candidate in another project cannot be merged into',
+      !crossScope.merged && /not one that can be merged into/.test(crossScope.reason),
+    ],
+    [
+      'nor one that has already been folded away',
+      !intoMerged.merged && /not one that can be merged into/.test(intoMerged.reason),
+    ],
+    [
+      'and neither refusal says which of the two it was',
+      crossScope.reason === intoMerged.reason,
+    ],
+    [
+      'every refused claim still kept its own idea',
+      [nearby, unrelated, crossScope, intoMerged].every((outcome) => outcome.candidate !== null),
+    ],
+    [
+      'a person can undo the merge',
+      splitOk && afterSplit?.state === 'CAPTURED' && afterSplit?.canonicalCandidateId === null,
+    ],
+    ['and neither history is lost', mergeRow !== null && splitRow !== null],
+    ['the idea it was folded into is untouched', canonicalAfter?.state === 'CAPTURED'],
+  ] as const;
+  const dedupeFailed = dedupe.filter(([, held]) => !held).map(([name]) => name);
+
   record(
     'C',
     'Priority and backlog',
-    classified === 100 ? 'PARTIAL' : 'NOT_RUN',
-    `${classified} candidates in an isolated scope, every one carrying a class ` +
-      `(${ranked.map((row) => `${row.priority}=${row.total}`).join(' ')}). ` +
-      'NOT established here: semantic merge of duplicates, which needs a worker to name the repeat.',
+    classified === 100 && dedupeFailed.length === 0 ? 'PARTIAL' : 'NOT_RUN',
+    dedupeFailed.length > 0 || classified !== 100
+      ? `${classified} candidates carried a class (100 expected) and ${dedupeFailed.length} of ` +
+        `${dedupe.length} deduplication condition(s) did not hold: ${dedupeFailed.join('; ')}. ` +
+        'That is a defect rather than a missing run.'
+      : `${classified} candidates in an isolated scope, every one carrying a class ` +
+        `(${ranked.map((row) => `${row.priority}=${row.total}`).join(' ')}). The semantic merge ` +
+        `is driven end to end in a second scope: ${dedupe.length}/${dedupe.length} conditions ` +
+        `held — a rewording merged (${mergeRow?.reason ?? 'no merge row'}) and is recorded as ` +
+        'SEMANTIC, and four claims were refused: below the ' +
+        `${SEMANTIC_MERGE_FLOOR} overlap floor, below the minimum shared subject words, naming ` +
+        'a candidate in another project, and naming one already folded away — the last two in ' +
+        'the same words as each other, deliberately, and each leaving both ideas standing. The merge was then undone with splitCandidate: the row returned to ' +
+        'CAPTURED, and its MERGE and SPLIT rows are both still there. NOT established here: a ' +
+        'worker naming the repeat from a live conversation, which is the one string the server ' +
+        'does not supply itself, and a person reading this backlog on the deployed product.',
   );
 
   /* -- D. Discovery Frontier v1 ------------------------------------------- */
   const derived = LENSES.filter((lens) => lens.kind === 'DERIVED');
   const asked = askableLenses();
+
+  /*
+   * A real project snapshot, built from the rows the five derived lenses
+   * actually read.
+   *
+   * The named unmet condition here was "the six discovery classes found in a
+   * real project snapshot", and the reason given was that it needs a worker.
+   * Half of that was true and half was not: the four **asked** lenses need a
+   * reader, and the five **derived** ones are answered from rows — knowledge,
+   * layers, audit gaps and candidates — none of which needs anybody. So the
+   * rows are written here and `frontierFor` is called on them, which is the
+   * same function the page calls.
+   *
+   * Nothing is inserted into `russell_frontier` directly. Writing a frontier
+   * row and then reading it back would prove the table exists and would say
+   * nothing about the classification, which is the whole claim the frontier
+   * makes.
+   */
+  const snapshot = await createProject({
+    name: 'Step 12B acceptance frontier',
+    slug: `s12b-frontier-${Date.now()}`,
+    purpose: 'PROJECT',
+  });
+  const discoveryLayer = await createLayer({
+    projectId: snapshot.id,
+    name: 'Discovery',
+    orderIndex: 0,
+  });
+  await updateLayer(discoveryLayer.id, { status: 'FROZEN', statusSource: 'DERIVED' });
+  const sizingLayer = await createLayer({
+    projectId: snapshot.id,
+    name: 'Market Sizing',
+    orderIndex: 1,
+  });
+  await updateLayer(sizingLayer.id, { status: 'RESEARCHING', statusSource: 'DERIVED' });
+  // Left as declared and untouched, which is the one item derived from an
+  // absence — and the only way UNEXAMINED can be reached at all.
+  await createLayer({ projectId: snapshot.id, name: 'Go To Market', orderIndex: 2 });
+
+  const believed: {
+    kind: 'CONCLUSION' | 'ASSUMPTION' | 'CONTRADICTION' | 'GAP';
+    confidence: 'ESTABLISHED' | 'SUPPORTED' | 'UNCERTAIN' | 'DISPUTED';
+    statement: string;
+  }[] = [
+    {
+      kind: 'CONCLUSION',
+      confidence: 'ESTABLISHED',
+      statement: 'Every county register of deeds in the state records instruments in a public index.',
+    },
+    {
+      kind: 'CONCLUSION',
+      confidence: 'UNCERTAIN',
+      statement: 'Most counties publish a recorded instrument electronically within two working days.',
+    },
+    {
+      kind: 'ASSUMPTION',
+      confidence: 'UNCERTAIN',
+      statement: 'A buyer will accept an electronic copy where a certified paper copy is not required.',
+    },
+    {
+      kind: 'CONTRADICTION',
+      confidence: 'DISPUTED',
+      statement: 'Two sources disagree about whether the index is updated nightly or weekly.',
+    },
+    {
+      kind: 'GAP',
+      confidence: 'UNCERTAIN',
+      statement: 'Nothing recorded says what happens to the timeline when a document is rejected.',
+    },
+  ];
+  for (const row of believed) {
+    await recordKnowledge({
+      projectId: snapshot.id,
+      layerId: discoveryLayer.id,
+      visibility: 'SHARED',
+      kind: row.kind,
+      statement: row.statement,
+      provenance: { source: 'step12b acceptance snapshot' },
+      authorType: 'PIPELINE',
+      confidence: row.confidence,
+    });
+  }
+
+  /*
+   * A judge's own classified gaps, through `createAudit` rather than an INSERT,
+   * so the frontier reads exactly what an audit leaves behind.
+   */
+  await createAudit({
+    projectId: snapshot.id,
+    layerId: discoveryLayer.id,
+    result: {
+      verdict: 'MORE_RESEARCH',
+      summary: 'The recording timeline is not established for rejected instruments.',
+      failures: [],
+      missingDocuments: [],
+      requiredResearchRuns: [],
+      requiredPatches: [],
+      synthesisRequired: false,
+      freezeEligible: false,
+      nextVersion: null,
+      nextAction: 'Establish the rejection path before freezing.',
+    },
+    gaps: [
+      {
+        classification: 'FOUNDATIONAL_GAP',
+        title: 'The rejection path is unestablished',
+        detail: 'Nothing in the packet says what a rejected instrument does to the timeline.',
+      },
+      {
+        classification: 'PATCH',
+        title: 'One county is named inconsistently',
+        detail: 'Correctable in synthesis; no new research.',
+      },
+    ],
+  });
+
+  // An idea Russell had itself: no conversation behind it, which is the test.
+  await capture({
+    title: 'Ask the state association for its own timing survey',
+    statement:
+      'The state association of registers may already publish a timing survey that answers ' +
+      'this without any county-by-county work.',
+    projectId: snapshot.id,
+    visibility: 'SHARED',
+  });
+
+  const frontier = await frontierFor({
+    projectId: snapshot.id,
+    projectName: snapshot.name,
+    includePrivate: true,
+  });
+  const populated = frontier.regions.filter((region) => region.items.length > 0);
+  const emptyRegions = frontier.regions
+    .filter((region) => region.items.length === 0)
+    .map((region) => region.region);
+  const lensesSeen = new Set(
+    frontier.regions.flatMap((region) =>
+      region.items.map((item) => item.lens).filter((lens): lens is string => lens !== null),
+    ),
+  );
+  const derivedKeys = new Set<string>(derived.map((lens) => lens.key));
+  const derivedSeen = [...lensesSeen].filter((lens) => derivedKeys.has(lens));
+  const regionSummary = frontier.regions
+    .map((region) => {
+      const lenses = new Set(
+        region.items.map((item) => item.lens ?? 'no lens — the row itself is the reading'),
+      );
+      return `${region.region}=${region.items.length} (${[...lenses].join(', ')})`;
+    })
+    .join('; ');
+
+  /*
+   * What the audit's own gaps became, reported rather than assumed.
+   *
+   * `classify` sends a gap to OPEN_QUESTION when its classification is
+   * `FOUNDATIONAL`, and the domain's vocabulary (`GAP_CLASSIFICATIONS`) has no
+   * such member — it is `FOUNDATIONAL_GAP`. So this run reads which region a
+   * genuinely foundational gap actually landed in rather than asserting the one
+   * the comment implies. Repairing that comparison is a change to
+   * `services/russell/frontier.ts`, which this reporter does not make.
+   */
+  const gapItems = frontier.regions.flatMap((region) =>
+    region.items.filter((item) => item.sourceKind === 'AUDIT_GAP').map((item) => ({
+      region: region.region as FrontierRegion,
+      subject: item.subject,
+    })),
+  );
+  const foundationalGap = gapItems.find((item) => /rejection path/i.test(item.subject)) ?? null;
+  const gapNote = foundationalGap
+    ? `an audit's FOUNDATIONAL_GAP was recorded as ${foundationalGap.region}` +
+      (foundationalGap.region === 'OPEN_QUESTION'
+        ? ''
+        : " — `classify` compares the classification against 'FOUNDATIONAL', which is not a " +
+          'member of GAP_CLASSIFICATIONS, so that branch is unreachable. Reported, not worked ' +
+          'around: it is a defect in server/services/russell/frontier.ts')
+    : 'no audit gap reached the frontier at all, which is a defect';
+
   // The asked half now has a path; that the path *exists and validates* is
   // exercised here, and that a worker answers one is not.
   const refusedDerived = await openInquiry({
-    projectId: project.id,
-    projectName: project.name,
+    projectId: snapshot.id,
+    projectName: snapshot.name,
     lens: derived[0]!.key,
     openedBy: 'acceptance',
   });
@@ -476,26 +909,66 @@ async function main(): Promise<void> {
     { knowledgeIds: new Set(), layerIds: new Set(), frontierIds: new Set(), held: [] },
   );
   const discarded = invented.ok && invented.result.findings.length === 0;
+  const derivationHeld =
+    populated.length === frontier.regions.length &&
+    derivedSeen.length === derived.length &&
+    !refusedDerived.ok &&
+    discarded;
   record(
     'D',
     'Discovery Frontier v1',
-    'PARTIAL',
-    `${derived.length} lenses answered from rows, ${asked.length} asked with a governed path. ` +
-      `A derived lens is refused as an inquiry (${refusedDerived.ok ? 'NOT REFUSED — defect' : 'refused'}); ` +
-      `a finding citing a row this project does not hold is discarded (${discarded ? 'discarded' : 'KEPT — defect'}). ` +
-      'NOT established here: the six discovery classes found in a real project snapshot, which needs a worker for the asked half.',
+    derivationHeld ? 'PARTIAL' : 'NOT_RUN',
+    derivationHeld
+      ? `A project snapshot built from real rows — three declared foundations, ` +
+        `${believed.length} knowledge rows, an audit with two classified gaps and one idea ` +
+        `Russell had itself — reads back through frontierFor with all ` +
+        `${frontier.regions.length} regions populated: ${regionSummary}. All ` +
+        `${derived.length} derived lenses answered something (${derivedSeen.sort().join(', ')}), ` +
+        `and ${gapNote}. ${frontier.openLenses.length} asked lenses are put, ` +
+        `${frontier.openLenses.filter((lens) => lens.about !== null).length} of them with a ` +
+        'subject attached, and none is answered. A derived lens is refused ' +
+        'as an inquiry (refused); a finding citing a row ' +
+        'this project does not hold is discarded (discarded). NOT established here: the ' +
+        `${asked.length} asked lenses, each of which needs a reader — no worker answered one in ` +
+        'this run — and the same snapshot read on the deployed product rather than in this ' +
+        'isolated database. (§29 and this module\'s own header say four are asked; LENSES ' +
+        `declares ${asked.length}. The count printed here is the one the code holds.)`
+      : `The derivation did not hold, which is a defect rather than a missing run: ` +
+        `${populated.length}/${frontier.regions.length} regions populated (${regionSummary}), ` +
+        `empty: ${emptyRegions.join(', ') || 'none'}; ` +
+        `${derivedSeen.length}/${derived.length} derived lenses answered; ` +
+        `derived lens refused as an inquiry=${!refusedDerived.ok}; invented finding discarded=${discarded}.`,
   );
 
   /* -- E. Connected-site intelligence ------------------------------------- */
+  /*
+   * Asked of the live connection rather than of the projection's source.
+   *
+   * This was a regex for `NEEDS_PERSON` over `projection.ts`, which is the
+   * shape of evidence this reporter's header refuses — and it meant a scenario
+   * about a *connected site* never looked at whether one was connected. Deal
+   * Dispatch has been delivering to this Brain all along; the reading was
+   * simply not being taken.
+   */
   const connect = file('server/services/connect/projection.ts');
   const sixAnswers = connect ? /NEEDS_PERSON/.test(connect) && /stateReason/.test(connect) : false;
+  const live = seen.connectorEvents > 0;
   record(
     'E',
     'Connected-site intelligence',
-    'NOT_RUN',
-    sixAnswers
-      ? 'The six-answer projection including NEEDS_PERSON is present and derived on the read path; no live site was read in this run.'
-      : 'The projection could not be read.',
+    live && sixAnswers ? 'PARTIAL' : sixAnswers ? 'NOT_RUN' : 'NOT_RUN',
+    live
+      ? `A connected site is delivering into ${fleet.source}: ${seen.connectorEvents} connector ` +
+        `event(s), ${seen.connectorCommands} accepted command(s), ${seen.externalRecords} ` +
+        `registered record(s) and ${seen.externalRejections} recorded rejection(s)` +
+        (seen.lastRecordAt ? `, most recently at ${seen.lastRecordAt}` : '') +
+        '. The six-answer projection including NEEDS_PERSON is derived on the read path and is ' +
+        'never stored. NOT established here: a command driven from the site through to a ' +
+        'launched mission in one observed pass, which needs the site to send one.'
+      : sixAnswers
+        ? `The six-answer projection including NEEDS_PERSON is present and derived on the read ` +
+          `path. ${fleet.source} holds no connector event, so no live site was read.`
+        : 'The projection could not be read.',
   );
 
   /* -- F. Needs You -------------------------------------------------------- */
@@ -803,14 +1276,30 @@ async function main(): Promise<void> {
 
   /* -- M. Product truth, historical knowledge, and memory -------------------- */
   /*
-   * "One projection answers every surface" is a claim two surfaces can falsify,
+   * "One projection answers every surface" is a claim the surfaces can falsify,
    * so it is asked of them rather than of the source file.
    *
-   * `projectProgress` has three callers — the briefing home renders, the
-   * conversation's context hat, and the project route. The first two are driven
-   * here against the same project at the same instant and their answers are
-   * compared field by field; a third that re-derived its own would show up as a
-   * mismatch rather than as a comment nobody checks.
+   * Every reader of `projectProgress` is driven here against the same project
+   * at the same instant, and there are four of them rather than the two this
+   * used to compare:
+   *
+   *   - `projections.briefing`, which home renders — compared field by field;
+   *   - `conversation/contextHat`, which puts the project's state in front of a
+   *     worker — checked for the projection's own headline rather than a
+   *     sentence of its own, because a hat that re-worded it would be a second
+   *     opinion arriving where nobody could see it;
+   *   - `routes/russell.ts`'s progress route, which hands back this reading
+   *     beside Work and the build — all three driven, and their denominators
+   *     required to be different, because three numbers on one screen that
+   *     count different things must never be readable as one percentage;
+   *   - the constellation (`ideaMapForProject`), which the map and the Ideas
+   *     list both read, and whose major nodes are these same foundations.
+   *
+   * The constellation is the one that could genuinely disagree: it builds its
+   * own `Progress` per node out of a layer's declared versions. So what is
+   * compared is the thing both must agree about — the milestone state of each
+   * foundation — rather than a fraction over two different denominators, which
+   * would be a comparison that could only ever fail.
    *
    * The two truth rules are checked on the answer itself: the denominator is
    * named, and the headline carries no percentage — there being no code path
@@ -829,6 +1318,7 @@ async function main(): Promise<void> {
     { name: 'Monetization Logic', status: 'BLOCKED' },
     { name: 'Go To Market', status: 'NOT_STARTED' },
   ];
+  const foundationIds: string[] = [];
   for (const [index, foundation] of foundations.entries()) {
     const layer = await createLayer({
       projectId: project.id,
@@ -838,6 +1328,7 @@ async function main(): Promise<void> {
     if (foundation.status !== 'NOT_STARTED') {
       await updateLayer(layer.id, { status: foundation.status, statusSource: 'DERIVED' });
     }
+    foundationIds.push(layer.id);
   }
   const direct = await projectProgress({ projectId: project.id, projectName: project.name });
   const viaHome = ownerPrincipalNow
@@ -855,28 +1346,120 @@ async function main(): Promise<void> {
     viaBriefing.denominator === direct.denominator &&
     JSON.stringify(viaBriefing.ratio) === JSON.stringify(direct.ratio) &&
     JSON.stringify(viaBriefing.milestones) === JSON.stringify(direct.milestones);
+
+  /*
+   * The context hat, which is where this projection reaches a worker.
+   *
+   * It embeds the headline rather than returning the object, so what is
+   * asserted is that the sentence it carries **is** the projection's own —
+   * present verbatim — rather than one composed beside it.
+   */
+  const hat = await compileHat({
+    conversationId: sharedThread.id,
+    projectId: project.id,
+    projectName: project.name,
+    ownerUserId: owner.id,
+  });
+  const hatState = hat.parts.find((part) => part.section === 'PROJECT_STATE')?.text ?? null;
+  const hatCarriesIt = hatState !== null && hatState.includes(direct.headline);
+
+  /*
+   * The progress route's other two readings, driven rather than described.
+   *
+   * `GET /api/russell/projects/:id/progress` returns this projection beside
+   * Work and the build. Work's milestone set is not closed, so it must carry no
+   * ratio at all — and all three must name different denominators, because
+   * "3 of 4" over foundations, missions and build steps on one screen is
+   * exactly how a person ends up reading one number for another.
+   */
+  const work = await activeWorkProgress(project.id);
+  const build = buildProgress();
+  const denominators = [direct.denominator, work.denominator, build.denominator];
+  const denominatorsDiffer = new Set(denominators).size === denominators.length;
+  const workClaimsNoFraction = work.ratio === null;
+
+  /*
+   * And the constellation, over the same four foundations.
+   *
+   * Every major node must be one of this project's foundations, there must be
+   * exactly as many as the projection counts, and the state each reports for a
+   * foundation must be the state the projection reports for it. A blocked
+   * foundation additionally has to read as blocked on its own node, because
+   * that is the one place `stageFor` could quietly average it away.
+   */
+  const constellation = await ideaMapForProject({
+    projectId: project.id,
+    viewerUserId: owner.id,
+    includePrivate: false,
+  });
+  const majors = (constellation?.nodes ?? []).filter((node) => node.level === 'MAJOR');
+  const milestoneByLayer = new Map(direct.milestones.map((milestone) => [milestone.key, milestone]));
+  const constellationDisagreements = majors
+    .map((node) => {
+      const layerId = node.links.layerId;
+      const milestone = layerId ? milestoneByLayer.get(layerId) : undefined;
+      if (!milestone) return `${node.title} is on the map and not in the reading`;
+      const nodeState = milestoneStateOfLayer(node.state as LayerStatus);
+      if (nodeState !== milestone.state) {
+        return `${node.title}: the map says ${nodeState}, the reading says ${milestone.state}`;
+      }
+      if (milestone.state === 'BLOCKED' && node.progress.stage !== 'BLOCKED') {
+        return `${node.title} is blocked in the reading and ${node.progress.stage} on the map`;
+      }
+      return null;
+    })
+    .filter((entry): entry is string => entry !== null);
+  const constellationAgrees =
+    majors.length === direct.milestones.length &&
+    majors.length === foundationIds.length &&
+    constellationDisagreements.length === 0;
+
   const named = direct.denominator.trim().length > 0;
   // A percentage anywhere in the sentence a person reads. §6 forbids one that
   // was not counted, and nothing here counts one.
   const noPercentage = !/\d+\s*%/.test(direct.headline);
+  const noPercentageAnywhere = [viaBriefing?.headline ?? '', work.headline, build.headline].every(
+    (headline) => !/\d+\s*%/.test(headline),
+  );
   const ratioIsWholeOrAbsent =
     direct.ratio === null ||
     (Number.isInteger(direct.ratio.done) && Number.isInteger(direct.ratio.total));
-  const truthHeld = sameProgress && named && noPercentage && ratioIsWholeOrAbsent;
+  const truthHeld =
+    sameProgress &&
+    hatCarriesIt &&
+    denominatorsDiffer &&
+    workClaimsNoFraction &&
+    constellationAgrees &&
+    named &&
+    noPercentage &&
+    noPercentageAnywhere &&
+    ratioIsWholeOrAbsent;
   record(
     'M',
     'Product truth and named denominators',
     truthHeld ? 'PARTIAL' : 'NOT_RUN',
     truthHeld
-      ? `Home's briefing and the project's own reading return the identical progress for one ` +
-        `project with ${foundations.length} foundations in ${new Set(foundations.map((f) => f.status)).size} different states ` +
-        `at one instant — headline, stage, ratio and every milestone state. The ` +
-        `denominator is named ("${direct.denominator}"), the ratio is ` +
+      ? `Four readers of one projection, driven against one project with ${foundations.length} ` +
+        `foundations in ${new Set(foundations.map((f) => f.status)).size} different states at one ` +
+        "instant. Home's briefing returns the identical progress field by field — headline, " +
+        'stage, ratio and every milestone state. The conversation hat a worker is given carries ' +
+        "that same headline verbatim rather than a sentence of its own. The progress route's " +
+        `three readings name three different denominators (${denominators.join(', ')}) and Work ` +
+        'reports no fraction at all, because its milestone set is not closed. The ' +
+        `constellation's ${majors.length} major nodes are these same foundations and report the ` +
+        'same state for every one of them, with the blocked foundation blocked on its own node. ' +
+        `The denominator is named ("${direct.denominator}"), the ratio is ` +
         (direct.ratio ? `${direct.ratio.done}/${direct.ratio.total} whole` : 'absent rather than guessed') +
-        `, and the sentence a person reads carries no percentage. NOT established here: the same ` +
-        'comparison across constellation and Work against a versioned production state.'
-      : 'The surfaces did not agree, or a truth rule did not hold, which is a defect rather ' +
-        `than a missing run: same=${sameProgress} named=${named} noPercentage=${noPercentage} ` +
+        ', and no sentence any of them hands a person carries a percentage. NOT established ' +
+        'here: the same comparison against a versioned production state — this is an isolated ' +
+        'database, and the progress route was driven through its own services rather than over ' +
+        'HTTP with an authenticated principal.'
+      : 'A surface disagreed, or a truth rule did not hold, which is a defect rather than a ' +
+        `missing run: briefing=${sameProgress} hat=${hatCarriesIt} ` +
+        `constellation=${constellationAgrees}` +
+        (constellationDisagreements.length > 0 ? ` (${constellationDisagreements.join('; ')})` : '') +
+        ` denominatorsDiffer=${denominatorsDiffer} workHasNoRatio=${workClaimsNoFraction} ` +
+        `named=${named} noPercentage=${noPercentage && noPercentageAnywhere} ` +
         `wholeRatio=${ratioIsWholeOrAbsent}.`,
   );
 
@@ -937,17 +1520,192 @@ async function main(): Promise<void> {
   /* -- Q. Shared-product access and safe experiments -------------------------- */
   const prefs = checkPreference('depth', 'NOT_A_DEPTH');
   const searchScoped = await search({ principal: null, query: 'anything' });
+
+  /*
+   * The canary cycle, both ways round, against real `fleet_policy` rows.
+   *
+   * The named unmet condition was "a canary rollback", and the half that
+   * matters is not that a rollback happens — it is *what it rolls back to*.
+   * `applyFinding` reads the displaced policy **before** it writes its own, and
+   * the two wrong ways to do it fail in opposite directions: reading afterwards
+   * over an empty history finds nothing and falls back to the canary's own
+   * number, and after any later policy it finds that one instead. So both
+   * branches are driven here in one run, in this order deliberately, because
+   * the empty-history branch only exists before anything has been applied.
+   *
+   * It is in the same isolated TECHNICAL scope the Lab requires, and it spends
+   * nothing: a policy is a row.
+   */
+  /*
+   * Three numbers that must stay apart: what a person had set, what the canary
+   * applied over nothing, and what it applied over the person's value. Named
+   * rather than repeated, because the whole point of the cycle is that a
+   * rollback does not confuse them.
+   */
+  const operatorTarget = 4;
+  const canaryOverNothing = 9;
+  const canaryOverPolicy = 12;
+  const canaryEnvelope = {
+    ceiling: 4,
+    durationMinutes: 1,
+    stopConditions: ['the ceiling is reached'],
+    cleanup: 'nothing is created; the experiment row stays',
+    rollback: 'the displaced policy version is written forward again',
+    workloadClass: 'RESEARCH',
+    workKind: 'REAL_CANARY' as const,
+  };
+
+  /*
+   * Real work as a *first* canary on a pressure mode is refused by name, and
+   * the refusal is kept rather than thrown. Driven here beside the cycle,
+   * because the two together are the rule: a ledger reading may be applied as a
+   * canary and a pressure test may not be one until something safer has passed.
+   */
+  const refusedCanary = await declareExperiment({
+    projectId: technical.id,
+    mode: 'PUSH_TO_FAILURE',
+    title: 'acceptance canary refusal',
+    envelope: canaryEnvelope,
+    actor: 'acceptance',
+  });
+
+  const policyBefore = await currentPolicy('FLEET', null);
+  const firstCanary = await runExperiment({
+    id: (
+      await declareExperiment({
+        projectId: technical.id,
+        mode: 'CALIBRATION',
+        title: 'acceptance canary over an empty policy history',
+        envelope: canaryEnvelope,
+        actor: 'acceptance',
+      })
+    ).id,
+    pressureAuthorized: false,
+  });
+  const appliedOverNothing = await applyFinding({
+    experimentId: firstCanary.id,
+    target: canaryOverNothing,
+    actor: 'acceptance',
+    reason: 'Canary: adopt the reading',
+  });
+  const underFirstCanary = await currentPolicy('FLEET', null);
+  const rolledBackToNothing = await rollbackFinding({
+    experimentId: firstCanary.id,
+    actor: 'acceptance',
+    reason: 'Canary complete',
+  });
+  const afterFirstRollback = await currentPolicy('FLEET', null);
+
+  /*
+   * And the branch with something to displace. An operator's own target, set
+   * before the canary, which the rollback must return to — and which must not
+   * be confused with the dispatcher default the first branch returned to.
+   */
+  const operatorPolicy = await setPolicy({
+    scope: 'FLEET',
+    target: operatorTarget,
+    actor: 'acceptance',
+    reason: 'The target a person set before any canary',
+  });
+  const secondCanary = await runExperiment({
+    id: (
+      await declareExperiment({
+        projectId: technical.id,
+        mode: 'CALIBRATION',
+        title: 'acceptance canary over an operator policy',
+        envelope: canaryEnvelope,
+        actor: 'acceptance',
+      })
+    ).id,
+    pressureAuthorized: false,
+  });
+  const appliedOverPolicy = await applyFinding({
+    experimentId: secondCanary.id,
+    target: canaryOverPolicy,
+    actor: 'acceptance',
+    reason: 'Canary: adopt the reading',
+  });
+  const underSecondCanary = await currentPolicy('FLEET', null);
+  // The retest: the same reading taken again under the canary, and compared.
+  const retest = await runExperiment({
+    id: (
+      await declareExperiment({
+        projectId: technical.id,
+        mode: 'CALIBRATION',
+        title: 'acceptance retest under the canary',
+        envelope: canaryEnvelope,
+        actor: 'acceptance',
+      })
+    ).id,
+    pressureAuthorized: false,
+  });
+  const comparison =
+    `sample ${secondCanary.result?.confidence.sampleSize ?? 0} → ` +
+    `${retest.result?.confidence.sampleSize ?? 0}, recommendation ` +
+    `${secondCanary.result?.recommendedSetting.evidence ?? 'UNKNOWN'} → ` +
+    `${retest.result?.recommendedSetting.evidence ?? 'UNKNOWN'}`;
+  const rolledBackToPolicy = await rollbackFinding({
+    experimentId: secondCanary.id,
+    actor: 'acceptance',
+    reason: 'Canary complete',
+  });
+  const afterSecondRollback = await currentPolicy('FLEET', null);
+  const history = await policyHistory('FLEET', null, 20);
+
+  /*
+   * Read out of the rows before they are compared, so the comparisons are
+   * between two `number`s rather than between a value and a literal type the
+   * compiler has already narrowed — which would make "and not the canary's own
+   * number" a comparison it could prove impossible instead of one this run
+   * makes.
+   */
+  const defaultTarget: number = DEFAULT_TARGET_WITH_NO_PRIOR_POLICY;
+  const firstRollbackTarget = afterFirstRollback?.target ?? null;
+  const secondRollbackTarget = afterSecondRollback?.target ?? null;
+  const displacedTarget = appliedOverPolicy.displacedTarget;
+
+  const canaryConditions = [
+    ['real work is refused as a first canary on a pressure test', refusedCanary.state === 'REFUSED' && /canary/i.test(refusedCanary.refusalReason ?? '')],
+    ['and is permitted for a reading that spends nothing', firstCanary.state === 'COMPLETE' && secondCanary.state === 'COMPLETE'],
+    ['a canary over no prior policy records that it displaced nothing', policyBefore === null && appliedOverNothing.displacedPolicyId === null && appliedOverNothing.displacedTarget === null],
+    ['the canary target is live while it is applied', underFirstCanary?.target === canaryOverNothing],
+    ['rolling that back returns the dispatcher default rather than the canary', firstRollbackTarget === defaultTarget && firstRollbackTarget !== canaryOverNothing],
+    ['and says so in words rather than reporting a number', /no prior policy/.test(afterFirstRollback?.reason ?? '')],
+    ['a canary over a real policy records what it displaced before replacing it', appliedOverPolicy.displacedPolicyId === operatorPolicy.id && displacedTarget === operatorTarget],
+    ['never its own value', displacedTarget !== canaryOverPolicy],
+    ['the second canary target is live while it is applied', underSecondCanary?.target === canaryOverPolicy],
+    ['rolling it back restores the target it displaced', secondRollbackTarget === operatorTarget],
+    ['and names that target in the reason', new RegExp(`displaced \\(${operatorTarget}\\)`).test(afterSecondRollback?.reason ?? '')],
+    ['both rollbacks are written forward, so nothing is destroyed', history.some((row) => row.target === canaryOverNothing) && history.some((row) => row.target === canaryOverPolicy) && rolledBackToNothing.rolledBackAt !== null && rolledBackToPolicy.rolledBackAt !== null],
+  ] as const;
+  const canaryFailed = canaryConditions.filter(([, held]) => !held).map(([name]) => name);
+
   record(
     'Q',
     'Shared access and safe experiments',
-    'PARTIAL',
-    `A preference outside its declared set is refused (${prefs.ok ? 'ACCEPTED — defect' : 'refused'}); ` +
-      `an unauthenticated search is scoped to nothing (${searchScoped.scopedProjects} projects, ` +
-      `${searchScoped.hits.length} hits); ${Object.keys(PREFERENCES).length} preference keys are ` +
-      `presentational only and every one has a default (${Object.keys(defaults()).length}). ` +
-      `${SEARCH_KINDS.length} search kinds are scoped before the query rather than filtered after. ` +
-      'Role change with two real identities is exercised in I. NOT established here: an ' +
-      'invitation anybody received, and a canary rollback in production.',
+    canaryFailed.length === 0 && !prefs.ok ? 'PARTIAL' : 'NOT_RUN',
+    canaryFailed.length > 0
+      ? `The canary cycle ran and ${canaryFailed.length} of ${canaryConditions.length} ` +
+        `condition(s) did not hold: ${canaryFailed.join('; ')}. That is a defect rather than a ` +
+        'missing run.'
+      : `A preference outside its declared set is refused (${prefs.ok ? 'ACCEPTED — defect' : 'refused'}); ` +
+        `an unauthenticated search is scoped to nothing (${searchScoped.scopedProjects} projects, ` +
+        `${searchScoped.hits.length} hits); ${Object.keys(PREFERENCES).length} preference keys are ` +
+        `presentational only and every one has a default (${Object.keys(defaults()).length}). ` +
+        `${SEARCH_KINDS.length} search kinds are scoped before the query rather than filtered after. ` +
+        'The canary cycle is driven end to end against real fleet_policy rows in an isolated ' +
+        `TECHNICAL scope, both ways round: ${canaryConditions.length}/${canaryConditions.length} ` +
+        'conditions held. Real work is refused as a first canary on a pressure test and allowed ' +
+        'for a ledger reading; applied over an empty history it records that it displaced ' +
+        'nothing and rolls back to the dispatcher default rather than to its own number; ' +
+        `applied over a person's target of ${operatorTarget} it records that ${operatorTarget} ` +
+        `before writing ${canaryOverPolicy}, retests under ` +
+        `the canary (${comparison}) and rolls back to ${operatorTarget} by name. Every version ` +
+        'stays in the ' +
+        'history, so the rollback is a write forward rather than a delete. Role change with two ' +
+        'real identities is exercised in I. NOT established here: an invitation anybody ' +
+        'received, and this same cycle against the deployed fleet rather than in an isolated ' +
+        'database — where the policy it displaced would be one a person is actually running on.',
   );
 
   /* ------------------------------------------------------------------------ */

@@ -7,7 +7,11 @@
  * derives all five from rows the project already holds, and the derivation is
  * the whole design.
  *
- * **The honest split.** §11 lists nine discovery lenses. Some of them are
+ * **The honest split.** `LENSES` below declares ten: five answered from rows
+ * and five asked of a reader. An earlier version of this paragraph said nine,
+ * and §29 said five answered and four asked — both undercounted by one, and
+ * the count is corrected here rather than a lens being removed to match a
+ * sentence. Some of them are
  * questions about *state* — which assumptions have nothing supporting them,
  * which findings contradict each other, which declared region has no work in it
  * — and those are answerable from rows, deterministically, with no model
@@ -37,6 +41,7 @@ import {
   observeFrontierItem,
   resolveUnseenFrontierItems,
 } from '../../repos/russellFrontier.ts';
+import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import { plainLayerName } from './dealDispatch.ts';
 import { milestoneStateOfLayer } from './progress.ts';
 // One set of words for the five regions, imported rather than re-declared.
@@ -206,10 +211,28 @@ export function classify(input: {
    * domain says may keep research open is an open question; the rest are
    * recorded as weak ground, because they describe something believed that the
    * audit was not satisfied by.
+   *
+   * That sentence was right and the code under it was unreachable. It compared
+   * `gap.classification === 'FOUNDATIONAL'`, and the vocabulary has no such
+   * member — it has `FOUNDATIONAL_GAP` — so the branch could never be taken and
+   * **every judge-classified gap was filed as WEAK_GROUND**: "believed, on
+   * evidence that would not survive much scrutiny", when a foundational gap is
+   * precisely OPEN_QUESTION, "known to be unanswered". Those are the two
+   * regions a reader most needs kept apart, and a whole class of them was in
+   * the wrong one.
+   *
+   * The set was wrong too, not just the spelling: the domain says **two**
+   * classifications may keep a layer open, and `RESEARCH_JUSTIFYING_GAPS` has
+   * held both since the audit engine was written. So this is the fifth instance
+   * of the same shape — a constant that already existed, and one reader
+   * spelling the rule out by hand instead of calling it. It is called now, and
+   * a classification added to that constant reaches this reading for free.
    */
   for (const gap of input.gaps) {
     observed.push({
-      region: gap.classification === 'FOUNDATIONAL' ? 'OPEN_QUESTION' : 'WEAK_GROUND',
+      region: (RESEARCH_JUSTIFYING_GAPS as readonly string[]).includes(gap.classification)
+        ? 'OPEN_QUESTION'
+        : 'WEAK_GROUND',
       subject: gap.title,
       detail: gap.detail,
       sourceKind: 'AUDIT_GAP',
