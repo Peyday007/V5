@@ -786,11 +786,15 @@ untouched: a re-arm is not a retry.
 **A skipped candidate is stamped too, and that is not bookkeeping.** The
 candidate query is `updated_at < watermark`, so an intent the recheck answered
 "not yet" still matched on the next tick — and with a bin read per candidate that
-became up to two hundred extra reads every ten seconds, for ever. It showed up as
-a deploy's post-restart verification losing a work item's lease mid-audit.
-Stamping says *we asked, against this state of the fleet*; the next operator
-write is newer than the stamp, which is the only moment the answer could change.
-`next_attempt_at` does not move.
+is up to two hundred extra reads every ten seconds, for ever. Stamping says *we
+asked, against this state of the fleet*; the next operator write is newer than
+the stamp, which is the only moment the answer could change. `next_attempt_at`
+does not move.
+
+It was found while looking for the cause of three consecutive post-restart
+verification failures, and it is **not** known to be that cause: the next deploy
+without the fix passed. It is fixed because an unbounded per-tick rescan is a
+defect whatever else is true, and the slow verifications remain unexplained.
 
 ### One checkout, no target, and the dimensions that would keep two apart
 

@@ -2414,20 +2414,31 @@ remote.
   disagreed — the loop deferred on a word the filter had never heard of, and the
   intent waited out a wall no write could shorten. **A rule applied by one of two
   readers is worse than none**, for the fourth time.
-- **"Considered" has to be recorded, not only "put back" — and leaving that out
-  cost a production deploy.** The re-arm's candidate query is `updated_at <
-  watermark`, so an intent the recheck *skipped* still matched it on the next
-  tick, and the one after that. With the recheck reading a bin per candidate,
-  every ten-second tick re-read and re-routed up to two hundred intents that had
-  already been answered "not yet" — for ever, because nothing about skipping one
-  changed a row. It surfaced two deploys later as a post-restart hosted
-  verification whose audit step ran past five minutes and lost the work item's
-  lease: `brain_complete_work: FENCE_LOST`. **A scan that is self-limiting in one
-  direction is not self-limiting.** Stamping a skipped candidate says exactly
-  what stamping a re-armed one says — *we asked, against this state of the
-  fleet* — and the next operator write is newer than the stamp, which is the only
-  moment the answer could have changed. `next_attempt_at` and the attempt count
-  are untouched, so nothing about when it would fire moves.
+- **"Considered" has to be recorded, not only "put back".** The re-arm's
+  candidate query is `updated_at < watermark`, and only the intents it put back
+  were stamped. One it *skipped* therefore matched again on the next tick, and
+  the one after — and with the recheck reading a bin per candidate that is up to
+  two hundred extra reads and routing decisions every ten seconds, for ever,
+  because nothing about skipping one changed a row. **A scan that is
+  self-limiting in one direction is not self-limiting.** Stamping a skipped
+  candidate says exactly what stamping a re-armed one says — *we asked, against
+  this state of the fleet* — and the next operator write is newer than the stamp,
+  which is the only moment the answer could have changed. `next_attempt_at` and
+  the attempt count are untouched, so nothing about when it would fire moves.
+
+  **I said this had caused three failed deploys, and that claim is withdrawn.**
+  Three post-restart hosted verifications failed in a row — twice with an audit
+  step running past five minutes and losing the work item's lease
+  (`brain_complete_work: FENCE_LOST`), once with a bare `fetch failed` at the
+  same point — and the first of them was the deploy that made every routing
+  refusal defer, which is what lets these intents accumulate at all. The
+  correlation was real and the mechanism is plausible. It is not established:
+  the very next deploy, of a tree **without** this fix, passed. So what is true
+  is that the unbounded rescan was a defect worth removing on its own terms, and
+  that what actually slowed those three runs is **not known**. Recording it as
+  the cause would have been the comfortable half-truth this file exists to
+  refuse — and the next slow verification would have been debugged against a
+  fixed bug.
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first
