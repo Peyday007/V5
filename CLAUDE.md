@@ -2786,6 +2786,39 @@ minimum refusing to be satisfied by one model context wearing two role names,
 and `sessionWindow.ts` is what stops the wait being longer than the token's own
 life.
 
+**A branch nothing can reach is not a branch, and a stylesheet can hide one.**
+`RussellShell` had a `mode === 'BAR'` arm inside the More menu, written for
+phone width, tested, and reachable by nothing — because
+`.rs-shell-bar .rs-rail-foot { display: none }` removed the element the menu
+lives in at exactly that width. What went with it was not a nicety: Search, the
+depth control, Build, Connected sites, Full console and **Sign out**. A person
+on a phone could not sign out of Brain. That is the file's own recurring
+sentence — *a mechanism nothing calls is not a mechanism* — arriving somewhere
+it had not been looked for, because the mechanism was React and the thing that
+disabled it was CSS, and no test of either half could see the other. It is
+found by driving the product rather than by reading it: the harness asks every
+thumb-bar cell and the send button `document.elementFromPoint` at its own
+centre, because **a box of the right size in the right place is still not a
+control if something else is painted over it** — or if nothing is painted there
+at all.
+
+**One continuous journey proves the path; three isolated interactions prove
+three controls.** The mobile harness used to open its own address per
+interaction, do one thing and stop. §29's J is the path between them, so it is
+now one browser, one session and one scroll history, and after the first
+address nothing navigates. That change is what surfaced both defects above,
+neither of which any single-screen capture could have shown.
+
+**A committed screenshot is evidence of one run at one commit, and says so in
+its first paragraph.** `visual-qa.ts` writes to a throwaway directory by
+default for the right reason — a stale image that still looks like evidence is
+worse than none. One set is committed anyway, because a decision somebody must
+run a twenty-minute harness to see is a decision nobody makes, and the approval
+§29 asks for is a person's. Deleting the set breaks no test; it drops H, J and
+O back to what the code alone can say, which is the correct behaviour rather
+than a failure. **The reporter never promotes O to `PASS` however good the
+images are** — a reporter that could would be approving its own work.
+
 
 ---
 
@@ -3022,6 +3055,13 @@ data/                   database, documents, backups, runtime state (gitignored)
   the SQLite suite and throws on the database production runs.
 - Booleans are `0`/`1` in the database and real booleans in view types; repositories are
   the only place the two representations meet.
+- **A suite that drives a real server owns a port range no other suite can
+  reach.** `/healthz` is deliberately unauthenticated, so a collision does not
+  fail loudly: the second suite's readiness probe finds the first suite's
+  server, waits happily for it, and then signs in against a Brain with a
+  different bootstrap administrator — which reports `401` and reads as a broken
+  sign-in. Three suites once held the identical range. It is the migration
+  collision one floor down, and `deploymentOwnership` refuses both.
 - Timestamps are ISO-8601 UTC strings.
 
 ## Checks before you call a change done
