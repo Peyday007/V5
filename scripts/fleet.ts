@@ -22,6 +22,7 @@ import {
   effectiveTarget,
   getAccountByName,
   getRoutineByRef,
+  sessionsForRoutine,
   listAccounts,
   listRoutines,
   policyHistory,
@@ -33,11 +34,12 @@ import {
 } from '../server/repos/fleet.ts';
 import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { routeBin } from '../server/services/dispatch/router.ts';
+import { proveSurface } from '../server/services/dispatch/surfaceProof.ts';
 import { resolveToken } from '../server/services/dispatch/fire.ts';
 import { proposeScale, shouldQuarantine } from '../server/services/dispatch/scaler.ts';
 import { referenceFleet, REFERENCE_SIZES, simulate } from '../server/services/dispatch/simulate.ts';
 import { activationTrace, workloadProfile } from '../server/services/dispatch/profiles.ts';
-import { getBin, listBins } from '../server/repos/bins.ts';
+import { getBin, listBins, listDispatchesForBin } from '../server/repos/bins.ts';
 import { getWorker, getWorkerByName, getWorkerRouting } from '../server/repos/identity.ts';
 import { listTokensForWorker } from '../server/repos/oauth.ts';
 import { FLEET_STATES } from '../server/domain/types.ts';
@@ -524,6 +526,89 @@ async function main(): Promise<void> {
     return ok(`explain-route ${binId} ${decision.ok ? 'ROUTED' : decision.refusal}`);
   }
 
+/**
+ * One bounded self-test bin for a factory surface.
+ *
+ * The controlled fire `verify-surface --probe` needs, and deliberately the
+ * smallest thing that can produce the whole chain. It is a `DETERMINISTIC_CHECK`
+ * — the shape §22 already describes as exercising claiming, the lease,
+ * heartbeats, fencing and completion without touching a document or spending
+ * anything — so a worker answers it by hashing a value that travelled inside the
+ * bin.
+ *
+ * It names the repository the worker is authorized for, because that is the
+ * dimension being verified and because a repository family with no repository
+ * named is refused at admission. It is not work on that repository: the manifest
+ * says so, it belongs to no campaign, and nothing reads its result but this
+ * command.
+ */
+async function probeBin(input: {
+  worker: { id: string; name: string };
+  routing: { repositories: string[] };
+  routine: { id: string; name: string; capabilities: string[] };
+}): Promise<string> {
+  const { createBin } = await import('../server/repos/bins.ts');
+  const { listMembershipsForPrincipal } = await import('../server/repos/identity.ts');
+  const memberships = (await listMembershipsForPrincipal('WORKER', input.worker.id)).filter(
+    (membership) => membership.active,
+  );
+  const projectId = memberships[0]?.projectId;
+  if (!projectId) throw new Error('this worker is a member of no project, so it can be handed nothing');
+  const repository = input.routing.repositories[0];
+  if (!repository) throw new Error('this worker is authorized for no repository');
+  const nonce = new Date().toISOString();
+  const bin = await createBin({
+    projectId,
+    kind: 'DETERMINISTIC_CHECK',
+    title: `Surface self-test for ${input.routine.name}`,
+    objective:
+      'Prove this surface can be fired, can authenticate, can be handed a bin and can finish one. ' +
+      'Submit the sha-256 of the value below as the unit result. Change nothing anywhere.',
+    rationale: 'verify-surface --probe',
+    manifest: {
+      objective: 'Return the sha-256 of one value carried in this manifest.',
+      why: 'a bounded proof that this Routine runs as the worker it is bound to',
+      lineage: { projectId, layerId: null, goal: null, orchestrationId: null },
+      units: [{ key: 'echo', establishes: 'the surface answered', input: nonce, transform: 'sha256', dependsOn: [] }],
+      /*
+       * Named so the bin routes to this surface and is admitted — a repository
+       * family with no repository named is refused — and explicitly not work on
+       * it. A probe pins no commit and integrates nothing, so both of those are
+       * empty rather than plausible: an invented sha in a row is a lie whoever
+       * reads it next has no way to detect.
+       */
+      repository: {
+        remote: `https://github.com/${repository}`,
+        ref: 'main',
+        baseSha: '',
+        integrationBranch: '',
+        pullRequest: null,
+      },
+      acceptableSources: [],
+      excludedSources: [],
+      evidence: ['one unit result'],
+      outputs: ['the sha-256 of the value in this manifest'],
+      authorizedActions: ['submit the unit result', 'complete this bin'],
+      prohibitedActions: [
+        'cloning, reading, writing, branching or pushing to any repository',
+        'creating or claiming any other work',
+        'anything with an external effect',
+      ],
+      budgetUnits: 1,
+      retry: { maxAttempts: 2, backoffSeconds: 30 },
+      stoppingConditions: ['the declared unit has a result'],
+    },
+    completionContract: 'DETERMINISTIC_UNITS_V1',
+    workloadClass: 'FACTORY_SURFACE_PROBE',
+    requiredCapabilities: [...input.routine.capabilities],
+    createdByType: 'SYSTEM',
+    createdById: 'fleet-cli:verify-surface',
+    ready: true,
+    maxAttempts: 2,
+  });
+  return bin.id;
+}
+
   /*
    * Is this surface the worker we meant, and is that a reading or an assumption?
    *
@@ -596,14 +681,69 @@ async function main(): Promise<void> {
       }
     }
 
+    if (flag('probe') && problems.length === 0 && worker && routing) {
+      const created = await probeBin({ worker, routing, routine });
+      console.log('');
+      console.log(`  PROBE       created ${created} — a bounded self-test bin for this surface.`);
+      console.log('              It names no objective, changes no repository and belongs to no');
+      console.log('              campaign. Brain will fire this Routine for it within a tick;');
+      console.log('              run verify-surface again once it has.');
+    }
+
     console.log('');
     console.log('OBSERVED');
     if (!worker) {
       console.log('  nothing, because there is no worker to observe');
     } else {
+      /*
+       * A token is held by a *connector*, and nothing about a token says which
+       * Routine holds it. So this is supporting evidence and never the proof —
+       * see the chain below, which is the thing that is actually being asked.
+       */
       const tokens = await listTokensForWorker(worker.id);
       const used = tokens.filter((token) => token.lastUsedAt !== null);
       console.log(`  oauth       ${tokens.length} token(s) minted for this worker, ${used.length} used`);
+      console.log(`  fires       ${routine.totalFires} sent, ${routine.totalRefusals} refused`);
+      console.log(`  arrivals    ${routine.consecutiveNoShows} consecutive fire(s) with nobody arriving`);
+
+      /*
+       * The correlation, which is the only thing that proves *this Routine* uses
+       * *that worker*.
+       *
+       * Four links, each from a row Brain wrote rather than from anything a
+       * worker said about itself: Brain fired this Routine (`bin_dispatch`, with
+       * the session the provider returned); a session arrived and authenticated
+       * (`worker_sessions`, written from that same dispatch row); it was handed a
+       * bin; and that bin reached a terminal completion. A surface with a used
+       * token and no such chain is a connector somebody authorized and a Routine
+       * nothing has been shown to run on.
+       */
+      const sessions = await sessionsForRoutine(routine.id, 20);
+      const bins = new Map<string, Awaited<ReturnType<typeof getBin>>>();
+      const dispatches = new Map<string, Awaited<ReturnType<typeof listDispatchesForBin>>>();
+      for (const session of sessions) {
+        if (!bins.has(session.binId)) bins.set(session.binId, await getBin(session.binId));
+        if (!dispatches.has(session.binId)) {
+          dispatches.set(session.binId, await listDispatchesForBin(session.binId));
+        }
+      }
+      const proof = proveSurface({
+        boundWorkerId: worker.id,
+        routineRef: routine.routineRef,
+        sessions,
+        bins,
+        dispatches,
+      });
+      const proven = proof.chain;
+
+      console.log(`  sessions    ${sessions.length} arrival(s) attributed to this Routine`);
+      if (proven) {
+        console.log(`    fired     ${proven.sentAt ?? 'recorded on the dispatch this arrival came from'}`);
+        console.log(`    arrived   ${proven.sessionRef} authenticated as ${worker.name} at ${proven.observedAt}`);
+        console.log(`    assigned  ${proven.binId}`);
+        console.log(`    completed ${proven.binId} reached COMPLETE`);
+      }
+
       if (tokens.length === 0) {
         problems.push(
           'no OAuth token has ever been minted for this worker, so no connector has authenticated as it',
@@ -611,8 +751,7 @@ async function main(): Promise<void> {
       } else if (used.length === 0) {
         problems.push('a token exists for this worker but has never been used to call Brain');
       }
-      console.log(`  fires       ${routine.totalFires} sent, ${routine.totalRefusals} refused`);
-      console.log(`  arrivals    ${routine.consecutiveNoShows} consecutive fire(s) with nobody arriving`);
+      problems.push(...proof.problems);
       if (routine.totalFires > 0 && routine.consecutiveNoShows >= routine.totalFires) {
         problems.push('every fire to this Routine has gone unanswered');
       }
@@ -620,8 +759,8 @@ async function main(): Promise<void> {
 
     console.log('');
     if (problems.length === 0) {
-      console.log('  VERIFIED  this surface is the worker it is meant to be, and that worker has');
-      console.log('            authenticated to Brain at least once.');
+      console.log('  VERIFIED  a fire to this Routine produced a session that authenticated as');
+      console.log(`            ${worker!.name}, was handed a bin and completed it.`);
       return ok(`verify-surface ${ref} VERIFIED`);
     }
     for (const problem of problems) console.log(`  PROBLEM   ${problem}`);

@@ -813,6 +813,44 @@ export async function workerSessionForBin(binId: string): Promise<WorkerSession 
     : null;
 }
 
+/**
+ * Every session Brain observed arriving on one Routine, newest first.
+ *
+ * The read that turns "a token was minted for this worker and used" into "this
+ * Routine's fire produced a session that authenticated as this worker". Those
+ * are different claims and only the second one is about the surface: a token is
+ * held by a *connector*, and nothing about a token says which Routine has it.
+ *
+ * Every row here was written from the `bin_dispatch` row Brain itself wrote when
+ * it fired, so this cannot be satisfied by anything a worker says about itself.
+ */
+export async function sessionsForRoutine(routineId: string, limit = 20): Promise<WorkerSession[]> {
+  const rows = await getDb().all<{
+    session_ref: string;
+    worker_id: string;
+    routine_id: string;
+    account_id: string;
+    bin_id: string;
+    lease_generation: number;
+    observed_at: string;
+  }>(
+    // Ordered on a real column and tiebroken on the primary key, because
+    // `worker_sessions` has no identity column on Postgres.
+    `SELECT * FROM worker_sessions WHERE routine_id = ?
+      ORDER BY observed_at DESC, session_ref DESC LIMIT ?`,
+    [routineId, Math.min(200, Math.max(1, limit))],
+  );
+  return rows.map((row) => ({
+    sessionRef: row.session_ref,
+    workerId: row.worker_id,
+    routineId: row.routine_id,
+    accountId: row.account_id,
+    binId: row.bin_id,
+    leaseGeneration: Number(row.lease_generation),
+    observedAt: row.observed_at,
+  }));
+}
+
 export async function getWorkerSession(sessionRef: string): Promise<WorkerSession | null> {
   const row = await getDb().get<{
     session_ref: string;

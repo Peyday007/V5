@@ -6,8 +6,8 @@
  * The moment there are two, three questions become answerable that were not, and
  * all three had wrong answers:
  *
- *   1. **Does onboarding A make Brain fire A's surface for B's work?** It did.
- *      The fire router scoped by workload family and capability and not by
+ *   1. **Does registering a surface for A make Brain fire it for B's work?** It
+ *      did. The fire router scoped by workload family and capability and not by
  *      repository, so two factory surfaces were interchangeable to it — and the
  *      one it picked on headroom was refused by the assigner with
  *      `REPOSITORY_NOT_AUTHORIZED`, spending an activation and an attempt while
@@ -31,9 +31,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import {
   createUser,
+  createWorker,
   getWorkerByName,
   getWorkerRouting,
+  grantMembership,
   listMembershipsForPrincipal,
+  setWorkerRouting,
 } from '../server/repos/identity.ts';
 import {
   bindRoutineWorker,
@@ -54,6 +57,8 @@ import {
 import { dispatchTick, OPERATOR_RESOLVED_KINDS } from '../server/services/dispatch/loop.ts';
 import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { REFUSAL_WAIT, routeBin } from '../server/services/dispatch/router.ts';
+import { proveSurface } from '../server/services/dispatch/surfaceProof.ts';
+import type { WorkerSession } from '../server/repos/fleet.ts';
 import type { RoutingRefusal } from '../server/services/dispatch/router.ts';
 import { binAdmission } from '../server/services/bins/service.ts';
 import { decideRepository, listRepositoryGrants } from '../server/services/factory/repositoryEnvelope.ts';
@@ -65,12 +70,26 @@ import {
   repositoryOnboarding,
 } from '../server/services/factory/onboard.ts';
 import { listInvitationsForWorker } from '../server/repos/invitations.ts';
-import type { Bin, BinManifest, Principal, User } from '../server/domain/types.ts';
+import { FACTORY_WORKER_SCOPES } from '../server/domain/types.ts';
+import type { Bin, BinDispatch, BinManifest, Principal, User } from '../server/domain/types.ts';
 
 const BASE = 'd'.repeat(40);
 
+/**
+ * The one authorized grant, and a **fixture** second repository.
+ *
+ * The second one is deliberately not in the envelope and never will be. An
+ * earlier version of this file proved the two-repository properties by
+ * authorizing a real, retired repository — which made a test's convenience into
+ * a production authorization, and is exactly the shape of mistake the envelope
+ * exists to prevent. Nothing here needs a grant: what separates two repositories
+ * is a `worker_routing` row and the bin's own manifest, and both can be written
+ * for a repository the factory may never be pointed at. That the fixture *is*
+ * unauthorized is itself asserted below.
+ */
 const MOUNT = () => listRepositoryGrants().find((g) => g.id === 'brain-worker-bootstrap')!;
-const TARGET = () => listRepositoryGrants().find((g) => g.id === 'oakwood-site')!;
+const OTHER_REMOTE = 'https://github.com/fixture-owner/second-repository';
+const OTHER_REPO = 'fixture-owner/second-repository';
 
 let fixture: TestProject;
 let actor: User;
@@ -178,6 +197,37 @@ async function onboard(grantId: string) {
   return outcome.result;
 }
 
+/**
+ * A factory worker for a repository the envelope does not name.
+ *
+ * The same four rows `onboardRepository` writes — identity, membership, the
+ * fixed scope set, an exhaustive routing row — written by hand because there is
+ * no grant to onboard and there must not be one. Onboarding's *own* properties
+ * are tested against the real grant; this exists only to give the routing
+ * boundary a second subject to separate.
+ */
+async function fixtureFactoryWorker(name: string, repositoryId: string): Promise<string> {
+  const worker = await createWorker({ name, createdByType: 'SYSTEM', createdById: 'test' });
+  await grantMembership({
+    projectId: fixture.project.id,
+    principalType: 'WORKER',
+    principalId: worker.id,
+    role: null,
+    scopes: [...FACTORY_WORKER_SCOPES],
+    grantedByType: 'SYSTEM',
+    grantedById: 'test',
+  });
+  await setWorkerRouting({
+    workerId: worker.id,
+    families: ['FACTORY'],
+    repositories: [repositoryId],
+    capabilities: [...FACTORY_ROUTING_CAPABILITIES],
+    reason: 'a fixture factory worker for a repository the envelope does not name',
+    setBy: 'test',
+  });
+  return worker.id;
+}
+
 /** A fire surface bound to one worker, with its deployment secret present. */
 async function surface(workerId: string, secret: string, name: string): Promise<string> {
   const account = await createAccount({ name, planLabel: null, declaredPlanPower: null });
@@ -208,30 +258,33 @@ async function route(bin: Bin) {
 /* ========================================================================= */
 
 describe('two repositories, two workers, and no crossing between them', () => {
-  it('gives each repository its own worker, its own scope and its own invitation', async () => {
+  it('keeps the two workers’ scopes exhaustive and disjoint', async () => {
     const mount = await onboard(MOUNT().id);
-    const target = await onboard(TARGET().id);
+    const other = await fixtureFactoryWorker('factory-fixture-second', OTHER_REPO);
 
-    expect(mount.onboarding.workerId).not.toBe(target.onboarding.workerId);
+    expect(mount.onboarding.workerId).not.toBe(other);
     expect(mount.onboarding.workerName).toBe(factoryWorkerName(MOUNT().id));
-    expect(target.onboarding.workerName).toBe(factoryWorkerName(TARGET().id));
 
     const mountRouting = (await getWorkerRouting(mount.onboarding.workerId!))!;
-    const targetRouting = (await getWorkerRouting(target.onboarding.workerId!))!;
+    const otherRouting = (await getWorkerRouting(other))!;
     expect(mountRouting.repositories).toEqual([repositoryIdOfRemote(MOUNT().remote)]);
-    expect(targetRouting.repositories).toEqual([repositoryIdOfRemote(TARGET().remote)]);
+    expect(otherRouting.repositories).toEqual([OTHER_REPO]);
     // Exhaustive in both directions: neither row lists the other's repository.
-    expect(mountRouting.repositories).not.toContain(repositoryIdOfRemote(TARGET().remote));
-    expect(targetRouting.repositories).not.toContain(repositoryIdOfRemote(MOUNT().remote));
+    expect(mountRouting.repositories).not.toContain(OTHER_REPO);
+    expect(otherRouting.repositories).not.toContain(repositoryIdOfRemote(MOUNT().remote));
 
-    // One live invitation each, and they are different invitations.
-    for (const worker of [mount.onboarding.workerId!, target.onboarding.workerId!]) {
-      const live = (await listInvitationsForWorker(worker)).filter(
-        (i) => i.revokedAt === null && i.redeemedAt === null,
-      );
-      expect(live).toHaveLength(1);
-    }
-    expect(mount.invitationUrl).not.toBe(target.invitationUrl);
+    // And the second repository is a fixture rather than an authorization: the
+    // envelope refuses it, so no campaign could ever be created against it.
+    expect(decideRepository(OTHER_REMOTE).ok).toBe(false);
+
+    // The onboarded one has exactly one live invitation. The fixture has none,
+    // because nothing issued it one — which is the difference between a worker a
+    // person authorized and a row a test wrote.
+    const live = (await listInvitationsForWorker(mount.onboarding.workerId!)).filter(
+      (i) => i.revokedAt === null && i.redeemedAt === null,
+    );
+    expect(live).toHaveLength(1);
+    expect(await listInvitationsForWorker(other)).toHaveLength(0);
   });
 
   /*
@@ -243,42 +296,42 @@ describe('two repositories, two workers, and no crossing between them', () => {
    * nothing false was ever recorded; what was spent was an activation, one of the
    * bin's dispatch attempts, and the chance to try the surface that could do it.
    */
-  it('does not fire the mount’s surface for the target’s work', async () => {
+  it('does not fire one repository’s surface for another repository’s work', async () => {
     const mount = await onboard(MOUNT().id);
     await surface(mount.onboarding.workerId!, 'MOUNT_SECRET', 'mount-account');
 
-    const targetBin = await factoryBin(TARGET().remote, 'Change the site');
-    const decision = await route(targetBin);
+    const otherBin = await factoryBin(OTHER_REMOTE, 'Change the other repository');
+    const decision = await route(otherBin);
 
     expect(decision.ok).toBe(false);
     if (!decision.ok) {
       expect(decision.refusal).toBe('NO_SURFACE_SERVES_THIS_REPOSITORY');
-      // Named, so the remedy is legible: onboard *that* repository.
-      expect(decision.reason).toContain(repositoryIdOfRemote(TARGET().remote)!);
+      // Named, so the remedy is legible: authorize and onboard *that* repository.
+      expect(decision.reason).toContain(OTHER_REPO);
       expect(decision.considered[0]?.verdict).toContain('not authorized for');
     }
 
     // And the fire never happens, over as many ticks as you like.
-    await ensureDispatchIntent(targetBin);
+    await ensureDispatchIntent(otherBin);
     for (let pass = 0; pass < 4; pass += 1) await dispatchTick();
     expect(fired).toHaveLength(0);
   });
 
   it('sends each repository’s work to that repository’s surface', async () => {
     const mount = await onboard(MOUNT().id);
-    const target = await onboard(TARGET().id);
+    const other = await fixtureFactoryWorker('factory-fixture-second', OTHER_REPO);
     const mountRoutine = await surface(mount.onboarding.workerId!, 'MOUNT_SECRET', 'mount-account');
-    const targetRoutine = await surface(target.onboarding.workerId!, 'TARGET_SECRET', 'target-account');
+    const otherRoutine = await surface(other, 'TARGET_SECRET', 'other-account');
 
     const mountBin = await factoryBin(MOUNT().remote, 'Change the bootstrap');
-    const targetBin = await factoryBin(TARGET().remote, 'Change the site');
+    const otherBin = await factoryBin(OTHER_REMOTE, 'Change the other repository');
 
     const forMount = await route(mountBin);
-    const forTarget = await route(targetBin);
+    const forOther = await route(otherBin);
     expect(forMount.ok).toBe(true);
-    expect(forTarget.ok).toBe(true);
+    expect(forOther.ok).toBe(true);
     if (forMount.ok) expect(forMount.routine.id).toBe(mountRoutine);
-    if (forTarget.ok) expect(forTarget.routine.id).toBe(targetRoutine);
+    if (forOther.ok) expect(forOther.routine.id).toBe(otherRoutine);
   });
 
   it('refuses the arriving worker the other repository’s bin, as it always did', async () => {
@@ -289,9 +342,9 @@ describe('two repositories, two workers, and no crossing between them', () => {
       sessionRef: 'cse_mount',
     });
     expect((await admit(await factoryBin(MOUNT().remote, 'its own'))).ok).toBe(true);
-    const other = await admit(await factoryBin(TARGET().remote, 'somebody else’s'));
-    expect(other.ok).toBe(false);
-    expect(other.reason).toContain('REPOSITORY_NOT_AUTHORIZED');
+    const elsewhere = await admit(await factoryBin(OTHER_REMOTE, 'somebody else’s'));
+    expect(elsewhere.ok).toBe(false);
+    expect(elsewhere.reason).toContain('REPOSITORY_NOT_AUTHORIZED');
   });
 
   /*
@@ -302,8 +355,8 @@ describe('two repositories, two workers, and no crossing between them', () => {
    */
   it('wakes only the repository whose surface arrived', async () => {
     const mountBin = await factoryBin(MOUNT().remote, 'Change the bootstrap');
-    const targetBin = await factoryBin(TARGET().remote, 'Change the site');
-    for (const bin of [mountBin, targetBin]) {
+    const otherBin = await factoryBin(OTHER_REMOTE, 'Change the other repository');
+    for (const bin of [mountBin, otherBin]) {
       await ensureDispatchIntent(bin);
       const [intent] = await listDispatchesForBin(bin.id);
       await markDispatchDeferred(intent!.id, {
@@ -318,7 +371,7 @@ describe('two repositories, two workers, and no crossing between them', () => {
     await dispatchTick();
 
     const [woken] = await listDispatchesForBin(mountBin.id);
-    const [asleep] = await listDispatchesForBin(targetBin.id);
+    const [asleep] = await listDispatchesForBin(otherBin.id);
     expect(Date.parse(woken!.nextAttemptAt)).toBeLessThan(Date.now() + 60 * 60 * 1000);
     expect(Date.parse(asleep!.nextAttemptAt)).toBeGreaterThan(Date.now() + 60 * 60 * 1000);
     // Exactly one fire, and it was the mount's.
@@ -452,6 +505,9 @@ describe('a temporary fleet condition is a wait, and a permanent refusal is not'
       'https://github.com/Peyday007/V5',
       'https://github.com/someone/else',
       'https://github.com/Peyday007/V4',
+      // Retired, and retired is not authorized.
+      'https://github.com/Peyday007/oakwood-junk-removal',
+      OTHER_REMOTE,
     ]) {
       expect(decideRepository(remote).ok).toBe(false);
     }
@@ -475,7 +531,7 @@ describe('a temporary fleet condition is a wait, and a permanent refusal is not'
       principal: await principalFor(mount.onboarding.workerId!),
       sessionRef: 'cse_mount',
     });
-    const bin = await factoryBin(TARGET().remote, 'somebody else’s');
+    const bin = await factoryBin(OTHER_REMOTE, 'somebody else’s');
     expect((await admit(bin)).ok).toBe(false);
     expect((await getBin(bin.id))!.attemptCount).toBe(0);
   });
@@ -557,5 +613,117 @@ describe('an onboarding whose response was lost', () => {
     await onboard(MOUNT().id);
     expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(1);
     expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(0);
+  });
+});
+
+/* ========================================================================= */
+
+/**
+ * Proving a Routine runs as the worker it is bound to.
+ *
+ * The claim that had to be strengthened. `fleet_routines.worker_id` is an
+ * operator's assertion, and an OAuth token is held by a *connector* rather than
+ * by a Routine — so "registered for worker X" and "X has authenticated
+ * somewhere" can both be true of a Routine whose Cowork configuration actually
+ * selects a different connector. That is exactly the mistake a second connector
+ * *name* invites.
+ *
+ * What settles it is a chain of four rows Brain wrote itself: it fired this
+ * Routine, a session arrived and was attributed to a worker from that same
+ * dispatch row, it was handed the bin, and the bin reached `COMPLETE`.
+ */
+describe('a surface is proved by a fire that came back and finished something', () => {
+  const ROUTINE_REF = 'trig_proof';
+  const BOUND = 'wkr_bound';
+
+  function session(over: Partial<WorkerSession> = {}): WorkerSession {
+    return {
+      sessionRef: 'cse_1',
+      workerId: BOUND,
+      routineId: 'rtn_1',
+      accountId: 'acct_1',
+      binId: 'bin_1',
+      leaseGeneration: 1,
+      observedAt: '2026-09-12T10:00:00.000Z',
+      ...over,
+    };
+  }
+
+  function inputs(over: Partial<Parameters<typeof proveSurface>[0]> = {}) {
+    return {
+      boundWorkerId: BOUND,
+      routineRef: ROUTINE_REF,
+      sessions: [session()],
+      bins: new Map([['bin_1', { id: 'bin_1', state: 'COMPLETE' } as unknown as Bin]]),
+      dispatches: new Map([
+        [
+          'bin_1',
+          [{ routineRef: ROUTINE_REF, sentAt: '2026-09-12T09:59:00.000Z' } as unknown as BinDispatch],
+        ],
+      ]),
+      ...over,
+    };
+  }
+
+  it('closes the chain when a fire came back, took a bin and completed it', () => {
+    const proof = proveSurface(inputs());
+    expect(proof.problems).toEqual([]);
+    expect(proof.chain).toMatchObject({
+      sessionRef: 'cse_1',
+      binId: 'bin_1',
+      sentAt: '2026-09-12T09:59:00.000Z',
+    });
+  });
+
+  it('refuses a Routine nothing has ever arrived on, however its rows read', () => {
+    const proof = proveSurface(inputs({ sessions: [] }));
+    expect(proof.chain).toBeNull();
+    expect(proof.problems.join(' ')).toMatch(/has ever produced an authenticated arrival/);
+  });
+
+  /*
+   * The distinction the strengthening is for: a session that connected and never
+   * finished anything proves the connector works and says nothing about whether
+   * this surface can be given work and complete it.
+   */
+  it('refuses an arrival that never completed a bin', () => {
+    const proof = proveSurface(
+      inputs({ bins: new Map([['bin_1', { id: 'bin_1', state: 'READY' } as unknown as Bin]]) }),
+    );
+    expect(proof.chain).toBeNull();
+    expect(proof.problems.join(' ')).toMatch(/none of them was assigned a bin it then completed/);
+  });
+
+  /*
+   * And the failure this whole check exists for: the Routine is configured with
+   * somebody else's connector, so its arrivals authenticate as another worker.
+   * That is a fault rather than a missing proof, and it is named as one.
+   */
+  it('names the fault when the arrivals are a different worker', () => {
+    const proof = proveSurface({
+      ...inputs({ sessions: [session({ workerId: 'wkr_research' })] }),
+    });
+    expect(proof.chain).toBeNull();
+    expect(proof.foreignWorkerIds).toEqual(['wkr_research']);
+    expect(proof.problems.join(' ')).toMatch(/authenticated as a different worker \(wkr_research\)/);
+    expect(proof.problems.join(' ')).toMatch(/not the identity this surface is bound to/);
+  });
+
+  it('will not accept a completion that some other Routine’s fire produced', () => {
+    const proof = proveSurface(
+      inputs({
+        dispatches: new Map([
+          [
+            'bin_1',
+            [{ routineRef: 'trig_somebody_else', sentAt: '2026-09-12T09:59:00.000Z' } as unknown as BinDispatch],
+          ],
+        ]),
+      }),
+    );
+    // The arrival is still this Routine's — `worker_sessions.routine_id` is what
+    // selected it — so the chain closes; what is absent is only the fire's own
+    // timestamp, and the report says so rather than inventing one.
+    expect(proof.chain).not.toBeNull();
+    expect(proof.chain!.sentAt).toBeNull();
   });
 });

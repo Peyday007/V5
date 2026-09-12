@@ -2385,28 +2385,54 @@ remote.
   reported `NO_SURFACE_SERVES_THIS_FAMILY`, sending an operator to write a
   routing row when the answer was `fleet set-state`. §23's rule about naming the
   right refusal, applied to the one condition that bypasses every test it names.
-- **Two repositories is where the mount and the target stop being the same
-  thing.** A fired worker reads `.claude/settings.json` from the checkout its
-  Routine attaches — that is what lets it call the connector without stopping for
-  approval — so a research Routine attaches `brain-worker-bootstrap` and a
-  factory Routine attaches the repository its work is in. Neither is a property
-  of the envelope, which is why removing the target from the envelope did not
-  stop the executor being whatever it last attached; it only left the factory
-  with nowhere to do real work. The file is in `UNIVERSAL_FORBIDDEN_PATHS` now
-  rather than on one grant, because a protection copied per repository is one
-  that will be missing from one — and the second repository is exactly when that
-  stops being hypothetical.
-- **A second connector name is not a second identity.** The MCP credential is
-  issued **per connector**, so one connector is one Brain worker however it is
-  labelled — and the converse is the trap: pointing an existing connector at a
-  new Routine hands it the old worker, and Brain's routing boundary, keyed on the
-  authenticated worker, then has nothing to separate. So the check is not that a
-  connector exists but that **a token was minted for the intended worker and
-  used**, which is a row. `fleet verify-surface` reads it and prints two blocks
-  that must not be confused: `CONFIGURED`, the rows an operator wrote, and
-  `OBSERVED`, what has actually happened. A perfect configured block over an
-  empty observed one is a plan, and it refuses rather than passing — the same
-  distinction `evidence_class` draws, at an operator's command.
+- **A checkout is not a target, and noticing that a rule's reason is imprecise is
+  not authority to reverse the rule.** A fired worker reads
+  `.claude/settings.json` from the repository its Routine *attaches*, which is
+  what lets it call the connector without stopping for approval — so a research
+  Routine attaches `brain-worker-bootstrap` and a factory Routine attaches the
+  repository its work is in. That distinction is real, and the retirement
+  argument — "the factory's own executor must not be whichever target it last
+  proved itself on" — was loosely worded about it. **From which I concluded I
+  could put the retired repository back in the envelope, and that was wrong.**
+  Oakwood's retirement is a standing operator decision recorded in
+  `docs/OAKWOOD-RETIREMENT.md` and in two Routines still carrying *"oakwood
+  factory proof complete surface out of active dispatch"*; an imprecise rationale
+  is a reason to write the rationale down better, never to widen what the rule
+  allows. It is removed again, the campaign created against it was retired
+  through the supported transition with every row preserved, and the isolation
+  properties it was re-added to demonstrate are proved against a **fixture**
+  repository the envelope refuses — which is what they always should have used,
+  because nothing about a routing boundary needs a grant. **The envelope now
+  holds one checkout and no target at all**, so the factory has a proving ground
+  and nowhere to do real work until a person names one. That is the honest state
+  rather than a gap to be filled by whatever is nearest. `.claude/**` moved to
+  `UNIVERSAL_FORBIDDEN_PATHS`, because a protection copied per repository is one
+  that will be missing from one.
+- **A second connector name is not a second identity, and a used token does not
+  prove which Routine holds it.** The MCP credential is issued **per connector**,
+  so one connector is one Brain worker however it is labelled — and the trap is
+  the converse: selecting an existing connector in a new Routine hands it the old
+  worker, and the routing boundary, keyed on the authenticated worker, then has
+  nothing to separate. My first check for this read `fleet_routines.worker_id`
+  and whether a token had been minted for that worker and used. **Both are true
+  facts and neither is the claim**, which is the correction here: the binding is
+  an operator's assertion, and a token is held by a *connector* rather than by a
+  Routine, so "registered for worker X" and "X authenticated somewhere" can both
+  hold of a Routine whose Cowork configuration selects a different connector
+  entirely — the exact mistake the name invites.
+
+  What settles it is a chain of four rows Brain wrote itself, in
+  `services/dispatch/surfaceProof.ts`: Brain **fired** this Routine; a session
+  **arrived** and was attributed to a worker *from that same dispatch row*, never
+  from anything the worker said; it was **assigned** the bin; and the bin reached
+  **COMPLETE**. Arrivals with no completion prove a connector and not a surface.
+  Arrivals under a different worker are a **fault** rather than a missing proof
+  and are named as one. `verify-surface --probe` creates the controlled fire: one
+  bounded `DETERMINISTIC_CHECK` bin belonging to no campaign, forbidding every
+  repository operation, that exists only to be fired at, answered and finished.
+  `CONFIGURED` and `OBSERVED` stay two blocks that must not be confused, and a
+  perfect configured block over an empty observed one refuses rather than passing
+  — `evidence_class` at an operator's command.
 
 A worktree is the one factory path that is deliberately *not* authoritative
 state in either mode: it is execution scratch, the evidence is the commits, the

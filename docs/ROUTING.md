@@ -133,14 +133,17 @@ which Brain decides from rows it wrote, and neither is a guess about a worker
 that has already arrived — that is still settled by the admission hook, on the
 authenticated worker, and is still where an unknown fails closed.
 
-**A connector is an identity.** The MCP credential is issued per connector, so a
-second Routine that reuses an existing connector is the *same* Brain worker,
-whatever the Routine is called — and every routing boundary above would then pass
-while separating nothing. `npm run fleet -- verify-surface --ref <trig_…>` is the
-check: it prints the rows an operator wrote under `CONFIGURED`, and under
-`OBSERVED` whether a token was ever minted for that worker and ever used. It
-refuses on a configured surface nothing has authenticated as, because that is a
-plan rather than a proof.
+**A connector is an identity, and a used token does not say which Routine holds
+it.** The MCP credential is issued per connector, so a Routine that selects an
+existing connector runs as the *same* Brain worker whatever it is called — and
+every routing boundary above would then pass while separating nothing.
+`npm run fleet -- verify-surface --ref <trig_…>` is the check, and what it
+requires is a chain rather than a row: Brain **fired** this Routine, a session
+**arrived** and was attributed to a worker from that same dispatch row, it was
+**assigned** the bin, and the bin reached **COMPLETE**. `--probe` creates the
+controlled fire — one bounded self-test bin, no campaign, every repository
+operation forbidden. Arrivals under a different worker are reported as a fault,
+because that is a Routine wearing somebody else's connector.
 
 ## Operating it
 
