@@ -134,22 +134,30 @@ export async function observeFrontierItem(input: FrontierUpsert): Promise<void> 
  *
  * Resolved rather than deleted: §11's rule is that an explicit unknown must not
  * become a silent dark spot, and a delete makes one look like progress.
+ *
+ * **The pass is identified by a time, not by a list of what it saw.** The
+ * obvious implementation is `fingerprint NOT IN (…)`, and it is wrong for a
+ * reason that only appears on a project big enough to matter: SQLite refuses a
+ * statement with more than 999 bound parameters by default, so a frontier of a
+ * thousand items would start throwing — on the largest projects, which are
+ * exactly the ones whose edges are worth reading. `observeFrontierItem` stamps
+ * every item it sees with the same `now`, so "not seen in this pass" is
+ * `last_seen_at < startedAt`, which is one parameter however many items there
+ * are.
  */
 export async function resolveUnseenFrontierItems(input: {
   projectId: string;
-  seenFingerprints: string[];
+  /** When the pass began. Everything observed since carries a later stamp. */
+  startedAt: string;
   at?: string;
 }): Promise<number> {
-  const now = input.at ?? nowIso();
-  const seen = input.seenFingerprints;
-  const placeholders = seen.map(() => '?').join(',');
   const result = await getDb().run(
     `UPDATE russell_frontier
         SET resolved_at = ?
       WHERE project_id = ?
         AND resolved_at IS NULL
-        ${seen.length > 0 ? `AND fingerprint NOT IN (${placeholders})` : ''}`,
-    [now, input.projectId, ...seen],
+        AND last_seen_at < ?`,
+    [input.at ?? nowIso(), input.projectId, input.startedAt],
   );
   return result.changes;
 }

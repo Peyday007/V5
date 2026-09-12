@@ -32,7 +32,6 @@ import { listCurrentKnowledge } from '../../repos/russellMissions.ts';
 import { listCandidates } from '../../repos/russellCandidates.ts';
 import { listGapsByLayer } from '../../repos/audits.ts';
 import {
-  frontierFingerprint,
   listFrontier,
   observeFrontierItem,
   resolveUnseenFrontierItems,
@@ -338,7 +337,15 @@ export async function refreshFrontier(projectId: string): Promise<{
     })),
   });
 
-  const seen: string[] = [];
+  /*
+   * The pass is stamped, not listed.
+   *
+   * Everything observed below is written with a `last_seen_at` at or after
+   * this instant, so resolving what was *not* observed is one comparison
+   * rather than a list of every fingerprint — which SQLite would refuse past
+   * 999 of them, on exactly the projects whose edges are worth reading.
+   */
+  const startedAt = new Date().toISOString();
   const byRegion: Record<FrontierRegion, number> = {
     SOLID_GROUND: 0,
     WEAK_GROUND: 0,
@@ -348,18 +355,10 @@ export async function refreshFrontier(projectId: string): Promise<{
   };
   for (const item of observed) {
     await observeFrontierItem({ projectId, ...item });
-    seen.push(
-      frontierFingerprint({
-        region: item.region,
-        sourceKind: item.sourceKind,
-        sourceId: item.sourceId,
-        subject: item.subject,
-      }),
-    );
     byRegion[item.region] += 1;
   }
 
-  const resolved = await resolveUnseenFrontierItems({ projectId, seenFingerprints: seen });
+  const resolved = await resolveUnseenFrontierItems({ projectId, startedAt });
   return { observed: observed.length, resolved, byRegion };
 }
 
