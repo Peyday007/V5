@@ -261,28 +261,89 @@ async function main(): Promise<void> {
           mobile: false,
         });
         for (const destination of DESTINATIONS) {
-          await cdp.send('Page.navigate', { url: `${BASE}${destination.path}` });
-          await waitFor(cdp, "document.querySelector('.rs-shell') !== null");
-          await sleep(500);
-          const overflow = String(
+          try {
+            await cdp.send('Page.navigate', { url: `${BASE}${destination.path}` });
+            await waitFor(cdp, "document.querySelector('.rs-shell') !== null");
+            await sleep(500);
+          } catch (error) {
+            // A timeout here is a finding about *this* width and destination,
+            // not a reason to abandon the sweep: the widths after it are the
+            // ones the rejected build failed at, and losing them to one slow
+            // page would be losing the evidence to the diagnostic.
+            console.log(
+              `  ${width}px ${destination.name}: NOT MEASURED — ${error instanceof Error ? error.message : error}`,
+            );
+            continue;
+          }
+
+          /*
+           * Two different defects, measured separately, because conflating
+           * them is what made the first run unreadable.
+           *
+           * **The page scrolls sideways** is the one the rejected build had,
+           * and the honest test for it is the document's own scroll width. An
+           * element-by-element scan is a *diagnostic* for when that is true,
+           * never an independent criterion — used as one it flags absolutely
+           * positioned nodes inside `.lim-canvas`, which has `overflow:
+           * hidden` and therefore already contains them.
+           *
+           * **A label is cut off inside its own container** is a real defect
+           * too, and a different one with a different fix. It is reported
+           * under its own name rather than as a page overflow.
+           */
+          const sideways = (await evaluate(
+            cdp,
+            'document.documentElement.scrollWidth > document.documentElement.clientWidth',
+          )) as boolean;
+
+          const offenders = sideways
+            ? String(
+                await evaluate(
+                  cdp,
+                  `(() => {
+                    const limit = document.documentElement.clientWidth;
+                    const bad = [];
+                    const nodes = document.querySelectorAll('.rs-shell *');
+                    const cap = Math.min(nodes.length, 3000);
+                    for (let i = 0; i < cap; i += 1) {
+                      const el = nodes[i];
+                      const box = el.getBoundingClientRect();
+                      if (box.width === 0 && box.height === 0) continue;
+                      if (box.right > limit + 1 || box.left < -1) {
+                        bad.push((el.className || el.tagName) + '@' + Math.round(box.left) + '..' + Math.round(box.right));
+                      }
+                    }
+                    return bad.slice(0, 4).join(' | ');
+                  })()`,
+                ),
+              )
+            : '';
+
+          const cutOff = String(
             await evaluate(
               cdp,
               `(() => {
-                const limit = document.documentElement.clientWidth;
                 const bad = [];
-                for (const el of document.querySelectorAll('*')) {
-                  const box = el.getBoundingClientRect();
-                  if (box.right > limit + 1 || box.left < -1) {
-                    bad.push((el.className || el.tagName) + '@' + Math.round(box.left) + '..' + Math.round(box.right));
+                for (const el of document.querySelectorAll('.rs-shell *')) {
+                  const style = getComputedStyle(el);
+                  if (style.overflow === 'visible') continue;
+                  const outer = el.getBoundingClientRect();
+                  for (const child of el.children) {
+                    const box = child.getBoundingClientRect();
+                    if (box.width === 0 && box.height === 0) continue;
+                    if (box.right > outer.right + 1 || box.left < outer.left - 1) {
+                      bad.push((child.className || child.tagName) + ' inside ' + (el.className || el.tagName));
+                    }
                   }
                 }
-                return bad.slice(0, 4).join(' | ');
+                return [...new Set(bad)].slice(0, 3).join(' | ');
               })()`,
             ),
           );
-          if (overflow) {
+
+          if (sideways) {
             clipped += 1;
-            console.log(`  ${width}px ${destination.name}: CLIPS -> ${overflow}`);
+            console.log(`  ${width}px ${destination.name}: SCROLLS SIDEWAYS -> ${offenders}`);
             const shot = (await cdp.send('Page.captureScreenshot', {
               format: 'png',
               captureBeyondViewport: true,
@@ -291,6 +352,9 @@ async function main(): Promise<void> {
               path.join(outputDir, `clip-${width}-${destination.name}.png`),
               Buffer.from(shot.data, 'base64'),
             );
+          }
+          if (cutOff) {
+            console.log(`  ${width}px ${destination.name}: label cut off inside a container -> ${cutOff}`);
           }
         }
       }
@@ -427,10 +491,30 @@ async function withChromium(body: (cdp: Cdp) => Promise<void>): Promise<void> {
     });
 
     const cdp: Cdp = {
+      /*
+       * Every call is bounded, and a call that is not is a run that hangs.
+       *
+       * This promise used to have no timeout and no rejection path at all, so a
+       * reply Chromium never sent — a renderer that died, an evaluate that
+       * walked every node on the map page and was dropped — left the whole
+       * script waiting for ever, with no output, looking exactly like slow
+       * progress. It did that here for fourteen minutes before it was noticed.
+       *
+       * A bound turns that into a legible failure naming the method, which is
+       * the difference between a harness that reports and one that has to be
+       * diagnosed with `ps`.
+       */
       send: (method, params = {}) =>
-        new Promise((resolve) => {
+        new Promise((resolve, reject) => {
           const id = nextId++;
-          pending.set(id, resolve);
+          const timer = setTimeout(() => {
+            pending.delete(id);
+            reject(new Error(`Chromium never answered ${method} (id ${id}) within 30s`));
+          }, 30_000);
+          pending.set(id, (value) => {
+            clearTimeout(timer);
+            resolve(value);
+          });
           socket.send(JSON.stringify({ id, method, params }));
         }),
       on: (event, handler) => {
