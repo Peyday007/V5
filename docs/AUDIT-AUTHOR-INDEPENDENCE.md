@@ -138,30 +138,83 @@ Verified 2328 on SQLite and 2329 on Postgres.
 
 ---
 
-## 5. What the repair does not do
+## 5. What the repair did not do, and the transition that now does
 
-**It does not make this packet's audit independent.** The repair stops the
-pairing happening again; it changes no recorded row, and §5 forbids destroying
-the ones that exist. `orc_abab7d7130d545eaa1a1` is `COMPLETE` with a `PASS`
-verdict and a filed document, and its PRIMARY audit was written by the report's
-own author.
+The first version of this section ended with an honest gap, kept here rather
+than deleted because it is why the transition is shaped the way it is:
 
-**There is no supported transition that reopens an audit round for this
-reason**, and that is the honest finding rather than an omission to paper over.
-`auditRound.ts` starts a new round from exactly one event — an `OTHER_LAYER`
-handoff, which asserts the document moved layers, and this document did not.
-Using it here would make the rows say something untrue to get a lookup to come
-out right, which is the thing that module was written to refuse.
+> **There is no supported transition that reopens an audit round for this
+> reason.** `auditRound.ts` starts a new round from exactly one event — an
+> `OTHER_LAYER` handoff, which asserts that the document moved layers, and this
+> document did not. Obtaining an eligible independent PRIMARY review on a packet
+> that has already passed needs either a guarded re-audit transition that does
+> not exist, or the person who owns the project deciding that the filed
+> conclusion stands with the violation recorded against it.
 
-So this is §24's own sentence at a new altitude: **an escalation with no
-answering transition is not waiting, it is stuck.** Obtaining an eligible
-independent PRIMARY review on a packet that has already passed needs either a
-guarded re-audit transition that does not exist, or the person who owns the
-project deciding that the filed conclusion stands with the violation recorded
-against it. Both are decisions, and neither is one a worker or this session may
-take alone.
+The reasoning about the handoff still holds: using it here would make the rows
+say something untrue to get a lookup to come out right, which is what that
+module was written to refuse. **The owner chose the first option, so the
+transition exists now** — as a second, narrower reason a round may begin, with
+its own event (`AUDIT_ROUND_REOPENED`) and its own append-only record
+(`audit_integrity_reopens`). Nothing about the handoff changed.
 
-What can be said without any of that: the three *reviewer* pairs on this packet
-are genuinely session-separated, the evidence gate, the verification pass and
-the judge's own verdict are untouched, and the report's six cited claim ids all
+**It destroys nothing.** The superseded audit keeps its row, its verdict, its
+gaps and its `created_at`; every pass keeps its raw response, its lineage and
+its timestamps; the document keeps its bytes, version, hash and storage key.
+What moves is a boundary in *time*, which is the same mechanism the handoff uses
+and the reason neither has to edit history to work.
+
+**It is bound to the bytes and to a person.** The reservation key is a sha-256
+of the orchestration, the document, its exact content hash and the finding —
+server facts only, so nothing a caller sent contributes and a key is never a way
+to reopen a packet in another project. `UNIQUE (request_key)` is the arbiter,
+which makes a duplicate request, a retry after a lost response and a restart
+mid-request the same outcome. A document whose bytes changed produces a
+different key, because it is a different operation; an open reopen whose
+document no longer hashes the same is `SUPERSEDED_BY_VERSION`, never
+`RESOLVED` — nothing re-audited anything, and saying otherwise would claim an
+assurance nobody earned.
+
+**A replay re-reads and re-authorizes.** The stored `requested_by_id` is a
+record of who asked, never a credential: a person whose access was revoked
+between the attempts is refused at the second, from current rows, in the same
+words a non-member gets. A worker cannot reach it at all — the principal is
+built from a user row, so the policy only ever sees a `HUMAN` here.
+
+**Which roles run again is derived, not chosen.** `decideRoleReuse` reads the
+recorded lineage: a role is carried forward only if its session authored nothing
+(every completed synthesis attempt counts, including superseded ones), no role
+it is built from is being rerun, and it has a completed pass to carry. The
+dependency closure comes from `auditBriefFor`, which composes the adversarial
+prompt from the primary's raw response and the judge's from both — so for
+`orc_abab7d7130d545eaa1a1`, where PRIMARY is the conflicted role, **all three
+rerun and nothing is carried.**
+
+**The old JUDGE verdict cannot validate a replacement PRIMARY.** The packet's
+own `verdict` and `audit_id` pointers are cleared — the `audits` row is
+untouched and the reopen points at it — and a reopen settles only on an audit id
+that differs from the superseded one *and* a judge pass completed after the
+boundary. Restoring the old pointer settles nothing.
+
+**A11 says so while it is open.** `AUTHOR_IS_NOT_A_REVIEWER` reports the
+violation and names the correction in the same breath — pending, resolved or
+superseded — because an escalation that cannot mention its own answering
+transition sends a reader to do work that is already happening.
+
+## 6. The scope, reported without reopening anything
+
+`npm run admin -- packets independence [project]` reads every packet's lineage
+and names the ones where a reviewer shared a session with an author. It is
+read-only by construction: it opens nothing and proposes nothing per packet,
+because "which other packets have this problem" is a question a person asks
+before deciding, and a command that answered it by reopening what it found would
+be making that decision for them.
+
+It reports a packet whose sessions were **never recorded** separately from one
+where the author demonstrably reviewed. That distinction is the whole of this
+repair in one column: *we could not tell* is not the same fact as *we checked*.
+
+What is true either way for this packet: the three *reviewer* pairs are
+genuinely session-separated, the evidence gate, the verification pass and the
+judge's own verdict are untouched, and the report's six cited claim ids all
 resolve to accepted evidence present in the stored bytes.

@@ -96,6 +96,8 @@ import {
   routeAuditedDocument,
   type HandoffOutcome,
 } from '../audit/handoff.ts';
+import { reconcileIntegrityReopens } from '../audit/integrityReaudit.ts';
+import { listOpenReopens } from '../../repos/auditReopens.ts';
 import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
 import {
   reconcileArguedAuditRoles,
@@ -148,6 +150,12 @@ export interface TickReport {
    * is not charged an attempt for a defect in the planning that created it.
    */
   recovered: { missionId: string; candidateId: string }[];
+  /**
+   * Integrity reopens settled this tick: re-audited to a fresh verdict, or
+   * superseded because the document is no longer the bytes the finding was
+   * about. Never the same outcome, because they do not mean the same thing.
+   */
+  integrityReopens: { resolved: string[]; superseded: string[] };
   /**
    * Ideas the project's own archive already answered, judged and parked without
    * anything being dispatched. §13's default outcome, and the cheapest one.
@@ -311,6 +319,7 @@ const EMPTY: TickReport = {
   generation: null,
   wroteBack: [],
   recovered: [],
+  integrityReopens: { resolved: [], superseded: [] },
   answeredByArchive: [],
   planning: [],
   resumed: [],
@@ -546,6 +555,24 @@ export async function tick(owner: string): Promise<TickReport> {
      */
     for (const entry of await reconcileTerminalPackets(cycle.maxEventsPerCycle)) {
       report.retiredPacketWork.push(entry);
+    }
+
+    /*
+     * 1a-iv-c. Settle the integrity reopens whose condition has stopped holding.
+     *
+     * Derived on the tick rather than hooked to the judge's submission, for the
+     * reason `concludeAbandonedParks` is: a hook fixes one entrance and the
+     * rows reach every entrance plus anything already stranded. Two exits, and
+     * they are deliberately different — a fresh verdict in this round settles
+     * it, and a document whose bytes are no longer the ones the finding was
+     * about is superseded rather than answered, because nothing re-audited
+     * anything.
+     */
+    {
+      const settled = await reconcileIntegrityReopens(
+        await listOpenReopens(cycle.maxEventsPerCycle),
+      );
+      report.integrityReopens = settled;
     }
 
     /*

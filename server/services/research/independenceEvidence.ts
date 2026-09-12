@@ -641,18 +641,44 @@ export async function auditIndependenceEvidence(
         (pass) => pass.executor_session_ref && authorSessions.has(pass.executor_session_ref),
       );
       const authorSeparated = author.length > 0 && !unattributed && overlap.length === 0;
+      /*
+       * Whether a correction is already under way, said in the same breath.
+       *
+       * A gate that reports a violation and stays silent about the guarded
+       * transition answering it sends a reader to do work that is already
+       * happening — and §24's rule about an escalation needing an answering
+       * transition is worth nothing if the escalation cannot mention it. It
+       * changes no verdict: a packet whose author reviewed it fails this
+       * condition whether or not the re-audit has started.
+       */
+      const reopen = await rows<{ state: string; roles_rerun: string }>(
+        `SELECT state, roles_rerun FROM audit_integrity_reopens
+          WHERE orchestration_id = ?
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1`,
+        [orchestrationId],
+      );
+      const pending = reopen[0]?.state === 'OPEN' ? reopen[0] : null;
+      const correction = pending
+        ? ` A correction is PENDING: the round was reopened and ${pending.roles_rerun} ` +
+          'are running again.'
+        : reopen[0]
+          ? ` A correction was opened and is now ${reopen[0].state}.`
+          : '';
+
       if (
         !check(
           'AUTHOR_IS_NOT_A_REVIEWER',
           authorSeparated,
-          author.length === 0
+          (author.length === 0
             ? 'no completed synthesis pass, so the author of the filed report cannot be identified'
             : unattributed
               ? `${author.length} completed synthesis pass(es), none carrying a session — ` +
                 'unrecorded authorship is not evidence of independence'
               : overlap.length === 0
                 ? `the report's author ran in a session none of the three reviewers used`
-                : `${overlap.length} reviewer(s) ran in the session that wrote the report`,
+                : `${overlap.length} reviewer(s) ran in the session that wrote the report`) +
+            (authorSeparated ? '' : correction),
         )
       ) {
         lastReasons = local;

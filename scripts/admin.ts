@@ -39,8 +39,14 @@
  *   npm run admin -- packets approve <orchestration> --admin someone@example.com
  *   npm run admin -- packets retry-fragment <fragment> --admin someone@example.com
  *   npm run admin -- packets reissue <workItem> --admin someone@example.com
+ *   npm run admin -- packets independence [project]
+ *   npm run admin -- packets reaudit <orchestration> --admin someone@example.com
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import {
+  requestIntegrityReaudit,
+  scanAuthorReviewerOverlap,
+} from '../server/services/audit/integrityReaudit.ts';
 import {
   archiveWorker,
   clearWorkerRouting,
@@ -176,6 +182,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
   access    show <worker> | grant <worker> <project> | revoke <worker> <project>
   queue     list <project>
   packets   list <project> | approve <orchestration>
+            independence [project] | reaudit <orchestration>
             retry-fragment <fragment> | reissue <workItem>
 
 Connecting a site is not here. It is a person's decision and it lives in
@@ -538,6 +545,69 @@ async function main(): Promise<void> {
         advance: true,
       });
       console.log(`  ${JSON.stringify(result)}`);
+      break;
+    }
+    /*
+     * The scope report, and it is read-only on purpose.
+     *
+     * "Which other packets have this problem" is a question a person asks
+     * before deciding anything, and a command that answered it by reopening
+     * what it found would be making that decision for them. It opens nothing.
+     */
+    case 'packets independence': {
+      const project = rest[0] ? await projectFrom(rest[0]) : null;
+      const findings = (await scanAuthorReviewerOverlap(500)).filter(
+        (finding) => !project || finding.projectId === project.id,
+      );
+      if (findings.length === 0) {
+        console.log('  No packet has a reviewer that shared a session with its author.');
+        console.log('  (Packets with no completed audit or no completed synthesis are not');
+        console.log('   in scope: there is nothing to compare.)');
+        break;
+      }
+      for (const finding of findings) {
+        console.log(
+          `  ${finding.orchestrationId}  ${finding.status.padEnd(16)}` +
+            `  reopen=${finding.reopenState ?? '—'}`,
+        );
+        if (finding.conflicted.length > 0) {
+          console.log(`      AUTHOR REVIEWED: ${finding.conflicted.join(', ')}`);
+        }
+        if (finding.unattributed) {
+          console.log(
+            '      UNATTRIBUTED: a reviewer or the author recorded no session, so this one ' +
+              'cannot be told either way',
+          );
+        }
+      }
+      console.log(
+        `  ${findings.length} packet(s) need a decision. ` +
+          'Reopening one is `packets reaudit <orchestration> --admin <email>`.',
+      );
+      break;
+    }
+    case 'packets reaudit': {
+      const actor = await administrator();
+      const id = rest[0] ?? fail('Name an orchestration.');
+      const outcome = await requestIntegrityReaudit({
+        orchestrationId: id,
+        personId: actor.id,
+      });
+      console.log(`  ok        ${outcome.ok}`);
+      console.log(`  created   ${outcome.created}`);
+      if (outcome.refusal) console.log(`  refusal   ${outcome.refusal}`);
+      console.log(`  detail    ${outcome.detail}`);
+      if (outcome.reopen) {
+        console.log(`  reopen    ${outcome.reopen.id}  ${outcome.reopen.state}`);
+        console.log(`  document  ${outcome.reopen.documentVersion}  ${outcome.reopen.documentHash}`);
+        console.log(`  rerun     ${outcome.reopen.rolesRerun.join(', ') || '—'}`);
+        console.log(
+          `  carried   ${outcome.reopen.rolesCarried.map((role) => role.role).join(', ') || '—'}`,
+        );
+        console.log(`  supersedes ${outcome.reopen.supersededAuditId ?? '—'}`);
+      }
+      if (outcome.binId) console.log(`  bin       ${outcome.binId}`);
+      if (!outcome.ok) fail(outcome.detail);
       break;
     }
     case 'packets reissue': {

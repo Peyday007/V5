@@ -44,9 +44,21 @@ function schemaForThisFile(): string {
   return `brain_t_${stem}`.slice(0, 60);
 }
 
+/**
+ * Where the database this file is using actually lives.
+ *
+ * Remembered so a test can *restart* against the same Brain rather than open a
+ * different one. `initDatabase()` with no options resolves the configured
+ * default, which is not the per-file scratch database these tests run on — so a
+ * test that closed and re-opened that way was reading an empty Brain and
+ * calling it a restart.
+ */
+let openedAs: { dbPath: string } | { schema: string } | null = null;
+
 async function openTestDatabase(): Promise<void> {
   if (!POSTGRES_URL) {
     const dbPath = path.join(DATA_ROOT, `test-${Math.random().toString(36).slice(2)}.db`);
+    openedAs = { dbPath };
     await initDatabase({ dbPath });
     return;
   }
@@ -63,8 +75,34 @@ async function openTestDatabase(): Promise<void> {
   } finally {
     await admin.end();
   }
+  openedAs = { schema };
   await initDatabase({
     config: { provider: 'postgres', connectionString: POSTGRES_URL, poolSize: 4, schema },
+  });
+}
+
+/**
+ * Close this file's database and open the same one again.
+ *
+ * What a restart actually is, for a test that needs to prove something survives
+ * one: the rows are still there and nothing was held in memory. Deliberately
+ * not `freshProject`, which throws the rows away, and deliberately not a bare
+ * `initDatabase()`, which opens a different database entirely.
+ */
+export async function restartDatabase(): Promise<void> {
+  if (!openedAs) throw new Error('no test database has been opened to restart');
+  await closeDatabase();
+  if ('dbPath' in openedAs) {
+    await initDatabase({ dbPath: openedAs.dbPath });
+    return;
+  }
+  await initDatabase({
+    config: {
+      provider: 'postgres',
+      connectionString: POSTGRES_URL!,
+      poolSize: 4,
+      schema: openedAs.schema,
+    },
   });
 }
 

@@ -422,6 +422,23 @@ export function confinementFor(bin: Bin): BinConfinement {
   return { id: bin.id, orchestrationId: bin.orchestrationId };
 }
 
+/**
+ * The bin a named creator made, if it is still there.
+ *
+ * Exact where `binForOrchestration` is not: a packet can have more than one bin
+ * over its life — the spent one a finished round used and the one a reopened
+ * round needs — and a `SELECT` with no `ORDER BY` over two rows returns
+ * whichever the backend feels like. A creator id is unique to the operation
+ * that made it, so this answers about *that* bin or about none.
+ */
+export async function binByCreator(createdById: string): Promise<Bin | null> {
+  const row = await getDb().get<BinRow>(
+    `SELECT * FROM bins WHERE created_by_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [createdById],
+  );
+  return row ? mapBin(row) : null;
+}
+
 export async function binForOrchestration(orchestrationId: string): Promise<Bin | null> {
   const row = await getDb().get<BinRow>(`SELECT * FROM bins WHERE orchestration_id = ?`, [
     orchestrationId,

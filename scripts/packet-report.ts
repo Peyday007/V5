@@ -33,6 +33,7 @@ import {
   listPasses,
 } from '../server/repos/research.ts';
 import { auditMatrixVerdict } from '../server/services/research/auditEligibility.ts';
+import { reopenProjection } from '../server/services/audit/integrityReaudit.ts';
 import { binForOrchestration } from '../server/repos/bins.ts';
 import { listCoverage, listRequirements } from '../server/repos/reconciliation.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
@@ -345,6 +346,29 @@ async function main(): Promise<void> {
         `  account=${pass.executorAccountId ?? '—'}`,
     );
   }
+  /*
+   * Whether the independence of this audit is under correction.
+   *
+   * Printed beside the separation verdict rather than somewhere else, because
+   * they are two halves of one answer: the verdict says what the lineage is,
+   * and this says whether anybody is doing something about it.
+   */
+  const integrity = await reopenProjection(packet.id);
+  if (integrity.sentence) {
+    console.log(`      ** ${integrity.sentence} **`);
+  }
+  for (const entry of integrity.history) {
+    console.log(
+      `      integrity ${entry.id}  ${entry.state.padEnd(22)} ${entry.finding} ` +
+        `on ${entry.documentVersion} (${entry.documentHash.slice(0, 12)}…)`,
+    );
+    console.log(
+      `          rerun ${entry.rolesRerun.join(', ') || '—'}  ` +
+        `carried ${entry.rolesCarried.map((role) => role.role).join(', ') || '—'}  ` +
+        `asked by ${entry.requestedById}  at ${entry.createdAt}`,
+    );
+  }
+
   const separation = auditMatrixVerdict(passes);
   console.log(
     `  separation  ${separation.eligible ? 'compliant' : 'VIOLATED'} ` +

@@ -299,6 +299,24 @@ export const EVENT_TYPES = [
   'EXTERNAL_RECORD_REJECTED',
   // A person on the connected site asked Brain for something, and Brain took it.
   'EXTERNAL_COMMAND_ACCEPTED',
+
+  // An audit round begun again because the audit was not independent.
+  //
+  // The *second* reason a round may start, and it exists because the first one
+  // is the wrong instrument for this: `DOCUMENT_HANDED_OFF` asserts that a
+  // document moved layers, and a packet whose author reviewed its own report
+  // has not moved anywhere. Writing a handoff to make the boundary lookup come
+  // out right would be making the rows say something untrue, which is what
+  // `auditRound.ts` exists to refuse.
+  //
+  // It destroys nothing. Every pass keeps its row and its timestamps, the
+  // superseded verdict keeps its gaps and its `created_at`, and the document
+  // keeps its bytes. What the row does is move a boundary in *time*, which is
+  // the same mechanism the handoff uses and the reason neither has to edit
+  // history to work. The payload carries the finding, the document version and
+  // hash it is about, which roles run again and which are carried forward with
+  // why, the verdict it supersedes, and the authenticated person who asked.
+  'AUDIT_ROUND_REOPENED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

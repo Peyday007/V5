@@ -1042,6 +1042,56 @@ only for its cited claim ids. Both print the author beside the reviewers now.
 (`AUTHOR_IS_NOT_A_REVIEWER`) and a live probe of the refusal, because a
 strengthened constant that nothing exercises is a claim rather than a reading.
 
+**A rule that arrives after the fact needs a way to correct what it found, and
+that is a second reason a round may begin rather than a second use of the
+first.** The matrix stops the pairing happening again and changes no recorded
+row; the packet it found was already `COMPLETE` with a `PASS` verdict. The
+obvious instrument was to hand: `auditRound.ts` starts a round from an
+`OTHER_LAYER` handoff and makes three roles outstanding again without editing
+anything. It is the wrong one — a handoff asserts that a document moved layers,
+and **making the rows say something untrue to get a lookup to come out right is
+what that module was written to refuse.** So `services/audit/integrityReaudit.ts`
+is its own event, `AUDIT_ROUND_REOPENED`, with its own append-only record.
+
+- **It destroys nothing.** The superseded audit keeps its row, its verdict, its
+  gaps and its `created_at`; every pass keeps its raw response, its lineage and
+  its timestamps; the document keeps its bytes, version, hash and storage key.
+  What moves is a boundary in *time*, which is why neither reason has to edit
+  history to work.
+- **The reservation is bound to the bytes, and the key is server facts only** —
+  the orchestration, the document, its content hash, the finding. §20's shape at
+  a smaller scale: `UNIQUE (request_key)` makes a duplicate request, a retry
+  after a lost response and a restart mid-request one outcome, and a document
+  whose bytes changed is a *different operation* rather than a repeat. An open
+  reopen whose document no longer hashes the same is `SUPERSEDED_BY_VERSION` and
+  never `RESOLVED`: nothing re-audited anything, and the two words must not mean
+  the same thing.
+- **A replay re-reads and re-authorizes.** The stored requester is a record of
+  who asked, never a credential, so revoked access is refused at the retry from
+  current rows — in the same words a non-member gets. A worker cannot reach it
+  at all, by principal type.
+- **Which roles rerun is derived from lineage, never chosen.** A role is carried
+  forward only if its session authored nothing, no role it is built from is
+  being rerun, and it has a completed pass to carry. The dependency closure is
+  read from `auditBriefFor`, which composes the adversarial prompt out of the
+  primary's own output and the judge's out of both — so a replaced PRIMARY
+  reruns everything after it, and **an old JUDGE verdict can never validate a
+  replacement PRIMARY**. The packet's `verdict` and `audit_id` pointers are
+  cleared while the `audits` row stays exactly as written, and the reopen
+  settles only on an audit id that differs from the superseded one *and* a judge
+  pass completed after the boundary.
+- **Carrying a role forward is not copying it.** `auditRoundFor` returns the
+  boundary and the carried ordinals together, because a reader that took the two
+  from different events would offer a role as satisfied against a boundary that
+  postdates it. Three readers share it — the brief, the runner and the admission
+  check — for the reason the boundary itself has four.
+- **The scan reports and does not act.** `npm run admin -- packets independence`
+  names every packet whose reviewer shared a session with an author, and opens
+  none of them, because that decision is a person's. It reports a packet whose
+  sessions were never recorded **separately** from one where the author
+  demonstrably reviewed: *we could not tell* is not the same fact as *we
+  checked*, which is this whole repair in one column.
+
 **This is a recorded correction to the original two-account requirement, not a
 silent weakening.** The threat an independent audit exists to defeat is *one
 model context reviewing its own work*. Three separate sessions defeat it. Two
@@ -2559,6 +2609,7 @@ server/
     jurisdiction.ts     states, postal codes, and where each one may be read from
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
+    auditReopens.ts     the record behind a re-audit, and its one reservation
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
     factory.ts          the contract, the campaign, and units that own a surface
     factoryFleet.ts     factory workers, sessions, reviews, findings, the ledger
@@ -2603,6 +2654,7 @@ server/
       schema.ts         zero-trust validation of model output
       pipeline.ts       orchestration; the only path to a recorded verdict
       evidence.ts       the citation trail from a verdict back to passages
+      integrityReaudit.ts  the second reason a round begins, and what it preserves
     dispatch/
       fire.ts           one POST to the Routine, and what a refusal means
       loop.ts           the tick: supersede, ensure, route, claim a slot, send
