@@ -45,6 +45,20 @@ export interface SurfaceReading {
   /** Whether this surface can be fired at all right now, and why not. */
   usable: boolean;
   reason: string | null;
+  /**
+   * What actually refused, in the provider's own words, as the dispatcher
+   * recorded it when it took this surface out of routing.
+   *
+   * Present only at technical depth, and null far more often than not. It
+   * exists because the category alone is not an answer: `state_reason` was
+   * written on every quarantine from the day that rule shipped and read by
+   * nothing, so an operator looking at a fleet with no usable surface could
+   * see *that* it was held back and nowhere at all *why*. A refusal that
+   * names nothing is the defect §23 and §26 both already record, one row
+   * along — and an escalation whose remedy is "correct the secret" is not a
+   * remedy while the thing to correct is invisible.
+   */
+  recordedReason: string | null;
   capabilities: string[];
   /** Present only at technical depth: the raw identifiers. */
   workerId: string | null;
@@ -112,29 +126,49 @@ const STATE_WORDS: Record<string, string> = {
  * account, a paused surface, a surface still inside its backoff — are named
  * separately, because they send an operator to four different places. A single
  * "unavailable" would send them to none of them.
+ *
+ * **The sentence here is the category, never the evidence.** What actually
+ * refused the fire is `fleet_routines.state_reason`, written by the dispatcher
+ * at the moment it took the surface out of routing — and it is returned
+ * separately, because the two answer different questions for different
+ * readers. "Held back after a refusal that needs fixing" is what a person is
+ * owed; the provider's own words are what an operator needs in order to fix
+ * it, and §14 says technical detail is what a caller is *owed* rather than
+ * what it asks for.
  */
 export function usability(
   routine: FleetRoutine,
   account: FleetAccount | undefined,
   now: string,
-): { usable: boolean; reason: string | null } {
-  if (!account) return { usable: false, reason: 'Its account is not registered.' };
+): { usable: boolean; reason: string | null; recorded: string | null } {
+  const recorded = routine.stateReason?.trim() || null;
+  if (!account) {
+    return { usable: false, reason: 'Its account is not registered.', recorded };
+  }
   if (account.state !== 'ENABLED') {
-    return { usable: false, reason: `Its account is ${STATE_WORDS[account.state] ?? account.state}.` };
+    return {
+      usable: false,
+      reason: `Its account is ${STATE_WORDS[account.state] ?? account.state}.`,
+      recorded,
+    };
   }
   if (routine.state === 'QUARANTINED') {
-    return { usable: false, reason: 'Held back after a refusal that needs fixing.' };
+    return { usable: false, reason: 'Held back after a refusal that needs fixing.', recorded };
   }
   if (routine.state !== 'ENABLED') {
-    return { usable: false, reason: STATE_WORDS[routine.state] ?? routine.state };
+    return { usable: false, reason: STATE_WORDS[routine.state] ?? routine.state, recorded };
   }
   if (!routine.tokenSecretName) {
-    return { usable: false, reason: 'No deployment secret is recorded for it.' };
+    return { usable: false, reason: 'No deployment secret is recorded for it.', recorded };
   }
   if (routine.retryAt && routine.retryAt > now) {
-    return { usable: false, reason: 'Waiting out a provider refusal before it is fired again.' };
+    return {
+      usable: false,
+      reason: 'Waiting out a provider refusal before it is fired again.',
+      recorded,
+    };
   }
-  return { usable: true, reason: null };
+  return { usable: true, reason: null, recorded: null };
 }
 
 /**
@@ -161,7 +195,7 @@ export async function fleetView(input: {
   const byAccount = new Map(accounts.map((account) => [account.id, account]));
   const surfaces: SurfaceReading[] = routines.map((routine) => {
     const account = byAccount.get(routine.accountId);
-    const { usable, reason } = usability(routine, account, now);
+    const { usable, reason, recorded } = usability(routine, account, now);
     return {
       routineId: routine.id,
       name: routine.name,
@@ -171,6 +205,9 @@ export async function fleetView(input: {
       stateLabel: STATE_WORDS[routine.state] ?? routine.state,
       usable,
       reason,
+      // The provider's own words are technical detail, so they travel with the
+      // raw identifiers rather than with the plain sentence beside them.
+      recordedReason: input.includeTechnical ? recorded : null,
       capabilities: routine.capabilities,
       // Raw identifiers are technical detail. Null is "you are not told",
       // which is different from "there is none".

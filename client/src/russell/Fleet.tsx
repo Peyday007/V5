@@ -124,6 +124,19 @@ export function FleetCentre({ projectId }: { projectId: string | null }): JSX.El
                     Can do: {surface.capabilities.join(', ')}
                   </p>
                 ) : null}
+                {/*
+                  What actually refused, in the provider's own words.
+
+                  The sentence above is the category; this is the evidence, and
+                  it is the half an operator can act on. It arrives only at
+                  technical depth and only for a surface that is not usable, so
+                  a healthy fleet shows none of it.
+                */}
+                {surface.recordedReason ? (
+                  <p className="rs-item-meta rs-at-technical">
+                    Recorded when it was held back: {surface.recordedReason}
+                  </p>
+                ) : null}
                 {/* Raw identifiers arrive only for a caller entitled to them. */}
                 {surface.workerId ? (
                   <p className="rs-ref rs-at-technical">
