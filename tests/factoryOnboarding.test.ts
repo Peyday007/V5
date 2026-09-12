@@ -124,6 +124,27 @@ async function principalFor(workerId: string): Promise<Principal> {
   } as unknown as Principal;
 }
 
+/**
+ * Wait until the wall clock reports a different ISO instant.
+ *
+ * `rearmSurfaceDeferredIntents` compares an intent's `updated_at` against the
+ * newest `fleet_routines` / `worker_routing` write and re-arms only what was
+ * deferred **strictly before** it. Timestamps are ISO-8601 with millisecond
+ * resolution, so a fixture that defers an intent and then onboards inside the
+ * same millisecond has not set up the condition it means to test — it has set up
+ * the boundary case, and the assertion then fails on a fast machine and passes on
+ * a slow one. This makes the ordering the fixture claims actually true.
+ *
+ * The production path never needs it: a tick is ten seconds and an operator's
+ * write is minutes from a deferral.
+ */
+async function afterThisInstant(): Promise<void> {
+  const started = new Date().toISOString();
+  while (new Date().toISOString() === started) {
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+}
+
 async function onboard() {
   const outcome = await onboardRepository({
     projectId: fixture.project.id,
@@ -354,6 +375,7 @@ describe('a stage deferred before its worker existed is put back by the onboardi
     // Nothing has changed about the fleet yet, so nothing is put back.
     expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(0);
 
+    await afterThisInstant();
     await onboard();
 
     expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(1);
@@ -373,6 +395,7 @@ describe('a stage deferred before its worker existed is put back by the onboardi
       message: 'the account is at its ceiling',
       retryAfterMs: 24 * 60 * 60 * 1000,
     });
+    await afterThisInstant();
     await onboard();
     expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(0);
   });
@@ -491,6 +514,7 @@ describe('a re-arm wakes the work the change was about, and nothing else', () =>
       });
     }
 
+    await afterThisInstant();
     const result = await onboard();
     await surfaceFor(result.onboarding.workerId!, 'SCOPED_REARM_SECRET');
 
@@ -639,6 +663,7 @@ describe('a duplicate action produces no duplicate execution', () => {
       message: 'nobody is registered for this repository',
       retryAfterMs: 24 * 60 * 60 * 1000,
     });
+    await afterThisInstant();
     await onboard();
     expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(1);
     // The re-arm stamps the intent, so the watermark it compares against is now
