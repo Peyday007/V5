@@ -1085,6 +1085,42 @@ is its own event, `AUDIT_ROUND_REOPENED`, with its own append-only record.
   from different events would offer a role as satisfied against a boundary that
   postdates it. Three readers share it — the brief, the runner and the admission
   check — for the reason the boundary itself has four.
+- **A transition that reopens work must also enqueue it, and this one did not
+  — the correction is recorded rather than quietly applied.** The first real
+  reopen ran in production on 2026-09-12 and did everything it was supposed to:
+  a reservation bound to `v1E`, three roles to rerun, the previous round's items
+  cancelled, the packet back to `AUDITING` with its verdict cleared, a bin
+  READY. Brain fired fifteen seconds later and a worker arrived fifteen seconds
+  after that — and released at 13:34:17 saying **"No open work item exists yet
+  for this reopened audit round"**, because nothing had called `advancePacket`.
+  It was fired again immediately. Left alone that is a loop which looks like
+  progress and ends with the bin's attempts spent against a packet whose own
+  state said a worker should be working. `advancePacket` is what turns AUDITING
+  into a claimable item and **every other reopening transition calls it** —
+  `startPacket`, `reissue`, `surfaceRecovery`, `needsHuman`, the launch and the
+  submit tools. §24's sentence at a fifth altitude, and §27's beside it: a stage
+  becomes fireable when something makes it fireable, and the reopen is that
+  something. Ahead of the bin, so there is no window where the fire exists and
+  the work does not. **The fixture is why reading did not find it**: it had a
+  filed document and no fragments, which production cannot produce, and with no
+  fragment `advancePacket` walks to the planning branch instead of the audit
+  one — so the tests pin the queue an arriving worker sees rather than the call.
+  **The replay had to assert it too**, which is the same mistake one move along:
+  the advance went on the winning path only, so re-running the command against a
+  round already opened would have answered "nothing was opened twice" and left it
+  empty. **Idempotency means the effect is present after either call, not that
+  the second call does nothing.** Safe to repeat for the same reason it is safe
+  at all — idempotent by the round, not by a flag. Cancelling the previous
+  round's items and building a bin stay on the winning path, because those are
+  not.
+  **And the round already in that state needed somewhere to run, which is the
+  third move of the same mistake.** Those five refused activations spent the
+  bin's five attempts, so it retired at `NEEDS_HUMAN` — and a live round whose
+  only bin is terminal is a packet nothing can be sent for. A replay reuses the
+  bin while it can still deliver and builds a new one when it cannot; the spent
+  one keeps its row, its attempts and its events. The five workers were not the
+  defect and are worth recording as the opposite: each read the state correctly,
+  said so precisely, and released rather than inventing a report.
 - **The scan reports and does not act.** `npm run admin -- packets independence`
   names every packet whose reviewer shared a session with an author, and opens
   none of them, because that decision is a person's. It reports a packet whose

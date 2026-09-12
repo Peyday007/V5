@@ -201,6 +201,85 @@ violation and names the correction in the same breath — pending, resolved or
 superseded — because an escalation that cannot mention its own answering
 transition sends a reader to do work that is already happening.
 
+## 5a. What the first real reopen found, ninety seconds in
+
+The transition was exercised in production on 2026-09-12, and it found a defect
+in itself. This is recorded rather than quietly fixed, for the reason every
+other correction in this repository is.
+
+`air_fdf0af5981c0404389e6` opened at 13:31:53 against `orc_abab7d7130d545eaa1a1`
+at `v1E` (`96b3b10c1307…`). It rerun `PRIMARY, ADVERSARIAL, JUDGE`, carried
+nothing, superseded `aud_b84704fe7b3542a7a184`, moved the packet back to
+`AUDITING` with its verdict pointer cleared, cancelled the previous round's
+outstanding items, and built `bin_50336752dd134a2c97fa`. Every one of those is
+what it was supposed to do. What it did not do was enqueue the round's work:
+
+```
+13:31:53  BIN_READY
+13:31:59  DISPATCH_INTENT → DISPATCH_ROUTED   Selected V1 on primary: 0/2 Routine, 0/2 account
+13:32:00  DISPATCH_SENT                        session cse_01S3HDc52B7jsgnoGvLfqSJk
+13:32:15  BIN_ASSIGNED                         worker wkr_1cdd82cfb2a54faf8edd
+13:32:34  BIN_COMPLETION_REFUSED               "The packet is AUDITING, which is not a state it files a report in."
+13:34:17  BIN_RELEASED                         "No open work item exists yet for this reopened audit round"
+13:34:19  DISPATCH_INTENT → 13:34:20 DISPATCH_SENT   (fired again)
+```
+
+Brain fired fifteen seconds after the bin went ready and a worker arrived
+fifteen seconds after that — the dispatch half was exactly right. The worker
+then had nothing to claim, released saying so, and was fired again. Left alone
+that is a loop which looks like progress and ends with the bin's five attempts
+spent against a packet whose own state said a worker should be working.
+
+`advancePacket` is what turns "this packet is `AUDITING`" into a claimable work
+item, and **every other transition that reopens work calls it** — `startPacket`,
+`reissue`, `surfaceRecovery`, `needsHuman`, the launch, and the submit tools.
+This one did not. It calls it now, ahead of building the bin so there is no
+window where the fire exists and the work does not, and it reports what the
+round is waiting on. It is idempotent by the round rather than by a flag:
+`auditRoleSubmitted`, `stillRunning` and `alreadyCreated` are all asked of *this*
+round, so a replay, a restart mid-request or a concurrent tick enqueues one item
+for the first outstanding role and no more. One, not three — the roles are built
+from each other, so `ADVERSARIAL` is enqueued once `PRIMARY` has argued and
+`JUDGE` once both have.
+
+**And the replay had to assert it too, which is the same mistake one move
+along.** The advance was put on the winning path only, and a replay returns
+before it — so re-running the command against the round production had *already*
+opened would have answered "nothing was opened twice" and left it with nothing in
+it. **Idempotency means the effect is present after either call, not that the
+second call does nothing.** It is safe to repeat for the same reason it is safe
+at all: it is idempotent by the round rather than by a flag, so a role already
+argued, already out or already enqueued adds nothing. Cancelling the previous
+round's items and building a bin stay on the winning path, because those are not.
+
+**And enqueuing the work is only half a remedy for the round already in that
+state, which is the third move of the same mistake.** Those five activations
+spent the bin's five attempts, so it retired at `NEEDS_HUMAN` — and a live round
+whose only bin is terminal is *a packet nothing can be sent for*, §24's own
+words. So a replay reuses the bin while it can still deliver, because two live
+bins for one packet is the duplicate the replay path exists to avoid, and builds
+a new one when it cannot. **A remedy that cannot reach the state it exists for
+is not a remedy.** The spent bin keeps its row, its attempts, its checkpoints
+and its events.
+
+The five workers were not the problem and are worth recording as the opposite.
+Each one arrived, read the state correctly, said so precisely — *"no claimable
+RESEARCH_AUDIT work items exist for this reopened round"*, *"attempt 4 of 5,
+identical stuck state as attempts 1-3"* — and released rather than inventing a
+report. The completion contract refused every attempt with the accurate reason:
+*"The packet is AUDITING, which is not a state it files a report in."* The
+machinery was honest about a defect for five consecutive activations, which is
+exactly what it is for.
+
+**The test fixture is why reading did not find it.** It had a filed document and
+no fragments, which is a shape production cannot produce: a packet cannot have a
+document without having synthesized one, and it cannot synthesize without a
+fragment that cleared its gate. With no fragment `advancePacket` walks to the
+planning branch, so a test that called it would have been testing a different
+packet. The fixture now carries the accepted fragment the document implies, and
+two tests pin the queue rather than the call — what an arriving worker can claim,
+and that a replay adds nothing to it.
+
 ## 6. The scope, reported without reopening anything
 
 `npm run admin -- packets independence [project]` reads every packet's lineage

@@ -7,7 +7,12 @@
  * through a repository helper — §28 is explicit that proving a helper while
  * bypassing the service is not coverage.
  */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
+
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { addMessage, createConversation } from '../server/repos/russellConversations.ts';
@@ -1875,4 +1880,57 @@ describe('a pressure test that actually runs', () => {
     expect(ran.result!.findings.join(' ')).toMatch(/different worker identity/i);
     expect(ran.result!.highestTested.anythingFailed).toBe(false);
   }, 60_000);
+});
+
+/* ==========================================================================
+ * The reporter must not be a mutation
+ * ========================================================================== */
+
+/*
+ * `initDatabase` honours `dbPath` **only in local mode** — it reads the
+ * configured provider first — so a script that opens a scratch database by path
+ * alone gets the real one whenever the environment says postgres. The Step 12B
+ * reporter registers a project, four foundations, two people, a hundred
+ * candidates, a lens inquiry and eight Capability Lab experiments, and it runs
+ * *inside the container*, where the provider is postgres and the cloud
+ * credential is present. Its own header says everything it exercises runs in a
+ * temporary database; against the deployed Brain that would have been false.
+ *
+ * Found by running it twice against a Postgres test database — the second run
+ * collided on a candidate id the first had written — and before the production
+ * workflow had ever been dispatched, so nothing real was touched.
+ *
+ * Asserted on the source because that is where the decision is. A test that
+ * opened a Postgres database to prove it would need one, and the property being
+ * pinned is "this script states its provider", which is readable.
+ */
+describe('the acceptance reporter writes to a scratch database, never the configured one', () => {
+  const source = fs.readFileSync(
+    path.join(REPO_ROOT, 'scripts', 'step12b-acceptance.ts'),
+    'utf8',
+  );
+
+  it('names sqlite explicitly wherever it opens the database it writes to', () => {
+    // Every `initDatabase` that is followed by writes carries a config naming
+    // the provider. The operational read is the one call that must see the real
+    // Brain, and it takes no options at all.
+    const calls = [...source.matchAll(/initDatabase\(([\s\S]*?)\);/g)].map((match) => match[1] ?? '');
+    expect(calls.length).toBeGreaterThan(1);
+    const writing = calls.filter((call) => call.includes('dbPath'));
+    expect(writing.length).toBeGreaterThan(0);
+    for (const call of writing) {
+      expect(call).toContain("provider: 'sqlite'");
+    }
+  });
+
+  it('takes its operational reading before it opens anything it writes to', () => {
+    // Order matters: the real Brain is read and closed, and only then is the
+    // scratch database opened. Reversed, the read would see the scratch one.
+    const read = source.indexOf('readOperationalFleet()');
+    const write = source.indexOf("provider: 'sqlite'");
+    expect(read).toBeGreaterThan(-1);
+    expect(write).toBeGreaterThan(-1);
+    expect(read).toBeLessThan(write);
+    expect(source).toContain('await closeDatabase()');
+  });
 });

@@ -69,7 +69,8 @@ import { LAB_MODES, declareExperiment, runExperiment } from '../server/services/
 import { MAP_TYPES } from '../server/services/russell/maps.ts';
 import { PREFERENCES, checkPreference, defaults } from '../server/services/russell/preferences.ts';
 import { SEARCH_KINDS, search } from '../server/services/russell/search.ts';
-import { usability } from '../server/services/fleet/view.ts';
+import { explainSlowness, usability } from '../server/services/fleet/view.ts';
+import type { SlownessExplanation } from '../server/services/fleet/view.ts';
 import { CANDIDATE_PRIORITIES } from '../server/domain/types.ts';
 import { choicesFor } from '../server/services/russell/needsHuman.ts';
 import { projectProgress } from '../server/services/russell/progress.ts';
@@ -125,6 +126,40 @@ interface FleetReading {
   unreadable: string | null;
   /** What was read: the configured Brain, named without its credential. */
   source: string;
+  /**
+   * One real dispatch, traced from the Brain's own `bin_events`.
+   *
+   * Taken in the same read-only phase as the fleet rows, because N is a fact
+   * about a dispatch that actually happened and no scratch database has one.
+   * Null where the Brain has never fired anything, which is *not run* rather
+   * than a finding.
+   */
+  trace: SlownessExplanation | null;
+  /**
+   * What this Brain has actually done, for the three scenarios that are facts
+   * about work rather than about a mechanism.
+   *
+   * A, B and L were reported from the surface blocker — *can anything be
+   * fired* — which is a proxy for them and not one of them. "Can a turn be
+   * answered" is a different question from "has one been", and only the second
+   * is the scenario. These are the rows that answer it, counted in the same
+   * read-only phase and zero everywhere a Brain has not run.
+   */
+  history: {
+    /** A: conversations, and turns a worker actually answered. */
+    conversations: number;
+    answeredTurns: number;
+    pendingTurns: number;
+    failedTurns: number;
+    routedConversations: number;
+    /** B: ideas Russell formed its own priority on, and audit passes recorded. */
+    judgedCandidates: number;
+    auditPasses: number;
+    /** L: the durable tick, as its own row states it. */
+    cycleState: string | null;
+    cycleLastRanAt: string | null;
+    cycleLastError: string | null;
+  };
 }
 
 async function readOperationalFleet(): Promise<FleetReading> {
@@ -135,8 +170,75 @@ async function readOperationalFleet(): Promise<FleetReading> {
     // Named by provider, never by connection string — §18's rule, and this
     // output goes into a CI log.
     const source = config?.provider === 'postgres' ? 'the cloud database' : 'the local database';
+
+    /*
+     * The most recent bin Brain actually fired a worker for.
+     *
+     * `DISPATCH_SENT` is the event that makes it a real dispatch rather than an
+     * intent, and `MAX(at)` picks the newest without needing a tiebreak on a
+     * column only one dialect has — the `ORDER BY` rule this repository has
+     * been caught by three times.
+     */
+    /*
+     * What this Brain has done, counted rather than inferred.
+     *
+     * Six `SELECT COUNT`s and one singleton read, all in the same read-only
+     * phase. `attachment_source <> 'NONE'` is the routing half of A — a thread
+     * Brain decided a project for — and it is deliberately not the same count
+     * as "has a project", because a thread can carry one a person set.
+     */
+    const one = async (sql: string): Promise<number> => {
+      const row = await getDb().get<{ total: number }>(sql);
+      return Number(row?.total ?? 0);
+    };
+    const conversations = await one('SELECT COUNT(*) AS total FROM russell_conversations');
+    const routedConversations = await one(
+      "SELECT COUNT(*) AS total FROM russell_conversations WHERE attachment_source <> 'NONE'",
+    );
+    const answeredTurns = await one(
+      "SELECT COUNT(*) AS total FROM russell_messages WHERE role = 'RUSSELL' AND status = 'COMPLETE'",
+    );
+    const pendingTurns = await one(
+      "SELECT COUNT(*) AS total FROM russell_messages WHERE status = 'PENDING'",
+    );
+    const failedTurns = await one(
+      "SELECT COUNT(*) AS total FROM russell_messages WHERE status = 'FAILED'",
+    );
+    const judgedCandidates = await one(
+      'SELECT COUNT(*) AS total FROM russell_candidates WHERE priority IS NOT NULL',
+    );
+    const auditPasses = await one(
+      "SELECT COUNT(*) AS total FROM research_passes WHERE pass_key = 'AUDIT' AND status = 'COMPLETE'",
+    );
+    const cycle = await getDb().get<{
+      state: string;
+      last_ran_at: string | null;
+      last_error: string | null;
+    }>('SELECT state, last_ran_at, last_error FROM russell_cycle LIMIT 1');
+    const history = {
+      conversations,
+      answeredTurns,
+      pendingTurns,
+      failedTurns,
+      routedConversations,
+      judgedCandidates,
+      auditPasses,
+      cycleState: cycle?.state ?? null,
+      cycleLastRanAt: cycle?.last_ran_at ?? null,
+      cycleLastError: cycle?.last_error ?? null,
+    };
+
+    const fired = await getDb().get<{ bin_id: string; last_at: string }>(
+      `SELECT bin_id, MAX(at) AS last_at FROM bin_events
+        WHERE event_type = 'DISPATCH_SENT'
+        GROUP BY bin_id
+        ORDER BY last_at DESC
+        LIMIT 1`,
+    );
+    const trace = fired ? await explainSlowness(fired.bin_id) : null;
+
     await closeDatabase();
-    return { routines, accounts, unreadable: null, source };
+    return { routines, accounts, unreadable: null, source, trace, history };
   } catch (error) {
     // A developer machine with nothing configured is the ordinary case here,
     // and it is not a finding about the fleet.
@@ -145,6 +247,19 @@ async function readOperationalFleet(): Promise<FleetReading> {
       accounts: [],
       unreadable: error instanceof Error ? error.message : String(error),
       source: 'nothing — no database was configured for this run',
+      trace: null,
+      history: {
+        conversations: 0,
+        answeredTurns: 0,
+        pendingTurns: 0,
+        failedTurns: 0,
+        routedConversations: 0,
+        judgedCandidates: 0,
+        auditPasses: 0,
+        cycleState: null,
+        cycleLastRanAt: null,
+        cycleLastError: null,
+      },
     };
   }
 }
@@ -219,16 +334,77 @@ async function main(): Promise<void> {
   const fleet = await readOperationalFleet();
   const blocker = surfaceBlocker(fleet);
 
+  /*
+   * The temporary database, and the reason it is named explicitly.
+   *
+   * `dbPath` is honoured **only in local mode**: `initDatabase` reads the
+   * configured provider first, so against a Postgres-configured Brain it is
+   * ignored entirely and every write below lands in the real database. This
+   * script registers a project, four foundations, two people, a hundred
+   * candidates, a lens inquiry and eight Capability Lab experiments — so in
+   * cloud mode the reporter would have been a mutation, which is precisely what
+   * its own header says it is not.
+   *
+   * Caught by running it twice against a Postgres test database: the second run
+   * collided on `rc_acc_0`, because the first had written it. The production
+   * workflow had never been dispatched, so nothing real was touched — but it
+   * runs *inside the container*, where the provider is postgres and the cloud
+   * credential is present, so the first dispatch would have done it.
+   *
+   * The remedy is to state the config rather than to hint at it. A provider
+   * named here cannot be overridden by the environment, so the exercising half
+   * is local whatever the Brain is configured for — and the operational reading
+   * above, which is the part that must see the real Brain, has already been
+   * taken and closed.
+   */
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-12b-acc-'));
-  await initDatabase({ dbPath: path.join(dataDir, 'acceptance.db') });
+  await initDatabase({
+    dbPath: path.join(dataDir, 'acceptance.db'),
+    config: { provider: 'sqlite', connectionString: null, poolSize: 1 },
+  });
 
   /* -- A. Conversation routing and continuity ----------------------------- */
-  // Needs a worker to answer a turn: no inference is bought (§24), so a turn is
-  // a bin and a bin needs a surface.
-  record('A', 'Conversation routing and continuity', blocker.verdict, blocker.detail);
+  /*
+   * Asked of the turns rather than of the fleet.
+   *
+   * A turn is a bin and a bin needs a surface (§24: no inference is bought), so
+   * this was reported from the surface blocker — *can anything be fired*. That
+   * is a proxy for the scenario and not the scenario: "a turn can be answered"
+   * and "a turn has been answered" are different facts, and only the second is
+   * what A asks. The blocker is still reported where nothing has run, because
+   * then it is the reason.
+   */
+  const seen = fleet.history;
+  record(
+    'A',
+    'Conversation routing and continuity',
+    seen.answeredTurns > 0 ? 'PARTIAL' : blocker.verdict,
+    seen.answeredTurns > 0
+      ? `${seen.answeredTurns} turn(s) answered by a worker across ${seen.conversations} ` +
+        `conversation(s) in ${fleet.source}, ${seen.routedConversations} of which Brain routed ` +
+        `to a project itself. ${seen.pendingTurns} pending and ${seen.failedTurns} failed, ` +
+        'each carrying its own recorded reason rather than an optimistic placeholder. ' +
+        'NOT established here: continuity across a restart mid-turn, driven deliberately.'
+      : blocker.detail,
+  );
 
   /* -- B. Independent judgment -------------------------------------------- */
-  record('B', 'Independent judgment', blocker.verdict, blocker.detail);
+  /*
+   * Two different things, and both are rows: Russell forming its own priority
+   * on an idea, and the three-role audit actually running. Neither is the
+   * fleet's health, which is what was being reported here.
+   */
+  record(
+    'B',
+    'Independent judgment',
+    seen.judgedCandidates > 0 && seen.auditPasses > 0 ? 'PARTIAL' : blocker.verdict,
+    seen.judgedCandidates > 0 && seen.auditPasses > 0
+      ? `${seen.judgedCandidates} idea(s) carry a priority Russell decided, and ` +
+        `${seen.auditPasses} audit pass(es) have completed in ${fleet.source} — the primary, ` +
+        'adversarial and judge roles this product does not let one session hold two of. ' +
+        'NOT established here: a judgment a person disagreed with and overrode, end to end.'
+      : blocker.detail,
+  );
 
   /* -- C. Priority and backlog -------------------------------------------- */
   // Ranking is deterministic and needs no worker, so this one is exercised.
@@ -596,7 +772,34 @@ async function main(): Promise<void> {
   );
 
   /* -- L. Always-on loop ---------------------------------------------------- */
-  record('L', 'Always-on loop', blocker.verdict, blocker.detail);
+  /*
+   * The tick's own row, which is the only thing that can say whether it runs.
+   * A loop is not "a surface exists"; it is a cursor that moved.
+   */
+  const ranAgoMs = seen.cycleLastRanAt ? Date.now() - Date.parse(seen.cycleLastRanAt) : null;
+  const ticking = seen.cycleState === 'RUNNING' && ranAgoMs !== null;
+  /*
+   * `RUNNING` with no cursor is a loop that has never run, not a broken one —
+   * which is what a fresh database looks like, and is the distinction this
+   * reporter's header insists on. Only a state somebody set is BLOCKED.
+   */
+  const halted = seen.cycleState === 'PAUSED' || seen.cycleState === 'STOPPED';
+  record(
+    'L',
+    'Always-on loop',
+    ticking ? 'PARTIAL' : halted ? 'BLOCKED' : blocker.verdict,
+    seen.cycleState === null || (!ticking && !halted)
+      ? blocker.detail
+      : ticking
+        ? `The durable cycle in ${fleet.source} is ${seen.cycleState} and last ran ` +
+          `${Math.round((ranAgoMs ?? 0) / 1000)}s ago` +
+          (seen.cycleLastError ? `, with a recorded last error: ${seen.cycleLastError.slice(0, 160)}` : ', with no recorded error') +
+          '. NOT established here: a measured uptime window rather than one reading.'
+        : `The durable cycle is ${seen.cycleState}` +
+          (seen.cycleLastError ? ` — ${seen.cycleLastError.slice(0, 200)}` : '') +
+          '. A paused or stopped loop is an operational fact with an operational remedy, ' +
+          'and resuming it is a person\u2019s decision rather than this reporter\u2019s.',
+  );
 
   /* -- M. Product truth, historical knowledge, and memory -------------------- */
   /*
@@ -678,14 +881,35 @@ async function main(): Promise<void> {
   );
 
   /* -- N. Routing and latency ----------------------------------------------- */
+  /*
+   * The trace is the scenario. A real bin Brain fired a worker for, its own
+   * recorded chain, and the largest gap named from the two events either side
+   * of it — read in the operational phase above, because no scratch database
+   * has a dispatch in it.
+   */
   const routing = file('server/services/bins/routing.ts');
+  const trace = fleet.trace;
   record(
     'N',
     'Routing and latency explanation',
-    routing ? 'PARTIAL' : 'NOT_RUN',
-    'One routing decision is read by the candidate query, the admission hook and the fire ' +
-      'router, and a refusal costs no claim state. NOT established here: a traced real dispatch, ' +
-      'which needs a surface.',
+    trace && trace.steps.length > 1 ? 'PARTIAL' : 'NOT_RUN',
+    trace && trace.steps.length > 1
+      ? `One real dispatch traced from ${fleet.source}: ${trace.steps.length} recorded steps ` +
+        `(${trace.steps.map((step) => step.label).slice(0, 4).join(' → ')}` +
+        `${trace.steps.length > 4 ? ' → …' : ''}), and the largest gap is ` +
+        (trace.largestGap
+          ? `${Math.round(trace.largestGap.ms / 1000)}s between ${trace.largestGap.from} and ` +
+            `${trace.largestGap.to} — "${trace.largestGap.meaning}"`
+          : 'not nameable from this chain') +
+        `. ${trace.unknowns.length} thing(s) are reported as undetermined rather than guessed. ` +
+        'One routing decision is read by the candidate query, the admission hook and the fire ' +
+        'router, and a refusal costs no claim state. NOT established here: the same reading ' +
+        'across a workload mix rather than one bin.'
+      : routing
+        ? 'One routing decision is read by the candidate query, the admission hook and the fire ' +
+          'router, and a refusal costs no claim state. NOT established here: a traced real ' +
+          `dispatch — ${fleet.source} holds no bin that was ever fired.`
+        : 'The routing decision could not be read.',
   );
 
   /* -- O. Visual and interaction approval ------------------------------------ */

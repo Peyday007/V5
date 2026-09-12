@@ -72,6 +72,7 @@ import { cancelWork, listWorkItems } from '../../repos/workQueue.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { binByCreator, createBin, getBin } from '../../repos/bins.ts';
 import { lineageFromPasses } from '../research/independence.ts';
+import { advancePacket } from '../research/packetRunner.ts';
 import { ROLE_PASS_ORDINAL } from '../research/auditBrief.ts';
 import {
   listReopens,
@@ -413,12 +414,27 @@ export async function requestIntegrityReaudit(input: {
 
   if (!created) {
     /*
-     * A replay. Every effect below already happened under the row that won, and
+     * A replay. Most effects below already happened under the row that won, and
      * repeating them would cancel a *live* round's work items and build a
      * second bin for one packet. The answer is the same answer, which is the
      * whole point: retrying a request whose response was lost is safe.
+     *
+     * One of them is repeated, and it is the one that makes this true rather
+     * than merely quiet. **Idempotency means the effect is present after either
+     * call, not that the second call does nothing** — and the round holding a
+     * claimable item is the effect. Asserting it here rather than only on the
+     * winning path is what lets a replay *recover* a round that was opened
+     * before this was fixed, which is not a hypothetical: production has an
+     * open reopen whose round was left with nothing in it.
+     *
+     * Safe to repeat because it is idempotent by the round rather than by a
+     * flag — `auditRoleSubmitted`, `stillRunning` and `alreadyCreated` are all
+     * asked of *this* round, so a role already argued, already out or already
+     * enqueued adds nothing. Unlike cancelling items or building a bin, which
+     * are not.
      */
-    const bin = await binForReopen(reopen);
+    const advancedOnReplay = await advancePacket(orchestration.id);
+    const bin = await binForReopen({ reopen, document, orchestration });
     return {
       ok: true,
       orchestrationId: orchestration.id,
@@ -428,7 +444,12 @@ export async function requestIntegrityReaudit(input: {
       refusal: null,
       detail:
         'This recovery was already reserved for exactly these bytes, so nothing was opened ' +
-        'twice. The round it started is the one already running.',
+        'twice. The round it started is the one already running, waiting on ' +
+        `${advancedOnReplay.waitingOn ?? 'nothing'}` +
+        (advancedOnReplay.enqueued.length > 0
+          ? ` (${advancedOnReplay.enqueued.length} item(s) it was missing are now queued)`
+          : '') +
+        '.',
     };
   }
 
@@ -511,6 +532,33 @@ export async function requestIntegrityReaudit(input: {
     failureReason: null,
   });
 
+  /* ---------------------------------------------------------------------
+   * The round's first item, enqueued by the thing that started the round.
+   *
+   * `advancePacket` is what turns "this packet is AUDITING" into a work item a
+   * worker can claim, and every other transition that reopens work calls it —
+   * `startPacket`, `reissue`, `surfaceRecovery`, `needsHuman`, the launch, and
+   * the submit tools. This one did not, and production measured the cost
+   * within ninety seconds of the first reopen: `bin_50336752dd134a2c97fa` went
+   * READY at 13:31:53, Brain fired at 13:32:00, a worker arrived at 13:32:15,
+   * found nothing to claim, and released at 13:34:17 saying *"No open work
+   * item exists yet for this reopened audit round"*. It was fired again
+   * immediately, and would have gone round until the bin's five attempts were
+   * spent — a loop that looks like progress, against a packet whose state said
+   * a worker should be doing something.
+   *
+   * §24's sentence at a fifth altitude, and §27's beside it: a stage becomes
+   * fireable when something makes it fireable, and the reopen is that
+   * something. Ahead of the bin rather than after it, so there is no window
+   * where the fire exists and the work does not.
+   *
+   * Idempotent by the round rather than by a flag: `advancePacket` asks
+   * `auditRoleSubmitted`, `stillRunning` and `alreadyCreated` of *this* round,
+   * so a replay, a restart mid-request or a concurrent tick enqueues one item
+   * for the first outstanding role and no more.
+   * ------------------------------------------------------------------ */
+  const advanced = await advancePacket(orchestration.id);
+
   const binId = await ensureReauditBin({ reopen, document, orchestration });
 
   return {
@@ -526,6 +574,8 @@ export async function requestIntegrityReaudit(input: {
       (reuse.carried.length > 0
         ? `${reuse.carried.map((c) => c.role).join(', ')} carried forward. `
         : 'No role could be carried forward. ') +
+      `The round is waiting on ${advanced.waitingOn ?? 'nothing'}; ` +
+      `${advanced.enqueued.length} item(s) enqueued. ` +
       'Nothing recorded was changed.',
   };
 }
@@ -553,9 +603,44 @@ function refuse(
  * because a packet can hold more than one bin over its life and asking by
  * orchestration would sometimes answer about the spent one.
  */
-async function binForReopen(reopen: AuditIntegrityReopen): Promise<string | null> {
-  const bin = await binByCreator(`reaudit:${reopen.id}`);
-  return bin?.id ?? null;
+/**
+ * Bin states from which nothing more will ever be dispatched or assigned.
+ *
+ * `COMPLETE`, `FAILED` and `CANCELLED` are finished. `NEEDS_HUMAN` is the one
+ * worth naming: it is the state a bin reaches when its attempts are spent, and
+ * `DISPATCHABLE_SQL` does not offer it either — so for the purpose of *can this
+ * round still be sent for*, it belongs with the rest.
+ */
+const SPENT_BIN_STATES = new Set(['COMPLETE', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN']);
+
+/**
+ * The bin this round can actually be sent for, built again if the last one is
+ * spent.
+ *
+ * Reused while it can still deliver, because two live bins for one packet is
+ * the duplicate the replay path exists to avoid. Rebuilt when it cannot,
+ * because a live round whose only bin is terminal is **a packet nothing can be
+ * sent for** — §24's own words, and the case it names as needing the launch's
+ * own bin rather than a reopen of the spent one.
+ *
+ * Production produced it inside five minutes: the round was opened with nothing
+ * in it, so five fired workers arrived, each correctly diagnosed that there was
+ * no claimable item, released, and the bin retired at `NEEDS_HUMAN` with
+ * `attempts 5/5`. Fixing the enqueue stops that happening again; it does not by
+ * itself give the round already in that state anywhere to run. **A remedy that
+ * cannot reach the state it exists for is not a remedy.**
+ *
+ * The spent bin keeps its row, its attempts, its checkpoints and its events.
+ */
+async function binForReopen(input: {
+  reopen: AuditIntegrityReopen;
+  document: { id: string; canonicalName: string; version: string };
+  orchestration: { id: string; projectId: string; layerId: string | null; title: string };
+}): Promise<string | null> {
+  const existing = await binByCreator(`reaudit:${input.reopen.id}`);
+  if (existing && !SPENT_BIN_STATES.has(existing.state)) return existing.id;
+  if (!existing) return null;
+  return await ensureReauditBin(input);
 }
 
 /**
