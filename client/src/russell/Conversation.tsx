@@ -25,7 +25,24 @@ import { ApiError } from '../lib/api.ts';
 /** How often an unanswered turn asks the server whether it has been answered. */
 const PENDING_POLL_MS = 4_000;
 
-export function Conversation({ conversationId }: { conversationId: string }): JSX.Element {
+export function Conversation({
+  conversationId,
+  showComposer = true,
+  reloadToken = 0,
+}: {
+  conversationId: string;
+  /**
+   * Whether this view carries its own input.
+   *
+   * False when the shell's docked command bar is present, because two
+   * identical text boxes on one screen is the failure the thread picker
+   * already had once: a person cannot tell which one does what, and they use
+   * the wrong one. One input, one place.
+   */
+  showComposer?: boolean;
+  /** Bumped by whoever sent a message from outside, to re-read the thread. */
+  reloadToken?: number;
+}): JSX.Element {
   const thread = useAsync(() => RussellApi.thread(conversationId), [conversationId]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -48,6 +65,20 @@ export function Conversation({ conversationId }: { conversationId: string }): JS
     const timer = setInterval(() => thread.reload(), PENDING_POLL_MS);
     return () => clearInterval(timer);
   }, [waiting, thread]);
+
+  /*
+   * Somebody said something from the command bar.
+   *
+   * The bar posts and then bumps this, rather than patching a turn in here:
+   * the same rule the composer already follows, so what a person sees is what
+   * the server stored rather than what the client hoped.
+   */
+  const seen = useRef(reloadToken);
+  useEffect(() => {
+    if (reloadToken === seen.current) return;
+    seen.current = reloadToken;
+    thread.reload();
+  }, [reloadToken, thread]);
 
   useEffect(() => {
     // Guarded rather than called: `scrollIntoView` is not universal, and a
@@ -114,6 +145,7 @@ export function Conversation({ conversationId }: { conversationId: string }): JS
         </p>
       ) : null}
 
+      {showComposer ? (
       <form
         className="rs-composer"
         onSubmit={(event) => {
@@ -143,6 +175,7 @@ export function Conversation({ conversationId }: { conversationId: string }): JS
           {sending ? 'Sending…' : 'Send'}
         </button>
       </form>
+      ) : null}
     </div>
   );
 }

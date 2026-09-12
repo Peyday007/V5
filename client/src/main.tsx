@@ -12,6 +12,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import Root from './Root.tsx';
 import './styles.css';
+import './russell/design.css';
 
 const container = document.getElementById('root');
 

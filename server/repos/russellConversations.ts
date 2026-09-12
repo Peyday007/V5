@@ -25,6 +25,7 @@ import { newId, nowIso, parseJson, toJson } from './util.ts';
 import type {
   AttachmentSource,
   RussellConversation,
+  CollectionSource,
   RussellConversationContext,
   RussellConversationContextRow,
   RussellConversationRow,
@@ -46,6 +47,9 @@ function mapConversation(row: RussellConversationRow): RussellConversation {
     attachmentSource: row.attachment_source as AttachmentSource,
     grounding: parseJson<Record<string, unknown>>(row.grounding, {}),
     legacyConversationId: row.legacy_conversation_id,
+    collectionId: row.collection_id,
+    collectionSource: row.collection_source as CollectionSource,
+    closedAt: row.closed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

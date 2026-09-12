@@ -4431,6 +4431,9 @@ export interface RussellConversationRow {
   attachment_source: string;
   grounding: string;
   legacy_conversation_id: string | null;
+  collection_id: string | null;
+  collection_source: string;
+  closed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -4680,8 +4683,46 @@ export interface RussellConversation {
   attachmentSource: AttachmentSource;
   grounding: Record<string, unknown>;
   legacyConversationId: string | null;
+  /** Which collection this thread sits in, or null while unfiled. */
+  collectionId: string | null;
+  /** Who filed it. A person's choice is never overwritten by the automatic pass. */
+  collectionSource: CollectionSource;
+  /** When somebody said this thread was done. Never derived. */
+  closedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** What kind of thing a collection groups. */
+export const COLLECTION_KINDS = ['PROJECT', 'CATEGORY', 'PERSONAL'] as const;
+export type CollectionKind = (typeof COLLECTION_KINDS)[number];
+
+/** Who decided a thread belongs in a collection. `NONE` means nobody yet. */
+export const COLLECTION_SOURCES = ['NONE', 'AUTOMATIC', 'USER'] as const;
+export type CollectionSource = (typeof COLLECTION_SOURCES)[number];
+
+export interface RussellCollection {
+  id: string;
+  ownerUserId: string;
+  projectId: string | null;
+  name: string;
+  kind: CollectionKind;
+  source: 'AUTOMATIC' | 'USER';
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RussellCollectionRow {
+  id: string;
+  owner_user_id: string;
+  project_id: string | null;
+  name: string;
+  kind: string;
+  source: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface RussellConversationContext {

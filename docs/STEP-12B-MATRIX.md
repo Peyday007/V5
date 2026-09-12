@@ -186,7 +186,7 @@ decisions below are the only ones that are genuinely a person's.
 
 | Decision | Proposed | Approved |
 | --- | --- | --- |
-| Where Build and Connected sites sit in the rail | Six primary items; those two below a rule | pending |
-| What replaces "0 of 8 settled" | Maturity word plus a per-foundation strip | pending |
-| How present Russell's voice is | One live line, on home only | pending |
-| Whether the constellation is the project's front door | Map first, written summary beneath | pending |
+| Where Build and Connected sites sit in the rail | Six primary items; those two below a rule | APPROVED 2026-09-12 |
+| What replaces "0 of 8 settled" | Maturity word plus a per-foundation strip | APPROVED 2026-09-12 |
+| How present Russell's voice is | One live line, on home only | APPROVED 2026-09-12 |
+| Whether the constellation is the project's front door | Map first, written summary beneath | APPROVED 2026-09-12 |

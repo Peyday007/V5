@@ -30,6 +30,8 @@ import type { Progress } from '../../../server/services/russell/progress.ts';
 import type { GroupedWork, WorkEntry } from '../../../server/services/russell/work.ts';
 import type { IdeaEdge, IdeaMap, IdeaNode } from '../../../server/services/russell/ideas.ts';
 import type { WhoView } from '../../../server/services/russell/who.ts';
+import type { HomeView } from '../../../server/services/russell/home.ts';
+import type { CollectionView, RankedThread, Starter } from '../../../server/services/russell/collections.ts';
 import type {
   AuthorityView,
   AuthorityLimitKey,
@@ -39,6 +41,10 @@ export type {
   AuthorityLimitKey,
   AuthorityView,
   Briefing,
+  CollectionView,
+  HomeView,
+  RankedThread,
+  Starter,
   CandidatePriority,
   CandidateState,
   ConnectedSystemView,
@@ -209,6 +215,39 @@ export const RussellApi = {
 
   briefing: (projectId: string): Promise<BriefingResponse> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/briefing`),
+
+  /**
+   * The whole home in one read.
+   *
+   * One call rather than five, because §6 asks for one deterministic answer
+   * about status and progress: a client that assembled it from separate reads
+   * could show a briefing from one instant beside a state from another.
+   */
+  home: (projectId: string): Promise<{
+    home: HomeView;
+    project: { id: string; name: string };
+  }> => api(`/api/russell/projects/${encodeURIComponent(projectId)}/home`),
+
+  /** A person's threads, organized and ranked by meaning. */
+  collections: (projectId: string | null): Promise<{ collections: CollectionView[] }> =>
+    api(`/api/russell/collections${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
+
+  /** Move a thread. `null` takes it out of every collection. */
+  fileConversation: (conversationId: string, collectionId: string | null): Promise<{ ok: true }> =>
+    api(`/api/russell/conversations/${encodeURIComponent(conversationId)}/collection`, {
+      method: 'PATCH',
+      body: JSON.stringify({ collectionId }),
+    }),
+
+  /** Say a thread is finished, or that it is not. */
+  closeConversation: (
+    conversationId: string,
+    closed: boolean,
+  ): Promise<{ ok: true; closed: boolean }> =>
+    api(`/api/russell/conversations/${encodeURIComponent(conversationId)}/closed`, {
+      method: 'PATCH',
+      body: JSON.stringify({ closed }),
+    }),
 
   /**
    * Work, grouped and provenance-labelled.

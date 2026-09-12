@@ -48,6 +48,13 @@ import { currentPrincipal } from '../services/identity/context.ts';
 import { beginTurn, conversationIsReadable, retryTurn } from '../services/russell/turn.ts';
 import { withPendingDetail } from '../services/russell/pending.ts';
 import { briefing, focusLayer } from '../services/russell/projections.ts';
+import { homeFor } from '../services/russell/home.ts';
+import { collectionsFor } from '../services/russell/collections.ts';
+import {
+  fileConversation,
+  getCollection,
+  setConversationClosed,
+} from '../repos/russellCollections.ts';
 import { knowsForProject, surfaceState } from '../services/russell/knows.ts';
 import { groupWork, workForProject } from '../services/russell/work.ts';
 import { ideaMapForProject } from '../services/russell/ideas.ts';
@@ -338,6 +345,126 @@ russellRouter.post(
 /* --------------------------------------------------------------------------
  * What Russell is doing
  * ------------------------------------------------------------------------ */
+
+/**
+ * Russell's home, in one read.
+ *
+ * A single projection rather than five calls a client stitches together, for
+ * the reason §6 gives directly: two surfaces inferring their own status is how
+ * a person ends up reading two different answers about one project. The
+ * briefing route below is unchanged and still serves the four sentences on
+ * their own, because callers already read it and removing a field is a change
+ * nobody asked for.
+ *
+ * `homeFor` returns null for a caller with no read access, which becomes the
+ * same 404 a missing project gives — the refusal names nothing, at this door as
+ * at every other.
+ */
+russellRouter.get(
+  '/projects/:projectId/home',
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    const view = await homeFor({
+      principal: currentPrincipal(),
+      projectId: project.id,
+      projectName: project.name,
+      includePrivate: false,
+    });
+    if (!view) throw notFound('No project with that id.');
+    return { home: view, project: { id: project.id, name: project.name } };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Collections
+ * ------------------------------------------------------------------------ */
+
+/**
+ * A person's threads, organized and ranked.
+ *
+ * Scoped to the authenticated person throughout — the collections, the threads
+ * inside them, and the filing routes below all read `principal.id` rather than
+ * anything the caller sent. A collection holds private conversations, so a
+ * route that took an owner from the body would be a way to read somebody
+ * else's thinking.
+ *
+ * `projectId` is optional and supplies the starters only. It goes through the
+ * ordinary project gate, so naming a project you may not read refuses here
+ * exactly as it does everywhere else.
+ */
+russellRouter.get(
+  '/collections',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const projectId = optionalString(queryOf(req)['projectId'], 'projectId');
+    const project = projectId ? await requireProject(projectId) : null;
+    return {
+      collections: await collectionsFor({
+        ownerUserId: principal.id,
+        projectId: project?.id ?? null,
+        projectName: project?.name ?? null,
+      }),
+    };
+  }),
+);
+
+/**
+ * Move a thread, or take it out of every collection.
+ *
+ * Always `USER`, because this route is only ever reached by a person choosing.
+ * The automatic pass writes `AUTOMATIC` and is guarded so it can never
+ * overwrite what happens here — that guard is in the statement, in
+ * `fileConversation`, rather than in this handler.
+ */
+russellRouter.patch(
+  '/conversations/:conversationId/collection',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const { conversation } = await requireConversation(pathId(req, 'conversationId'));
+    if (conversation.ownerUserId !== principal.id) {
+      // Readable is not writable: a shared thread is still one person's.
+      throw notFound('No conversation with that id.');
+    }
+    const body = bodyOf(req);
+    const collectionId = optionalString(body['collectionId'], 'collectionId') ?? null;
+    if (collectionId) {
+      const collection = await getCollection(collectionId);
+      // A collection somebody else owns is reported as one that does not
+      // exist, so this cannot be used to discover what other people have.
+      if (!collection || collection.ownerUserId !== principal.id) {
+        throw notFound('No collection with that id.');
+      }
+    }
+    const moved = await fileConversation({
+      conversationId: conversation.id,
+      ownerUserId: principal.id,
+      collectionId,
+      actor: 'USER',
+    });
+    if (!moved) throw notFound('No conversation with that id.');
+    return { ok: true };
+  }),
+);
+
+/** Say a thread is finished, or that it is not. A fact, never a derivation. */
+russellRouter.patch(
+  '/conversations/:conversationId/closed',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const { conversation } = await requireConversation(pathId(req, 'conversationId'));
+    if (conversation.ownerUserId !== principal.id) {
+      throw notFound('No conversation with that id.');
+    }
+    const closed = bodyOf(req)['closed'] === true;
+    const changed = await setConversationClosed({
+      conversationId: conversation.id,
+      ownerUserId: principal.id,
+      closed,
+    });
+    if (!changed) throw notFound('No conversation with that id.');
+    return { ok: true, closed };
+  }),
+);
 
 russellRouter.get(
   '/projects/:projectId/briefing',
