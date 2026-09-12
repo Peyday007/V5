@@ -2389,6 +2389,42 @@ weakening the control to satisfy the evaluator — exactly what
 *correct* to say so: it is an operational fact with an operational remedy, and
 the remedy is to fix the surface and prove it with a fire that arrives.
 
+**Both halves of that happened, and the surface was right about the cause.**
+The recorded reason was `AUTH: 403 {"message":"routines are not available for
+this organization","type":"permission_error"}` — an **organization-level
+entitlement**, not a credential and not a Brain defect. The same token had
+fired that Routine 260 times before it. What had happened outside Brain was a
+subscription lapsing to Free for the length of a billing switch away from the
+App Store, which is exactly the shape of condition the first-`AUTH`-quarantines
+rule exists for: not transient inside a retry window, and not permanent either.
+
+The transition that answered it is the one §23 already documented —
+`fleet set-state --kind routine --to ENABLED` — and nothing else was touched.
+Not the Routine, not the credential, not the worker identity, and not the
+execution path: **a historical `AUTH` is never a reason to rotate a secret or
+reach for a paid API**, because doing either would change what the recovery
+proves. One transition, one fire, and the evidence is the bin's own trace:
+
+    DISPATCH_ROUTED   SELECTED V1 on primary: 0/2 Routine, 0/2 account
+    DISPATCH_SENT     session cse_01XCUQgeYWmMTwUVpyLNihAE
+    BIN_TAKEOVER      worker wkr_1cdd82cfb2a54faf8edd, authenticated session
+    BIN_ITEM_CLAIMED  ×3
+    BIN_ATTEMPT_CREDITED ×2
+    BIN_RELEASED      "PRIMARY audit complete and checkpointed"
+
+Ten minutes either side of it are the honest before and after: the same bin
+recorded `DISPATCH_DEFERRED NO_SURFACE_SERVES_THIS_FAMILY` at 08:54 and again
+at 09:04:06, and routed at 09:04:46. **A recovery is a fire that arrives and
+finishes something, never a state column that changed.**
+
+And what the bin did *next* is the floor working rather than a second failure:
+`BIN_ASSIGNMENT_REFUSED — ADVERSARIAL would share the same session as PRIMARY`.
+The connector presents one OAuth access token per hour, so the adversarial role
+waits for a session that is genuinely distinct. That is §23's three-session
+minimum refusing to be satisfied by one model context wearing two role names,
+and `sessionWindow.ts` is what stops the wait being longer than the token's own
+life.
+
 
 ---
 
