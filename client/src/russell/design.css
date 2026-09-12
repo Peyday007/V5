@@ -1056,8 +1056,27 @@ button.rs-card:hover {
  * mechanism and stays where a single block genuinely folds; this is for the
  * case where three different amounts of the same answer exist.
  */
+/*
+ * It fills its column rather than sizing to its own words.
+ *
+ * `inline-flex` with per-button padding sizes this control to the *text*, and
+ * three labels plus six paddings come to about 237px against a rail whose inner
+ * width is about 208 — so at 822 and 860 pixels "Technical" was cut off at the
+ * rail's edge. That is precisely the class of defect the rejected build had and
+ * precisely the band it had it in, and no static test could have found it: the
+ * rule was correct at every width the CSS mentions.
+ *
+ * It was found by sweeping the band with a real browser and looking at the
+ * image. `scripts/visual-qa.ts` walks 822, 860, 900 and 953 and writes a
+ * screenshot only where something sticks out, which is how this surfaced.
+ *
+ * Equal thirds of whatever room there is, with `min-width: 0` so a flex item is
+ * actually allowed to shrink — without it the content's intrinsic width is a
+ * floor and the control overflows again.
+ */
 .rs-depth {
-  display: inline-flex;
+  display: flex;
+  max-width: 100%;
   padding: 2px;
   border: 1px solid var(--rule);
   border-radius: 999px;
@@ -1065,13 +1084,22 @@ button.rs-card:hover {
 }
 
 .rs-depth button {
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 32px;
-  padding: var(--gap-1) var(--gap-3);
+  padding: var(--gap-1) var(--gap-1);
   border: 0;
   border-radius: 999px;
   background: none;
   color: var(--ink-faint);
+  /*
+   * The smallest step on the scale, not a new one below it.
+   * Adding a `--step--2` for one control would change the type scale to fix a
+   * layout problem, and the room this control needs comes from its padding.
+   */
   font: 500 var(--step--1) / 1.3 var(--body);
+  white-space: nowrap;
+  text-align: center;
   cursor: pointer;
 }
 
