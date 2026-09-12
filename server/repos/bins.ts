@@ -2586,7 +2586,32 @@ const OPERATOR_RESOLVED_REFUSALS = [
   'NO_CAPABLE_SURFACE',
 ] as const;
 
-export async function rearmSurfaceDeferredIntents(): Promise<number> {
+export async function rearmSurfaceDeferredIntents(
+  /**
+   * Would this bin route *now*?
+   *
+   * Injected rather than computed here, for `claimWork`'s reason: this module
+   * knows about rows and the dispatcher knows about the fleet, and a repository
+   * layer that could answer a routing question would be a second router. The
+   * caller passes the same `routeBin` it is about to use, so the recheck and the
+   * decision are one function — an intent cannot be put back on a judgement the
+   * fire would then disagree with.
+   *
+   * Omitted, every candidate is put back. That is the older behaviour and it is
+   * wrong in a way worth naming: registering a factory surface would have
+   * re-armed every stranded bin in the Brain — research packets included — each
+   * of which then re-defers on the next pass having spent a routing decision and
+   * rewritten its own reason. Correct, wasteful, and it makes the ledger read as
+   * though something changed for work where nothing did.
+   *
+   * What the recheck can decide is exactly what the *fire* decides on — the
+   * family the surface serves and the capabilities it declares. The repository
+   * is deliberately not among them, because §27 settles that at admission
+   * instead: being wrong there records something false, and being wrong here
+   * only wastes a fire.
+   */
+  routesNow?: (bin: Bin) => Promise<boolean>,
+): Promise<number> {
   const at = binNow();
   /*
    * The watermark is read in TypeScript and passed as a parameter rather than
@@ -2609,16 +2634,42 @@ export async function rearmSurfaceDeferredIntents(): Promise<number> {
   if (marks.length === 0) return 0;
   const watermark = marks.reduce((latest, value) => (value > latest ? value : latest));
   const placeholders = OPERATOR_RESOLVED_REFUSALS.map(() => '?').join(', ');
-  const result = await getDb().run(
-    `UPDATE bin_dispatch
-        SET next_attempt_at = ?, updated_at = ?
+  const candidates = await getDb().all<BinDispatchRow>(
+    `SELECT * FROM bin_dispatch
       WHERE state = 'PENDING'
         AND last_error_kind IN (${placeholders})
         AND next_attempt_at > ?
-        AND updated_at < ?`,
-    [at, at, ...OPERATOR_RESOLVED_REFUSALS, at, watermark],
+        AND updated_at < ?
+      ORDER BY created_at
+      LIMIT 200`,
+    [...OPERATOR_RESOLVED_REFUSALS, at, watermark],
   );
-  return result.changes;
+
+  let rearmed = 0;
+  for (const row of candidates) {
+    if (routesNow) {
+      const bin = await getBin(row.bin_id);
+      // A bin that has moved on is somebody else's problem: `supersedeStaleIntents`
+      // retires the intent, and putting it back first would only fire at a bin
+      // nobody can be given.
+      if (!bin) continue;
+      if (!(await routesNow(bin))) continue;
+    }
+    /*
+     * Guarded on the same two facts the candidate query matched, so a concurrent
+     * tick that already put this one back changes nothing here — and the fire it
+     * leads to is still claimed by a compare-and-swap, so two re-arms cannot
+     * become two activations.
+     */
+    const updated = await getDb().run(
+      `UPDATE bin_dispatch
+          SET next_attempt_at = ?, updated_at = ?
+        WHERE id = ? AND state = 'PENDING' AND next_attempt_at > ?`,
+      [at, at, row.id, at],
+    );
+    rearmed += updated.changes;
+  }
+  return rearmed;
 }
 
 /**

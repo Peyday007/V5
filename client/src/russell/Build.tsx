@@ -50,10 +50,22 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
     [projectId],
   );
 
+  /*
+   * A refresh must not blank a card that is already showing something.
+   *
+   * `loading` is true both when there is nothing yet and when the list is being
+   * read again, and treating the second one as "not ready" unmounted this whole
+   * section — which took the invitation *shown once* down with it, on the very
+   * reload that pressing the button triggers. A person would have completed the
+   * onboarding and never seen the link. So loading is a phase only while there
+   * is nothing to show; a re-read leaves the previous answer up until the new
+   * one arrives.
+   */
+  const shown = repositories.data?.repositories ?? null;
   const state = listState({
-    loading: repositories.loading,
+    loading: repositories.loading && shown === null,
     error: repositories.error,
-    items: repositories.data?.repositories ?? null,
+    items: shown,
     noun: 'repositories this factory may work in',
   });
 
@@ -78,7 +90,14 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
         </p>
       ) : (
         <>
+          {/*
+            * Keyed by the project, which is the other half of that decision: a
+            * re-read of the same project keeps what is on screen, and a change
+            * of project throws it away. An invitation belongs to the project it
+            * was issued for and must never outlive it on screen.
+            */}
           <Repositories
+            key={projectId ?? 'none'}
             projectId={projectId}
             repositories={state.items}
             onChanged={repositories.reload}
@@ -183,6 +202,21 @@ function Repositories({
                 ))}
               </ol>
             ) : null}
+            {repo.waiting > 0 ? (
+              /*
+               * What the steps are actually for. Work already deferred for want
+               * of this surface is put back by Brain when the surface arrives —
+               * so this says the one thing a person most needs to know before
+               * doing a setup task: nothing has to be started again afterwards.
+               */
+              <p className="rs-repo-waiting">
+                {repo.waiting === 1
+                  ? 'One stage is waiting on this'
+                  : `${repo.waiting} stages are waiting on this`}
+                , and resumes by itself once the surface is registered. Nothing has to be
+                submitted again.
+              </p>
+            ) : null}
             {repo.readiness !== 'READY' ? (
               <button
                 type="button"
@@ -226,6 +260,15 @@ function Repositories({
             has to approve it. It is not a credential: on its own it cannot read anything, call a
             tool, or obtain a token.
           </p>
+          {issued.onboarding.waiting > 0 ? (
+            <p className="rs-hint">
+              {issued.onboarding.waiting === 1
+                ? 'One stage already deferred for this repository resumes'
+                : `${issued.onboarding.waiting} stages already deferred for this repository resume`}{' '}
+              on their own once a surface is registered — Brain puts the deferred work back rather
+              than asking for it again.
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>

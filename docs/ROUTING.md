@@ -102,9 +102,24 @@ Three things, and any one of them missing authorizes nothing:
 3. push access **where the worker runs** — Brain holds no repository credential
    and must never mint one.
 
-The envelope is empty at rest. `V5` is deliberately absent: a campaign that
-could rewrite the machinery executing it is the one whose failure mode is not
-contained by declining a pull request.
+`V5` is deliberately absent: a campaign that could rewrite the machinery
+executing it is the one whose failure mode is not contained by declining a pull
+request.
+
+**Step 2 is one action on the Build surface, not four commands.** The routing
+row is one of four rows an operator used to compose by hand — an identity, a
+membership, a scope set and the row — each with a silently wrong answer
+available. `services/factory/onboard.ts` writes all four from the grant and from
+constants, and the routing commands below stay as the repair path and as the way
+to read what is there. Onboarding again repairs rather than accumulates: the
+same worker, the membership and routing rewritten from the constants, and the
+previous invitation revoked so there is never more than one live.
+
+Step 3 is deliberately still a person's, and the Build card says so rather than
+implying Brain will do it. What Brain does instead is notice: onboarding writes
+`worker_routing`, and `rearmSurfaceDeferredIntents` watches that table as well as
+`fleet_routines`, so work deferred for want of a surface is put back — after a
+re-check with `routeBin` itself, so only the work that condition was about moves.
 
 ## Operating it
 

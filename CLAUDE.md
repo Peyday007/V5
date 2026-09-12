@@ -2218,6 +2218,77 @@ remote.
   fire that may be refused, may arrive late, may be taken over, and must survive
   a restart — which is a bin, not a promise. The permanent subscription-backed
   executor is the fleet.
+- **A refusal that means "setup is missing" is not a refusal that means "this may
+  not happen", and treating them alike destroyed the work.** Two of the router's
+  refusals — `NO_SURFACE_SERVES_THIS_FAMILY` and `NO_CAPABLE_SURFACE` — name a
+  condition an authorized action resolves. They spent one of the bin's five
+  dispatch attempts each and abandoned at the fifth, and an abandoned stage counts
+  against the campaign's per-stage ceiling, so a campaign submitted before its
+  repository was onboarded had destroyed its own planning stage by the time the
+  worker existed, for a reason that was never about the work. They are **deferred**
+  now. Everything else still exhausts: `NO_ROUTINES_REGISTERED` and
+  `ALL_SURFACES_INELIGIBLE` are fleet-wide facts rather than this stage's, and the
+  admission refusals — `PROJECT_OUT_OF_SCOPE`, `REPOSITORY_NOT_AUTHORIZED`,
+  `SCOPE_MISSING` — are decisions, taken ahead of the compare-and-swap and costing
+  nothing. §23's sentence again, one category along: a refusal is not misconduct.
+- **Deferred is only honest if something puts it back, and only useful if it puts
+  back the right thing.** `rearmSurfaceDeferredIntents` derives the condition
+  instead of scheduling it, and it now watches `worker_routing` as well as
+  `fleet_routines`, because onboarding writes the first — a repository became
+  executable and the work already waiting for it did not notice. It also
+  re-checks each candidate with `routeBin` **itself** rather than putting back
+  everything: the old behaviour woke every stranded bin in the Brain on any fleet
+  write, and a fire spent on work nobody can do is a fire the work that can be
+  done did not get. What it decides on is what the *fire* decides on — the family
+  and the declared capabilities — and never the repository, which §27 settles at
+  admission instead: fail closed where the unknown could record something false,
+  fail open where it could only waste a fire. A re-arm is not a retry and never spends an attempt, and it
+  stamps the intent, so it is self-limiting.
+- **A campaign whose stage has nobody to give it to says so, without lying about
+  its state.** A ready stage deferred on one of those two refusals sets
+  `blockerKind = NO_HEALTHY_EXECUTION_SURFACE` with the remedy in words; `state`
+  is left alone, because the campaign *is* planning and BLOCKED would throw away
+  what happens when the surface arrives and then need a guess about which state
+  to restore. The blocker clears on the tick after the condition stops holding.
+  §24's sentence at the factory, for the fifth time: **a state that says waiting
+  which nobody can resolve is not waiting, it is stuck.**
+- **Registering a worker for a repository is one action a person takes, not four
+  rows an operator composes.** `services/factory/onboard.ts` is `connectSite`'s
+  shape for `connectSite`'s reason: the identity, the membership, the fixed scope
+  set and the exhaustive routing row are written from the grant and from
+  constants, so there is nothing to get silently wrong — and a worker given the
+  wrong scopes is refused by every route with the same 404 a missing project
+  gives, which tells nobody anything. It lives on the Build surface behind
+  `requirePerson` and `decideProjectAccess` at `ADMIN`, the level a membership
+  grant already carries, and a worker principal is refused there by type. It
+  issues **no credential**: what a Cowork connector needs is not a secret to
+  paste but a way for the consent screen to name one worker, so it issues a
+  single-use expiring invitation that on its own cannot read anything, call a
+  tool or obtain a token — and the invitation *id* is what reaches the audit row.
+  Onboarding twice is a repair and a rotation rather than an accumulation.
+- **It cannot register the surface, and readiness says which half is missing.**
+  Brain that could mint its own execution surfaces is exactly what §22's split
+  forbids, so the projection is derived on every read into three answers with
+  three different remedies — `NOT_ONBOARDED`, `AWAITING_SURFACE`, `READY` — with
+  the remaining steps printed in the order they have to happen. Beside them it
+  counts, from rows, **how much work is already waiting on this repository**,
+  which is the one thing that makes a setup task worth doing today: the work
+  resumes by itself and nothing has to be submitted again.
+- **A rendered card is not a passing service test.** Pressing the button reloads
+  the list, the reload counted as loading, and loading unmounted the section —
+  taking the invitation *shown once* down with it. Every server test passed: the
+  rows were written, the invitation was issued, the reply carried the link, and
+  the person would never have seen it. A re-read leaves the previous answer up
+  until the new one arrives, and the section is keyed by the project so a change
+  of project still throws it away.
+- **A stage becomes fireable when something makes it fireable, not on the hour.**
+  A factory bin's completion advances **its own** campaign and dispatches what
+  that created, and the twenty-second remote loop dispatches what it created too.
+  Advancing every campaign on any factory completion was the first version and
+  was wrong for the ordinary reason — it made one bin's completion the whole
+  fleet's work. Both paths are idempotent by the same row the design already had:
+  one intent per (bin, generation), `ON CONFLICT DO NOTHING`, so a duplicate
+  tick, a restart mid-flight and two instances produce exactly one fire.
 
 A worktree is the one factory path that is deliberately *not* authoritative
 state in either mode: it is execution scratch, the evidence is the commits, the

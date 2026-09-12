@@ -198,14 +198,45 @@ export async function dispatchTick(
   result.superseded = await supersedeStaleIntents();
 
   /*
-   * And put back anything deferred on a condition the fleet has since changed.
+   * The fleet, read once. Above the re-arm rather than below it, because the
+   * re-arm now asks a routing question and must ask it against the same numbers
+   * the fire will be decided on.
+   */
+  const snapshot = await fleetSnapshot();
+  result.missingSecrets = snapshot.missingSecrets.length;
+
+  /*
+   * And put back anything deferred on a condition the fleet has since changed —
+   * **only the work that condition was actually about.**
    *
    * Before routing, because this decides what there is to route. See
    * `rearmSurfaceDeferredIntents`: a backoff is a timestamp and the condition it
-   * stands for — one Routine's token, its state, its capabilities — can stop being
-   * true long before the timestamp lapses.
+   * stands for — one Routine's token, its state, its capabilities, and now the
+   * scope of the worker behind it — can stop being true long before the timestamp
+   * lapses.
+   *
+   * The predicate is `routeBin` itself, so this is a recheck rather than a guess:
+   * the fleet's state, the workload family the surfaces serve and the
+   * capabilities they declare are asked again, and an intent is put back only
+   * when the answer is no longer a scope refusal. Registering a factory surface
+   * therefore wakes factory work and leaves a research packet nothing serves
+   * exactly where it was.
+   *
+   * The repository is not one of the dimensions here, and that is the fire
+   * router's rule rather than an omission: §27 settles the repository at
+   * admission, where being wrong records something false, and leaves the fire
+   * free to be wrong at the cost of one activation.
    */
-  result.rearmed = await rearmSurfaceDeferredIntents();
+  result.rearmed = await rearmSurfaceDeferredIntents(async (bin) => {
+    const decision = routeBin({
+      bin,
+      candidates: snapshot.candidates,
+      fleetPolicy: snapshot.fleetPolicy,
+      fleetInFlight: snapshot.fleetInFlight,
+      now: new Date().toISOString(),
+    });
+    return decision.ok || !WAIT_FOR_OPERATOR.has(decision.refusal);
+  });
 
   /*
    * Put back a fire nobody answered.
@@ -258,8 +289,6 @@ export async function dispatchTick(
    * unmigrated deployment keeps firing its one Routine until somebody registers
    * it properly.
    */
-  const snapshot = await fleetSnapshot();
-  result.missingSecrets = snapshot.missingSecrets.length;
   const registryEmpty = snapshot.candidates.length === 0;
 
   if (registryEmpty && !isFireConfigured()) {

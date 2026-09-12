@@ -691,6 +691,97 @@ mutation scope, kept apart so that a contract cannot widen it by asking.
 could rewrite the machinery executing it is the one campaign whose failure mode
 is not contained by declining a pull request.
 
+### Onboarding a repository, and the half of it Brain cannot do
+
+Authorizing a repository is three things, and any one of them missing authorizes
+nothing: the grant above, a worker Brain will hand `FACTORY` work *for that
+repository*, and push access where that worker runs. The first is a merge; the
+third is granted on the surface. The second used to be an operator composing a
+scope set, a membership, an identity and a `worker_routing` row by hand on a
+terminal — four things with a wrong answer each, and every wrong answer failing
+silently, because a worker with the wrong scopes is refused with the same 404 a
+missing project gives.
+
+`services/factory/onboard.ts` is that middle act, and it is `connectSite`'s
+shape for `connectSite`'s reason. One action on the Build surface, behind
+`requirePerson` and `decideProjectAccess` at `ADMIN` — the level a membership
+grant already carries, and a level no worker principal can reach by type. Brain
+creates or reuses one worker per grant, writes `FACTORY_WORKER_SCOPES` and an
+exhaustive routing row **from constants rather than from anything the caller
+sent**, revokes any prior invitation and issues exactly one. Nothing is asked
+that has a wrong answer.
+
+It issues **no credential**. A factory worker reaches Brain through the Cowork
+connector, which authenticates with OAuth, so what it needs is not a secret to
+paste but a way for the consent screen to name it: a single-use, expiring worker
+invitation that on its own cannot read anything, call a tool or obtain a token.
+The invitation id is what reaches `identity_events`; the token reaches the reply
+once and nothing reads it back.
+
+And it **cannot register the surface**, which is the honest boundary rather than
+an omission — §22's split says the surface owns whether a worker may act. So
+readiness is derived on every read, in three answers with different remedies:
+
+| Readiness | What it means | What is left |
+| --- | --- | --- |
+| `NOT_ONBOARDED` | no worker is registered for this repository | press the one button |
+| `AWAITING_SURFACE` | Brain's half is done | connect it in Claude, then register a Routine |
+| `READY` | an enabled Routine is bound to that worker | nothing |
+
+Alongside it the card reports **how much work is already waiting on this
+repository**, counted from rows: while a grant has no surface, routing keys on
+the repository, so a `READY` bin naming it is work nothing can be handed. That
+number is the point of the setup task, and it carries the promise that makes
+deferring different from failing — the work resumes by itself, and nothing has
+to be submitted again.
+
+### A stage with nobody to give it to waits, and is put back
+
+Two refusals mean *setup is missing* rather than *this may not happen*:
+`NO_SURFACE_SERVES_THIS_FAMILY` and `NO_CAPABLE_SURFACE`. Both are resolved by
+an authorized action a person can take — registering a worker for the family, or
+a Routine that declares the capability — so the dispatcher **defers** them
+rather than counting them as failures. A scope refusal used to spend one of the
+bin's five dispatch attempts and abandon at the fifth, and an abandoned stage
+counts against the campaign's per-stage ceiling: a campaign submitted before its
+repository was onboarded had destroyed its own planning stage by the time the
+worker existed, for a reason that was never about the work.
+
+Everything else still exhausts. `NO_ROUTINES_REGISTERED` and
+`ALL_SURFACES_INELIGIBLE` are fleet-wide conditions rather than this stage's, and
+the admission-level refusals — `PROJECT_OUT_OF_SCOPE`, `REPOSITORY_NOT_AUTHORIZED`,
+`SCOPE_MISSING` — are not deferrals at all: they are decisions, and they cost
+nothing because a refused candidate is skipped before the compare-and-swap.
+
+Putting deferred work back is derived rather than scheduled, for the reason
+§23's re-arm already gives: a backoff is a timestamp, and the condition it stands
+for stops being true long before it lapses. `rearmSurfaceDeferredIntents` watches
+`worker_routing` as well as `fleet_routines` — onboarding writes the first — and
+it re-checks each candidate with `routeBin` itself before putting it back, so
+registering a factory surface wakes factory work and leaves a research packet
+nothing serves exactly where it was. The repository is deliberately not one of
+the dimensions it decides on: that is settled at admission, where being wrong
+records something false, rather than at the fire, where being wrong costs one
+activation. The attempt count is untouched: a re-arm is not a retry.
+
+The campaign says the same thing in a place a person looks. A ready stage whose
+current-generation intent is deferred on one of those two refusals sets
+`blockerKind = NO_HEALTHY_EXECUTION_SURFACE` with a sentence naming the remedy —
+and leaves `state` alone, because the campaign *is* planning, and saying BLOCKED
+would throw away what happens when the surface arrives. The blocker clears on the
+tick after the condition stops holding.
+
+### Fireable now, rather than on the hour
+
+A stage becoming available inside an activation used to wait for the next
+dispatch tick, and a stage becoming available *between* activations used to wait
+for the next scheduled one. Neither is a decision; both are a timer standing in
+for one. So a factory bin's completion advances **its own** campaign and then
+dispatches what that created, and the twenty-second remote loop dispatches what
+it created too. Both are ordinary idempotent paths — the intent is one row per
+(bin, generation) and `ON CONFLICT DO NOTHING` — so a duplicate tick, a restart
+mid-flight and two instances all produce exactly one fire.
+
 ### What recovers, and how
 
 Nothing here needs a new recovery mechanism, which is the point of having built

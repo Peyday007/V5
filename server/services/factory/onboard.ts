@@ -64,6 +64,8 @@ import {
   setWorkerStatus,
 } from '../../repos/identity.ts';
 import { listRoutines } from '../../repos/fleet.ts';
+import { listBins } from '../../repos/bins.ts';
+import { repositoryIdOf } from '../bins/routing.ts';
 import { createInvitation, revokeInvitationsForWorker } from '../../repos/invitations.ts';
 import { generateInvitationToken } from '../identity/secrets.ts';
 import { FACTORY_WORKER_SCOPES } from '../../domain/types.ts';
@@ -125,6 +127,17 @@ export interface RepositoryOnboarding {
   readiness: RepositoryReadiness;
   /** What a person still has to do, in the order they have to do it. */
   remaining: string[];
+  /**
+   * Stages already waiting on this, which resume by themselves afterwards.
+   *
+   * Counted from rows rather than promised: a bin that is `READY` for this
+   * repository and whose current-generation intent is deferred on a refusal an
+   * operator resolves is, precisely, work the missing surface is holding up.
+   * It is what makes the remaining steps worth taking today rather than an
+   * abstract setup task, and it is why `rearmSurfaceDeferredIntents` exists —
+   * nobody has to come back and start any of it again.
+   */
+  waiting: number;
 }
 
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
@@ -158,6 +171,25 @@ export async function repositoryOnboarding(projectId: string): Promise<Repositor
     out.push(await describeGrant(projectId, grant, routines));
   }
   return out;
+}
+
+/**
+ * How much work is already waiting on this repository's surface.
+ *
+ * Counted from rows rather than promised, and counted the simple way on
+ * purpose: routing keys on the repository the bin's manifest names (§27), so
+ * while this grant has no surface, a `READY` bin naming it is work that nothing
+ * can be handed. Whether its intent happens to be deferred, unattempted or
+ * newly superseded is a fact about the last tick rather than about the person's
+ * question, and reading it would make the number flicker between refreshes.
+ *
+ * It is only ever asked of a grant that is *not* `READY`, which is what makes
+ * that reasoning hold.
+ */
+async function waitingFor(projectId: string, repositoryId: string | null): Promise<number> {
+  if (!repositoryId) return 0;
+  const bins = await listBins({ projectId, states: ['READY'], limit: 200 });
+  return bins.filter((bin) => repositoryIdOf(bin) === repositoryId).length;
 }
 
 async function describeGrant(
@@ -223,6 +255,7 @@ async function describeGrant(
     surfaces,
     readiness,
     remaining,
+    waiting: readiness === 'READY' ? 0 : await waitingFor(projectId, repositoryId),
   };
 }
 

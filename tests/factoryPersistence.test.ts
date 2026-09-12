@@ -34,6 +34,9 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN_EMAIL = 'root@example.invalid';
 const BOOTSTRAP_PASSWORD = 'bootstrap-password-01';
 const ADMIN_PASSWORD = 'administrator-across-restarts';
+const MEMBER_EMAIL = 'writer@example.invalid';
+const MEMBER_TEMPORARY_PASSWORD = 'temporary-password-01';
+const MEMBER_PASSWORD = 'a-person-with-write-access';
 
 let dataDir = '';
 let log = '';
@@ -44,6 +47,10 @@ let projectId = '';
 let changeRequestId = '';
 let campaignId = '';
 let pinnedBaseSha = '';
+let grantId = '';
+let factoryWorkerName = '';
+let firstInvitation = '';
+let memberCookie = '';
 
 const OBJECTIVE = {
   objective: 'Prove a campaign is rows rather than something a dispatcher remembers.',
@@ -86,11 +93,14 @@ async function waitForHealthy(): Promise<void> {
   /*
    * Generous, because this file starts two servers in sequence and a machine
    * running the rest of the suite in parallel takes far longer than an idle one
-   * to boot either. It failed exactly that way once — under load, in the middle
-   * of a full run — and a test that only passes on a quiet machine is a test that
-   * will fail in CI for a reason that has nothing to do with the code.
+   * to boot either. It failed exactly that way twice — under load, in the middle
+   * of a full run, the second time with the boot log showing migrations applied
+   * and the administrator created, so the process was healthy and merely slow.
+   * A test that only passes on a quiet machine is a test that will fail in CI for
+   * a reason that has nothing to do with the code, so the bound is well past
+   * anything a real boot takes rather than close to it.
    */
-  const deadline = Date.now() + 120_000;
+  const deadline = Date.now() + 240_000;
   for (;;) {
     if (Date.now() > deadline) throw new Error(`server never became healthy:\n${log}`);
     try {
@@ -190,12 +200,63 @@ beforeAll(async () => {
   );
   campaignId = approved.body.campaign.id;
 
+  /*
+   * Onboard the authorized repository over the real route, before the restart.
+   *
+   * Everything about onboarding is rows — an identity, a membership, a routing
+   * scope, an invitation — so a restart is the only honest way to find out
+   * whether any of it was really a fact about the process that wrote it.
+   */
+  const repositories = await call<{ repositories: { grantId: string; readiness: string }[] }>(
+    'GET',
+    `/api/projects/${projectId}/factory/repositories`,
+    { cookie: adminCookie },
+  );
+  grantId = repositories.body.repositories[0]!.grantId;
+  const onboarded = await call<{
+    onboarding: { workerName: string; readiness: string };
+    invitationUrl: string;
+    createdIdentity: boolean;
+  }>('POST', `/api/projects/${projectId}/factory/repositories/${grantId}/onboard`, {
+    cookie: adminCookie,
+  });
+  if (onboarded.status !== 200) throw new Error(`onboarding failed: ${onboarded.status}`);
+  factoryWorkerName = onboarded.body.onboarding.workerName;
+  firstInvitation = onboarded.body.invitationUrl;
+
+  /*
+   * A second person, with write access and nothing more.
+   *
+   * Onboarding is a membership grant, so the policy puts it at ADMIN. Somebody
+   * who may submit an objective is deliberately not somebody who may widen who
+   * is allowed to execute a repository, and that has to still be true in a
+   * process that did not write the membership.
+   */
+  const member = await call<{ user: { id: string } }>('POST', '/api/admin/users', {
+    cookie: adminCookie,
+    body: {
+      email: MEMBER_EMAIL,
+      displayName: 'A person with write access',
+      password: MEMBER_TEMPORARY_PASSWORD,
+    },
+  });
+  await call('POST', `/api/admin/projects/${projectId}/members`, {
+    cookie: adminCookie,
+    body: { principalType: 'HUMAN', principalId: member.body.user.id, role: 'MEMBER' },
+  });
+  const temporary = await signIn(MEMBER_EMAIL, MEMBER_TEMPORARY_PASSWORD);
+  await call('POST', '/api/auth/password', {
+    cookie: temporary,
+    body: { currentPassword: MEMBER_TEMPORARY_PASSWORD, newPassword: MEMBER_PASSWORD },
+  });
+
   // The restart, for real: a different process, the same rows.
   await stopServer();
   current = startServer();
   await waitForHealthy();
   adminCookie = await signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
-}, 300_000);
+  memberCookie = await signIn(MEMBER_EMAIL, MEMBER_PASSWORD);
+}, 900_000);
 
 afterAll(async () => {
   await stopServer();
@@ -203,6 +264,102 @@ afterAll(async () => {
 });
 
 describe('after a real restart', () => {
+  /*
+   * Onboarding is rows, and a restart is what proves it.
+   *
+   * The identity, the membership, the routing scope and the invitation were all
+   * written by a process that no longer exists. Nothing here re-onboards first:
+   * the reading is taken cold, from a server that has only ever seen the
+   * database.
+   */
+  it('the repository is still onboarded, and still waiting for exactly one thing', async () => {
+    const view = await call<{
+      repositories: {
+        grantId: string;
+        workerName: string;
+        readiness: string;
+        routedFamilies: string[];
+        routedRepositories: string[];
+        remaining: string[];
+      }[];
+    }>('GET', `/api/projects/${projectId}/factory/repositories`, { cookie: adminCookie });
+    expect(view.status).toBe(200);
+    const repo = view.body.repositories.find((entry) => entry.grantId === grantId)!;
+    expect(repo.workerName).toBe(factoryWorkerName);
+    expect(repo.routedFamilies).toEqual(['FACTORY']);
+    expect(repo.routedRepositories).toHaveLength(1);
+    // Registered, and honest about the half that is not Brain's to do.
+    expect(repo.readiness).toBe('AWAITING_SURFACE');
+    expect(repo.remaining.join(' ')).toContain('connector');
+  });
+
+  /*
+   * A duplicate onboarding event — the person pressed it twice, or the first
+   * response was lost and they retried — must repair rather than accumulate.
+   * The identity is reused, the invitation is rotated rather than added to, and
+   * the reply says which of the two happened.
+   */
+  it('onboarding again repairs the same identity and leaves one live invitation', async () => {
+    const again = await call<{
+      onboarding: { workerName: string };
+      invitationUrl: string;
+      createdIdentity: boolean;
+    }>('POST', `/api/projects/${projectId}/factory/repositories/${grantId}/onboard`, {
+      cookie: adminCookie,
+    });
+    expect(again.status).toBe(200);
+    expect(again.body.createdIdentity).toBe(false);
+    expect(again.body.onboarding.workerName).toBe(factoryWorkerName);
+    expect(again.body.invitationUrl).not.toBe(firstInvitation);
+
+    // And the one it replaced no longer opens anything.
+    const spent = await fetch(`${BASE}${new URL(firstInvitation).pathname}`, { redirect: 'manual' });
+    expect(spent.status).toBe(400);
+  });
+
+  /*
+   * The same 404 body a missing project gives, to a caller who may not do this.
+   * Onboarding is a membership grant, so it is ADMIN — and a person with write
+   * access is not automatically entitled to widen who may execute a repository.
+   */
+  it('refuses an unauthenticated caller the onboarding route outright', async () => {
+    // No principal at all is not a resource question, so it is not the 404 the
+    // next test is about: there is nobody to decide anything for yet.
+    const refused = await call('POST', `/api/projects/${projectId}/factory/repositories/${grantId}/onboard`);
+    expect(refused.status).toBe(401);
+  });
+
+  /*
+   * The permanent refusal, preserved. Write access is not authority to widen
+   * who may execute a repository, and the person who lacks it is told exactly
+   * what a person looking at a project that does not exist is told — the same
+   * status *and* the same body, because a matching status over a different
+   * sentence is still an oracle.
+   */
+  it('refuses a person with write access, in the words a missing project gets', async () => {
+    const refused = await call(
+      'POST',
+      `/api/projects/${projectId}/factory/repositories/${grantId}/onboard`,
+      { cookie: memberCookie },
+    );
+    const absent = await call('POST', `/api/projects/prj_nothing/factory/repositories/${grantId}/onboard`, {
+      cookie: memberCookie,
+    });
+    expect(refused.status).toBe(404);
+    expect(absent.status).toBe(404);
+    expect(refused.text).toBe(absent.text);
+
+    // And it is a refusal about authority rather than a repository that went
+    // missing: the administrator still sees it registered.
+    const still = await call<{ repositories: { readiness: string }[] }>(
+      'GET',
+      `/api/projects/${projectId}/factory/repositories`,
+      { cookie: adminCookie },
+    );
+    expect(still.body.repositories[0]!.readiness).toBe('AWAITING_SURFACE');
+  });
+
+
   it('the campaign is still there, with the commit it pinned', async () => {
     const view = await call<{
       campaign: { id: string; baseSha: string; state: string };
