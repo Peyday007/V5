@@ -9405,3 +9405,33 @@ would hollow out both.
 request, so it would leave the mission at `NEEDS_HUMAN` with an open decision,
 no writeback, and therefore no follow-on. It is not a way round this and was not
 used.
+
+## 98. A19 closed; 20/21, and the last one is a decision — 2026-09-12
+
+The refusal clamp was delivered as **34659204629** from `production` at
+`9cbd5f7`, guard first, `npm test` and `npm run build` in CI, then verified
+either side of a real restart — *Prove the live Brain is actually shut* at
+23:51:50Z, *Restart it, so persistence means something*, *Prove it survived the
+restart*, all three green. Both backends passed before it left: **2166 on
+SQLite** and **2191 on Postgres**, the second because this change reads
+`oauth_tokens` and §25's own lesson is that a repository layer over two
+databases is true or merely compiling.
+
+Ledgered as entry 56. A19 had been `NOT_RUN` about something true — the branch
+had moved well past `34586165112`, so what was deployed was not what the
+acceptance was reading — and it is now:
+
+```
+STEP 12A — composed: 20/21 PASS · 0 FAIL · 0 BLOCKED · 1 NOT_RUN · 1 DEFERRED
+A19_DELIVERY PASS
+A13_AUTO_NEXT NOT_RUN
+A22_FAST_CHAT_ROUTING DEFERRED
+```
+
+`A13_AUTO_NEXT` is the one gate left and it is the decision §95 and §97 already
+recorded. Nothing about worker capacity stands in its way: the packet reads
+`claimable=0`, the report is filed with bytes, and both audits are recorded.
+`recordGaps` reads `request.answeredByUserId`, which `answerHumanRequest` takes
+from the authenticated principal — so the answer has to come from a person
+signed in at `/needs-you`, and that is the property that makes `A14_HUMAN_RESUME`
+mean anything rather than an obstacle to route around.
