@@ -49,8 +49,17 @@ import {
   getDb,
   initDatabase,
 } from '../server/db/database.ts';
+import { randomUUID } from 'node:crypto';
 import { createProject } from '../server/repos/projects.ts';
-import { createWorker, grantMembership } from '../server/repos/identity.ts';
+import {
+  createUser,
+  createWorker,
+  grantMembership,
+  revokeMembership,
+} from '../server/repos/identity.ts';
+import { decideProjectAccess } from '../server/services/identity/policy.ts';
+import { conversationIsReadable, ownerPrincipal } from '../server/services/russell/turn.ts';
+import { createConversation } from '../server/repos/russellConversations.ts';
 import { listRoutines, listAccounts } from '../server/repos/fleet.ts';
 import { LENSES } from '../server/services/russell/frontier.ts';
 import { askableLenses, openInquiry, validateLensReply } from '../server/services/russell/inquiry.ts';
@@ -60,6 +69,7 @@ import { PREFERENCES, checkPreference, defaults } from '../server/services/russe
 import { SEARCH_KINDS, search } from '../server/services/russell/search.ts';
 import { usability } from '../server/services/fleet/view.ts';
 import { CANDIDATE_PRIORITIES } from '../server/domain/types.ts';
+import { choicesFor } from '../server/services/russell/needsHuman.ts';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 
@@ -309,13 +319,60 @@ async function main(): Promise<void> {
   );
 
   /* -- F. Needs You -------------------------------------------------------- */
-  const needsHuman = file('server/services/russell/needsHuman.ts');
+  /*
+   * The rule the park rests on, exercised against the three packet shapes that
+   * separate it — including the production one that produced the correction.
+   *
+   * §24's rule is "park only where more than one thing can be chosen between",
+   * and `choicesFor` is where that is decided. It is a pure function over a
+   * shape read from fragment rows, so it is driven here directly with the three
+   * shapes rather than through a fixture that would have to arrange a packet to
+   * ask it. What this does *not* establish is the end-to-end journey: a real
+   * packet parking, a person answering, and the packet moving — that needs a
+   * production boundary and is reported as missing rather than implied.
+   */
+  const shapes = [
+    {
+      name: 'a plan awaiting approval',
+      shape: { awaitingApproval: 2, accepted: 0, researched: 0 },
+      expect: ['APPROVE_PLAN', 'STOP'],
+    },
+    {
+      name: 'researched, and nothing cleared the gate',
+      shape: { awaitingApproval: 0, accepted: 0, researched: 1 },
+      expect: ['STOP'],
+    },
+    {
+      name: 'researched, with something to file beside the gaps',
+      shape: { awaitingApproval: 0, accepted: 2, researched: 3 },
+      expect: ['RECORD_GAPS', 'STOP'],
+    },
+  ] as const;
+  const offers = shapes.map((entry) => {
+    const keys = choicesFor(entry.shape).map((choice) => choice.key);
+    return {
+      name: entry.name,
+      keys,
+      held: keys.length === entry.expect.length && keys.every((key, i) => key === entry.expect[i]),
+      decidable: keys.length > 1,
+    };
+  });
+  const offersHeld = offers.every((entry) => entry.held);
+  // The production case: one refused fragment, nothing accepted. One answer,
+  // so nothing is parked and nobody is asked to press the only button there is.
+  const singleAnswerDoesNotPark = offers[1]!.decidable === false;
   record(
     'F',
     'Needs You',
-    needsHuman && /choicesFor/.test(needsHuman) ? 'NOT_RUN' : 'NOT_RUN',
-    'The park and its answering transition are present and unit-tested; a genuine production ' +
-      'boundary answered end to end is not established by this run.',
+    offersHeld && singleAnswerDoesNotPark ? 'PARTIAL' : 'NOT_RUN',
+    offersHeld && singleAnswerDoesNotPark
+      ? `${offers.length}/${offers.length} packet shapes produce the offer the domain says they ` +
+        `should (${offers.map((entry) => `${entry.name} → ${entry.keys.join('+')}`).join('; ')}), ` +
+        'and the shape with one answer is not parked — which is the condition being the offer ' +
+        'rather than a row count standing in for it. NOT established here: a real packet ' +
+        'parking on a production boundary, a person answering it, and the packet moving.'
+      : 'The offer did not match the domain for at least one shape, which is a defect rather ' +
+        `than a missing run: ${offers.map((entry) => `${entry.name} → ${entry.keys.join('+')}`).join('; ')}.`,
   );
 
   /* -- G. Capability Lab --------------------------------------------------- */
@@ -382,16 +439,131 @@ async function main(): Promise<void> {
   );
 
   /* -- I. Collaboration ---------------------------------------------------- */
+  /*
+   * Two real identities, and the boundary between them, exercised rather than
+   * read.
+   *
+   * §29's I is about what happens when a second person is on a project, and
+   * that is a fact about rows: a membership granted, a role changed, a
+   * membership revoked, and a private thread that stays its owner's whatever
+   * the other person's role is. All four are driven here against the temporary
+   * database, through the same `decideProjectAccess` every route calls — not a
+   * second copy of the rule, and not a regex over the route file.
+   *
+   * Two things it deliberately does not claim. It is not an *invitation* flow:
+   * nothing here sends anything to anybody, and the email that would carry one
+   * is outside this Brain. And it is a reading in an isolated database rather
+   * than on the deployed product, so it establishes the mechanism and not the
+   * experience.
+   */
   const routes = file('server/routes/russell.ts');
   const workerRefused = routes ? /requirePerson\(\)/.test(routes) : false;
+  const owner = await createUser({
+    email: 'acceptance-owner@example.invalid',
+    displayName: 'Owner',
+    // A generated value that is never printed, never stored in the clear and
+    // never reused: the identity is the subject here, not the credential.
+    password: `acc-${randomUUID()}`,
+    isBrainAdmin: false,
+  });
+  const colleague = await createUser({
+    email: 'acceptance-colleague@example.invalid',
+    displayName: 'Colleague',
+    password: `acc-${randomUUID()}`,
+    isBrainAdmin: false,
+  });
+  await grantMembership({
+    principalType: 'HUMAN',
+    principalId: owner.id,
+    projectId: project.id,
+    role: 'ADMIN',
+    grantedByType: 'SYSTEM',
+    grantedById: owner.id,
+  });
+  const ownerPrincipalNow = await ownerPrincipal(owner.id);
+  const strangerBefore = await ownerPrincipal(colleague.id);
+  // A person with no membership may not read the project at all.
+  const strangerRefused =
+    strangerBefore !== null &&
+    !decideProjectAccess(strangerBefore, project.id, 'READ').allowed;
+
+  await grantMembership({
+    principalType: 'HUMAN',
+    principalId: colleague.id,
+    projectId: project.id,
+    role: 'MEMBER',
+    grantedByType: 'HUMAN',
+    grantedById: owner.id,
+  });
+  const asMember = await ownerPrincipal(colleague.id);
+  const memberReads = asMember !== null && decideProjectAccess(asMember, project.id, 'READ').allowed;
+  const memberIsNotAdmin =
+    asMember !== null && !decideProjectAccess(asMember, project.id, 'ADMIN').allowed;
+
+  // The role change: the same person, a different answer, read from rows
+  // rather than from anything they sent.
+  await grantMembership({
+    principalType: 'HUMAN',
+    principalId: colleague.id,
+    projectId: project.id,
+    role: 'ADMIN',
+    grantedByType: 'HUMAN',
+    grantedById: owner.id,
+  });
+  const asAdmin = await ownerPrincipal(colleague.id);
+  const promoted = asAdmin !== null && decideProjectAccess(asAdmin, project.id, 'ADMIN').allowed;
+
+  // A private thread stays its owner's, whatever the other person's role.
+  const privateThread = await createConversation({
+    ownerUserId: owner.id,
+    title: 'Something the owner is thinking about alone',
+    projectId: project.id,
+    visibility: 'PRIVATE',
+  });
+  const sharedThread = await createConversation({
+    ownerUserId: owner.id,
+    title: 'Something the project is thinking about together',
+    projectId: project.id,
+    visibility: 'SHARED',
+  });
+  const adminDeniedPrivate =
+    asAdmin !== null && !(await conversationIsReadable(asAdmin, privateThread.id));
+  const adminReadsShared =
+    asAdmin !== null && (await conversationIsReadable(asAdmin, sharedThread.id));
+  const ownerReadsOwn =
+    ownerPrincipalNow !== null && (await conversationIsReadable(ownerPrincipalNow, privateThread.id));
+
+  // And revoking lands on the next read rather than at the next sign-in.
+  await revokeMembership(project.id, 'HUMAN', colleague.id);
+  const afterRevoke = await ownerPrincipal(colleague.id);
+  const revokedImmediately =
+    afterRevoke !== null && !decideProjectAccess(afterRevoke, project.id, 'READ').allowed;
+
+  const collaboration = [
+    ['a non-member may not read', strangerRefused],
+    ['a MEMBER may read', memberReads],
+    ['a MEMBER is not an ADMIN', memberIsNotAdmin],
+    ['a role change is read from rows', promoted],
+    ["a project ADMIN may not read the owner's private thread", adminDeniedPrivate],
+    ['that same ADMIN may read the shared one', adminReadsShared],
+    ['the owner reads their own', ownerReadsOwn],
+    ['revoking lands on the next read', revokedImmediately],
+  ] as const;
+  const failed = collaboration.filter(([, held]) => !held).map(([name]) => name);
   record(
     'I',
     'Collaboration',
-    'NOT_RUN',
-    workerRefused
-      ? 'A worker principal is refused at the conversation and decision routes by type, and ' +
-        'private threads are scoped by owner. Two real human identities were not exercised in this run.'
-      : 'The route guards could not be read.',
+    failed.length === 0 && workerRefused ? 'PARTIAL' : 'NOT_RUN',
+    failed.length > 0
+      ? `Exercised with two real identities and ${failed.length} condition(s) did not hold: ` +
+        `${failed.join('; ')}. That is a defect rather than a missing run.`
+      : `Two real human identities on one project: ${collaboration.length}/${collaboration.length} ` +
+        'boundary conditions held — non-member refused, MEMBER reads but is not ADMIN, a role ' +
+        "change is read from rows, a project ADMIN cannot read the owner's private thread but " +
+        'can read the shared one, and revoking lands on the next read rather than the next ' +
+        `sign-in. A worker principal is refused at these routes by type (${workerRefused ? 'requirePerson' : 'NOT FOUND — defect'}). ` +
+        'NOT established here: an invitation anybody received, and the same journey on the ' +
+        'deployed product rather than in this isolated database.',
   );
 
   /* -- J. Mobile ----------------------------------------------------------- */
@@ -480,8 +652,8 @@ async function main(): Promise<void> {
       `${searchScoped.hits.length} hits); ${Object.keys(PREFERENCES).length} preference keys are ` +
       `presentational only and every one has a default (${Object.keys(defaults()).length}). ` +
       `${SEARCH_KINDS.length} search kinds are scoped before the query rather than filtered after. ` +
-      'NOT established here: invite/accept/role-change with two real identities, and a canary ' +
-      'rollback in production.',
+      'Role change with two real identities is exercised in I. NOT established here: an ' +
+      'invitation anybody received, and a canary rollback in production.',
   );
 
   /* ------------------------------------------------------------------------ */
