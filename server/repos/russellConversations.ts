@@ -490,6 +490,54 @@ export async function listPendingMessages(limit = 50): Promise<RussellMessage[]>
  * an author is worse than admitting there is not one, so a legacy turn arrives
  * flagged `legacy: true` with `authorUserId: null` and the UI can say so.
  */
+/**
+ * The last thing said in each of several threads, in one query.
+ *
+ * Exists because the collections view needs to know whether a person's message
+ * is still unanswered, for every thread they own — and asking per thread is a
+ * fan-out that is invisible with four threads and unusable with four hundred.
+ *
+ * Deliberately reads `russell_messages` only. An adopted legacy transcript
+ * cannot receive a new turn, so its last message can never be the unanswered
+ * one; including it would cost a second query and a merge to learn nothing.
+ */
+export async function lastTurnPerConversation(
+  conversationIds: string[],
+): Promise<Map<string, { role: RussellMessageRole; status: RussellMessageState }>> {
+  const out = new Map<string, { role: RussellMessageRole; status: RussellMessageState }>();
+  if (conversationIds.length === 0) return out;
+  const placeholders = conversationIds.map(() => '?').join(',');
+  /*
+   * Newest first, and the first row per conversation wins.
+   *
+   * A window function would be tidier and is not sayable identically in both
+   * dialects, so this orders and takes the first — which is the same answer
+   * and passes on both backends. The cap is generous rather than exact: it
+   * bounds a pathological read without being able to drop a conversation that
+   * has fewer messages than the cap divided by the number of threads.
+   */
+  const rows = await getDb().all<{
+    conversation_id: string;
+    role: string;
+    status: string;
+  }>(
+    `SELECT conversation_id, role, status
+       FROM russell_messages
+      WHERE conversation_id IN (${placeholders})
+      ORDER BY created_at DESC, rowid DESC
+      LIMIT ?`,
+    [...conversationIds, Math.min(5000, conversationIds.length * 25)],
+  );
+  for (const row of rows) {
+    if (out.has(row.conversation_id)) continue;
+    out.set(row.conversation_id, {
+      role: row.role as RussellMessageRole,
+      status: row.status as RussellMessageState,
+    });
+  }
+  return out;
+}
+
 export async function listTurns(
   conversationId: string,
   limit = 500,

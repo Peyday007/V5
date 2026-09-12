@@ -31,7 +31,10 @@ import {
   fileConversation,
   listCollections,
 } from '../../repos/russellCollections.ts';
-import { listConversationsForOwner, listTurns } from '../../repos/russellConversations.ts';
+import {
+  lastTurnPerConversation,
+  listConversationsForOwner,
+} from '../../repos/russellConversations.ts';
 import { listMissions, listOpenRequests, listCurrentKnowledge } from '../../repos/russellMissions.ts';
 import { listCandidates } from '../../repos/russellCandidates.ts';
 import { getProject } from '../../repos/projects.ts';
@@ -271,6 +274,15 @@ export async function collectionsFor(input: {
     requestsByMission.set(request.missionId, (requestsByMission.get(request.missionId) ?? 0) + 1);
   }
 
+  /*
+   * The last turn in every thread, in one query.
+   *
+   * This was a `listTurns` call inside the loop — the fan-out the comment
+   * above this function claims it avoids, which made the comment wrong rather
+   * than the code slow. Two hundred threads was two hundred round trips.
+   */
+  const lastTurns = await lastTurnPerConversation(threads.map((thread) => thread.id));
+
   const ranked: RankedThread[] = [];
   for (const thread of threads) {
     const threadMissions = missionsByThread.get(thread.id) ?? [];
@@ -281,8 +293,7 @@ export async function collectionsFor(input: {
       (total, mission) => total + (requestsByMission.get(mission.id) ?? 0),
       0,
     );
-    const turns = await listTurns(thread.id, 4);
-    const last = turns[turns.length - 1];
+    const last = lastTurns.get(thread.id);
     const awaitingAnswer =
       last !== undefined && (last.role === 'USER' || last.status === 'PENDING');
     const { standing, reason } = standingOf({

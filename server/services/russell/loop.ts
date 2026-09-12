@@ -71,7 +71,7 @@ import {
 import { currentFragments, getOrchestration, updateOrchestration } from '../../repos/research.ts';
 import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
 import { getProject, listProjects } from '../../repos/projects.ts';
-import { refreshFrontier } from './frontier.ts';
+import { frontierIsDue, refreshFrontier } from './frontier.ts';
 import { recordEvent } from '../../repos/events.ts';
 import {
   createCandidate,
@@ -705,6 +705,17 @@ export async function tick(owner: string): Promise<TickReport> {
      */
     for (const project of await listProjects()) {
       try {
+        /*
+         * On the frontier's own cadence rather than the loop's.
+         *
+         * Observing an item touches its `last_seen_at`, so refreshing every
+         * project every thirty seconds would rewrite every frontier row twice
+         * a minute for ever. Whether a project is due is read from those same
+         * rows, so it survives a restart without any in-process state — and a
+         * person opening the page still gets a reading of now, because the
+         * read path refreshes unconditionally.
+         */
+        if (!(await frontierIsDue(project.id))) continue;
         const counts = await refreshFrontier(project.id);
         if (counts.observed > 0 || counts.resolved > 0) {
           report.frontier.push({

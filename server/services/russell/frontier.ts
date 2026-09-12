@@ -245,6 +245,39 @@ export function classify(input: {
 }
 
 /**
+ * How often the durable loop re-reads a project's edges.
+ *
+ * Ten minutes, not the loop's thirty seconds, and the reason is write churn:
+ * observing an item touches its `last_seen_at`, so a tick-rate refresh would
+ * write every row of every project's frontier twice a minute for ever. The
+ * frontier changes when knowledge, layers or candidates change — which is
+ * minutes apart at the fastest — so this is the cadence the data actually has.
+ *
+ * A read of the page always refreshes regardless. A person looking at the
+ * frontier is asking what is true now, and answering with a reading up to ten
+ * minutes old would be the staleness this whole module exists to remove.
+ */
+export const FRONTIER_REFRESH_MS = 10 * 60 * 1000;
+
+/**
+ * Whether the background loop should re-read this project.
+ *
+ * Derived from the rows rather than from in-process state, so it survives a
+ * restart: the newest `last_seen_at` *is* when the last pass ran. A project
+ * with no frontier rows at all has never been read and is always due.
+ */
+export async function frontierIsDue(projectId: string, now = Date.now()): Promise<boolean> {
+  const items = await listFrontier({ projectId, includeResolved: true, includePrivate: true });
+  let newest = 0;
+  for (const item of items) {
+    const at = Date.parse(item.lastSeenAt);
+    if (!Number.isNaN(at) && at > newest) newest = at;
+  }
+  if (newest === 0) return true;
+  return now - newest >= FRONTIER_REFRESH_MS;
+}
+
+/**
  * Re-read one project's frontier and record what is true now.
  *
  * Everything observed is touched; everything that was live and is no longer
