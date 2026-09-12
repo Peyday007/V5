@@ -46,7 +46,7 @@ import {
 } from '../server/services/audit/integrityReaudit.ts';
 import { listOpenReopens, listReopens } from '../server/repos/auditReopens.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
-import { getBin } from '../server/repos/bins.ts';
+import { binForOrchestration, getBin } from '../server/repos/bins.ts';
 import { auditRoundFor, auditRoundStartedAt } from '../server/services/research/auditRound.ts';
 import { earlierAuditRole } from '../server/services/research/auditBrief.ts';
 import type { Document } from '../server/domain/types.ts';
@@ -421,6 +421,41 @@ describe('the transition itself', () => {
     const fresh = await getBin(replay.binId!);
     expect(fresh?.state).toBe('READY');
     expect(fresh?.orchestrationId).toBe(orchestrationId);
+  });
+
+  /*
+   * The reader that told a person the opposite of the truth.
+   *
+   * `binForOrchestration` had no `ORDER BY` at all, so once a reopened round
+   * gave the packet a second bin it returned whichever row the backend felt
+   * like. In production it picked the spent one while a live bin was running
+   * the replacement PRIMARY, and `packet-report` printed "nothing can be sent
+   * for this packet". A warning that cries wolf is worse than no warning.
+   */
+  it('names the bin that can still deliver, not whichever row comes back first', async () => {
+    await authorReviewedItsOwnWork();
+    const first = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    await getDb().run(`UPDATE bins SET state = 'NEEDS_HUMAN' WHERE id = ?`, [first.binId]);
+    const replay = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    expect(replay.binId).not.toBe(first.binId);
+
+    // Two bins on one packet, one spent and one live. The live one is the answer.
+    const chosen = await binForOrchestration(orchestrationId);
+    expect(chosen?.id).toBe(replay.binId);
+    expect(chosen?.state).toBe('READY');
+  });
+
+  it('falls back to the newest bin when every one of them is spent', async () => {
+    await authorReviewedItsOwnWork();
+    const first = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    await getDb().run(`UPDATE bins SET state = 'NEEDS_HUMAN' WHERE id = ?`, [first.binId]);
+    const replay = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    await getDb().run(`UPDATE bins SET state = 'COMPLETE' WHERE id = ?`, [replay.binId]);
+
+    // Nothing can deliver, and saying so needs a bin to say it about — the
+    // newest, because that is the one whose state is the current answer.
+    const chosen = await binForOrchestration(orchestrationId);
+    expect(chosen?.id).toBe(replay.binId);
   });
 
   it('a replay reuses a bin that can still deliver, rather than building a second', async () => {

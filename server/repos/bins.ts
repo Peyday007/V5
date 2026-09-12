@@ -439,10 +439,38 @@ export async function binByCreator(createdById: string): Promise<Bin | null> {
   return row ? mapBin(row) : null;
 }
 
+/**
+ * The bin this packet can still be sent for, or the last one it had.
+ *
+ * The paragraph above `binByCreator` names this function's defect and left it
+ * standing: a `SELECT` with no `ORDER BY` returns whichever row the backend
+ * feels like, and a packet has more than one bin as soon as a round is
+ * reopened. Production showed both costs within the hour —
+ * `orc_abab7d7130d545eaa1a1` had a live `LEASED` bin doing its replacement
+ * PRIMARY review while `packet-report` picked the spent one and printed
+ * **"nothing can be sent for this packet"**. A warning that cries wolf is worse
+ * than no warning: it teaches a reader to stop believing the one place that
+ * tells them a packet is genuinely stranded. `creditPacketProgress` had the
+ * quieter half of it, refunding an attempt to whichever bin came back rather
+ * than the one doing the work.
+ *
+ * So the order is the answer: a bin that can still deliver first, then the
+ * newest. `NEEDS_HUMAN` sits with the terminal states here because
+ * `DISPATCHABLE_SQL` does not offer it either — for *can this packet be sent
+ * for*, a bin out of attempts is as spent as a finished one.
+ *
+ * The `CASE` is sayable in both dialects, and the tiebreak is `created_at` and
+ * `id` rather than `rowid`, which is the rule this repository has been caught
+ * by three times.
+ */
 export async function binForOrchestration(orchestrationId: string): Promise<Bin | null> {
-  const row = await getDb().get<BinRow>(`SELECT * FROM bins WHERE orchestration_id = ?`, [
-    orchestrationId,
-  ]);
+  const row = await getDb().get<BinRow>(
+    `SELECT * FROM bins WHERE orchestration_id = ?
+      ORDER BY CASE WHEN state IN ('COMPLETE','FAILED','CANCELLED','NEEDS_HUMAN') THEN 1 ELSE 0 END,
+               created_at DESC, id DESC
+      LIMIT 1`,
+    [orchestrationId],
+  );
   return row ? mapBin(row) : null;
 }
 

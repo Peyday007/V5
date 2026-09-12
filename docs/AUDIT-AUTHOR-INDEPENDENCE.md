@@ -280,6 +280,52 @@ packet. The fixture now carries the accepted fragment the document implies, and
 two tests pin the queue rather than the call — what an arriving worker can claim,
 and that a replay adds nothing to it.
 
+## 5b. What the corrected round actually did, and the reader that lied about it
+
+The replay at 15:48 put the round back in business and the fleet took it
+without anybody involved:
+
+```
+15:48:18  BIN_READY            bin_9933ad0a856440418241
+15:48:25  DISPATCH_ROUTED      Selected V1 on primary: 0/2 Routine, 0/2 account
+15:48:26  DISPATCH_SENT        session cse_01HrfBw1rvDFrDnss3CWZ7j8
+15:48:40  BIN_ASSIGNED         worker wkr_1cdd82cfb2a54faf8edd
+15:48:58  BIN_ITEM_CLAIMED     ← the thing that did not exist before the fix
+15:51:53  PRIMARY pass complete, session oat_564ad322fc284a94a54c
+15:51:59  BIN_ITEM_WITHHELD    REFUSED_BY_ADMISSION —
+                               "ADVERSARIAL would share the same session as PRIMARY"
+```
+
+Forty seconds from replay to a worker holding the work, zero refusals on the
+bin. The replacement PRIMARY ran in `oat_564ad322fc284a94a54c`, which is
+distinct from **both** synthesis sessions — so the pairing the finding is about
+is gone, and `auditMatrixVerdict` reads `compliant` over the current round's
+six pairs. The old passes are all still there with their original timestamps,
+and `audits=4 synthesis=2` is the honest count of a packet that has been
+audited twice.
+
+The refusal six seconds later is the floor working rather than a second fault:
+the same session may not also argue the other side, so ADVERSARIAL waits for
+one that is genuinely distinct. The reopen stays `OPEN` until a **fresh judge
+verdict** lands, which is the whole point — the old `PASS` cannot settle it.
+
+**And one reader lied about all of it.** `binForOrchestration` was a `SELECT`
+with no `ORDER BY`, which was fine while a packet had one bin and stopped being
+fine the moment a reopened round gave it a second. It returned the *spent* bin
+while the live one was running the replacement review, so `packet-report`
+printed **"1 claimable item(s) and the bin is COMPLETE: nothing can be sent for
+this packet"** about a packet that was at that moment being worked on. A warning
+that cries wolf is worse than no warning — it teaches a reader to stop believing
+the one place that tells them a packet is genuinely stranded.
+
+The paragraph directly above it, on `binByCreator`, already names the defect in
+so many words: *"a `SELECT` with no `ORDER BY` over two rows returns whichever
+the backend feels like."* The neighbour was left standing. It now orders a bin
+that can still deliver ahead of one that cannot and takes the newest as the
+tiebreak, so the answer is deterministic in both dialects.
+`creditPacketProgress` had the quieter half of the same bug, refunding an
+attempt to whichever bin came back rather than the one doing the work.
+
 ## 6. The scope, reported without reopening anything
 
 `npm run admin -- packets independence [project]` reads every packet's lineage

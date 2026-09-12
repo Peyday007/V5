@@ -1121,6 +1121,17 @@ is its own event, `AUDIT_ROUND_REOPENED`, with its own append-only record.
   one keeps its row, its attempts and its events. The five workers were not the
   defect and are worth recording as the opposite: each read the state correctly,
   said so precisely, and released rather than inventing a report.
+  **And one reader lied about the corrected round.** `binForOrchestration` was a
+  `SELECT` with no `ORDER BY`, fine while a packet had one bin and wrong the
+  moment a reopened round gave it a second: it returned the spent bin while the
+  live one was running the replacement review, so `packet-report` printed *"1
+  claimable item(s) and the bin is COMPLETE: nothing can be sent for this
+  packet"* about a packet being worked on at that instant. **A warning that
+  cries wolf is worse than no warning** — it teaches a reader to stop believing
+  the one place that says a packet is genuinely stranded. The paragraph directly
+  above it already named the defect and the neighbour was left standing; it
+  orders a deliverable bin ahead of a spent one now, newest as the tiebreak,
+  deterministic in both dialects.
 - **The scan reports and does not act.** `npm run admin -- packets independence`
   names every packet whose reviewer shared a session with an author, and opens
   none of them, because that decision is a person's. It reports a packet whose
