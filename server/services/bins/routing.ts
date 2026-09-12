@@ -230,7 +230,10 @@ export interface RoutingDecision {
 
 /** The repository a bin's work is a change to, as an owner/name id. */
 export function repositoryIdOf(bin: Pick<Bin, 'manifest'>): string | null {
-  const remote = bin.manifest.repository?.remote;
+  // Optional all the way down, as `familyOf` already is. The router reads this
+  // for every bin it considers, and a bin whose manifest has not been read is a
+  // bin with no repository rather than a thrown dispatcher.
+  const remote = bin.manifest?.repository?.remote;
   if (typeof remote !== 'string' || remote.length === 0) return null;
   /*
    * Normalised the same way the repository envelope normalises a grant, because

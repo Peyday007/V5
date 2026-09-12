@@ -138,6 +138,25 @@ export function isRetryable(kind: FireErrorKind): boolean {
   return kind === 'RATE_LIMIT' || kind === 'SERVER' || kind === 'NETWORK';
 }
 
+/**
+ * Fire failures that are facts about *that surface* and are fixed by a person.
+ *
+ * These are the three that quarantine a Routine by name rather than backing off:
+ * a token that does not authorize will not start authorizing, a Routine that is
+ * gone will not come back, and a paused one stays paused until somebody
+ * un-pauses it. They are also, for exactly that reason, the ones a write to the
+ * fleet could have answered — so they join the routing refusals in the set
+ * `rearmSurfaceDeferredIntents` reconsiders.
+ *
+ * `NOT_CONFIGURED` is deliberately absent: it is fleet-wide rather than about a
+ * surface, and there is no row to write that answers it.
+ */
+export const OPERATOR_RESOLVED_FIRE_FAILURES: readonly FireErrorKind[] = [
+  'AUTH',
+  'NOT_FOUND',
+  'PAUSED',
+];
+
 function retryAfterMs(header: string | null): number | null {
   if (!header) return null;
   const seconds = Number(header);

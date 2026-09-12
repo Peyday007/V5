@@ -29,6 +29,7 @@ import {
 } from '../server/repos/bins.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import type { BinManifest } from '../server/domain/types.ts';
+import { OPERATOR_RESOLVED_KINDS } from '../server/services/dispatch/loop.ts';
 
 let projectId = '';
 const realFetch = globalThis.fetch;
@@ -188,13 +189,13 @@ describe('a fire refused for authentication', () => {
       }),
     ).toBe(true);
 
-    expect(await rearmSurfaceDeferredIntents()).toBeGreaterThanOrEqual(1);
+    expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBeGreaterThanOrEqual(1);
     const again = await claimDispatchIntent();
     expect(again?.id).toBe(claimed!.id);
 
     // Self-limiting: the re-arm stamped the intent, so a second pass finds nothing
     // until the fleet changes again.
-    expect(await rearmSurfaceDeferredIntents()).toBe(0);
+    expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(0);
   });
 
   it('leaves every surface enabled when the provider accepts', async () => {

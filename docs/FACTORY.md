@@ -737,32 +737,74 @@ to be submitted again.
 
 ### A stage with nobody to give it to waits, and is put back
 
-Two refusals mean *setup is missing* rather than *this may not happen*:
-`NO_SURFACE_SERVES_THIS_FAMILY` and `NO_CAPABLE_SURFACE`. Both are resolved by
-an authorized action a person can take — registering a worker for the family, or
-a Routine that declares the capability — so the dispatcher **defers** them
-rather than counting them as failures. A scope refusal used to spend one of the
-bin's five dispatch attempts and abandon at the fifth, and an abandoned stage
-counts against the campaign's per-stage ceiling: a campaign submitted before its
-repository was onboarded had destroyed its own planning stage by the time the
-worker existed, for a reason that was never about the work.
+**Every routing refusal is a wait, and none of them exhausts.** That is a
+statement about what routing is rather than a softening: routing answers "can any
+surface take this now", which is never a decision about whether the work may
+happen. `REFUSAL_WAIT` in `services/dispatch/router.ts` classifies the whole
+union into two kinds and there is no third:
 
-Everything else still exhausts. `NO_ROUTINES_REGISTERED` and
-`ALL_SURFACES_INELIGIBLE` are fleet-wide conditions rather than this stage's, and
-the admission-level refusals — `PROJECT_OUT_OF_SCOPE`, `REPOSITORY_NOT_AUTHORIZED`,
-`SCOPE_MISSING` — are not deferrals at all: they are decisions, and they cost
-nothing because a refused candidate is skipped before the compare-and-swap.
+| Kind | Refusals | Resolved by |
+| --- | --- | --- |
+| `CAPACITY` | `FLEET_TARGET_REACHED`, `ACCOUNT_TARGETS_REACHED`, `ALL_SURFACES_RATE_LIMITED`, `FLEET_PAUSED` | itself — an activation finishes, a limit lapses |
+| `OPERATOR` | `NO_SURFACE_SERVES_THIS_FAMILY`, `NO_SURFACE_SERVES_THIS_REPOSITORY`, `NO_CAPABLE_SURFACE`, `NO_ROUTINES_REGISTERED`, `ALL_SURFACES_INELIGIBLE` | somebody registering, onboarding, or lifting a quarantine |
+
+It is a `Record` keyed by the union rather than two sets, because two sets that
+had to be total between them were not — and a refusal in neither fell silently
+into the exhausting branch, which is how `NO_ROUTINES_REGISTERED` and
+`ALL_SURFACES_INELIGIBLE` came to abandon a bin over conditions `fleet
+register-routine` and `fleet set-state` answer. Exhausting spends the bin's five
+dispatch attempts in five minutes, and an abandoned stage counts against the
+campaign's per-stage ceiling: a campaign submitted before its repository was
+onboarded had destroyed its own planning stage by the time the worker existed.
+
+What still exhausts a dispatch intent is not a routing refusal: `SUPERSEDED`,
+when the bin has moved on, and a fire the provider refused unretryably, which
+quarantines the surface by name. And the **permanent** refusals are somewhere
+else entirely — `decideRepository` before a campaign exists,
+`services/bins/routing.ts` ahead of the compare-and-swap so it costs nothing, and
+`services/identity/policy.ts` with the same 404 a missing project gives. None of
+those produces a `RoutingRefusal`, so none of them is reached by any of this.
+
+A fleet that is merely switched off says so. Every candidate refused on its own
+state used to `continue` before any scope question was asked, so the flags those
+questions set stayed false and the first check after the loop claimed the
+refusal — a quarantined fleet reported `NO_SURFACE_SERVES_THIS_FAMILY`, sending
+an operator to write a routing row when the answer was `fleet set-state`.
 
 Putting deferred work back is derived rather than scheduled, for the reason
 §23's re-arm already gives: a backoff is a timestamp, and the condition it stands
 for stops being true long before it lapses. `rearmSurfaceDeferredIntents` watches
 `worker_routing` as well as `fleet_routines` — onboarding writes the first — and
-it re-checks each candidate with `routeBin` itself before putting it back, so
-registering a factory surface wakes factory work and leaves a research packet
-nothing serves exactly where it was. The repository is deliberately not one of
-the dimensions it decides on: that is settled at admission, where being wrong
-records something false, rather than at the fire, where being wrong costs one
-activation. The attempt count is untouched: a re-arm is not a retry.
+re-checks each candidate with `routeBin` **itself** before putting it back, so
+registering a factory surface wakes that surface's work and leaves a research
+packet nothing serves exactly where it was. Its filter is the same
+`REFUSAL_WAIT` table composed with the three fire failures an operator resolves,
+passed in as a required argument: the repository layer used to keep its own copy,
+and the moment the router grew a refusal the two disagreed. The attempt count is
+untouched: a re-arm is not a retry.
+
+### Two repositories, and the dimensions that keep them apart
+
+The fire router scopes by **repository** as well as by family and capability, and
+that is a correction to what this file said before. The argument for leaving it
+out was §27's — Brain cannot tell which surface has *arrived*, because
+`worker_sessions` is keyed by a per-connector credential — and it is still true
+and was never about the fire. Choosing which Routine to fire is Brain's own
+decision over rows Brain wrote: `fleet_routines.worker_id` names the worker, and
+that worker's `worker_routing` row names its repositories.
+
+Left out, two onboarded repositories in one family were interchangeable to the
+router, which picked between them on headroom. Onboarding A registered a surface
+Brain would fire for B's bin; the assigner refused it with
+`REPOSITORY_NOT_AUTHORIZED`, so nothing false was recorded — what was spent was an
+activation, one of the bin's attempts, and the chance to try the surface that
+could have done it. The refusal is `NO_SURFACE_SERVES_THIS_REPOSITORY`, named
+rather than reported as the nearest available one, because its remedy is
+onboarding *that* repository.
+
+A `worker_routing` row with no explicit entry is unknown rather than empty and
+stays eligible, exactly as the family dimension does — and cannot reach here
+anyway, since the derived default serves no repository family at all.
 
 The campaign says the same thing in a place a person looks. A ready stage whose
 current-generation intent is deferred on one of those two refusals sets

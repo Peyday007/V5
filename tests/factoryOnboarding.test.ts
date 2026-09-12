@@ -27,6 +27,7 @@ import { createBin, getBin, getDispatch, listDispatchesForBin, markDispatchDefer
 import { binAdmission } from '../server/services/bins/service.ts';
 import { listInvitationsForWorker } from '../server/repos/invitations.ts';
 import type { Bin, BinManifest, Principal, User } from '../server/domain/types.ts';
+import { OPERATOR_RESOLVED_KINDS } from '../server/services/dispatch/loop.ts';
 
 let fixture: TestProject;
 let actor: User;
@@ -351,11 +352,11 @@ describe('a stage deferred before its worker existed is put back by the onboardi
     expect(Date.parse(deferred.nextAttemptAt)).toBeGreaterThan(Date.now() + 60_000);
 
     // Nothing has changed about the fleet yet, so nothing is put back.
-    expect(await rearmSurfaceDeferredIntents()).toBe(0);
+    expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(0);
 
     await onboard();
 
-    expect(await rearmSurfaceDeferredIntents()).toBe(1);
+    expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(1);
     const rearmed = (await getDispatch(intent!.id))!;
     expect(Date.parse(rearmed.nextAttemptAt)).toBeLessThanOrEqual(Date.now() + 1_000);
     // The attempt count is untouched: a re-arm is not a retry and must not spend
@@ -373,7 +374,7 @@ describe('a stage deferred before its worker existed is put back by the onboardi
       retryAfterMs: 24 * 60 * 60 * 1000,
     });
     await onboard();
-    expect(await rearmSurfaceDeferredIntents()).toBe(0);
+    expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(0);
   });
 });
 
@@ -639,9 +640,9 @@ describe('a duplicate action produces no duplicate execution', () => {
       retryAfterMs: 24 * 60 * 60 * 1000,
     });
     await onboard();
-    expect(await rearmSurfaceDeferredIntents()).toBe(1);
+    expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(1);
     // The re-arm stamps the intent, so the watermark it compares against is now
     // behind it. Self-limiting by construction rather than by a flag.
-    expect(await rearmSurfaceDeferredIntents()).toBe(0);
+    expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(0);
   });
 });
