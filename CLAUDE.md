@@ -1132,6 +1132,42 @@ is its own event, `AUDIT_ROUND_REOPENED`, with its own append-only record.
   above it already named the defect and the neighbour was left standing; it
   orders a deliverable bin ahead of a spent one now, newest as the tiebreak,
   deterministic in both dialects.
+- **The independent round reached a different answer, which is the point.** It
+  ran on its own: PRIMARY 15:51:53, ADVERSARIAL 16:26:36, JUDGE 17:30:08, in
+  three sessions distinct from each other and from both synthesis sessions, the
+  judge's stamp after both arguments. `air_fdf0af5981c0404389e6` is RESOLVED on
+  `aud_b057009fcf5a4c8f8692`, which differs from the superseded
+  `aud_b84704fe7b3542a7a184`; both audit rows and all ten passes stand. **The
+  verdict is `PATCH`, not `PASS`** — an `OTHER_LAYER` gap that handed the
+  document to Execution Playbooks, and a `PATCH` gap saying the summary
+  overclaims Oakland County's e-recording status as verified-current. The round
+  the author reviewed passed the report; the round it could not reach did not.
+  An independence floor that never changes an outcome has not been tested.
+- **A mission is not the only thing that can ask a packet a question.** Four
+  hours after the reopen, `concludeAbandonedParks` cancelled the packet saying
+  *"The mission that asked this question is DONE, so nobody is going to answer
+  the decision this packet stopped at."* `PATCH` does not advance, so
+  `NEEDS_HUMAN` was right; the mission had finished that morning; and the sweep
+  reads the mission as the only possible asker. The asker was the reopen, an
+  administrator asked at 13:31:53, and it was waiting for that exact answer. The
+  guard names the two row shapes that say otherwise — an OPEN reopen, or a
+  RESOLVED one whose audit *is* the packet's current verdict — and
+  `restoreWronglyConcludedParks` reaches the packet already cancelled, because a
+  fix deployed after the damage does not undo the damage. The cancellation stays
+  on the history and `RESEARCH_PARK_RESTORED` says why it came back.
+- **Attribution is not authentication, and `047` said it was.** It called
+  `requested_by_id` "the authenticated principal". `--admin <email>` resolves an
+  enabled administrator from `users`: that establishes such a person exists and
+  may authorize this, and nothing about who typed the command. Reaching the
+  shell is what authenticated it (§26) — here a GitHub Actions job holding the
+  deployment credential, running `flyctl ssh console`, dispatched by an agent on
+  a recorded instruction. **Recording that as a browser approval would be
+  undetectable afterwards**, so it is two columns: `requested_by_id` is whose
+  authority it carries, `authority_channel` is how the call got in, and
+  `executed_by_ref` is whatever the caller claimed, read back as reported. The
+  channel defaults to the weaker, unverifiable value, because Brain cannot check
+  a channel and must never assume the stronger one — unknown lineage failing
+  closed, at a new column. Every reader prints both.
 - **The scan reports and does not act.** `npm run admin -- packets independence`
   names every packet whose reviewer shared a session with an author, and opens
   none of them, because that decision is a person's. It reports a packet whose

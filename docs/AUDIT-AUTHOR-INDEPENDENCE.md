@@ -326,6 +326,96 @@ tiebreak, so the answer is deterministic in both dialects.
 `creditPacketProgress` had the quieter half of the same bug, refunding an
 attempt to whichever bin came back rather than the one doing the work.
 
+## 5c. What the independent round actually decided
+
+The corrected round finished on its own. Three roles, three sessions, none of
+them either author's:
+
+| Role | Completed | Session |
+| --- | --- | --- |
+| PRIMARY | 15:51:53.728Z | `oat_564ad322fc284a94a54c` |
+| ADVERSARIAL | 16:26:36.129Z | `oat_ae146820622d4dbb85ae` |
+| JUDGE | 17:30:08.751Z | `oat_747690ea1066479f9b05` |
+
+The two synthesis sessions are `oat_3d16a48193954a9bbaa7` and
+`oat_b7e9bffca36a45a896c6`; all five are distinct, and the judge's stamp is
+after both arguments. `air_fdf0af5981c0404389e6` is **RESOLVED**, on
+`aud_b057009fcf5a4c8f8692` — an audit id that differs from the superseded
+`aud_b84704fe7b3542a7a184`, produced by a judge pass completed after the
+boundary, which is the only thing that settles a reopen. Both audit rows are
+still there with their gaps and their timestamps; the packet now carries ten
+passes where it carried seven.
+
+**The verdict is `PATCH`, not `PASS`, and that is the finding rather than a
+disappointment.** The round the author reviewed passed the report. The round it
+could not reach did not:
+
+- `[OTHER_LAYER]` — *"Michigan county e-recording procedures are
+  jurisdiction-specific operating detail, not World Model architecture"*, owned
+  by Execution Playbooks.
+- `[PATCH]` — *"Summary overclaims Oakland County's e-recording status as
+  verified-current."*
+
+The first moved the document: it is `Execution Playbooks v1E` now, by §24's
+handoff, which relocates the ownership rows itself. The bytes never moved — the
+storage key still reads `world-model`, because §5 does not rewrite history to
+make a pointer tidy.
+
+So the exercise did not merely re-confirm a conclusion under better conditions.
+**An independent reviewer reached a materially different judgment about the same
+bytes**, including that the report overclaims a specific county's status. That
+is what an independence floor is for, and it is the strongest available evidence
+that the original PASS was worth reopening.
+
+## 5d. And the packet was then cancelled by a rule that had one owner too few
+
+Four hours after the reopen, `concludeAbandonedParks` cancelled the packet
+saying *"The mission that asked this question is DONE, so nobody is going to
+answer the decision this packet stopped at."*
+
+Every word of that was false here. `PATCH` is not an advancing verdict, so the
+packet correctly went to `NEEDS_HUMAN`; its Russell mission had finished that
+morning, long before the round existed; and the sweep reads the mission as the
+only possible asker. The thing that asked for this round was the reopen, an
+administrator asked for it at 13:31:53, and it was waiting for precisely this
+answer.
+
+The guard names the two row shapes that say a non-mission asker owns the current
+round — an OPEN reopen, or a RESOLVED one whose audit *is* the packet's current
+verdict — and `restoreWronglyConcludedParks` reaches the packet already
+cancelled, because a fix deployed after the damage does not undo the damage.
+The cancellation stays on the history; an append-only `RESEARCH_PARK_RESTORED`
+row says why it came back. `cancel_reason` is cleared, because it is current
+state rather than history and it contradicted the packet it was written on.
+
+## 5e. Who authorized it, and who was authenticated — two facts, two columns
+
+`047` called `requested_by_id` "the authenticated principal that initiated the
+recovery". That sentence is wrong and is corrected rather than deleted.
+
+`--admin <email>` resolves an email against `users` and checks it is an enabled
+administrator. **That is attribution.** It establishes that such a person exists
+and may authorize this; it establishes nothing whatever about who typed the
+command. What actually authenticated the call is reaching the shell — §26's own
+rule — and in production that shell was reached by a GitHub Actions job holding
+the deployment credential, running `flyctl ssh console`, dispatched by an agent
+acting on the owner's recorded instruction to execute the guarded recovery.
+
+**The owner did not approve this in a browser, and the record must never read as
+though they had.** So there are two columns:
+
+| Column | Fact | For this recovery |
+| --- | --- | --- |
+| `requested_by_id` | whose authority it carries | `usr_14439966398243339341`, resolved from rows |
+| `authority_channel` | how the call was authenticated | `DELEGATED_TERMINAL` |
+| `executed_by_ref` | what the caller said about itself | unverified, null unless offered |
+
+The channel defaults to the weaker claim because Brain cannot check a channel
+and must never assume the stronger one — the same shape as unknown lineage
+failing closed. Only a caller holding an authenticated HTTP principal may assert
+`BROWSER_SESSION`, and nothing in this repository does yet. `packet-report`
+prints both lines, and prints a reported execution reference as reported.
+
 ## 6. The scope, reported without reopening anything
 
 `npm run admin -- packets independence [project]` reads every packet's lineage
