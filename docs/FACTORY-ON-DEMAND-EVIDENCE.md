@@ -211,6 +211,33 @@ parameters only, no `rowid`, no `DISTINCT`, and an `ORDER BY` on a real column �
 so it is sayable in both dialects. Nothing else touches persistence, and there is
 no migration.
 
+## In production
+
+Deployed from `production` by the one `Deploy` workflow, run **210**, commit
+`d27683e`, finished **2026-09-12 09:57:51Z**. The canonical-branch guard passed
+as its first job; typecheck, the suite and the build ran in the second; the third
+deployed, proved the live Brain shut, spent the bootstrap secrets, restarted it
+and proved it survived.
+
+Read back from the deployed Brain at `northline-brain.fly.dev`:
+
+| Check | Answer |
+| --- | --- |
+| `GET /healthz` | `ok` |
+| `POST /api/projects/:id/factory/repositories/:grantId/onboard`, anonymous | `401` — no principal, so nothing to decide for |
+| `GET /api/projects/:id/factory/repositories`, anonymous | `401` |
+| `GET /operator` | `404`, still |
+| Client bundle | `assets/index-DuEdhprq.js`, byte-identical hash to the local build of this commit |
+
+And in that served bundle: `rs-factory-repositories`, *Onboard this repository*,
+*Registered — waiting for a surface*, *resumes by itself*, *not a credential* and
+the `/onboard` call each appear once, and the string `operator` appears **zero**
+times.
+
+What cannot be read from outside is anything behind a person's session, which is
+every projection the card renders. Onboarding is an `ADMIN` decision made in a
+browser, so the live half of it is the owner's — below.
+
 ---
 
 ## What is not proven, and cannot be from here
