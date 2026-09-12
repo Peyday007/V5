@@ -293,35 +293,44 @@ export function RussellShell({
           ))}
         </ul>
 
+        {/*
+          The foot, and what happens to it on a phone.
+
+          At rail width it is three things side by side: Search, the depth
+          control and the More menu. At thumb-bar width there is no room for
+          three, so it becomes the bar's seventh cell holding More alone and the
+          other two move *into* that menu — which is what More already meant
+          here for Build and Connected sites.
+
+          It used to be `display: none` at this width instead, which took all
+          three off a phone: no Search, no depth, and no way to reach Build,
+          Connected sites, the full console or **Sign out**. The `mode === 'BAR'`
+          branch below has existed the whole time and nothing could reach it,
+          because the element holding it was not rendered at the only width the
+          branch is for. Found by walking the journey on a phone in
+          `scripts/visual-qa.ts`; every assertion in the suite passed while a
+          person on a phone could not sign out.
+        */}
         <div className="rs-rail-foot">
           {/* Search is a destination rather than a box in the chrome: at phone
               width a persistent field would take the room the conversation
               needs, and the command bar is already where a person types. */}
-          <button
-            type="button"
-            className="rs-rail-item"
-            aria-current={route.name === 'SEARCH' ? 'page' : undefined}
-            onClick={() => go({ name: 'SEARCH' })}
-          >
-            Search
-          </button>
-
-          <div
-            className="rs-depth"
-            role="group"
-            aria-label="How much detail you want"
-          >
-            {DEPTHS.map((option) => (
+          {mode === 'RAIL' ? (
+            <>
               <button
-                key={option}
                 type="button"
-                aria-pressed={depth === option}
-                onClick={() => setDepth(option)}
+                className="rs-rail-item"
+                aria-current={route.name === 'SEARCH' ? 'page' : undefined}
+                onClick={() => go({ name: 'SEARCH' })}
               >
-                {DEPTH_LABELS[option]}
+                Search
               </button>
-            ))}
-          </div>
+
+              <div className="rs-depth" role="group" aria-label="How much detail you want">
+                <DepthChoice depth={depth} setDepth={setDepth} />
+              </div>
+            </>
+          ) : null}
 
           <div className="rs-more">
             <button
@@ -330,13 +339,30 @@ export function RussellShell({
               aria-haspopup="menu"
               onClick={() => setMenuOpen((open) => !open)}
             >
-              More · {user.displayName}
+              {/* A thumb-bar cell is about fifty pixels wide, and a name does
+                  not fit in one. The name is on Who, which is where a person
+                  looks for who they are signed in as. */}
+              {mode === 'BAR' ? 'More' : `More · ${user.displayName}`}
             </button>
             {menuOpen ? (
               <ul className="rs-menu" role="menu">
                 {/* On a phone the two secondary destinations live here, because
                     eight items in a thumb bar is a bar whose last item nobody
                     finds. The addresses are unchanged either way. */}
+                {mode === 'BAR' ? (
+                  <li role="none">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        go({ name: 'SEARCH' });
+                      }}
+                    >
+                      Search
+                    </button>
+                  </li>
+                ) : null}
                 {mode === 'BAR'
                   ? SECTIONS.filter((section) => !section.primary).map((section) => (
                       <li role="none" key={section.name}>
@@ -353,6 +379,16 @@ export function RussellShell({
                       </li>
                     ))
                   : null}
+                {mode === 'BAR' ? (
+                  <li role="none" className="rs-menu-depth">
+                    {/* Left open after a choice on purpose: the pressed state is
+                        the answer, and a sheet that closed itself would hide it. */}
+                    <span id="rs-menu-depth-label">How much detail you want</span>
+                    <div className="rs-depth" role="group" aria-labelledby="rs-menu-depth-label">
+                      <DepthChoice depth={depth} setDepth={setDepth} inMenu />
+                    </div>
+                  </li>
+                ) : null}
                 <li role="none">
                   <button type="button" role="menuitem" onClick={() => go({ name: 'LEGACY' })}>
                     Full console
@@ -474,6 +510,49 @@ function RailItem({
         ) : null}
       </button>
     </li>
+  );
+}
+
+/**
+ * The three depth buttons, in the one place they are written.
+ *
+ * Rendered in the rail's foot at rail width and inside the More sheet at
+ * thumb-bar width — the same three controls over the same state, extracted so
+ * the two placements cannot drift into offering different choices. The wrapper
+ * carries the `role="group"` and its label, because the two placements label it
+ * differently: beside a rail there is nothing to read it against, and inside a
+ * sheet there is a heading.
+ */
+function DepthChoice({
+  depth,
+  setDepth,
+  inMenu = false,
+}: {
+  depth: Depth;
+  setDepth(next: Depth): void;
+  /**
+   * Inside a `role="menu"`, a plain toggle button is not a valid child and a
+   * screen reader is entitled to skip it. `menuitemradio` is the same three
+   * controls saying the same thing in the grammar of the container they are
+   * actually in — one of three, this one chosen — rather than a second control.
+   */
+  inMenu?: boolean;
+}): JSX.Element {
+  return (
+    <>
+      {DEPTHS.map((option) => (
+        <button
+          key={option}
+          type="button"
+          {...(inMenu
+            ? { role: 'menuitemradio' as const, 'aria-checked': depth === option }
+            : { 'aria-pressed': depth === option })}
+          onClick={() => setDepth(option)}
+        >
+          {DEPTH_LABELS[option]}
+        </button>
+      ))}
+    </>
   );
 }
 

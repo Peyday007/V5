@@ -199,3 +199,117 @@ describe('what the 900px capture found', () => {
     expect(block).toMatch(/overflow:\s*hidden/);
   });
 });
+
+/**
+ * What walking the journey on a phone found, which reading could not.
+ *
+ * `.rs-shell-bar .rs-rail-foot` was `display: none`. That one declaration took
+ * **Search, the depth control and the whole More menu** off a phone — and with
+ * More went Build, Connected sites, the full console and **Sign out**. Every
+ * assertion above passed the entire time, because none of them asks whether a
+ * control a person needs is anywhere they can press it: the markup was correct,
+ * the routes were correct, the deep links worked, and the shell even carried a
+ * `mode === 'BAR'` branch inside that menu written specifically for phone width,
+ * which nothing could ever reach.
+ *
+ * That is §29's own rule about the visual gate, arriving from the other
+ * direction: a screenshot cannot approve a design, and an assertion cannot see
+ * a control that is not on the screen. `scripts/visual-qa.ts` presses every
+ * thumb-bar cell and the send button at every step of a real journey and asks
+ * `elementFromPoint` whether the press would land — which is how this was found.
+ *
+ * These tests do not reproduce that. They pin the rules that fix it, so an edit
+ * that removes one fails here instead of being found again by a person on a
+ * phone who cannot sign out.
+ */
+describe('what the phone journey found', () => {
+  const SHELL = fs.readFileSync(
+    path.join(process.cwd(), 'client/src/russell/RussellShell.tsx'),
+    'utf8',
+  );
+
+  const rule = (selector: string): string => {
+    const at = CSS.indexOf(selector);
+    expect(at, `no rule for ${selector}`).toBeGreaterThan(-1);
+    return CSS.slice(at, CSS.indexOf('}', at));
+  };
+
+  it('keeps the rail’s foot on a phone rather than deleting it', () => {
+    const foot = rule('.rs-shell-bar .rs-rail-foot {');
+    expect(foot).not.toMatch(/display:\s*none/);
+    // A row, because at this width it is one cell of the thumb bar.
+    expect(foot).toMatch(/flex-direction:\s*row/);
+  });
+
+  it('sizes the More cell like the six beside it, from one number', () => {
+    // The sheet has to clear the bar exactly, so the bar's height is a token
+    // rather than a literal repeated in three rules. `.rs-shell-bar
+    // .rs-rail-item` keeps its own literal — the assertion above is about that
+    // rule and must stay about that rule — so this is what stops the two
+    // drifting apart, which is the failure a sheet sitting over its own nav is.
+    const token = /--bar-cell:\s*(\d+)px/.exec(CSS);
+    expect(token).not.toBeNull();
+    const phoneRail = CSS.slice(CSS.indexOf('.rs-shell-bar .rs-rail-item'));
+    const cell = /min-height:\s*(\d+)px/.exec(phoneRail);
+    expect(cell).not.toBeNull();
+    expect(cell?.[1]).toBe(token?.[1]);
+    expect(rule('.rs-shell-bar .rs-more > button {')).toMatch(/min-height:\s*var\(--bar-cell\)/);
+  });
+
+  it('opens the phone sheet outside the bar that clips it', () => {
+    /*
+     * The bar sets `overflow-x: hidden` deliberately, and CSS computes the other
+     * axis to `auto` the moment one axis is not `visible` — so an absolutely
+     * positioned sheet inside it is clipped on both axes and opens into nothing.
+     * The sheet escapes the clip; the clip is not opened up for the sheet.
+     */
+    const sheet = rule('.rs-shell-bar .rs-menu {');
+    expect(sheet).toMatch(/position:\s*fixed/);
+    expect(sheet).toMatch(/bottom:\s*calc\(var\(--bar-cell\)/);
+    expect(rule('.rs-shell-bar .rs-rail {')).toMatch(/overflow-x:\s*hidden/);
+  });
+
+  it('keeps the composer’s hint on one line rather than half of a second', () => {
+    /*
+     * The box is one row tall. At 360px the hint wrapped and the thumb bar
+     * sliced its second line in half — at 390px it fits, which is why a sample
+     * at one phone width would have missed it and why §24 names two.
+     *
+     * Truncating rather than growing the box is the same answer `.rs-depth`
+     * already gives. `nowrap` is the half that does the work; Chromium renders
+     * no ellipsis on a textarea placeholder, and the declaration is kept
+     * because the intent is right — which the stylesheet says in those words
+     * rather than letting a reader assume the character appears.
+     */
+    const hint = rule('.rs-command textarea::placeholder {');
+    expect(hint).toMatch(/white-space:\s*nowrap/);
+    expect(hint).toMatch(/text-overflow:\s*ellipsis/);
+  });
+
+  it('leaves every rail-foot control somewhere a phone can reach', () => {
+    /*
+     * Source text rather than a render, for the reason the head of this file
+     * gives: what is decidable here is the *decision*. The decision is that
+     * nothing in the foot is dropped at thumb-bar width — Search and the depth
+     * control move into the sheet, and the two secondary destinations were
+     * already written to. The proof that they are pressable is the journey's
+     * capture, not this.
+     */
+    const opens = SHELL.indexOf('<ul className="rs-menu"');
+    expect(opens).toBeGreaterThan(-1);
+    const sheet = SHELL.slice(opens, SHELL.indexOf('</ul>', opens));
+
+    expect(sheet).toMatch(/go\(\{ name: 'SEARCH' \}\)/);
+    expect(sheet).toMatch(/<DepthChoice/);
+    expect(sheet).toMatch(/section\.label/);
+    expect(sheet).toMatch(/Full console/);
+    expect(sheet).toMatch(/Sign out/);
+
+    // And the rail keeps them beside it at rail width rather than in a menu.
+    expect(SHELL).toMatch(/mode === 'RAIL' \? \(/);
+    // One definition of the three depth controls, used by both placements: two
+    // copies is two sets of choices waiting to disagree.
+    expect(SHELL.match(/<DepthChoice/g)).toHaveLength(2);
+    expect(SHELL.match(/function DepthChoice/g)).toHaveLength(1);
+  });
+});

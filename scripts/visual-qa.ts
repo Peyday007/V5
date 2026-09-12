@@ -15,9 +15,18 @@
  *
  *   npx tsx scripts/visual-qa.ts [outputDir]
  *
- * The images are deliberately not committed. They are evidence for one run at
- * one commit, and a screenshot in the repository is stale the moment the CSS
- * changes.
+ * It writes to a throwaway directory by default, and that default is the rule:
+ * a screenshot in the repository is stale the moment the CSS changes, and a
+ * stale one that still looks like evidence is worse than none.
+ *
+ * **One named set is committed anyway, and the reason is recorded rather than
+ * left as a contradiction.** §29's acceptance asks a person to approve what the
+ * product actually looks like, and a decision somebody has to re-run a
+ * twelve-minute harness to see is a decision nobody makes.
+ * `docs/evidence/step12b-visual.md` is that set: it names the commit and the
+ * date the images were taken at, and it says in its own first paragraph that it
+ * is the record of one run and not a baseline anything is compared against.
+ * Nothing reads those files; deleting them breaks no test.
  */
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
@@ -69,53 +78,384 @@ const DESTINATIONS = [
   { name: 'needs-you', path: '/needs-you' },
 ];
 
-/**
- * Three things a person does, driven for real.
+/* -------------------------------------------------------------------------
+ * The readings every capture takes, in one place.
  *
- * Each one reads something before, does the thing, and reads the same something
- * after — so the evidence is a *change*, not a click that may have landed on
- * nothing. `act` returns false when the control is not there at all, which is a
- * finding rather than a crash.
+ * The band sweep and the phone journey ask the same questions of the page, and
+ * two copies of a predicate is two predicates: the sweep's rule that a
+ * **scrollable** container is not a **clipping** one was arrived at once, from a
+ * real false finding, and a second copy would have had to arrive at it again. So
+ * the rule lives here and both readers use it — `hidden` and `clip` stay in
+ * scope because there the content really is gone, `auto` and `scroll` stay out
+ * because that is how a person reaches it.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * §29's "the page body must never scroll horizontally", asked of the document.
+ *
+ * Of the document rather than of an element, because an element sticking out of
+ * a container that already contains it is a different defect with a different
+ * fix, and `CUT_OFF` is what reports that one. `window.innerWidth` and
+ * `documentElement.clientWidth` are the same number here because Chromium is
+ * launched with `--hide-scrollbars`; the window is named because that is the
+ * screen a person is holding.
  */
-const INTERACTIONS = [
+const SIDEWAYS = 'document.documentElement.scrollWidth > window.innerWidth';
+
+/** Content cut off inside a container that clips rather than scrolls. */
+const CUT_OFF = `(() => {
+  const bad = [];
+  const nodes = document.querySelectorAll('.rs-shell *');
+  const cap = Math.min(nodes.length, 2000);
+  for (let i = 0; i < cap; i += 1) {
+    const el = nodes[i];
+    if (el.children.length === 0) continue;
+    const style = getComputedStyle(el);
+    if (style.overflowX !== 'hidden' && style.overflowX !== 'clip') continue;
+    const outer = el.getBoundingClientRect();
+    for (const child of el.children) {
+      const box = child.getBoundingClientRect();
+      if (box.width === 0 && box.height === 0) continue;
+      if (box.right > outer.right + 1 || box.left < outer.left - 1) {
+        bad.push((child.className || child.tagName) + ' inside ' + (el.className || el.tagName));
+      }
+    }
+  }
+  return [...new Set(bad)].slice(0, 3).join(' | ');
+})()`;
+
+/** Which element sticks out past the viewport — the diagnostic for a finding. */
+const OFFENDERS = `(() => {
+  const limit = document.documentElement.clientWidth;
+  const bad = [];
+  const nodes = document.querySelectorAll('.rs-shell *');
+  const cap = Math.min(nodes.length, 3000);
+  for (let i = 0; i < cap; i += 1) {
+    const el = nodes[i];
+    const box = el.getBoundingClientRect();
+    if (box.width === 0 && box.height === 0) continue;
+    if (box.right > limit + 1 || box.left < -1) {
+      bad.push((el.className || el.tagName) + '@' + Math.round(box.left) + '..' + Math.round(box.right));
+    }
+  }
+  return bad.slice(0, 4).join(' | ');
+})()`;
+
+/**
+ * A control a thumb cannot land on, asked the way a thumb asks.
+ *
+ * A box of the right size in the right place is still not a control if
+ * something else is painted over it, and nothing about a bounding rectangle can
+ * say so. `elementFromPoint` is what actually decides which element receives a
+ * tap, so it is what this asks — at the control's own centre, which is where a
+ * person aims.
+ *
+ * A control scrolled off the bottom of a long page is not a finding; that is
+ * what scrolling is for. One that is off to the *side*, or covered where it
+ * sits, is.
+ *
+ * **An element with no box at all is not this question, and its first version
+ * of this said it was.** That flagged `Build`, `Connected sites` and `Search`
+ * on every one of seventeen steps — which was pointing at something real, and
+ * pointing at it with a predicate that cannot tell a control that was silently
+ * dropped from one the shell deliberately renders somewhere else. A `display:
+ * none` node is not on the screen; whether a person can still get to what it
+ * does is a question about the *set* of reachable controls, and `REACHABLE`
+ * below is where that is asked.
+ */
+function unreachable(selector: string): string {
+  return `(() => {
+    const bad = [];
+    for (const el of document.querySelectorAll(${JSON.stringify(selector)})) {
+      const box = el.getBoundingClientRect();
+      const name = ((el.textContent || el.className || el.tagName).trim() || el.tagName).slice(0, 28);
+      if (box.width < 1 || box.height < 1) continue;
+      if (box.top > innerHeight || box.bottom < 0) continue;
+      if (box.left < -1 || box.right > innerWidth + 1) {
+        bad.push(name + ': off the side of the screen');
+        continue;
+      }
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      if (!hit) { bad.push(name + ': nothing at its own centre'); continue; }
+      if (el.contains(hit) || hit.contains(el)) continue;
+      const over = ((hit.textContent || hit.className || hit.tagName).trim() || hit.tagName).slice(0, 28);
+      bad.push(name + ': covered by ' + over);
+    }
+    return bad.slice(0, 6).join(' | ');
+  })()`;
+}
+
+/**
+ * Every name in the shell's chrome a person can actually press right now.
+ *
+ * Pressable rather than present: it has a box, it is on the screen sideways,
+ * and its own centre belongs to it. A badge is stripped off the end of a label
+ * and the More button is reduced to `More`, because a set that distinguished
+ * "Needs you" from "Needs you1" would be a set about rendering rather than
+ * about destinations.
+ */
+const REACHABLE = `(() => {
+  const names = new Set();
+  for (const el of document.querySelectorAll('.rs-rail button, .rs-rail a')) {
+    const box = el.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1) continue;
+    if (box.left < -1 || box.right > innerWidth + 1) continue;
+    if (box.top > innerHeight || box.bottom < 0) continue;
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    if (!hit) continue;
+    if (!(el.contains(hit) || hit.contains(el))) continue;
+    let name = (el.textContent || '').trim().replace(/\\s*\\d+$/, '').trim();
+    if (name.startsWith('More')) name = 'More';
+    if (name) names.add(name);
+  }
+  return [...names];
+})()`;
+
+/**
+ * What a person must be able to get to from the shell, at any width.
+ *
+ * Not a style rule and not a layout rule: this is the product's own list of
+ * where a person can go and what they can do to their own session, and a width
+ * at which one of them is absent is a width at which the product is missing a
+ * feature. §29's rule that a phone and a desktop are one product rather than
+ * two, written as something a run can check.
+ *
+ * The six destinations, the two capabilities, the reader's depth, the old
+ * console and the way out. Reached in one press or in two — through More is
+ * still reached — which is why the probe opens the sheet before it answers.
+ */
+const MUST_REACH = [
+  'Russell',
+  'Work',
+  'Ideas',
+  'Knows',
+  'Who',
+  'Needs you',
+  'Search',
+  'Build',
+  'Connected sites',
+  'Normal',
+  'Interested',
+  'Technical',
+  'Full console',
+  'Sign out',
+];
+
+/**
+ * Two constellation nodes painted on top of each other.
+ *
+ * `Constellation.tsx` places its nodes absolutely, so two that overlap are two
+ * buttons where a person can press only one — and the covered label is not hard
+ * to read, it is gone. This is the defect the header of this file names first,
+ * and a rectangle intersection is the whole of it: these are siblings in one
+ * stacking context, so an intersection *is* one covering the other.
+ *
+ * Measured rather than eyeballed, and reported as a count with the worst pairs,
+ * because "the ring seats its labels" has to be a number before it is a claim.
+ */
+const OVERLAPPING_NODES = `(() => {
+  const nodes = [...document.querySelectorAll('.lim-node')];
+  const pairs = [];
+  for (let i = 0; i < nodes.length; i += 1) {
+    for (let j = i + 1; j < nodes.length; j += 1) {
+      const a = nodes[i].getBoundingClientRect();
+      const b = nodes[j].getBoundingClientRect();
+      const x = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      const y = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      if (x > 1 && y > 1) {
+        pairs.push({
+          area: Math.round(x * y),
+          what:
+            (nodes[i].textContent || '').trim().slice(0, 22) +
+            ' × ' +
+            (nodes[j].textContent || '').trim().slice(0, 22),
+        });
+      }
+    }
+  }
+  pairs.sort((left, right) => right.area - left.area);
+  return {
+    nodes: nodes.length,
+    overlaps: pairs.length,
+    worst: pairs.slice(0, 3).map((pair) => pair.what + ' (' + pair.area + 'px²)').join(' | '),
+  };
+})()`;
+
+/* -------------------------------------------------------------------------
+ * One phone, one person, one continuous journey.
+ *
+ * The three isolated interactions this replaced each opened their own address,
+ * did one thing and stopped — which proves three controls and nothing about the
+ * path between them. A person on a phone does not do that. They land on home,
+ * open a thread, say something, go and look at the work, open the project, check
+ * what needs them and come back, and every one of those transitions is a chance
+ * for the shell to lose its layout, strand a control off the side, or leave
+ * somebody somewhere with no way back.
+ *
+ * So this is one browser, one session and one scroll history. After the first
+ * address nothing navigates: every move is a real press on a real control, and a
+ * step whose control is not there returns false and is reported as a finding
+ * rather than crashing the run.
+ *
+ * **The pending turn is the correct outcome, not a failure.** §24: no inference
+ * is bought, so a Russell turn persists as `PENDING` carrying the server's own
+ * reason and a worker answers it later. The journey reads that reason and moves
+ * on; waiting for an answer would be waiting for a fleet this harness
+ * deliberately does not have.
+ * ---------------------------------------------------------------------- */
+
+const PHONE = { width: 390, height: 844 } as const;
+
+/**
+ * The narrower phone §24 also names, re-read at the end.
+ *
+ * Only the thumb bar is asked about at 360: the bar is the one part of the
+ * shell with a fixed number of cells and `overflow-x: hidden`, so it is the one
+ * part where six labels either fit or are silently gone. Everything else
+ * reflows.
+ */
+const NARROW_PHONE = 360;
+
+/** What a person types. */
+const SAID = 'Please check something for me, and tell me what you find.';
+
+interface JourneyStep {
+  /** Numbered, because the file names are the order somebody walked it. */
+  name: string;
+  /** What the image shows. Copied into the evidence index verbatim. */
+  what: string;
+  /**
+   * What the person does, as an expression evaluated in the page. Returning
+   * false means the control is not there at all — a finding about the product
+   * rather than a crash in the harness.
+   */
+  act: string;
+  /** Polled afterwards. False means the press landed on nothing. */
+  until?: string;
+  /** Read back after, so the evidence is a change rather than a press. */
+  read?: string;
+}
+
+/** Press a thumb-bar cell by the label a person reads on it. */
+function railPress(label: string): string {
+  return `(() => {
+    const item = [...document.querySelectorAll('.rs-rail-item')].find(
+      (button) => (button.textContent || '').trim().startsWith(${JSON.stringify(label)}),
+    );
+    if (!item) return false;
+    item.click();
+    return true;
+  })()`;
+}
+
+/** Everything up to the project, where the maps pass takes over. */
+const JOURNEY_IN: JourneyStep[] = [
   {
-    name: 'open-a-section',
-    path: '/',
-    read: 'location.pathname',
+    name: '01-home',
+    what: 'Landing on Brain: the state sentence, the foundations strip, the docked command bar and the six-destination thumb bar.',
+    act: 'true',
+    until: "document.querySelector('.rs-shell') !== null",
+    read: "document.querySelector('.rs-shell').getAttribute('data-nav')",
+  },
+  {
+    name: '02-conversation',
+    what: 'A conversation, opened by pressing it in the list on home rather than by navigating to its address.',
     act: `(() => {
-      const link = [...document.querySelectorAll('a,button')].find(
-        (el) => (el.textContent || '').trim().toLowerCase() === 'work',
+      const thread = document.querySelector('.rs-thread');
+      if (thread) { thread.click(); return 'opened the thread already there'; }
+      const start = [...document.querySelectorAll('button')].find(
+        (button) => /start a new one/i.test(button.textContent || ''),
       );
-      if (!link) return false;
-      link.click();
-      return true;
+      if (!start) return false;
+      start.click();
+      return 'started a new thread';
     })()`,
+    until: "location.pathname.startsWith('/conversation/')",
+    read: 'location.pathname',
   },
   {
-    name: 'reveal-details',
-    path: '/needs-you',
-    read: "String(document.querySelectorAll('details[open]').length)",
-    act: `(() => {
-      const first = document.querySelector('details:not([open]) > summary');
-      if (!first) return false;
-      first.click();
-      return true;
-    })()`,
-  },
-  {
-    name: 'refuse-empty-search',
-    path: '/search',
-    read: "String(document.body.innerText).replace(/\\s+/g, ' ').slice(0, 60)",
-    act: `(() => {
-      const box = document.querySelector('input[type=search], input[type=text]');
+    name: '03-said-something',
+    what: 'A message sent from the docked command bar, and the turn the server stored for it. Russell’s reply is PENDING with its own reason, which is §24 holding rather than a failure.',
+    act: `(async () => {
+      const box = document.getElementById('rs-command-input');
       if (!box) return false;
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-      setter.call(box, 'a');
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(box, ${JSON.stringify(SAID)});
       box.dispatchEvent(new Event('input', { bubbles: true }));
+      // React re-renders before the button stops being disabled, and pressing a
+      // disabled button is a press that silently does nothing.
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      const send = document.querySelector('.rs-command button[type=submit]');
+      if (!send) return false;
+      if (send.disabled) return 'the send button never enabled';
+      send.click();
       return true;
     })()`,
+    until: "document.querySelectorAll('.rs-turn').length >= 1",
+    read: `(() => {
+      const turns = [...document.querySelectorAll('.rs-turn')];
+      const status = document.querySelector('.rs-turn-status');
+      return turns.length + ' turn(s), Russell says: ' +
+        (status ? status.textContent.trim().slice(0, 60) : 'nothing about its state');
+    })()`,
+  },
+  {
+    name: '04-work',
+    what: 'Work, reached by pressing its cell in the thumb bar.',
+    act: railPress('Work'),
+    until: "location.pathname === '/work'",
+    read: 'location.pathname',
+  },
+  {
+    name: '05-project-map',
+    what: 'The project on its Map tab: the constellation at 390px, which is where its nodes have room for their labels or do not.',
+    act: railPress('Ideas'),
+    until:
+      "location.pathname === '/projects' && document.querySelector('.lim-canvas') !== null",
+    read: `(() => {
+      const canvas = document.querySelector('.lim-canvas');
+      if (!canvas) return 'no constellation rendered';
+      const box = canvas.getBoundingClientRect();
+      return document.querySelectorAll('.lim-node').length + ' nodes on a ' +
+        Math.round(box.width) + '×' + Math.round(box.height) + ' canvas';
+    })()`,
+  },
+  {
+    name: '06-project-maps',
+    what: 'The Other maps tab, reached from the project’s own tab strip.',
+    act: `(() => {
+      const tab = [...document.querySelectorAll('ul[aria-label="This project"] button')].find(
+        (button) => (button.textContent || '').trim() === 'Other maps',
+      );
+      if (!tab) return false;
+      tab.click();
+      return true;
+    })()`,
+    until: 'document.querySelector(\'ul[aria-label="Kind of map"]\') !== null',
+    read: `String(document.querySelectorAll('ul[aria-label="Kind of map"] button').length) + ' kinds of map offered'`,
   },
 ];
+
+/** The rest of the journey, after the maps pass has run inside the project. */
+const JOURNEY_OUT: JourneyStep[] = [
+  {
+    name: '13-needs-you',
+    what: 'Needs you, from the thumb bar: the decision surface §29 says must never be folded away.',
+    act: railPress('Needs you'),
+    until: "location.pathname === '/needs-you'",
+    read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 90)",
+  },
+  {
+    name: '14-back-home',
+    what: 'Back where the journey started, by pressing Russell in the thumb bar.',
+    act: railPress('Russell'),
+    until: "location.pathname === '/'",
+    read: 'location.pathname',
+  },
+];
+
+/** The six maps, by the label on their tab. */
+const MAP_TABS = ['System', 'Workflow', 'Knowledge', 'Decisions', 'Timeline', 'Money flow'];
 
 async function main(): Promise<void> {
   const outputDir = path.resolve(process.argv[2] ?? path.join(os.tmpdir(), 'brain-visual-qa'));
@@ -373,28 +713,7 @@ async function main(): Promise<void> {
             'document.documentElement.scrollWidth > document.documentElement.clientWidth',
           )) as boolean;
 
-          const offenders = sideways
-            ? String(
-                await evaluate(
-                  cdp,
-                  `(() => {
-                    const limit = document.documentElement.clientWidth;
-                    const bad = [];
-                    const nodes = document.querySelectorAll('.rs-shell *');
-                    const cap = Math.min(nodes.length, 3000);
-                    for (let i = 0; i < cap; i += 1) {
-                      const el = nodes[i];
-                      const box = el.getBoundingClientRect();
-                      if (box.width === 0 && box.height === 0) continue;
-                      if (box.right > limit + 1 || box.left < -1) {
-                        bad.push((el.className || el.tagName) + '@' + Math.round(box.left) + '..' + Math.round(box.right));
-                      }
-                    }
-                    return bad.slice(0, 4).join(' | ');
-                  })()`,
-                ),
-              )
-            : '';
+          const offenders = sideways ? String(await evaluate(cdp, OFFENDERS)) : '';
 
           /*
            * A container that **scrolls** is not a container that **clips**.
@@ -418,31 +737,7 @@ async function main(): Promise<void> {
            * protocol altogether — a diagnostic expensive enough to break the
            * thing it was measuring.
            */
-          const cutOff = String(
-            await evaluate(
-              cdp,
-              `(() => {
-                const bad = [];
-                const nodes = document.querySelectorAll('.rs-shell *');
-                const cap = Math.min(nodes.length, 2000);
-                for (let i = 0; i < cap; i += 1) {
-                  const el = nodes[i];
-                  if (el.children.length === 0) continue;
-                  const style = getComputedStyle(el);
-                  if (style.overflowX !== 'hidden' && style.overflowX !== 'clip') continue;
-                  const outer = el.getBoundingClientRect();
-                  for (const child of el.children) {
-                    const box = child.getBoundingClientRect();
-                    if (box.width === 0 && box.height === 0) continue;
-                    if (box.right > outer.right + 1 || box.left < outer.left - 1) {
-                      bad.push((child.className || child.tagName) + ' inside ' + (el.className || el.tagName));
-                    }
-                  }
-                }
-                return [...new Set(bad)].slice(0, 3).join(' | ');
-              })()`,
-            ),
-          );
+          const cutOff = String(await evaluate(cdp, CUT_OFF));
 
           if (sideways) {
             clipped += 1;
@@ -468,52 +763,489 @@ async function main(): Promise<void> {
         : `  ${clipped} clipping(s) found — images written`,
     );
 
-      /*
-       * And that the thing a person does actually works.
-       *
-       * A screenshot proves a layout rendered. It cannot tell you whether the
-       * control under the cursor does anything, and §29's own rule is that the
-       * visual gate is not passed by tests alone. So this drives three real
-       * interactions at phone width — where the rail collapses and where a
-       * broken control is most likely — and prints what changed.
-       */
-    console.log('');
-    console.log('Interactions, at phone width:');
-    await withChromium(async (cdp) => {
-      await signInBrowser(cdp, cookie);
-      await cdp.send('Emulation.setDeviceMetricsOverride', {
-        width: 390,
-        height: 844,
-        deviceScaleFactor: 2,
-        mobile: true,
-      });
-      for (const step of INTERACTIONS) {
-        await cdp.send('Page.navigate', { url: `${BASE}${step.path}` });
-        await waitFor(cdp, "document.querySelector('.rs-shell') !== null");
-        await sleep(600);
-        const before = String(await evaluate(cdp, step.read));
-        const acted = await evaluate(cdp, step.act);
-        await sleep(700);
-        const after = String(await evaluate(cdp, step.read));
-        const shot = (await cdp.send('Page.captureScreenshot', { format: 'png' })) as {
-          data: string;
-        };
-        fs.writeFileSync(
-          path.join(outputDir, `interaction-${step.name}.png`),
-          Buffer.from(shot.data, 'base64'),
-        );
-        console.log(
-          `  ${step.name.padEnd(18)} ${acted ? 'acted' : 'NO CONTROL FOUND'}  ` +
-            `${before.slice(0, 40)} -> ${after.slice(0, 40)}`,
-        );
-      }
-    });
+    /*
+     * And that the path a person walks actually works.
+     *
+     * A screenshot proves a layout rendered. It cannot tell you whether the
+     * control under the thumb does anything, and §29's own rule is that the
+     * visual gate is not passed by tests alone. So this walks one continuous
+     * journey at phone width — where the rail collapses and where a broken
+     * control is most likely — and prints what changed at every step.
+     */
+    const findings = await driveJourney(cookie, outputDir);
 
     console.log(`\nImages in ${outputDir}`);
+    if (findings.length > 0) {
+      console.log('');
+      console.log(`${findings.length} finding(s) from the phone journey:`);
+      for (const finding of findings) console.log(`  ${finding}`);
+      process.exitCode = 1;
+    }
   } finally {
     await endServerTree(server);
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
+}
+
+/* -------------------------------------------------------------------------
+ * The phone journey, and the maps inside it.
+ * ---------------------------------------------------------------------- */
+
+interface Reading {
+  sideways: boolean;
+  cutOff: string;
+  offenders: string;
+  unreachable: string;
+}
+
+/**
+ * One capture and the readings that go with it, at whatever the screen now is.
+ *
+ * Every step takes exactly the same set, so a regression at step nine is never
+ * something the harness happened not to look for there. The thumb bar and the
+ * send button are asked about at *every* step rather than once, because they are
+ * on every screen and a layout that strands them does it on one screen at a
+ * time.
+ */
+async function capture(cdp: Cdp, outputDir: string, file: string): Promise<Reading> {
+  const shot = (await cdp.send('Page.captureScreenshot', {
+    format: 'png',
+    captureBeyondViewport: true,
+  })) as { data: string };
+  fs.writeFileSync(path.join(outputDir, file), Buffer.from(shot.data, 'base64'));
+  const sideways = (await evaluate(cdp, SIDEWAYS)) as boolean;
+  return {
+    sideways,
+    cutOff: String(await evaluate(cdp, CUT_OFF)),
+    offenders: sideways ? String(await evaluate(cdp, OFFENDERS)) : '',
+    unreachable: String(
+      await evaluate(cdp, unreachable('.rs-rail-item, .rs-command button[type=submit]')),
+    ),
+  };
+}
+
+/** Turn a reading into findings, in the words a person would use about them. */
+function judge(step: string, reading: Reading): string[] {
+  const found: string[] = [];
+  if (reading.sideways) {
+    found.push(`${step}: the page scrolls sideways at ${PHONE.width}px — ${reading.offenders}`);
+  }
+  if (reading.cutOff) {
+    found.push(`${step}: cut off inside a container that clips — ${reading.cutOff}`);
+  }
+  if (reading.unreachable) {
+    found.push(`${step}: a control a thumb cannot land on — ${reading.unreachable}`);
+  }
+  return found;
+}
+
+/**
+ * Walk a list of steps, pressing rather than navigating.
+ *
+ * A step whose control is missing is recorded and the walk continues: the steps
+ * after it are the ones nobody has looked at, and losing them to the first
+ * finding would be losing the evidence to the diagnostic — the same reasoning
+ * the band sweep already applies to a timed-out width.
+ */
+async function walk(
+  cdp: Cdp,
+  outputDir: string,
+  steps: JourneyStep[],
+  probes: Record<string, (cdp: Cdp) => Promise<string[]>> = {},
+): Promise<string[]> {
+  const findings: string[] = [];
+  for (const step of steps) {
+    const acted = await evaluate(cdp, step.act);
+    if (acted === false) {
+      findings.push(`${step.name}: the control a person would press is not on the screen`);
+      console.log(`  ${step.name.padEnd(18)} NO CONTROL FOUND`);
+      continue;
+    }
+    const landed = step.until ? await waitFor(cdp, step.until) : true;
+    if (!landed) {
+      findings.push(`${step.name}: pressed, and the screen never arrived — ${String(step.until)}`);
+    }
+    // The shell renders its own state as soon as it has an answer; this is for
+    // what comes after that — a measured canvas, a re-read thread, a fetch.
+    await sleep(1200);
+
+    const reading = await capture(cdp, outputDir, `journey-${step.name}.png`);
+    findings.push(...judge(step.name, reading));
+    const read = step.read ? String(await evaluate(cdp, step.read)) : '';
+    console.log(
+      `  ${step.name.padEnd(18)} ${landed ? 'arrived' : 'NEVER ARRIVED'}  ` +
+        `${reading.sideways ? 'SCROLLS SIDEWAYS' : 'fits'}  ` +
+        `${typeof acted === 'string' ? `[${acted}] ` : ''}${read.slice(0, 80)}`,
+    );
+
+    const probe = probes[step.name];
+    if (probe) findings.push(...(await probe(cdp)));
+  }
+  return findings;
+}
+
+/** The constellation, measured for nodes painted over each other. */
+async function constellationProbe(cdp: Cdp): Promise<string[]> {
+  const reading = (await evaluate(cdp, OVERLAPPING_NODES)) as {
+    nodes: number;
+    overlaps: number;
+    worst: string;
+  };
+  console.log(
+    `    constellation: ${reading.nodes} nodes, ${reading.overlaps} overlapping pair(s)` +
+      (reading.worst ? ` — ${reading.worst}` : ''),
+  );
+  return reading.overlaps > 0
+    ? [
+        `05-project-map: ${reading.overlaps} constellation node pair(s) painted over each other ` +
+          `at ${PHONE.width}px — ${reading.worst}`,
+      ]
+    : [];
+}
+
+/**
+ * The six maps, at phone width, each with the outline §29 requires beside it.
+ *
+ * Two things are asked of every one of them and they are different questions.
+ * **The picture and the list must be the same graph** — the outline comes from
+ * the server in the same pass as the nodes, so a diagram with more or fewer
+ * things in it than its own list is two derivations that can disagree, which is
+ * exactly what the one-pass rule exists to prevent. And **an empty map must say
+ * why**, because a blank canvas with no sentence cannot be told from one that
+ * failed to load.
+ *
+ * The money-flow map is the one that is usually empty here, and the assertion on
+ * it is the strong one: nothing drawn, no connections claimed, and a reason in
+ * words. Inventing edges to finish a diagram is an invented citation one
+ * altitude down.
+ */
+async function mapsPass(cdp: Cdp, outputDir: string): Promise<string[]> {
+  const findings: string[] = [];
+  console.log('  the six maps, at phone width:');
+  let ordinal = 7;
+  for (const label of MAP_TABS) {
+    const file =
+      `journey-${String(ordinal).padStart(2, '0')}-map-` +
+      `${label.toLowerCase().replace(/\s+/g, '-')}.png`;
+    ordinal += 1;
+
+    const pressed = await evaluate(
+      cdp,
+      `(() => {
+        const tab = [...document.querySelectorAll('ul[aria-label="Kind of map"] button')].find(
+          (button) => (button.textContent || '').trim() === ${JSON.stringify(label)},
+        );
+        if (!tab) return false;
+        tab.click();
+        return true;
+      })()`,
+    );
+    if (pressed !== true) {
+      findings.push(`maps: there is no tab for the "${label}" map to press`);
+      console.log(`    ${label.padEnd(11)} NO TAB`);
+      continue;
+    }
+
+    const selected = await waitFor(
+      cdp,
+      `(() => {
+        const on = document.querySelector('ul[aria-label="Kind of map"] button[aria-selected=true]');
+        return !!on && (on.textContent || '').trim() === ${JSON.stringify(label)};
+      })()`,
+    );
+    if (!selected) findings.push(`maps: pressing "${label}" did not select it`);
+    // Each type is its own request, so this waits for the reading to stop being
+    // a loading sentence rather than for a fixed delay.
+    await waitFor(cdp, "document.querySelector('.rs-state-loading') === null", 20_000);
+    await sleep(600);
+
+    const reading = (await evaluate(
+      cdp,
+      `(() => {
+        const tabs = document.querySelector('ul[aria-label="Kind of map"]');
+        const root = tabs ? tabs.closest('.rs-column') : null;
+        if (!root) return null;
+        const list = root.querySelector('ul[aria-label="The same map as a list"]');
+        const counts = root.querySelector('.rs-row .rs-hint');
+        const empty = root.querySelector('.rs-state-empty');
+        const lede = root.querySelector('.rs-lede');
+        return {
+          question: lede ? lede.textContent.trim() : '',
+          counts: counts ? counts.textContent.trim() : '',
+          drawn: root.querySelectorAll('.rs-map-node').length,
+          outline: list ? list.querySelectorAll(':scope > li').length : 0,
+          outlineInDocument: list !== null,
+          emptyReason: empty ? empty.textContent.trim() : '',
+        };
+      })()`,
+    )) as {
+      question: string;
+      counts: string;
+      drawn: number;
+      outline: number;
+      outlineInDocument: boolean;
+      emptyReason: string;
+    } | null;
+
+    const capture0 = await capture(cdp, outputDir, file);
+    findings.push(...judge(`map:${label}`, capture0));
+
+    if (!reading) {
+      findings.push(`maps: the "${label}" map rendered nothing this could read`);
+      console.log(`    ${label.padEnd(11)} NOTHING RENDERED`);
+      continue;
+    }
+
+    if (reading.drawn > 0 && !reading.outlineInDocument) {
+      findings.push(`maps: the "${label}" map draws ${reading.drawn} things and carries no outline`);
+    }
+    if (reading.drawn > 0 && reading.outline !== reading.drawn) {
+      findings.push(
+        `maps: the "${label}" diagram and its outline are different graphs — ` +
+          `${reading.drawn} drawn against ${reading.outline} listed`,
+      );
+    }
+    if (reading.drawn === 0 && !reading.emptyReason) {
+      findings.push(`maps: the "${label}" map is empty and does not say why`);
+    }
+    if (label === 'Money flow' && reading.drawn === 0) {
+      if (!/0 connections/.test(reading.counts)) {
+        findings.push(
+          `maps: the empty money-flow map claims connections it cannot have — ${reading.counts}`,
+        );
+      }
+      if (!reading.emptyReason) {
+        findings.push('maps: the money-flow map is empty and states no reason');
+      }
+    }
+
+    console.log(
+      `    ${label.padEnd(11)} ${String(reading.drawn).padStart(2)} drawn / ` +
+        `${String(reading.outline).padStart(2)} listed  ` +
+        `${capture0.sideways ? 'SCROLLS SIDEWAYS' : 'fits'}  ` +
+        `${reading.emptyReason ? `empty: ${reading.emptyReason.slice(0, 64)}` : reading.question.slice(0, 64)}`,
+    );
+  }
+
+  /*
+   * And that the outline is a control a person can actually reach, not only a
+   * node in the document. The toggle is the whole accessible path: if it does
+   * not switch, the list §29 calls an equal is unreachable at phone width.
+   *
+   * Asked of a map that has something to list. The first version asked it of
+   * whichever map the loop above happened to leave selected, which was the
+   * money-flow one — empty by design here — so the outline was correctly absent
+   * and the harness reported a defect in itself. A probe whose subject is
+   * whatever is left over is a probe that will eventually say something untrue.
+   */
+  await evaluate(
+    cdp,
+    `(() => {
+      const tab = [...document.querySelectorAll('ul[aria-label="Kind of map"] button')].find(
+        (button) => (button.textContent || '').trim() === 'System',
+      );
+      if (tab) tab.click();
+      return true;
+    })()`,
+  );
+  await waitFor(cdp, "document.querySelectorAll('.rs-map-node').length > 0", 20_000);
+  await sleep(500);
+
+  const toggled = await evaluate(
+    cdp,
+    `(() => {
+      const button = [...document.querySelectorAll('button')].find(
+        (candidate) => /show it as a list/i.test(candidate.textContent || ''),
+      );
+      if (!button) return false;
+      button.click();
+      return true;
+    })()`,
+  );
+  if (toggled !== true) {
+    findings.push('maps: there is no control to show a map as its list');
+  } else {
+    await sleep(700);
+    const shown = await evaluate(
+      cdp,
+      `(() => {
+        const list = document.querySelector('ul[aria-label="The same map as a list"]');
+        if (!list) return 'no outline in the document';
+        const holder = list.parentElement;
+        return holder && !holder.hasAttribute('hidden') ? true : 'the outline stayed hidden';
+      })()`,
+    );
+    if (shown !== true) findings.push(`maps: pressing the list control left ${String(shown)}`);
+    const reading = await capture(cdp, outputDir, 'journey-12b-map-as-a-list.png');
+    findings.push(...judge('map:outline', reading));
+    console.log(`    outline      ${shown === true ? 'shown' : String(shown)}`);
+  }
+  return findings;
+}
+
+/**
+ * Everywhere a person can go from here, counted rather than assumed.
+ *
+ * The sheet is opened, because "reached in two presses through More" is still
+ * reached — that is what More is for. What is *not* reached is a control that is
+ * in the markup at a width where nothing renders it and nothing else offers what
+ * it does, and at 390px that was Search, the depth control, Build, Connected
+ * sites, the full console and Sign out: six things, including the way out of
+ * your own session, with no path to them on a phone at all.
+ *
+ * It captures the open sheet, because a list of names is a reading and the
+ * picture is what a person approves.
+ */
+async function reachabilityProbe(
+  cdp: Cdp,
+  outputDir: string,
+  file: string,
+  width: number,
+): Promise<string[]> {
+  const closed = (await evaluate(cdp, REACHABLE)) as string[];
+  const opened = await evaluate(
+    cdp,
+    `(() => {
+      const more = document.querySelector('.rs-more > button');
+      if (!more) return false;
+      if (more.getAttribute('aria-expanded') === 'true') return true;
+      more.click();
+      return true;
+    })()`,
+  );
+  if (opened === true) await sleep(500);
+  const withSheet = opened === true ? ((await evaluate(cdp, REACHABLE)) as string[]) : [];
+  const reachable = new Set([...closed, ...withSheet]);
+  const reading = await capture(cdp, outputDir, file);
+
+  const missing = MUST_REACH.filter((name) => !reachable.has(name));
+  console.log(
+    `  reachable at ${width}px (${opened === true ? 'sheet opened' : 'NO MORE CONTROL'}): ` +
+      `${[...reachable].join(' · ')}`,
+  );
+  /*
+   * The sheet is open in this capture, so the covered-control clause is not
+   * asked of it.
+   *
+   * It flagged `Send: covered by Sign out`, which is a popup doing exactly what
+   * a popup does — and a harness that calls that a defect teaches a reader to
+   * skim its findings, which is the one thing a findings list must not do. The
+   * question this capture exists for is whether the *sheet's own* items can be
+   * pressed, and `REACHABLE` is what answers it. Every other step of the
+   * journey takes the covered-control reading with nothing open, so nothing is
+   * lost.
+   */
+  const findings = judge(`reachable-${width}`, {
+    ...reading,
+    unreachable: '',
+  });
+  if (opened !== true) {
+    findings.push(`reachable-${width}: there is no More control to open at this width`);
+  }
+  if (missing.length > 0) {
+    findings.push(
+      `reachable-${width}: a person cannot get to ${missing.join(', ')} at ${width}px — ` +
+        'not in the bar, and not in the More sheet',
+    );
+  }
+  // Put it back, so the step after this is photographed as a person left it.
+  if (opened === true) {
+    await evaluate(
+      cdp,
+      `(() => {
+        const more = document.querySelector('.rs-more > button');
+        if (more && more.getAttribute('aria-expanded') === 'true') more.click();
+        return true;
+      })()`,
+    );
+    await sleep(300);
+  }
+  return findings;
+}
+
+/**
+ * The thumb bar at the narrower phone §24 names.
+ *
+ * Asked separately and asked only of the bar, because the bar is the one part of
+ * this shell with a fixed number of cells and `overflow-x: hidden` — so it is
+ * the one part where a label that no longer fits is not smaller, it is gone.
+ * Everything else on the screen reflows and is covered by the journey above.
+ */
+async function narrowPhoneBar(cdp: Cdp, outputDir: string): Promise<string[]> {
+  await cdp.send('Emulation.setDeviceMetricsOverride', {
+    width: NARROW_PHONE,
+    height: PHONE.height,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
+  await sleep(900);
+  const reading = await capture(cdp, outputDir, `journey-16-thumb-bar-${NARROW_PHONE}.png`);
+  /*
+   * The cells that are actually on the bar, not every rail item in the markup.
+   *
+   * Its first version printed `.rs-rail-item` outright, which includes the two
+   * secondary destinations the phone deliberately moves into the sheet — so the
+   * log read as though Build and Connected sites were cells of a 360px thumb
+   * bar. A line of evidence that names something not on the screen is a line
+   * somebody will quote.
+   */
+  const labels = String(
+    await evaluate(
+      cdp,
+      `[...document.querySelectorAll('.rs-rail-item, .rs-more > button')]
+        .filter((item) => {
+          const box = item.getBoundingClientRect();
+          return box.width >= 1 && box.height >= 1;
+        })
+        .map((item) => (item.textContent || '').trim())
+        .join(' · ')`,
+    ),
+  );
+  console.log(`  thumb bar at ${NARROW_PHONE}px: ${labels}`);
+  return judge(`16-thumb-bar-${NARROW_PHONE}`, reading);
+}
+
+/** One browser, one signed-in person, one path through the product. */
+async function driveJourney(cookie: string, outputDir: string): Promise<string[]> {
+  const findings: string[] = [];
+  console.log('');
+  console.log(
+    `One journey on a ${PHONE.width}×${PHONE.height} phone, pressing real controls:`,
+  );
+  await withChromium(async (cdp) => {
+    await signInBrowser(cdp, cookie);
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: PHONE.width,
+      height: PHONE.height,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+    // The only navigation in the whole journey. Everything after this is a press.
+    await cdp.send('Page.navigate', { url: `${BASE}/` });
+    findings.push(
+      ...(await walk(cdp, outputDir, JOURNEY_IN, { '05-project-map': constellationProbe })),
+    );
+    findings.push(...(await mapsPass(cdp, outputDir)));
+    findings.push(...(await walk(cdp, outputDir, JOURNEY_OUT)));
+    findings.push(
+      ...(await reachabilityProbe(
+        cdp,
+        outputDir,
+        `journey-15-everywhere-from-${PHONE.width}.png`,
+        PHONE.width,
+      )),
+    );
+    findings.push(...(await narrowPhoneBar(cdp, outputDir)));
+    findings.push(
+      ...(await reachabilityProbe(
+        cdp,
+        outputDir,
+        `journey-17-everywhere-from-${NARROW_PHONE}.png`,
+        NARROW_PHONE,
+      )),
+    );
+  });
+  return findings;
 }
 
 /**

@@ -83,6 +83,13 @@
   /* The rail is a measurement other rules need, so it is a token rather than
      a number repeated in four places. */
   --rail: 232px;
+
+  /* The height of one thumb-bar cell on a phone. The More sheet has to clear
+     the bar exactly, and a sheet that sits over the nav it opened from is how
+     two literals that must agree stop agreeing. The phone rail cell keeps its
+     own literal below, and `tests/step12bResponsive.test.tsx` fails if the two
+     numbers ever differ. */
+  --bar-cell: 56px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -319,8 +326,75 @@
   gap: var(--gap-2);
 }
 
+/*
+ * The seventh cell, not a hidden drawer.
+ *
+ * This was `display: none`, and that took Search, the depth control and the
+ * More menu off a phone entirely — and with More went Build, Connected sites,
+ * the full console and **Sign out**. `RussellShell.tsx` has always carried a
+ * `mode === 'BAR'` branch inside that menu for exactly the two secondary
+ * destinations, and nothing could ever reach it, because the element holding
+ * the menu was not rendered at the only width that branch is for. A control
+ * that exists in the markup and cannot be pressed is not a control.
+ *
+ * Found by walking the journey rather than by reading, which is the whole
+ * argument for `scripts/visual-qa.ts`: every assertion in the suite passed, and
+ * a person on a phone could not sign out.
+ *
+ * So the foot becomes one cell of the thumb bar holding the More button, and
+ * the shell renders Search and the depth control *inside* that menu at this
+ * width rather than beside it — which is what "More" already meant here.
+ */
 .rs-shell-bar .rs-rail-foot {
-  display: none;
+  flex: none;
+  flex-direction: row;
+  align-items: stretch;
+  margin-top: 0;
+  gap: 0;
+}
+
+.rs-shell-bar .rs-more > button {
+  width: auto;
+  /* The same cell as the six beside it; see --bar-cell. */
+  min-height: var(--bar-cell);
+  padding: var(--gap-1) var(--gap-2);
+  border: 0;
+  border-radius: 0;
+  font-size: var(--step--1);
+  text-align: center;
+}
+
+/*
+ * Fixed, because the bar above it clips.
+ *
+ * `.rs-shell-bar .rs-rail` sets `overflow-x: hidden` on purpose — a nav you
+ * have to swipe is a nav whose last item nobody finds — and CSS computes the
+ * other axis to `auto` the moment one axis is not `visible`. So an absolutely
+ * positioned sheet inside that element is clipped on both axes, and the menu
+ * would open into nothing. `fixed` is positioned against the viewport, which
+ * the rail's overflow cannot reach.
+ */
+.rs-shell-bar .rs-menu {
+  position: fixed;
+  left: var(--gap-3);
+  right: var(--gap-3);
+  bottom: calc(var(--bar-cell) + env(safe-area-inset-bottom, 0px) + 6px);
+  min-width: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* The depth control, when it is inside the sheet rather than in the rail. */
+.rs-menu-depth {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  padding: var(--gap-2) var(--gap-3) var(--gap-1);
+}
+
+.rs-menu-depth > span {
+  color: var(--ink-faint);
+  font: var(--step--1) / 1.4 var(--body);
 }
 
 .rs-badge {
@@ -481,6 +555,28 @@
 
 .rs-command textarea::placeholder {
   color: var(--ink-faint);
+  /*
+   * One line, truncated — never a second line the bar below cuts in half.
+   *
+   * The box is one row tall, so at 360px "Ask Russell, or tell it something…"
+   * wrapped and its second line was sliced by the thumb bar's own top edge.
+   * Found in the 360px capture; at 390px it fits, which is why a sample at one
+   * width would have missed it.
+   *
+   * Truncating rather than growing the box, for the reason `.rs-depth` already
+   * truncates: cut-off-with-more-to-come reads as a narrow screen, and a
+   * half-height line of text reads as a broken one. Nothing is lost either way
+   * — the accessible name of the control is its label, and this is a hint.
+   *
+   * `nowrap` is what does the work. The ellipsis is declared with it and
+   * Chromium 141 renders none on a *textarea* placeholder, so the hint ends at
+   * the edge of the box rather than with a character saying so; it is kept
+   * because the intent is right and an engine that honours it is strictly
+   * better. Measured, not assumed — see `docs/evidence/step12b-visual.md`.
+   */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---------------------------------------------------------------- typing -- */
