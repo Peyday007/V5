@@ -624,6 +624,61 @@ describe('an onboarding whose response was lost', () => {
     expect(shown.waiting).toBe(1);
   });
 
+  /*
+   * The scan has to be self-limiting in both directions.
+   *
+   * A candidate the recheck *skips* still matched the candidate query, so
+   * without stamping it the next tick re-read its bin and re-routed it, for
+   * ever. With the recheck reading a bin per candidate that is up to two hundred
+   * extra reads every ten seconds against a Brain that is also serving workers —
+   * which is how a deploy's post-restart verification ran an audit step past five
+   * minutes and lost the work item's lease.
+   */
+  it('asks a skipped candidate once per fleet write, not once per tick', async () => {
+    const bin = await factoryBin(OTHER_REMOTE, 'nobody is registered for this');
+    await ensureDispatchIntent(bin);
+    const [intent] = await listDispatchesForBin(bin.id);
+    await markDispatchDeferred(intent!.id, {
+      refusal: 'NO_SURFACE_SERVES_THIS_REPOSITORY',
+      message: 'nobody is registered for this repository',
+      retryAfterMs: 24 * 60 * 60 * 1000,
+    });
+    await afterThisInstant();
+    // A fleet write the recheck will answer "no" for: a surface for the *other*
+    // repository, which cannot take this bin.
+    const mount = await onboard(MOUNT().id);
+    await surface(mount.onboarding.workerId!, 'MOUNT_SECRET', 'mount-account');
+
+    const before = (await getDispatch(intent!.id))!;
+    let looked = 0;
+    const counting = async (candidate: Bin): Promise<boolean> => {
+      looked += 1;
+      return (await route(candidate)).ok;
+    };
+
+    expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS, routesNow: counting })).toBe(0);
+    expect(looked).toBe(1);
+
+    // Asked, answered, and not asked again until something about the fleet
+    // changes — the scan does not grow into a per-tick cost.
+    expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS, routesNow: counting })).toBe(0);
+    expect(looked).toBe(1);
+
+    // And skipping it changed nothing about when it would fire, or its attempts.
+    const after = (await getDispatch(intent!.id))!;
+    expect(after.nextAttemptAt).toBe(before.nextAttemptAt);
+    expect(after.attemptCount).toBe(before.attemptCount);
+    expect(after.state).toBe('PENDING');
+
+    // The next fleet write asks it again, because that is the only moment the
+    // answer could have changed.
+    await afterThisInstant();
+    const other = await fixtureFactoryWorker('factory-fixture-second', OTHER_REPO);
+    await surface(other, 'TARGET_SECRET', 'other-account');
+    expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS, routesNow: counting })).toBe(1);
+    expect(looked).toBe(2);
+  });
+
   it('re-arms once however many times onboarding is repeated', async () => {
     const bin = await factoryBin(MOUNT().remote, 'its own');
     await ensureDispatchIntent(bin);

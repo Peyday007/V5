@@ -264,8 +264,8 @@ identical each time.
 
 ```
 npx tsc --noEmit     clean
-npm test             107 files, 2355 passed | 37 skipped, 0 failed      (SQLite)
-npm test             107 files, 2380 passed | 12 skipped, 0 failed      (Postgres 16)
+npm test             107 files, 2356 passed | 37 skipped, 0 failed      (SQLite)
+npm test             107 files, 2381 passed | 12 skipped, 0 failed      (Postgres 16)
 npx vite build       clean
 ```
 
