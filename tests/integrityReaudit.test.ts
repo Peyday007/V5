@@ -46,6 +46,7 @@ import {
 } from '../server/services/audit/integrityReaudit.ts';
 import { listOpenReopens, listReopens } from '../server/repos/auditReopens.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
+import { getBin } from '../server/repos/bins.ts';
 import { auditRoundFor, auditRoundStartedAt } from '../server/services/research/auditRound.ts';
 import { earlierAuditRole } from '../server/services/research/auditBrief.ts';
 import type { Document } from '../server/domain/types.ts';
@@ -389,6 +390,46 @@ describe('the transition itself', () => {
     );
     expect(restored).toHaveLength(1);
     expect(restored[0]?.payload['role']).toBe('PRIMARY');
+  });
+
+  /*
+   * The other half of the recovery: somewhere for the round to run.
+   *
+   * Production's round was opened with nothing in it, so five fired workers
+   * arrived, each correctly found no claimable item, released, and the bin
+   * retired at NEEDS_HUMAN with its five attempts spent. Enqueuing the work
+   * stops that happening again; it does not give *that* round anywhere to run.
+   * A live round whose only bin is terminal is a packet nothing can be sent for.
+   */
+  it('a replay builds a new bin when the round has nowhere left to run', async () => {
+    await authorReviewedItsOwnWork();
+    const first = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    expect(first.binId).toBeTruthy();
+
+    // Spend it, the way five refused activations did.
+    await getDb().run(`UPDATE bins SET state = 'NEEDS_HUMAN' WHERE id = ?`, [first.binId]);
+
+    const replay = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    expect(replay.created).toBe(false);
+    expect(replay.binId).toBeTruthy();
+    expect(replay.binId).not.toBe(first.binId);
+
+    // The spent one keeps everything it had.
+    const spent = await getBin(first.binId!);
+    expect(spent?.state).toBe('NEEDS_HUMAN');
+
+    const fresh = await getBin(replay.binId!);
+    expect(fresh?.state).toBe('READY');
+    expect(fresh?.orchestrationId).toBe(orchestrationId);
+  });
+
+  it('a replay reuses a bin that can still deliver, rather than building a second', async () => {
+    await authorReviewedItsOwnWork();
+    const first = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    const replay = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    // Two live bins for one packet is the duplicate the replay path exists to
+    // avoid, and it is still avoided.
+    expect(replay.binId).toBe(first.binId);
   });
 
   it('a replay enqueues nothing further, because the round already holds it', async () => {

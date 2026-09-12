@@ -1113,6 +1113,14 @@ is its own event, `AUDIT_ROUND_REOPENED`, with its own append-only record.
   at all — idempotent by the round, not by a flag. Cancelling the previous
   round's items and building a bin stay on the winning path, because those are
   not.
+  **And the round already in that state needed somewhere to run, which is the
+  third move of the same mistake.** Those five refused activations spent the
+  bin's five attempts, so it retired at `NEEDS_HUMAN` — and a live round whose
+  only bin is terminal is a packet nothing can be sent for. A replay reuses the
+  bin while it can still deliver and builds a new one when it cannot; the spent
+  one keeps its row, its attempts and its events. The five workers were not the
+  defect and are worth recording as the opposite: each read the state correctly,
+  said so precisely, and released rather than inventing a report.
 - **The scan reports and does not act.** `npm run admin -- packets independence`
   names every packet whose reviewer shared a session with an author, and opens
   none of them, because that decision is a person's. It reports a packet whose

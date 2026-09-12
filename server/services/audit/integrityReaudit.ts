@@ -434,7 +434,7 @@ export async function requestIntegrityReaudit(input: {
      * are not.
      */
     const advancedOnReplay = await advancePacket(orchestration.id);
-    const bin = await binForReopen(reopen);
+    const bin = await binForReopen({ reopen, document, orchestration });
     return {
       ok: true,
       orchestrationId: orchestration.id,
@@ -603,9 +603,44 @@ function refuse(
  * because a packet can hold more than one bin over its life and asking by
  * orchestration would sometimes answer about the spent one.
  */
-async function binForReopen(reopen: AuditIntegrityReopen): Promise<string | null> {
-  const bin = await binByCreator(`reaudit:${reopen.id}`);
-  return bin?.id ?? null;
+/**
+ * Bin states from which nothing more will ever be dispatched or assigned.
+ *
+ * `COMPLETE`, `FAILED` and `CANCELLED` are finished. `NEEDS_HUMAN` is the one
+ * worth naming: it is the state a bin reaches when its attempts are spent, and
+ * `DISPATCHABLE_SQL` does not offer it either — so for the purpose of *can this
+ * round still be sent for*, it belongs with the rest.
+ */
+const SPENT_BIN_STATES = new Set(['COMPLETE', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN']);
+
+/**
+ * The bin this round can actually be sent for, built again if the last one is
+ * spent.
+ *
+ * Reused while it can still deliver, because two live bins for one packet is
+ * the duplicate the replay path exists to avoid. Rebuilt when it cannot,
+ * because a live round whose only bin is terminal is **a packet nothing can be
+ * sent for** — §24's own words, and the case it names as needing the launch's
+ * own bin rather than a reopen of the spent one.
+ *
+ * Production produced it inside five minutes: the round was opened with nothing
+ * in it, so five fired workers arrived, each correctly diagnosed that there was
+ * no claimable item, released, and the bin retired at `NEEDS_HUMAN` with
+ * `attempts 5/5`. Fixing the enqueue stops that happening again; it does not by
+ * itself give the round already in that state anywhere to run. **A remedy that
+ * cannot reach the state it exists for is not a remedy.**
+ *
+ * The spent bin keeps its row, its attempts, its checkpoints and its events.
+ */
+async function binForReopen(input: {
+  reopen: AuditIntegrityReopen;
+  document: { id: string; canonicalName: string; version: string };
+  orchestration: { id: string; projectId: string; layerId: string | null; title: string };
+}): Promise<string | null> {
+  const existing = await binByCreator(`reaudit:${input.reopen.id}`);
+  if (existing && !SPENT_BIN_STATES.has(existing.state)) return existing.id;
+  if (!existing) return null;
+  return await ensureReauditBin(input);
 }
 
 /**

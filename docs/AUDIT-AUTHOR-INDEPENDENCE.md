@@ -252,6 +252,25 @@ at all: it is idempotent by the round rather than by a flag, so a role already
 argued, already out or already enqueued adds nothing. Cancelling the previous
 round's items and building a bin stay on the winning path, because those are not.
 
+**And enqueuing the work is only half a remedy for the round already in that
+state, which is the third move of the same mistake.** Those five activations
+spent the bin's five attempts, so it retired at `NEEDS_HUMAN` — and a live round
+whose only bin is terminal is *a packet nothing can be sent for*, §24's own
+words. So a replay reuses the bin while it can still deliver, because two live
+bins for one packet is the duplicate the replay path exists to avoid, and builds
+a new one when it cannot. **A remedy that cannot reach the state it exists for
+is not a remedy.** The spent bin keeps its row, its attempts, its checkpoints
+and its events.
+
+The five workers were not the problem and are worth recording as the opposite.
+Each one arrived, read the state correctly, said so precisely — *"no claimable
+RESEARCH_AUDIT work items exist for this reopened round"*, *"attempt 4 of 5,
+identical stuck state as attempts 1-3"* — and released rather than inventing a
+report. The completion contract refused every attempt with the accurate reason:
+*"The packet is AUDITING, which is not a state it files a report in."* The
+machinery was honest about a defect for five consecutive activations, which is
+exactly what it is for.
+
 **The test fixture is why reading did not find it.** It had a filed document and
 no fragments, which is a shape production cannot produce: a packet cannot have a
 document without having synthesized one, and it cannot synthesize without a
