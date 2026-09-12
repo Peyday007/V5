@@ -40,6 +40,7 @@
  *   npm run admin -- packets retry-fragment <fragment> --admin someone@example.com
  *   npm run admin -- packets reissue <workItem> --admin someone@example.com
  *   npm run admin -- packets independence [project]
+ *   npm run admin -- packets scope [project]
  *   npm run admin -- packets reaudit <orchestration> --admin someone@example.com
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
@@ -47,6 +48,7 @@ import {
   requestIntegrityReaudit,
   scanAuthorReviewerOverlap,
 } from '../server/services/audit/integrityReaudit.ts';
+import { scopeIndependence } from '../server/services/audit/independenceScope.ts';
 import {
   archiveWorker,
   clearWorkerRouting,
@@ -182,7 +184,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
   access    show <worker> | grant <worker> <project> | revoke <worker> <project>
   queue     list <project>
   packets   list <project> | approve <orchestration>
-            independence [project] | reaudit <orchestration>
+            independence [project] | scope [project] | reaudit <orchestration>
             retry-fragment <fragment> | reissue <workItem>
 
 Connecting a site is not here. It is a person's decision and it lives in
@@ -583,6 +585,94 @@ async function main(): Promise<void> {
       console.log(
         `  ${findings.length} packet(s) need a decision. ` +
           'Reopening one is `packets reaudit <orchestration> --admin <email>`.',
+      );
+      break;
+    }
+    /*
+     * The same rows, triaged — and read-only for the same reason.
+     *
+     * `packets independence` names every packet whose reviewer shared a session
+     * with its author; against production that is 117, which reads as 117
+     * approvals and is not one. This separates what was demonstrated from what
+     * was never attributed, from what is already being re-run, from what is
+     * history — and then says, per packet, whether the conclusion is still in
+     * use and what depends on it.
+     *
+     * It needs no `--admin` because it changes nothing: no reopen, no bin, no
+     * row. §23 — the scan reports and does not act.
+     */
+    case 'packets scope': {
+      const project = rest[0] ? await projectFrom(rest[0]) : null;
+      const { summary, findings } = await scopeIndependence({ projectId: project?.id ?? null });
+
+      // Printed strongest statement first rather than alphabetically, because
+      // that is the order the list has to be read in to be useful.
+      const order = [
+        'DEMONSTRATED',
+        'RECOVERING',
+        'UNATTRIBUTED',
+        'SUPERSEDED_HISTORY',
+        'CLEAN',
+      ] as const;
+      console.log(`  scanned   ${summary.scanned} packet(s)`);
+      for (const status of order) {
+        console.log(`  ${status.padEnd(20)} ${summary.byStatus[status]}`);
+      }
+      console.log(
+        `  not clean ${summary.notClean}: ${summary.inUse} still in use, ` +
+          `${summary.historical} historical`,
+      );
+      console.log('');
+      console.log(`  ${summary.headline}`);
+
+      if (findings.length === 0) {
+        console.log('  Nothing to triage.');
+        break;
+      }
+
+      console.log('');
+      for (const finding of findings) {
+        console.log(
+          `  ${finding.orchestrationId}  ${finding.status.padEnd(20)}` +
+            `${finding.inUse ? 'IN USE    ' : 'historical'}  ${finding.packetStatus}`,
+        );
+        console.log(`      why:  ${finding.statusReason}`);
+        if (finding.conflictedRoles.length > 0) {
+          console.log(`      AUTHOR REVIEWED: ${finding.conflictedRoles.join(', ')}`);
+        }
+        if (finding.unattributedRoles.length > 0 || finding.authorUnattributed) {
+          const missing = finding.authorUnattributed
+            ? ['the author', ...finding.unattributedRoles]
+            : finding.unattributedRoles;
+          console.log(`      no session recorded for: ${missing.join(', ')} (unknown, not a finding)`);
+        }
+        for (const evidence of finding.use) {
+          console.log(`      in use: ${evidence.kind} ${evidence.rowId} — ${evidence.detail}`);
+        }
+        if (finding.notInUseReason) console.log(`      not in use: ${finding.notInUseReason}`);
+        for (const dependent of finding.dependents.slice(0, 10)) {
+          console.log(
+            `      depends: ${dependent.kind} ${dependent.id}` +
+              `${dependent.orchestrationId ? ` (${dependent.orchestrationId})` : ''} — ${dependent.label}`,
+          );
+        }
+        if (finding.dependents.length > 10) {
+          console.log(`      depends: and ${finding.dependents.length - 10} more`);
+        }
+      }
+
+      console.log('');
+      if (summary.decisions.length === 0) {
+        console.log('  No decision is waiting on a person here.');
+      } else {
+        console.log('  The decisions, and nothing else on this list, are:');
+        for (const id of summary.decisions) {
+          console.log(`    ${id}  —  packets reaudit ${id} --admin someone@example.com`);
+        }
+      }
+      console.log(
+        '  An UNATTRIBUTED packet is not one of them: its remedy is recovering the ' +
+          'attribution, never an approval.',
       );
       break;
     }
