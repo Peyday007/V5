@@ -264,10 +264,12 @@ identical each time.
 
 ```
 npx tsc --noEmit     clean
-npm test             106 files, 2307 passed | 37 skipped, 0 failed      (SQLite)
-npm test             106 files, 2332 passed | 12 skipped, 0 failed      (Postgres 16)
+npm test             107 files, 2342 passed | 45 skipped, 0 failed      (SQLite)
+npm test             107 files, 2375 passed | 12 skipped, 0 failed      (Postgres 16)
 npx vite build       clean
 ```
+
+on the reconciled tree, after Step 12A's workstream merged into `production`.
 
 Against Postgres, with a local cluster initialised for it:
 
@@ -354,6 +356,58 @@ connector name would have hidden.
 `bind-worker` takes the worker **name** as well as its id, because onboarding
 names the worker and never shows the id — a runbook that has to say "find the id"
 has a step somebody invents.
+
+## The campaign is live, deferred, and waiting for one thing
+
+Submitted and approved against the deployed Brain through the operator path
+(`Factory` workflow → `flyctl ssh console` → `scripts/factory.ts`), so the
+objective is a committed, reviewable file rather than prose typed into an input:
+
+```
+factory submit --file objectives/bootstrap-settings-guard.json
+  created fcr_7f58ff30aeea4c0f845c
+  base 9cf09ac5773523632f0c9c6025022bcbb933f29d on main
+  repository https://github.com/Peyday007/brain-worker-bootstrap
+  verification                      ← none: the repository has no package.json yet
+
+factory approve --change-request fcr_7f58ff30aeea4c0f845c
+  approved by rosserpeyton@gmail.com
+  campaign fcp_bd1725a9b19b4688ac8e (created)
+```
+
+The empty verification line is the honest answer rather than a gap: a repository
+with no manifest declares no commands, and the campaign's own first unit is what
+gives it one — after which `amendContract` may add `npm test`, and may never
+remove one.
+
+And then, from `factory status`:
+
+```
+campaign fcp_bd1725a9b19b4688ac8e PLANNING — waiting for a plan
+BLOCKER NO_HEALTHY_EXECUTION_SURFACE: FACTORY_PLAN bin bin_e6ae061e726e4918acbe
+  is ready and no registered worker may be handed it
+  (NO_SURFACE_SERVES_THIS_FAMILY). The work is fine; there is nobody to give it
+  to. Onboard this repository in Build … and the deferred dispatch is put back
+  by that write rather than by a timer.
+base 9cf09ac57735 -> 9cf09ac57735 on factory/campaign/fcp_bd1725a9b19b4688ac8e
+units: 0/0 integrated, 0 ready, 0 leased, 0 failed
+paid-API executions recorded: 0
+```
+
+Every property this work was for, in one production reading: the state is
+`PLANNING` rather than `BLOCKED`, because the campaign *is* planning; the blocker
+names the condition and the remedy; the bin is `READY` with no lease; nothing was
+spent; and the resume is derived from the write that fixes it rather than
+scheduled.
+
+The fleet it is waiting on, read the same way (`fleet show`): four accounts, six
+Routines, one eligible. `primary/V1` is the research surface — `caps=[]`, bound
+to `wkr_1cdd82cf…`, the identity `friend-2/V2` also carries. The two `V1-oak`
+Routines that carried `repository,repository-write` are `RETIRED` with *"oakwood
+factory proof complete surface out of active dispatch"* and are bound to no
+worker. **There is no factory surface**, which is why the refusal above names the
+family rather than the repository: no registered worker serves `FACTORY` at all
+yet, so the family question is the first one that fails.
 
 ## What is not proven, and cannot be from here
 

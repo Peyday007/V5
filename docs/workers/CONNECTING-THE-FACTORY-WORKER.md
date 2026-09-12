@@ -247,6 +247,29 @@ Brain's side, and it is the failure a second connector *name* would have hidden.
 
 Nothing after this needs you. Brain fires the surface when a stage is ready.
 
+## What is already waiting
+
+Campaign **`fcp_bd1725a9b19b4688ac8e`** is approved and deferred against exactly
+this setup, pinned at `9cf09ac57735` on `main` of the proving ground. Its
+objective is the one thing that repository is short of: a check that
+`.claude/settings.json` — the file every step above depends on — is valid, names
+both connector prefixes, and is exercised by continuous integration.
+
+Right now `factory status` reads:
+
+```
+campaign fcp_bd1725a9b19b4688ac8e PLANNING — waiting for a plan
+BLOCKER NO_HEALTHY_EXECUTION_SURFACE: FACTORY_PLAN bin bin_e6ae061e726e4918acbe
+  is ready and no registered worker may be handed it.
+units: 0/0 integrated, 0 ready, 0 leased, 0 failed
+paid-API executions recorded: 0
+```
+
+It has spent nothing and holds no lease. When step 7 prints `VERIFIED`, the next
+dispatch tick puts that deferred fire back and the campaign runs plan →
+implement → integrate → independent review → repair → pull request on its own.
+Nothing has to be submitted again.
+
 ---
 
 ## What Brain refuses to do here, and why you have to
