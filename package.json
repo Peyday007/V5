@@ -33,7 +33,8 @@
     "factory:acceptance": "tsx --env-file-if-exists=.env scripts/factory-acceptance.ts",
     "factory:verify": "tsx --env-file-if-exists=.env scripts/factory-verify.ts",
     "upgrade:populated": "tsx --env-file-if-exists=.env scripts/upgrade-populated.ts",
-    "step12b:lab": "tsx --env-file-if-exists=.env scripts/step12b-lab.ts"
+    "step12b:lab": "tsx --env-file-if-exists=.env scripts/step12b-lab.ts",
+    "step12b:acceptance": "tsx --env-file-if-exists=.env scripts/step12b-acceptance.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
