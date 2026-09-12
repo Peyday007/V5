@@ -259,6 +259,13 @@ const OVERRIDES: Override[] = [
   // precisely what §22 was protecting against. The routes refuse a worker by
   // type as well; this is the same answer said in the module that decides.
   { pattern: /^\/api\/russell\/projects\/[^/]+\/sites\/[^/]+\/(connect|disconnect)$/, method: 'POST', level: 'ADMIN' },
+
+  // Onboarding a repository is a membership grant plus a routing scope plus an
+  // invitation, so it is the same authority as connecting a site and carries the
+  // same level. A worker principal is refused by type in the handler as well: a
+  // machine that could register itself for repository work is precisely what §22
+  // was protecting against.
+  { pattern: /^\/api\/projects\/[^/]+\/factory\/repositories\/[^/]+\/onboard$/, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/russell\/projects\/[^/]+\/sites/, method: 'GET', level: 'READ' },
 
   // ---------------------------------------------------------------------

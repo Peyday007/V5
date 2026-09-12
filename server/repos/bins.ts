@@ -2506,22 +2506,66 @@ export async function markDispatchFailed(
  * cannot reach the state it exists for is not a remedy.
  *
  * So the condition is derived rather than scheduled: an intent deferred on a
- * surface-specific error is re-armed when any Routine row has been written since
- * that intent was. It is self-limiting — the re-arm stamps the intent, so it cannot
- * fire again until the fleet changes again — and it never touches an intent
- * deferred for any other reason, never revives an `ABANDONED` one, and never
- * changes an attempt count.
+ * surface-specific error is re-armed when any Routine row **or any
+ * `worker_routing` row** has been written since that intent was. Both tables,
+ * because a surface is two facts now — which Routine Brain may fire, and what the
+ * worker behind it may be handed — and onboarding a repository writes only the
+ * second. It is self-limiting: the re-arm stamps the intent, so it cannot fire
+ * again until the fleet changes again. It never touches an intent deferred for any
+ * other reason, never revives an `ABANDONED` one, and never changes an attempt
+ * count.
  */
+/**
+ * The refusals an operator act resolves, and therefore the ones a write to the
+ * fleet puts back.
+ *
+ * Two of these are about a *scope* rather than a credential, and they are the
+ * reason this list is a list rather than the original three. A factory stage whose
+ * family no worker serves is refused `NO_SURFACE_SERVES_THIS_FAMILY` — and the act
+ * that resolves it is onboarding a worker, which writes `worker_routing` and
+ * touches no Routine at all. Left out, every intent written before the onboarding
+ * kept its backoff, and a repository authorized at 10:00 would have waited until
+ * whatever wall the last refusal set.
+ */
+const OPERATOR_RESOLVED_REFUSALS = [
+  'AUTH',
+  'NOT_FOUND',
+  'PAUSED',
+  'NO_SURFACE_SERVES_THIS_FAMILY',
+  'NO_CAPABLE_SURFACE',
+] as const;
+
 export async function rearmSurfaceDeferredIntents(): Promise<number> {
   const at = binNow();
+  /*
+   * The watermark is read in TypeScript and passed as a parameter rather than
+   * written as a subquery over both tables.
+   *
+   * `MAX(updated_at)` over a UNION is sayable in both dialects only with care, and
+   * this codebase has now paid three times for an `ORDER BY` or an aggregate that
+   * was true in SQLite and false on the database production runs. Two indexed
+   * single-row reads cost nothing on a tick that already does several.
+   */
+  const routines = await getDb().get<{ at: string | null }>(
+    'SELECT MAX(updated_at) AS at FROM fleet_routines',
+  );
+  const routing = await getDb().get<{ at: string | null }>(
+    'SELECT MAX(updated_at) AS at FROM worker_routing',
+  );
+  const marks = [routines?.at ?? null, routing?.at ?? null].filter(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+  if (marks.length === 0) return 0;
+  const watermark = marks.reduce((latest, value) => (value > latest ? value : latest));
+  const placeholders = OPERATOR_RESOLVED_REFUSALS.map(() => '?').join(', ');
   const result = await getDb().run(
     `UPDATE bin_dispatch
         SET next_attempt_at = ?, updated_at = ?
       WHERE state = 'PENDING'
-        AND last_error_kind IN ('AUTH', 'NOT_FOUND', 'PAUSED')
+        AND last_error_kind IN (${placeholders})
         AND next_attempt_at > ?
-        AND updated_at < (SELECT MAX(updated_at) FROM fleet_routines)`,
-    [at, at, at],
+        AND updated_at < ?`,
+    [at, at, ...OPERATOR_RESOLVED_REFUSALS, at, watermark],
   );
   return result.changes;
 }

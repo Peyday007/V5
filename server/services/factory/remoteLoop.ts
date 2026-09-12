@@ -50,6 +50,7 @@ import {
   recordFactoryEvent,
   recordReview,
 } from '../../repos/factoryFleet.ts';
+import { listDispatchesForBin } from '../../repos/bins.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { installPlan, validatePlan } from './planner.ts';
 import { gatingFindings, queueRepairs, reconcileRepairs } from './repair.ts';
@@ -852,6 +853,87 @@ async function surfaceBlockedIntegrations(
  * problem, and a stage no surface can perform is an access problem wherever the
  * workers run.
  */
+/**
+ * The refusals that mean no surface will ever take this stage until a person acts.
+ *
+ * The same two the dispatcher defers on (`WAIT_FOR_OPERATOR` in
+ * `services/dispatch/loop.ts`), named here because this is where the *campaign*
+ * learns about them. The dispatcher's job is to stop burning fires; this one's job
+ * is to make sure somebody can see why nothing is happening.
+ */
+const SCOPE_REFUSALS = new Set(['NO_SURFACE_SERVES_THIS_FAMILY', 'NO_CAPABLE_SURFACE']);
+
+/**
+ * Is a stage of this campaign waiting on a surface nobody has registered?
+ *
+ * Read from the dispatch intent Brain itself wrote, at the bin's **current**
+ * generation — an intent from an earlier generation belongs to an assignment that
+ * has since moved on, and reading it would report a condition that is over.
+ *
+ * This exists because of what production looked like without it. A factory bin sat
+ * `READY` with `DISPATCH_UNROUTED: No enabled Routine is bound to a worker that may
+ * be handed FACTORY work`, the campaign read `EXECUTING`, every row was healthy, and
+ * there was nowhere a person could look that said the one thing that mattered:
+ * **the work is fine and there is nobody to give it to.** A campaign that cannot
+ * say that is a campaign somebody watches for an hour before reading a ledger.
+ */
+async function unservedStage(bins: Bin[]): Promise<{ stage: string; detail: string } | null> {
+  for (const bin of bins) {
+    if (bin.state !== 'READY') continue;
+    for (const dispatch of await listDispatchesForBin(bin.id)) {
+      if (dispatch.leaseGeneration !== bin.leaseGeneration) continue;
+      if (dispatch.state !== 'PENDING') continue;
+      if (!dispatch.lastErrorKind || !SCOPE_REFUSALS.has(dispatch.lastErrorKind)) continue;
+      return {
+        stage: bin.kind,
+        detail:
+          `${bin.kind} bin ${bin.id} is ready and no registered worker may be handed it ` +
+          `(${dispatch.lastErrorKind}). The work is fine; there is nobody to give it to. ` +
+          'Onboard this repository in Build — which registers a worker for FACTORY work on it ' +
+          'and names the one remaining step on the surface where that worker runs — and the ' +
+          'deferred dispatch is put back by that write rather than by a timer.',
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Annotate the campaign with a surface blocker, or take one off.
+ *
+ * **It deliberately does not move `state`.** A campaign whose planning bin cannot
+ * be routed *is* planning; saying `BLOCKED` instead would throw away the only
+ * information a reader needs to know what happens when the surface arrives, and
+ * would then need a guess about which state to restore. So the state stays
+ * truthful and the blocker is a derived annotation beside it — which also makes
+ * the answering transition free: the condition stops being true, and the next tick
+ * takes the sentence away.
+ */
+async function noteSurfaceBlocker(
+  campaign: FactoryCampaign,
+  unserved: { stage: string; detail: string } | null,
+  report: RemoteTickReport,
+): Promise<void> {
+  if (unserved) {
+    if (
+      campaign.blockerKind === 'NO_HEALTHY_EXECUTION_SURFACE' &&
+      campaign.blockerDetail === unserved.detail
+    ) {
+      return;
+    }
+    await patchCampaign(campaign.id, {
+      blockerKind: 'NO_HEALTHY_EXECUTION_SURFACE',
+      blockerDetail: unserved.detail,
+    });
+    report.notes.push(unserved.detail);
+    return;
+  }
+  if (campaign.blockerKind === 'NO_HEALTHY_EXECUTION_SURFACE') {
+    await patchCampaign(campaign.id, { blockerKind: null, blockerDetail: null });
+    report.notes.push('a surface can take this campaign again');
+  }
+}
+
 async function blockStage(
   campaign: FactoryCampaign,
   stage: string,
@@ -949,6 +1031,16 @@ async function runRemoteTick(
   const fresh = (await getCampaign(campaign.id)) ?? campaign;
   const units = await listUnits(fresh.id);
   const liveBins = await campaignBins(fresh.id);
+
+  /*
+   * 1b. Say so when a stage is ready and nobody may be handed it.
+   *
+   * Derived from the dispatch rows every tick, in both directions, before any
+   * decision about what to create next — because the answer to "why is nothing
+   * happening" must not depend on a stage transition that is precisely what is not
+   * happening.
+   */
+  await noteSurfaceBlocker(fresh, await unservedStage(liveBins), report);
 
   // 2. Make the next thing available, at most one bin per stage.
   if (units.length === 0) {
@@ -1445,6 +1537,23 @@ export function startFactoryRemoteLoop(intervalMs = DEFAULT_INTERVAL_MS): void {
     if (running) return;
     running = true;
     void tickAllRemoteCampaigns()
+      .then(async (reports) => {
+        /*
+         * Place what this tick created, now, instead of leaving it for the
+         * dispatcher's own wake.
+         *
+         * The two loops are deliberately separate — one decides what a campaign
+         * needs, the other decides who gets it — and separate loops mean their
+         * intervals add up. Ten seconds is not long, but it is a wait for no
+         * reason at the moment Brain has just written a READY bin, and a factory
+         * campaign pays it once per stage. A dispatch pass with nothing to place
+         * is two indexed reads, and one already in flight cannot double-fire:
+         * every fire takes the surface with a compare-and-swap.
+         */
+        if (!reports.some((report) => report.created.length > 0)) return;
+        const { dispatchTick } = await import('../dispatch/loop.ts');
+        await dispatchTick();
+      })
       .catch(() => undefined)
       .finally(() => {
         running = false;

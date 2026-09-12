@@ -52,7 +52,8 @@ import { campaignBriefing } from '../services/factory/projections.ts';
 import { throughputReport } from '../services/factory/throughput.ts';
 import { pullRequestFor } from '../services/factory/pullRequest.ts';
 import { campaignSpecFor } from '../services/factory/remote.ts';
-import { listRepositoryGrants } from '../services/factory/repositoryEnvelope.ts';
+import { onboardRepository, repositoryOnboarding } from '../services/factory/onboard.ts';
+import { getUser } from '../repos/identity.ts';
 import {
   authorizeProject,
   badRequest,
@@ -112,6 +113,21 @@ async function projectForFactory(projectId: string, level: 'read' | 'write'): Pr
     throw notFound('No such project.');
   }
   await authorizeOrDeny(projectId, level, 'No such project.');
+}
+
+/**
+ * Where this Brain is, from the request rather than from configuration.
+ *
+ * The same derivation `oauth.ts` uses for the issuer, and for the same reason:
+ * one image runs locally, in CI and in production, and an invitation link that
+ * named the wrong host would be a link nobody could open. A forwarded scheme is
+ * honoured because the deployment terminates TLS in front of the app.
+ */
+function originOf(req: { protocol: string; get(name: string): string | undefined }): string {
+  const host = req.get('host') ?? '';
+  const forwarded = req.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const scheme = forwarded === 'http' || forwarded === 'https' ? forwarded : req.protocol;
+  return `${scheme}://${host}`;
 }
 
 /** Resolve a campaign and authorize the project it actually belongs to. */
@@ -234,7 +250,56 @@ factoryRouter.get(
   handler(async (req, res) => {
     const projectId = pathId(req, 'projectId');
     await projectForFactory(projectId, 'write');
-    res.json({ repositories: listRepositoryGrants() });
+    /*
+     * The grants, and what each one's onboarding actually looks like right now.
+     *
+     * The list alone answered "what may I submit here" and left the more useful
+     * question — "and would anything execute it" — to a terminal. A surface that
+     * offers a repository it cannot run is the shape §24 keeps finding: a state
+     * that says waiting when the honest answer is that somebody has to act.
+     */
+    res.json({ repositories: await repositoryOnboarding(projectId) });
+  }),
+);
+
+/**
+ * Register a worker for one authorized repository.
+ *
+ * ADMIN, by the policy table, because it is a membership grant and a routing
+ * scope — the same authority as connecting a site, and named there for the same
+ * reason. `requirePerson` as well as the level: a worker principal is refused by
+ * type, so no membership configuration lets a machine register itself for
+ * repository work.
+ *
+ * Nothing is asked. The grant is the one in the path, the project is the one
+ * being onboarded, the scope set and the families are constants, and the
+ * repository comes from the envelope rather than from the request — so there is
+ * no field here whose wrong value would fail silently.
+ *
+ * The response carries the invitation link once. It is not stored in a form it
+ * can be recovered from, does not appear in the identity event, and is in no
+ * later read of this route.
+ */
+factoryRouter.post(
+  '/projects/:projectId/factory/repositories/:grantId/onboard',
+  handler(async (req, res) => {
+    const principal = requirePerson();
+    const projectId = pathId(req, 'projectId');
+    await projectForFactory(projectId, 'write');
+    const actor = await getUser(principal.id);
+    if (!actor || actor.disabledAt) throw notFound('No such route.');
+
+    const outcome = await onboardRepository({
+      projectId,
+      grantId: pathId(req, 'grantId'),
+      actor,
+      origin: originOf(req),
+    });
+    if (!outcome.ok) {
+      res.status(422).json({ error: 'NOT_AUTHORIZED_REPOSITORY', message: outcome.reason });
+      return;
+    }
+    res.json(outcome.result);
   }),
 );
 

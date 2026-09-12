@@ -92,6 +92,37 @@ const WAIT_FOR_CAPACITY = new Set<RoutingRefusal>([
 ]);
 
 /**
+ * Routing refusals that mean "wait for a person to change the fleet".
+ *
+ * A scope refusal is not capacity and it is not a fault in the work either: no
+ * worker is registered to be handed this family, or none declares a capability the
+ * bin needs. Nothing resolves it by itself — which is exactly why the first version
+ * of this loop put both in the exhausting branch, on the sound-sounding reasoning
+ * that "retrying into an empty room forever would hide that from the person
+ * waiting".
+ *
+ * **That reasoning was right about the hiding and wrong about where to put the
+ * cost.** Exhausting spends the bin's five dispatch attempts in five minutes and
+ * abandons it, and an abandoned stage counts toward `MAX_BINS_PER_STAGE` — so a
+ * campaign created an hour before its repository was onboarded had destroyed its
+ * own planning stage by the time the worker existed, for a reason that was never
+ * about the work. The person waiting learns nothing from that; they learn it from
+ * the campaign, which now carries `NO_HEALTHY_EXECUTION_SURFACE` and the remedy.
+ *
+ * So these defer, and `rearmSurfaceDeferredIntents` puts them back the moment a
+ * `worker_routing` or `fleet_routines` row is written — the derived condition, not
+ * a timer, because the act that resolves this is an operator's and arrives
+ * whenever it arrives.
+ */
+const WAIT_FOR_OPERATOR = new Set<RoutingRefusal>([
+  'NO_SURFACE_SERVES_THIS_FAMILY',
+  'NO_CAPABLE_SURFACE',
+]);
+
+/** Ten minutes, because the re-arm is what ends this wait rather than the clock. */
+const SCOPE_DEFER_MS = 10 * 60_000;
+
+/**
  * How often the loop wakes.
  *
  * Ten seconds. Fast enough that a person watching a bin go ready does not
@@ -307,11 +338,20 @@ export async function dispatchTick(
       const retryAfterMs = decision.retryAt
         ? Math.max(0, Date.parse(decision.retryAt) - Date.now())
         : null;
-      if (WAIT_FOR_CAPACITY.has(decision.refusal)) {
+      if (WAIT_FOR_CAPACITY.has(decision.refusal) || WAIT_FOR_OPERATOR.has(decision.refusal)) {
         await markDispatchDeferred(intent.id, {
           refusal: decision.refusal,
           message: decision.reason,
-          retryAfterMs,
+          /*
+           * A capacity wait is measured in the provider's own retry time or the
+           * default; a scope wait is measured in however long a person takes. So
+           * the second one backs off further and is put back by the write rather
+           * than by the clock — polling a scope that only an operator can change
+           * is a fire nobody asked for.
+           */
+          retryAfterMs: WAIT_FOR_OPERATOR.has(decision.refusal)
+            ? (retryAfterMs ?? SCOPE_DEFER_MS)
+            : retryAfterMs,
         });
         result.deferred += 1;
       } else {

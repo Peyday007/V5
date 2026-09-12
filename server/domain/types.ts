@@ -2831,6 +2831,37 @@ export const SITE_CONNECTOR_SCOPES: readonly WorkerScope[] = [
   'external:sync',
 ];
 
+/**
+ * What a **factory** worker gets, which is neither of the other two.
+ *
+ * A third composed set, for the reason there are two already: the jobs share
+ * almost nothing, and the wrong answer fails silently. A factory worker takes a
+ * bin, reads its manifest, submits unit results, heartbeats, checkpoints, reports
+ * an honest blocker and asks for completion. That is the whole of it.
+ *
+ * What is deliberately absent is the entire research half — `research:write`,
+ * `research:propose`, `claims:write`, `contradictions:write` — and its absence is
+ * a second, independent lock on the crossing `worker_routing` already refuses.
+ * Routing decides what a worker may be *handed*; scopes decide what it could
+ * *write* if it were handed one anyway. A factory identity holding this set cannot
+ * record a claim, a verification or an audit verdict on anybody's research even if
+ * every other guard in this codebase were removed — which is the property worth
+ * having, because the defect these two mechanisms exist for was one identity doing
+ * both jobs.
+ *
+ * `external:sync` is absent for the same reason it is absent from
+ * `CONNECTOR_SCOPES`: a factory worker is not a connected site.
+ */
+export const FACTORY_WORKER_SCOPES: readonly WorkerScope[] = [
+  'project:read',
+  'queue:read',
+  'queue:claim',
+  'queue:heartbeat',
+  'queue:complete',
+  'checkpoints:write',
+  'blockers:report',
+];
+
 /** How a request proved who it was. */
 /**
  * `OAUTH_BEARER` is a token this Brain minted for a worker after a human

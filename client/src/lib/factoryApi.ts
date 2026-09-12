@@ -22,6 +22,10 @@ import type {
 } from '../../../server/domain/factory.ts';
 import type { CampaignBriefing } from '../../../server/services/factory/projections.ts';
 import type { RepositoryGrant } from '../../../server/services/factory/repositoryEnvelope.ts';
+import type {
+  OnboardResult,
+  RepositoryOnboarding,
+} from '../../../server/services/factory/onboard.ts';
 
 export type {
   CampaignBriefing,
@@ -30,7 +34,9 @@ export type {
   FactoryFinding,
   FactoryReview,
   FactoryWorkUnit,
+  OnboardResult,
   RepositoryGrant,
+  RepositoryOnboarding,
 };
 
 export interface SubmitObjectiveInput {
@@ -82,8 +88,25 @@ export const FactoryApi = {
    * had to guess a remote and be refused would be learning the envelope by
    * trial, and the envelope is not a secret — it holds no credential.
    */
-  repositories: (projectId: string): Promise<{ repositories: RepositoryGrant[] }> =>
+  repositories: (projectId: string): Promise<{ repositories: RepositoryOnboarding[] }> =>
     api(`/api/projects/${encodeURIComponent(projectId)}/factory/repositories`),
+
+  /**
+   * Register a worker for one authorized repository.
+   *
+   * The third human decision this screen offers, and the reason it belongs here
+   * rather than on a terminal: it is a membership grant, which is the same
+   * authority as connecting a site, and §26's rule is that a decision a person
+   * makes about their own project belongs on the surface they already use.
+   *
+   * The reply carries the invitation link once. Nothing reads it back.
+   */
+  onboard: (projectId: string, grantId: string): Promise<OnboardResult> =>
+    api(
+      `/api/projects/${encodeURIComponent(projectId)}/factory/repositories/` +
+        `${encodeURIComponent(grantId)}/onboard`,
+      { method: 'POST' },
+    ),
 
   changeRequests: (projectId: string): Promise<{ changeRequests: FactoryChangeRequest[] }> =>
     api(`/api/projects/${encodeURIComponent(projectId)}/factory/change-requests`),

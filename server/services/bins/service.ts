@@ -808,7 +808,58 @@ export async function requestCompletion(input: {
   if (outcome !== 'OK') {
     return { held: false, terminal: false, state: null, verdict, signals };
   }
+  /*
+   * A finished factory stage makes the next one available *now*.
+   *
+   * The same argument the `checkIn` derivation above rests on, one step earlier:
+   * a stage becomes available only when a tick reads what the last one finished,
+   * and the timer is the wrong place to answer a question that has just been
+   * answered. A worker that completes a bin and then ends — which is the ordinary
+   * shape once its own work is done — leaves the next stage waiting on the loop.
+   *
+   * Best-effort and idempotent: it is the same tick the loop runs, guarded by its
+   * own compare-and-swap, so a tick already in flight simply declines and the loop
+   * picks it up twenty seconds later. Completion has already been recorded above,
+   * so nothing here can make the bin's own outcome depend on it.
+   */
+  await advanceFactoryAfter(bin);
   return { held: true, terminal: true, state: 'COMPLETE', verdict, signals };
+}
+
+/**
+ * Tick the campaign a finished bin belonged to, and try to place what it created.
+ *
+ * Two calls rather than one, because they answer different questions: the tick
+ * decides what the campaign now needs, and the dispatch pass gives it to somebody.
+ * Without the second, a stage created here would still wait for the dispatcher's
+ * next ten-second wake — which is not long, but it is a wait for no reason at the
+ * exact moment Brain already knows there is work.
+ *
+ * Dynamic imports for the reason `deriveReadyWork` uses them: the factory and the
+ * dispatcher both read bins, and importing either at the top of this module would
+ * make the cycle real.
+ */
+async function advanceFactoryAfter(bin: Bin): Promise<void> {
+  /*
+   * Scoped to the campaign this bin belongs to, read from the bin's own column.
+   *
+   * The first version ticked every live campaign, which is what the loop does —
+   * right for a timer that has no idea what changed, and wrong here, where the
+   * one thing that changed is known. A completion is on somebody's critical path
+   * and must not pay for every other campaign in the Brain.
+   */
+  const campaignId = bin.factoryCampaignId;
+  if (!campaignId) return;
+  try {
+    const { tickRemoteCampaign } = await import('../factory/remoteLoop.ts');
+    const report = await tickRemoteCampaign(campaignId);
+    if (report.created.length === 0) return;
+    const { dispatchTick } = await import('../dispatch/loop.ts');
+    await dispatchTick();
+  } catch {
+    // The loop is the fallback for every one of these, and it runs in twenty
+    // seconds. A completion must never fail because an optimisation did.
+  }
 }
 
 /**

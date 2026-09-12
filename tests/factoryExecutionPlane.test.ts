@@ -227,20 +227,43 @@ function reviewerPrincipal(workerId: string): Parameters<typeof binAdmission>[0]
 
 describe('the repository envelope', () => {
   /*
-   * The envelope is empty, and that is its intended resting state rather than an
-   * oversight. `oakwood-site` was in it for one purpose — being the target the
-   * hosted factory proved itself against — and that proof is finished and kept.
-   * What it must not remain is a standing authorization, because the factory's
-   * executor must not be whichever repository it last proved itself on.
+   * Two repositories are named in this codebase's history and neither may be
+   * pointed at. `oakwood-site` was in the envelope for one purpose — being the
+   * target the hosted factory proved itself against — and that proof is finished
+   * and kept; what it must not remain is a standing authorization, because the
+   * factory's executor must not be whichever repository it last proved itself on.
+   * `V5` was never in it, because a campaign that could rewrite the machinery
+   * executing it is the one whose failure mode is not contained by declining a
+   * pull request.
    */
-  it('authorizes nothing at rest, including the repository it was proved against', () => {
-    expect(listRepositoryGrants()).toHaveLength(0);
+  it('refuses the repository it was proved against, and the one it lives in', () => {
     for (const remote of [OAKWOOD, `${OAKWOOD}.git`, `${OAKWOOD}/`, OAKWOOD.toUpperCase()]) {
       expect(decideRepository(remote).ok).toBe(false);
     }
     const refused = decideRepository('https://github.com/Peyday007/V5');
     expect(refused.ok).toBe(false);
     expect(refused.grant).toBeNull();
+  });
+
+  /*
+   * What it does authorize is a proving ground, and the properties that make one
+   * safe are asserted rather than described: it may not be Oakwood or V5, it may
+   * not own the file every fired worker reads for its own permissions, and it must
+   * be an `owner/name` the router can compare a manifest against — a grant whose
+   * remote no routing row could ever match is a grant that authorizes nothing and
+   * says otherwise.
+   */
+  it('authorizes a proving ground, and only on terms that keep it one', async () => {
+    const { repositoryIdOfRemote } = await import('../server/services/factory/onboard.ts');
+    const grants = listRepositoryGrants();
+    expect(grants.length).toBeGreaterThan(0);
+    for (const grant of grants) {
+      expect(decideRepository(grant.remote).ok).toBe(true);
+      expect(grant.remote.toLowerCase()).not.toContain('oakwood');
+      expect(grant.remote.toLowerCase()).not.toMatch(/peyday007\/v5$/);
+      expect(repositoryIdOfRemote(grant.remote)).toBeTruthy();
+      expect(grant.forbiddenPaths).toContain('.claude/**');
+    }
   });
 
   /*
@@ -720,6 +743,54 @@ describe('the hosted tick hands out one stage at a time', () => {
     expect(second.created).toEqual([]);
     const bins = await listBins({ projectId: fixture.project.id });
     expect(bins.filter((bin) => bin.kind === 'FACTORY_PLAN')).toHaveLength(1);
+  });
+
+  /*
+   * The unhealthy-surface failure, said on the campaign rather than left on a
+   * ledger.
+   *
+   * Production looked like this: a factory bin `READY`, a `DISPATCH_UNROUTED` row
+   * saying no enabled Routine is bound to a worker that may be handed FACTORY
+   * work, the campaign reading `PLANNING`, and every row healthy. The work was
+   * fine and there was nobody to give it to, and nowhere a person could look that
+   * said so. §24's sentence at the factory: a state that says waiting which
+   * nobody can resolve is not waiting, it is stuck.
+   */
+  it('says on the campaign when a ready stage has nobody to give it to', async () => {
+    stubForge({});
+    await tickRemoteCampaign(campaignId);
+    const [plan] = (await listBins({ projectId: fixture.project.id })).filter(
+      (bin) => bin.kind === 'FACTORY_PLAN',
+    );
+    expect(plan).toBeTruthy();
+
+    const { ensureDispatchIntent, listDispatchesForBin, markDispatchDeferred } = await import(
+      '../server/repos/bins.ts'
+    );
+    await ensureDispatchIntent(plan!);
+    const [intent] = await listDispatchesForBin(plan!.id);
+    await markDispatchDeferred(intent!.id, {
+      refusal: 'NO_SURFACE_SERVES_THIS_FAMILY',
+      message: 'no registered worker may be handed FACTORY work',
+      retryAfterMs: 600_000,
+    });
+
+    await tickRemoteCampaign(campaignId);
+    const blocked = (await getCampaign(campaignId))!;
+    expect(blocked.blockerKind).toBe('NO_HEALTHY_EXECUTION_SURFACE');
+    expect(blocked.blockerDetail).toContain('nobody to give it to');
+    // The state stays truthful. The campaign *is* planning; saying BLOCKED would
+    // throw away what happens when the surface arrives and then need a guess
+    // about which state to restore.
+    expect(blocked.state).toBe('PLANNING');
+
+    // And the answering transition is derived, not scheduled: the condition stops
+    // holding and the next tick takes the sentence away.
+    const { markDispatchSent } = await import('../server/repos/bins.ts');
+    await markDispatchSent(intent!.id, { sessionRef: 'cse_x', routineRef: 'trig_x' });
+    await tickRemoteCampaign(campaignId);
+    const cleared = (await getCampaign(campaignId))!;
+    expect(cleared.blockerKind).toBeNull();
   });
 
   it('waits for an integrator rather than reviewing work that is only implemented', async () => {

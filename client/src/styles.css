@@ -3044,3 +3044,85 @@ legend {
   color: var(--fg-muted);
   font-size: 13px;
 }
+
+/* ---------------------------------------------------------------------------
+   Build — which repositories could actually execute
+   ---------------------------------------------------------------------------
+   The readiness word is the point of this card, so it is the thing that reads
+   differently: one repository nobody could run must not look like one that is
+   ready, at a glance, from across a desk. */
+.rs-factory-repositories {
+  margin: 0 0 18px;
+}
+
+.rs-repo-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rs-repo {
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  border-left-width: 3px;
+}
+
+.rs-repo-ready {
+  border-left-color: var(--ok, #3f8f5f);
+}
+
+.rs-repo-awaiting_surface,
+.rs-repo-not_onboarded {
+  border-left-color: var(--warn, #b8862b);
+}
+
+.rs-repo-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rs-repo-readiness {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+}
+
+.rs-repo-remaining {
+  margin: 8px 0 10px;
+  padding-left: 20px;
+  color: var(--fg-muted);
+  font-size: 13px;
+  max-width: 74ch;
+}
+
+.rs-repo-remaining li + li {
+  margin-top: 4px;
+}
+
+.rs-repo-issued {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--bg-3, transparent);
+}
+
+/* Wraps rather than scrolls: this is copied by hand, once, and a value that is
+   half off the edge of its box is one somebody copies half of. */
+.rs-repo-invite code {
+  display: block;
+  margin-top: 6px;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: var(--bg-1, transparent);
+  word-break: break-all;
+  font-size: 12px;
+}

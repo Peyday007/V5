@@ -22,7 +22,8 @@ import { FactoryApi } from '../lib/factoryApi.ts';
 import type {
   FactoryCampaign,
   FactoryChangeRequest,
-  RepositoryGrant,
+  OnboardResult,
+  RepositoryOnboarding,
   SubmitResponse,
 } from '../lib/factoryApi.ts';
 
@@ -31,7 +32,7 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
     () =>
       projectId
         ? FactoryApi.repositories(projectId)
-        : Promise.resolve({ repositories: [] as RepositoryGrant[] }),
+        : Promise.resolve({ repositories: [] as RepositoryOnboarding[] }),
     [projectId],
   );
   const campaigns = useAsync(
@@ -76,14 +77,21 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
           ) : null}
         </p>
       ) : (
-        <Submit
-          projectId={projectId}
-          repositories={state.items}
-          onStarted={() => {
-            campaigns.reload();
-            requests.reload();
-          }}
-        />
+        <>
+          <Repositories
+            projectId={projectId}
+            repositories={state.items}
+            onChanged={repositories.reload}
+          />
+          <Submit
+            projectId={projectId}
+            repositories={state.items}
+            onStarted={() => {
+              campaigns.reload();
+              requests.reload();
+            }}
+          />
+        </>
       )}
 
       <Campaigns
@@ -106,6 +114,131 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
 }
 
 /**
+ * Which repositories could actually execute, and the one action that fixes one
+ * that could not.
+ *
+ * This card exists because of the state it replaces. The list used to be a
+ * dropdown of remotes, and a person could submit an objective against one that
+ * had no worker registered for it — the campaign would be created, plan a stage,
+ * and sit at `READY` for ever with the reason on a ledger nobody reads. §24's
+ * sentence, at the factory: **a state that says waiting which nobody can resolve
+ * is not waiting, it is stuck.**
+ *
+ * So the readiness is derived on every read and said out loud, and the remaining
+ * steps are printed in the order they have to happen. Two of the three are Brain's
+ * and happen when the button is pressed; the third is not Brain's and says so —
+ * the surface a worker runs on is granted where it runs, and a Brain that could
+ * mint its own execution surfaces would be exactly what §22's split forbids.
+ */
+function Repositories({
+  projectId,
+  repositories,
+  onChanged,
+}: {
+  projectId: string | null;
+  repositories: RepositoryOnboarding[];
+  onChanged(): void;
+}): JSX.Element | null {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [issued, setIssued] = useState<OnboardResult | null>(null);
+
+  if (repositories.length === 0) return null;
+
+  async function onboard(grantId: string): Promise<void> {
+    if (!projectId) return;
+    setBusy(grantId);
+    setProblem(null);
+    try {
+      setIssued(await FactoryApi.onboard(projectId, grantId));
+      onChanged();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : 'That did not work.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="rs-card rs-factory-repositories">
+      <h3>Repositories</h3>
+      <ul className="rs-repo-list">
+        {repositories.map((repo) => (
+          <li key={repo.grantId} className={`rs-repo rs-repo-${repo.readiness.toLowerCase()}`}>
+            <div className="rs-repo-head">
+              <strong>{repo.remote.replace('https://github.com/', '')}</strong>
+              <span className="rs-repo-readiness">{READINESS[repo.readiness]}</span>
+            </div>
+            <p className="rs-hint">{repo.description}</p>
+            {repo.readiness === 'READY' ? (
+              <p className="rs-hint">
+                Registered as <code>{repo.workerName}</code>, running on{' '}
+                {repo.surfaces.join(', ')}.
+              </p>
+            ) : null}
+            {repo.remaining.length > 0 ? (
+              <ol className="rs-repo-remaining">
+                {repo.remaining.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            ) : null}
+            {repo.readiness !== 'READY' ? (
+              <button
+                type="button"
+                disabled={busy !== null || !projectId}
+                onClick={() => void onboard(repo.grantId)}
+              >
+                {busy === repo.grantId
+                  ? 'Registering…'
+                  : repo.readiness === 'NOT_ONBOARDED'
+                    ? 'Onboard this repository'
+                    : 'Issue a new invitation'}
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+
+      {issued ? (
+        <div className="rs-repo-issued">
+          <h4>Connect the surface</h4>
+          <p>
+            {issued.createdIdentity ? 'Created' : 'Repaired'} <code>
+              {issued.onboarding.workerName}
+            </code>
+            , registered it for <code>{issued.onboarding.repositoryId}</code> and nothing else, and
+            issued one invitation. Open this link in the browser you will connect from — it is
+            shown once and expires {new Date(issued.invitationExpiresAt).toLocaleString()}.
+          </p>
+          {/*
+            * Selectable rather than a link: opening it here would spend the browser
+            * cookie on this tab, and the browser that needs it is the one that will
+            * register the connector.
+            */}
+          <p className="rs-repo-invite">
+            <code>{issued.invitationUrl}</code>
+          </p>
+          <p className="rs-hint">
+            The invitation connects that one worker and nothing else, and a signed-in person still
+            has to approve it. It is not a credential: on its own it cannot read anything, call a
+            tool, or obtain a token.
+          </p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+const READINESS: Record<RepositoryOnboarding['readiness'], string> = {
+  NOT_ONBOARDED: 'No worker registered',
+  AWAITING_SURFACE: 'Registered — waiting for a surface',
+  READY: 'Ready to execute',
+};
+
+/**
  * The objective, and the one decision that starts it.
  *
  * Submitting records the ask and pins the repository; approving is what freezes
@@ -124,7 +257,7 @@ function Submit({
   onStarted,
 }: {
   projectId: string | null;
-  repositories: RepositoryGrant[];
+  repositories: RepositoryOnboarding[];
   onStarted(): void;
 }): JSX.Element {
   const [repository, setRepository] = useState(repositories[0]?.remote ?? '');
@@ -193,8 +326,9 @@ function Submit({
           <span>Repository</span>
           <select value={repository} onChange={(event) => setRepository(event.target.value)}>
             {repositories.map((grant) => (
-              <option key={grant.id} value={grant.remote}>
+              <option key={grant.grantId} value={grant.remote}>
                 {grant.remote.replace('https://github.com/', '')}
+                {grant.readiness === 'READY' ? '' : ' — not ready to execute'}
               </option>
             ))}
           </select>

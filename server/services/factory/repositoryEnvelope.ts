@@ -45,10 +45,46 @@ export interface RepositoryGrant {
  * declining a pull request. It is authorized for the *bootstrap* campaign only,
  * which ran locally with a person watching every tick, and that is not this.
  */
-export const REPOSITORY_GRANTS: readonly RepositoryGrant[] = [];
+export const REPOSITORY_GRANTS: readonly RepositoryGrant[] = [
+  /*
+   * The factory's own proving ground, and the shape every later entry copies.
+   *
+   * `brain-worker-bootstrap` is the minimal checkout an unattended Routine
+   * attaches so it can use the connector without stopping for approval. Its own
+   * README says what it is: no application code, no project data, no credentials,
+   * no deployment configuration. That makes it the one repository in this account
+   * where a bounded campaign can prove the whole chain — plan, implement,
+   * integrate, review, repair — without anything a person depends on being in
+   * range of a mistake.
+   *
+   * It is here so the factory is *demonstrable* rather than merely built, and it
+   * is one line to remove. Authorizing the next real repository is this same
+   * entry with a different remote: nothing else in the codebase changes, and the
+   * three gates after it — a person onboarding it in Build, a surface registered
+   * for that worker, and access granted where the worker runs — are all still
+   * there.
+   */
+  {
+    id: 'brain-worker-bootstrap',
+    remote: 'https://github.com/Peyday007/brain-worker-bootstrap',
+    description:
+      'The minimal checkout unattended Routines mount for their connector permissions. ' +
+      'No application code, no project data, no credentials.',
+    defaultBranch: 'main',
+    /*
+     * The settings file is what every fired worker reads to know it may call the
+     * connector without a prompt. A unit that owned it could take the whole fleet
+     * out with a diff nobody would read as dangerous, so no unit may own it — the
+     * campaign can still read it, and a test that checks it is exactly the kind of
+     * change this repository is short of.
+     */
+    forbiddenPaths: ['.claude/**'],
+    mayOpenPullRequest: true,
+  },
+];
 
 /**
- * **The envelope is empty, and that is the intended resting state.**
+ * **One entry, and it is the factory's own proving ground.**
  *
  * `oakwood-site` was in it. The Oakwood Junk Removal site was revived for one
  * purpose — to be the target the hosted factory proved itself against — and that
@@ -58,11 +94,11 @@ export const REPOSITORY_GRANTS: readonly RepositoryGrant[] = [];
  * working in is a repository nobody is watching, and the factory's own executor
  * must not be whichever target it last proved itself on.
  *
- * So the factory is intact and dormant. `decideRepository` refuses every remote,
- * which means no campaign can be created for any repository at all until somebody
- * adds one back here in a reviewed change — which is exactly what this envelope is
- * for, and is the same shape §24 gives for the approval envelope: nobody supplies
- * the limits their own work is judged against.
+ * So the factory is intact, and what it may be pointed at is one repository that
+ * holds nothing anybody depends on. `decideRepository` refuses every other remote,
+ * which means no campaign can be created against one until somebody adds it here
+ * in a reviewed change — the same shape §24 gives for the approval envelope:
+ * nobody supplies the limits their own work is judged against.
  *
  * **Onboarding a repository is three things, and the grant is only the first.**
  * A grant here says the factory may be *pointed* at it; a `worker_routing` row
