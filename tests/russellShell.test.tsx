@@ -1375,6 +1375,18 @@ describe('the thin views', () => {
     // status that contradicts the control beside it teaches people to stop
     // reading the status.
     expect(document.querySelector('details.rs-authority')).toBeNull();
+    /*
+     * And the page must not say the opposite directly above it. This assertion
+     * is the half that was missing: the card was correctly unfolded, the nav
+     * badge correctly read 1, and the heading still announced that nothing
+     * needed a decision — because the empty *list* was being read as the empty
+     * *page*. Photographed at 390px by the visual harness before it was fixed.
+     */
+    expect(screen.queryByText(/Nothing needs your decision/)).toBeNull();
+    // Nor the panel's own empty-list message in its place.
+    expect(document.querySelector('.rs-state-empty')).toBeNull();
+    // The badge and this page are one answer, not two.
+    expect(screen.getByText('1', { selector: '.rs-badge' })).toBeTruthy();
   });
 
   it('says there is nothing at an address it does not know', async () => {

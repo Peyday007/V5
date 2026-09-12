@@ -2713,6 +2713,20 @@ and a tab strip to scroll sideways, each inside its own container.
   somewhere else would move the withdraw control to a page that does not have
   it. The approval a project cannot proceed without is never folded.
 
+  **And the empty list is not the empty page — this page said it was, after the
+  briefing and the badge had both been corrected.** A project with no standing
+  grant has exactly one decision outstanding, and `AuthorityPanel` correctly
+  refuses to fold it; the heading above it still announced *"Nothing needs your
+  decision"* while the nav badge beside them read 1. Three readers of one fact,
+  two of them fixed and the third left asserting the opposite — which is the
+  same defect this section already records, one surface along, and **a status
+  that contradicts the control beside it is worse than no status.** It asks the
+  same question the badge asks, from the same route, rather than inferring it
+  from the list: two places counting one thing is how they come to disagree,
+  and is exactly how this happened. While the answer is unknown the
+  reassurance is withheld rather than guessed, because an incomplete page is a
+  better wrong answer than a false settled one.
+
 **`/legacy` is not `/operator`, and the difference matters.** The operator
 console is deleted and stays deleted (§26). The old three-pane *main* console is
 one click away and holds seven archive operations — importing, extraction

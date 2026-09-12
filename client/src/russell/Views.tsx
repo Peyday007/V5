@@ -1597,16 +1597,43 @@ export function NeedsYouView({
    * for the opposite: a compact statement, what continues without anybody, and
    * the standing authority folded to one line.
    *
-   * The empty *list* is not the same as the empty *page*: a project with no
-   * grant still has one decision outstanding, and `AuthorityPanel` renders it
-   * unfolded because nothing can proceed until it is answered.
+   * **The empty list is not the same fact as the empty page, and this page
+   * used to treat them as one.** A project with no standing grant has exactly
+   * one decision outstanding — the one nothing else can proceed without — and
+   * `AuthorityPanel` correctly refuses to fold it. So the heading said
+   * "Nothing needs your decision" directly above a card saying Russell may not
+   * start research here, while the nav badge beside them both showed 1.
+   *
+   * That is §29's own correction reappearing one surface along. It was applied
+   * to the briefing and to the badge, both of which now count an ungranted
+   * project as one decision, and this page was left asserting the opposite
+   * about the same fact. **A status that contradicts the control beside it is
+   * worse than no status**, because it teaches a person to stop reading it.
+   *
+   * It asks the same question the badge asks, from the same route, rather than
+   * inferring it from the list — two places counting the same thing is how
+   * they come to disagree, which is exactly how this happened. While the
+   * answer is still unknown the reassurance is simply withheld: an incomplete
+   * page is a better wrong answer than a false settled one.
    */
-  const nothingWaiting = state.phase === 'EMPTY';
+  const authority = useAsync(
+    () => (projectId ? RussellApi.authority(projectId) : Promise.resolve(null)),
+    [projectId],
+  );
+  const listEmpty = state.phase === 'EMPTY';
+  const grantOutstanding = authority.data ? authority.data.grant === null : null;
+  const nothingWaiting = listEmpty && grantOutstanding === false;
 
   return (
     <Panel
       title="Needs you"
-      state={{ ...state, phase: nothingWaiting ? 'READY' : state.phase }}
+      /*
+       * An empty list is never the panel's own EMPTY message here, whichever
+       * way the grant goes: either this page is settled and says so below, or
+       * the approval is the decision and says so itself. A third sentence
+       * announcing no decisions would be the same contradiction again.
+       */
+      state={{ ...state, phase: listEmpty ? 'READY' : state.phase }}
       onRetry={query.reload}
     >
       {nothingWaiting ? (
