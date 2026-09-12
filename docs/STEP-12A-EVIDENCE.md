@@ -9435,3 +9435,72 @@ recorded. Nothing about worker capacity stands in its way: the packet reads
 from the authenticated principal — so the answer has to come from a person
 signed in at `/needs-you`, and that is the property that makes `A14_HUMAN_RESUME`
 mean anything rather than an obstacle to route around.
+
+## 99. 21/21 — the decision, the follow-on, and nothing manufactured — 2026-09-12
+
+The operator answered the Needs You request at `/needs-you`. Every link is read
+from production rows below, in the order they happened.
+
+**The decision is authenticated and attributed to the person who made it.**
+`chain-watch` on `rcv_cd79bff8d3e941fda5e0`:
+
+```
+NEEDS YOU  1
+  rhr_36a4f59793274ac08598  RESUMED  mission=rms_aca21b51ac6b41cb8472
+                            choice=RECORD_GAPS by=usr_14439966398243339341
+                            at=2026-09-12T01:28:23.377Z
+```
+
+and the packet carries the same id, which is the condition `A14_HUMAN_RESUME`
+requires and the reason no script could have produced it:
+
+```
+gap policy  RECORD_GAPS — by usr_14439966398243339341 at 2026-09-12T01:28:33.522Z
+status      COMPLETE_WITH_GAPS   pass AUDIT
+completed   2026-09-12T01:28:34.329Z
+```
+
+**The follow-on launched by itself, and exactly once.**
+
+```
+MISSIONS  2
+  rms_aca21b51ac6b41cb8472  DONE     orch=orc_08b94f87a71a4b588829
+      writeback=2026-09-12T01:29:02.375Z  next=rms_683d8907fcb94e94bb63
+  rms_683d8907fcb94e94bb63  RUNNING  orch=orc_abab7d7130d545eaa1a1  bin=bin_2a66343bb7ea4e38a2d9
+      writeback=—  next=—
+```
+
+Exactly one candidate in the chain carries the parent —
+`rcn_532c878641984f1c8ee0 QUEUED followOnOf=rms_aca21b51ac6b41cb8472` — one
+child mission exists, and the parent's `next` is set once. Nobody was involved
+after 01:28:23: ten seconds to the authorization, eleven to the packet's
+terminal status, thirty-nine more to the writeback, and the child was `RUNNING`
+by 01:31:29. The loop reads `RUNNING … launches 1 · events 50`, `last error
+none`.
+
+**Nothing was manufactured, and the way to see that is that none of it moved.**
+Claims `60 stored, 57 accepted` — the same numbers as before the decision. Two
+audits, nine gaps and seven, every classification unchanged: the same four
+`TARGETED_RESEARCH_GAP`s, the same `PATCH`es, the same `OTHER_LAYER`. The
+document is byte-identical at 42,621 with `30/30 cited claim id(s) present in
+the stored bytes` and `extraction READY`. The fragment is still `ACCEPTED …
+integrity PASS sufficiency SUFFICIENT`, the requirement still `SATISFIED`, and
+the six audit passes still carry their 2026-09-11 completion stamps. The
+independence evidence reads `distinct sessions 5, predicted (future:) 0` — real
+credentials, no allocator predictions. `COMPLETION LINKS` reports
+`rms_aca21b51ac6b41cb8472 ALIGNED` with layer, audit and document matching the
+packet on both sides.
+
+What changed is only what the decision is *for*: the packet's status, the
+authorization row naming the person, the writeback, and one new mission.
+
+**The canonical reporter, run 34665158457 against the deployed tree:**
+
+```
+STEP 12A — composed: 21/21 PASS · 0 FAIL · 0 BLOCKED · 0 NOT_RUN · 1 DEFERRED (of 22 gates)
+Deferred by the owner and excluded from the denominator:
+  A22_FAST_CHAT_ROUTING
+Every in-scope gate is PASS.
+```
+
+**Step 12A is complete.**
