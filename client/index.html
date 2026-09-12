@@ -3,7 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark" />
+    <!-- Both themes are real. The shell defines a complete light palette and
+         redefines the same tokens for dark, so the browser is told to expect
+         either rather than being pinned to one. -->
+    <meta name="color-scheme" content="light dark" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Three roles, one request. Every face has a real fallback stack in the
+         stylesheet, so a blocked font host degrades to system text rather than
+         to an unstyled page. -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    />
     <title>Brain</title>
   </head>
   <body>

@@ -24,6 +24,7 @@ export type Route =
   | { name: 'FLEET' }
   | { name: 'NEEDS_YOU' }
   | { name: 'SITES' }
+  | { name: 'SEARCH' }
   | { name: 'LEGACY' }
   | { name: 'NOT_FOUND'; path: string };
 
@@ -53,6 +54,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'NEEDS_YOU' };
     case 'sites':
       return { name: 'SITES' };
+    case 'search':
+      return { name: 'SEARCH' };
     case 'legacy':
       return { name: 'LEGACY' };
     default:
@@ -80,6 +83,8 @@ export function pathFor(route: Route): string {
       return '/needs-you';
     case 'SITES':
       return '/sites';
+    case 'SEARCH':
+      return '/search';
     case 'LEGACY':
       return '/legacy';
     default:

@@ -37,7 +37,7 @@ import { listDependenciesForProject } from '../../repos/dependencies.ts';
 import { countVisibleConversationsForProject } from '../../repos/russellConversations.ts';
 import { knowsForProject } from './knows.ts';
 import { plainLayerName } from './dealDispatch.ts';
-import { ideaProgress, progressOf, type Progress } from './progress.ts';
+import { ideaProgress, milestoneStateOfLayer, progressOf, type Progress } from './progress.ts';
 import { CANDIDATE_PRIORITY_LABELS } from '../../domain/types.ts';
 import type {
   CandidatePriority,
@@ -381,18 +381,31 @@ export async function ideaMapForProject(input: {
       // fraction is over something the project itself fixed. A layer with no
       // declared versions gets no fraction rather than a made-up denominator.
       progress: progressOf({
-        milestones: versions.map((version) => ({
-          key: `${layer.id}:${version}`,
-          title: version,
-          done:
+        milestones: versions.map((version) => {
+          const done =
             layer.currentVersion !== null &&
-            versions.indexOf(version) <= versions.indexOf(layer.currentVersion),
-          detail: null,
-        })),
+            versions.indexOf(version) <= versions.indexOf(layer.currentVersion);
+          return {
+            key: `${layer.id}:${version}`,
+            title: version,
+            done,
+            detail: null,
+            state: done
+              ? ('DONE' as const)
+              : layer.status === 'BLOCKED'
+                ? ('BLOCKED' as const)
+                : milestoneStateOfLayer(layer.status) === 'WORKING' &&
+                    versions.indexOf(version) ===
+                      (layer.currentVersion ? versions.indexOf(layer.currentVersion) : -1) + 1
+                  ? ('WORKING' as const)
+                  : ('OPEN' as const),
+          };
+        }),
         closed: versions.length > 0,
         started: layer.status !== 'NOT_STARTED',
         blockedBy: layer.status === 'BLOCKED' ? ['this part cannot go further'] : [],
         noun: plainLayerName(layer.name),
+        denominator: versions.length === 1 ? 'version' : 'versions',
       }),
       priority: null,
       priorityLabel: null,
@@ -474,11 +487,13 @@ export async function ideaMapForProject(input: {
         title: plainLayerName(layer.name),
         done: layer.status === 'FROZEN',
         detail: layer.status === 'FROZEN' ? null : plainLayerState(layer.status),
+        state: milestoneStateOfLayer(layer.status),
       })),
       closed: true,
       started: layers.some((layer) => layer.status !== 'NOT_STARTED'),
       blockedBy: siteBlocked,
       noun: project.name,
+      denominator: layers.length === 1 ? 'foundation' : 'foundations',
     }),
     priority: null,
     priorityLabel: null,

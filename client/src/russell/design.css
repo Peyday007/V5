@@ -1,0 +1,2008 @@
+/*
+ * Brain — the Step 12B design system.
+ *
+ * The September 11 interface was rejected, and this file is the answer to the
+ * specific things that were wrong with it rather than a new coat of paint. Each
+ * of those failures is named at the rule that fixes it, because a regression is
+ * only prevented by somebody knowing what it was.
+ *
+ * Three decisions shape everything below.
+ *
+ * **Tokens, and only tokens, carry colour.** Light is the bare `:root`; dark
+ * redefines the same names and nothing else. No component rule names a literal
+ * colour, so neither theme can be half-finished — which is how a page ends up
+ * rendering one theme's text on the other theme's ground.
+ *
+ * **The layout reflows on its own width, not the window's.** The rejected
+ * captures clipped content at 822-953px: a media query asked the *viewport* how
+ * wide it was while the element doing the clipping was a column inside a rail.
+ * `container-type: inline-size` asks the container, so a panel narrows correctly
+ * whatever is beside it, and the same component is right on a phone and in a
+ * drawer without a second rule.
+ *
+ * **Border, fill, radius and shadow are spent by role.** Everything was a card,
+ * so nothing was. A surface is lifted when it is genuinely a separate object;
+ * a group of related lines is a group of lines.
+ */
+
+/* ---------------------------------------------------------------- tokens -- */
+
+.rs-shell,
+.rs-boot {
+  --paper: #f2f4f6;
+  --surface: #ffffff;
+  --surface-sunk: #e9edf1;
+  --ink: #141c26;
+  --ink-soft: #44535f;
+  --ink-faint: #74838f;
+  --rule: #d3dae1;
+  --rule-soft: #e3e8ed;
+
+  /* One accent, spent in one place at a time. */
+  --verdigris: #2e7d6b;
+  --verdigris-soft: #dceae6;
+  --verdigris-ink: #1f5a4d;
+
+  /* Semantic status, deliberately separate from the accent so "this is
+     selected" and "this is healthy" never look like the same fact. */
+  --moss: #4a7c59;
+  --ochre: #b4801f;
+  --iron: #9c3b2c;
+  --slate: #5b6b7c;
+
+  --moss-wash: #e4ede6;
+  --ochre-wash: #f6eedc;
+  --iron-wash: #f4e4e1;
+  --slate-wash: #e6eaee;
+
+  --shadow: 0 1px 2px rgba(20, 28, 38, 0.06), 0 8px 24px -16px rgba(20, 28, 38, 0.28);
+
+  --display: "Fraunces", Georgia, "Times New Roman", serif;
+  --body: "Public Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --code: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --step--1: 0.8125rem;
+  --step-0: 0.9375rem;
+  --step-1: 1.0625rem;
+  --step-2: 1.375rem;
+  --step-3: 1.875rem;
+  --step-4: 2.5rem;
+
+  --gap-1: 4px;
+  --gap-2: 8px;
+  --gap-3: 12px;
+  --gap-4: 16px;
+  --gap-5: 24px;
+  --gap-6: 32px;
+  --gap-7: 48px;
+
+  --r-1: 4px;
+  --r-2: 8px;
+  --r-3: 14px;
+
+  /* The rail is a measurement other rules need, so it is a token rather than
+     a number repeated in four places. */
+  --rail: 232px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .rs-shell:not([data-theme='light']),
+  .rs-boot:not([data-theme='light']) {
+    --paper: #0e141b;
+    --surface: #161f29;
+    --surface-sunk: #111923;
+    --ink: #e6ebf0;
+    --ink-soft: #a3b1be;
+    --ink-faint: #74838f;
+    --rule: #2a3744;
+    --rule-soft: #1f2a35;
+
+    --verdigris: #55b49c;
+    --verdigris-soft: #17332d;
+    --verdigris-ink: #7fcdb8;
+
+    --moss: #7fb08b;
+    --ochre: #d9a845;
+    --iron: #d4705e;
+    --slate: #8b9bab;
+
+    --moss-wash: #17281c;
+    --ochre-wash: #2c2415;
+    --iron-wash: #2c1a17;
+    --slate-wash: #1c242d;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -16px rgba(0, 0, 0, 0.7);
+  }
+}
+
+.rs-shell[data-theme='dark'],
+.rs-boot[data-theme='dark'] {
+  --paper: #0e141b;
+  --surface: #161f29;
+  --surface-sunk: #111923;
+  --ink: #e6ebf0;
+  --ink-soft: #a3b1be;
+  --ink-faint: #74838f;
+  --rule: #2a3744;
+  --rule-soft: #1f2a35;
+  --verdigris: #55b49c;
+  --verdigris-soft: #17332d;
+  --verdigris-ink: #7fcdb8;
+  --moss: #7fb08b;
+  --ochre: #d9a845;
+  --iron: #d4705e;
+  --slate: #8b9bab;
+  --moss-wash: #17281c;
+  --ochre-wash: #2c2415;
+  --iron-wash: #2c1a17;
+  --slate-wash: #1c242d;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -16px rgba(0, 0, 0, 0.7);
+}
+
+/* ------------------------------------------------------------------ boot -- */
+
+.rs-boot {
+  min-height: 100vh;
+  padding: var(--gap-7) var(--gap-5);
+  background: var(--paper);
+  color: var(--ink-soft);
+  font: var(--step-0) / 1.6 var(--body);
+}
+
+/* ----------------------------------------------------------------- shell -- */
+
+.rs-shell {
+  display: grid;
+  min-height: 100vh;
+  /* A grid item's default `min-width: auto` refuses to shrink below its
+     content's minimum, so one long briefing sentence used to widen the whole
+     shell past a phone viewport and every screen scrolled sideways. */
+  max-width: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font: var(--step-0) / 1.6 var(--body);
+  grid-template-areas:
+    'rail main'
+    'rail command';
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.rs-shell > * {
+  min-width: 0;
+}
+
+.rs-shell-bar {
+  /* Phone: the reading column is the screen, the command bar sits above the
+     thumb rail, and the rail becomes that thumb rail. */
+  grid-template-areas:
+    'main'
+    'command'
+    'rail';
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto;
+}
+
+/* ------------------------------------------------------------------ rail -- */
+
+.rs-rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-4);
+  padding: var(--gap-4) var(--gap-3);
+  border-right: 1px solid var(--rule);
+  background: var(--surface);
+  overflow-y: auto;
+}
+
+.rs-shell-bar .rs-rail {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  border-right: 0;
+  border-top: 1px solid var(--rule);
+  overflow-y: visible;
+  /* A phone rail is a fixed set of destinations, not a scroller: a nav you
+     have to swipe is a nav whose last item nobody finds. */
+  overflow-x: hidden;
+  /* Clear of the home indicator on a phone without a second media query. */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.rs-brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-2);
+  margin: 0;
+  padding: var(--gap-1) var(--gap-3) 0;
+  font: 600 var(--step-2) / 1.1 var(--display);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.rs-brand small {
+  font: 500 var(--step--1) / 1 var(--body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.rs-shell-bar .rs-brand {
+  display: none;
+}
+
+.rs-rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-shell-bar .rs-rail-group {
+  flex: 1;
+  flex-direction: row;
+}
+
+/* The rule between the six primary destinations and the two capabilities that
+   are operations on the machine rather than views of the work. Approved
+   2026-09-12; the alternative was eight equals. */
+.rs-rail-secondary {
+  padding-top: var(--gap-3);
+  border-top: 1px solid var(--rule-soft);
+}
+
+.rs-shell-bar .rs-rail-secondary {
+  /* Two items in a thumb rail would crowd the six that matter, so on a phone
+     they live in the More menu — which is where the deep links still point. */
+  display: none;
+}
+
+.rs-rail-item {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--gap-2) var(--gap-3);
+  border: 0;
+  border-radius: var(--r-2);
+  background: none;
+  color: var(--ink-soft);
+  font: var(--step-0) / 1.3 var(--body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rs-rail-item:hover {
+  background: var(--surface-sunk);
+  color: var(--ink);
+}
+
+.rs-rail-item[aria-current='page'] {
+  background: var(--verdigris-soft);
+  color: var(--verdigris-ink);
+  font-weight: 600;
+}
+
+.rs-shell-bar .rs-rail-item {
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  padding: var(--gap-1) 2px;
+  border-radius: 0;
+  font-size: var(--step--1);
+  line-height: 1.15;
+  text-align: center;
+}
+
+.rs-shell-bar .rs-rail-item[aria-current='page'] {
+  background: none;
+  color: var(--verdigris-ink);
+  box-shadow: inset 0 2px 0 var(--verdigris);
+}
+
+.rs-rail-item svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.rs-rail-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.rs-shell-bar .rs-rail-foot {
+  display: none;
+}
+
+.rs-badge {
+  min-width: 18px;
+  margin-left: auto;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--ochre);
+  color: #1a1408;
+  font: 600 var(--step--1) / 18px var(--body);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.rs-shell-bar .rs-badge {
+  position: absolute;
+  top: 4px;
+  right: 50%;
+  margin-left: 0;
+  transform: translateX(22px);
+}
+
+.rs-shell-bar .rs-rail-item {
+  position: relative;
+}
+
+/* ------------------------------------------------------------------ more -- */
+
+.rs-more {
+  position: relative;
+}
+
+.rs-more > button {
+  width: 100%;
+  min-height: 40px;
+  padding: var(--gap-2) var(--gap-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: var(--step--1) / 1.3 var(--body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rs-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  margin: 0;
+  padding: var(--gap-1);
+  min-width: 210px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  box-shadow: var(--shadow);
+}
+
+.rs-menu button,
+.rs-menu a {
+  display: block;
+  width: 100%;
+  padding: var(--gap-2) var(--gap-3);
+  border: 0;
+  border-radius: var(--r-1);
+  background: none;
+  color: var(--ink-soft);
+  font: var(--step--1) / 1.4 var(--body);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.rs-menu button:hover,
+.rs-menu a:hover,
+.rs-menu button:focus-visible,
+.rs-menu a:focus-visible {
+  background: var(--surface-sunk);
+  color: var(--ink);
+}
+
+/* ------------------------------------------------------------------ main -- */
+
+.rs-main {
+  grid-area: main;
+  container-type: inline-size;
+  container-name: rs-main;
+  min-width: 0;
+  padding: var(--gap-5) var(--gap-5) var(--gap-6);
+  overflow-y: auto;
+}
+
+@container rs-main (max-width: 720px) {
+  .rs-main {
+    padding: var(--gap-4) var(--gap-4) var(--gap-5);
+  }
+}
+
+/* The reading column. Everything ordinary sits inside one measure, which is
+   what stops a wide monitor turning a briefing into a banner. */
+.rs-column {
+  width: 100%;
+  max-width: 74ch;
+  margin: 0 auto;
+}
+
+.rs-column-wide {
+  max-width: 104ch;
+}
+
+/* ----------------------------------------------------------- command bar -- */
+
+/*
+ * The persistent way to talk to Brain, from anywhere (§6).
+ *
+ * It is docked rather than living on one page because the conversation is an
+ * affordance, not a destination: a person on Work who wants to ask why
+ * something is ranked there should not have to navigate away to ask.
+ */
+.rs-command {
+  grid-area: command;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--gap-2);
+  padding: var(--gap-3) var(--gap-5);
+  border-top: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+.rs-shell-bar .rs-command {
+  padding: var(--gap-2) var(--gap-3);
+}
+
+.rs-command form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--gap-2);
+  width: 100%;
+  max-width: 74ch;
+  margin: 0 auto;
+}
+
+.rs-command textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 40vh;
+  padding: var(--gap-2) var(--gap-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--paper);
+  color: var(--ink);
+  font: var(--step-0) / 1.5 var(--body);
+  resize: vertical;
+}
+
+.rs-command textarea::placeholder {
+  color: var(--ink-faint);
+}
+
+/* ---------------------------------------------------------------- typing -- */
+
+.rs-view > h2,
+.rs-view-title {
+  margin: 0 0 var(--gap-2);
+  font: 600 var(--step-3) / 1.15 var(--display);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.rs-view h3 {
+  margin: var(--gap-5) 0 var(--gap-2);
+  font: 600 var(--step-1) / 1.25 var(--body);
+}
+
+.rs-lede {
+  margin: 0 0 var(--gap-4);
+  max-width: 62ch;
+  color: var(--ink-soft);
+}
+
+.rs-eyebrow {
+  margin: 0 0 var(--gap-1);
+  font: 600 var(--step--1) / 1.2 var(--body);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.rs-hint {
+  margin: var(--gap-2) 0 0;
+  color: var(--ink-faint);
+  font-size: var(--step--1);
+}
+
+.rs-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A technical identifier, kept inspectable rather than discarded. */
+.rs-ref {
+  font: var(--step--1) / 1.4 var(--code);
+  color: var(--ink-faint);
+  word-break: break-all;
+}
+
+/*
+ * A time a person can read, with the exact instant still available.
+ *
+ * Raw ISO dates dominating normal context was one of the rejected screens'
+ * named faults. The precise value lives in the element's `title` and its
+ * `dateTime`, so nothing is discarded — it is just no longer the first thing
+ * anybody's eye lands on.
+ */
+.rs-when {
+  color: var(--ink-faint);
+  font-size: var(--step--1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------- buttons -- */
+
+.rs-button,
+.rs-primary,
+.rs-retry,
+.rs-choice button,
+.rs-composer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-2);
+  min-height: 40px;
+  padding: var(--gap-2) var(--gap-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 var(--step-0) / 1.2 var(--body);
+  cursor: pointer;
+}
+
+.rs-button:hover,
+.rs-retry:hover,
+.rs-choice button:hover {
+  border-color: var(--ink-faint);
+  background: var(--surface-sunk);
+}
+
+.rs-primary,
+.rs-composer button,
+.rs-command button[type='submit'] {
+  border-color: transparent;
+  background: var(--verdigris);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.rs-primary:hover,
+.rs-composer button:hover,
+.rs-command button[type='submit']:hover {
+  background: var(--verdigris-ink);
+}
+
+.rs-button:disabled,
+.rs-primary:disabled,
+.rs-composer button:disabled,
+.rs-command button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.rs-button-quiet {
+  min-height: 32px;
+  padding: var(--gap-1) var(--gap-2);
+  border-color: transparent;
+  background: none;
+  color: var(--verdigris-ink);
+  font-size: var(--step--1);
+}
+
+.rs-button-quiet:hover {
+  background: var(--verdigris-soft);
+}
+
+.rs-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--verdigris-ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+:where(.rs-shell) button:focus-visible,
+:where(.rs-shell) a:focus-visible,
+:where(.rs-shell) select:focus-visible,
+:where(.rs-shell) textarea:focus-visible,
+:where(.rs-shell) input:focus-visible,
+:where(.rs-shell) summary:focus-visible,
+:where(.rs-shell) [tabindex]:focus-visible {
+  outline: 2px solid var(--verdigris);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------- surfaces -- */
+
+/*
+ * Not everything is a card.
+ *
+ * `rs-panel` is a genuine separate object and is lifted. `rs-group` is a set of
+ * related lines and gets a rule, not a border, a radius and a shadow. The
+ * rejected interface gave both the same treatment, which is why its hierarchy
+ * read flat.
+ */
+.rs-panel {
+  padding: var(--gap-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--surface);
+}
+
+.rs-panel + .rs-panel {
+  margin-top: var(--gap-4);
+}
+
+.rs-panel-lift {
+  box-shadow: var(--shadow);
+}
+
+.rs-group {
+  margin: 0 0 var(--gap-5);
+}
+
+.rs-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-2);
+  margin: 0 0 var(--gap-2);
+  padding-bottom: var(--gap-2);
+  border-bottom: 1px solid var(--rule-soft);
+  font: 600 var(--step-0) / 1.3 var(--body);
+  letter-spacing: 0.02em;
+}
+
+.rs-group-title .rs-count {
+  color: var(--ink-faint);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--gap-2) var(--gap-3);
+  min-width: 0;
+}
+
+.rs-item-title {
+  margin: 0;
+  font: 600 var(--step-0) / 1.4 var(--body);
+  color: var(--ink);
+}
+
+.rs-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-1) var(--gap-3);
+  margin: var(--gap-1) 0 0;
+  color: var(--ink-faint);
+  font-size: var(--step--1);
+}
+
+.rs-card {
+  display: block;
+  width: 100%;
+  padding: var(--gap-3) var(--gap-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.rs-card {
+  cursor: pointer;
+}
+
+button.rs-card:hover {
+  border-color: var(--verdigris);
+}
+
+/* ----------------------------------------------------------------- pills -- */
+
+.rs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-1);
+  padding: 1px var(--gap-2);
+  border-radius: 999px;
+  background: var(--slate-wash);
+  color: var(--slate);
+  font: 600 var(--step--1) / 1.5 var(--body);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.rs-pill-good {
+  background: var(--moss-wash);
+  color: var(--moss);
+}
+
+.rs-pill-watch {
+  background: var(--ochre-wash);
+  color: var(--ochre);
+}
+
+.rs-pill-bad {
+  background: var(--iron-wash);
+  color: var(--iron);
+}
+
+.rs-pill-accent {
+  background: var(--verdigris-soft);
+  color: var(--verdigris-ink);
+}
+
+/* ---------------------------------------------------------------- states -- */
+
+/*
+ * Six answers that are not each other.
+ *
+ * Empty, inactive, not connected, stale, unavailable and forbidden are six
+ * different facts (§6), and a forbidden read must never render as an empty
+ * project — the server cannot distinguish absent from forbidden and the last
+ * hop must not invent an answer either.
+ */
+.rs-state {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-2);
+  margin: var(--gap-2) 0;
+  padding: var(--gap-3);
+  border-radius: var(--r-2);
+  background: var(--surface-sunk);
+  color: var(--ink-soft);
+  font-size: var(--step-0);
+}
+
+.rs-state::before {
+  content: '';
+  flex: none;
+  width: 3px;
+  align-self: stretch;
+  border-radius: 2px;
+  background: var(--ink-faint);
+}
+
+.rs-state-loading::before {
+  background: var(--slate);
+}
+
+.rs-state-ready::before {
+  background: var(--moss);
+}
+
+.rs-state-stale::before {
+  background: var(--ochre);
+}
+
+.rs-state-error::before,
+.rs-state-forbidden::before {
+  background: var(--iron);
+}
+
+.rs-state-empty {
+  background: none;
+  padding-left: 0;
+}
+
+.rs-state-empty::before {
+  display: none;
+}
+
+/* ------------------------------------------------------------- home ------ */
+
+.rs-home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-5);
+}
+
+/*
+ * The opening. Russell's own line, then what it is on, then the shape of the
+ * progress — in that order, because §6 fixes the order and a home that leads
+ * with an orchestration id has already lost.
+ *
+ * It is a heading and two paragraphs, not a hero. The rejected interface's
+ * giant header took the top third of the screen before anything useful.
+ */
+.rs-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.rs-hero-focus {
+  margin: 0;
+  font: 600 var(--step-3) / 1.2 var(--display);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.rs-hero-needs {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.rs-hero-needs.is-needed {
+  color: var(--ochre);
+  font-weight: 600;
+}
+
+/*
+ * Brain Pulse — one live line in Russell's voice, on home only.
+ *
+ * Approved 2026-09-12. More would make the product chatty; none would make it
+ * a dashboard, which is the thing §24 says it must not be. It is grounded in
+ * rows like everything else: when there is nothing true to say, it is absent
+ * rather than filled with encouragement.
+ */
+.rs-pulse {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-2);
+  margin: 0;
+  padding: var(--gap-2) var(--gap-3);
+  border-left: 2px solid var(--verdigris);
+  background: var(--verdigris-soft);
+  border-radius: 0 var(--r-2) var(--r-2) 0;
+  color: var(--verdigris-ink);
+  font-size: var(--step-0);
+}
+
+.rs-pulse-label {
+  flex: none;
+  font: 600 var(--step--1) / 1.5 var(--body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+/* --------------------------------------------------- maturity and progress */
+
+/*
+ * What replaced "0 of 8 settled".
+ *
+ * That string was accurate and read as failure on a project that was working.
+ * The maturity word comes from `progress.ts`'s declared stage vocabulary, and
+ * the strip under it shows each foundation's own state — so the same truth
+ * arrives as a shape rather than as a score of nought. Approved 2026-09-12.
+ *
+ * Nothing here invents a percentage: the bar renders only when the projection
+ * supplies a ratio over a closed declared set, and is absent otherwise.
+ */
+.rs-maturity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+}
+
+.rs-maturity-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--gap-2) var(--gap-3);
+}
+
+.rs-progress-headline,
+.rs-maturity-word {
+  margin: 0;
+  font: 600 var(--step-1) / 1.25 var(--body);
+  color: var(--ink);
+}
+
+.rs-maturity-sub {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--step-0);
+}
+
+.rs-stage-blocked,
+.rs-progress-blocked {
+  color: var(--iron);
+}
+
+.rs-stage-settled {
+  color: var(--moss);
+}
+
+.rs-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.rs-progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-sunk);
+  overflow: hidden;
+}
+
+.rs-progress-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--verdigris);
+}
+
+/* The per-foundation strip. One cell per foundation, in the project's own
+   order, each carrying its own state — never a single global percentage. */
+.rs-foundations {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: var(--gap-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-foundation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  padding: var(--gap-2);
+  border-radius: var(--r-1);
+  background: var(--surface-sunk);
+}
+
+.rs-foundation::before {
+  content: '';
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ink-faint);
+}
+
+.rs-foundation-settled::before {
+  background: var(--moss);
+}
+
+.rs-foundation-working::before {
+  background: var(--verdigris);
+}
+
+.rs-foundation-blocked::before {
+  background: var(--iron);
+}
+
+.rs-foundation-name {
+  font: 600 var(--step--1) / 1.3 var(--body);
+  color: var(--ink);
+}
+
+.rs-foundation-state {
+  font-size: var(--step--1);
+  color: var(--ink-faint);
+}
+
+.rs-milestones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  margin: var(--gap-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--step--1);
+}
+
+.rs-milestone-done {
+  color: var(--moss);
+}
+
+.rs-milestone-open {
+  color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------ progressive depth -- */
+
+/*
+ * Normal / Interested / Technical (§4.5).
+ *
+ * The depth is a property of the reader rather than of the page, so it is one
+ * control in the shell and every surface answers to it. `details` was the old
+ * mechanism and stays where a single block genuinely folds; this is for the
+ * case where three different amounts of the same answer exist.
+ */
+.rs-depth {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.rs-depth button {
+  min-height: 32px;
+  padding: var(--gap-1) var(--gap-3);
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-faint);
+  font: 500 var(--step--1) / 1.3 var(--body);
+  cursor: pointer;
+}
+
+.rs-depth button[aria-pressed='true'] {
+  background: var(--verdigris-soft);
+  color: var(--verdigris-ink);
+  font-weight: 600;
+}
+
+.rs-shell[data-depth='NORMAL'] .rs-at-interested,
+.rs-shell[data-depth='NORMAL'] .rs-at-technical,
+.rs-shell[data-depth='INTERESTED'] .rs-at-technical {
+  display: none;
+}
+
+/* --------------------------------------------------------------- missions -- */
+
+.rs-mission {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  padding: var(--gap-4);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--surface);
+}
+
+.rs-mission-must::before,
+.rs-mission-big::before {
+  content: none;
+}
+
+.rs-mission-must {
+  border-left-color: var(--iron);
+}
+
+.rs-mission-big {
+  border-left-color: var(--verdigris);
+}
+
+.rs-mission-worth {
+  border-left-color: var(--moss);
+}
+
+.rs-mission-explore {
+  border-left-color: var(--slate);
+}
+
+.rs-mission-parked {
+  border-left-color: var(--rule);
+}
+
+.rs-mission-head {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--gap-2) var(--gap-3);
+}
+
+.rs-mission-objective {
+  flex: 1 1 22ch;
+  margin: 0;
+  font: 600 var(--step-1) / 1.35 var(--body);
+  text-wrap: balance;
+}
+
+.rs-mission-why {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.rs-mission-next {
+  margin: 0;
+  color: var(--ink);
+}
+
+.rs-mission-next strong {
+  font-weight: 600;
+}
+
+.rs-mission-blocked {
+  color: var(--iron);
+}
+
+.rs-mission-how {
+  margin-top: var(--gap-1);
+  border-top: 1px solid var(--rule-soft);
+  padding-top: var(--gap-2);
+}
+
+.rs-mission-how > summary {
+  color: var(--ink-faint);
+  font-size: var(--step--1);
+  cursor: pointer;
+}
+
+.rs-mission-how dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--gap-1) var(--gap-3);
+  margin: var(--gap-2) 0 0;
+  font-size: var(--step--1);
+}
+
+.rs-mission-how dt {
+  color: var(--ink-faint);
+}
+
+.rs-mission-how dd {
+  margin: 0;
+  font-family: var(--code);
+  word-break: break-all;
+}
+
+/* ---------------------------------------------------------- conversations -- */
+
+/*
+ * Collections, and the threads inside them ranked by meaning (§7).
+ *
+ * A flat recent list was the floor Step 12A left; this is the structure over
+ * it. A collection is a stored object rather than a grouping the client
+ * invents, so the same organisation is what the server reasons about.
+ */
+.rs-collections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-collection-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--gap-2) var(--gap-3);
+  margin: 0 0 var(--gap-2);
+}
+
+.rs-collection-name {
+  margin: 0;
+  font: 600 var(--step-1) / 1.3 var(--body);
+}
+
+.rs-threads-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-thread {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-3);
+  width: 100%;
+  padding: var(--gap-2) var(--gap-3);
+  border: 0;
+  border-radius: var(--r-2);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rs-thread:hover {
+  background: var(--surface-sunk);
+}
+
+.rs-thread[aria-current='true'] {
+  background: var(--verdigris-soft);
+}
+
+.rs-thread-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rs-thread-unfinished .rs-thread-title {
+  font-weight: 600;
+}
+
+/* Starters written from the collection's own state, never generic filler. */
+.rs-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  margin: var(--gap-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-starter {
+  padding: var(--gap-1) var(--gap-3);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: var(--step--1) / 1.5 var(--body);
+  cursor: pointer;
+}
+
+.rs-starter:hover {
+  border-color: var(--verdigris);
+  color: var(--verdigris-ink);
+}
+
+/* --------------------------------------------------------- the conversation */
+
+.rs-conversation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-4);
+}
+
+.rs-turns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+}
+
+.rs-turn-who {
+  font: 600 var(--step--1) / 1.4 var(--body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.rs-turn-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rs-turn-person .rs-turn-body {
+  padding: var(--gap-3);
+  border-radius: var(--r-2);
+  background: var(--surface-sunk);
+}
+
+.rs-turn-russell .rs-turn-body {
+  padding-left: var(--gap-3);
+  border-left: 2px solid var(--verdigris);
+}
+
+.rs-turn-status {
+  color: var(--ink-faint);
+  font-size: var(--step--1);
+}
+
+.rs-turn-failed {
+  color: var(--iron);
+}
+
+.rs-turn-retry {
+  margin-top: var(--gap-1);
+}
+
+.rs-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--gap-2);
+}
+
+.rs-composer textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 72px;
+  padding: var(--gap-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--step-0) / 1.55 var(--body);
+  resize: vertical;
+}
+
+/* ------------------------------------------------------------- needs you -- */
+
+.rs-decision {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+  padding: var(--gap-4);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--ochre);
+  border-radius: var(--r-2);
+  background: var(--surface);
+}
+
+.rs-decision-urgent {
+  border-left-color: var(--iron);
+}
+
+.rs-decision-whenever {
+  border-left-color: var(--slate);
+}
+
+.rs-decision-label {
+  font: 600 var(--step--1) / 1.4 var(--body);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.rs-decision-what {
+  margin: 0;
+  font: 600 var(--step-1) / 1.35 var(--body);
+  text-wrap: balance;
+}
+
+.rs-decision-why {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.rs-recommend {
+  margin: 0;
+  padding: var(--gap-2) var(--gap-3);
+  border-radius: var(--r-2);
+  background: var(--verdigris-soft);
+  color: var(--verdigris-ink);
+}
+
+.rs-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-choice {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--gap-2) var(--gap-3);
+  padding: var(--gap-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--paper);
+}
+
+.rs-choice-text {
+  flex: 1 1 24ch;
+  min-width: 0;
+}
+
+.rs-choice-consequence {
+  margin: var(--gap-1) 0 0;
+  color: var(--ink-soft);
+  font-size: var(--step--1);
+}
+
+/*
+ * The empty inbox.
+ *
+ * A long authority card taking over an otherwise empty Needs You was one of the
+ * rejected screens' named faults. Nothing needing a decision is good news and
+ * should read as a settled state: what continues automatically, and what
+ * Russell may do, folded to one line with the detail behind it.
+ */
+.rs-nothing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  padding: var(--gap-5) var(--gap-4);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--r-3);
+  background: var(--surface);
+  text-align: center;
+}
+
+.rs-nothing h3 {
+  margin: 0;
+  font: 600 var(--step-2) / 1.2 var(--display);
+}
+
+.rs-nothing p {
+  margin: 0 auto;
+  max-width: 48ch;
+  color: var(--ink-soft);
+}
+
+/* ------------------------------------------------- what Russell may do ---- */
+
+.rs-authority {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+}
+
+.rs-authority-headline {
+  margin: 0;
+  font: 600 var(--step-1) / 1.35 var(--body);
+}
+
+.rs-authority-list,
+.rs-authority-never {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  margin: 0;
+  padding: 0 0 0 var(--gap-4);
+}
+
+.rs-authority-never {
+  color: var(--ink-faint);
+}
+
+.rs-authority-limit {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-authority-history {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--step--1);
+}
+
+.rs-approval-summary {
+  cursor: pointer;
+  color: var(--ink-faint);
+  font-size: var(--step--1);
+}
+
+/* ---------------------------------------------------------------- panels -- */
+
+.rs-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-4);
+}
+
+.rs-tabs {
+  display: flex;
+  gap: var(--gap-1);
+  margin: 0 0 var(--gap-2);
+  padding: 0 0 var(--gap-1);
+  border-bottom: 1px solid var(--rule);
+  list-style: none;
+  overflow-x: auto;
+}
+
+.rs-tabs button {
+  min-height: 36px;
+  padding: var(--gap-1) var(--gap-3);
+  border: 0;
+  border-radius: var(--r-2) var(--r-2) 0 0;
+  background: none;
+  color: var(--ink-faint);
+  font: 500 var(--step-0) / 1.3 var(--body);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rs-tabs button[aria-selected='true'] {
+  color: var(--verdigris-ink);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--verdigris);
+}
+
+.rs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--gap-3);
+}
+
+.rs-fleet-line,
+.rs-site {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--gap-2) var(--gap-3);
+}
+
+.rs-sites {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-site-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--gap-2) var(--gap-3);
+}
+
+.rs-site-secret,
+.rs-secret {
+  padding: var(--gap-2) var(--gap-3);
+  border: 1px solid var(--ochre);
+  border-radius: var(--r-2);
+  background: var(--ochre-wash);
+  font-family: var(--code);
+  font-size: var(--step--1);
+  word-break: break-all;
+}
+
+.rs-site-vars {
+  margin: var(--gap-2) 0 0;
+  font-family: var(--code);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.rs-node {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+}
+
+.rs-findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ------------------------------------------------------------------ build -- */
+
+.rs-view-build {
+  gap: var(--gap-5);
+}
+
+.rs-build-campaigns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-build-campaign {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  padding: var(--gap-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--surface);
+}
+
+.rs-build-stage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.rs-build-details {
+  margin: 0;
+}
+
+.rs-build-details summary {
+  cursor: pointer;
+  color: var(--ink-faint);
+  font-size: var(--step--1);
+}
+
+.rs-build-pinned,
+.rs-build-unapproved {
+  color: var(--ink-faint);
+  font-size: var(--step--1);
+}
+
+.rs-build-submit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.rs-build-submit textarea {
+  min-height: 120px;
+  padding: var(--gap-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--step--1) / 1.55 var(--code);
+  resize: vertical;
+}
+
+.rs-factory-repositories,
+.rs-repo-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-repo {
+  padding: var(--gap-3);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--surface);
+}
+
+.rs-repo-ready {
+  border-left-color: var(--moss);
+}
+
+.rs-repo-blocked {
+  border-left-color: var(--iron);
+}
+
+.rs-repo-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--gap-2) var(--gap-3);
+}
+
+.rs-repo-invite,
+.rs-repo-issued,
+.rs-repo-readiness,
+.rs-repo-remaining {
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+/* ------------------------------------------------- the living constellation
+ *
+ * A real spatial diagram (§20), not a nested list renamed "map". The list
+ * alternative beside it is synchronized and is the keyboard and screen-reader
+ * path — an equivalent, never a consolation.
+ * ========================================================================== */
+
+.lim {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+  container-type: inline-size;
+  container-name: lim;
+}
+
+.lim-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--gap-2) var(--gap-3);
+}
+
+.lim-header h2 {
+  margin: 0;
+  font: 600 var(--step-2) / 1.2 var(--display);
+}
+
+.lim-depth {
+  color: var(--ink-faint);
+  font-size: var(--step--1);
+}
+
+.lim-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--gap-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--step--1);
+}
+
+.lim-crumb {
+  border: 0;
+  padding: 2px var(--gap-1);
+  border-radius: var(--r-1);
+  background: none;
+  color: var(--verdigris-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.lim-crumb:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+.lim-crumb:not(:last-child)::after {
+  content: '›';
+  margin-left: var(--gap-1);
+  color: var(--ink-faint);
+}
+
+.lim-canvas {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  max-width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.lim-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.lim-line {
+  stroke: var(--rule);
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.lim-line.is-active {
+  stroke: var(--verdigris);
+  stroke-width: 2;
+}
+
+.lim-halo {
+  fill: var(--verdigris-soft);
+  stroke: none;
+}
+
+.lim-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  max-width: 40cqw;
+  padding: var(--gap-1) var(--gap-2);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: var(--step--1) / 1.3 var(--body);
+  text-align: center;
+  cursor: pointer;
+}
+
+.lim-node.is-centre {
+  border-color: var(--verdigris);
+  background: var(--verdigris-soft);
+  color: var(--verdigris-ink);
+  font-weight: 600;
+}
+
+.lim-node.is-selected {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.lim-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  padding: var(--gap-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--surface);
+}
+
+.lim-detail-text {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.lim-connections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--step--1);
+}
+
+/* -------------------------------------------------------- container reflow --
+ *
+ * The rejected captures clipped at roughly 822-953px. That width is not a
+ * phone and not a desktop, and a viewport media query could not see it because
+ * the element that clipped was a column inside a rail. These ask the container.
+ */
+
+@container rs-main (max-width: 980px) {
+  .rs-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rs-column-wide {
+    max-width: 100%;
+  }
+}
+
+@container rs-main (max-width: 720px) {
+  .rs-view > h2,
+  .rs-view-title,
+  .rs-hero-focus {
+    font-size: var(--step-2);
+  }
+
+  .rs-mission,
+  .rs-decision,
+  .rs-panel {
+    padding: var(--gap-3);
+  }
+
+  .rs-foundations {
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  }
+
+  /* A horizontal desktop table is never the primary phone pattern (§21). */
+  .rs-table-wrap {
+    overflow-x: auto;
+  }
+}
+
+@container lim (max-width: 520px) {
+  .lim-canvas {
+    aspect-ratio: 1 / 1;
+  }
+
+  .lim-node {
+    max-width: 46cqw;
+  }
+}
+
+/* ------------------------------------------------------------------ motion -- */
+
+@media (prefers-reduced-motion: reduce) {
+  .rs-shell *,
+  .rs-shell *::before,
+  .rs-shell *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ------------------------------------------------------------------- maps --
+ *
+ * A layered diagram rather than a force graph: the depth is a fact the server
+ * computed from the recorded edges, so the picture and the outline beside it
+ * are the same graph arranged differently. Rows wrap, which is what makes it
+ * survive a phone without a second layout.
+ */
+
+.rs-map {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-4);
+  padding: var(--gap-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--surface);
+  overflow-x: auto;
+}
+
+.rs-map-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  align-items: center;
+}
+
+.rs-map-row + .rs-map-row {
+  padding-top: var(--gap-3);
+  border-top: 1px dashed var(--rule-soft);
+}
+
+.rs-map-node {
+  display: inline-flex;
+  align-items: center;
+  max-width: 32ch;
+  padding: var(--gap-1) var(--gap-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--paper);
+  color: var(--ink);
+  font: var(--step--1) / 1.35 var(--body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------- why this matters ------
+ *
+ * Quiet by construction. No badge, no streak, no confetti: a rule, a heading
+ * and a list of things that actually happened. It is absent far more often
+ * than it is present, which is what stops it becoming noise.
+ */
+
+.rs-why {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+  padding: var(--gap-4);
+  border-left: 2px solid var(--moss);
+  border-radius: 0 var(--r-2) var(--r-2) 0;
+  background: var(--moss-wash);
+}
+
+.rs-why h3 {
+  margin: 0;
+  font: 600 var(--step-1) / 1.3 var(--display);
+  color: var(--moss);
+}
+
+.rs-why p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.rs-why-milestones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--step--1);
+}

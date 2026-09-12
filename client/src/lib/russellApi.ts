@@ -30,6 +30,15 @@ import type { Progress } from '../../../server/services/russell/progress.ts';
 import type { GroupedWork, WorkEntry } from '../../../server/services/russell/work.ts';
 import type { IdeaEdge, IdeaMap, IdeaNode } from '../../../server/services/russell/ideas.ts';
 import type { WhoView } from '../../../server/services/russell/who.ts';
+import type { HomeView } from '../../../server/services/russell/home.ts';
+import type { CollectionView, RankedThread, Starter } from '../../../server/services/russell/collections.ts';
+import type { FrontierView, FrontierRegionView } from '../../../server/services/russell/frontier.ts';
+import type { SearchHit, SearchKind, SearchResult } from '../../../server/services/russell/search.ts';
+import type { FleetView as FleetReading, SlownessExplanation } from '../../../server/services/fleet/view.ts';
+import type { LabExperiment, LabMode, TestEnvelope } from '../../../server/services/fleet/lab.ts';
+import type { MapType, MapView } from '../../../server/services/russell/maps.ts';
+import type { WhyThisMatters } from '../../../server/services/russell/whyThisMatters.ts';
+import type { Preferences, PreferenceKey } from '../../../server/services/russell/preferences.ts';
 import type {
   AuthorityView,
   AuthorityLimitKey,
@@ -39,6 +48,25 @@ export type {
   AuthorityLimitKey,
   AuthorityView,
   Briefing,
+  CollectionView,
+  FrontierRegionView,
+  FrontierView,
+  HomeView,
+  FleetReading,
+  LabExperiment,
+  LabMode,
+  MapType,
+  MapView,
+  PreferenceKey,
+  Preferences,
+  WhyThisMatters,
+  SearchHit,
+  SearchKind,
+  SearchResult,
+  SlownessExplanation,
+  TestEnvelope,
+  RankedThread,
+  Starter,
   CandidatePriority,
   CandidateState,
   ConnectedSystemView,
@@ -209,6 +237,180 @@ export const RussellApi = {
 
   briefing: (projectId: string): Promise<BriefingResponse> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/briefing`),
+
+  /**
+   * The whole home in one read.
+   *
+   * One call rather than five, because §6 asks for one deterministic answer
+   * about status and progress: a client that assembled it from separate reads
+   * could show a briefing from one instant beside a state from another.
+   */
+  home: (projectId: string): Promise<{
+    home: HomeView;
+    project: { id: string; name: string };
+  }> => api(`/api/russell/projects/${encodeURIComponent(projectId)}/home`),
+
+  /** One of the six specialized maps, over the authoritative graph. */
+  map: (
+    projectId: string,
+    type: MapType,
+  ): Promise<{ map: MapView; types: { key: MapType; label: string }[] }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/maps/${encodeURIComponent(type)}`,
+    ),
+
+  /** Why this matters, or null when there is nothing true to say. */
+  whyThisMatters: (projectId: string): Promise<{ whyThisMatters: WhyThisMatters | null }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/why-this-matters`),
+
+  /** This person's own preferences. Presentational by construction. */
+  preferences: (): Promise<{ preferences: Preferences }> => api('/api/russell/preferences'),
+
+  setPreference: (key: PreferenceKey, value: unknown): Promise<{ preferences: Preferences }> =>
+    api('/api/russell/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ key, value }),
+    }),
+
+  /**
+   * How much usable power exists, where it is going, and what should change.
+   *
+   * Technical depth is decided on the server from the caller's rights, so
+   * there is nothing to ask for here: raw identifiers arrive, or they do not.
+   */
+  fleetReading: (projectId: string): Promise<{ fleet: FleetReading }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/fleet`),
+
+  /** Why one piece of work took as long as it did, from recorded events. */
+  whySlow: (projectId: string, binId: string): Promise<{ explanation: SlownessExplanation }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/fleet/slow/${encodeURIComponent(binId)}`,
+    ),
+
+  /** Change how much may run at once. A row, never a deployment. */
+  setFleetTarget: (
+    projectId: string,
+    target: number,
+    reason: string,
+    paused = false,
+  ): Promise<{ policy: { id: string; version: number; target: number } }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/fleet/policy`, {
+      method: 'POST',
+      body: JSON.stringify({ target, reason, paused }),
+    }),
+
+  /** Everything the lab has been asked to find out, and what it found. */
+  labExperiments: (
+    projectId: string,
+  ): Promise<{ experiments: LabExperiment[]; modes: readonly LabMode[] }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/lab`),
+
+  declareExperiment: (
+    projectId: string,
+    body: { mode: LabMode; title: string; envelope: TestEnvelope; manifest?: Record<string, unknown> },
+  ): Promise<{ experiment: LabExperiment }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/lab`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Run one.
+   *
+   * `authorizePressure` is the person's authorization, sent deliberately: a
+   * pressure test without it settles as refused with nothing spent.
+   */
+  runExperiment: (
+    projectId: string,
+    experimentId: string,
+    authorizePressure = false,
+  ): Promise<{ experiment: LabExperiment }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/lab/${encodeURIComponent(experimentId)}/run`,
+      { method: 'POST', body: JSON.stringify({ authorizePressure }) },
+    ),
+
+  applyFinding: (
+    projectId: string,
+    experimentId: string,
+    target: number,
+    reason: string,
+  ): Promise<{ experiment: LabExperiment }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/lab/${encodeURIComponent(experimentId)}/apply`,
+      { method: 'POST', body: JSON.stringify({ target, reason }) },
+    ),
+
+  rollbackFinding: (
+    projectId: string,
+    experimentId: string,
+    reason: string,
+  ): Promise<{ experiment: LabExperiment }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/lab/${encodeURIComponent(experimentId)}/rollback`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    ),
+
+  /**
+   * Search, as this person.
+   *
+   * There is no project parameter: the scope is decided on the server from the
+   * authenticated principal, so a client cannot ask about a project it may not
+   * read — not even to learn whether it exists.
+   */
+  search: (
+    query: string,
+    kinds?: SearchKind[],
+  ): Promise<{
+    results: SearchResult;
+    savedViews: readonly { key: string; label: string; kinds: SearchKind[] }[];
+  }> =>
+    api(
+      `/api/russell/search?q=${encodeURIComponent(query)}` +
+        (kinds && kinds.length > 0 ? `&kinds=${encodeURIComponent(kinds.join(','))}` : ''),
+    ),
+
+  /**
+   * Where this project's understanding runs out.
+   *
+   * Refreshed on the server's read path, so this is a reading of now rather
+   * than of whenever something last ran.
+   */
+  frontier: (projectId: string): Promise<{ frontier: FrontierView }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/frontier`),
+
+  /** Say an area is deliberately not required, or take that back. */
+  setFrontierDismissed: (
+    projectId: string,
+    itemId: string,
+    dismissed: boolean,
+    reason: string,
+  ): Promise<{ ok: true; dismissed: boolean }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/frontier/${encodeURIComponent(itemId)}`,
+      { method: 'PATCH', body: JSON.stringify({ dismissed, reason }) },
+    ),
+
+  /** A person's threads, organized and ranked by meaning. */
+  collections: (projectId: string | null): Promise<{ collections: CollectionView[] }> =>
+    api(`/api/russell/collections${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
+
+  /** Move a thread. `null` takes it out of every collection. */
+  fileConversation: (conversationId: string, collectionId: string | null): Promise<{ ok: true }> =>
+    api(`/api/russell/conversations/${encodeURIComponent(conversationId)}/collection`, {
+      method: 'PATCH',
+      body: JSON.stringify({ collectionId }),
+    }),
+
+  /** Say a thread is finished, or that it is not. */
+  closeConversation: (
+    conversationId: string,
+    closed: boolean,
+  ): Promise<{ ok: true; closed: boolean }> =>
+    api(`/api/russell/conversations/${encodeURIComponent(conversationId)}/closed`, {
+      method: 'PATCH',
+      body: JSON.stringify({ closed }),
+    }),
 
   /**
    * Work, grouped and provenance-labelled.

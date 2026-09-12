@@ -4431,6 +4431,9 @@ export interface RussellConversationRow {
   attachment_source: string;
   grounding: string;
   legacy_conversation_id: string | null;
+  collection_id: string | null;
+  collection_source: string;
+  closed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -4680,8 +4683,46 @@ export interface RussellConversation {
   attachmentSource: AttachmentSource;
   grounding: Record<string, unknown>;
   legacyConversationId: string | null;
+  /** Which collection this thread sits in, or null while unfiled. */
+  collectionId: string | null;
+  /** Who filed it. A person's choice is never overwritten by the automatic pass. */
+  collectionSource: CollectionSource;
+  /** When somebody said this thread was done. Never derived. */
+  closedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** What kind of thing a collection groups. */
+export const COLLECTION_KINDS = ['PROJECT', 'CATEGORY', 'PERSONAL'] as const;
+export type CollectionKind = (typeof COLLECTION_KINDS)[number];
+
+/** Who decided a thread belongs in a collection. `NONE` means nobody yet. */
+export const COLLECTION_SOURCES = ['NONE', 'AUTOMATIC', 'USER'] as const;
+export type CollectionSource = (typeof COLLECTION_SOURCES)[number];
+
+export interface RussellCollection {
+  id: string;
+  ownerUserId: string;
+  projectId: string | null;
+  name: string;
+  kind: CollectionKind;
+  source: 'AUTOMATIC' | 'USER';
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RussellCollectionRow {
+  id: string;
+  owner_user_id: string;
+  project_id: string | null;
+  name: string;
+  kind: string;
+  source: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface RussellConversationContext {
@@ -4896,6 +4937,88 @@ export interface RussellKnowledge {
   conversationId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/* --------------------------------------------------------------------------
+ * The Discovery Frontier (Step 12B, S11)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The five regions of a project's edge.
+ *
+ * They are not a gradient. Solid and weak are both *believed*; an open question
+ * is known to be unanswered; an unexamined area is one nobody has looked at at
+ * all; and a new path is something Brain found rather than something anybody
+ * asked for. Collapsing any two of them loses the difference that decides what
+ * to do next.
+ */
+export const FRONTIER_REGIONS = [
+  'SOLID_GROUND',
+  'WEAK_GROUND',
+  'OPEN_QUESTION',
+  'UNEXAMINED',
+  'NEW_PATH',
+] as const;
+export type FrontierRegion = (typeof FRONTIER_REGIONS)[number];
+
+/** What a person reads for each. One mapping, not scattered through the UI. */
+export const FRONTIER_REGION_LABELS: Record<FrontierRegion, string> = {
+  SOLID_GROUND: 'Solid ground',
+  WEAK_GROUND: 'Weak ground',
+  OPEN_QUESTION: 'Open questions',
+  UNEXAMINED: 'Unexamined',
+  NEW_PATH: 'New paths',
+};
+
+/** Which authoritative row a reading was derived from. `ABSENCE` is a real one. */
+export const FRONTIER_SOURCE_KINDS = [
+  'KNOWLEDGE',
+  'LAYER',
+  'AUDIT_GAP',
+  'CANDIDATE',
+  'CONTRADICTION',
+  'ABSENCE',
+] as const;
+export type FrontierSourceKind = (typeof FRONTIER_SOURCE_KINDS)[number];
+
+export interface RussellFrontierItem {
+  id: string;
+  projectId: string;
+  region: FrontierRegion;
+  subject: string;
+  detail: string | null;
+  sourceKind: FrontierSourceKind;
+  sourceId: string | null;
+  lens: string | null;
+  fingerprint: string;
+  visibility: RussellVisibility;
+  dismissedAt: string | null;
+  dismissedByUserId: string | null;
+  dismissedReason: string | null;
+  resolvedAt: string | null;
+  version: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface RussellFrontierRow {
+  id: string;
+  project_id: string;
+  region: string;
+  subject: string;
+  detail: string | null;
+  source_kind: string;
+  source_id: string | null;
+  lens: string | null;
+  fingerprint: string;
+  visibility: string;
+  dismissed_at: string | null;
+  dismissed_by_user_id: string | null;
+  dismissed_reason: string | null;
+  resolved_at: string | null;
+  version: number;
+  first_seen_at: string;
+  last_seen_at: string;
 }
 
 export interface RussellHumanRequest {

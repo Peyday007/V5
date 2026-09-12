@@ -2429,6 +2429,7 @@ describe('a briefing says what changed, why, what next, and whether you are need
           title: `part ${index}`,
           done: index < done,
           detail: null,
+          state: (index < done ? 'DONE' : 'OPEN') as 'DONE' | 'OPEN',
         })),
         closed: true,
         started: true,
@@ -2442,8 +2443,8 @@ describe('a briefing says what changed, why, what next, and whether you are need
 
   it('reports a fraction only over a closed milestone set', () => {
     const milestones = [
-      { key: 'a', title: 'a', done: true, detail: null },
-      { key: 'b', title: 'b', done: false, detail: null },
+      { key: 'a', title: 'a', done: true, detail: null, state: 'DONE' as const },
+      { key: 'b', title: 'b', done: false, detail: null, state: 'OPEN' as const },
     ];
     const closed = progressOf({ milestones, closed: true, started: true, blockedBy: [], noun: 'x' });
     const open = progressOf({ milestones, closed: false, started: true, blockedBy: [], noun: 'x' });
@@ -2469,7 +2470,15 @@ describe('a briefing says what changed, why, what next, and whether you are need
     expect(stageFor({ done: 0, total: 0, started: false, blocked: false })).toBe('NOT_STARTED');
     expect(
       describeProgress(
-        { stage: 'NOT_STARTED', completed: [], missing: [], ratio: null, blockedBy: [] },
+        {
+          stage: 'NOT_STARTED',
+          completed: [],
+          missing: [],
+          ratio: null,
+          denominator: 'steps',
+          blockedBy: [],
+          milestones: [],
+        },
         'this project',
       ),
     ).toMatch(/Nothing has been started/);

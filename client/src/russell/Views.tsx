@@ -9,9 +9,11 @@
  * Every one of them renders through `listState`, so loading, empty, forbidden
  * and error are decided in one tested place rather than five untested ones.
  */
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { Constellation } from './Constellation.tsx';
-import { freshnessLabel, listState, readingState } from './present.ts';
+import { Frontier } from './Frontier.tsx';
+import { Maps } from './Maps.tsx';
+import { freshnessLabel, humanWhen, listState, priorityTone, readingState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { RussellApi } from '../lib/russellApi.ts';
 import type { ConnectSiteResult, SiteConnectionState } from '../lib/russellApi.ts';
@@ -187,16 +189,14 @@ export function WorkView({ projectId }: { projectId: string | null }): JSX.Eleme
     <Panel title="Work" state={state} onRetry={query.reload}>
       {groups.map((group) => (
         <div key={group.group} className="rs-group">
-          <h3 className="rs-group-title">{GROUP_TITLES[group.group] ?? group.group}</h3>
+          <h3 className="rs-group-title">
+            {GROUP_TITLES[group.group] ?? group.group}
+            <span className="rs-count">{group.entries.length}</span>
+          </h3>
           <ul className="rs-list">
             {group.entries.map((entry) => (
               <li key={entry.id}>
-                <span className="rs-item-title">{entry.title}</span>
-                <span className="rs-item-meta">
-                  {plainWorkState(entry)}
-                  {entry.provenance !== 'PROJECT' ? ` · ${PROVENANCE_WORDS[entry.provenance]}` : ''}
-                </span>
-                {entry.why ? <span className="rs-item-meta">{entry.why}</span> : null}
+                <MissionCard entry={entry} />
               </li>
             ))}
           </ul>
@@ -217,6 +217,84 @@ export function WorkView({ projectId }: { projectId: string | null }): JSX.Eleme
     </Panel>
   );
 }
+
+/**
+ * One piece of work, as §8 asks for it.
+ *
+ * Seven things: what Russell is trying to accomplish, rough progress, why it
+ * matters, why it is ranked here, what changed, the next action, and whether it
+ * is blocked. Every one of them is a field the server sent — there is no
+ * sentence composed here, because a card that wrote its own explanation would
+ * be the second implementation that disagrees with the briefing.
+ *
+ * The identifiers are real and are kept (§5), behind "How it is being done",
+ * which is `details` so it is keyboard-reachable and screen-reader-announced
+ * without any state of ours.
+ */
+function MissionCard({ entry }: { entry: WorkEntry }): JSX.Element {
+  const when = humanWhen(entry.updatedAt);
+  return (
+    <article className={`rs-mission rs-mission-${priorityTone(entry.priority ?? '')}`}>
+      <div className="rs-mission-head">
+        <h4 className="rs-mission-objective">{entry.title}</h4>
+        {entry.priorityLabel ? (
+          <span className="rs-pill rs-pill-accent">{entry.priorityLabel}</span>
+        ) : null}
+        {entry.provenance !== 'PROJECT' ? (
+          <span className="rs-pill">{PROVENANCE_WORDS[entry.provenance]}</span>
+        ) : null}
+      </div>
+
+      {/* Why it matters, in the row's own words. */}
+      {entry.why ? <p className="rs-mission-why">{entry.why}</p> : null}
+
+      <p className={`rs-mission-next${entry.blocked ? ' rs-mission-blocked' : ''}`}>
+        {plainWorkState(entry)}
+        {when ? (
+          <>
+            {' · '}
+            <time className="rs-when" dateTime={entry.updatedAt} title={when.exact}>
+              {when.text}
+            </time>
+          </>
+        ) : null}
+      </p>
+
+      {/* Why it is ranked here — Russell's stored reason, never re-derived. */}
+      {entry.priorityReason ? (
+        <p className="rs-hint rs-at-interested">{entry.priorityReason}</p>
+      ) : null}
+
+      {entry.how.length > 0 ? (
+        <details className="rs-mission-how rs-at-technical">
+          <summary>How it is being done</summary>
+          <dl>
+            {entry.how.map((pair) => (
+              <Fragment key={`${pair.label}:${pair.value}`}>
+                <dt>{pair.label}</dt>
+                <dd>{pair.value}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        </details>
+      ) : null}
+    </article>
+  );
+}
+
+/**
+ * How a decision is ranked (§16), in words.
+ *
+ * Three, and they mean different things to a person: something that cannot
+ * wait, something that is holding real work up, and something to get to
+ * whenever. A card that showed all three the same way would make the first one
+ * stop registering, which is the §4.7 rule this whole surface exists to keep.
+ */
+const URGENCY_WORDS: Record<string, string> = {
+  URGENT: 'Urgent',
+  BLOCKING: 'Blocking important work',
+  WHENEVER: 'Whenever convenient',
+};
 
 /** The five headings. One mapping, so two screens cannot disagree. */
 const GROUP_TITLES: Record<string, string> = {
@@ -269,6 +347,156 @@ function plainWorkState(entry: WorkEntry): string {
  * There is no "back" that loses where you were, because the path is derived
  * from the node rather than from a history stack.
  */
+/**
+ * A project, as a living model rather than a folder (§9).
+ *
+ * The map is the front door — approved 2026-09-12 — because it is the one view
+ * nothing else in the product gives you: the shape of what the project is and
+ * how its parts connect. The written summary sits under it, and the other four
+ * subviews are the surfaces that already existed, reached from here rather than
+ * from four different places.
+ *
+ * Nothing here is a second store. Each tab renders the same projection its own
+ * section renders, so a person who reads "three foundations under way" on the
+ * project cannot read something else on Work.
+ */
+const PROJECT_TABS = [
+  { key: 'MAP' as const, label: 'Map' },
+  { key: 'OVERVIEW' as const, label: 'Overview' },
+  { key: 'MAPS' as const, label: 'Other maps' },
+  { key: 'FRONTIER' as const, label: 'Frontier' },
+  { key: 'WORK' as const, label: 'Work' },
+  { key: 'KNOWLEDGE' as const, label: 'Knowledge' },
+  { key: 'SYSTEM' as const, label: 'System' },
+];
+
+export function ProjectView({
+  projectId,
+  focusId,
+  onFocus,
+}: {
+  projectId: string | null;
+  focusId?: string | null;
+  onFocus?: (nodeId: string) => void;
+}): JSX.Element {
+  const [tab, setTab] = useState<(typeof PROJECT_TABS)[number]['key']>('MAP');
+  return (
+    <div className="rs-view">
+      <ul className="rs-tabs" role="tablist" aria-label="This project">
+        {PROJECT_TABS.map((entry) => (
+          <li key={entry.key} role="none">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === entry.key}
+              onClick={() => setTab(entry.key)}
+            >
+              {entry.label}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {tab === 'MAP' ? (
+        <IdeasView projectId={projectId} focusId={focusId} onFocus={onFocus} />
+      ) : null}
+      {tab === 'OVERVIEW' ? <ProjectOverview projectId={projectId} /> : null}
+      {tab === 'MAPS' ? <Maps projectId={projectId} /> : null}
+      {tab === 'FRONTIER' ? <Frontier projectId={projectId} /> : null}
+      {tab === 'WORK' ? <WorkView projectId={projectId} /> : null}
+      {tab === 'KNOWLEDGE' ? <KnowledgeView projectId={projectId} /> : null}
+      {tab === 'SYSTEM' ? <SitesView projectId={projectId} /> : null}
+    </div>
+  );
+}
+
+/**
+ * What the project currently is, in the words the rest of the product uses.
+ *
+ * Reads the one home projection rather than composing a second account of the
+ * same rows — §6's rule, applied where it is most tempting to break: a project
+ * page is exactly where somebody would write a fresh summary and end up with a
+ * page that disagrees with the home screen about the same project.
+ */
+function ProjectOverview({ projectId }: { projectId: string | null }): JSX.Element {
+  const query = useAsync(
+    () => (projectId ? RussellApi.home(projectId) : Promise.resolve(null)),
+    [projectId],
+  );
+  const state = readingState({
+    loading: query.loading,
+    error: query.error,
+    value: query.data ?? null,
+    noun: 'this project',
+  });
+  if (state.phase !== 'READY' || !query.data) {
+    return <p className={`rs-state rs-state-${state.phase.toLowerCase()}`}>{state.message}</p>;
+  }
+  const home = query.data.home;
+  const progress = home.briefing.progress;
+  const milestones = typeof progress === 'string' ? [] : (progress.milestones ?? []);
+  return (
+    <div className="rs-column">
+      <p className="rs-eyebrow">What this is becoming</p>
+      <h3 className="rs-view-title">{query.data.project.name}</h3>
+      <p className="rs-lede">{home.briefing.focus}</p>
+
+      <section className="rs-panel">
+        <p className="rs-maturity-word">
+          {typeof progress === 'string' ? progress : progress.headline}
+        </p>
+        <ul className="rs-foundations">
+          {milestones.map((milestone) => (
+            <li key={milestone.key} className={`rs-foundation rs-foundation-${TONE_WORDS[milestone.state]}`}>
+              <span className="rs-foundation-name">{milestone.title}</span>
+              <span className="rs-foundation-state">{STATE_WORDS_[milestone.state]}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="rs-group">
+        <h4 className="rs-group-title">What Russell believes right now</h4>
+        {home.briefing.latest ? (
+          <p className="rs-mission-why">{home.briefing.latest}</p>
+        ) : (
+          <p className="rs-state rs-state-empty">
+            Nothing has been concluded here yet. That is different from nothing being known —
+            Knowledge holds what has been read.
+          </p>
+        )}
+        <p className="rs-mission-next">{home.briefing.next}</p>
+      </section>
+
+      {Array.isArray(home.briefing.openGaps) && home.briefing.openGaps.length > 0 ? (
+        <section className="rs-group">
+          <h4 className="rs-group-title">What is still open</h4>
+          <ul className="rs-milestones">
+            {home.briefing.openGaps.map((gap) => (
+              <li key={gap} className="rs-milestone-open">
+                {gap}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+const TONE_WORDS: Record<string, string> = {
+  DONE: 'settled',
+  WORKING: 'working',
+  BLOCKED: 'blocked',
+  OPEN: 'open',
+};
+
+const STATE_WORDS_: Record<string, string> = {
+  DONE: 'Settled',
+  WORKING: 'Under way',
+  BLOCKED: 'Blocked',
+  OPEN: 'Not started',
+};
+
 export function IdeasView({
   projectId,
   focusId,
@@ -604,32 +832,122 @@ export function KnowledgeView({ projectId }: { projectId: string | null }): JSX.
     // rendered as "nothing yet".
     noun: query.data?.knows?.explanation ?? 'findings',
   });
+  /*
+   * Understanding, organized — not a prettier document library (§10).
+   *
+   * The six kinds are grouped because they answer different questions and a
+   * flat list makes a person read every line to find the one they wanted: what
+   * is concluded, what is decided, what is assumed, what is unknown, what
+   * contradicts, and what remains a gap. The order is what somebody is most
+   * likely to want first.
+   *
+   * The grouping is over the *kind the server sent*. Nothing here reclassifies
+   * anything — a knowledge row's kind is a fact about the row.
+   */
+  const groups = KNOWLEDGE_ORDER.map((kind) => ({
+    kind,
+    label: KNOWLEDGE_WORDS[kind],
+    meaning: KNOWLEDGE_MEANINGS[kind],
+    items: state.items.filter((entry) => entry.kind === kind),
+  })).filter((group) => group.items.length > 0);
+
   return (
     <Panel title="What Russell knows" state={state} onRetry={query.reload}>
-      <ul className="rs-list">
-        {state.items.map((entry) => (
-          <li key={entry.id}>
-            <span className="rs-item-title">{entry.statement}</span>
-            <span className="rs-item-meta">
-              {entry.status.toLowerCase()} · {entry.confidence.toLowerCase()}
-              {entry.provenance.sourceUrl ? ' · cited' : ''}
-            </span>
-            {/*
-              A provisional entry says what it is short of. Hiding that would
-              make it read like an accepted one, which is the single thing this
-              surface must never do.
-            */}
-            {entry.missingEvidence.length > 0 && (
-              <span className="rs-item-meta">
-                still missing: {entry.missingEvidence.join('; ')}
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
+      {groups.map((group) => (
+        <section key={group.kind} className="rs-group">
+          <h3 className="rs-group-title">
+            {group.label}
+            <span className="rs-count">{group.items.length}</span>
+          </h3>
+          <p className="rs-hint">{group.meaning}</p>
+          <ul className="rs-list">
+            {group.items.map((entry) => (
+              <li key={entry.id}>
+                <article className="rs-card">
+                  <div className="rs-row">
+                    <span className="rs-item-title">{entry.statement}</span>
+                    <span className={`rs-pill ${CONFIDENCE_TONE[entry.confidence] ?? ''}`.trim()}>
+                      {CONFIDENCE_WORDS[entry.confidence] ?? entry.confidence}
+                    </span>
+                  </div>
+                  {entry.detail ? <p className="rs-item-meta">{entry.detail}</p> : null}
+                  <p className="rs-item-meta">
+                    {STATUS_WORDS[entry.status] ?? entry.status.toLowerCase()}
+                    {entry.provenance.sourceUrl ? ' · has a source' : ' · no source recorded'}
+                    {entry.asOf ? ` · true as of ${entry.asOf.slice(0, 10)}` : ''}
+                  </p>
+                  {/*
+                    A provisional entry says what it is short of. Hiding that
+                    would make it read like an accepted one, which is the single
+                    thing this surface must never do.
+                  */}
+                  {entry.missingEvidence.length > 0 ? (
+                    <p className="rs-item-meta">
+                      Still missing: {entry.missingEvidence.join('; ')}
+                    </p>
+                  ) : null}
+                </article>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </Panel>
   );
 }
+
+/** The six kinds, in the order a person is most likely to want them. */
+const KNOWLEDGE_ORDER = [
+  'CONCLUSION',
+  'DECISION',
+  'CONTRADICTION',
+  'ASSUMPTION',
+  'UNKNOWN',
+  'GAP',
+] as const;
+
+const KNOWLEDGE_WORDS: Record<string, string> = {
+  CONCLUSION: 'Conclusions',
+  DECISION: 'Decisions',
+  CONTRADICTION: 'Contradictions',
+  ASSUMPTION: 'Assumptions',
+  UNKNOWN: 'Unknowns',
+  GAP: 'Gaps',
+};
+
+const KNOWLEDGE_MEANINGS: Record<string, string> = {
+  CONCLUSION: 'What the evidence supports.',
+  DECISION: 'What was chosen, and by whom.',
+  CONTRADICTION: 'Where the evidence disagrees with itself.',
+  ASSUMPTION: 'Taken as true without being established.',
+  UNKNOWN: 'Known not to be known.',
+  GAP: 'Something an audit said is missing.',
+};
+
+/** Confidence follows evidence, never tone — so the words do too. */
+const CONFIDENCE_WORDS: Record<string, string> = {
+  ESTABLISHED: 'Established',
+  SUPPORTED: 'Supported',
+  UNCERTAIN: 'Uncertain',
+  DISPUTED: 'Disputed',
+};
+
+const CONFIDENCE_TONE: Record<string, string> = {
+  ESTABLISHED: 'rs-pill-good',
+  SUPPORTED: 'rs-pill-good',
+  UNCERTAIN: 'rs-pill-watch',
+  DISPUTED: 'rs-pill-bad',
+};
+
+const STATUS_WORDS: Record<string, string> = {
+  ACCEPTED: 'Accepted',
+  PROVISIONAL: 'Provisional',
+  UNDER_REVIEW: 'Under review',
+  CONTRADICTED: 'Contradicted',
+  STALE: 'Stale',
+  SUPERSEDED: 'Superseded',
+  REFUSED: 'Refused by an audit',
+};
 
 /**
  * The fleet, as one honest sentence.
@@ -937,7 +1255,26 @@ export function SitesView({ projectId }: { projectId: string | null }): JSX.Elem
   );
 }
 
-export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX.Element | null {
+export function AuthorityPanel({
+  projectId,
+  folded = false,
+}: {
+  projectId: string | null;
+  /**
+   * Whether an existing grant is folded behind a one-line summary.
+   *
+   * True on Needs You, where §16 is explicit: standing authority belongs
+   * behind a concise "What Russell may do" summary, not a policy essay
+   * occupying the inbox. The owner rejected exactly that — a long authority
+   * card taking over an otherwise empty page.
+   *
+   * It never folds the case where there is *no* grant. That is not a reference
+   * card; it is the one decision nothing can proceed without, and hiding it
+   * behind a disclosure would be the status-contradicting-the-control defect
+   * that §24 already had to correct once.
+   */
+  folded?: boolean;
+}): JSX.Element | null {
   const query = useAsync(
     () => (projectId ? RussellApi.authority(projectId) : Promise.resolve(null)),
     [projectId],
@@ -1004,9 +1341,18 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
     );
   }
 
-  return (
-    <section className="rs-authority" aria-labelledby="rs-authority-heading">
-      <h3 id="rs-authority-heading">What Russell may do on its own</h3>
+  /*
+   * Folded means one line and everything behind it — never one line and a
+   * pointer somewhere else.
+   *
+   * A summary that said "open the full card from the project" would move the
+   * withdraw control to a page that does not have it, which is the
+   * waiting-with-no-remedy defect at the smallest possible scale. `details`
+   * keeps the whole card in the document, keyboard-reachable and
+   * screen-reader-announced, one click from the compact state §16 asks for.
+   */
+  const body = (
+    <>
       {/* The server's sentence, whether or not a grant exists. */}
       <p className="rs-authority-headline">{view.headline}</p>
 
@@ -1194,6 +1540,24 @@ export function AuthorityPanel({ projectId }: { projectId: string | null }): JSX
           {error}
         </p>
       ) : null}
+    </>
+  );
+
+  if (folded && view.grant) {
+    return (
+      <details className="rs-panel rs-authority">
+        <summary className="rs-approval-summary">
+          What Russell may do on its own — {view.grant.name}
+        </summary>
+        {body}
+      </details>
+    );
+  }
+
+  return (
+    <section className="rs-authority" aria-labelledby="rs-authority-heading">
+      <h3 id="rs-authority-heading">What Russell may do on its own</h3>
+      {body}
     </section>
   );
 }
@@ -1225,23 +1589,51 @@ export function NeedsYouView({
     onAnswered?.();
   }
 
+  /*
+   * Nothing needing a decision is good news, and must read as a settled state.
+   *
+   * The rejected screen put a long authority card on an empty inbox, which
+   * made "you are not needed" look like a page full of obligations. §16 asks
+   * for the opposite: a compact statement, what continues without anybody, and
+   * the standing authority folded to one line.
+   *
+   * The empty *list* is not the same as the empty *page*: a project with no
+   * grant still has one decision outstanding, and `AuthorityPanel` renders it
+   * unfolded because nothing can proceed until it is answered.
+   */
+  const nothingWaiting = state.phase === 'EMPTY';
+
   return (
-    <Panel title="Needs you" state={state} onRetry={query.reload}>
-      {/* Above the list, because a project Russell may not act on has one
-          decision outstanding that matters more than any individual request —
-          and when the grant exists this is where a person comes to see what
-          they agreed to and to take it back. */}
-      <AuthorityPanel key={projectId} projectId={projectId} />
+    <Panel
+      title="Needs you"
+      state={{ ...state, phase: nothingWaiting ? 'READY' : state.phase }}
+      onRetry={query.reload}
+    >
+      {nothingWaiting ? (
+        <section className="rs-nothing">
+          <h3>Nothing needs your decision</h3>
+          <p>
+            Russell carries on by itself: it keeps watching the project, ranking what is worth
+            doing, and starting work it already has permission for. You will be asked here if it
+            reaches something it cannot decide.
+          </p>
+        </section>
+      ) : null}
+      {/* Above the list when a decision is outstanding, folded to one line when
+          the grant already exists — §16, and the rejected page's own fault. */}
+      <AuthorityPanel key={projectId} projectId={projectId} folded={nothingWaiting} />
       <ul className="rs-list">
         {state.items.map((request) => (
           <li key={request.id}>
-            <span className="rs-item-title">{request.authorityNeeded}</span>
+            <article className={`rs-decision rs-decision-${request.urgency.toLowerCase()}`}>
+            <span className="rs-decision-label">{URGENCY_WORDS[request.urgency] ?? request.urgency}</span>
+            <h4 className="rs-decision-what">{request.authorityNeeded}</h4>
             {/* Why Russell is asking rather than deciding. A request with no
                 stated reason would be indistinguishable from Russell simply
                 declining to do its job. */}
-            <span className="rs-item-meta">{request.whyNotRussell}</span>
+            <p className="rs-decision-why">{request.whyNotRussell}</p>
             {request.recommendation ? (
-              <span className="rs-item-meta">Russell suggests: {request.recommendation}</span>
+              <p className="rs-recommend">Russell suggests: {request.recommendation}</p>
             ) : null}
             {/* The consequence, beside the button that causes it.
 
@@ -1253,21 +1645,26 @@ export function NeedsYouView({
                 "authorize this plan" saw two verbs and no consequences. It is
                 the one place in Russell where a wrong click spends real
                 research or files a report into the archive. */}
-            <div className="rs-choices">
+            <ul className="rs-choices">
               {request.choices.map((choice) => (
-                <span key={choice.key} className="rs-choice">
+                <li key={choice.key} className="rs-choice">
+                  <span className="rs-choice-text">
+                    <strong>{choice.label}</strong>
+                    <span className="rs-choice-consequence">{choice.consequence}</span>
+                  </span>
                   <button
                     type="button"
+                    className="rs-button"
                     onClick={() => {
                       void answer(request.id, choice.key);
                     }}
                   >
-                    {choice.label}
+                    Choose this
                   </button>
-                  <span className="rs-item-meta">{choice.consequence}</span>
-                </span>
+                </li>
               ))}
-            </div>
+            </ul>
+            </article>
           </li>
         ))}
       </ul>

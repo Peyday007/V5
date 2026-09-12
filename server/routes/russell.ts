@@ -48,6 +48,35 @@ import { currentPrincipal } from '../services/identity/context.ts';
 import { beginTurn, conversationIsReadable, retryTurn } from '../services/russell/turn.ts';
 import { withPendingDetail } from '../services/russell/pending.ts';
 import { briefing, focusLayer } from '../services/russell/projections.ts';
+import { homeFor } from '../services/russell/home.ts';
+import { collectionsFor } from '../services/russell/collections.ts';
+import { frontierFor } from '../services/russell/frontier.ts';
+import { SAVED_VIEWS, SEARCH_KINDS, search, type SearchKind } from '../services/russell/search.ts';
+import { explainSlowness, fleetView } from '../services/fleet/view.ts';
+import {
+  LAB_MODES,
+  applyFinding,
+  declareExperiment,
+  listExperiments,
+  rollbackFinding,
+  runExperiment,
+  type LabMode,
+} from '../services/fleet/lab.ts';
+import { setPolicy } from '../repos/fleet.ts';
+import { MAP_LABELS, MAP_TYPES, mapFor, type MapType } from '../services/russell/maps.ts';
+import { whyThisMatters, worthSurfacing } from '../services/russell/whyThisMatters.ts';
+import {
+  PREFERENCES,
+  isPreferenceKey,
+  preferencesFor,
+  setPreference,
+} from '../services/russell/preferences.ts';
+import { dismissFrontierItem } from '../repos/russellFrontier.ts';
+import {
+  fileConversation,
+  getCollection,
+  setConversationClosed,
+} from '../repos/russellCollections.ts';
 import { knowsForProject, surfaceState } from '../services/russell/knows.ts';
 import { groupWork, workForProject } from '../services/russell/work.ts';
 import { ideaMapForProject } from '../services/russell/ideas.ts';
@@ -338,6 +367,500 @@ russellRouter.post(
 /* --------------------------------------------------------------------------
  * What Russell is doing
  * ------------------------------------------------------------------------ */
+
+/**
+ * Russell's home, in one read.
+ *
+ * A single projection rather than five calls a client stitches together, for
+ * the reason §6 gives directly: two surfaces inferring their own status is how
+ * a person ends up reading two different answers about one project. The
+ * briefing route below is unchanged and still serves the four sentences on
+ * their own, because callers already read it and removing a field is a change
+ * nobody asked for.
+ *
+ * `homeFor` returns null for a caller with no read access, which becomes the
+ * same 404 a missing project gives — the refusal names nothing, at this door as
+ * at every other.
+ */
+russellRouter.get(
+  '/projects/:projectId/home',
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    const view = await homeFor({
+      principal: currentPrincipal(),
+      projectId: project.id,
+      projectName: project.name,
+      includePrivate: false,
+    });
+    if (!view) throw notFound('No project with that id.');
+    return { home: view, project: { id: project.id, name: project.name } };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Maps, preferences, and why this matters
+ * ------------------------------------------------------------------------ */
+
+/**
+ * One of the six specialized maps, over the authoritative graph.
+ *
+ * A map draws only relationships that are recorded. Where a project holds
+ * nothing of that kind the map comes back empty *with the reason*, which is the
+ * honest output — inventing edges to make a diagram look finished is an
+ * invented citation one altitude down.
+ */
+russellRouter.get(
+  '/projects/:projectId/maps/:type',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const type = pathId(req, 'type').toUpperCase();
+    if (!(MAP_TYPES as readonly string[]).includes(type)) {
+      throw notFound('There is no map of that kind.');
+    }
+    return {
+      map: await mapFor({
+        type: type as MapType,
+        projectId: project.id,
+        projectName: project.name,
+        includePrivate: false,
+      }),
+      types: MAP_TYPES.map((key) => ({ key, label: MAP_LABELS[key] })),
+    };
+  }),
+);
+
+/**
+ * Why this matters — a private, non-gamified reading of what has happened.
+ *
+ * Returns nothing at all when nothing has. A quiet screen is the honest one,
+ * and an encouraging screen over an empty project is what makes a person stop
+ * believing the rest of the product.
+ */
+russellRouter.get(
+  '/projects/:projectId/why-this-matters',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const view = await whyThisMatters({
+      projectId: project.id,
+      projectName: project.name,
+      includePrivate: false,
+    });
+    return { whyThisMatters: worthSurfacing(view) ? view : null };
+  }),
+);
+
+/**
+ * This person's own preferences.
+ *
+ * The user comes from the authenticated principal, never from the body or the
+ * path: a preference route that took a user id would be a way to change
+ * somebody else's screen. Every key is presentational by construction — nothing
+ * here can change a fact, an evidence standard, or what anybody may do.
+ */
+russellRouter.get(
+  '/preferences',
+  handler(async () => {
+    const principal = requirePerson();
+    return { preferences: await preferencesFor(principal.id), declared: PREFERENCES };
+  }),
+);
+
+russellRouter.patch(
+  '/preferences',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const body = bodyOf(req);
+    const key = requiredString(body['key'], 'key');
+    if (!isPreferenceKey(key)) throw badRequest('That is not a preference Brain keeps.');
+    const outcome = await setPreference({ userId: principal.id, key, value: body['value'] });
+    if (!outcome.ok) throw badRequest(outcome.reason);
+    return { preferences: await preferencesFor(principal.id) };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Fleet and the Capability Lab
+ * ------------------------------------------------------------------------ */
+
+/**
+ * How much usable Brain power exists, where it is going, and what should change.
+ *
+ * Technical depth is decided from the caller's actual rights rather than from a
+ * query parameter: raw worker, token and session identifiers are technical
+ * detail (§14), so they come back only for a caller `decideProjectAccess`
+ * already admits at ADMIN. A parameter would let anybody ask for them.
+ */
+russellRouter.get(
+  '/projects/:projectId/fleet',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const who = await whoForProject({ principal, projectId: project.id });
+    if (!who) throw notFound('No project with that id.');
+    return {
+      fleet: await fleetView({
+        includeTechnical: who.depth === 'OPERATOR',
+        projectId: project.id,
+      }),
+    };
+  }),
+);
+
+/**
+ * Why one piece of work took as long as it did.
+ *
+ * The chain is Brain's own recorded events. Nothing here consults a clock to
+ * decide what happened, and nothing consults a worker's account of itself.
+ */
+russellRouter.get(
+  '/projects/:projectId/fleet/slow/:binId',
+  handler(async (req) => {
+    requirePerson();
+    await requireProject(pathId(req, 'projectId'));
+    return { explanation: await explainSlowness(pathId(req, 'binId')) };
+  }),
+);
+
+/**
+ * Change how much may run at once, durably and reversibly.
+ *
+ * An INSERT into `fleet_policy`, which is versioned, attributed and reasoned —
+ * so this needs no deployment and the previous value is still there to revert
+ * to. It changes *allocation*, never the right to perform a new kind of work:
+ * nothing here widens a scope, grants a capability or authorizes spending.
+ */
+russellRouter.post(
+  '/projects/:projectId/fleet/policy',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const who = await whoForProject({ principal, projectId: project.id });
+    if (!who || who.depth !== 'OPERATOR') throw notFound('No project with that id.');
+    const body = bodyOf(req);
+    const target = optionalInteger(body['target'], 'target', { min: 0, max: 1000 });
+    if (target === undefined) throw badRequest('A target is required.');
+    const reason = (optionalString(body['reason'], 'reason') ?? '').trim();
+    if (reason.length === 0) {
+      throw badRequest('Say why the fleet target is changing; a change with no reason cannot be reviewed later.');
+    }
+    const policy = await setPolicy({
+      scope: 'FLEET',
+      target,
+      paused: body['paused'] === true,
+      actor: principal.displayName,
+      reason,
+    });
+    return { policy: { id: policy.id, version: policy.version, target: policy.target } };
+  }),
+);
+
+/** Everything the lab has been asked to find out, and what it found. */
+russellRouter.get(
+  '/projects/:projectId/lab',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { experiments: await listExperiments(project.id), modes: LAB_MODES };
+  }),
+);
+
+/**
+ * Declare an experiment.
+ *
+ * Declaring is not running, and a pressure mode with an incomplete envelope is
+ * *stored* as refused rather than rejected — the refusal is evidence of what
+ * was asked for and why it was not allowed, which a thrown error would lose.
+ */
+russellRouter.post(
+  '/projects/:projectId/lab',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const mode = requiredString(body['mode'], 'mode');
+    if (!(LAB_MODES as readonly string[]).includes(mode)) {
+      throw badRequest('That is not a test this lab knows how to run.');
+    }
+    const envelope = body['envelope'];
+    return {
+      experiment: await declareExperiment({
+        projectId: project.id,
+        mode: mode as LabMode,
+        title: requiredString(body['title'], 'title'),
+        envelope: (typeof envelope === 'object' && envelope !== null
+          ? envelope
+          : {
+              ceiling: 0,
+              durationMinutes: 0,
+              stopConditions: [],
+              cleanup: '',
+              rollback: '',
+              workloadClass: 'UNKNOWN',
+              workKind: 'SYNTHETIC',
+            }) as never,
+        manifest: (typeof body['manifest'] === 'object' && body['manifest'] !== null
+          ? body['manifest']
+          : {}) as Record<string, unknown>,
+        actor: principal.displayName,
+      }),
+    };
+  }),
+);
+
+/**
+ * Run one.
+ *
+ * `pressureAuthorized` is read from the *route*, not from the experiment's own
+ * row: an experiment that carried its own authorization would be supplying the
+ * limits it is judged against. A person at ADMIN saying so in the request is
+ * the authorization, and a pressure mode without it settles as refused with
+ * nothing spent.
+ */
+russellRouter.post(
+  '/projects/:projectId/lab/:experimentId/run',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const who = await whoForProject({ principal, projectId: project.id });
+    const authorized =
+      who?.depth === 'OPERATOR' && bodyOf(req)['authorizePressure'] === true;
+    return {
+      experiment: await runExperiment({
+        id: pathId(req, 'experimentId'),
+        pressureAuthorized: authorized,
+      }),
+    };
+  }),
+);
+
+/** Turn a finding into policy, reversibly. */
+russellRouter.post(
+  '/projects/:projectId/lab/:experimentId/apply',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const who = await whoForProject({ principal, projectId: project.id });
+    if (!who || who.depth !== 'OPERATOR') throw notFound('No project with that id.');
+    const body = bodyOf(req);
+    const reason = (optionalString(body['reason'], 'reason') ?? '').trim();
+    if (reason.length === 0) throw badRequest('Say why this finding is being applied.');
+    return {
+      experiment: await applyFinding({
+        experimentId: pathId(req, 'experimentId'),
+        target: optionalInteger(body['target'], 'target', { min: 0, max: 1000 }) ?? 1,
+        actor: principal.displayName,
+        reason,
+      }),
+    };
+  }),
+);
+
+/** Undo one, by writing the previous value forward rather than deleting. */
+russellRouter.post(
+  '/projects/:projectId/lab/:experimentId/rollback',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const who = await whoForProject({ principal, projectId: project.id });
+    if (!who || who.depth !== 'OPERATOR') throw notFound('No project with that id.');
+    const reason = (optionalString(bodyOf(req)['reason'], 'reason') ?? '').trim();
+    if (reason.length === 0) throw badRequest('Say why this is being rolled back.');
+    return {
+      experiment: await rollbackFinding({
+        experimentId: pathId(req, 'experimentId'),
+        actor: principal.displayName,
+        reason,
+      }),
+    };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Search
+ * ------------------------------------------------------------------------ */
+
+/**
+ * One search, over everything this person may see.
+ *
+ * Scope is decided inside the service from the authenticated principal, never
+ * from anything the caller sent — there is no `projectId` parameter here on
+ * purpose, because a search that took one would be a way to ask whether a
+ * project exists. A query the caller has no access to simply returns nothing,
+ * which is the same answer a genuine miss gives.
+ */
+russellRouter.get(
+  '/search',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const query = optionalString(queryOf(req)['q'], 'q') ?? '';
+    const kinds = optionalString(queryOf(req)['kinds'], 'kinds');
+    const wanted = kinds
+      ? kinds
+          .split(',')
+          .map((kind) => kind.trim().toUpperCase())
+          .filter((kind): kind is SearchKind => (SEARCH_KINDS as readonly string[]).includes(kind))
+      : undefined;
+    return {
+      results: await search({ principal, query, kinds: wanted }),
+      // The saved views travel with the response so the client renders the
+      // server's own set rather than keeping a second copy that drifts.
+      savedViews: SAVED_VIEWS,
+    };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The Discovery Frontier
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Where this project's understanding runs out.
+ *
+ * Refreshed on the read path, so what a person sees is what is true now rather
+ * than what was true the last time something happened to run. Private knowledge
+ * stays the owner's: the API view is the shared one, so two people reading the
+ * same project see the same frontier.
+ */
+russellRouter.get(
+  '/projects/:projectId/frontier',
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    return {
+      frontier: await frontierFor({
+        projectId: project.id,
+        projectName: project.name,
+        includePrivate: false,
+      }),
+    };
+  }),
+);
+
+/**
+ * A person saying an area is deliberately not required — or taking it back.
+ *
+ * A reason is required in both directions, because a scope decision with no
+ * stated reason is indistinguishable from somebody tidying the screen. It is
+ * reversible for the same reason every other escalation here has an answering
+ * transition: a judgment about scope is exactly the kind that changes.
+ */
+russellRouter.patch(
+  '/projects/:projectId/frontier/:itemId',
+  handler(async (req) => {
+    const principal = requirePerson();
+    // The access level comes from the request method — a PATCH already
+    // requires WRITE through `requirementForCurrentRequest`, so asking for it
+    // again here would be a second place to get it wrong.
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const dismissed = body['dismissed'] === true;
+    const reason = (optionalString(body['reason'], 'reason') ?? '').trim();
+    if (reason.length === 0) {
+      throw badRequest('Say why this area is or is not required.');
+    }
+    const changed = await dismissFrontierItem({
+      id: pathId(req, 'itemId'),
+      projectId: project.id,
+      userId: principal.id,
+      reason,
+      dismissed,
+    });
+    if (!changed) throw notFound('No frontier item with that id.');
+    return { ok: true, dismissed };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Collections
+ * ------------------------------------------------------------------------ */
+
+/**
+ * A person's threads, organized and ranked.
+ *
+ * Scoped to the authenticated person throughout — the collections, the threads
+ * inside them, and the filing routes below all read `principal.id` rather than
+ * anything the caller sent. A collection holds private conversations, so a
+ * route that took an owner from the body would be a way to read somebody
+ * else's thinking.
+ *
+ * `projectId` is optional and supplies the starters only. It goes through the
+ * ordinary project gate, so naming a project you may not read refuses here
+ * exactly as it does everywhere else.
+ */
+russellRouter.get(
+  '/collections',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const projectId = optionalString(queryOf(req)['projectId'], 'projectId');
+    const project = projectId ? await requireProject(projectId) : null;
+    return {
+      collections: await collectionsFor({
+        ownerUserId: principal.id,
+        projectId: project?.id ?? null,
+        projectName: project?.name ?? null,
+      }),
+    };
+  }),
+);
+
+/**
+ * Move a thread, or take it out of every collection.
+ *
+ * Always `USER`, because this route is only ever reached by a person choosing.
+ * The automatic pass writes `AUTOMATIC` and is guarded so it can never
+ * overwrite what happens here — that guard is in the statement, in
+ * `fileConversation`, rather than in this handler.
+ */
+russellRouter.patch(
+  '/conversations/:conversationId/collection',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const { conversation } = await requireConversation(pathId(req, 'conversationId'));
+    if (conversation.ownerUserId !== principal.id) {
+      // Readable is not writable: a shared thread is still one person's.
+      throw notFound('No conversation with that id.');
+    }
+    const body = bodyOf(req);
+    const collectionId = optionalString(body['collectionId'], 'collectionId') ?? null;
+    if (collectionId) {
+      const collection = await getCollection(collectionId);
+      // A collection somebody else owns is reported as one that does not
+      // exist, so this cannot be used to discover what other people have.
+      if (!collection || collection.ownerUserId !== principal.id) {
+        throw notFound('No collection with that id.');
+      }
+    }
+    const moved = await fileConversation({
+      conversationId: conversation.id,
+      ownerUserId: principal.id,
+      collectionId,
+      actor: 'USER',
+    });
+    if (!moved) throw notFound('No conversation with that id.');
+    return { ok: true };
+  }),
+);
+
+/** Say a thread is finished, or that it is not. A fact, never a derivation. */
+russellRouter.patch(
+  '/conversations/:conversationId/closed',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const { conversation } = await requireConversation(pathId(req, 'conversationId'));
+    if (conversation.ownerUserId !== principal.id) {
+      throw notFound('No conversation with that id.');
+    }
+    const closed = bodyOf(req)['closed'] === true;
+    const changed = await setConversationClosed({
+      conversationId: conversation.id,
+      ownerUserId: principal.id,
+      closed,
+    });
+    if (!changed) throw notFound('No conversation with that id.');
+    return { ok: true, closed };
+  }),
+);
 
 russellRouter.get(
   '/projects/:projectId/briefing',

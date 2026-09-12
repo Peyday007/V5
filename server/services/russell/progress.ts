@@ -22,6 +22,7 @@
  */
 import { listLayers } from '../../repos/layers.ts';
 import { listMissions, listOpenRequests } from '../../repos/russellMissions.ts';
+import { plainLayerName } from './dealDispatch.ts';
 import type { LayerStatus, RussellCandidate, RussellMission } from '../../domain/types.ts';
 
 /**
@@ -61,7 +62,26 @@ export interface Milestone {
   done: boolean;
   /** Why it is or is not done, when there is something worth saying. */
   detail: string | null;
+  /**
+   * Which of four things this milestone currently is.
+   *
+   * `done` stays the arithmetic — the ratio counts it and nothing else — and
+   * this is what a person reads. The two are separate because a milestone that
+   * is *under way* and one that nobody has touched are both `done: false`, and
+   * a project where three of eight foundations are being actively researched is
+   * not in the same condition as one where none of them are. Reporting both as
+   * a bare "0 of 8" is exactly the sentence the owner rejected.
+   *
+   * `BLOCKED` is not a point on the same scale. A foundation nobody can read is
+   * not a fraction of the way anywhere, which is why `stageFor` takes blocking
+   * first and never averages it in.
+   */
+  state: MilestoneState;
 }
+
+/** The four, in the order they are worth reading. */
+export const MILESTONE_STATES = ['DONE', 'WORKING', 'BLOCKED', 'OPEN'] as const;
+export type MilestoneState = (typeof MILESTONE_STATES)[number];
 
 export interface Progress {
   stage: ProgressStage;
@@ -75,8 +95,26 @@ export interface Progress {
    * than guess a denominator.
    */
   ratio: { done: number; total: number } | null;
+  /**
+   * What the denominator counts, named (§6).
+   *
+   * "Eight" is not a quantity until you know eight of what. A project counts
+   * foundations, an idea counts steps of its own pipeline, and a build counts
+   * its declared stages — three different scopes that must never be read as
+   * one global percentage of anything. The name travels with the number so a
+   * surface cannot render the fraction without it.
+   */
+  denominator: string;
   /** Named obstacles, in a person's words. Empty when nothing is blocked. */
   blockedBy: string[];
+  /**
+   * Every milestone in declared order, with its own state.
+   *
+   * The strip a person actually reads is built from this rather than from
+   * `completed` and `missing`, which lose the order and cannot tell an open
+   * milestone from one being worked on right now.
+   */
+  milestones: Milestone[];
 }
 
 /**
@@ -115,12 +153,35 @@ export function describe(progress: Omit<Progress, 'headline'>, noun: string): st
   }
   if (progress.stage === 'NOT_STARTED') return `Nothing has been started on ${noun} yet.`;
   if (progress.stage === 'SETTLED') return `Everything defined for ${noun} is settled.`;
+
+  const working = progress.milestones.filter((milestone) => milestone.state === 'WORKING').length;
+  const stage = STAGE_LABELS[progress.stage];
   const ratio = progress.ratio;
   if (!ratio) {
-    // No denominator, so no fraction — and no sentence that implies one.
-    return `${STAGE_LABELS[progress.stage]}: ${progress.completed.length} done, ${progress.missing.length} still open.`;
+    // No closed set, so no fraction — and no sentence that implies one.
+    return working > 0
+      ? `${stage}: ${progress.completed.length} done, ${working} under way.`
+      : `${stage}: ${progress.completed.length} done, ${progress.missing.length} still open.`;
   }
-  return `${STAGE_LABELS[progress.stage]} — ${ratio.done} of ${ratio.total} settled.`;
+
+  /*
+   * The rejected sentence, and why this is not it.
+   *
+   * "0 of 8 settled" was true and read as failure on a project that was
+   * working — the owner named it directly. The fix is not to soften the number
+   * or to invent a different one: it is to say what is actually happening when
+   * nothing has *finished* yet, which the milestone states now carry. A project
+   * with three foundations under research is described that way; one with none
+   * is still told plainly that nothing has been settled, because that is the
+   * truth and §6 forbids dressing it up.
+   */
+  if (ratio.done === 0) {
+    return working > 0
+      ? `${stage} — nothing settled yet; ${working} of ${ratio.total} ${progress.denominator} under way.`
+      : `${stage} — nothing settled yet, across ${ratio.total} ${progress.denominator}.`;
+  }
+  const settled = `${stage} — ${ratio.done} of ${ratio.total} ${progress.denominator} settled`;
+  return working > 0 ? `${settled}, ${working} more under way.` : `${settled}.`;
 }
 
 /** Assemble, so no caller composes a headline of its own. */
@@ -131,6 +192,8 @@ export function progressOf(input: {
   started: boolean;
   blockedBy: string[];
   noun: string;
+  /** What the total counts. Defaults to the neutral word rather than nothing. */
+  denominator?: string;
 }): Progress {
   const completed = input.milestones.filter((milestone) => milestone.done);
   const missing = input.milestones.filter((milestone) => !milestone.done);
@@ -147,7 +210,9 @@ export function progressOf(input: {
     ratio: input.closed && input.milestones.length > 0
       ? { done: completed.length, total: input.milestones.length }
       : null,
+    denominator: input.denominator ?? 'steps',
     blockedBy: input.blockedBy,
+    milestones: input.milestones,
   };
   return { ...partial, headline: describe(partial, input.noun) };
 }
@@ -197,9 +262,21 @@ export async function projectProgress(input: {
   return progressOf({
     milestones: layers.map((layer) => ({
       key: layer.id,
-      title: layer.name,
+      /*
+       * The plain name, not the internal key.
+       *
+       * "Monetization Logic" is the schema's word and must not reach a
+       * person's screen (§9) — but the schema is *not* renamed to suit the
+       * copy, so `plainLayerName` translates and the underlying key stays
+       * exactly as every other part of the platform stores it. A project type
+       * with no mapping gets its own name back rather than a guess.
+       */
+      title: plainLayerName(layer.name),
       done: SETTLED.includes(layer.status),
-      detail: layer.status === 'FROZEN' ? null : `currently ${layer.status.toLowerCase().replace(/_/g, ' ')}`,
+      detail: layer.status === 'FROZEN'
+        ? null
+        : `currently ${layer.status.toLowerCase().replace(/_/g, ' ')}`,
+      state: milestoneStateOfLayer(layer.status),
     })),
     closed: true,
     started: layers.some(
@@ -207,7 +284,23 @@ export async function projectProgress(input: {
     ),
     blockedBy,
     noun: input.projectName,
+    denominator: layers.length === 1 ? 'foundation' : 'foundations',
   });
+}
+
+/**
+ * A layer's own status, as one of the four a person reads.
+ *
+ * Deliberately exhaustive over the states rather than a default with
+ * exceptions: a status nobody classified would fall into `OPEN` and quietly
+ * report an actively-researched foundation as untouched, which is the
+ * confusion this whole distinction exists to remove.
+ */
+export function milestoneStateOfLayer(status: LayerStatus): MilestoneState {
+  if (SETTLED.includes(status)) return 'DONE';
+  if (status === 'BLOCKED') return 'BLOCKED';
+  if (UNDER_WAY.includes(status)) return 'WORKING';
+  return 'OPEN';
 }
 
 // ---------------------------------------------------------------------------
@@ -255,39 +348,48 @@ export function ideaProgress(input: {
     blockedBy.push('a decision is waiting for you');
   }
 
+  /*
+   * The step that is happening right now, and only one of them.
+   *
+   * A pipeline's `WORKING` is the first unfinished step *once something has
+   * started*, which is different from a project's — where several foundations
+   * can genuinely be researched at once. Marking every remaining step as under
+   * way would claim six things are in flight when one is.
+   */
+  const running = missions.some(
+    (mission) => mission.state === 'RUNNING' || mission.state === 'LAUNCHING',
+  );
+  const step = (
+    key: string,
+    title: string,
+    done: boolean,
+    detail: string | null,
+  ): Milestone => ({ key, title, done, detail, state: done ? 'DONE' : 'OPEN' });
+
   const milestones: Milestone[] = [
-    { key: 'CAPTURED', title: 'Captured', done: true, detail: null },
-    {
-      key: 'LOOKED_AT',
-      title: 'Cheaply looked at',
-      done: hasProbe,
-      detail: hasProbe ? null : 'no probe has run',
-    },
-    {
-      key: 'JUDGED',
-      title: 'Judged worth doing',
-      done: candidate.priority !== null,
-      detail: candidate.reason,
-    },
-    {
-      key: 'LAUNCHED',
-      title: 'Work started',
-      done: launched,
-      detail: launched ? null : 'no mission exists yet',
-    },
-    {
-      key: 'RESEARCHED',
-      title: 'Researched',
-      done: researched,
-      detail: researched ? null : 'no research packet has run',
-    },
-    {
-      key: 'FILED',
-      title: 'Written down',
-      done: filed,
-      detail: filed ? null : 'nothing has been filed',
-    },
+    step('CAPTURED', 'Captured', true, null),
+    step('LOOKED_AT', 'Cheaply looked at', hasProbe, hasProbe ? null : 'no probe has run'),
+    step('JUDGED', 'Judged worth doing', candidate.priority !== null, candidate.reason),
+    step('LAUNCHED', 'Work started', launched, launched ? null : 'no mission exists yet'),
+    step('RESEARCHED', 'Researched', researched, researched ? null : 'no research packet has run'),
+    step('FILED', 'Written down', filed, filed ? null : 'nothing has been filed'),
   ];
+
+  if (blockedBy.length > 0) {
+    for (const milestone of milestones) {
+      if (!milestone.done) {
+        milestone.state = 'BLOCKED';
+        break;
+      }
+    }
+  } else if (running) {
+    for (const milestone of milestones) {
+      if (!milestone.done) {
+        milestone.state = 'WORKING';
+        break;
+      }
+    }
+  }
 
   return progressOf({
     milestones,
@@ -295,6 +397,7 @@ export function ideaProgress(input: {
     started: true,
     blockedBy,
     noun: candidate.title,
+    denominator: 'steps',
   });
 }
 
@@ -317,22 +420,25 @@ export function ideaProgress(input: {
  * acceptance reporter rather than by anything readable at request time.
  */
 export const BUILD_MILESTONES: readonly Milestone[] = [
-  { key: 'S1', title: 'The archive and its state engine', done: true, detail: null },
-  { key: 'S2', title: 'Reading documents, and auditing what they say', done: true, detail: null },
-  { key: 'S3', title: 'Research that has to prove itself', done: true, detail: null },
-  { key: 'S4', title: 'Everyone who asks has a name', done: true, detail: null },
-  { key: 'S5', title: 'A queue two machines can share', done: true, detail: null },
-  { key: 'S6', title: 'A retry is not a second effect', done: true, detail: null },
-  { key: 'S7', title: 'A door for other tools', done: true, detail: null },
-  { key: 'S8', title: 'The first real worker', done: true, detail: null },
-  { key: 'S9', title: 'The first real research packet', done: true, detail: null },
-  { key: 'S10', title: 'Workers that start themselves', done: true, detail: null },
-  { key: 'S11', title: 'A fleet, and where each job runs', done: true, detail: null },
+  { key: 'S1', title: 'The archive and its state engine', done: true, detail: null, state: 'DONE' },
+  { key: 'S2', title: 'Reading documents, and auditing what they say', done: true, detail: null, state: 'DONE' },
+  { key: 'S3', title: 'Research that has to prove itself', done: true, detail: null, state: 'DONE' },
+  { key: 'S4', title: 'Everyone who asks has a name', done: true, detail: null, state: 'DONE' },
+  { key: 'S5', title: 'A queue two machines can share', done: true, detail: null, state: 'DONE' },
+  { key: 'S6', title: 'A retry is not a second effect', done: true, detail: null, state: 'DONE' },
+  { key: 'S7', title: 'A door for other tools', done: true, detail: null, state: 'DONE' },
+  { key: 'S8', title: 'The first real worker', done: true, detail: null, state: 'DONE' },
+  { key: 'S9', title: 'The first real research packet', done: true, detail: null, state: 'DONE' },
+  { key: 'S10', title: 'Workers that start themselves', done: true, detail: null, state: 'DONE' },
+  { key: 'S11', title: 'A fleet, and where each job runs', done: true, detail: null, state: 'DONE' },
   {
     key: 'S12A',
     title: 'Russell — a way in',
     done: false,
     detail: 'proved by the acceptance reporter, not by anything readable from here',
+    // Under way rather than open: the step is being built as this runs, and
+    // reporting it as untouched would be the same defect one altitude up.
+    state: 'WORKING',
   },
 ];
 
@@ -350,6 +456,7 @@ export function buildProgress(): Progress {
     started: true,
     blockedBy: [],
     noun: 'the Brain',
+    denominator: 'steps',
   });
 }
 
@@ -377,10 +484,19 @@ export async function activeWorkProgress(projectId: string): Promise<Progress> {
       title: mission.objective,
       done: mission.state === 'DONE',
       detail: terminal.has(mission.state) ? mission.terminalReason : mission.waitingOn,
+      state:
+        mission.state === 'DONE'
+          ? ('DONE' as const)
+          : mission.state === 'NEEDS_HUMAN'
+            ? ('BLOCKED' as const)
+            : terminal.has(mission.state)
+              ? ('OPEN' as const)
+              : ('WORKING' as const),
     })),
     closed: false,
     started: missions.length > 0,
     blockedBy,
     noun: 'this work',
+    denominator: 'missions',
   });
 }

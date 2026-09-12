@@ -1,51 +1,71 @@
 /**
- * The default shell.
+ * The shell.
  *
- * Opening Brain lands here, on a conversation — not on a three-pane operations
- * console. That is the whole change of posture the step is for: a person should
- * be able to say what they want and be told what happened, and everything else
- * is available when they go looking for it.
+ * Opening Brain lands here. The structure is three parts and each one is a
+ * decision the owner approved on 2026-09-12:
  *
- * The old console is not deleted and is not hidden as punishment. It is behind
- * a secondary menu, one click away, because it is still the only place some
- * operations exist and a person who needs it should not have to be told a URL.
+ *   - a **rail** of six destinations, with Build and Connected sites below a
+ *     rule — they are operations on the machine rather than views of the work,
+ *     and neither is hidden or deleted (§5 is explicit that their placement is
+ *     a design choice and not authorization to remove them);
+ *   - a **reading column**, one measure wide, so a wide monitor does not turn a
+ *     briefing into a banner;
+ *   - a **docked command bar**, because the conversation is an affordance
+ *     rather than a destination: somebody on Work who wants to ask why
+ *     something is ranked there should not have to navigate away to ask.
  *
- * Layout is one decision, taken from the viewport: a rail beside the
- * conversation on a desktop, a bar under it on a phone. `navigationMode` owns
- * it, so the behaviour is asserted in a test rather than left to a media query
- * nobody exercises.
+ * Two controls live in the rail's foot. The **depth** control is §4.5 — Normal,
+ * Interested, Technical — and it is a property of the reader, so it is chosen
+ * once here and every surface answers to it. The **More** menu holds the things
+ * a person reaches for rarely, including the old console at `/legacy`, which is
+ * one click away and never a URL somebody has to be told.
+ *
+ * On a phone the rail becomes a thumb bar of the same six, the command bar sits
+ * above it, and Build and Connected sites move into More — the same information
+ * architecture and the same state, which is §21's rule: one product, not two.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Api } from '../lib/api.ts';
 import type { SessionUser } from '../lib/api.ts';
 import type { Project } from '../../../server/domain/types.ts';
 import { RussellApi } from '../lib/russellApi.ts';
-import { navigationMode } from './present.ts';
+import { DEPTHS, DEPTH_LABELS, isDepth, navigationMode, type Depth } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { Conversation } from './Conversation.tsx';
+import { RussellHome } from './Home.tsx';
+import { Search } from './Search.tsx';
+import { FleetCentre } from './Fleet.tsx';
 import { BuildView } from './Build.tsx';
 import {
   FleetView,
-  IdeasView,
+  ProjectView,
   KnowledgeView,
   NeedsYouView,
   SitesView,
-  ProgressLine,
   WhoView,
   WorkView,
 } from './Views.tsx';
-import type { Navigation, Route } from '../lib/router.ts';
+import { parseRoute, type Navigation, type Route } from '../lib/router.ts';
 
+/**
+ * The six, and then the two.
+ *
+ * `primary` is the approved split. Everything in both lists keeps its own
+ * address, so a deep link to `/build` or `/sites` works exactly as it did
+ * whichever list it is in.
+ */
 const SECTIONS = [
-  { name: 'HOME' as const, label: 'Russell' },
-  { name: 'WORK' as const, label: 'Work' },
-  { name: 'BUILD' as const, label: 'Build' },
-  { name: 'PROJECTS' as const, label: 'Ideas' },
-  { name: 'KNOWLEDGE' as const, label: 'Knows' },
-  { name: 'FLEET' as const, label: 'Who' },
-  { name: 'SITES' as const, label: 'Connected sites' },
-  { name: 'NEEDS_YOU' as const, label: 'Needs you' },
+  { name: 'HOME' as const, label: 'Russell', primary: true },
+  { name: 'WORK' as const, label: 'Work', primary: true },
+  { name: 'PROJECTS' as const, label: 'Ideas', primary: true },
+  { name: 'KNOWLEDGE' as const, label: 'Knows', primary: true },
+  { name: 'FLEET' as const, label: 'Who', primary: true },
+  { name: 'NEEDS_YOU' as const, label: 'Needs you', primary: true },
+  { name: 'BUILD' as const, label: 'Build', primary: false },
+  { name: 'SITES' as const, label: 'Connected sites', primary: false },
 ];
+
+const DEPTH_KEY = 'brain.depth';
 
 export function useViewportWidth(): number {
   const [width, setWidth] = useState(() =>
@@ -57,6 +77,62 @@ export function useViewportWidth(): number {
     return () => window.removeEventListener('resize', onResize);
   }, []);
   return width;
+}
+
+/**
+ * The reader's chosen depth, remembered in two places on purpose.
+ *
+ * `localStorage` answers instantly so the first paint is right, and the
+ * server's per-account preference is what makes the choice follow a person to
+ * another browser. The local value is the optimistic one and the account's is
+ * authoritative: when they differ on load, the account wins.
+ *
+ * Both reads are guarded. A private window or blocked site data makes the
+ * storage accessor throw rather than return nothing, and a failed preference
+ * read must leave a usable shell rather than an unusable one — §18's rule that
+ * every account works with strong defaults, applied to its own mechanism.
+ */
+function useDepth(): [Depth, (next: Depth) => void] {
+  const [depth, setDepth] = useState<Depth>(() => {
+    try {
+      const stored = window.localStorage.getItem(DEPTH_KEY);
+      return isDepth(stored) ? stored : 'NORMAL';
+    } catch {
+      return 'NORMAL';
+    }
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    void RussellApi.preferences().then(
+      (answer) => {
+        const stored = answer.preferences.depth;
+        if (!cancelled && isDepth(stored)) setDepth(stored);
+      },
+      () => {
+        /* the shell still works at the depth this browser remembers */
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const choose = useCallback((next: Depth) => {
+    setDepth(next);
+    try {
+      window.localStorage.setItem(DEPTH_KEY, next);
+    } catch {
+      /* a viewer whose browser refuses storage still gets the depth they chose,
+         for this visit. Losing it on reload is a smaller harm than throwing. */
+    }
+    // Nothing optimistic depends on this: the screen has already changed, and
+    // a failed write means the choice does not follow them to another browser
+    // rather than that it did not happen.
+    void RussellApi.setPreference('depth', next).catch(() => undefined);
+  }, []);
+
+  return [depth, choose];
 }
 
 export function RussellShell({
@@ -71,6 +147,7 @@ export function RussellShell({
   const { route, go } = navigation;
   const mode = navigationMode(useViewportWidth());
   const [menuOpen, setMenuOpen] = useState(false);
+  const [depth, setDepth] = useDepth();
 
   const projects = useAsync(() => Api.projects(), []);
   const project: Project | null = projects.data?.projects[0] ?? null;
@@ -94,11 +171,6 @@ export function RussellShell({
       return;
     }
     let cancelled = false;
-    /*
-     * Titled by when it began, so a list of threads is a list of different
-     * things. Every one being called "New conversation" made the picker
-     * useless and made it read identically to the button beside it.
-     */
     const title = `Conversation — ${new Date().toLocaleString(undefined, {
       month: 'short',
       day: 'numeric',
@@ -118,44 +190,7 @@ export function RussellShell({
     };
   }, [openedId, conversations.loading, conversations.error, conversations.data, projectId]);
 
-  const conversationId =
-    route.name === 'CONVERSATION' ? route.conversationId : openedId;
-
-  /*
-   * Starting a thread, and getting back to one.
-   *
-   * These were missing, and their absence was not cosmetic. The shell opens a
-   * person's *most recent* conversation and creates one only when they have
-   * none — so with one thread in existence there was no way to begin a second,
-   * and once a second existed there was no way back to the first except by
-   * knowing its id and typing the address. A shell where you can only ever see
-   * your newest thread is not a usable shell, whatever else it does.
-   *
-   * Both are deliberately minimal. Collections, pinning, ordering by meaning
-   * and tailored starters are Step 12B; this is the floor beneath them.
-   */
-  const [starting, setStarting] = useState(false);
-  const startConversation = useCallback(() => {
-    if (starting) return;
-    setStarting(true);
-    void RussellApi.openConversation('New conversation', projectId).then(
-      (created) => {
-        setStarting(false);
-        // Reload the list rather than patching it: the same rule the
-        // conversation itself follows, so what is listed is what is stored.
-        conversations.reload();
-        setOpenedId(created.id);
-        go({ name: 'CONVERSATION', conversationId: created.id });
-      },
-      () => {
-        // The button comes back rather than spinning. A control that never
-        // recovers from one failed click is worse than one that did nothing.
-        setStarting(false);
-      },
-    );
-  }, [starting, projectId, conversations, go]);
-
-  const threads = conversations.data?.conversations ?? [];
+  const conversationId = route.name === 'CONVERSATION' ? route.conversationId : openedId;
 
   const signOut = useCallback(() => {
     void Api.logout().then(onSignedOut, onSignedOut);
@@ -168,12 +203,10 @@ export function RussellShell({
   /*
    * The badge counts decisions, and an outstanding approval is one.
    *
-   * It counted `russell_human_requests` rows, so a project waiting on the one
-   * permission that lets Russell do anything showed no badge at all — while
-   * the briefing beside it now says a person is needed. The briefing derives
-   * that count on the server; this reads it rather than computing a second
-   * one, because two places counting the same thing is how they come to
-   * disagree.
+   * Read from the same projection the briefing uses rather than computed a
+   * second time here, because two places counting the same thing is how they
+   * come to disagree — which they did: a project waiting on the one permission
+   * that lets Russell act showed no badge at all.
    */
   const authority = useAsync(
     () => (projectId ? RussellApi.authority(projectId) : Promise.resolve(null)),
@@ -183,200 +216,345 @@ export function RussellShell({
     (needsYou.data?.requests.length ?? 0) +
     (authority.data && authority.data.grant === null ? 1 : 0);
 
-  return (
-    <div className={`rs-shell rs-shell-${mode.toLowerCase()}`} data-nav={mode}>
-      <header className="rs-header">
-        <h1 className="rs-brand">Russell</h1>
-        <Briefing projectId={projectId} projectName={project?.name ?? null} />
-        <div className="rs-threads">
-          {threads.length > 1 ? (
-            <>
-              {/*
-                A visible label, not a screen-reader-only one.
-                
-                It was hidden, and every thread this shell creates is titled
-                "New conversation" — so the picker's selected option read "New
-                conversation" directly beside a button reading "New
-                conversation". Two identical words, one of which navigates and
-                one of which creates. The owner clicked both within twenty
-                seconds and sent the frozen acceptance message into two
-                different threads. An interface that cannot be told apart is an
-                interface that will be used wrong.
-              */}
-              <label className="rs-threads-label" htmlFor="rs-thread">
-                Open
-              </label>
-              <select
-                id="rs-thread"
-                value={conversationId ?? ''}
-                onChange={(event) => {
-                  const id = event.target.value;
-                  if (!id) return;
-                  setOpenedId(id);
-                  go({ name: 'CONVERSATION', conversationId: id });
-                }}
-              >
-                {threads.map((thread) => (
-                  <option key={thread.id} value={thread.id}>
-                    {thread.title}
-                  </option>
-                ))}
-              </select>
-            </>
-          ) : null}
-          <button type="button" onClick={startConversation} disabled={starting}>
-            {starting ? 'Starting…' : 'Start a new one'}
-          </button>
-        </div>
-        <div className="rs-more">
-          <button
-            type="button"
-            aria-expanded={menuOpen}
-            aria-haspopup="menu"
-            aria-label="More"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            More
-          </button>
-          {menuOpen ? (
-            <ul className="rs-menu" role="menu">
-              {/* The old console. One click, never a URL somebody has to be
-                  told, and never the default. */}
-              <li role="none">
-                <button type="button" role="menuitem" onClick={() => go({ name: 'LEGACY' })}>
-                  Full console
-                </button>
-              </li>
-              <li role="none">
-                <button type="button" role="menuitem" onClick={signOut}>
-                  Sign out ({user.displayName})
-                </button>
-              </li>
-            </ul>
-          ) : null}
-        </div>
-      </header>
+  /* Bumped after the command bar posts, so the open thread re-reads itself. */
+  const [reloadToken, setReloadToken] = useState(0);
+  const [draft, setDraft] = useState('');
+  const [starting, setStarting] = useState(false);
 
-      <nav className="rs-nav" aria-label="Sections">
-        <ul>
-          {SECTIONS.map((section) => (
-            <li key={section.name}>
-              <button
-                type="button"
-                aria-current={route.name === section.name ? 'page' : undefined}
-                onClick={() => go({ name: section.name } as Route)}
-              >
-                {section.label}
-                {section.name === 'NEEDS_YOU' && openCount > 0 ? (
-                  <span className="rs-badge" aria-label={`${openCount} waiting`}>
-                    {openCount}
-                  </span>
-                ) : null}
-              </button>
-            </li>
+  const openThread = useCallback(
+    (id: string) => {
+      setOpenedId(id);
+      go({ name: 'CONVERSATION', conversationId: id });
+    },
+    [go],
+  );
+
+  /*
+   * Beginning a thread.
+   *
+   * The shell opens a person's *most recent* conversation and creates one only
+   * when they have none — so without this there is no way to start a second
+   * subject, and once a second exists no way back to the first except by
+   * knowing its id. The list above is the way back; this is the way forward.
+   */
+  const startConversation = useCallback(() => {
+    if (starting) return;
+    setStarting(true);
+    void RussellApi.openConversation('New conversation', projectId).then(
+      (created) => {
+        setStarting(false);
+        // Reload rather than patch: what is listed is what is stored.
+        conversations.reload();
+        setOpenedId(created.id);
+        go({ name: 'CONVERSATION', conversationId: created.id });
+      },
+      () => {
+        // The button comes back rather than spinning. A control that never
+        // recovers from one failed click is worse than one that did nothing.
+        setStarting(false);
+      },
+    );
+  }, [starting, projectId, conversations, go]);
+
+  /* A starter fills the bar rather than sending itself. A suggestion that
+     spent capacity on one click would be a decision nobody took. */
+  const prefill = useCallback((text: string) => {
+    setDraft(text);
+    const box = document.getElementById('rs-command-input');
+    if (box instanceof HTMLTextAreaElement) box.focus();
+  }, []);
+
+  return (
+    <div
+      className={`rs-shell rs-shell-${mode.toLowerCase()}`}
+      data-nav={mode}
+      data-depth={depth}
+    >
+      <nav className="rs-rail" aria-label="Sections">
+        <h1 className="rs-brand">
+          Brain <small>Russell</small>
+        </h1>
+
+        <ul className="rs-rail-group">
+          {SECTIONS.filter((section) => section.primary).map((section) => (
+            <RailItem
+              key={section.name}
+              section={section}
+              route={route}
+              go={go}
+              badge={section.name === 'NEEDS_YOU' ? openCount : 0}
+            />
           ))}
         </ul>
+
+        <ul className="rs-rail-group rs-rail-secondary">
+          {SECTIONS.filter((section) => !section.primary).map((section) => (
+            <RailItem key={section.name} section={section} route={route} go={go} badge={0} />
+          ))}
+        </ul>
+
+        <div className="rs-rail-foot">
+          {/* Search is a destination rather than a box in the chrome: at phone
+              width a persistent field would take the room the conversation
+              needs, and the command bar is already where a person types. */}
+          <button
+            type="button"
+            className="rs-rail-item"
+            aria-current={route.name === 'SEARCH' ? 'page' : undefined}
+            onClick={() => go({ name: 'SEARCH' })}
+          >
+            Search
+          </button>
+
+          <div
+            className="rs-depth"
+            role="group"
+            aria-label="How much detail you want"
+          >
+            {DEPTHS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={depth === option}
+                onClick={() => setDepth(option)}
+              >
+                {DEPTH_LABELS[option]}
+              </button>
+            ))}
+          </div>
+
+          <div className="rs-more">
+            <button
+              type="button"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              More · {user.displayName}
+            </button>
+            {menuOpen ? (
+              <ul className="rs-menu" role="menu">
+                {/* On a phone the two secondary destinations live here, because
+                    eight items in a thumb bar is a bar whose last item nobody
+                    finds. The addresses are unchanged either way. */}
+                {mode === 'BAR'
+                  ? SECTIONS.filter((section) => !section.primary).map((section) => (
+                      <li role="none" key={section.name}>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            go({ name: section.name } as Route);
+                          }}
+                        >
+                          {section.label}
+                        </button>
+                      </li>
+                    ))
+                  : null}
+                <li role="none">
+                  <button type="button" role="menuitem" onClick={() => go({ name: 'LEGACY' })}>
+                    Full console
+                  </button>
+                </li>
+                <li role="none">
+                  <button type="button" role="menuitem" onClick={signOut}>
+                    Sign out
+                  </button>
+                </li>
+              </ul>
+            ) : null}
+          </div>
+        </div>
       </nav>
 
       <main className="rs-main">
-        {route.name === 'HOME' || route.name === 'CONVERSATION' ? (
+        {route.name === 'HOME' ? (
+          <RussellHome
+            projectId={projectId}
+            openThreadId={conversationId}
+            onOpenThread={openThread}
+            onAsk={prefill}
+            onStartThread={startConversation}
+            starting={starting}
+          />
+        ) : null}
+        {route.name === 'CONVERSATION' ? (
           conversationId ? (
-            <Conversation conversationId={conversationId} />
+            <div className="rs-column">
+              <Conversation
+                conversationId={conversationId}
+                showComposer={false}
+                reloadToken={reloadToken}
+              />
+            </div>
           ) : (
             <p className="rs-state rs-state-loading">Opening a conversation…</p>
           )
         ) : null}
         {route.name === 'WORK' ? <WorkView projectId={projectId} /> : null}
         {route.name === 'BUILD' ? <BuildView projectId={projectId} /> : null}
-        {route.name === 'PROJECTS' ? <IdeasView projectId={projectId} /> : null}
+        {route.name === 'PROJECTS' ? <ProjectView projectId={projectId} /> : null}
         {route.name === 'KNOWLEDGE' ? <KnowledgeView projectId={projectId} /> : null}
         {route.name === 'FLEET' ? (
           <>
-            {/* Who is people first, machinery second. The older fleet reading
+            {/* Who is people first, machinery second. The one-sentence reading
                 stays underneath because it is the one thing that carries its
-                own freshness, which the role-gated view deliberately does
-                not. */}
+                own freshness, which the role-gated view deliberately does not. */}
             <WhoView projectId={projectId} />
             <FleetView />
+            <FleetCentre projectId={projectId} />
           </>
         ) : null}
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
+        {route.name === 'SEARCH' ? (
+          <Search
+            onOpen={(href) => {
+              // The server sends a real address in this application, so the
+              // shell navigates rather than reconstructing a route from a kind.
+              window.history.pushState({}, '', href);
+              go(parseRoute(href));
+            }}
+          />
+        ) : null}
         {route.name === 'NEEDS_YOU' ? (
           <NeedsYouView projectId={projectId} onAnswered={needsYou.reload} />
         ) : null}
         {route.name === 'NOT_FOUND' ? (
           <p className="rs-state rs-state-empty">
             There is nothing at that address.{' '}
-            <button type="button" onClick={() => go({ name: 'HOME' })}>
+            <button type="button" className="rs-link" onClick={() => go({ name: 'HOME' })}>
               Go back to Russell
             </button>
           </p>
         ) : null}
       </main>
+
+      <CommandBar
+        conversationId={conversationId}
+        draft={draft}
+        setDraft={setDraft}
+        onSent={() => {
+          setReloadToken((token) => token + 1);
+          conversations.reload();
+          if (conversationId && route.name !== 'CONVERSATION') {
+            go({ name: 'CONVERSATION', conversationId });
+          }
+        }}
+      />
     </div>
   );
 }
 
-/**
- * The four sentences, in their fixed order.
- *
- * Composed on the server so that the ordering rule lives in one place; this
- * only renders it. A briefing that could not be read says so rather than
- * showing an encouraging blank.
- */
-function Briefing({
-  projectId,
-  projectName,
+function RailItem({
+  section,
+  route,
+  go,
+  badge,
 }: {
-  projectId: string | null;
-  projectName: string | null;
+  section: { name: Route['name']; label: string };
+  route: Route;
+  go(route: Route): void;
+  badge: number;
 }): JSX.Element {
-  const query = useAsync(
-    () => (projectId ? RussellApi.briefing(projectId) : Promise.resolve(null)),
-    [projectId],
-  );
-  if (query.loading) return <p className="rs-briefing rs-state-loading">Reading the project…</p>;
-  if (query.error || !query.data) {
-    return (
-      <p className="rs-briefing rs-state-empty">
-        {projectName ? `Russell cannot read ${projectName} right now.` : 'Nothing to report yet.'}
-      </p>
-    );
-  }
-  const { briefing, cycle } = query.data;
   return (
-    <div className="rs-briefing">
-      <p className="rs-briefing-focus">{briefing.focus}</p>
-      <ProgressLine progress={briefing.progress} />
-      <p className="rs-briefing-needs">{briefing.needsYou}</p>
-      {/*
-        The rest folds away.
-        
-        On a phone the four sentences plus a milestone list filled a third of
-        the screen before anything a person navigated to appeared. `details` is
-        native, so it is keyboard-reachable and screen-reader-announced without
-        any state of ours, and the text stays in the document either way —
-        collapsed is not hidden.
-      */}
-      <details className="rs-briefing-more">
-        <summary>What changed, and what is next</summary>
-        {briefing.latest ? <p className="rs-briefing-latest">{briefing.latest}</p> : null}
-        <p>{briefing.next}</p>
-        {/* Gaps somebody wrote down, never gaps inferred from an absence. An
-            empty list means none were recorded, which is not the same as none
-            existing — so nothing is said at all rather than "no gaps". */}
-        {briefing.openGaps && briefing.openGaps.length > 0 ? (
-          <ul className="rs-briefing-gaps">
-            {briefing.openGaps.map((gap) => (
-              <li key={gap}>{gap}</li>
-            ))}
-          </ul>
+    <li>
+      <button
+        type="button"
+        className="rs-rail-item"
+        aria-current={route.name === section.name ? 'page' : undefined}
+        onClick={() => go({ name: section.name } as Route)}
+      >
+        {section.label}
+        {badge > 0 ? (
+          <span className="rs-badge" aria-label={`${badge} waiting`}>
+            {badge}
+          </span>
         ) : null}
-      </details>
-      {cycle && cycle.state !== 'RUNNING' ? (
-        <p className="rs-state rs-state-stale">
-          {cycle.state === 'PAUSED' ? 'Russell is paused' : 'Russell is stopped'}
-          {cycle.pausedReason ? `: ${cycle.pausedReason}` : '.'}
+      </button>
+    </li>
+  );
+}
+
+/**
+ * The persistent way to talk to Brain (§6).
+ *
+ * Nothing optimistic: the words stay in the box until the server has accepted
+ * them, and a failure keeps them rather than losing what somebody typed. The
+ * bar is present on every screen, which is the point — a question about what is
+ * on the screen should be askable from the screen.
+ */
+function CommandBar({
+  conversationId,
+  draft,
+  setDraft,
+  onSent,
+}: {
+  conversationId: string | null;
+  draft: string;
+  setDraft(next: string): void;
+  onSent(): void;
+}): JSX.Element {
+  const [sending, setSending] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const send = useCallback(async () => {
+    const content = draft.trim();
+    if (!content || sending || !conversationId) return;
+    setSending(true);
+    setProblem(null);
+    try {
+      await RussellApi.say(conversationId, content);
+      setDraft('');
+      onSent();
+    } catch {
+      setProblem('That did not send. Your words are still here — try again.');
+    } finally {
+      setSending(false);
+    }
+  }, [conversationId, draft, onSent, sending, setDraft]);
+
+  return (
+    <div className="rs-command">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void send();
+        }}
+      >
+        <label className="rs-visually-hidden" htmlFor="rs-command-input">
+          Say something to Russell
+        </label>
+        <textarea
+          id="rs-command-input"
+          value={draft}
+          rows={1}
+          placeholder={
+            conversationId ? 'Ask Russell, or tell it something…' : 'Opening a conversation…'
+          }
+          disabled={!conversationId}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            // Enter sends, shift-enter is a newline. Both are ordinary
+            // expectations and neither should require reaching for a mouse.
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              void send();
+            }
+          }}
+        />
+        <button
+          type="submit"
+          className="rs-primary"
+          disabled={sending || !conversationId || draft.trim().length === 0}
+        >
+          {sending ? 'Sending…' : 'Send'}
+        </button>
+      </form>
+      {problem ? (
+        <p className="rs-state rs-state-error" role="alert">
+          {problem}
         </p>
       ) : null}
     </div>

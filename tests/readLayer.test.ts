@@ -518,7 +518,7 @@ describe('progress is milestone-backed everywhere or it is not a number', () => 
 
   it('never invents a denominator for an open-ended set', () => {
     const open = progressOf({
-      milestones: [{ key: 'a', title: 'a', done: true, detail: null }],
+      milestones: [{ key: 'a', title: 'a', done: true, detail: null, state: 'DONE' as const }],
       closed: false,
       started: true,
       blockedBy: [],

@@ -250,6 +250,61 @@ afterEach(() => {
 const USER = { id: 'usr_1', email: 'a@b.test', displayName: 'Ada', isBrainAdmin: false, mustChangePassword: false };
 const PROJECT = { id: 'prj_1', name: 'Deal Dispatch', slug: 'deal-dispatch' };
 
+const BRIEFING = {
+  focus: 'Russell is watching Deal Dispatch.',
+  progress: {
+    stage: 'OPERATIONAL',
+    headline: 'Operational — 3 of 8 foundations settled.',
+    completed: [],
+    missing: [],
+    ratio: { done: 3, total: 8 },
+    denominator: 'foundations',
+    blockedBy: [],
+    milestones: [
+      { key: 'l1', title: 'How the market works', done: true, detail: null, state: 'DONE' },
+      { key: 'l2', title: 'How the money works', done: false, detail: null, state: 'WORKING' },
+    ],
+  },
+  latest: null,
+  next: 'Russell has nothing queued.',
+  openGaps: [],
+  needsYou: 'You are not needed.',
+  openRequests: 0,
+};
+
+/** The one projection the home reads. Every sentence on it is the server's. */
+const HOME = {
+  state: 'WAITING',
+  stateReason: 'Nothing is running; Russell is watching for something worth starting.',
+  briefing: BRIEFING,
+  pulse: null,
+  power: { level: 'READY', explanation: 'A worker is available.' },
+  accepted: { conclusions: 0, readable: true },
+};
+
+const COLLECTION = {
+  id: 'rcl_1',
+  name: 'Deal Dispatch',
+  kind: 'PROJECT',
+  projectId: 'prj_1',
+  threads: [
+    {
+      id: 'rcv_1',
+      title: 'A thread',
+      standing: 'ACTIVE',
+      standingLabel: 'Active',
+      reason: 'Nothing outstanding; pick it up whenever.',
+      projectId: 'prj_1',
+      visibility: 'PRIVATE',
+      updatedAt: '2026-09-12T00:00:00.000Z',
+      closedAt: null,
+      collectionId: 'rcl_1',
+      filedBy: 'AUTOMATIC',
+    },
+  ],
+  starters: [],
+};
+
 function baseRoutes(overrides: Record<string, Reply | (() => Reply)> = {}): void {
   routes = {
     'GET /api/auth/session': { body: { authenticated: true, user: USER } },
@@ -279,6 +334,8 @@ function baseRoutes(overrides: Record<string, Reply | (() => Reply)> = {}): void
         cycle: { state: 'RUNNING', pausedReason: null },
       },
     },
+    'GET /api/russell/projects/prj_1/home': { body: { home: HOME, project: PROJECT } },
+    'GET /api/russell/collections?projectId=prj_1': { body: { collections: [COLLECTION] } },
     'GET /api/russell/projects/prj_1/needs-you': { body: { requests: [] } },
     ...overrides,
   };
@@ -295,7 +352,9 @@ describe('opening Brain', () => {
   it('lands on Russell, not on the old console', async () => {
     baseRoutes();
     await mount();
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Russell' })).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 1, name: /Russell/ })).toBeTruthy(),
+    );
     // The three-pane console's own chrome is not on screen.
     expect(screen.queryByText(/Master Planner/i)).toBeNull();
   });
@@ -304,11 +363,52 @@ describe('opening Brain', () => {
     baseRoutes();
     await mount();
     await waitFor(() => expect(screen.getByText(/Russell is watching Deal Dispatch/)).toBeTruthy());
-    expect(screen.getByText('Operational — 3 of 8 settled.')).toBeTruthy();
+    expect(screen.getByText('Operational — 3 of 8 foundations settled.')).toBeTruthy();
     expect(screen.getByText('You are not needed.')).toBeTruthy();
     // A counted fraction is fine; a percentage is not, because nothing behind
     // it has that resolution.
     expect(document.body.textContent ?? '').not.toMatch(/\d+\s?%/);
+  });
+
+  /*
+   * The rejected string, and what replaced it.
+   *
+   * "0 of 8 settled" was accurate and read as failure on a project that was
+   * working — the owner named it directly. What must be true now is that the
+   * denominator has a name, that nothing settled is described by what *is*
+   * under way, and that each foundation carries its own state rather than
+   * being averaged into one number.
+   */
+  it('never puts a bare nought-of-eight in front of a working project', async () => {
+    baseRoutes({
+      'GET /api/russell/projects/prj_1/home': {
+        body: {
+          home: {
+            ...HOME,
+            briefing: {
+              ...BRIEFING,
+              progress: {
+                ...BRIEFING.progress,
+                stage: 'FOUNDATION',
+                headline: 'Foundation — nothing settled yet; 2 of 8 foundations under way.',
+                ratio: { done: 0, total: 8 },
+              },
+            },
+          },
+          project: PROJECT,
+        },
+      },
+    });
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByText(/2 of 8 foundations under way/)).toBeTruthy(),
+    );
+    expect(document.body.textContent ?? '').not.toMatch(/\b0 of 8 settled\b/);
+    // The strip, with each foundation's own state rather than one number.
+    expect(screen.getByText('How the market works')).toBeTruthy();
+    expect(screen.getByText('Under way')).toBeTruthy();
+    // And the internal key never reaches a person.
+    expect(document.body.textContent ?? '').not.toMatch(/Monetization Logic/);
   });
 
   it('still renders a briefing from an older server rather than blanking', async () => {
@@ -318,18 +418,20 @@ describe('opening Brain', () => {
      * all, which is worse than showing them the older sentence.
      */
     baseRoutes({
-      'GET /api/russell/projects/prj_1/briefing': {
+      'GET /api/russell/projects/prj_1/home': {
         body: {
-          briefing: {
-            focus: 'Russell is watching Deal Dispatch.',
-            progress: 'Some of this is settled.',
-            latest: null,
-            next: 'Russell has nothing queued.',
-            needsYou: 'You are not needed.',
-            openRequests: 0,
+          home: {
+            ...HOME,
+            briefing: {
+              focus: 'Russell is watching Deal Dispatch.',
+              progress: 'Some of this is settled.',
+              latest: null,
+              next: 'Russell has nothing queued.',
+              needsYou: 'You are not needed.',
+              openRequests: 0,
+            },
           },
-          focusLayer: null,
-          cycle: null,
+          project: PROJECT,
         },
       },
     });
@@ -340,11 +442,11 @@ describe('opening Brain', () => {
   it('keeps the old console one click away behind a secondary menu', async () => {
     baseRoutes();
     await mount();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'More' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: /More/ })).toBeTruthy());
     // Not on screen until asked for: it is available, not the default.
     expect(screen.queryByRole('menuitem', { name: 'Full console' })).toBeNull();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'More' }));
+      fireEvent.click(screen.getByRole('button', { name: /More/ }));
     });
     expect(screen.getByRole('menuitem', { name: 'Full console' })).toBeTruthy();
   });
@@ -377,14 +479,28 @@ describe('opening Brain', () => {
   });
 
   it('offers a way back to a thread that is not the newest', async () => {
-    // Two threads and no picker is a shell where the older one is reachable
-    // only by knowing its id. One `select`; collections are Step 12B.
+    /*
+     * The picker this replaces was one `select` beside a button, and Step 12B's
+     * collections are what it was a floor beneath. The guarantee is unchanged
+     * and is the one that matters: a person must be able to reach a thread
+     * that is not their most recent, without knowing its id.
+     */
     baseRoutes({
-      'GET /api/russell/conversations': {
+      'GET /api/russell/collections?projectId=prj_1': {
         body: {
-          conversations: [
-            { id: 'rcv_1', title: 'A thread' },
-            { id: 'rcv_9', title: 'An older thread' },
+          collections: [
+            {
+              ...COLLECTION,
+              threads: [
+                COLLECTION.threads[0],
+                {
+                  ...COLLECTION.threads[0],
+                  id: 'rcv_9',
+                  title: 'An older thread',
+                  updatedAt: '2026-09-01T00:00:00.000Z',
+                },
+              ],
+            },
           ],
         },
       },
@@ -393,43 +509,78 @@ describe('opening Brain', () => {
       },
     });
     await mount();
-    const picker = await waitFor(() => screen.getByLabelText('Open'));
+    const older = await waitFor(() => screen.getByRole('button', { name: /An older thread/ }));
     await act(async () => {
-      fireEvent.change(picker, { target: { value: 'rcv_9' } });
+      fireEvent.click(older);
     });
     expect(window.location.pathname).toBe('/conversation/rcv_9');
   });
 
-  it('shows no picker when there is only one thread to pick', async () => {
-    baseRoutes();
-    await mount();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Start a new one' })).toBeTruthy());
-    expect(screen.queryByLabelText('Open')).toBeNull();
-  });
-
-  it('does not label the picker and the button with the same words', async () => {
+  it('ranks the unfinished above the merely recent, and says which is which', async () => {
     /*
-     * The defect that sent one acceptance message into two threads. Every
-     * thread this shell creates was titled "New conversation", so the picker's
-     * selected option read "New conversation" beside a button reading "New
-     * conversation" — one navigates, one creates, and nothing on screen said
-     * which. Two clicks in twenty seconds, two threads.
+     * Ordering by recency alone is what Step 12A had, and it buries the thread
+     * somebody was in the middle of under whatever they opened last. The order
+     * is the server's; what is asserted here is that the interface renders the
+     * order it was given and shows the standing, so nobody has to infer it
+     * from position.
      */
     baseRoutes({
-      'GET /api/russell/conversations': {
+      'GET /api/russell/collections?projectId=prj_1': {
         body: {
-          conversations: [
-            { id: 'rcv_1', title: 'A thread' },
-            { id: 'rcv_9', title: 'An older thread' },
+          collections: [
+            {
+              ...COLLECTION,
+              threads: [
+                {
+                  ...COLLECTION.threads[0],
+                  id: 'rcv_5',
+                  title: 'The one you were mid-sentence in',
+                  standing: 'MAJOR_UNFINISHED',
+                  standingLabel: 'Major, unfinished',
+                  updatedAt: '2026-08-01T00:00:00.000Z',
+                },
+                COLLECTION.threads[0],
+              ],
+            },
           ],
         },
       },
     });
     await mount();
-    const picker = await waitFor(() => screen.getByLabelText('Open'));
-    const button = screen.getByRole('button', { name: 'Start a new one' });
-    const optionNames = Array.from(picker.querySelectorAll('option')).map((o) => o.textContent);
-    expect(optionNames).not.toContain(button.textContent);
+    await waitFor(() => expect(screen.getByText('Major, unfinished')).toBeTruthy());
+    const titles = Array.from(document.querySelectorAll('.rs-thread-title')).map(
+      (node) => node.textContent,
+    );
+    expect(titles[0]).toBe('The one you were mid-sentence in');
+  });
+
+  it('does not label a thread and the start button with the same words', async () => {
+    /*
+     * The defect that sent one acceptance message into two threads. Every
+     * thread the shell creates was titled "New conversation", so the picker's
+     * selected option read "New conversation" beside a button reading "New
+     * conversation" — one navigates, one creates, and nothing on screen said
+     * which. Two clicks in twenty seconds, two threads. The picker is gone;
+     * the confusion it caused must not come back with the list.
+     */
+    baseRoutes({
+      'GET /api/russell/collections?projectId=prj_1': {
+        body: {
+          collections: [
+            {
+              ...COLLECTION,
+              threads: [{ ...COLLECTION.threads[0], title: 'New conversation' }],
+            },
+          ],
+        },
+      },
+    });
+    await mount();
+    const button = await waitFor(() => screen.getByRole('button', { name: 'Start a new one' }));
+    const titles = Array.from(document.querySelectorAll('.rs-thread-title')).map(
+      (node) => node.textContent,
+    );
+    expect(titles).not.toContain(button.textContent);
   });
 
   /*
@@ -445,9 +596,9 @@ describe('opening Brain', () => {
       });
       cleanup();
       await mount();
-      await waitFor(() => expect(screen.getByRole('button', { name: 'More' })).toBeTruthy());
+      await waitFor(() => expect(screen.getByRole('button', { name: /More/ })).toBeTruthy());
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'More' }));
+        fireEvent.click(screen.getByRole('button', { name: /More/ }));
       });
       expect(screen.queryByRole('menuitem', { name: /operator/i })).toBeNull();
       expect(document.querySelector('a[href="/operator"]')).toBeNull();
@@ -463,6 +614,19 @@ describe('opening Brain', () => {
 });
 
 describe('saying something', () => {
+  /*
+   * A thread is a place you go.
+   *
+   * Step 12A rendered the conversation *as* the home screen; Step 12B's home
+   * is the command center §6 describes, and the thread has its own address.
+   * The command bar is on every screen either way, which is the point of
+   * docking it — so what these assert is unchanged: nothing optimistic,
+   * a pending turn that ends, and words that survive a failure.
+   */
+  beforeEach(() => {
+    window.history.pushState({}, '', '/conversation/rcv_1');
+  });
+
   it('does not show the message until the server stored it', async () => {
     let stored = false;
     baseRoutes({
@@ -1146,6 +1310,71 @@ describe('the thin views', () => {
     await mount();
     await waitFor(() => expect(screen.getByRole('button', { name: /^Needs you/ })).toBeTruthy());
     expect(screen.queryByLabelText(/waiting/)).toBeNull();
+  });
+
+  /*
+   * The empty inbox.
+   *
+   * A long authority card taking over an otherwise empty Needs You was one of
+   * the rejected screens' named faults. Nothing needing a decision is good
+   * news and has to read as a settled state — while the card stays reachable,
+   * in the document, one click away, because folding a control into somewhere
+   * else is how a remedy stops existing.
+   */
+  it('reads an empty Needs You as settled, with the permission folded but reachable', async () => {
+    baseRoutes({
+      'GET /api/russell/projects/prj_1/authority': {
+        body: {
+          headline: 'Russell may research public records here.',
+          limits: [],
+          counters: [],
+          suggested: {},
+          suggestedApproval: null,
+          history: [],
+          grant: {
+            id: 'rgo_1',
+            name: 'Public records research',
+            grantedBy: 'Ada',
+            grantedAt: '2026-09-01T00:00:00.000Z',
+            expiresAt: '2026-12-01T00:00:00.000Z',
+            permits: ['research public records'],
+            neverPermits: ['spend money'],
+            spend: {},
+          },
+        },
+      },
+    });
+    window.history.pushState({}, '', '/needs-you');
+    await mount();
+    await waitFor(() => expect(screen.getByText(/Nothing needs your decision/)).toBeTruthy());
+    // Folded to one line, and the whole card is still in the document — so the
+    // withdraw control has somewhere to be rather than a pointer elsewhere.
+    const summary = document.querySelector('details.rs-authority > summary');
+    expect(summary?.textContent).toMatch(/What Russell may do on its own/);
+    expect(screen.getByRole('button', { name: /Withdraw this/i })).toBeTruthy();
+  });
+
+  it('never folds the approval a project cannot proceed without', async () => {
+    baseRoutes({
+      'GET /api/russell/projects/prj_1/authority': {
+        body: {
+          headline: 'Russell needs your permission before it can research anything here.',
+          limits: [],
+          counters: [],
+          suggested: { maxConcurrent: 1 },
+          suggestedApproval: { name: 'Public records research', expiresAt: '2026-12-01T00:00:00.000Z' },
+          history: [],
+          grant: null,
+        },
+      },
+    });
+    window.history.pushState({}, '', '/needs-you');
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy());
+    // Not behind a disclosure: nothing can proceed until it is answered, and a
+    // status that contradicts the control beside it teaches people to stop
+    // reading the status.
+    expect(document.querySelector('details.rs-authority')).toBeNull();
   });
 
   it('says there is nothing at an address it does not know', async () => {

@@ -200,3 +200,132 @@ export const PHONE_MAX_WIDTH = 720;
 export function navigationMode(viewportWidth: number): 'RAIL' | 'BAR' {
   return viewportWidth <= PHONE_MAX_WIDTH ? 'BAR' : 'RAIL';
 }
+
+/**
+ * A date a person reads, with the exact instant kept.
+ *
+ * Raw ISO timestamps dominating ordinary context was one of the rejected
+ * interface's named faults, and the tempting fix — formatting them away — is
+ * the wrong one: this is a research platform, and when something happened is
+ * frequently the fact under dispute. So both are returned. The caller renders
+ * `text` and puts `exact` in the element's `title`, which keeps the precise
+ * value one hover or one screen-reader description away rather than deleting
+ * it.
+ *
+ * The relative forms stop at a week. "Forty-three days ago" is arithmetic
+ * nobody asked for; a date is more useful and shorter.
+ */
+export function humanWhen(iso: string | null | undefined, now: number = Date.now()): {
+  text: string;
+  exact: string;
+} | null {
+  if (!iso) return null;
+  const at = Date.parse(iso);
+  if (Number.isNaN(at)) return null;
+  const exact = new Date(at).toLocaleString(undefined, {
+    dateStyle: 'full',
+    timeStyle: 'long',
+  });
+  const seconds = Math.round((now - at) / 1000);
+  if (seconds < 0) {
+    // A future stamp is a real thing — a deferral, a scheduled retry — and
+    // calling it "just now" would hide exactly the fact that matters.
+    const ahead = Math.abs(seconds);
+    if (ahead < 3600) return { text: `in ${Math.max(1, Math.round(ahead / 60))} min`, exact };
+    if (ahead < 86_400) return { text: `in ${Math.round(ahead / 3600)} h`, exact };
+    return { text: new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), exact };
+  }
+  if (seconds < 60) return { text: 'just now', exact };
+  if (seconds < 3600) {
+    const minutes = Math.round(seconds / 60);
+    return { text: `${minutes} min ago`, exact };
+  }
+  if (seconds < 86_400) {
+    const hours = Math.round(seconds / 3600);
+    return { text: `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`, exact };
+  }
+  if (seconds < 604_800) {
+    const days = Math.round(seconds / 86_400);
+    return { text: `${days} ${days === 1 ? 'day' : 'days'} ago`, exact };
+  }
+  return {
+    text: new Date(at).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: new Date(at).getFullYear() === new Date(now).getFullYear() ? undefined : 'numeric',
+    }),
+    exact,
+  };
+}
+
+/**
+ * How much of an answer a person wants (§4.5).
+ *
+ * Three depths, chosen once and obeyed everywhere, because the depth is a
+ * property of the reader rather than of the page. A person who has asked for
+ * Technical should not have to ask again on the next screen, and one reading
+ * Normal should never have an orchestration id put in front of them.
+ *
+ * It is deliberately not a permission. Technical shows *more of what this
+ * person may already see*; it never reveals a row authorization would refuse,
+ * and there is no depth that widens a principal's reach.
+ */
+export const DEPTHS = ['NORMAL', 'INTERESTED', 'TECHNICAL'] as const;
+export type Depth = (typeof DEPTHS)[number];
+
+export const DEPTH_LABELS: Record<Depth, string> = {
+  NORMAL: 'Normal',
+  INTERESTED: 'Interested',
+  TECHNICAL: 'Technical',
+};
+
+export function isDepth(value: unknown): value is Depth {
+  return typeof value === 'string' && (DEPTHS as readonly string[]).includes(value);
+}
+
+/**
+ * The tone a foundation's strip cell carries.
+ *
+ * Four outcomes rather than a percentage, and `BLOCKED` is deliberately not a
+ * point on the same scale: a foundation nobody can read is not a fraction of
+ * the way anywhere. This is the presentation half of the same rule
+ * `progress.ts` applies on the server.
+ */
+export function foundationTone(status: string): 'settled' | 'working' | 'blocked' | 'open' {
+  switch (status) {
+    case 'FROZEN':
+    case 'COMPLETE':
+      return 'settled';
+    case 'BLOCKED':
+    case 'INCONSISTENT':
+      return 'blocked';
+    case 'NOT_STARTED':
+    case 'EMPTY':
+      return 'open';
+    default:
+      return 'working';
+  }
+}
+
+/**
+ * The modifier a mission card carries for its class.
+ *
+ * A CSS decision and nothing more. The *words* for the five classes live in
+ * `domain/types.ts` and travel with the entry, because a second copy of an
+ * enum's labels in the client is how two screens come to disagree about one
+ * row — and the class a person reads must be the class the server ranked.
+ */
+export function priorityTone(priority: string): string {
+  switch (priority) {
+    case 'MUST_DO':
+      return 'must';
+    case 'BIG_MOVE':
+      return 'big';
+    case 'WORTH_DOING':
+      return 'worth';
+    case 'EXPLORE':
+      return 'explore';
+    default:
+      return 'parked';
+  }
+}
