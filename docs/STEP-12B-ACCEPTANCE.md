@@ -74,6 +74,29 @@ L — resolve to what the deployed fleet can actually do rather than to
 | P | Migrations, restart and preserved integrations | PARTIAL | `npm run upgrade:populated` proves the upgrade over populated data on both chains with a per-table sha-256 census, and a second restart applying nothing. **Not established by the script:** the hosted pre/post-restart checks, which the Deploy workflow runs. |
 | Q | Shared access and safe experiments | PARTIAL | A preference outside its declared set is refused; an unauthenticated search is scoped to nothing; every preference key is presentational and has a default; every search kind is scoped before the query. **Not established:** an invitation anybody received, and a canary rollback in production. Role change with two real identities is exercised in I. |
 
+### The reporter nearly became a mutation, and that is recorded rather than fixed quietly
+
+`initDatabase` honours `dbPath` **only in local mode** — it reads the configured
+provider first — so a script that opens a scratch database by path alone gets
+the real one whenever the environment says postgres. This reporter registers a
+project, four foundations, two people, a hundred candidates, a lens inquiry and
+eight Capability Lab experiments, and the workflow runs it *inside the
+container*, where the provider is postgres and the cloud credential is present.
+Its own header says everything it exercises runs in a temporary database;
+against the deployed Brain that sentence would have been false.
+
+It was found by running it twice against a Postgres test database: the second
+run collided on a candidate id the first had written. **The production workflow
+had never been dispatched**, so nothing real was touched — the first dispatch
+would have done it.
+
+The remedy is to state the config rather than hint at it: a provider named in
+code cannot be overridden by the environment, so the exercising half is local
+whatever the Brain is configured for. The operational reading — the part that
+must see the real Brain — is taken and closed before any of it.
+`tests/step12bProduct.test.ts` pins both halves: every `initDatabase` that is
+followed by writes names `sqlite`, and the real read happens first.
+
 Run locally against an empty database the reading is **2 PASS · 9 PARTIAL · 0
 BLOCKED · 6 NOT_RUN (of 17)**: A, B, L and N have nothing to read, which is
 *nothing has happened* rather than *something is wrong*. The verdicts above are

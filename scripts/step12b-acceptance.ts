@@ -334,8 +334,34 @@ async function main(): Promise<void> {
   const fleet = await readOperationalFleet();
   const blocker = surfaceBlocker(fleet);
 
+  /*
+   * The temporary database, and the reason it is named explicitly.
+   *
+   * `dbPath` is honoured **only in local mode**: `initDatabase` reads the
+   * configured provider first, so against a Postgres-configured Brain it is
+   * ignored entirely and every write below lands in the real database. This
+   * script registers a project, four foundations, two people, a hundred
+   * candidates, a lens inquiry and eight Capability Lab experiments — so in
+   * cloud mode the reporter would have been a mutation, which is precisely what
+   * its own header says it is not.
+   *
+   * Caught by running it twice against a Postgres test database: the second run
+   * collided on `rc_acc_0`, because the first had written it. The production
+   * workflow had never been dispatched, so nothing real was touched — but it
+   * runs *inside the container*, where the provider is postgres and the cloud
+   * credential is present, so the first dispatch would have done it.
+   *
+   * The remedy is to state the config rather than to hint at it. A provider
+   * named here cannot be overridden by the environment, so the exercising half
+   * is local whatever the Brain is configured for — and the operational reading
+   * above, which is the part that must see the real Brain, has already been
+   * taken and closed.
+   */
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-12b-acc-'));
-  await initDatabase({ dbPath: path.join(dataDir, 'acceptance.db') });
+  await initDatabase({
+    dbPath: path.join(dataDir, 'acceptance.db'),
+    config: { provider: 'sqlite', connectionString: null, poolSize: 1 },
+  });
 
   /* -- A. Conversation routing and continuity ----------------------------- */
   /*
