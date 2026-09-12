@@ -1,0 +1,1386 @@
+<title>Russell Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  /* ---------------------------------------------------------------------
+     Tokens. Light is the bare :root; dark redefines only these.
+     --------------------------------------------------------------------- */
+  :root {
+    --paper: #F2F4F6;
+    --surface: #FFFFFF;
+    --surface-sunk: #E9EDF1;
+    --ink: #141C26;
+    --ink-soft: #44535F;
+    --ink-faint: #74838F;
+    --rule: #D3DAE1;
+    --rule-soft: #E3E8ED;
+
+    --verdigris: #2E7D6B;
+    --verdigris-soft: #DCEAE6;
+    --verdigris-ink: #1F5A4D;
+
+    --moss: #4A7C59;
+    --ochre: #B4801F;
+    --iron: #9C3B2C;
+    --slate: #5B6B7C;
+
+    --moss-wash: #E4EDE6;
+    --ochre-wash: #F6EEDC;
+    --iron-wash: #F4E4E1;
+    --slate-wash: #E6EAEE;
+
+    --shadow: 0 1px 2px rgba(20, 28, 38, .06), 0 8px 24px -16px rgba(20, 28, 38, .28);
+
+    --display: "Fraunces", Georgia, "Times New Roman", serif;
+    --body: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --step--1: .8125rem;
+    --step-0: .9375rem;
+    --step-1: 1.0625rem;
+    --step-2: 1.375rem;
+    --step-3: 1.875rem;
+    --step-4: 2.5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0E141B;
+      --surface: #161F29;
+      --surface-sunk: #111923;
+      --ink: #E6EBF0;
+      --ink-soft: #A3B1BE;
+      --ink-faint: #74838F;
+      --rule: #2A3744;
+      --rule-soft: #1F2A35;
+
+      --verdigris: #55B49C;
+      --verdigris-soft: #17332D;
+      --verdigris-ink: #7FCDB8;
+
+      --moss: #7FB08B;
+      --ochre: #D9A845;
+      --iron: #D4705E;
+      --slate: #8B9BAB;
+
+      --moss-wash: #17281C;
+      --ochre-wash: #2C2415;
+      --iron-wash: #2C1A17;
+      --slate-wash: #1C242D;
+
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .7);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #0E141B;
+    --surface: #161F29;
+    --surface-sunk: #111923;
+    --ink: #E6EBF0;
+    --ink-soft: #A3B1BE;
+    --ink-faint: #74838F;
+    --rule: #2A3744;
+    --rule-soft: #1F2A35;
+
+    --verdigris: #55B49C;
+    --verdigris-soft: #17332D;
+    --verdigris-ink: #7FCDB8;
+
+    --moss: #7FB08B;
+    --ochre: #D9A845;
+    --iron: #D4705E;
+    --slate: #8B9BAB;
+
+    --moss-wash: #17281C;
+    --ochre-wash: #2C2415;
+    --iron-wash: #2C1A17;
+    --slate-wash: #1C242D;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: var(--step-0);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 48px 96px;
+  }
+
+  /* ---------------------------------------------------------------------
+     Document furniture — the wrapper that presents the mocks
+     --------------------------------------------------------------------- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .6875rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--verdigris);
+    margin: 0 0 14px;
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: var(--step-4);
+    line-height: 1.08;
+    letter-spacing: -.015em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+
+  .lede {
+    font-size: var(--step-1);
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0 0 28px;
+  }
+
+  .meta-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    padding-block: 16px;
+    border-block: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    color: var(--ink-faint);
+  }
+  .meta-strip b { color: var(--ink-soft); font-weight: 500; }
+
+  h2.section {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: var(--step-3);
+    letter-spacing: -.01em;
+    margin: 64px 0 6px;
+    text-wrap: balance;
+  }
+  .section-note {
+    color: var(--ink-soft);
+    max-width: 68ch;
+    margin: 0 0 22px;
+  }
+
+  /* Controls -------------------------------------------------------- */
+  .controls {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    align-items: center;
+    padding-block: 12px;
+    margin-block: 28px 8px;
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--rule);
+  }
+  .control-group { display: flex; align-items: center; gap: 8px; }
+  .control-label {
+    font-family: var(--mono);
+    font-size: .6875rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .seg { display: flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+  .seg button {
+    font: inherit;
+    font-size: var(--step--1);
+    padding: 5px 11px;
+    border: 0;
+    border-right: 1px solid var(--rule);
+    background: var(--surface);
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] {
+    background: var(--verdigris);
+    color: #fff;
+    font-weight: 600;
+  }
+  :root[data-theme="dark"] .seg button[aria-pressed="true"],
+  @media (prefers-color-scheme: dark) { }
+  .seg button:focus-visible { outline: 2px solid var(--verdigris); outline-offset: -2px; }
+
+  /* Device frame ---------------------------------------------------- */
+  .frame-wrap { display: flex; justify-content: center; }
+  .frame {
+    container-type: inline-size;
+    width: var(--vw, 1180px);
+    max-width: 100%;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--paper);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transition: width .28s cubic-bezier(.2,.7,.3,1);
+  }
+  .frame-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--surface-sunk);
+    font-family: var(--mono);
+    font-size: .6875rem;
+    color: var(--ink-faint);
+  }
+  .dot-row { display: flex; gap: 5px; }
+  .dot-row i { width: 8px; height: 8px; border-radius: 50%; background: var(--rule); display: block; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .frame { transition: none; }
+    * { animation: none !important; }
+  }
+
+  /* ---------------------------------------------------------------------
+     THE PRODUCT MOCK
+     --------------------------------------------------------------------- */
+  .app {
+    display: grid;
+    grid-template-columns: 188px 1fr;
+    min-height: 560px;
+    background: var(--paper);
+    font-size: var(--step-0);
+  }
+
+  /* Rail */
+  .rail {
+    border-right: 1px solid var(--rule);
+    background: var(--surface);
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 9px;
+    padding: 4px 8px 14px;
+  }
+  .brand-mark {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: var(--verdigris);
+    display: grid; place-items: center;
+    color: #fff; font-family: var(--display); font-weight: 600; font-size: 15px;
+    flex: none;
+  }
+  .brand-name { font-family: var(--display); font-weight: 600; font-size: 1.0625rem; letter-spacing: -.01em; }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 9px;
+    border-radius: 6px;
+    color: var(--ink-soft);
+    font-size: var(--step-0);
+    text-decoration: none;
+    cursor: pointer;
+    border: 0; background: none; font-family: inherit; width: 100%; text-align: left;
+  }
+  .nav-item[aria-current="page"] {
+    background: var(--verdigris-soft);
+    color: var(--verdigris-ink);
+    font-weight: 600;
+  }
+  .nav-item .badge {
+    margin-left: auto;
+    font-family: var(--mono); font-size: .6875rem;
+    background: var(--ochre); color: #2A2010;
+    border-radius: 9px; padding: 0 6px; font-weight: 500;
+  }
+  .nav-glyph { width: 15px; height: 15px; flex: none; opacity: .9; }
+  .nav-sep { height: 1px; background: var(--rule-soft); margin: 10px 9px; }
+  .nav-more { font-size: var(--step--1); color: var(--ink-faint); }
+
+  /* Main */
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .scroll { padding: 20px 24px 16px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+
+  .page-head { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .page-title { font-family: var(--display); font-weight: 600; font-size: var(--step-2); letter-spacing: -.01em; margin: 0; }
+  .page-sub { color: var(--ink-faint); font-size: var(--step--1); margin: 2px 0 0; }
+  .depth-seg { margin-left: auto; display: flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; flex: none; }
+  .depth-seg span {
+    font-size: .75rem; padding: 3px 9px; color: var(--ink-faint);
+    border-right: 1px solid var(--rule); background: var(--surface);
+  }
+  .depth-seg span:last-child { border-right: 0; }
+  .depth-seg span.on { background: var(--ink); color: var(--paper); font-weight: 600; }
+
+  /* Russell state header — the living line */
+  .state-line {
+    display: flex; align-items: center; gap: 10px;
+    font-size: var(--step--1); color: var(--ink-soft);
+    padding: 9px 12px;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--verdigris);
+    border-radius: 6px;
+    flex-wrap: wrap;
+  }
+  .pulse {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--verdigris); flex: none;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--verdigris) 60%, transparent);
+    animation: breathe 3.4s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--verdigris) 55%, transparent); }
+    50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--verdigris) 0%, transparent); }
+  }
+  .state-line .sep { color: var(--rule); }
+  .state-line .thinking { color: var(--ink); }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px 18px;
+    min-width: 0;
+  }
+  .card.flush { padding: 0; overflow: hidden; }
+  .card-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .card-title { font-weight: 600; font-size: var(--step-1); margin: 0; letter-spacing: -.005em; }
+  .card-kicker {
+    font-family: var(--mono); font-size: .6875rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+
+  .brief-answer { font-size: var(--step-1); line-height: 1.5; margin: 0 0 12px; max-width: 60ch; }
+  .brief-answer strong { font-weight: 600; }
+
+  .qa { display: grid; gap: 10px; margin: 0; }
+  .qa div { display: grid; grid-template-columns: 132px 1fr; gap: 12px; align-items: start; }
+  .qa dt {
+    font-family: var(--mono); font-size: .6875rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-faint); padding-top: 3px;
+  }
+  .qa dd { margin: 0; color: var(--ink-soft); }
+  .qa dd b { color: var(--ink); font-weight: 600; }
+
+  /* Stamp — the status chip, drawn like a recording stamp */
+  .stamp {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: .6875rem; letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .stamp::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+  .stamp.hollow::before { background: none; border: 1.5px solid currentColor; }
+  .stamp.settled { color: var(--moss); background: var(--moss-wash); }
+  .stamp.attention { color: var(--ochre); background: var(--ochre-wash); }
+  .stamp.blocked { color: var(--iron); background: var(--iron-wash); }
+  .stamp.unknown { color: var(--slate); background: var(--slate-wash); }
+  .stamp.live { color: var(--verdigris); background: var(--verdigris-soft); }
+
+  /* Mission rows */
+  .mission {
+    display: grid;
+    grid-template-columns: 4px 1fr;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .mission:last-child { border-bottom: 0; }
+  .mission-stripe { background: var(--slate); }
+  .mission-stripe.running { background: var(--verdigris); }
+  .mission-stripe.done { background: var(--moss); }
+  .mission-body { padding: 13px 16px; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+  .mission-top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .mission-name { font-weight: 600; margin: 0; letter-spacing: -.005em; }
+  .mission-why { color: var(--ink-soft); font-size: var(--step--1); margin: 0; max-width: 64ch; }
+  .mission-foot {
+    display: flex; gap: 14px; flex-wrap: wrap;
+    font-family: var(--mono); font-size: .6875rem; color: var(--ink-faint);
+  }
+
+  /* Progress — named denominator, never a bare percentage */
+  .prog { display: flex; align-items: center; gap: 10px; }
+  .prog-track { flex: 1; height: 5px; border-radius: 3px; background: var(--surface-sunk); overflow: hidden; min-width: 60px; }
+  .prog-fill { height: 100%; background: var(--verdigris); border-radius: 3px; }
+  .prog-fill.done { background: var(--moss); }
+  .prog-label { font-family: var(--mono); font-size: .6875rem; color: var(--ink-faint); white-space: nowrap; }
+
+  /* Layer strip — replaces "0 of 8 settled" */
+  .layers { display: flex; flex-direction: column; gap: 1px; background: var(--rule-soft); border-radius: 6px; overflow: hidden; }
+  .layer {
+    display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
+    background: var(--surface); padding: 8px 12px;
+  }
+  .layer-name { font-size: var(--step--1); min-width: 0; }
+  .layer-name b { font-weight: 600; }
+  .layer-name em { font-style: normal; color: var(--ink-faint); }
+  .layer-bar { width: 84px; height: 4px; border-radius: 2px; background: var(--surface-sunk); overflow: hidden; }
+  .layer-bar i { display: block; height: 100%; background: var(--moss); }
+  .layer-bar i.thin { background: var(--ochre); }
+  .layer-bar i.none { background: var(--slate); }
+
+  /* Technical drawer */
+  .tech {
+    border: 1px dashed var(--rule);
+    border-radius: 6px;
+    padding: 10px 12px;
+    background: var(--surface-sunk);
+    font-family: var(--mono);
+    font-size: .6875rem;
+    color: var(--ink-soft);
+    display: grid;
+    gap: 4px;
+    overflow-x: auto;
+  }
+  .tech .k { color: var(--ink-faint); }
+
+  /* Command bar */
+  .command {
+    border-top: 1px solid var(--rule);
+    background: var(--surface);
+    padding: 10px 24px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .starters { display: flex; gap: 7px; flex-wrap: wrap; }
+  .starter {
+    font: inherit; font-size: var(--step--1);
+    padding: 4px 10px;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    background: var(--paper);
+    color: var(--ink-soft);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .starter:hover { border-color: var(--verdigris); color: var(--verdigris-ink); }
+  .command-input {
+    display: flex; align-items: center; gap: 10px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 9px 12px;
+    background: var(--paper);
+  }
+  .command-input .ph { color: var(--ink-faint); font-size: var(--step-0); }
+  .command-input .scope {
+    margin-left: auto; flex: none;
+    font-family: var(--mono); font-size: .6875rem;
+    color: var(--verdigris-ink); background: var(--verdigris-soft);
+    border: 1px solid color-mix(in srgb, var(--verdigris) 35%, transparent);
+    border-radius: 4px; padding: 1px 7px;
+  }
+  .send { flex: none; width: 26px; height: 26px; border-radius: 6px; background: var(--verdigris); display: grid; place-items: center; }
+  .send svg { width: 13px; height: 13px; }
+
+  /* Two column inside main */
+  .cols { display: grid; grid-template-columns: 1.35fr 1fr; gap: 18px; align-items: start; min-width: 0; }
+
+  /* Constellation */
+  .constellation { position: relative; background: var(--surface); }
+  .constellation svg { display: block; width: 100%; height: auto; }
+  .const-legend {
+    display: flex; gap: 14px; flex-wrap: wrap; padding: 10px 16px;
+    border-top: 1px solid var(--rule-soft);
+    font-family: var(--mono); font-size: .6875rem; color: var(--ink-faint);
+  }
+  .const-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .const-legend i { width: 9px; height: 9px; border-radius: 50%; display: block; }
+
+  /* Needs You */
+  .decision { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); overflow: hidden; }
+  .decision-head {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 12px 16px; border-bottom: 1px solid var(--rule-soft);
+    background: var(--ochre-wash);
+  }
+  .decision-head h4 { margin: 0; font-size: var(--step-1); font-weight: 600; letter-spacing: -.005em; }
+  .decision-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .choice {
+    display: grid; grid-template-columns: auto 1fr; gap: 10px;
+    padding: 11px 12px; border: 1px solid var(--rule); border-radius: 7px; background: var(--paper);
+  }
+  .choice.recommended { border-color: var(--verdigris); background: var(--verdigris-soft); }
+  .choice-mark {
+    width: 17px; height: 17px; border-radius: 50%; border: 2px solid var(--ink-faint);
+    margin-top: 2px; flex: none;
+  }
+  .choice.recommended .choice-mark { border-color: var(--verdigris); background: var(--verdigris); box-shadow: inset 0 0 0 3px var(--surface); }
+  .choice-name { font-weight: 600; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .choice-what { color: var(--ink-soft); font-size: var(--step--1); margin: 3px 0 0; }
+  .choice-next { color: var(--verdigris-ink); font-size: var(--step--1); margin: 5px 0 0; font-weight: 500; }
+  .rec-tag {
+    font-family: var(--mono); font-size: .625rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--verdigris-ink); border: 1px solid currentColor; border-radius: 3px; padding: 0 5px;
+  }
+  .decision-actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 2px; }
+  .btn {
+    font: inherit; font-size: var(--step-0); font-weight: 500;
+    padding: 7px 15px; border-radius: 7px; border: 1px solid var(--rule);
+    background: var(--surface); color: var(--ink); cursor: pointer;
+  }
+  .btn.primary { background: var(--verdigris); border-color: var(--verdigris); color: #fff; }
+  .btn.quiet { border-color: transparent; color: var(--ink-soft); }
+
+  .calm {
+    border: 1px solid var(--rule); border-radius: 8px; background: var(--surface);
+    padding: 22px 20px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+  }
+  .calm h4 { margin: 0; font-family: var(--display); font-weight: 600; font-size: var(--step-2); letter-spacing: -.01em; }
+  .calm p { margin: 0; color: var(--ink-soft); max-width: 56ch; }
+  .continues { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; width: 100%; }
+  .continues div {
+    display: flex; gap: 9px; align-items: baseline;
+    font-size: var(--step--1); color: var(--ink-soft);
+    padding: 6px 0; border-top: 1px solid var(--rule-soft);
+  }
+  .continues div:first-child { border-top: 0; }
+  .continues b { color: var(--ink); font-weight: 600; }
+  .may-do {
+    margin-top: 10px; width: 100%;
+    border: 1px solid var(--rule); border-radius: 7px; background: var(--paper);
+    padding: 10px 12px;
+  }
+  .may-do summary { cursor: pointer; font-size: var(--step--1); font-weight: 600; color: var(--ink-soft); }
+  .may-do summary::marker { color: var(--ink-faint); }
+  .may-do ul { margin: 9px 0 0; padding-left: 18px; color: var(--ink-soft); font-size: var(--step--1); display: grid; gap: 4px; }
+
+  .resolved-line {
+    display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+    font-size: var(--step--1); color: var(--ink-faint);
+    padding-top: 10px; border-top: 1px solid var(--rule-soft); width: 100%;
+  }
+
+  /* ------------ container reflow: the real test ------------ */
+  @container (max-width: 980px) {
+    .cols { grid-template-columns: 1fr; }
+    .qa div { grid-template-columns: 112px 1fr; }
+  }
+  @container (max-width: 720px) {
+    .app { grid-template-columns: 1fr; }
+    .rail {
+      order: 2;
+      border-right: 0;
+      border-top: 1px solid var(--rule);
+      flex-direction: row;
+      padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+      gap: 2px;
+      justify-content: space-between;
+    }
+    .brand, .nav-sep, .nav-more, .rail .desk-only { display: none; }
+    .nav-item {
+      flex-direction: column; gap: 3px; padding: 6px 4px;
+      font-size: .625rem; text-align: center; min-height: 44px; justify-content: center;
+    }
+    .nav-item .badge { margin-left: 0; position: absolute; transform: translate(13px, -9px); }
+    .nav-item { position: relative; }
+    .scroll { padding: 14px 16px 12px; gap: 14px; }
+    .command { padding: 9px 16px calc(10px + env(safe-area-inset-bottom)); }
+    .page-head { gap: 10px; }
+    .depth-seg { margin-left: 0; width: 100%; }
+    .depth-seg span { flex: 1; text-align: center; }
+    .qa div { grid-template-columns: 1fr; gap: 2px; }
+    .mission-foot { gap: 10px; }
+    .starters { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+    .layer-bar { width: 56px; }
+  }
+
+  /* Annotation blocks ------------------------------------------------ */
+  .notes { margin-top: 22px; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); }
+  .note { border-left: 2px solid var(--verdigris); padding: 2px 0 2px 14px; }
+  .note h4 {
+    margin: 0 0 4px; font-size: var(--step-0); font-weight: 600;
+  }
+  .note p { margin: 0; color: var(--ink-soft); font-size: var(--step--1); }
+
+  /* Decisions needing judgment -------------------------------------- */
+  .judgment { display: grid; gap: 0; margin-top: 24px; border-top: 1px solid var(--rule); }
+  .judgment > article {
+    display: grid; grid-template-columns: 40px 1fr; gap: 18px;
+    padding: 24px 0; border-bottom: 1px solid var(--rule);
+  }
+  .jnum {
+    font-family: var(--mono); font-size: var(--step-1); color: var(--verdigris); padding-top: 2px;
+  }
+  .jbody h3 { margin: 0 0 8px; font-size: var(--step-1); font-weight: 600; letter-spacing: -.005em; }
+  .jbody p { margin: 0 0 10px; color: var(--ink-soft); max-width: 68ch; }
+  .options { display: grid; gap: 8px; margin: 12px 0 0; }
+  .option {
+    display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start;
+    padding: 10px 12px; border: 1px solid var(--rule); border-radius: 7px; background: var(--surface);
+  }
+  .option.mine { border-color: var(--verdigris); background: var(--verdigris-soft); }
+  .option-key {
+    font-family: var(--mono); font-size: .6875rem; color: var(--ink-faint);
+    border: 1px solid var(--rule); border-radius: 3px; padding: 0 5px; margin-top: 2px;
+  }
+  .option.mine .option-key { color: var(--verdigris-ink); border-color: currentColor; }
+  .option b { font-weight: 600; }
+  .option p { margin: 3px 0 0; font-size: var(--step--1); color: var(--ink-soft); max-width: none; }
+
+  @media (max-width: 600px) {
+    .judgment > article { grid-template-columns: 1fr; gap: 6px; }
+    h1 { font-size: var(--step-3); }
+  }
+
+  .footnote {
+    margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--rule);
+    color: var(--ink-faint); font-size: var(--step--1); max-width: 72ch;
+  }
+  .footnote code { font-family: var(--mono); font-size: .8125rem; color: var(--ink-soft); }
+</style>
+
+<div class="page">
+
+  <p class="eyebrow">Step 12B · §24 visual direction · for approval</p>
+  <h1>Russell Command Center</h1>
+  <p class="lede">
+    One coherent direction for the Brain-first product, drawn on real production rows read this
+    morning. Every number below is a row in the live Brain — nothing is invented to make the
+    screens look finished.
+  </p>
+
+  <div class="meta-strip">
+    <span><b>Read</b> 2026-09-12 02:45Z</span>
+    <span><b>Project</b> Deal Dispatch</span>
+    <span><b>Loop</b> RUNNING · gen 22673</span>
+    <span><b>Concurrency</b> 1 · unchanged</span>
+    <span><b>Paid API</b> $0 · unchanged</span>
+  </div>
+
+  <div class="controls">
+    <div class="control-group">
+      <span class="control-label" id="w-label">Width</span>
+      <div class="seg" role="group" aria-labelledby="w-label">
+        <button type="button" data-w="1180" aria-pressed="true">Desktop 1440</button>
+        <button type="button" data-w="953" aria-pressed="false">953 — the clipping case</button>
+        <button type="button" data-w="390" aria-pressed="false">Phone 390</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <span class="control-label" id="d-label">Depth</span>
+      <div class="seg" role="group" aria-labelledby="d-label">
+        <button type="button" data-d="normal" aria-pressed="true">Normal</button>
+        <button type="button" data-d="interested" aria-pressed="false">Interested</button>
+        <button type="button" data-d="technical" aria-pressed="false">Technical</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================
+       SCREEN 1 — RUSSELL HOME
+       ================================================================== -->
+  <h2 class="section">Russell home</h2>
+  <p class="section-note">
+    Briefing first, in the order §6 requires: what Russell is, what it is on, what moved, what
+    is next, whether you are needed. The command bar is docked — it is the product, not a
+    widget beside it.
+  </p>
+
+  <div class="frame-wrap">
+    <div class="frame" id="frame-home">
+      <div class="frame-bar"><span class="dot-row"><i></i><i></i><i></i></span><span class="fb-w">1440 × desktop</span></div>
+      <div class="app">
+        <nav class="rail">
+          <div class="brand"><div class="brand-mark">R</div><div class="brand-name">Russell</div></div>
+          <button class="nav-item" aria-current="page" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/></svg>Russell</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 8h8M2 12h10"/></svg>Work</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="7" r="2"/><circle cx="6" cy="12" r="2"/><path d="M5.7 5.2 10.3 6M10.8 8.7 7.4 10.6"/></svg>Projects</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 3v10l5-2 5 2V3z"/></svg>Knowledge</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5.5" cy="5" r="2.2"/><circle cx="11" cy="7" r="1.8"/><path d="M2 13c.6-2.2 2-3.2 3.5-3.2S8.4 10.8 9 13"/></svg>Fleet</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3"/></svg>Needs you</button>
+          <div class="nav-sep desk-only"></div>
+          <button class="nav-item nav-more desk-only" type="button">Build</button>
+          <button class="nav-item nav-more desk-only" type="button">Connected sites</button>
+        </nav>
+
+        <div class="main">
+          <div class="scroll">
+            <div class="page-head">
+              <div>
+                <h3 class="page-title">Good morning</h3>
+                <p class="page-sub">Deal Dispatch · nothing needs you</p>
+              </div>
+              <div class="depth-seg" aria-hidden="true">
+                <span class="on d-normal">Normal</span><span class="d-interested">Interested</span><span class="d-technical">Technical</span>
+              </div>
+            </div>
+
+            <div class="state-line">
+              <span class="pulse"></span>
+              <span class="thinking">Working — auditing the county follow-up it started for itself</span>
+              <span class="sep">·</span>
+              <span>1 of 1 worker slot busy</span>
+              <span class="sep">·</span>
+              <span>checked 14 seconds ago</span>
+            </div>
+
+            <div class="cols">
+              <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+
+                <div class="card">
+                  <div class="card-head">
+                    <h4 class="card-title">What changed overnight</h4>
+                    <span class="card-kicker">Since you last looked</span>
+                  </div>
+                  <p class="brief-answer">
+                    The Michigan recording question <strong>finished and filed</strong>. Russell accepted
+                    57 of 60 findings, wrote them up with 30 citations, and its own reviewer said the
+                    write-up still leaves real questions open — so Russell started the follow-up itself
+                    and is reviewing that now.
+                  </p>
+                  <dl class="qa">
+                    <div><dt>Why it matters</dt><dd>Whether a county takes electronic recording decides whether a deal closes the same day or waits on paper. <b>73 of 83 counties</b> now have an answer on file.</dd></div>
+                    <div><dt>Next</dt><dd>Finish reviewing the follow-up, then fold it into <b>How the market works</b>.</dd></div>
+                    <div><dt>You</dt><dd>Nothing. You answered the one open question at <b>01:28 this morning</b>.</dd></div>
+                  </dl>
+                  <div class="reveal-interested" hidden style="margin-top:12px">
+                    <dl class="qa">
+                      <div><dt>Held back</dt><dd>3 findings failed the evidence bar — 2 quoted a page that did not support them, 1 was a calculation with no stated inputs. They keep their rejection reason and cannot re-enter through a later write-up.</dd></div>
+                      <div><dt>Still open</dt><dd>Oakland and Ottawa refused the fetch; 27 counties have no located statement. Both are named in the filed report rather than smoothed over.</dd></div>
+                    </dl>
+                  </div>
+                  <div class="reveal-technical tech" hidden style="margin-top:12px">
+                    <div><span class="k">orchestration</span> orc_08b94f87a71a4b588829 · COMPLETE_WITH_GAPS</div>
+                    <div><span class="k">document</span> doc_e9eaeab710b148d29fdd · 42,621 B · 30/30 cited ids present</div>
+                    <div><span class="k">audits</span> aud_9da36e403bcb41dca1c9 MORE_RESEARCH (9 gaps) · aud_bb7dcba8c56043c2836c MORE_RESEARCH (7 gaps)</div>
+                    <div><span class="k">follow-on</span> rms_683d8907fcb94e94bb63 → orc_abab7d7130d545eaa1a1 · AUDITING</div>
+                  </div>
+                </div>
+
+                <div class="card flush">
+                  <div style="padding:16px 18px 10px" class="card-head">
+                    <h4 class="card-title">Working now</h4>
+                    <span class="card-kicker">2 missions</span>
+                  </div>
+                  <div class="mission">
+                    <div class="mission-stripe running"></div>
+                    <div class="mission-body">
+                      <div class="mission-top">
+                        <p class="mission-name">Fill the gaps the county write-up left open</p>
+                        <span class="stamp live">Reviewing</span>
+                      </div>
+                      <p class="mission-why">Russell started this one itself, from the questions its own reviewer wrote.</p>
+                      <div class="prog">
+                        <div class="prog-track"><div class="prog-fill" style="width:72%"></div></div>
+                        <span class="prog-label">researched · writing up · <b>reviewing</b> · file</span>
+                      </div>
+                      <div class="mission-foot">
+                        <span>Big move</span><span>started 01:29 today</span><span>no decision needed</span>
+                      </div>
+                      <div class="reveal-technical tech" hidden>
+                        <div><span class="k">mission</span> rms_683d8907fcb94e94bb63 · STALE → recovering</div>
+                        <div><span class="k">packet</span> orc_abab7d7130d545eaa1a1 · AUDITING · doc_6dc71795f8f8443bb4a7 filed</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mission">
+                    <div class="mission-stripe done"></div>
+                    <div class="mission-body">
+                      <div class="mission-top">
+                        <p class="mission-name">Which Michigan counties accept electronic recording</p>
+                        <span class="stamp settled">Filed, with gaps named</span>
+                      </div>
+                      <p class="mission-why">Filed as <b>How to actually do them</b> — 57 findings, 30 citations, 5 questions left open on purpose.</p>
+                      <div class="mission-foot">
+                        <span>finished 01:28 today</span><span>you authorised filing it short</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+                <div class="card">
+                  <div class="card-head"><h4 class="card-title">Deal Dispatch</h4><span class="stamp hollow attention">Forming</span></div>
+                  <p class="mission-why" style="margin-bottom:12px">Two of eight foundations have filed work on them. That is early, and it is progress.</p>
+                  <div class="layers">
+                    <div class="layer"><span class="layer-name"><b>How to actually do them</b> <em>· Execution Playbooks</em></span><span class="layer-bar"><i style="width:78%"></i></span><span class="stamp settled">Filed</span></div>
+                    <div class="layer"><span class="layer-name"><b>How the market works</b> <em>· World Model</em></span><span class="layer-bar"><i class="thin" style="width:42%"></i></span><span class="stamp attention">In review</span></div>
+                    <div class="layer"><span class="layer-name"><b>How the money works</b> <em>· Monetization</em></span><span class="layer-bar"><i class="thin" style="width:30%"></i></span><span class="stamp hollow unknown">Earlier work</span></div>
+                    <div class="layer"><span class="layer-name"><b>Which are worth it</b> <em>· Qualification</em></span><span class="layer-bar"><i class="thin" style="width:26%"></i></span><span class="stamp hollow unknown">Earlier work</span></div>
+                    <div class="layer"><span class="layer-name"><b>How to find them</b> <em>· Discovery</em></span><span class="layer-bar"><i class="none" style="width:4%"></i></span><span class="stamp hollow unknown">Not started</span></div>
+                  </div>
+                  <p class="mission-why" style="margin-top:10px">+ 3 more foundations not started</p>
+                </div>
+
+                <div class="card">
+                  <div class="card-head"><h4 class="card-title">Worker power</h4><span class="card-kicker">Right now</span></div>
+                  <dl class="qa">
+                    <div><dt>In use</dt><dd><b>1 of 1</b> — the limit you set</dd></div>
+                    <div><dt>Resting</dt><dd>A second pool is quarantined and not being asked</dd></div>
+                    <div><dt>Spend</dt><dd><b>$0</b> — subscription only</dd></div>
+                  </dl>
+                  <div class="reveal-technical tech" hidden style="margin-top:10px">
+                    <div><span class="k">routine</span> primary/V1 trig_01CBLu…7U7g ENABLED fires=253</div>
+                    <div><span class="k">routine</span> friend-2/V2 QUARANTINED fires=12</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="command">
+            <div class="starters">
+              <button class="starter" type="button">Why did you start the follow-up?</button>
+              <button class="starter" type="button">What is still unknown about recording?</button>
+              <button class="starter" type="button">Compare this against Deal Dispatch sourcing</button>
+            </div>
+            <div class="command-input">
+              <span class="ph">Ask Russell, or tell it something…</span>
+              <span class="scope">Deal Dispatch → County recording</span>
+              <span class="send"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.8"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h4>No global percentage</h4><p>Every bar names its own denominator. “73 of 83 counties” is a real count; “0 of 8 settled” is gone, replaced by a maturity word and a per-foundation strip that shows partial work.</p></div>
+    <div class="note"><h4>The scope chip is the routing</h4><p>The command bar shows which project and subtopic the conversation is bound to. Clicking it corrects the routing, and the correction trains it.</p></div>
+    <div class="note"><h4>Dates are human</h4><p>“01:28 this morning”, never <code>2026-09-12T01:28:33.522Z</code>. The ISO value is one depth down, where an auditor wants it.</p></div>
+    <div class="note"><h4>Technical is a depth, not a page</h4><p>Switch to Technical above and the ids, packet states and routine names appear in place. Nothing is hidden; nothing dominates.</p></div>
+  </div>
+
+  <!-- ==================================================================
+       SCREEN 2 — PROJECT + CONSTELLATION
+       ================================================================== -->
+  <h2 class="section">Project — and the living constellation</h2>
+  <p class="section-note">
+    A project opens as a model, not a folder. The constellation is a real spatial diagram over the
+    authoritative graph: Portfolio → Site → Major idea → Regular idea. Selecting a node recenters
+    and expands; the list beside it is the same data for keyboard and screen-reader use.
+  </p>
+
+  <div class="frame-wrap">
+    <div class="frame" id="frame-project">
+      <div class="frame-bar"><span class="dot-row"><i></i><i></i><i></i></span><span class="fb-w">1440 × desktop</span></div>
+      <div class="app">
+        <nav class="rail">
+          <div class="brand"><div class="brand-mark">R</div><div class="brand-name">Russell</div></div>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/></svg>Russell</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 8h8M2 12h10"/></svg>Work</button>
+          <button class="nav-item" aria-current="page" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="7" r="2"/><circle cx="6" cy="12" r="2"/><path d="M5.7 5.2 10.3 6M10.8 8.7 7.4 10.6"/></svg>Projects</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 3v10l5-2 5 2V3z"/></svg>Knowledge</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5.5" cy="5" r="2.2"/><circle cx="11" cy="7" r="1.8"/><path d="M2 13c.6-2.2 2-3.2 3.5-3.2S8.4 10.8 9 13"/></svg>Fleet</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3"/></svg>Needs you</button>
+          <div class="nav-sep desk-only"></div>
+          <button class="nav-item nav-more desk-only" type="button">Build</button>
+          <button class="nav-item nav-more desk-only" type="button">Connected sites</button>
+        </nav>
+
+        <div class="main">
+          <div class="scroll">
+            <div class="page-head">
+              <div>
+                <h3 class="page-title">Deal Dispatch</h3>
+                <p class="page-sub">Map · Work · Knowledge · Conversations · System</p>
+              </div>
+              <div class="depth-seg" aria-hidden="true">
+                <span class="on d-normal">Normal</span><span class="d-interested">Interested</span><span class="d-technical">Technical</span>
+              </div>
+            </div>
+
+            <div class="card flush constellation">
+              <svg viewBox="0 0 860 340" role="img" aria-label="Constellation: Deal Dispatch and its major and regular ideas">
+                <defs>
+                  <marker id="arw" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+                    <path d="M0 1 L7 4 L0 7" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+                  </marker>
+                </defs>
+
+                <!-- links -->
+                <g fill="none" stroke="var(--rule)" stroke-width="1.4" marker-end="url(#arw)">
+                  <path d="M196 170 C 260 170, 262 88, 322 88"/>
+                  <path d="M196 170 C 260 170, 262 170, 322 170"/>
+                  <path d="M196 170 C 260 170, 262 254, 322 254"/>
+                  <path d="M470 88 C 528 88, 530 54, 592 54"/>
+                  <path d="M470 88 C 528 88, 530 122, 592 122"/>
+                  <path d="M470 170 C 528 170, 530 190, 592 190"/>
+                  <path d="M470 254 C 528 254, 530 262, 592 262"/>
+                </g>
+                <!-- the canonical idea reached from two branches, drawn once -->
+                <path d="M470 170 C 530 170, 534 122, 592 122" fill="none" stroke="var(--verdigris)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#arw)"/>
+
+                <!-- site -->
+                <g>
+                  <rect x="40" y="140" width="156" height="60" rx="9" fill="var(--verdigris-soft)" stroke="var(--verdigris)" stroke-width="1.5"/>
+                  <text x="58" y="165" font-family="Public Sans, sans-serif" font-size="14" font-weight="600" fill="var(--verdigris-ink)">Deal Dispatch</text>
+                  <text x="58" y="183" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--verdigris-ink)">SITE · connected</text>
+                </g>
+
+                <!-- major ideas -->
+                <g font-family="Public Sans, sans-serif">
+                  <rect x="322" y="62" width="148" height="52" rx="8" fill="var(--surface)" stroke="var(--moss)" stroke-width="1.5"/>
+                  <text x="338" y="84" font-size="12.5" font-weight="600" fill="var(--ink)">County recording</text>
+                  <text x="338" y="100" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--moss)">FILED · 57 findings</text>
+
+                  <rect x="322" y="144" width="148" height="52" rx="8" fill="var(--surface)" stroke="var(--ochre)" stroke-width="1.5"/>
+                  <text x="338" y="166" font-size="12.5" font-weight="600" fill="var(--ink)">Market model</text>
+                  <text x="338" y="182" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ochre)">IN REVIEW</text>
+
+                  <rect x="322" y="228" width="148" height="52" rx="8" fill="var(--surface)" stroke="var(--slate)" stroke-width="1.5" stroke-dasharray="4 3"/>
+                  <text x="338" y="250" font-size="12.5" font-weight="600" fill="var(--ink)">Deal sourcing</text>
+                  <text x="338" y="266" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--slate)">NOT STARTED</text>
+                </g>
+
+                <!-- regular ideas -->
+                <g font-family="Public Sans, sans-serif" font-size="11.5">
+                  <rect x="592" y="34" width="228" height="40" rx="7" fill="var(--surface)" stroke="var(--rule)"/>
+                  <text x="606" y="52" fill="var(--ink)">E-recording acceptance by county</text>
+                  <text x="606" y="66" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--moss)">73 of 83 answered</text>
+
+                  <rect x="592" y="102" width="228" height="40" rx="7" fill="var(--surface)" stroke="var(--verdigris)"/>
+                  <text x="606" y="120" fill="var(--ink)">Per-office fee schedules</text>
+                  <text x="606" y="134" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--verdigris)">SHARED · 2 branches</text>
+
+                  <rect x="592" y="170" width="228" height="40" rx="7" fill="var(--surface)" stroke="var(--rule)"/>
+                  <text x="606" y="188" fill="var(--ink)">Same-day close feasibility</text>
+                  <text x="606" y="202" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ochre)">DEPENDS ON FEES</text>
+
+                  <rect x="592" y="242" width="228" height="40" rx="7" fill="var(--surface)" stroke="var(--rule)" stroke-dasharray="4 3"/>
+                  <text x="606" y="260" fill="var(--ink-faint)">Distressed-listing signals</text>
+                  <text x="606" y="274" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--slate)">PARKED</text>
+                </g>
+
+                <text x="40" y="316" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-faint)">Portfolio › Deal Dispatch</text>
+              </svg>
+              <div class="const-legend">
+                <span><i style="background:var(--moss)"></i>Filed</span>
+                <span><i style="background:var(--ochre)"></i>In review</span>
+                <span><i style="background:var(--slate)"></i>Not started</span>
+                <span><i style="background:var(--verdigris)"></i>One idea, reached from two branches — not duplicated</span>
+              </div>
+            </div>
+
+            <div class="cols">
+              <div class="card">
+                <div class="card-head"><h4 class="card-title">What Russell believes here</h4><span class="card-kicker">3 conclusions</span></div>
+                <dl class="qa">
+                  <div><dt>Strongest</dt><dd>Most Michigan counties take electronic recording, and the ones that publish a fee mostly publish <b>$30</b>. <em style="color:var(--ink-faint);font-style:normal">Backed by 54 official sources.</em></dd></div>
+                  <div><dt>Weakest</dt><dd>Who each office actually approves as a submitter. Named as a gap rather than guessed.</dd></div>
+                  <div><dt>Contradicted</dt><dd>Nothing currently.</dd></div>
+                  <div><dt>Unknown</dt><dd><b>10 counties</b> — 3 refused the fetch, 7 publish nothing locatable.</dd></div>
+                </dl>
+                <div class="reveal-interested" hidden style="margin-top:12px">
+                  <dl class="qa">
+                    <div><dt>Held from you</dt><dd>Three findings were rejected at the evidence gate and are not counted above. They keep their reasons and cannot re-enter a later write-up.</dd></div>
+                  </dl>
+                </div>
+                <div class="reveal-technical tech" hidden style="margin-top:12px">
+                  <div><span class="k">knowledge</span> rkn_edb3de2d7d2d4f058e15 CONCLUSION layer=Execution Playbooks</div>
+                  <div><span class="k">provenance</span> doc_e9eaeab710b148d29fdd ← aud_9da36e403bcb41dca1c9</div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head"><h4 class="card-title">Connected system</h4><span class="stamp live">Live · 41s ago</span></div>
+                <dl class="qa">
+                  <div><dt>Site</dt><dd>Deal Dispatch — <b>6 records</b> tracked</dd></div>
+                  <div><dt>Asked for</dt><dd>1 record sent <em style="color:var(--ink-faint);font-style:normal">research this further</em></dd></div>
+                  <div><dt>State</dt><dd>Queued behind the current mission</dd></div>
+                </dl>
+              </div>
+            </div>
+          </div>
+
+          <div class="command">
+            <div class="starters">
+              <button class="starter" type="button">What breaks if fee schedules are wrong?</button>
+              <button class="starter" type="button">Why is sourcing still not started?</button>
+              <button class="starter" type="button">Show me the 10 unknown counties</button>
+            </div>
+            <div class="command-input">
+              <span class="ph">Ask about anything on this map…</span>
+              <span class="scope">Deal Dispatch</span>
+              <span class="send"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.8"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h4>Selecting recenters</h4><p>Clicking a node focuses it, expands its children, and leaves breadcrumbs out. Dragging repositions the view; it never rewrites business truth without an explicit model edit.</p></div>
+    <div class="note"><h4>One idea, two parents</h4><p>Fee schedules feed both recording and the market model. It is drawn once with a dashed second link — never cloned into two competing truths.</p></div>
+    <div class="note"><h4>Unknown ≠ zero</h4><p>Dashed outline and slate mean not started or not read. A failed read renders as unavailable, never as an empty project.</p></div>
+    <div class="note"><h4>Six specialised maps follow</h4><p>System, workflow, knowledge, decision tree, timeline, money-flow are siblings of this view, not replacements for it.</p></div>
+  </div>
+
+  <!-- ==================================================================
+       SCREEN 3 + 4 — NEEDS YOU
+       ================================================================== -->
+  <h2 class="section">Needs you — empty, and populated</h2>
+  <p class="section-note">
+    The empty state is the normal state, and it should feel settled rather than broken. The
+    standing authority sits behind one line, not a policy essay filling the page — the exact case
+    you rejected. Toggle the width; both survive 390.
+  </p>
+
+  <div class="frame-wrap">
+    <div class="frame" id="frame-empty">
+      <div class="frame-bar"><span class="dot-row"><i></i><i></i><i></i></span><span class="fb-w">1440 × desktop</span> · empty</div>
+      <div class="app">
+        <nav class="rail">
+          <div class="brand"><div class="brand-mark">R</div><div class="brand-name">Russell</div></div>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/></svg>Russell</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 8h8M2 12h10"/></svg>Work</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="7" r="2"/><circle cx="6" cy="12" r="2"/><path d="M5.7 5.2 10.3 6M10.8 8.7 7.4 10.6"/></svg>Projects</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 3v10l5-2 5 2V3z"/></svg>Knowledge</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5.5" cy="5" r="2.2"/><circle cx="11" cy="7" r="1.8"/><path d="M2 13c.6-2.2 2-3.2 3.5-3.2S8.4 10.8 9 13"/></svg>Fleet</button>
+          <button class="nav-item" aria-current="page" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3"/></svg>Needs you</button>
+          <div class="nav-sep desk-only"></div>
+          <button class="nav-item nav-more desk-only" type="button">Build</button>
+          <button class="nav-item nav-more desk-only" type="button">Connected sites</button>
+        </nav>
+        <div class="main">
+          <div class="scroll">
+            <div class="page-head">
+              <div><h3 class="page-title">Needs you</h3><p class="page-sub">Deal Dispatch</p></div>
+            </div>
+            <div class="calm">
+              <span class="stamp settled">Nothing needs your decision</span>
+              <h4>You are clear</h4>
+              <p>Russell is running inside what you already allowed. It will come back here only for
+                spending, an outside action, something irreversible, or a question it genuinely cannot
+                settle on its own.</p>
+              <div class="continues">
+                <div><b>Continues without you</b> — reviewing the county follow-up</div>
+                <div><b>Continues without you</b> — folding the result into How the market works</div>
+                <div><b>Will pause for you</b> — anything that costs money, and it currently costs nothing</div>
+              </div>
+              <details class="may-do">
+                <summary>What Russell may do here</summary>
+                <ul>
+                  <li>Research Michigan public records, one job at a time</li>
+                  <li>Take a short look before committing to a full investigation</li>
+                  <li>Start the next thing it ranked highest, by itself</li>
+                  <li>Never spend money, contact anyone, or publish anything</li>
+                </ul>
+              </details>
+              <div class="resolved-line">
+                <span>Last decision · <b style="color:var(--ink)">01:28 this morning</b> — you let it file the county write-up with its open questions named.</span>
+                <span style="color:var(--verdigris)">It started the follow-up 39 seconds later.</span>
+              </div>
+            </div>
+          </div>
+          <div class="command">
+            <div class="command-input">
+              <span class="ph">Ask Russell, or tell it something…</span>
+              <span class="scope">Deal Dispatch</span>
+              <span class="send"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.8"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:22px"></div>
+
+  <div class="frame-wrap">
+    <div class="frame" id="frame-full">
+      <div class="frame-bar"><span class="dot-row"><i></i><i></i><i></i></span><span class="fb-w">1440 × desktop</span> · populated</div>
+      <div class="app">
+        <nav class="rail">
+          <div class="brand"><div class="brand-mark">R</div><div class="brand-name">Russell</div></div>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/></svg>Russell</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 8h8M2 12h10"/></svg>Work</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="7" r="2"/><circle cx="6" cy="12" r="2"/><path d="M5.7 5.2 10.3 6M10.8 8.7 7.4 10.6"/></svg>Projects</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 3v10l5-2 5 2V3z"/></svg>Knowledge</button>
+          <button class="nav-item" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5.5" cy="5" r="2.2"/><circle cx="11" cy="7" r="1.8"/><path d="M2 13c.6-2.2 2-3.2 3.5-3.2S8.4 10.8 9 13"/></svg>Fleet</button>
+          <button class="nav-item" aria-current="page" type="button"><svg class="nav-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3"/></svg>Needs you<span class="badge">1</span></button>
+          <div class="nav-sep desk-only"></div>
+          <button class="nav-item nav-more desk-only" type="button">Build</button>
+          <button class="nav-item nav-more desk-only" type="button">Connected sites</button>
+        </nav>
+        <div class="main">
+          <div class="scroll">
+            <div class="page-head">
+              <div><h3 class="page-title">Needs you</h3><p class="page-sub">1 decision · blocking important work</p></div>
+              <div class="depth-seg" aria-hidden="true">
+                <span class="on d-normal">Normal</span><span class="d-interested">Interested</span><span class="d-technical">Technical</span>
+              </div>
+            </div>
+
+            <div class="decision">
+              <div class="decision-head">
+                <span class="stamp attention">Blocking important work</span>
+                <h4>The county write-up answers most of it, not all of it</h4>
+              </div>
+              <div class="decision-body">
+                <p style="margin:0;color:var(--ink-soft);max-width:64ch">
+                  Russell finished the Michigan recording investigation and its own reviewer found the
+                  write-up sound but incomplete — five questions it could not settle from the public
+                  record. Filing a report short of its goal is a judgement Russell is not allowed to make
+                  for you.
+                </p>
+
+                <div class="choice recommended">
+                  <span class="choice-mark"></span>
+                  <div>
+                    <div class="choice-name">Record what could not be settled, and finish <span class="rec-tag">Russell recommends</span></div>
+                    <p class="choice-what">The report files with its open questions named inside it, rather than claiming they were answered. The 57 findings and 30 citations stand.</p>
+                    <p class="choice-next">→ Russell then starts a follow-up on the questions its reviewer wrote, by itself, within what you already allowed.</p>
+                  </div>
+                </div>
+
+                <div class="choice">
+                  <span class="choice-mark"></span>
+                  <div>
+                    <div class="choice-name">Stop this work</div>
+                    <p class="choice-what">The investigation ends without filing. The 57 accepted findings stay in the project and keep their sources; nothing is promoted into what Russell believes.</p>
+                    <p class="choice-next" style="color:var(--ink-faint)">→ Nothing further is started.</p>
+                  </div>
+                </div>
+
+                <div class="reveal-interested" hidden>
+                  <dl class="qa">
+                    <div><dt>The five</dt><dd>Oakland, Ottawa and Montmorency refused the fetch · 27 counties publish nothing locatable · approved-submitter lists · per-office fees · Wayne and Macomb closed on one page each</dd></div>
+                    <div><dt>Why not more</dt><dd>The repair budget for this question is spent. Another attempt would repeat a search already tried, which Russell will not do.</dd></div>
+                  </dl>
+                </div>
+                <div class="reveal-technical tech" hidden>
+                  <div><span class="k">request</span> rhr_36a4f59793274ac08598 · BLOCKING · choices [RECORD_GAPS, STOP]</div>
+                  <div><span class="k">packet</span> orc_08b94f87a71a4b588829 NEEDS_HUMAN · unresolved_gap_policy null</div>
+                  <div><span class="k">gaps</span> 5 × TARGETED_RESEARCH_GAP, 4 × PATCH, 1 × OTHER_LAYER</div>
+                </div>
+
+                <div class="decision-actions">
+                  <button class="btn primary" type="button">Record and finish</button>
+                  <button class="btn" type="button">Stop this work</button>
+                  <button class="btn quiet" type="button">Ask Russell about it</button>
+                  <button class="btn quiet" type="button">Later</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="command">
+            <div class="command-input">
+              <span class="ph">Ask Russell about this decision…</span>
+              <span class="scope">Deal Dispatch → County recording</span>
+              <span class="send"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.8"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h4>Only offered choices appear</h4><p>Two buttons, because the server supports two for this card. No generic Approve/Decline/Modify row stamped on every decision.</p></div>
+    <div class="note"><h4>It names the next work</h4><p>“Nothing further is searched” was wrong — the durable path launches the follow-up. The card says so, because you are deciding partly on that.</p></div>
+    <div class="note"><h4>The recommendation is visible</h4><p>Russell marks its own pick and takes the consequence of being wrong. You can still take the other one in a single click.</p></div>
+    <div class="note"><h4>Both states, one page</h4><p>Empty is not a different screen with a leftover policy card on it. It is the same page, settled.</p></div>
+  </div>
+
+  <!-- ==================================================================
+       DECISIONS
+       ================================================================== -->
+  <h2 class="section">Four things I need your judgment on</h2>
+  <p class="section-note">
+    Everything else in this direction follows from the reconciled contract. These four do not —
+    each is a real fork where your preference decides, and I have marked which way I would go.
+  </p>
+
+  <div class="judgment">
+
+    <article>
+      <div class="jnum">01</div>
+      <div class="jbody">
+        <h3>Where Build and Connected sites live</h3>
+        <p>
+          §5 asks for a tight six — Russell, Work, Projects, Knowledge, Fleet, Needs you — but Build
+          (the software factory) and Connected sites are working capabilities that must stay easy to
+          find. Today's rail has all eight flat, which is part of why it reads cluttered.
+        </p>
+        <div class="options">
+          <div class="option mine">
+            <span class="option-key">A</span>
+            <div><b>Six primary, two below a rule</b>
+              <p>What the mocks show. Six get icons and weight; Build and Connected sites sit under a hairline as plain text, always visible on desktop, reachable from the More sheet on phone. Deep links keep working.</p></div>
+          </div>
+          <div class="option">
+            <span class="option-key">B</span>
+            <div><b>Build and Connected sites become project subviews</b>
+              <p>They move inside a project, beside Map / Work / Knowledge. Tighter rail, but Build is not really per-project and would feel misfiled.</p></div>
+          </div>
+          <div class="option">
+            <span class="option-key">C</span>
+            <div><b>Keep all eight equal</b>
+              <p>No hierarchy to learn. But it is the current layout, and the flatness is part of what you rejected.</p></div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article>
+      <div class="jnum">02</div>
+      <div class="jbody">
+        <h3>What replaces “0 of 8 settled”</h3>
+        <p>
+          The old line was true and useless: it read as “nothing accomplished” over a project holding
+          57 accepted findings and a filed report. A project needs a maturity word and a shape, and the
+          question is how much shape.
+        </p>
+        <div class="options">
+          <div class="option mine">
+            <span class="option-key">A</span>
+            <div><b>Maturity word + per-foundation strip</b>
+              <p>What the mocks show: <em>Forming</em>, then five foundations with partial bars and the rest summarised as “+3 not started”. Honest about partial work, no invented percentage.</p></div>
+          </div>
+          <div class="option">
+            <span class="option-key">B</span>
+            <div><b>Maturity word only</b>
+              <p>Quieter. But it hides that one foundation is nearly done and another is untouched, which is exactly the difference you would act on.</p></div>
+          </div>
+          <div class="option">
+            <span class="option-key">C</span>
+            <div><b>Count of answered questions instead of foundations</b>
+              <p>“73 of 83 counties.” Sharpest when the project has one dominant question; falls apart when it has four.</p></div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article>
+      <div class="jnum">03</div>
+      <div class="jbody">
+        <h3>How present Russell is</h3>
+        <p>
+          §6 asks for a Brain Pulse that makes Russell feel active without becoming status spam. The
+          line in the mocks reads <em>“Working — auditing the county follow-up it started for
+          itself”</em> and breathes once every few seconds. That is a deliberate small amount of
+          personality; it could be more or none.
+        </p>
+        <div class="options">
+          <div class="option mine">
+            <span class="option-key">A</span>
+            <div><b>One live line, always, in Russell's voice</b>
+              <p>Present on home only, derived from real rows, never a spinner. Says what it is thinking about, not what state machine it is in.</p></div>
+          </div>
+          <div class="option">
+            <span class="option-key">B</span>
+            <div><b>The same line on every screen</b>
+              <p>Stronger presence. Risks becoming furniture people stop reading, which §6 warns against.</p></div>
+          </div>
+          <div class="option">
+            <span class="option-key">C</span>
+            <div><b>Status only, no voice</b>
+              <p>“1 of 1 worker busy · checked 14s ago.” Calmer and colder. Loses the thing that makes it feel like a colleague.</p></div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article>
+      <div class="jnum">04</div>
+      <div class="jbody">
+        <h3>Whether the constellation is the project's front door</h3>
+        <p>
+          §20 makes the constellation the primary project experience. In the mocks it sits at the top
+          of the project page above the written summary. That is a strong claim: it means you see
+          shape before you read words, every time you open a project.
+        </p>
+        <div class="options">
+          <div class="option mine">
+            <span class="option-key">A</span>
+            <div><b>Map first, summary under it</b>
+              <p>What the mocks show. The shape of the thing is the fastest read once a project has more than a handful of ideas, and it is where §20 points.</p></div>
+          </div>
+          <div class="option">
+            <span class="option-key">B</span>
+            <div><b>Summary first, map one tab along</b>
+              <p>Words before shape. Better on a phone and for a project with three ideas; weaker as the graph grows.</p></div>
+          </div>
+          <div class="option">
+            <span class="option-key">C</span>
+            <div><b>Map first on desktop, summary first on phone</b>
+              <p>Honest to each device, but the two then disagree about what a project <em>is</em>, and §21 says desktop and mobile share one architecture.</p></div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+  </div>
+
+  <p class="footnote">
+    Everything on these screens is drawn from rows read at 02:45Z on 12 September: packet
+    <code>orc_08b94f87a71a4b588829</code> filed at 42,621 bytes with 30 of 30 citations resolving,
+    its follow-on <code>rms_683d8907fcb94e94bb63</code> auditing, the durable loop at generation
+    22673, one concurrent worker slot, and a paid-API ceiling of zero. The county figures are
+    rounded from the filed claim ledger for display and are inspectable at Technical depth. Type is
+    Public Sans — the typeface of US public records — with Fraunces for display and IBM Plex Mono
+    for identifiers.
+  </p>
+
+</div>
+
+<script>
+  (function () {
+    var frames = Array.prototype.slice.call(document.querySelectorAll('.frame'));
+    var widthLabels = { '1180': '1440 × desktop', '953': '953 × intermediate', '390': '390 × phone' };
+
+    function setWidth(w) {
+      frames.forEach(function (f) {
+        f.style.setProperty('--vw', w + 'px');
+        var label = f.querySelector('.fb-w');
+        if (label) label.textContent = widthLabels[w] || w + 'px';
+      });
+    }
+
+    function setDepth(d) {
+      document.querySelectorAll('.reveal-interested').forEach(function (el) {
+        el.hidden = !(d === 'interested' || d === 'technical');
+      });
+      document.querySelectorAll('.reveal-technical').forEach(function (el) {
+        el.hidden = d !== 'technical';
+      });
+      document.querySelectorAll('.depth-seg').forEach(function (seg) {
+        seg.querySelectorAll('span').forEach(function (s) {
+          s.classList.toggle('on', s.classList.contains('d-' + d));
+        });
+      });
+    }
+
+    document.querySelectorAll('[data-w]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('[data-w]').forEach(function (b) {
+          b.setAttribute('aria-pressed', String(b === btn));
+        });
+        setWidth(btn.getAttribute('data-w'));
+      });
+    });
+
+    document.querySelectorAll('[data-d]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('[data-d]').forEach(function (b) {
+          b.setAttribute('aria-pressed', String(b === btn));
+        });
+        setDepth(btn.getAttribute('data-d'));
+      });
+    });
+
+    setWidth('1180');
+    setDepth('normal');
+  })();
+</script>

@@ -164,3 +164,29 @@ Needs You was prepared on 2026-09-12. Approval is recorded below when given.
 | Date | Decision | Recorded by |
 | --- | --- | --- |
 | — | pending | — |
+
+---
+
+## Design preview (§24 gate)
+
+The proposed direction is versioned at `docs/design/step-12b-direction.html` and
+published for review at:
+
+    https://claude.ai/code/artifact/8521cb82-173d-452b-b310-b4e2731a7882
+
+It shows four screens — Russell home, project with the living constellation,
+Needs You empty, Needs You populated — at three widths (1180 / 953 / 390) driven
+by container queries rather than a media query on the preview's own viewport, so
+the reflow shown is the reflow the product gets. It carries a depth control
+(Normal / Interested / Technical) because §12's progressive disclosure is an
+interaction rather than a layout, and a static picture cannot show it.
+
+Nothing in it is implemented. It is a proposal to approve, and the four
+decisions below are the only ones that are genuinely a person's.
+
+| Decision | Proposed | Approved |
+| --- | --- | --- |
+| Where Build and Connected sites sit in the rail | Six primary items; those two below a rule | pending |
+| What replaces "0 of 8 settled" | Maturity word plus a per-foundation strip | pending |
+| How present Russell's voice is | One live line, on home only | pending |
+| Whether the constellation is the project's front door | Map first, written summary beneath | pending |
