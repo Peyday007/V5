@@ -34,6 +34,7 @@ import { useAsync } from './useAsync.ts';
 import { Conversation } from './Conversation.tsx';
 import { RussellHome } from './Home.tsx';
 import { Search } from './Search.tsx';
+import { FleetCentre } from './Fleet.tsx';
 import { BuildView } from './Build.tsx';
 import {
   FleetView,
@@ -371,11 +372,12 @@ export function RussellShell({
         {route.name === 'KNOWLEDGE' ? <KnowledgeView projectId={projectId} /> : null}
         {route.name === 'FLEET' ? (
           <>
-            {/* Who is people first, machinery second. The older fleet reading
+            {/* Who is people first, machinery second. The one-sentence reading
                 stays underneath because it is the one thing that carries its
                 own freshness, which the role-gated view deliberately does not. */}
             <WhoView projectId={projectId} />
             <FleetView />
+            <FleetCentre projectId={projectId} />
           </>
         ) : null}
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}

@@ -52,6 +52,17 @@ import { homeFor } from '../services/russell/home.ts';
 import { collectionsFor } from '../services/russell/collections.ts';
 import { frontierFor } from '../services/russell/frontier.ts';
 import { SAVED_VIEWS, SEARCH_KINDS, search, type SearchKind } from '../services/russell/search.ts';
+import { explainSlowness, fleetView } from '../services/fleet/view.ts';
+import {
+  LAB_MODES,
+  applyFinding,
+  declareExperiment,
+  listExperiments,
+  rollbackFinding,
+  runExperiment,
+  type LabMode,
+} from '../services/fleet/lab.ts';
+import { setPolicy } from '../repos/fleet.ts';
 import { dismissFrontierItem } from '../repos/russellFrontier.ts';
 import {
   fileConversation,
@@ -375,6 +386,203 @@ russellRouter.get(
     });
     if (!view) throw notFound('No project with that id.');
     return { home: view, project: { id: project.id, name: project.name } };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Fleet and the Capability Lab
+ * ------------------------------------------------------------------------ */
+
+/**
+ * How much usable Brain power exists, where it is going, and what should change.
+ *
+ * Technical depth is decided from the caller's actual rights rather than from a
+ * query parameter: raw worker, token and session identifiers are technical
+ * detail (§14), so they come back only for a caller `decideProjectAccess`
+ * already admits at ADMIN. A parameter would let anybody ask for them.
+ */
+russellRouter.get(
+  '/projects/:projectId/fleet',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const who = await whoForProject({ principal, projectId: project.id });
+    if (!who) throw notFound('No project with that id.');
+    return {
+      fleet: await fleetView({
+        includeTechnical: who.depth === 'OPERATOR',
+        projectId: project.id,
+      }),
+    };
+  }),
+);
+
+/**
+ * Why one piece of work took as long as it did.
+ *
+ * The chain is Brain's own recorded events. Nothing here consults a clock to
+ * decide what happened, and nothing consults a worker's account of itself.
+ */
+russellRouter.get(
+  '/projects/:projectId/fleet/slow/:binId',
+  handler(async (req) => {
+    requirePerson();
+    await requireProject(pathId(req, 'projectId'));
+    return { explanation: await explainSlowness(pathId(req, 'binId')) };
+  }),
+);
+
+/**
+ * Change how much may run at once, durably and reversibly.
+ *
+ * An INSERT into `fleet_policy`, which is versioned, attributed and reasoned —
+ * so this needs no deployment and the previous value is still there to revert
+ * to. It changes *allocation*, never the right to perform a new kind of work:
+ * nothing here widens a scope, grants a capability or authorizes spending.
+ */
+russellRouter.post(
+  '/projects/:projectId/fleet/policy',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const who = await whoForProject({ principal, projectId: project.id });
+    if (!who || who.depth !== 'OPERATOR') throw notFound('No project with that id.');
+    const body = bodyOf(req);
+    const target = optionalInteger(body['target'], 'target', { min: 0, max: 1000 });
+    if (target === undefined) throw badRequest('A target is required.');
+    const reason = (optionalString(body['reason'], 'reason') ?? '').trim();
+    if (reason.length === 0) {
+      throw badRequest('Say why the fleet target is changing; a change with no reason cannot be reviewed later.');
+    }
+    const policy = await setPolicy({
+      scope: 'FLEET',
+      target,
+      paused: body['paused'] === true,
+      actor: principal.displayName,
+      reason,
+    });
+    return { policy: { id: policy.id, version: policy.version, target: policy.target } };
+  }),
+);
+
+/** Everything the lab has been asked to find out, and what it found. */
+russellRouter.get(
+  '/projects/:projectId/lab',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { experiments: await listExperiments(project.id), modes: LAB_MODES };
+  }),
+);
+
+/**
+ * Declare an experiment.
+ *
+ * Declaring is not running, and a pressure mode with an incomplete envelope is
+ * *stored* as refused rather than rejected — the refusal is evidence of what
+ * was asked for and why it was not allowed, which a thrown error would lose.
+ */
+russellRouter.post(
+  '/projects/:projectId/lab',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const mode = requiredString(body['mode'], 'mode');
+    if (!(LAB_MODES as readonly string[]).includes(mode)) {
+      throw badRequest('That is not a test this lab knows how to run.');
+    }
+    const envelope = body['envelope'];
+    return {
+      experiment: await declareExperiment({
+        projectId: project.id,
+        mode: mode as LabMode,
+        title: requiredString(body['title'], 'title'),
+        envelope: (typeof envelope === 'object' && envelope !== null
+          ? envelope
+          : {
+              ceiling: 0,
+              durationMinutes: 0,
+              stopConditions: [],
+              cleanup: '',
+              rollback: '',
+              workloadClass: 'UNKNOWN',
+              workKind: 'SYNTHETIC',
+            }) as never,
+        manifest: (typeof body['manifest'] === 'object' && body['manifest'] !== null
+          ? body['manifest']
+          : {}) as Record<string, unknown>,
+        actor: principal.displayName,
+      }),
+    };
+  }),
+);
+
+/**
+ * Run one.
+ *
+ * `pressureAuthorized` is read from the *route*, not from the experiment's own
+ * row: an experiment that carried its own authorization would be supplying the
+ * limits it is judged against. A person at ADMIN saying so in the request is
+ * the authorization, and a pressure mode without it settles as refused with
+ * nothing spent.
+ */
+russellRouter.post(
+  '/projects/:projectId/lab/:experimentId/run',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const who = await whoForProject({ principal, projectId: project.id });
+    const authorized =
+      who?.depth === 'OPERATOR' && bodyOf(req)['authorizePressure'] === true;
+    return {
+      experiment: await runExperiment({
+        id: pathId(req, 'experimentId'),
+        pressureAuthorized: authorized,
+      }),
+    };
+  }),
+);
+
+/** Turn a finding into policy, reversibly. */
+russellRouter.post(
+  '/projects/:projectId/lab/:experimentId/apply',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const who = await whoForProject({ principal, projectId: project.id });
+    if (!who || who.depth !== 'OPERATOR') throw notFound('No project with that id.');
+    const body = bodyOf(req);
+    const reason = (optionalString(body['reason'], 'reason') ?? '').trim();
+    if (reason.length === 0) throw badRequest('Say why this finding is being applied.');
+    return {
+      experiment: await applyFinding({
+        experimentId: pathId(req, 'experimentId'),
+        target: optionalInteger(body['target'], 'target', { min: 0, max: 1000 }) ?? 1,
+        actor: principal.displayName,
+        reason,
+      }),
+    };
+  }),
+);
+
+/** Undo one, by writing the previous value forward rather than deleting. */
+russellRouter.post(
+  '/projects/:projectId/lab/:experimentId/rollback',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const who = await whoForProject({ principal, projectId: project.id });
+    if (!who || who.depth !== 'OPERATOR') throw notFound('No project with that id.');
+    const reason = (optionalString(bodyOf(req)['reason'], 'reason') ?? '').trim();
+    if (reason.length === 0) throw badRequest('Say why this is being rolled back.');
+    return {
+      experiment: await rollbackFinding({
+        experimentId: pathId(req, 'experimentId'),
+        actor: principal.displayName,
+        reason,
+      }),
+    };
   }),
 );
 

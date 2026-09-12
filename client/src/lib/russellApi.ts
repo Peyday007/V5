@@ -34,6 +34,8 @@ import type { HomeView } from '../../../server/services/russell/home.ts';
 import type { CollectionView, RankedThread, Starter } from '../../../server/services/russell/collections.ts';
 import type { FrontierView, FrontierRegionView } from '../../../server/services/russell/frontier.ts';
 import type { SearchHit, SearchKind, SearchResult } from '../../../server/services/russell/search.ts';
+import type { FleetView as FleetReading, SlownessExplanation } from '../../../server/services/fleet/view.ts';
+import type { LabExperiment, LabMode, TestEnvelope } from '../../../server/services/fleet/lab.ts';
 import type {
   AuthorityView,
   AuthorityLimitKey,
@@ -47,9 +49,14 @@ export type {
   FrontierRegionView,
   FrontierView,
   HomeView,
+  FleetReading,
+  LabExperiment,
+  LabMode,
   SearchHit,
   SearchKind,
   SearchResult,
+  SlownessExplanation,
+  TestEnvelope,
   RankedThread,
   Starter,
   CandidatePriority,
@@ -234,6 +241,85 @@ export const RussellApi = {
     home: HomeView;
     project: { id: string; name: string };
   }> => api(`/api/russell/projects/${encodeURIComponent(projectId)}/home`),
+
+  /**
+   * How much usable power exists, where it is going, and what should change.
+   *
+   * Technical depth is decided on the server from the caller's rights, so
+   * there is nothing to ask for here: raw identifiers arrive, or they do not.
+   */
+  fleetReading: (projectId: string): Promise<{ fleet: FleetReading }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/fleet`),
+
+  /** Why one piece of work took as long as it did, from recorded events. */
+  whySlow: (projectId: string, binId: string): Promise<{ explanation: SlownessExplanation }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/fleet/slow/${encodeURIComponent(binId)}`,
+    ),
+
+  /** Change how much may run at once. A row, never a deployment. */
+  setFleetTarget: (
+    projectId: string,
+    target: number,
+    reason: string,
+    paused = false,
+  ): Promise<{ policy: { id: string; version: number; target: number } }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/fleet/policy`, {
+      method: 'POST',
+      body: JSON.stringify({ target, reason, paused }),
+    }),
+
+  /** Everything the lab has been asked to find out, and what it found. */
+  labExperiments: (
+    projectId: string,
+  ): Promise<{ experiments: LabExperiment[]; modes: readonly LabMode[] }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/lab`),
+
+  declareExperiment: (
+    projectId: string,
+    body: { mode: LabMode; title: string; envelope: TestEnvelope; manifest?: Record<string, unknown> },
+  ): Promise<{ experiment: LabExperiment }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/lab`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Run one.
+   *
+   * `authorizePressure` is the person's authorization, sent deliberately: a
+   * pressure test without it settles as refused with nothing spent.
+   */
+  runExperiment: (
+    projectId: string,
+    experimentId: string,
+    authorizePressure = false,
+  ): Promise<{ experiment: LabExperiment }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/lab/${encodeURIComponent(experimentId)}/run`,
+      { method: 'POST', body: JSON.stringify({ authorizePressure }) },
+    ),
+
+  applyFinding: (
+    projectId: string,
+    experimentId: string,
+    target: number,
+    reason: string,
+  ): Promise<{ experiment: LabExperiment }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/lab/${encodeURIComponent(experimentId)}/apply`,
+      { method: 'POST', body: JSON.stringify({ target, reason }) },
+    ),
+
+  rollbackFinding: (
+    projectId: string,
+    experimentId: string,
+    reason: string,
+  ): Promise<{ experiment: LabExperiment }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/lab/${encodeURIComponent(experimentId)}/rollback`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    ),
 
   /**
    * Search, as this person.

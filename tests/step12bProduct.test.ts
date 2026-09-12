@@ -41,6 +41,17 @@ import {
   observeFrontierItem,
 } from '../server/repos/russellFrontier.ts';
 import { search } from '../server/services/russell/search.ts';
+import { explainSlowness, fleetView, meaningOfGap, usability } from '../server/services/fleet/view.ts';
+import {
+  applyFinding,
+  checkEnvelope,
+  declareExperiment,
+  rollbackFinding,
+  runExperiment,
+  stalenessOf,
+} from '../server/services/fleet/lab.ts';
+import { currentPolicy, policyHistory } from '../server/repos/fleet.ts';
+import { createProject } from '../server/repos/projects.ts';
 import { parseRoute } from '../client/src/lib/router.ts';
 import type { Principal, Project } from '../server/domain/types.ts';
 
@@ -839,5 +850,296 @@ describe('search is scoped before it runs, never filtered after', () => {
       expect(hit.href.startsWith('/')).toBe(true);
       expect(parseRoute(hit.href).name).not.toBe('NOT_FOUND');
     }
+  });
+});
+
+/* ==========================================================================
+ * Fleet and the Capability Lab
+ * ========================================================================== */
+
+describe('the fleet reports three different numbers, and never rounds one up', () => {
+  it('separates a configured target from a usable surface from an observed throughput', async () => {
+    const view = await fleetView({ includeTechnical: true });
+    // Three readings, three evidence classes. A throughput nobody has observed
+    // must read UNKNOWN rather than become a confident zero.
+    expect(view.provisioned.evidence).toBeTruthy();
+    expect(view.usable.evidence).toBe('MEASURED');
+    expect(['MEASURED', 'UNKNOWN', 'PROVIDER_ENFORCED']).toContain(view.measured.evidence);
+    expect(view.provisioned.explanation).not.toBe(view.usable.explanation);
+  });
+
+  it('says the backlog does not fit only when it knows, and otherwise says nothing', async () => {
+    const view = await fleetView({ includeTechnical: true });
+    // With no surface registered the answer is a definite no — a fact, not a
+    // projection. It is never a confident yes without a measurement.
+    expect(view.fits === false || view.fits === null || view.fits === true).toBe(true);
+    if (view.usable.value === 0) expect(view.fits).toBe(false);
+  });
+
+  it('withholds raw identifiers from a caller not entitled to them', async () => {
+    const open = await fleetView({ includeTechnical: true });
+    const closed = await fleetView({ includeTechnical: false });
+    for (const surface of closed.surfaces) {
+      // Null is "you are not told", which is different from "there is none".
+      expect(surface.workerId).toBeNull();
+    }
+    expect(closed.surfaces.length).toBe(open.surfaces.length);
+  });
+
+  it('names each reason a surface cannot be fired separately', () => {
+    const base = {
+      id: 'fr_1',
+      accountId: 'fa_1',
+      name: 'V1',
+      routineRef: 'trig_x',
+      state: 'ENABLED',
+      capabilities: [],
+      tokenSecretName: 'SECRET',
+      tokenDigest: 'abc',
+      workerId: null,
+      fireGeneration: 1,
+      consecutiveFailures: 0,
+      consecutiveNoShows: 0,
+      retryAt: null,
+    } as never;
+    const account = { id: 'fa_1', name: 'primary', state: 'ENABLED' } as never;
+    const now = '2026-09-12T00:00:00.000Z';
+
+    expect(usability(base, undefined, now).reason).toMatch(/account is not registered/i);
+    expect(usability({ ...(base as object), tokenSecretName: null } as never, account, now).reason).toMatch(
+      /deployment secret/i,
+    );
+    expect(usability({ ...(base as object), state: 'QUARANTINED' } as never, account, now).reason).toMatch(
+      /held back/i,
+    );
+    expect(
+      usability({ ...(base as object), retryAt: '2026-09-13T00:00:00.000Z' } as never, account, now)
+        .reason,
+    ).toMatch(/refusal/i);
+    // A healthy one has no reason at all, because there is nothing to say.
+    expect(usability(base, account, now)).toEqual({ usable: true, reason: null });
+  });
+
+  it('explains a gap from the events either side of it, never from elapsed time', () => {
+    expect(meaningOfGap('BIN_READY', 'DISPATCH_INTENT')).toMatch(/dispatcher to notice/i);
+    expect(meaningOfGap('DISPATCH_SENT', 'BIN_ASSIGNED')).toMatch(/fired worker to arrive/i);
+    expect(meaningOfGap('BIN_ASSIGNMENT_REFUSED', 'BIN_ASSIGNED')).toMatch(/not eligible/i);
+    // Two events with no known relationship get an honest non-answer rather
+    // than a plausible one.
+    expect(meaningOfGap('BIN_HEARTBEAT', 'BIN_CHECKPOINT')).toMatch(/does not attribute/i);
+  });
+
+  it('says what it could not determine rather than filling the hole', async () => {
+    const explanation = await explainSlowness('bin_that_does_not_exist');
+    expect(explanation.steps).toHaveLength(0);
+    expect(explanation.largestGap).toBeNull();
+    expect(explanation.unknowns.length).toBeGreaterThan(0);
+  });
+});
+
+describe('the Capability Lab is bounded before it runs', () => {
+  it('refuses a pressure test with no ceiling, no duration or no stop condition', () => {
+    const complete = {
+      ceiling: 5,
+      durationMinutes: 10,
+      stopConditions: ['a provider refusal'],
+      cleanup: 'delete the synthetic bins',
+      rollback: 'revert the policy version',
+      workloadClass: 'RESEARCH',
+      workKind: 'SYNTHETIC' as const,
+    };
+    expect(checkEnvelope('PUSH_TO_FAILURE', complete).ok).toBe(true);
+    expect(checkEnvelope('PUSH_TO_FAILURE', { ...complete, ceiling: 0 }).ok).toBe(false);
+    expect(checkEnvelope('PUSH_TO_FAILURE', { ...complete, durationMinutes: 0 }).ok).toBe(false);
+    expect(checkEnvelope('PUSH_TO_FAILURE', { ...complete, stopConditions: [] }).ok).toBe(false);
+    expect(checkEnvelope('PUSH_TO_FAILURE', { ...complete, cleanup: '' }).ok).toBe(false);
+    expect(checkEnvelope('PUSH_TO_FAILURE', { ...complete, rollback: '' }).ok).toBe(false);
+  });
+
+  it('refuses real work as a first canary, and says why', () => {
+    const verdict = checkEnvelope('PUSH_TO_FAILURE', {
+      ceiling: 5,
+      durationMinutes: 10,
+      stopConditions: ['a provider refusal'],
+      cleanup: 'nothing to clean',
+      rollback: 'nothing to revert',
+      workloadClass: 'RESEARCH',
+      workKind: 'REAL_CANARY',
+    });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.reason).toMatch(/synthetic and replay tests have passed/i);
+  });
+
+  it('does not hold a health check to a pressure envelope', () => {
+    expect(
+      checkEnvelope('HEALTH_CHECK', {
+        ceiling: 0,
+        durationMinutes: 0,
+        stopConditions: [],
+        cleanup: '',
+        rollback: '',
+        workloadClass: 'NONE',
+        workKind: 'SYNTHETIC',
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('refuses a pressure test declared against a live project, and keeps the refusal', async () => {
+    const declared = await declareExperiment({
+      projectId: project.id,
+      mode: 'PUSH_TO_FAILURE',
+      title: 'How far can this go?',
+      envelope: {
+        ceiling: 5,
+        durationMinutes: 10,
+        stopConditions: ['a provider refusal'],
+        cleanup: 'delete the synthetic bins',
+        rollback: 'revert the policy version',
+        workloadClass: 'RESEARCH',
+        workKind: 'SYNTHETIC',
+      },
+      actor: 'A person',
+    });
+    // Stored as refused rather than thrown away: what was asked for and why it
+    // was not allowed is worth as much as a result.
+    expect(declared.state).toBe('REFUSED');
+    expect(declared.refusalReason).toMatch(/isolated testing scope/i);
+  });
+
+  it('runs a health check for real, spends nothing, and is plain about it', async () => {
+    const declared = await declareExperiment({
+      projectId: project.id,
+      mode: 'HEALTH_CHECK',
+      title: 'Is the fleet reachable?',
+      envelope: {
+        ceiling: 0,
+        durationMinutes: 0,
+        stopConditions: [],
+        cleanup: 'Nothing is created.',
+        rollback: 'Nothing is applied.',
+        workloadClass: 'NONE',
+        workKind: 'SYNTHETIC',
+      },
+      actor: 'A person',
+    });
+    expect(declared.state).toBe('DECLARED');
+
+    const ran = await runExperiment({ id: declared.id, pressureAuthorized: false });
+    expect(ran.state).toBe('COMPLETE');
+    expect(ran.result).toBeTruthy();
+    // With no fleet registered it says so plainly rather than reporting health.
+    expect(ran.result!.findings.join(' ')).toMatch(/No account is registered|registered/i);
+    // And it is explicit about what a free check cannot tell you.
+    expect(ran.result!.untested.join(' ')).toMatch(/real activation/i);
+  });
+
+  it('refuses to run a pressure test without a person authorizing it', async () => {
+    const technical = await createProject({
+      name: 'Capability Lab scope',
+      slug: `lab-${Date.now()}`,
+      purpose: 'TECHNICAL',
+    });
+    const declared = await declareExperiment({
+      projectId: technical.id,
+      mode: 'PUSH_TO_FAILURE',
+      title: 'How far can this go?',
+      envelope: {
+        ceiling: 5,
+        durationMinutes: 10,
+        stopConditions: ['a provider refusal'],
+        cleanup: 'delete the synthetic bins',
+        rollback: 'revert the policy version',
+        workloadClass: 'RESEARCH',
+        workKind: 'SYNTHETIC',
+      },
+      actor: 'A person',
+    });
+    expect(declared.state).toBe('DECLARED');
+
+    const refused = await runExperiment({ id: declared.id, pressureAuthorized: false });
+    expect(refused.state).toBe('REFUSED');
+    expect(refused.refusalReason).toMatch(/needs a person to authorize/i);
+
+    // Asking again changes nothing: the condition is about the grant, not the
+    // attempt, so this is not a retry loop.
+    const again = await runExperiment({ id: declared.id, pressureAuthorized: true });
+    expect(again.state).toBe('REFUSED');
+  });
+
+  it('does not pretend an unimplemented pressure mode produced numbers', async () => {
+    const technical = await createProject({
+      name: 'Capability Lab scope two',
+      slug: `lab2-${Date.now()}`,
+      purpose: 'TECHNICAL',
+    });
+    const declared = await declareExperiment({
+      projectId: technical.id,
+      mode: 'RECOVERY_DRILL',
+      title: 'What happens when a worker disappears?',
+      envelope: {
+        ceiling: 3,
+        durationMinutes: 5,
+        stopConditions: ['detection takes longer than a minute'],
+        cleanup: 'release the synthetic leases',
+        rollback: 'nothing is applied',
+        workloadClass: 'RESEARCH',
+        workKind: 'SYNTHETIC',
+      },
+      actor: 'A person',
+    });
+    const ran = await runExperiment({ id: declared.id, pressureAuthorized: true });
+    // A stub returning plausible numbers is the worst thing this lab could
+    // produce, so it says exactly what happened instead: nothing.
+    expect(ran.state).toBe('REFUSED');
+    expect(ran.refusalReason).toMatch(/declared but not implemented/i);
+    expect(ran.result).toBeNull();
+  });
+
+  it('marks a conclusion stale when the conditions it was measured under change', () => {
+    expect(stalenessOf({ model: 'a', workloadClass: 'RESEARCH' }, { model: 'a', workloadClass: 'RESEARCH' })).toBeNull();
+    const stale = stalenessOf({ model: 'a' }, { model: 'b' });
+    expect(stale).toMatch(/model/);
+    expect(stale).toMatch(/Retest/);
+  });
+
+  it('applies a finding as a new policy version and rolls it back forward', async () => {
+    const declared = await declareExperiment({
+      projectId: project.id,
+      mode: 'CALIBRATION',
+      title: 'What has the fleet done?',
+      envelope: {
+        ceiling: 0,
+        durationMinutes: 0,
+        stopConditions: [],
+        cleanup: 'Nothing is created.',
+        rollback: 'Revert the policy version.',
+        workloadClass: 'RESEARCH',
+        workKind: 'SYNTHETIC',
+      },
+      actor: 'A person',
+    });
+    const ran = await runExperiment({ id: declared.id, pressureAuthorized: false });
+    expect(ran.state).toBe('COMPLETE');
+
+    const applied = await applyFinding({
+      experimentId: ran.id,
+      target: 4,
+      actor: 'A person',
+      reason: 'The ledger shows headroom',
+    });
+    expect(applied.appliedPolicyId).toBeTruthy();
+    expect((await currentPolicy('FLEET', null))?.target).toBe(4);
+
+    const back = await rollbackFinding({
+      experimentId: ran.id,
+      actor: 'A person',
+      reason: 'It was too high',
+    });
+    expect(back.rolledBackAt).toBeTruthy();
+    // Rolled back by writing forward: the applied version is still in the
+    // history, and the revert carries its own reason.
+    const history = await policyHistory('FLEET', null, 10);
+    expect(history.length).toBeGreaterThanOrEqual(2);
+    expect(history[0]?.reason).toMatch(/Rolled back/);
   });
 });
