@@ -141,6 +141,22 @@ async function main(): Promise<void> {
         BRAIN_BOOTSTRAP_ADMIN_PASSWORD: BOOTSTRAP,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
+      /*
+       * Its own process group, so the whole tree can be ended.
+       *
+       * `tsx`'s CLI is a launcher: it spawns the real server as a *grandchild*
+       * with the loader attached. SIGTERM to the child therefore left the
+       * grandchild holding the port and holding this process's event loop open
+       * through its stdio pipes — so a run that had taken every screenshot,
+       * swept the band and driven every interaction simply never exited, with
+       * its output still sitting in a pipe. It sat like that for three hours
+       * and was indistinguishable from a hang.
+       *
+       * A harness that has finished and cannot say so is worse than one that
+       * fails, because the failure at least names itself. Detaching gives the
+       * tree one group id, and the cleanup below ends the group.
+       */
+      detached: true,
     },
   );
   server.stdout.on('data', (chunk: Buffer) => (log += chunk.toString()));
@@ -183,16 +199,7 @@ async function main(): Promise<void> {
           deviceScaleFactor: 2,
           mobile: viewport.width < 600,
         });
-        const [cookieName, cookieValue] = cookie.split('=');
-        await cdp.send('Network.enable');
-        await cdp.send('Network.setCookie', {
-          name: cookieName ?? '',
-          value: cookieValue ?? '',
-          domain: '127.0.0.1',
-          path: '/',
-          httpOnly: true,
-          secure: false,
-        });
+        await signInBrowser(cdp, cookie);
 
         for (const destination of DESTINATIONS) {
           await cdp.send('Page.navigate', { url: `${BASE}${destination.path}` });
@@ -212,11 +219,19 @@ async function main(): Promise<void> {
             'document.documentElement.scrollWidth > document.documentElement.clientWidth',
           )) as boolean;
           const text = String(await evaluate(cdp, 'document.body.innerText')).replace(/\s+/g, ' ');
-          // Which element is wider than the viewport, if any. "The page scrolls
-          // sideways" is not actionable; the element that causes it is.
-          const widest = await evaluate(
-            cdp,
-            `(() => {
+          /*
+           * Which element is wider than the viewport — asked only when one is.
+           *
+           * "The page scrolls sideways" is not actionable; the element that
+           * causes it is. But this walked every node on every page whether or
+           * not anything overflowed, forcing a full layout eighteen times for a
+           * value the line below only prints when `sideways` is true. It is the
+           * diagnostic for a finding, so it runs when there is a finding.
+           */
+          const widest = sideways
+            ? await evaluate(
+                cdp,
+                `(() => {
               const limit = document.documentElement.clientWidth;
               const bad = [];
               for (const el of document.querySelectorAll('*')) {
@@ -227,7 +242,8 @@ async function main(): Promise<void> {
               }
               return bad.slice(0, 6).join(' | ');
             })()`,
-          );
+              )
+            : '';
           if (sideways && widest) console.log(`    overflowing: ${String(widest)}`);
           console.log(
             `${viewport.name.padEnd(8)} ${destination.name.padEnd(10)} ` +
@@ -240,20 +256,39 @@ async function main(): Promise<void> {
           for (const problem of problems.slice(0, 10)) console.log(`    ${problem}`);
         }
       }
+    });
 
-      /*
-       * The band, swept.
-       *
-       * Nothing is captured here unless something is wrong: a screenshot per
-       * width across four widths and six destinations is twenty-four images
-       * nobody looks at. What is recorded is the reading — does anything stick
-       * out past the viewport — and an image only where it does, because that
-       * is the one a person would need.
-       */
-      console.log('');
-      console.log('Sweeping the 822-953 band that the rejected build clipped in:');
-      let clipped = 0;
-      for (const width of CLIPPING_BAND) {
+    /*
+     * The band, swept — each width in its own browser.
+     *
+     * Nothing is captured here unless something is wrong: a screenshot per
+     * width across four widths and six destinations is twenty-four images
+     * nobody looks at. What is recorded is the reading — does anything stick
+     * out past the viewport — and an image only where it does, because that is
+     * the one a person would need.
+     *
+     * ---------------------------------------------------------------------
+     * Why a browser per width
+     * ---------------------------------------------------------------------
+     *
+     * One long-lived Chromium got through the eighteen screenshots and the
+     * first three widths and then stopped answering the protocol entirely, at
+     * the same point twice — two navigations timed out and the next command
+     * never returned. The bound made that legible rather than a hang, which is
+     * what it is for, but a diagnostic that outlives its own browser is
+     * measuring the browser.
+     *
+     * So each width is a session: launched, swept, ended. Nothing accumulates
+     * across widths, a wedged renderer costs one width instead of the rest of
+     * the run, and the evidence is identical — the reading is per width and
+     * never compared across them.
+     */
+    console.log('');
+    console.log('Sweeping the 822-953 band that the rejected build clipped in:');
+    let clipped = 0;
+    for (const width of CLIPPING_BAND) {
+      await withChromium(async (cdp) => {
+        await signInBrowser(cdp, cookie);
         await cdp.send('Emulation.setDeviceMetricsOverride', {
           width,
           height: 900,
@@ -319,14 +354,40 @@ async function main(): Promise<void> {
               )
             : '';
 
+          /*
+           * A container that **scrolls** is not a container that **clips**.
+           *
+           * This skipped only `overflow: visible`, and flagged the tab strip at
+           * 822 and 860 as a label cut off inside `.rs-tabs` — which has
+           * `overflow-x: auto` precisely so the tabs can be reached by
+           * scrolling, and which §29 names as one of the three things allowed
+           * to scroll sideways. The content was never unreachable, so the
+           * finding was about the harness rather than the build.
+           *
+           * That is the same distinction the sweep already draws one level up
+           * between the document scrolling and an element overflowing, arrived
+           * at again one level down: the defect is content a person cannot get
+           * to, and `auto`/`scroll` is how they get to it. `hidden` and `clip`
+           * stay in scope, because there the content really is gone.
+           *
+           * The walk is also capped. Uncapped, it called `getComputedStyle` and
+           * forced a layout for every node and every child on the page, and on
+           * the two densest destinations the renderer stopped answering the
+           * protocol altogether — a diagnostic expensive enough to break the
+           * thing it was measuring.
+           */
           const cutOff = String(
             await evaluate(
               cdp,
               `(() => {
                 const bad = [];
-                for (const el of document.querySelectorAll('.rs-shell *')) {
+                const nodes = document.querySelectorAll('.rs-shell *');
+                const cap = Math.min(nodes.length, 2000);
+                for (let i = 0; i < cap; i += 1) {
+                  const el = nodes[i];
+                  if (el.children.length === 0) continue;
                   const style = getComputedStyle(el);
-                  if (style.overflow === 'visible') continue;
+                  if (style.overflowX !== 'hidden' && style.overflowX !== 'clip') continue;
                   const outer = el.getBoundingClientRect();
                   for (const child of el.children) {
                     const box = child.getBoundingClientRect();
@@ -357,12 +418,13 @@ async function main(): Promise<void> {
             console.log(`  ${width}px ${destination.name}: label cut off inside a container -> ${cutOff}`);
           }
         }
-      }
-      console.log(
-        clipped === 0
-          ? `  nothing clips at any of ${CLIPPING_BAND.join(', ')}px across ${DESTINATIONS.length} destinations`
-          : `  ${clipped} clipping(s) found — images written`,
-      );
+      });
+    }
+    console.log(
+      clipped === 0
+        ? `  nothing clips at any of ${CLIPPING_BAND.join(', ')}px across ${DESTINATIONS.length} destinations`
+        : `  ${clipped} clipping(s) found — images written`,
+    );
 
       /*
        * And that the thing a person does actually works.
@@ -373,8 +435,10 @@ async function main(): Promise<void> {
        * interactions at phone width — where the rail collapses and where a
        * broken control is most likely — and prints what changed.
        */
-      console.log('');
-      console.log('Interactions, at phone width:');
+    console.log('');
+    console.log('Interactions, at phone width:');
+    await withChromium(async (cdp) => {
+      await signInBrowser(cdp, cookie);
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 390,
         height: 844,
@@ -405,8 +469,64 @@ async function main(): Promise<void> {
 
     console.log(`\nImages in ${outputDir}`);
   } finally {
-    server.kill('SIGTERM');
+    await endServerTree(server);
     fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * End the server and everything it launched, and do not return until it is gone.
+ *
+ * Asked politely first and then not: a `tsx` launcher forwards nothing, so the
+ * grandchild that is actually listening survives a SIGTERM aimed at its parent.
+ * The negative pid addresses the group, which is why the spawn above detaches.
+ *
+ * Both signals are wrapped, because "the group is already gone" arrives here as
+ * an ESRCH and is the outcome this function wants rather than an error.
+ */
+async function endServerTree(server: {
+  pid?: number;
+  kill(signal: NodeJS.Signals): boolean;
+}): Promise<void> {
+  const { pid } = server;
+  const signal = (which: NodeJS.Signals): void => {
+    try {
+      if (pid) process.kill(-pid, which);
+      else server.kill(which);
+    } catch {
+      /* already gone */
+    }
+  };
+  signal('SIGTERM');
+  const deadline = Date.now() + 5_000;
+  for (;;) {
+    try {
+      if (pid) process.kill(-pid, 0);
+      else break;
+    } catch {
+      return; // the group no longer exists
+    }
+    if (Date.now() > deadline) break;
+    await sleep(200);
+  }
+  signal('SIGKILL');
+}
+
+/**
+ * The same, without waiting: used where the caller is already unwinding.
+ *
+ * Chromium answers SIGTERM promptly when it is healthy and not at all when it
+ * is the reason we are here, so both signals go at once rather than five
+ * seconds apart.
+ */
+function endProcessTree(child: { pid?: number; kill(signal: NodeJS.Signals): boolean }): void {
+  for (const which of ['SIGTERM', 'SIGKILL'] as const) {
+    try {
+      if (child.pid) process.kill(-child.pid, which);
+      else child.kill(which);
+    } catch {
+      /* already gone */
+    }
   }
 }
 
@@ -445,7 +565,10 @@ async function withChromium(body: (cdp: Cdp) => Promise<void>): Promise<void> {
       `--user-data-dir=${profile}`,
       'about:blank',
     ],
-    { stdio: ['ignore', 'pipe', 'pipe'] },
+    // Its own group, for the same reason the server is detached: Chromium is a
+    // tree of processes and killing the one we spawned leaves the renderers,
+    // the GPU process and the zygotes behind.
+    { stdio: ['ignore', 'pipe', 'pipe'], detached: true },
   );
   try {
     let target: { webSocketDebuggerUrl: string } | null = null;
@@ -523,10 +646,23 @@ async function withChromium(body: (cdp: Cdp) => Promise<void>): Promise<void> {
     };
 
     await cdp.send('Page.enable');
-    await body(cdp);
-    socket.close();
+    try {
+      await body(cdp);
+    } finally {
+      /*
+       * In a `finally`, because it was not.
+       *
+       * A throw inside `body` — which is what a renderer that stops answering
+       * produces — skipped this line, and an open WebSocket holds Node's event
+       * loop open for ever. So a run that had already reported its failure
+       * legibly then sat there not exiting, which is the *second* form of the
+       * same defect the detached server spawn above records: a harness that
+       * has finished and cannot say so.
+       */
+      socket.close();
+    }
   } finally {
-    chrome.kill('SIGTERM');
+    endProcessTree(chrome);
     /*
      * `force` covers a missing directory; it does not cover a Chromium that has
      * been sent SIGTERM and is still writing into its profile, which raced this
@@ -543,6 +679,26 @@ async function withChromium(body: (cdp: Cdp) => Promise<void>): Promise<void> {
       /* left behind in the temp directory, deliberately */
     }
   }
+}
+
+/**
+ * Hand this browser the session cookie a person signs in with.
+ *
+ * Its own function because there are three browser sessions now, and a phase
+ * that forgot it would silently measure the signed-out shell — which renders,
+ * and renders something else.
+ */
+async function signInBrowser(cdp: Cdp, cookie: string): Promise<void> {
+  const [cookieName, cookieValue] = cookie.split('=');
+  await cdp.send('Network.enable');
+  await cdp.send('Network.setCookie', {
+    name: cookieName ?? '',
+    value: cookieValue ?? '',
+    domain: '127.0.0.1',
+    path: '/',
+    httpOnly: true,
+    secure: false,
+  });
 }
 
 async function evaluate(cdp: Cdp, expression: string): Promise<unknown> {
