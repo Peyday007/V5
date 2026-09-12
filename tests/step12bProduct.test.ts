@@ -930,7 +930,54 @@ describe('the fleet reports three different numbers, and never rounds one up', (
         .reason,
     ).toMatch(/refusal/i);
     // A healthy one has no reason at all, because there is nothing to say.
-    expect(usability(base, account, now)).toEqual({ usable: true, reason: null });
+    expect(usability(base, account, now)).toEqual({ usable: true, reason: null, recorded: null });
+  });
+
+  it('carries the reason the dispatcher recorded, beside the category rather than instead of it', () => {
+    const base = {
+      id: 'fr_1',
+      accountId: 'fa_1',
+      name: 'V1',
+      routineRef: 'trig_x',
+      state: 'QUARANTINED',
+      stateReason:
+        'The provider refused a fire with AUTH: 401 Token is not authorized for this routine.',
+      capabilities: [],
+      tokenSecretName: 'SECRET',
+      tokenDigest: 'abc',
+      workerId: null,
+      fireGeneration: 1,
+      consecutiveFailures: 0,
+      consecutiveNoShows: 0,
+      retryAt: null,
+    } as never;
+    const account = { id: 'fa_1', name: 'primary', state: 'ENABLED' } as never;
+    const now = '2026-09-12T00:00:00.000Z';
+
+    const held = usability(base, account, now);
+    // The category is what a person is owed and does not change.
+    expect(held.reason).toMatch(/held back/i);
+    // The evidence is what an operator needs, and it is the provider's words.
+    expect(held.recorded).toMatch(/401 Token is not authorized/);
+
+    // A healthy surface's last recorded reason is history, not a condition.
+    expect(usability({ ...(base as object), state: 'ENABLED' } as never, account, now).recorded).toBeNull();
+
+    // An empty reason is the same answer as none: a blank string must never
+    // reach a reader as though something had been recorded.
+    expect(usability({ ...(base as object), stateReason: '   ' } as never, account, now).recorded).toBeNull();
+  });
+
+  it('treats the recorded refusal as technical detail, like every other raw value', async () => {
+    const open = await fleetView({ includeTechnical: true });
+    const closed = await fleetView({ includeTechnical: false });
+    for (const surface of closed.surfaces) {
+      expect(surface.recordedReason).toBeNull();
+    }
+    // The plain sentence is not withheld — it is what a person is owed.
+    expect(closed.surfaces.map((surface) => surface.reason)).toEqual(
+      open.surfaces.map((surface) => surface.reason),
+    );
   });
 
   it('explains a gap from the events either side of it, never from elapsed time', () => {

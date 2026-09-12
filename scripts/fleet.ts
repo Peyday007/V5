@@ -426,6 +426,26 @@ async function main(): Promise<void> {
             (inFlight ? `  in-flight=${inFlight.routineInFlight}` : '  (not routable)') +
             (routine.retryAt ? `  retry_at=${routine.retryAt}` : ''),
         );
+        /*
+         * And why, when it is not ENABLED.
+         *
+         * `state_reason` has been written on every quarantine since the
+         * first-`AUTH`-quarantines rule shipped, and until now it was read by
+         * nothing at all — not here, not in the API, not in the UI. So a fleet
+         * whose only dispatchable Routine had been taken out of routing showed
+         * `QUARANTINED` and no way to find out what refused it, while the
+         * answering transition `fleet set-state` is documented as being "once
+         * the secret is fixed". **An escalation whose remedy names a thing to
+         * correct is not a remedy while the thing to correct is invisible** —
+         * §24's sentence, at a row.
+         *
+         * It is printed only for a surface that is not ENABLED, because a
+         * healthy Routine's last recorded reason is history rather than a
+         * condition, and printing it would read as a live problem.
+         */
+        if (routine.state !== 'ENABLED' && routine.stateReason?.trim()) {
+          console.log(`          reason: ${routine.stateReason.trim()}`);
+        }
       }
     }
     // Declared power is printed beside measured throughput and never multiplied

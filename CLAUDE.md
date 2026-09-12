@@ -2361,6 +2361,34 @@ provider configuration, ingestion review — every one of which §23 says belong
 entirely in Russell. `docs/STEP-12B-LEGACY-MIGRATION.md` is the inventory, taken
 from the code.
 
+**A column nothing reads is not an answer, and this fleet had one.**
+`fleet_routines.state_reason` has been written on every quarantine since the
+first-`AUTH`-quarantines rule shipped (§23), carrying the provider's own words
+for what refused the fire — and it was read by nothing: not `fleet show`, not
+the API, not the UI. So the fleet reaching a state with **no usable surface at
+all** showed `QUARANTINED` beside a Routine and offered nowhere to find out
+what had happened, while the answering transition §23 documents is "`fleet
+set-state` once the secret is fixed". **An escalation whose remedy names a
+thing to correct is not a remedy while the thing to correct is invisible** —
+§24's own sentence, at a column rather than a state machine, and the fifth time
+this file has had to write it.
+
+It is two readers of one row, and they are deliberately different. The
+category — *held back after a refusal that needs fixing* — is what a person is
+owed and does not change. The recorded text is the evidence, and it travels
+with the raw identifiers at technical depth, because §14 says technical detail
+is what a caller is *owed* rather than what it asks for. A healthy surface's
+last recorded reason is history rather than a condition, so neither reader
+prints it.
+
+**Reading it is not the same act as clearing it.** A quarantine is a health
+state Brain set from something a provider actually did, and lifting one so that
+an acceptance gate stops reporting `NO_HEALTHY_EXECUTION_SURFACE` would be
+weakening the control to satisfy the evaluator — exactly what
+`independenceEvidence.ts` re-checks its own guard to prevent. The gate is
+*correct* to say so: it is an operational fact with an operational remedy, and
+the remedy is to fix the surface and prove it with a fire that arrives.
+
 
 ---
 
