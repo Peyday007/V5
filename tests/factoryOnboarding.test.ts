@@ -436,3 +436,212 @@ describe('the dispatcher waits for an operator rather than exhausting the stage'
     delete process.env['ANOTHER_SECRET'];
   });
 });
+
+/* ========================================================================= */
+
+/**
+ * A surface for the onboarded worker, so the fleet is genuinely able to serve
+ * this repository. Everything below turns on the difference between "the fleet
+ * cannot do this" and "the fleet cannot do *that one*".
+ */
+async function surfaceFor(workerId: string, secret: string): Promise<void> {
+  const { bindRoutineWorker, createAccount, createRoutine } = await import('../server/repos/fleet.ts');
+  const account = await createAccount({ name: `acct-${secret}`, planLabel: null, declaredPlanPower: null });
+  const routine = await createRoutine({
+    accountId: account.id,
+    routineRef: `trig_${secret}`,
+    name: `Surface ${secret}`,
+    tokenSecretName: secret,
+    tokenDigest: 'digest',
+    routineVersion: null,
+    baseUrl: null,
+    capabilities: [...FACTORY_ROUTING_CAPABILITIES],
+  });
+  await bindRoutineWorker(routine.id, workerId);
+  process.env[secret] = 'not-a-real-token';
+}
+
+describe('a re-arm wakes the work the change was about, and nothing else', () => {
+  /*
+   * The scoped re-arm.
+   *
+   * The old re-arm put back every scope-deferred intent on any fleet write, so
+   * onboarding one repository woke every stranded bin in the Brain — each of
+   * which was then fired at, refused, and deferred again. That is not merely
+   * wasteful: a fire spent on work nobody can do is a fire the work that *can*
+   * be done did not get.
+   *
+   * The dimension the recheck can decide on is the one the fire router decides
+   * on, which is the **family** — §27 is explicit that the repository is settled
+   * at admission instead, where being wrong records something false rather than
+   * wasting a fire. So this holds the re-arm to exactly what the fire would say.
+   */
+  it('leaves work no surface serves exactly where it was', async () => {
+    const { dispatchTick } = await import('../server/services/dispatch/loop.ts');
+    const mine = await factoryBin(GRANT().remote);
+    const other = await researchBin();
+    for (const bin of [mine, other]) {
+      await ensureDispatchIntent(bin);
+      const [intent] = await listDispatchesForBin(bin.id);
+      await markDispatchDeferred(intent!.id, {
+        refusal: 'NO_SURFACE_SERVES_THIS_FAMILY',
+        message: 'no registered worker may be handed this work',
+        retryAfterMs: 24 * 60 * 60 * 1000,
+      });
+    }
+
+    const result = await onboard();
+    await surfaceFor(result.onboarding.workerId!, 'SCOPED_REARM_SECRET');
+
+    await dispatchTick();
+
+    const [woken] = await listDispatchesForBin(mine.id);
+    const [asleep] = await listDispatchesForBin(other.id);
+    // The factory work was reconsidered — it either fired or was deferred again
+    // on a *current* decision, and either way it is no longer behind the
+    // day-long wall it was parked at.
+    expect(Date.parse(woken!.nextAttemptAt)).toBeLessThan(Date.now() + 60 * 60 * 1000);
+    // The research packet is served by nobody still, so nothing about it changed.
+    expect(Date.parse(asleep!.nextAttemptAt)).toBeGreaterThan(Date.now() + 60 * 60 * 1000);
+    expect(asleep!.lastErrorKind).toBe('NO_SURFACE_SERVES_THIS_FAMILY');
+    delete process.env['SCOPED_REARM_SECRET'];
+  });
+
+  /*
+   * Partial setup: the routing row exists and the surface does not.
+   *
+   * This is the state onboarding *leaves behind on purpose* — Brain cannot
+   * create a fire surface — so it has to be a state the system sits in
+   * indefinitely without damaging anything. The work keeps its attempts, keeps
+   * its blocker, and holds no lease.
+   */
+  it('holds a stage safely while only half the setup exists', async () => {
+    const { dispatchTick } = await import('../server/services/dispatch/loop.ts');
+    const bin = await factoryBin(GRANT().remote);
+    await ensureDispatchIntent(bin);
+    await onboard();
+
+    for (let pass = 0; pass < 4; pass += 1) await dispatchTick();
+
+    const [intent] = await listDispatchesForBin(bin.id);
+    const after = (await getDispatch(intent!.id))!;
+    expect(after.state).toBe('PENDING');
+    expect(after.attemptCount).toBeLessThan(after.maxAttempts);
+    const held = (await getBin(bin.id))!;
+    expect(held.state).toBe('READY');
+    // No lease: nothing is holding this open, so nothing has to be released for
+    // a real worker to take it.
+    expect(held.workerId).toBeNull();
+    expect(held.leaseId).toBeNull();
+
+    // And the projection says which half is missing, rather than reading as
+    // finished or as broken.
+    const [shown] = await repositoryOnboarding(fixture.project.id);
+    expect(shown!.readiness).toBe('AWAITING_SURFACE');
+    expect(shown!.waiting).toBe(1);
+    expect(shown!.remaining.join(' ')).toMatch(/connector/i);
+  });
+
+  /*
+   * Revocation. Access taken away has to take effect on the next decision, not
+   * at the next restart — and it must not destroy the work, which is somebody
+   * else's to resume once access comes back.
+   */
+  it('stops routing the moment the routing row is taken away', async () => {
+    const result = await onboard();
+    const workerId = result.onboarding.workerId!;
+    const bin = await factoryBin(GRANT().remote);
+
+    const before = await (
+      await binAdmission({ workerId, principal: await principalFor(workerId), sessionRef: 'cse_f' })
+    )(bin);
+    expect(before.ok).toBe(true);
+
+    await setWorkerRouting({
+      workerId,
+      families: ['FACTORY'],
+      repositories: [],
+      capabilities: [...FACTORY_ROUTING_CAPABILITIES],
+      reason: 'access withdrawn',
+      setBy: 'test',
+    });
+
+    const after = await (
+      await binAdmission({ workerId, principal: await principalFor(workerId), sessionRef: 'cse_f' })
+    )(bin);
+    expect(after.ok).toBe(false);
+    // The bin itself is untouched: revoking somebody's access is not a decision
+    // about the work.
+    expect((await getBin(bin.id))!.state).toBe('READY');
+    // And the card says so, rather than continuing to read as registered.
+    const [shown] = await repositoryOnboarding(fixture.project.id);
+    expect(shown!.readiness).toBe('NOT_ONBOARDED');
+  });
+
+  it('refuses an archived identity rather than quietly reviving it', async () => {
+    const { archiveWorker } = await import('../server/repos/identity.ts');
+    const result = await onboard();
+    await archiveWorker(result.onboarding.workerId!);
+    const again = await onboardRepository({
+      projectId: fixture.project.id,
+      grantId: GRANT().id,
+      actor,
+      origin: 'https://brain.example',
+    });
+    expect(again.ok).toBe(false);
+  });
+});
+
+describe('a duplicate action produces no duplicate execution', () => {
+  /*
+   * A lost response, from every direction it can be lost from: the person
+   * pressed the button again, the tick ran twice, the intent was ensured twice.
+   * None of them may produce a second identity, a second live invitation, a
+   * second routing row or a second fire.
+   */
+  it('onboarding twice leaves one worker, one routing row and one invitation', async () => {
+    const first = await onboard();
+    const second = await onboard();
+    expect(second.onboarding.workerId).toBe(first.onboarding.workerId);
+    expect(second.createdIdentity).toBe(false);
+
+    const worker = (await getWorkerByName(factoryWorkerName(GRANT().id)))!;
+    const routing = (await getWorkerRouting(worker.id))!;
+    expect(routing.families).toEqual(['FACTORY']);
+    expect(routing.repositories).toEqual([repositoryIdOfRemote(GRANT().remote)]);
+
+    const live = (await listInvitationsForWorker(worker.id)).filter(
+      (invitation) => invitation.revokedAt === null && invitation.redeemedAt === null,
+    );
+    expect(live).toHaveLength(1);
+
+    const memberships = (await listMembershipsForPrincipal('WORKER', worker.id)).filter(
+      (m) => m.projectId === fixture.project.id && m.active,
+    );
+    expect(memberships).toHaveLength(1);
+    expect([...memberships[0]!.scopes].sort()).toEqual([...FACTORY_WORKER_SCOPES].sort());
+  });
+
+  it('ensuring the intent twice is still one fire’s worth of intent', async () => {
+    const bin = await factoryBin(GRANT().remote);
+    expect(await ensureDispatchIntent(bin)).toBe(true);
+    expect(await ensureDispatchIntent(bin)).toBe(false);
+    expect(await listDispatchesForBin(bin.id)).toHaveLength(1);
+  });
+
+  it('re-arming twice puts the same intent back once', async () => {
+    const bin = await factoryBin(GRANT().remote);
+    await ensureDispatchIntent(bin);
+    const [intent] = await listDispatchesForBin(bin.id);
+    await markDispatchDeferred(intent!.id, {
+      refusal: 'NO_SURFACE_SERVES_THIS_FAMILY',
+      message: 'nobody is registered for this repository',
+      retryAfterMs: 24 * 60 * 60 * 1000,
+    });
+    await onboard();
+    expect(await rearmSurfaceDeferredIntents()).toBe(1);
+    // The re-arm stamps the intent, so the watermark it compares against is now
+    // behind it. Self-limiting by construction rather than by a flag.
+    expect(await rearmSurfaceDeferredIntents()).toBe(0);
+  });
+});

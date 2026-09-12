@@ -1707,9 +1707,17 @@ button.rs-card:hover {
 .rs-repo-invite,
 .rs-repo-issued,
 .rs-repo-readiness,
-.rs-repo-remaining {
+.rs-repo-remaining,
+.rs-repo-waiting {
   font-size: var(--step--1);
   color: var(--ink-soft);
+}
+
+/* Work already held up is the reason the steps above are worth doing, so it is
+ * the one line in this card that is not soft. */
+.rs-repo-waiting {
+  margin: 0;
+  color: var(--ink);
 }
 
 /* ------------------------------------------------- the living constellation
