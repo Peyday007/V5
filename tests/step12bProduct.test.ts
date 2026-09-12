@@ -43,6 +43,15 @@ import {
 import { search } from '../server/services/russell/search.ts';
 import { explainSlowness, fleetView, meaningOfGap, usability } from '../server/services/fleet/view.ts';
 import {
+  MAX_CONCURRENCY,
+  evidenceFor,
+  knee,
+  ladder,
+} from '../server/services/fleet/labRunners.ts';
+import { openInquiry, validateLensReply } from '../server/services/russell/inquiry.ts';
+import { getDb } from '../server/db/database.ts';
+import { createWorker, grantMembership } from '../server/repos/identity.ts';
+import {
   applyFinding,
   checkEnvelope,
   declareExperiment,
@@ -1126,7 +1135,19 @@ describe('the Capability Lab is bounded before it runs', () => {
     expect(again.state).toBe('REFUSED');
   });
 
-  it('does not pretend an unimplemented pressure mode produced numbers', async () => {
+  it('never invents numbers for a pressure mode it could not run', async () => {
+    /*
+     * This test used to assert the words "declared but not implemented", which
+     * was the right assertion while five of the eight modes had no runner. They
+     * have runners now, so the assertion moved to the property that actually
+     * matters and was never about implementation: **a mode that did not run
+     * produces no result at all.**
+     *
+     * The condition exercised here is a real one — an isolated scope with no
+     * worker holding `queue:claim`, so there is nothing that can legitimately
+     * hold a lease — and the point is that the refusal names a remedy rather
+     * than returning plausible figures.
+     */
     const technical = await createProject({
       name: 'Capability Lab scope two',
       slug: `lab2-${Date.now()}`,
@@ -1148,10 +1169,8 @@ describe('the Capability Lab is bounded before it runs', () => {
       actor: 'A person',
     });
     const ran = await runExperiment({ id: declared.id, pressureAuthorized: true });
-    // A stub returning plausible numbers is the worst thing this lab could
-    // produce, so it says exactly what happened instead: nothing.
     expect(ran.state).toBe('REFUSED');
-    expect(ran.refusalReason).toMatch(/declared but not implemented/i);
+    expect(ran.refusalReason).toMatch(/queue:claim/);
     expect(ran.result).toBeNull();
   });
 
@@ -1503,4 +1522,357 @@ describe('Owner, Member, Viewer and machine roles have a concrete matrix', () =>
     expect(decideBrainAdmin(human('OWNER', project.id, true)).allowed).toBe(true);
     expect(decideBrainAdmin(human('OWNER', project.id, false)).allowed).toBe(false);
   });
+});
+
+/* ==========================================================================
+ * The asked lenses, given an execution path
+ * ========================================================================== */
+
+describe('a discovery lens only a reader can answer', () => {
+  it('refuses to hand a derived lens to a worker', async () => {
+    const { project } = await freshProject();
+    const refused = await openInquiry({
+      projectId: project.id,
+      projectName: project.name,
+      lens: 'CONTRADICTION',
+      openedBy: 'u_test',
+    });
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      // Named, not generic: the reason a person reads must say why this
+      // particular question is not one to ask a model.
+      expect(refused.reason).toMatch(/answered from the project's own rows/i);
+    }
+  });
+
+  it('opens one inquiry per lens rather than racing two', async () => {
+    const { project } = await freshProject();
+    const first = await openInquiry({
+      projectId: project.id,
+      projectName: project.name,
+      lens: 'ADJACENT_POSSIBILITY',
+      openedBy: 'u_test',
+    });
+    const second = await openInquiry({
+      projectId: project.id,
+      projectName: project.name,
+      lens: 'ADJACENT_POSSIBILITY',
+      openedBy: 'u_test',
+    });
+    expect(first.ok && second.ok).toBe(true);
+    if (first.ok && second.ok) expect(second.inquiry.id).toBe(first.inquiry.id);
+  });
+
+  it('discards a finding whose citations do not resolve to this project', () => {
+    const context = {
+      knowledgeIds: new Set(['rk_real']),
+      layerIds: new Set<string>(),
+      frontierIds: new Set<string>(),
+      held: [] as string[],
+    };
+    const checked = validateLensReply(
+      {
+        findings: [
+          {
+            subject: 'Invented',
+            statement: 'Something the project never recorded anywhere at all.',
+            rationale: 'Because it sounded plausible.',
+            references: [{ kind: 'KNOWLEDGE', id: 'rk_made_up' }],
+          },
+        ],
+      },
+      context,
+    );
+    expect(checked.ok).toBe(true);
+    if (checked.ok) {
+      expect(checked.result.findings).toHaveLength(0);
+      expect(checked.result.discarded).toBe(1);
+      expect(checked.result.reasons[0]).toMatch(/is not a row this project holds/);
+    }
+  });
+
+  it('discards a finding that restates something already held', () => {
+    const held = 'Assessment rolls are published annually by each county treasurer.';
+    const checked = validateLensReply(
+      {
+        findings: [
+          {
+            subject: 'Rolls',
+            // A rewording, not a new idea.
+            statement: 'Each county treasurer publishes assessment rolls annually.',
+            rationale: 'Reworded.',
+            references: [{ kind: 'KNOWLEDGE', id: 'rk_real' }],
+          },
+        ],
+      },
+      { knowledgeIds: new Set(['rk_real']), layerIds: new Set(), frontierIds: new Set(), held: [held] },
+    );
+    expect(checked.ok).toBe(true);
+    if (checked.ok) {
+      expect(checked.result.findings).toHaveLength(0);
+      expect(checked.result.reasons[0]).toMatch(/restates something the project already holds/);
+    }
+  });
+
+  it('refuses the whole reply for an unknown field rather than ignoring it', () => {
+    const checked = validateLensReply(
+      { findings: [], extra: 'something nobody declared' },
+      { knowledgeIds: new Set(), layerIds: new Set(), frontierIds: new Set(), held: [] },
+    );
+    expect(checked.ok).toBe(false);
+    if (!checked.ok) expect(checked.reason).toMatch(/unknown field/);
+  });
+
+  it('accepts an empty answer as an answer', () => {
+    const checked = validateLensReply(
+      { findings: [] },
+      { knowledgeIds: new Set(), layerIds: new Set(), frontierIds: new Set(), held: [] },
+    );
+    expect(checked.ok).toBe(true);
+    if (checked.ok) {
+      expect(checked.result.findings).toHaveLength(0);
+      expect(checked.result.discarded).toBe(0);
+    }
+  });
+});
+
+/* ==========================================================================
+ * The Capability Lab's pressure runners
+ * ========================================================================== */
+
+describe('the pressure runners measure Brain rather than a provider', () => {
+  it('walks a ladder bounded by the declared ceiling', () => {
+    expect(ladder(8)).toEqual([1, 2, 4, 8]);
+    expect(ladder(1)).toEqual([1]);
+    // A ceiling above the code's own limit is clamped rather than honoured.
+    expect(ladder(10_000)[ladder(10_000).length - 1]).toBe(MAX_CONCURRENCY);
+  });
+
+  it('reports the knee as the last rung that improved, never as a maximum', () => {
+    const rounds = [
+      { concurrency: 1, items: 10, claimed: 10, lostRaces: 0, completed: 10, refusedCompletions: 0, elapsedMs: 1000, leftOver: 0 },
+      { concurrency: 2, items: 10, claimed: 10, lostRaces: 0, completed: 10, refusedCompletions: 0, elapsedMs: 500, leftOver: 0 },
+      { concurrency: 4, items: 10, claimed: 10, lostRaces: 8, completed: 10, refusedCompletions: 0, elapsedMs: 500, leftOver: 0 },
+    ];
+    const found = knee(rounds);
+    expect(found?.concurrency).toBe(2);
+    expect(found?.reason).toMatch(/did not improve throughput/);
+  });
+
+  it('calls an empty run unknown rather than zero', () => {
+    const empty = [
+      { concurrency: 1, items: 5, claimed: 0, lostRaces: 1, completed: 0, refusedCompletions: 0, elapsedMs: 10, leftOver: 5 },
+    ];
+    expect(evidenceFor(empty)).toBe('UNKNOWN');
+  });
+
+  it('never labels a queue measurement as a provider fact', () => {
+    const done = [
+      { concurrency: 1, items: 5, claimed: 5, lostRaces: 0, completed: 5, refusedCompletions: 0, elapsedMs: 10, leftOver: 0 },
+    ];
+    // MEASURED or UNKNOWN are the only two answers. PROVIDER_ENFORCED would be
+    // a claim about a surface this runner never touched.
+    expect(['MEASURED', 'UNKNOWN']).toContain(evidenceFor(done));
+  });
+
+  it('refuses a pressure run with no registered claimant, naming the remedy', async () => {
+    const { project } = await freshProject();
+    // A TECHNICAL scope so the declaration is not refused for isolation, and no
+    // worker holding queue:claim in it, which is the condition under test.
+    await getDb().run('UPDATE projects SET purpose = ? WHERE id = ?', ['TECHNICAL', project.id]);
+    const declared = await declareExperiment({
+      projectId: project.id,
+      mode: 'RECOVERY_DRILL',
+      title: 'drill with nowhere to hold a lease',
+      envelope: {
+        ceiling: 2,
+        durationMinutes: 1,
+        stopConditions: ['the drill finishes'],
+        cleanup: 'cancel the synthetic item',
+        rollback: 'nothing is applied',
+        workloadClass: 'SYNTHETIC',
+        workKind: 'SYNTHETIC',
+      },
+      actor: 'u_test',
+    });
+    expect(declared.state).toBe('DECLARED');
+    const ran = await runExperiment({ id: declared.id, pressureAuthorized: true });
+    expect(ran.state).toBe('REFUSED');
+    expect(ran.refusalReason).toMatch(/npm run admin/);
+    // And it did not pretend to have numbers.
+    expect(ran.result).toBeNull();
+  });
+
+  it('still refuses a pressure mode that no person authorized', async () => {
+    const { project } = await freshProject();
+    await getDb().run('UPDATE projects SET purpose = ? WHERE id = ?', ['TECHNICAL', project.id]);
+    const declared = await declareExperiment({
+      projectId: project.id,
+      mode: 'PUSH_TO_FAILURE',
+      title: 'unauthorized',
+      envelope: {
+        ceiling: 4,
+        durationMinutes: 1,
+        stopConditions: ['a rung fails'],
+        cleanup: 'cancel what is left',
+        rollback: 'nothing is applied',
+        workloadClass: 'SYNTHETIC',
+        workKind: 'SYNTHETIC',
+      },
+      actor: 'u_test',
+    });
+    const ran = await runExperiment({ id: declared.id, pressureAuthorized: false });
+    expect(ran.state).toBe('REFUSED');
+    expect(ran.refusalReason).toMatch(/needs a person to authorize/i);
+  });
+});
+
+/* ==========================================================================
+ * The pressure runners, actually run
+ * ========================================================================== */
+
+/**
+ * An isolated scope with somewhere legitimate to hold a lease.
+ *
+ * The worker and the membership are made here rather than by the lab, which is
+ * the whole point of `NoLabClaimant`: registering an identity is a person's
+ * decision, and a test standing in for that person is doing so explicitly.
+ */
+async function labScope(name: string): Promise<{ projectId: string; workerIds: string[] }> {
+  const project = await createProject({
+    name,
+    slug: `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
+    purpose: 'TECHNICAL',
+  });
+  const workerIds: string[] = [];
+  for (const suffix of ['a', 'b']) {
+    const worker = await createWorker({
+      name: `lab-claimant-${suffix}-${Date.now()}`,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    await grantMembership({
+      projectId: project.id,
+      principalType: 'WORKER',
+      principalId: worker.id,
+      scopes: ['queue:claim'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'test',
+    });
+    workerIds.push(worker.id);
+  }
+  return { projectId: project.id, workerIds };
+}
+
+describe('a pressure test that actually runs', () => {
+  it('drains a real backlog through the real queue and reports what it reached', async () => {
+    const scope = await labScope('Push scope');
+    const declared = await declareExperiment({
+      projectId: scope.projectId,
+      mode: 'PUSH_TO_FAILURE',
+      title: 'How many claimants before contention stops paying?',
+      envelope: {
+        ceiling: 4,
+        durationMinutes: 1,
+        stopConditions: ['a rung leaves work undrained'],
+        cleanup: 'cancel anything a rung did not finish',
+        rollback: 'nothing is applied',
+        workloadClass: 'SYNTHETIC',
+        workKind: 'SYNTHETIC',
+      },
+      actor: 'A person',
+    });
+    const ran = await runExperiment({ id: declared.id, pressureAuthorized: true });
+
+    expect(ran.state).toBe('COMPLETE');
+    expect(ran.result).not.toBeNull();
+    // Real work really drained: this is a measurement, not a projection.
+    expect(ran.result!.confidence.sampleSize).toBeGreaterThan(0);
+    expect(ran.result!.highestTested.value).toBeGreaterThan(0);
+    // And it is a lower bound on Brain's machinery, said in those words.
+    expect(ran.result!.findings.join(' ')).toMatch(/lower bound/i);
+    // The one thing it cannot know is named every time.
+    expect(ran.result!.untested.join(' ')).toMatch(/real Cowork surface/i);
+    // A queue measurement is never dressed as a provider fact.
+    expect(ran.result!.bottleneck.evidence).not.toBe('PROVIDER_ENFORCED');
+  }, 60_000);
+
+  it('compares two materially different layouts over identical work', async () => {
+    const scope = await labScope('Tournament scope');
+    const declared = await declareExperiment({
+      projectId: scope.projectId,
+      mode: 'LAYOUT_TOURNAMENT',
+      title: 'One at a time against batched',
+      envelope: {
+        ceiling: 4,
+        durationMinutes: 1,
+        stopConditions: ['both layouts have drained or the clock ran out'],
+        cleanup: 'cancel anything left',
+        rollback: 'nothing is applied',
+        workloadClass: 'SYNTHETIC',
+        workKind: 'SYNTHETIC',
+      },
+      actor: 'A person',
+    });
+    const ran = await runExperiment({ id: declared.id, pressureAuthorized: true });
+    expect(ran.state).toBe('COMPLETE');
+    expect(ran.result!.whatHappened).toMatch(/one-at-a-time .* batched/);
+    // A defensible recommendation names a layout and a concurrency.
+    expect(ran.result!.recommendedSetting.value).toMatch(/layout|recommend/i);
+    expect(ran.result!.findings.join(' ')).toMatch(/says nothing about how many surfaces/i);
+  }, 60_000);
+
+  it('measures quality separately from throughput', async () => {
+    const scope = await labScope('Quality scope');
+    const declared = await declareExperiment({
+      projectId: scope.projectId,
+      mode: 'QUALITY_UNDER_PRESSURE',
+      title: 'Does quality go before speed?',
+      envelope: {
+        ceiling: 4,
+        durationMinutes: 1,
+        stopConditions: ['both runs have finished'],
+        cleanup: 'cancel anything left',
+        rollback: 'nothing is applied',
+        workloadClass: 'SYNTHETIC',
+        workKind: 'SYNTHETIC',
+      },
+      actor: 'A person',
+    });
+    const ran = await runExperiment({ id: declared.id, pressureAuthorized: true });
+    expect(ran.state).toBe('COMPLETE');
+    expect(ran.result!.whatHappened).toMatch(/quiet:/);
+    expect(ran.result!.whatHappened).toMatch(/Pressed:/);
+    // Content quality is explicitly outside what this can see, and says so.
+    expect(ran.result!.untested.join(' ')).toMatch(/content.*quality/i);
+  }, 60_000);
+
+  it('proves recovery by letting a real lease expire, not by editing one', async () => {
+    const scope = await labScope('Drill scope');
+    const declared = await declareExperiment({
+      projectId: scope.projectId,
+      mode: 'RECOVERY_DRILL',
+      title: 'A worker disappears mid-lease',
+      envelope: {
+        ceiling: 1,
+        durationMinutes: 1,
+        stopConditions: ['the drill finishes'],
+        cleanup: 'cancel the synthetic item',
+        rollback: 'nothing is applied',
+        workloadClass: 'SYNTHETIC',
+        workKind: 'SYNTHETIC',
+      },
+      actor: 'A person',
+    });
+    const ran = await runExperiment({ id: declared.id, pressureAuthorized: true });
+    expect(ran.state).toBe('COMPLETE');
+
+    const said = ran.result!.whatHappened;
+    expect(said).toMatch(/lease taken over: true/);
+    expect(said).toMatch(/late completion fenced: true/);
+    expect(said).toMatch(/completion after cancellation fenced: true/);
+    // Two identities were registered, so the stronger claim is the true one.
+    expect(ran.result!.findings.join(' ')).toMatch(/different worker identity/i);
+    expect(ran.result!.highestTested.anythingFailed).toBe(false);
+  }, 60_000);
 });

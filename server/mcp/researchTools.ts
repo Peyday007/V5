@@ -68,6 +68,7 @@ import {
   ROLE_PASS_ORDINAL,
 } from '../services/research/auditBrief.ts';
 import {
+  auditRoundFor,
   auditRoundStartedAt,
   passesInCurrentRound,
 } from '../services/research/auditRound.ts';
@@ -1997,7 +1998,7 @@ const submitAuditTool: McpTool = {
          * ORDER BY, which is not a property to leave a stored verdict resting
          * on.
          */
-        const round = await auditRoundStartedAt(orchestration.id);
+        const round = await auditRoundFor(orchestration.id);
         const primaryRaw = await earlierAuditRole(orchestration.id, 'PRIMARY', round);
         const adversarialRaw = await earlierAuditRole(orchestration.id, 'ADVERSARIAL', round);
         if (!primaryRaw || !adversarialRaw) {

@@ -169,11 +169,21 @@ describe('the signed matrix', () => {
      * reaches for. It is still pinned here, in the opposite direction: no
      * entry may name an account, because that would reintroduce the topology
      * dependency by the back door.
+     *
+     * **And a second recorded correction, in the strengthening direction.**
+     * Three entries became six when a production reading found the author of a
+     * report was not a party to its own audit: the three reviewers were
+     * separated from each other and each of them was free to be the session
+     * that wrote the thing under review. The level did not move — every pair is
+     * still `SESSION`, and still names no account — the *set of parties* did.
      */
     expect(SIGNED_AUDIT_MATRIX).toEqual({
       PRIMARY_ADVERSARIAL: 'SESSION',
       JUDGE_PRIMARY: 'SESSION',
       JUDGE_ADVERSARIAL: 'SESSION',
+      SYNTHESIS_PRIMARY: 'SESSION',
+      SYNTHESIS_ADVERSARIAL: 'SESSION',
+      SYNTHESIS_JUDGE: 'SESSION',
     });
     expect(Object.values(SIGNED_AUDIT_MATRIX)).not.toContain('ACCOUNT');
   });
@@ -782,5 +792,192 @@ describe('a worker bound to more than one Routine', () => {
     expect(row).toBeTruthy();
     expect(row!.metadata).toContain(was.id);
     expect(row!.metadata).toContain(now.id);
+  });
+});
+
+/* ========================================================================= */
+
+/**
+ * The author of the report is a party to its own audit.
+ *
+ * ---------------------------------------------------------------------------
+ * What this suite exists to stop happening again
+ * ---------------------------------------------------------------------------
+ *
+ * `lineageFromPasses` has always returned `{ synthesis, audits }`. Every caller
+ * in the codebase destructured `{ audits }` and threw the other half away, and
+ * `AUDIT_SEPARATION_MINIMUM` had no entry a synthesis could be compared under —
+ * so the three reviewers were separated from each other, and **every one of
+ * them was free to be the session that wrote the report**. §23 states the
+ * threat in one sentence: *one model context reviewing its own work*. A session
+ * that writes the synthesis and then files the PRIMARY audit is the literal
+ * instance of it, and nothing refused it.
+ *
+ * `checkIndependence` in `independence.ts` does hold a self-audit rule, and it
+ * is exercised by tests — and by nothing in production. A mechanism nothing
+ * calls is not a mechanism. So these tests go through the two functions
+ * production actually reaches: `auditEligibility`, which decides before the
+ * lease, and `auditMatrixVerdict`, which guards storage.
+ */
+describe('the author of the report', () => {
+  /** Record a completed SYNTHESIS pass with an exact lineage. */
+  async function recordSynthesis(input: {
+    workerId: string;
+    routineId: string | null;
+    accountId: string | null;
+    sessionRef: string | null;
+  }): Promise<void> {
+    const pass = await startPass({
+      orchestrationId,
+      fragmentId: null,
+      passKey: 'SYNTHESIS',
+      ordinal: 4,
+      provider: 'WORKER',
+      model: input.workerId,
+      prompt: 'write the report',
+      promptSha256: 'y'.repeat(64),
+      executorWorkerId: input.workerId,
+      executorRoutineId: input.routineId,
+      executorAccountId: input.accountId,
+      executorSessionRef: input.sessionRef,
+    });
+    await finishPass(pass.id, { status: 'COMPLETE', rawResponse: '{}', parsed: {} });
+  }
+
+  it('may not take an audit role in the session that wrote the report', async () => {
+    const f = await fleet();
+    await recordSynthesis({
+      workerId: f.a.workerId, routineId: null, accountId: f.a.accountId, sessionRef: 'sess-author',
+    });
+
+    // No audit role has run at all, so the only thing that can refuse this is
+    // the comparison against the author. Before the repair it was eligible.
+    for (const role of ['PRIMARY', 'ADVERSARIAL', 'JUDGE'] as const) {
+      const verdict = auditEligibility({
+        role,
+        executor: {
+          workerId: f.a.workerId, routineId: null, accountId: f.a.accountId,
+          sessionRef: 'sess-author',
+        },
+        passes: await passes(),
+      });
+      expect(verdict.eligible).toBe(false);
+      expect(verdict.applied.some((a) => a.pair === `SYNTHESIS_${role}`)).toBe(true);
+      expect(verdict.reasons.join(' ')).toContain('SYNTHESIS');
+    }
+  });
+
+  it('is compared on session, so the same account may still review it', async () => {
+    const f = await fleet();
+    await recordSynthesis({
+      workerId: f.a.workerId, routineId: null, accountId: f.a.accountId, sessionRef: 'sess-author',
+    });
+    // Same account, same worker, a different activation. That is the floor and
+    // it is deliberately reachable on a one-account fleet: the correction that
+    // removed the two-account requirement must not come back through this door.
+    const verdict = auditEligibility({
+      role: 'PRIMARY',
+      executor: {
+        workerId: f.a.workerId, routineId: null, accountId: f.a.accountId,
+        sessionRef: 'sess-reviewer',
+      },
+      passes: await passes(),
+    });
+    expect(verdict.eligible).toBe(true);
+  });
+
+  it('never returns the credential it refused on', async () => {
+    const f = await fleet();
+    await recordSynthesis({
+      workerId: f.a.workerId, routineId: null, accountId: f.a.accountId, sessionRef: 'cred_secret',
+    });
+    const verdict = auditEligibility({
+      role: 'PRIMARY',
+      executor: {
+        workerId: f.a.workerId, routineId: null, accountId: f.a.accountId,
+        sessionRef: 'cred_secret',
+      },
+      passes: await passes(),
+    });
+    expect(verdict.eligible).toBe(false);
+    // The session dimension *is* a credential identifier, so it stays out of
+    // the reasons an untrusted caller reads and lives in `conflicts`, which
+    // Brain logs and never returns. §17, at this boundary.
+    expect(verdict.reasons.join(' ')).not.toContain('cred_secret');
+    expect(verdict.conflicts.some((c) => c.value === 'cred_secret')).toBe(true);
+  });
+
+  it('is refused again at storage, not only at admission', async () => {
+    const f = await fleet();
+    await recordSynthesis({
+      workerId: f.a.workerId, routineId: null, accountId: f.a.accountId, sessionRef: 'sess-1',
+    });
+    // A compliant three-way audit — except that PRIMARY reused the author's
+    // session. A lease can expire and be retaken, so eligible at claim time is
+    // not eligible at submit time; this is the second guard.
+    await recordAuditPass({
+      role: 'PRIMARY', workerId: f.a.workerId, routineId: null,
+      accountId: f.a.accountId, sessionRef: 'sess-1',
+    });
+    await recordAuditPass({
+      role: 'ADVERSARIAL', workerId: f.b.workerId, routineId: null,
+      accountId: f.b.accountId, sessionRef: 'sess-2',
+    });
+    await recordAuditPass({
+      role: 'JUDGE', workerId: f.a.workerId, routineId: null,
+      accountId: f.a.accountId, sessionRef: 'sess-3',
+    });
+
+    const verdict = auditMatrixVerdict(await passes());
+    expect(verdict.eligible).toBe(false);
+    expect(verdict.reasons.join(' ')).toContain('SYNTHESIS');
+    expect(verdict.applied.some((a) => a.pair === 'SYNTHESIS_PRIMARY')).toBe(true);
+
+    // The three reviewer pairs still pass on their own — which is exactly how
+    // this stayed invisible: every existing check was green.
+    expect(
+      verdict.reasons.some(
+        (r) => r.includes('PRIMARY and ADVERSARIAL') || r.includes('JUDGE and'),
+      ),
+    ).toBe(false);
+  });
+
+  it('is compared even when the synthesis ran on a different attempt', async () => {
+    const f = await fleet();
+    // A redo writes a new synthesis pass; the author is whoever wrote the one
+    // that completed. Superseded attempts keep their rows (§5) and a
+    // non-COMPLETE pass is not an author — `lineageFromPasses` requires
+    // COMPLETE, which is what makes an abandoned attempt harmless here.
+    await recordSynthesis({
+      workerId: f.b.workerId, routineId: null, accountId: f.b.accountId, sessionRef: 'sess-redo',
+    });
+    await recordAuditPass({
+      role: 'PRIMARY', workerId: f.b.workerId, routineId: null,
+      accountId: f.b.accountId, sessionRef: 'sess-redo',
+    });
+    const verdict = auditMatrixVerdict(await passes());
+    expect(verdict.eligible).toBe(false);
+    expect(verdict.applied.map((a) => a.pair)).toContain('SYNTHESIS_PRIMARY');
+  });
+
+  it('a packet with no synthesis pass is unaffected', async () => {
+    const f = await fleet();
+    await recordAuditPass({
+      role: 'PRIMARY', workerId: f.a.workerId, routineId: null,
+      accountId: f.a.accountId, sessionRef: 'sess-1',
+    });
+    await recordAuditPass({
+      role: 'ADVERSARIAL', workerId: f.b.workerId, routineId: null,
+      accountId: f.b.accountId, sessionRef: 'sess-2',
+    });
+    await recordAuditPass({
+      role: 'JUDGE', workerId: f.a.workerId, routineId: null,
+      accountId: f.a.accountId, sessionRef: 'sess-3',
+    });
+    const verdict = auditMatrixVerdict(await passes());
+    expect(verdict.eligible).toBe(true);
+    // Nothing to compare against means no author pair was applied — absent, not
+    // assumed independent and not counted as a violation either.
+    expect(verdict.applied.every((a) => !a.pair.startsWith('SYNTHESIS_'))).toBe(true);
   });
 });

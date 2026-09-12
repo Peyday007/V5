@@ -32,6 +32,8 @@ import {
   listClaimsForFragment,
   listPasses,
 } from '../server/repos/research.ts';
+import { auditMatrixVerdict } from '../server/services/research/auditEligibility.ts';
+import { reopenProjection } from '../server/services/audit/integrityReaudit.ts';
 import { binForOrchestration } from '../server/repos/bins.ts';
 import { listCoverage, listRequirements } from '../server/repos/reconciliation.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
@@ -311,9 +313,71 @@ async function main(): Promise<void> {
   console.log('EVIDENCE');
   console.log(`  claims      ${claims.length} stored, ${accepted.length} accepted`);
   console.log(`  passes      ${passes.length}`);
-  for (const pass of passes.filter((entry) => entry.passKey === 'AUDIT')) {
-    console.log(`      audit role ordinal ${pass.ordinal} ${pass.status} ${pass.completedAt ?? ''}`);
+  /*
+   * Who wrote it, and who reviewed it — beside each other, from the rows.
+   *
+   * This printed the audit ordinals and their status and nothing about the
+   * executor, and it read the synthesis pass further down purely for the
+   * citation ids. So the one question a reader of a finished packet most
+   * obviously wants to ask — *did the session that wrote this report also sit
+   * in judgement on it?* — could not be answered from the report about that
+   * packet, while `research_passes` held the answer in a column.
+   *
+   * The verdict below is the production matrix applied to the whole pass list
+   * rather than a second opinion written here: `auditMatrixVerdict` reads the
+   * synthesis out of it and compares the author against each reviewer. A
+   * report that disagreed with the guard would be worse than no report.
+   */
+  const roleOf: Record<number, string> = { 5: 'PRIMARY', 6: 'ADVERSARIAL', 7: 'JUDGE' };
+  for (const pass of passes.filter(
+    (entry) => entry.passKey === 'SYNTHESIS' || entry.passKey === 'AUDIT',
+  )) {
+    const label =
+      pass.passKey === 'SYNTHESIS'
+        ? 'SYNTHESIS (author)'
+        : (roleOf[pass.ordinal] ?? `ordinal ${pass.ordinal}`);
+    console.log(
+      `      ${label.padEnd(20)} ${pass.status.padEnd(11)} attempt ${pass.attempt}` +
+        ` ${pass.completedAt ?? '—'}`,
+    );
+    console.log(
+      `          session=${pass.executorSessionRef ?? '—'}` +
+        `  worker=${pass.executorWorkerId ?? '—'}` +
+        `  account=${pass.executorAccountId ?? '—'}`,
+    );
   }
+  /*
+   * Whether the independence of this audit is under correction.
+   *
+   * Printed beside the separation verdict rather than somewhere else, because
+   * they are two halves of one answer: the verdict says what the lineage is,
+   * and this says whether anybody is doing something about it.
+   */
+  const integrity = await reopenProjection(packet.id);
+  if (integrity.sentence) {
+    console.log(`      ** ${integrity.sentence} **`);
+  }
+  for (const entry of integrity.history) {
+    console.log(
+      `      integrity ${entry.id}  ${entry.state.padEnd(22)} ${entry.finding} ` +
+        `on ${entry.documentVersion} (${entry.documentHash.slice(0, 12)}…)`,
+    );
+    console.log(
+      `          rerun ${entry.rolesRerun.join(', ') || '—'}  ` +
+        `carried ${entry.rolesCarried.map((role) => role.role).join(', ') || '—'}  ` +
+        `asked by ${entry.requestedById}  at ${entry.createdAt}`,
+    );
+  }
+
+  const separation = auditMatrixVerdict(passes);
+  console.log(
+    `  separation  ${separation.eligible ? 'compliant' : 'VIOLATED'} ` +
+      `(${separation.applied.length} pair(s) compared, policy ${separation.policyVersion})`,
+  );
+  for (const applied of separation.applied) {
+    console.log(`      compared ${applied.pair} at ${applied.level}`);
+  }
+  for (const reason of separation.reasons) console.log(`      VIOLATION  ${reason}`);
   console.log(`  audits      ${audits.length}`);
   for (const audit of audits) {
     console.log(`      ${audit.id} ${audit.verdict} ${audit.gaps.length} gap(s)`);

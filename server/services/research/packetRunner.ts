@@ -64,7 +64,7 @@ import {
   updateFragment,
   updateOrchestration,
 } from '../../repos/research.ts';
-import { auditRoundStartedAt, earlierAuditRole } from './auditBrief.ts';
+import { auditRoundFor, auditRoundStartedAt, earlierAuditRole } from './auditBrief.ts';
 import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
 import { listCoverage, overrideCoverage, upsertCoverage } from '../../repos/reconciliation.ts';
 import { binForOrchestration, creditBinAttempt } from '../../repos/bins.ts';
@@ -2007,8 +2007,8 @@ async function auditRoleSubmitted(
   // round's passes are history — they judged a document against a layer it has
   // since left — so the roles are outstanding again and the runner enqueues
   // them. Nothing about those passes is altered to make that true.
-  const since = await auditRoundStartedAt(orchestration.id);
-  return (await earlierAuditRole(orchestration.id, role, since)) !== null;
+  const round = await auditRoundFor(orchestration.id);
+  return (await earlierAuditRole(orchestration.id, role, round)) !== null;
 }
 
 /**

@@ -52,7 +52,7 @@ import {
   buildJudgePrompt,
 } from '../audit/prompts.ts';
 import { listPasses } from '../../repos/research.ts';
-import { auditRoundStartedAt } from './auditRound.ts';
+import { auditRoundFor, type AuditRound } from './auditRound.ts';
 import type { ResearchOrchestration } from '../../domain/types.ts';
 
 /*
@@ -61,7 +61,7 @@ import type { ResearchOrchestration } from '../../domain/types.ts';
  * importing nothing is exactly the failure mode §24 calls "a mechanism nothing
  * calls". The rule itself lives in `auditRound.ts`, with its four readers.
  */
-export { auditRoundStartedAt } from './auditRound.ts';
+export { auditRoundStartedAt, auditRoundFor, type AuditRound } from './auditRound.ts';
 
 export class AuditBriefUnavailable extends Error {
   constructor(message: string) {
@@ -103,13 +103,25 @@ export interface AuditBrief {
 export async function earlierAuditRole(
   orchestrationId: string,
   role: AuditRole,
-  since?: string | null,
+  round?: AuditRound | null,
 ): Promise<string | null> {
   const passes = await listPasses(orchestrationId);
+  const since = round?.since ?? null;
+  /*
+   * A carried role satisfies the round without having run again.
+   *
+   * An integrity reopen may decide that a role whose session authored nothing,
+   * and which depends on no role being rerun, does not have to be argued a
+   * second time. Its pass is untouched and still belongs to the previous round
+   * by the clock — so the boundary has to stop disqualifying it here too, or
+   * the runner would enqueue a role the reopen said to keep. Third reader of
+   * one rule; the rule itself is `auditRoundFor`.
+   */
+  const carried = round?.carried?.has(ROLE_PASS_ORDINAL[role]) === true;
   const match = passes
     .filter((pass) => pass.passKey === 'AUDIT' && pass.ordinal === ROLE_PASS_ORDINAL[role])
     .filter((pass) => pass.status === 'COMPLETE')
-    .filter((pass) => !since || (pass.completedAt ?? pass.startedAt) > since)
+    .filter((pass) => carried || !since || (pass.completedAt ?? pass.startedAt) > since)
     .at(-1);
   return match?.rawResponse ?? null;
 }
@@ -151,12 +163,12 @@ export async function auditBriefFor(input: {
    * round's arguments. Reading the previous round's primary pass here would
    * hand the adversarial role findings about a layer the document has left.
    */
-  const since = await auditRoundStartedAt(orchestration.id);
+  const round = await auditRoundFor(orchestration.id);
 
   if (role === 'PRIMARY') {
     prompt = buildPrimaryPrompt(context);
   } else if (role === 'ADVERSARIAL') {
-    const primary = await earlierAuditRole(orchestration.id, 'PRIMARY', since);
+    const primary = await earlierAuditRole(orchestration.id, 'PRIMARY', round);
     if (!primary) {
       throw new AuditBriefUnavailable(
         'The primary audit pass has not been completed, so there is nothing to attack.',
@@ -165,8 +177,8 @@ export async function auditBriefFor(input: {
     dependsOnRoles.push('PRIMARY');
     prompt = buildAdversarialPrompt(context, primary);
   } else {
-    const primary = await earlierAuditRole(orchestration.id, 'PRIMARY', since);
-    const adversarial = await earlierAuditRole(orchestration.id, 'ADVERSARIAL', since);
+    const primary = await earlierAuditRole(orchestration.id, 'PRIMARY', round);
+    const adversarial = await earlierAuditRole(orchestration.id, 'ADVERSARIAL', round);
     if (!primary || !adversarial) {
       throw new AuditBriefUnavailable(
         'The judge cannot run until both the primary and adversarial passes have been completed.',

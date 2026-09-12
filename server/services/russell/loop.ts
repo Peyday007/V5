@@ -72,6 +72,12 @@ import { currentFragments, getOrchestration, updateOrchestration } from '../../r
 import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
 import { getProject, listProjects } from '../../repos/projects.ts';
 import { frontierIsDue, refreshFrontier } from './frontier.ts';
+import {
+  dispatchInquiry,
+  pendingInquiries,
+  runningInquiries,
+  settleInquiry,
+} from './inquiry.ts';
 import { recordEvent } from '../../repos/events.ts';
 import {
   createCandidate,
@@ -90,6 +96,8 @@ import {
   routeAuditedDocument,
   type HandoffOutcome,
 } from '../audit/handoff.ts';
+import { reconcileIntegrityReopens } from '../audit/integrityReaudit.ts';
+import { listOpenReopens } from '../../repos/auditReopens.ts';
 import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
 import {
   reconcileArguedAuditRoles,
@@ -142,6 +150,12 @@ export interface TickReport {
    * is not charged an attempt for a defect in the planning that created it.
    */
   recovered: { missionId: string; candidateId: string }[];
+  /**
+   * Integrity reopens settled this tick: re-audited to a fresh verdict, or
+   * superseded because the document is no longer the bytes the finding was
+   * about. Never the same outcome, because they do not mean the same thing.
+   */
+  integrityReopens: { resolved: string[]; superseded: string[] };
   /**
    * Ideas the project's own archive already answered, judged and parked without
    * anything being dispatched. §13's default outcome, and the cheapest one.
@@ -287,6 +301,14 @@ export interface TickReport {
    * Brain creating its own work.
    */
   frontier: { projectId: string; observed: number; resolved: number }[];
+  /**
+   * Asked discovery lenses carried to a worker and read back this tick.
+   *
+   * Counted rather than listed: the question is whether the path moved, and a
+   * list of inquiry ids in a tick report would be a second place to look for
+   * something `listInquiries` already answers per project.
+   */
+  lensInquiries: { dispatched: number; settled: number };
   /** True when a bound stopped the tick short, with work preserved. */
   bounded: boolean;
 }
@@ -297,6 +319,7 @@ const EMPTY: TickReport = {
   generation: null,
   wroteBack: [],
   recovered: [],
+  integrityReopens: { resolved: [], superseded: [] },
   answeredByArchive: [],
   planning: [],
   resumed: [],
@@ -322,6 +345,7 @@ const EMPTY: TickReport = {
   unresolvedAnswers: [],
   renewedReservations: [],
   frontier: [],
+  lensInquiries: { dispatched: 0, settled: 0 },
   bounded: false,
 };
 
@@ -370,6 +394,7 @@ export async function tick(owner: string): Promise<TickReport> {
     unresolvedAnswers: [],
   renewedReservations: [],
     frontier: [],
+    lensInquiries: { dispatched: 0, settled: 0 },
   };
 
   try {
@@ -530,6 +555,24 @@ export async function tick(owner: string): Promise<TickReport> {
      */
     for (const entry of await reconcileTerminalPackets(cycle.maxEventsPerCycle)) {
       report.retiredPacketWork.push(entry);
+    }
+
+    /*
+     * 1a-iv-c. Settle the integrity reopens whose condition has stopped holding.
+     *
+     * Derived on the tick rather than hooked to the judge's submission, for the
+     * reason `concludeAbandonedParks` is: a hook fixes one entrance and the
+     * rows reach every entrance plus anything already stranded. Two exits, and
+     * they are deliberately different — a fresh verdict in this round settles
+     * it, and a document whose bytes are no longer the ones the finding was
+     * about is superseded rather than answered, because nothing re-audited
+     * anything.
+     */
+    {
+      const settled = await reconcileIntegrityReopens(
+        await listOpenReopens(cycle.maxEventsPerCycle),
+      );
+      report.integrityReopens = settled;
     }
 
     /*
@@ -726,6 +769,37 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a project whose frontier could not be read is left as it was */
+      }
+    }
+
+    /*
+     * 1e-iv. Carry asked lenses to a worker, and read the answers back.
+     *
+     * The frontier's five DERIVED lenses are answered above, from rows. The
+     * five ASKED ones are questions only a reader can settle, and this is the
+     * path from a person asking one to a validated row — `services/russell/
+     * inquiry.ts`, carried by the same bin fleet a Russell turn uses.
+     *
+     * Dispatch is bounded per tick for the reason every other fire is: a
+     * project with five open lenses must not become five simultaneous
+     * activations, and the ones left waiting are picked up next tick.
+     * `dispatchInquiry` claims with a guarded UPDATE before it creates the bin,
+     * so a redelivered tick cannot produce two bins for one question.
+     */
+    for (const inquiry of await pendingInquiries(3)) {
+      try {
+        await dispatchInquiry(inquiry);
+        report.lensInquiries.dispatched += 1;
+      } catch {
+        /* a lens that could not be dispatched stays REQUESTED and is retried */
+      }
+    }
+    for (const inquiry of await runningInquiries(10)) {
+      try {
+        const settled = await settleInquiry(inquiry);
+        if (settled.state !== 'RUNNING') report.lensInquiries.settled += 1;
+      } catch {
+        /* an inquiry whose bin could not be read stays RUNNING */
       }
     }
 

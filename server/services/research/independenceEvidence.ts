@@ -104,11 +104,32 @@ export interface IndependenceEvidence {
   achieved: SeparationTier | null;
 }
 
-/** The shape the signed contract has. A different one is a different contract. */
+/**
+ * The shape the signed contract has. A different one is a different contract.
+ *
+ * ---------------------------------------------------------------------------
+ * Six pairs, not three — a recorded strengthening
+ * ---------------------------------------------------------------------------
+ *
+ * This held three entries and matched the constant exactly, which is what the
+ * condition below checks. It grew to six when a production reading found the
+ * author of a report was not a party to its own audit: the three reviewers
+ * were separated from each other and every one of them was free to be the
+ * session that wrote the thing under review. See `auditEligibility.ts`.
+ *
+ * The equality check is deliberately both ways — same keys, same levels, same
+ * count — so this gate fails whether the matrix is **weakened** or **widened**
+ * without the contract moving with it. It failed here first, exactly as
+ * designed, and it is updated rather than loosened: an acceptance gate that
+ * tolerated a changed control would not be evidence of anything.
+ */
 const EXPECTED_MATRIX: Record<string, IndependenceLevel> = {
   PRIMARY_ADVERSARIAL: 'SESSION',
   JUDGE_PRIMARY: 'SESSION',
   JUDGE_ADVERSARIAL: 'SESSION',
+  SYNTHESIS_PRIMARY: 'SESSION',
+  SYNTHESIS_ADVERSARIAL: 'SESSION',
+  SYNTHESIS_JUDGE: 'SESSION',
 };
 
 /** The ordinals the three audit roles occupy, mirroring `independence.ts`. */
@@ -190,7 +211,8 @@ export async function auditIndependenceEvidence(
         'SIGNED_MATRIX_INTACT',
         matrixIntact,
         matrixIntact
-          ? 'all three role pairs separated by session, the corrected floor'
+          ? 'all six pairs separated by session — the three reviewers from each ' +
+            'other, and each of them from the author of the report'
           : 'the audit separation minimum is not the one this gate was written against',
       )
     ) {
@@ -239,6 +261,54 @@ export async function auditIndependenceEvidence(
         sameSession.eligible
           ? 'the eligibility guard admitted an adversarial audit in the primary’s own session'
           : 'a second audit role in one session is still refused',
+      )
+    ) {
+      return settle();
+    }
+
+    /* ---------------------------------------------------------------------
+     * 2b. The author is refused a role in the audit of its own report.
+     *
+     * The constant above having six entries is not evidence that six are
+     * enforced: the author pairs were added to a matrix whose only walker
+     * looked parties up in a map that had no row for `SYNTHESIS`, so they
+     * could be present and applied by nothing. That is the same shape as the
+     * defect they exist to close, which is why this is exercised live rather
+     * than inferred from the constant.
+     *
+     * The probe presents a PRIMARY executor holding the session that completed
+     * the SYNTHESIS pass, with no audit role recorded at all — so the only
+     * thing that can refuse it is the author comparison. If a refactor drops
+     * the synthesis from the comparison, this reads BLOCKED rather than
+     * passing quietly.
+     * ------------------------------------------------------------------- */
+    const authorAudits = auditEligibility({
+      role: 'PRIMARY',
+      executor: {
+        workerId: 'wkr_probe',
+        routineId: 'rtn_probe',
+        accountId: 'acct_probe',
+        sessionRef: 'cred_probe_author',
+      },
+      passes: [
+        {
+          passKey: 'SYNTHESIS',
+          ordinal: 4,
+          status: 'COMPLETE',
+          executorWorkerId: 'wkr_probe',
+          executorRoutineId: 'rtn_probe',
+          executorAccountId: 'acct_probe',
+          executorSessionRef: 'cred_probe_author',
+        } as never,
+      ],
+    });
+    if (
+      !require(
+        'AUTHOR_SELF_AUDIT_REFUSED',
+        !authorAudits.eligible,
+        authorAudits.eligible
+          ? 'the eligibility guard admitted an audit role in the session that wrote the synthesis'
+          : 'the session that wrote the report is still refused a role in auditing it',
       )
     ) {
       return settle();
@@ -511,6 +581,104 @@ export async function auditIndependenceEvidence(
           Number(filed[0]?.total ?? 0) > 0
             ? 'the audited packet filed a document with bytes recorded'
             : 'the audited packet has no filed document with bytes',
+        )
+      ) {
+        lastReasons = local;
+        continue;
+      }
+
+      /* ---------------------------------------------------------------------
+       * 10. None of the three reviewers is the author of what they reviewed.
+       *
+       * The seven conditions above establish that the three *reviewers* are
+       * three distinct authenticated contexts. They say nothing about whether
+       * one of those contexts also wrote the report — and for as long as this
+       * gate existed, neither did anything else: `lineageFromPasses` extracted
+       * the synthesis author's lineage and every caller discarded it, so a
+       * session could write the report and then file the PRIMARY audit on it
+       * and every condition here would still read met.
+       *
+       * That is §23's threat stated exactly — *one model context reviewing its
+       * own work* — passing a gate whose entire purpose is to refuse it. The
+       * condition is added rather than the wording softened, and this comment
+       * records it rather than the repository quietly acquiring a stricter
+       * gate, because a gate that changed without its reason is not evidence.
+       *
+       * Fail-closed, as everywhere in this file: a synthesis pass with no
+       * recorded session cannot be shown to be a different context, and
+       * "we could not tell" must never read the same as "we checked". It is a
+       * per-packet condition, so a packet that cannot demonstrate it is
+       * skipped and another may still win — the same shape as every condition
+       * in this loop.
+       *
+       * It is asked **last**, after the packet is known to have filed
+       * something, because a packet that filed nothing has no report to have
+       * authored and naming the missing document is the more useful refusal.
+       * Order here decides only which condition a reader is sent to first;
+       * every one of them still has to hold.
+       * ------------------------------------------------------------------ */
+      const author = await rows<{
+        executor_session_ref: string | null;
+        completed_at: string | null;
+      }>(
+        `SELECT executor_session_ref, completed_at
+           FROM research_passes
+          WHERE orchestration_id = ? AND pass_key = 'SYNTHESIS' AND status = 'COMPLETE'
+          ORDER BY completed_at DESC`,
+        [orchestrationId],
+      );
+      // Every completed synthesis attempt, not just the newest. A redo keeps
+      // the earlier attempt's row (§5), and a reviewer that shares a session
+      // with a superseded attempt is the same context that argued the report
+      // into its current shape — reading only the last one would clear it.
+      const authorSessions = new Set(
+        author
+          .map((row) => row.executor_session_ref)
+          .filter((ref): ref is string => typeof ref === 'string' && ref !== ''),
+      );
+      const unattributed = author.length > 0 && authorSessions.size === 0;
+      const overlap = three.filter(
+        (pass) => pass.executor_session_ref && authorSessions.has(pass.executor_session_ref),
+      );
+      const authorSeparated = author.length > 0 && !unattributed && overlap.length === 0;
+      /*
+       * Whether a correction is already under way, said in the same breath.
+       *
+       * A gate that reports a violation and stays silent about the guarded
+       * transition answering it sends a reader to do work that is already
+       * happening — and §24's rule about an escalation needing an answering
+       * transition is worth nothing if the escalation cannot mention it. It
+       * changes no verdict: a packet whose author reviewed it fails this
+       * condition whether or not the re-audit has started.
+       */
+      const reopen = await rows<{ state: string; roles_rerun: string }>(
+        `SELECT state, roles_rerun FROM audit_integrity_reopens
+          WHERE orchestration_id = ?
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1`,
+        [orchestrationId],
+      );
+      const pending = reopen[0]?.state === 'OPEN' ? reopen[0] : null;
+      const correction = pending
+        ? ` A correction is PENDING: the round was reopened and ${pending.roles_rerun} ` +
+          'are running again.'
+        : reopen[0]
+          ? ` A correction was opened and is now ${reopen[0].state}.`
+          : '';
+
+      if (
+        !check(
+          'AUTHOR_IS_NOT_A_REVIEWER',
+          authorSeparated,
+          (author.length === 0
+            ? 'no completed synthesis pass, so the author of the filed report cannot be identified'
+            : unattributed
+              ? `${author.length} completed synthesis pass(es), none carrying a session — ` +
+                'unrecorded authorship is not evidence of independence'
+              : overlap.length === 0
+                ? `the report's author ran in a session none of the three reviewers used`
+                : `${overlap.length} reviewer(s) ran in the session that wrote the report`) +
+            (authorSeparated ? '' : correction),
         )
       ) {
         lastReasons = local;

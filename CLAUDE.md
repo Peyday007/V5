@@ -1008,6 +1008,90 @@ constant, because a caller that could choose the level is a caller that could
 lower it, and **no count of accounts, workers or Routines appears anywhere in
 it.**
 
+**The author of the report is a party to its own audit, and for a long time it
+was not. The correction is recorded rather than quietly applied.**
+`lineageFromPasses` has always returned `{ synthesis, audits }` — the intent
+written down, in a field labelled and typed — and **every caller destructured
+`{ audits }` and dropped the other half**, while the separation matrix had no
+entry a synthesis could be compared under. So the three reviewers were
+separated from each other and **none of them was separated from the session
+that wrote the thing they were reviewing**. §23's own sentence states the
+threat exactly — *one model context reviewing its own work* — and a session
+that files the synthesis and then files the PRIMARY audit on it is the literal
+instance of it. `independence.ts` does hold a self-audit rule; it is called by
+tests and by nothing in production, which is the fourth time this file has had
+to write that **a mechanism nothing calls is not a mechanism**.
+
+Three matrix entries became six — `SYNTHESIS_PRIMARY`, `SYNTHESIS_ADVERSARIAL`
+and `SYNTHESIS_JUDGE`, all three named because an adversarial critic of its own
+report and a judge of its own report are the same defect one step along. The
+**level did not move**: every pair is still `SESSION` and still names no
+topology, so the correction that removed the two-account requirement is not
+reintroduced by this one — the same account may still review its own author's
+work from a different activation, which is what keeps the floor reachable on a
+one-Routine fleet. What changed is the set of parties, not the bar.
+
+Two readers had to change with it or the entries would have been enforced by
+nothing: `auditMatrixVerdict` looks each party up in a map, so a matrix key
+naming `SYNTHESIS` with no row for it would `continue` past both new pairs
+silently. And the two things that could *answer* the question could not: `step10
+audit-lineage` filtered to `passKey === 'AUDIT'` one line before the matrix
+could have used the author's row, and `packet-report` read the synthesis pass
+only for its cited claim ids. Both print the author beside the reviewers now.
+`independenceEvidence.ts` gained the pair as a per-packet condition
+(`AUTHOR_IS_NOT_A_REVIEWER`) and a live probe of the refusal, because a
+strengthened constant that nothing exercises is a claim rather than a reading.
+
+**A rule that arrives after the fact needs a way to correct what it found, and
+that is a second reason a round may begin rather than a second use of the
+first.** The matrix stops the pairing happening again and changes no recorded
+row; the packet it found was already `COMPLETE` with a `PASS` verdict. The
+obvious instrument was to hand: `auditRound.ts` starts a round from an
+`OTHER_LAYER` handoff and makes three roles outstanding again without editing
+anything. It is the wrong one — a handoff asserts that a document moved layers,
+and **making the rows say something untrue to get a lookup to come out right is
+what that module was written to refuse.** So `services/audit/integrityReaudit.ts`
+is its own event, `AUDIT_ROUND_REOPENED`, with its own append-only record.
+
+- **It destroys nothing.** The superseded audit keeps its row, its verdict, its
+  gaps and its `created_at`; every pass keeps its raw response, its lineage and
+  its timestamps; the document keeps its bytes, version, hash and storage key.
+  What moves is a boundary in *time*, which is why neither reason has to edit
+  history to work.
+- **The reservation is bound to the bytes, and the key is server facts only** —
+  the orchestration, the document, its content hash, the finding. §20's shape at
+  a smaller scale: `UNIQUE (request_key)` makes a duplicate request, a retry
+  after a lost response and a restart mid-request one outcome, and a document
+  whose bytes changed is a *different operation* rather than a repeat. An open
+  reopen whose document no longer hashes the same is `SUPERSEDED_BY_VERSION` and
+  never `RESOLVED`: nothing re-audited anything, and the two words must not mean
+  the same thing.
+- **A replay re-reads and re-authorizes.** The stored requester is a record of
+  who asked, never a credential, so revoked access is refused at the retry from
+  current rows — in the same words a non-member gets. A worker cannot reach it
+  at all, by principal type.
+- **Which roles rerun is derived from lineage, never chosen.** A role is carried
+  forward only if its session authored nothing, no role it is built from is
+  being rerun, and it has a completed pass to carry. The dependency closure is
+  read from `auditBriefFor`, which composes the adversarial prompt out of the
+  primary's own output and the judge's out of both — so a replaced PRIMARY
+  reruns everything after it, and **an old JUDGE verdict can never validate a
+  replacement PRIMARY**. The packet's `verdict` and `audit_id` pointers are
+  cleared while the `audits` row stays exactly as written, and the reopen
+  settles only on an audit id that differs from the superseded one *and* a judge
+  pass completed after the boundary.
+- **Carrying a role forward is not copying it.** `auditRoundFor` returns the
+  boundary and the carried ordinals together, because a reader that took the two
+  from different events would offer a role as satisfied against a boundary that
+  postdates it. Three readers share it — the brief, the runner and the admission
+  check — for the reason the boundary itself has four.
+- **The scan reports and does not act.** `npm run admin -- packets independence`
+  names every packet whose reviewer shared a session with an author, and opens
+  none of them, because that decision is a person's. It reports a packet whose
+  sessions were never recorded **separately** from one where the author
+  demonstrably reviewed: *we could not tell* is not the same fact as *we
+  checked*, which is this whole repair in one column.
+
 **This is a recorded correction to the original two-account requirement, not a
 silent weakening.** The threat an independent audit exists to defeat is *one
 model context reviewing its own work*. Three separate sessions defeat it. Two
@@ -2528,6 +2612,42 @@ weakening the control to satisfy the evaluator — exactly what
 *correct* to say so: it is an operational fact with an operational remedy, and
 the remedy is to fix the surface and prove it with a fire that arrives.
 
+**Both halves of that happened, and the surface was right about the cause.**
+The recorded reason was `AUTH: 403 {"message":"routines are not available for
+this organization","type":"permission_error"}` — an **organization-level
+entitlement**, not a credential and not a Brain defect. The same token had
+fired that Routine 260 times before it. What had happened outside Brain was a
+subscription lapsing to Free for the length of a billing switch away from the
+App Store, which is exactly the shape of condition the first-`AUTH`-quarantines
+rule exists for: not transient inside a retry window, and not permanent either.
+
+The transition that answered it is the one §23 already documented —
+`fleet set-state --kind routine --to ENABLED` — and nothing else was touched.
+Not the Routine, not the credential, not the worker identity, and not the
+execution path: **a historical `AUTH` is never a reason to rotate a secret or
+reach for a paid API**, because doing either would change what the recovery
+proves. One transition, one fire, and the evidence is the bin's own trace:
+
+    DISPATCH_ROUTED   SELECTED V1 on primary: 0/2 Routine, 0/2 account
+    DISPATCH_SENT     session cse_01XCUQgeYWmMTwUVpyLNihAE
+    BIN_TAKEOVER      worker wkr_1cdd82cfb2a54faf8edd, authenticated session
+    BIN_ITEM_CLAIMED  ×3
+    BIN_ATTEMPT_CREDITED ×2
+    BIN_RELEASED      "PRIMARY audit complete and checkpointed"
+
+Ten minutes either side of it are the honest before and after: the same bin
+recorded `DISPATCH_DEFERRED NO_SURFACE_SERVES_THIS_FAMILY` at 08:54 and again
+at 09:04:06, and routed at 09:04:46. **A recovery is a fire that arrives and
+finishes something, never a state column that changed.**
+
+And what the bin did *next* is the floor working rather than a second failure:
+`BIN_ASSIGNMENT_REFUSED — ADVERSARIAL would share the same session as PRIMARY`.
+The connector presents one OAuth access token per hour, so the adversarial role
+waits for a session that is genuinely distinct. That is §23's three-session
+minimum refusing to be satisfied by one model context wearing two role names,
+and `sessionWindow.ts` is what stops the wait being longer than the token's own
+life.
+
 
 ---
 
@@ -2557,6 +2677,7 @@ server/
     jurisdiction.ts     states, postal codes, and where each one may be read from
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
+    auditReopens.ts     the record behind a re-audit, and its one reservation
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
     factory.ts          the contract, the campaign, and units that own a surface
     factoryFleet.ts     factory workers, sessions, reviews, findings, the ledger
@@ -2601,6 +2722,7 @@ server/
       schema.ts         zero-trust validation of model output
       pipeline.ts       orchestration; the only path to a recorded verdict
       evidence.ts       the citation trail from a verdict back to passages
+      integrityReaudit.ts  the second reason a round begins, and what it preserves
     dispatch/
       fire.ts           one POST to the Routine, and what a refusal means
       loop.ts           the tick: supersede, ensure, route, claim a slot, send

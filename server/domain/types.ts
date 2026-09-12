@@ -299,6 +299,24 @@ export const EVENT_TYPES = [
   'EXTERNAL_RECORD_REJECTED',
   // A person on the connected site asked Brain for something, and Brain took it.
   'EXTERNAL_COMMAND_ACCEPTED',
+
+  // An audit round begun again because the audit was not independent.
+  //
+  // The *second* reason a round may start, and it exists because the first one
+  // is the wrong instrument for this: `DOCUMENT_HANDED_OFF` asserts that a
+  // document moved layers, and a packet whose author reviewed its own report
+  // has not moved anywhere. Writing a handoff to make the boundary lookup come
+  // out right would be making the rows say something untrue, which is what
+  // `auditRound.ts` exists to refuse.
+  //
+  // It destroys nothing. Every pass keeps its row and its timestamps, the
+  // superseded verdict keeps its gaps and its `created_at`, and the document
+  // keeps its bytes. What the row does is move a boundary in *time*, which is
+  // the same mechanism the handoff uses and the reason neither has to edit
+  // history to work. The payload carries the finding, the document version and
+  // hash it is about, which roles run again and which are carried forward with
+  // why, the verdict it supersedes, and the authenticated person who asked.
+  'AUDIT_ROUND_REOPENED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -3898,6 +3916,12 @@ export const COMPLETION_CONTRACTS = [
   // One conversation turn. The worker submits a structured proposal and Brain
   // decides what, if anything, it causes — see `services/russell/turn.ts`.
   'RUSSELL_TURN_V1',
+  // One discovery lens that only a reader can answer. The worker submits
+  // findings that each cite rows the project already holds; Brain validates
+  // them, discards the ones whose citations do not resolve or that restate
+  // something already held, and stores the rest as proposals a person accepts.
+  // See `services/russell/inquiry.ts`.
+  'RUSSELL_LENS_V1',
   // One captured idea, read. The worker submits what only a reader of the
   // question can judge — is the uncertainty cheap to reduce, what would a
   // packet have to establish, what is it worth — and Brain turns that into a

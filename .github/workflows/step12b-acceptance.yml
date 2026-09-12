@@ -1,0 +1,82 @@
+# The Step 12B A-to-Q verdict, read from production.
+#
+# `npm run step12b:acceptance` counts authoritative rows and prints the
+# seventeen scenarios. It is read-only by construction — it opens the configured
+# database, counts, prints and closes — so this workflow creates nothing,
+# advances nothing and takes no decision.
+#
+# **It is deliberately a separate workflow from `step12a-acceptance.yml`, and
+# the separation is the point.** Step 12A closed against its own twenty-two
+# gates and that reading is history; Step 12B is a different contract with a
+# different scope, and folding the two into one reporter would let either one's
+# verdict be read as the other's. The product owner asked for exactly this:
+# preserve the historical 12A closure, and report current 12B health honestly
+# beside it rather than inside it.
+#
+# It runs *inside* the container because that is the only place with the cloud
+# database credential. `BRAIN_DATABASE_URL` is a Fly secret and deliberately not
+# a GitHub one; putting it in a second system to save an SSH hop would be a
+# worse trade than the hop.
+#
+# There is no derived gate here, and that is a difference worth naming. 12A's
+# A19 is a fact about *deliveries* that no row can hold, so its verdict is
+# derived in the workflow. Every Step 12B scenario is a fact about rows or about
+# the repository, so the reporter is the whole authority and this file only
+# carries its output out.
+
+name: Step 12B acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why this reading is being taken, for the run log'
+        required: false
+        default: 'acceptance verdict'
+
+concurrency:
+  group: step12b-acceptance
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Read the A-to-Q matrix from production rows
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Run the Step 12B reporter in the container
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "npm --prefix /app run --silent step12b:acceptance" \
+            2>&1 | tee acceptance12b.txt
+          set -e
+          # The verdict comes from the reporter's own summary line rather than
+          # from an exit code that had to survive an SSH session, a shell and a
+          # CLI — the same reason the hosted verification prints a marker.
+          if ! grep -q 'STEP 12B — acceptance' acceptance12b.txt; then
+            echo "::error::The reporter never ran. Read the output above."
+            exit 1
+          fi
+          grep -E 'PASS ·|^[A-Q]\.' acceptance12b.txt || true
+          # Not complete is an honest reading, not a broken workflow. It exits 0
+          # so the reading is always available; a red run would make the fix
+          # "stop looking" rather than "finish the work".
+          if grep -q 'STEP 12B IS NOT COMPLETE' acceptance12b.txt; then
+            echo "::warning::Step 12B is not complete. The unmet scenarios are listed above."
+            exit 0
+          fi
+          echo "Every Step 12B scenario is PASS."
+
+      - name: Keep the reading
+        uses: actions/upload-artifact@v4
+        with:
+          name: step12b-acceptance
+          path: acceptance12b.txt
+          if-no-files-found: warn

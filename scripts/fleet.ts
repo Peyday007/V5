@@ -457,7 +457,19 @@ async function main(): Promise<void> {
          * condition, and printing it would read as a live problem.
          */
         if (routine.state !== 'ENABLED' && routine.stateReason?.trim()) {
-          console.log(`          reason: ${routine.stateReason.trim()}`);
+          /*
+           * With the row's own timestamp, precisely labelled.
+           *
+           * `updated_at` is when this row was last written, which for a surface
+           * sitting out of routing is when it was taken out — but only while
+           * nothing else has written it since, and a health counter can. So it
+           * says "row last written" rather than "quarantined at": the first is
+           * what the column means and the second is an inference from it. There
+           * is no column for the second, and inventing the stronger sentence
+           * from the weaker fact is the rounding-up this file keeps refusing.
+           */
+          console.log(`          reason (row last written ${routine.updatedAt}):`);
+          console.log(`            ${routine.stateReason.trim()}`);
         }
       }
     }

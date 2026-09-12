@@ -103,7 +103,14 @@ describe('the floor is three sessions, not a topology', () => {
   });
 
   it('every pair has a SESSION minimum, and no entry names an account', () => {
-    expect(Object.values(AUDIT_SEPARATION_MINIMUM)).toEqual(['SESSION', 'SESSION', 'SESSION']);
+    // Six pairs rather than three since the author of the report became a
+    // party to its own audit. The property asserted is the one that matters
+    // and has not moved: every entry is the session floor, and none names a
+    // topology. Listing the count would make this test re-fail on the next
+    // legitimate strengthening while proving nothing extra.
+    const levels = Object.values(AUDIT_SEPARATION_MINIMUM);
+    expect(levels.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(levels)).toEqual(new Set(['SESSION']));
   });
 
   it('one account, several Routines — spreads, and says ROUTINE_SEPARATED', () => {

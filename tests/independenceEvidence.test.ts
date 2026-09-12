@@ -42,6 +42,8 @@ interface Shape {
   credentialA: string;
   credentialB: string;
   credentialJudge: string;
+  /** The session that wrote the report the three roles review. */
+  credentialAuthor: string;
 }
 
 beforeEach(async () => {
@@ -101,6 +103,13 @@ async function authenticShape(): Promise<Shape> {
   const credentialJudge = (
     await issueWorkerCredential({ workerId: workerA, issuedByType: 'SYSTEM', issuedById: 't' })
   ).credential.id;
+  // And a fourth for the author of the report. A real packet has one — the
+  // synthesis pass is what produces the document the three roles then review —
+  // and this fixture did not, which is exactly how the author came to be
+  // missing from the separation matrix in the first place.
+  const credentialAuthor = (
+    await issueWorkerCredential({ workerId: workerB, issuedByType: 'SYSTEM', issuedById: 't' })
+  ).credential.id;
 
   const run = await createRun({
     projectId,
@@ -116,6 +125,20 @@ async function authenticShape(): Promise<Shape> {
     assignment: 'prove the lineage',
     provider: 'WORKER',
   });
+
+  // The report, written before anything reviews it.
+  const synthesis = await startPass({
+    orchestrationId: orchestration.id,
+    passKey: 'SYNTHESIS',
+    ordinal: 4,
+    provider: 'WORKER',
+    prompt: 'write the report',
+    promptSha256: 'y'.repeat(64),
+    executorWorkerId: workerB,
+    executorAccountId: accountB,
+    executorSessionRef: credentialAuthor,
+  });
+  await finishPass(synthesis.id, { status: 'COMPLETE' });
 
   const roles: [number, string, string, string][] = [
     [5, workerA, accountA, credentialA],
@@ -156,6 +179,7 @@ async function authenticShape(): Promise<Shape> {
     credentialA,
     credentialB,
     credentialJudge,
+    credentialAuthor,
   };
 }
 
@@ -556,7 +580,11 @@ describe('the gate is evidence for a control that must still exist', () => {
     expect(SIGNED_AUDIT_MATRIX['PRIMARY_ADVERSARIAL']).toBe('SESSION');
     expect(SIGNED_AUDIT_MATRIX['JUDGE_PRIMARY']).toBe('SESSION');
     expect(SIGNED_AUDIT_MATRIX['JUDGE_ADVERSARIAL']).toBe('SESSION');
-    expect(Object.keys(SIGNED_AUDIT_MATRIX).length).toBe(3);
+    // The author of the report is a party too, on all three reviewer pairs.
+    expect(SIGNED_AUDIT_MATRIX['SYNTHESIS_PRIMARY']).toBe('SESSION');
+    expect(SIGNED_AUDIT_MATRIX['SYNTHESIS_ADVERSARIAL']).toBe('SESSION');
+    expect(SIGNED_AUDIT_MATRIX['SYNTHESIS_JUDGE']).toBe('SESSION');
+    expect(Object.keys(SIGNED_AUDIT_MATRIX).length).toBe(6);
     // No count of accounts, workers or Routines appears in the minimum.
     expect(Object.values(SIGNED_AUDIT_MATRIX)).not.toContain('ACCOUNT');
   });
