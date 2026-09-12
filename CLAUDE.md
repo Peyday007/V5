@@ -2247,6 +2247,121 @@ of an older dispatch is the same rollback wearing the right branch name.
   happened, twice, and the cost was a deleted surface coming back.
 
 
+## 29. A product is what a person can do, and every number in it is a row.
+
+Step 12B (`client/src/russell/`, `server/services/russell/`,
+`server/services/fleet/`, `docs/STEP-12B-MATRIX.md`) is the product surface over
+everything Steps 1 to 12C built. The owner rejected the September 11 interface,
+and this section records what was actually wrong with it — because a rejection
+is evidence of a problem and not approval of whatever replaces it.
+
+**"0 of 8 settled" was accurate and read as failure.** That is the whole lesson
+in one string. The project it described was working: three foundations were
+being researched, claims were being accepted, an audit had run. The sentence was
+true and it told a person the opposite of the truth. So `progress.ts` now
+carries a **milestone state** beside the arithmetic — `DONE`, `WORKING`,
+`BLOCKED`, `OPEN` — and a **named denominator**, because eight is not a quantity
+until you know eight of what. A project with nothing settled and three
+foundations under way is described that way; one with nothing settled and
+nothing happening is still told plainly, because §6 forbids dressing that up.
+The fraction is still a fact and is still reported; what changed is that it is
+no longer the only thing said.
+
+**Content clipped between 822 and 953 pixels because the wrong thing was asked
+how wide it was.** A media query asks the *viewport*; the element that was
+clipping was a column inside a rail. `container-type: inline-size` asks the
+container, so the same component is right on a phone and in a drawer without a
+second rule — and the fix is pinned by `tests/step12bResponsive.test.tsx`, which
+also refuses any `min-width` wider than a phone and allows only a table, a map
+and a tab strip to scroll sideways, each inside its own container.
+
+- **One projection answers every surface.** Progress, status, recent changes,
+  next action and decisions come from `home.ts`, `progress.ts` and
+  `projections.ts` — never re-derived per page. Two surfaces inferring their own
+  status from prose is how a person reads two different answers about one
+  project, and the project page is exactly where somebody would write a fresh
+  summary and produce one.
+- **A collection is a row; a rank is not.** Organization is deterministic and
+  invents no category: a thread with a project goes in that project's
+  collection, a private one goes in Personal, everything else is unfiled and
+  says so. The automatic pass is guarded so it can only ever write over its own
+  decisions — `collection_source`, the same shape `attachment_source` already
+  gives project routing. Rank is *derived*, because "major and unfinished" is a
+  fact about live missions and the last turn, and a stored one would be stale
+  the moment a worker answered something.
+- **The frontier is a derived reading that is remembered, and that is
+  deliberate.** Everything about a project's edges can be re-derived; the table
+  exists for the two things a pure derivation cannot do — remember that an area
+  *stopped* being on the frontier, and hold a person's statement that one is
+  deliberately not required. An item that stops being derived is **resolved,
+  never deleted**, because a delete makes a dark spot look like progress.
+- **Five discovery lenses are answered and four are asked.** Which assumptions
+  have nothing supporting them, which findings contradict each other, which
+  declared region has no work in it — those are rows. What adjacent possibility
+  is absent, what lesson transfers from another project, what the current map
+  makes impossible to see — those need a reader. The engine puts them with the
+  subject attached and **answers none of them**, because a Brain that filled
+  them in from a template would be manufacturing insight, which is §8's rule at
+  the one altitude where it is most tempting to break.
+- **A map draws only relationships that are recorded.** The money-flow map is
+  usually empty here and says so: the margin, the costs and the contacts are the
+  connected site's and stay there (§25), so Brain has nothing to draw. An empty
+  map for an absent subject is the correct output, and inventing edges to finish
+  a diagram is an invented citation one altitude down. Every map carries a
+  synchronized outline built in the same pass, so the screen-reader path and the
+  picture cannot describe different graphs.
+- **Search decides its scope before it queries.** The readable projects come
+  from `decideProjectAccess` and every statement is bounded to them, so
+  "nothing found" and "nothing you can see" are the same answer — a search that
+  fetched broadly and filtered afterwards is one forgotten `.filter()` from a
+  disclosure, and the *count* alone is information. A private thread stays its
+  owner's whatever their project rights.
+- **The fleet reports three numbers that are not each other.** A target somebody
+  configured, a capacity the surfaces can serve, and a throughput Brain has
+  observed, each with its own evidence label. Whether the backlog fits is
+  **null** when nothing has been measured, because a confident yes without a
+  measurement is the arithmetic-on-a-fiction §23 already corrected once.
+  "Why is this slow" joins the bin's own recorded events and names the largest
+  gap from the two events either side of it; no branch consults a clock to
+  decide what happened, and none consults a worker's account of itself.
+- **The Capability Lab is exact about what it will not do.** A health check
+  reads rows and costs nothing — a check that fired a worker to learn whether it
+  works would spend the allowance to discover what the rows already say.
+  Calibration reads `bin_events`, the only measurement Brain did not
+  manufacture. The five pressure modes are declared with a full envelope,
+  refused outside an isolated `TECHNICAL` scope, refused without a person
+  authorizing the pressure, and refused **by name** when unimplemented rather
+  than returning plausible numbers. Both tempting alternatives are recorded and
+  refused: simulating them produces figures a reader cannot tell from
+  measurements, and running them unattended spends real capacity against a
+  ceiling nobody set. **The mechanism is complete and the measurements are not
+  taken**, and saying so is the honest report.
+- **A preference may never change a fact.** `PREFERENCES` is a closed set of
+  presentational keys checked on write, so there is no shape here that could
+  hold an evidence floor or an authorization rule. Adding a key is a code change
+  somebody reviews, which is where "does this change a fact?" gets asked.
+- **Why this matters is quiet by construction.** Every line is a frozen layer, a
+  filed report, an accepted conclusion or a closed question with the row behind
+  it; it needs two milestones before it surfaces at all; and it has no streak,
+  badge, point or confetti in it. It returns null far more often than it returns
+  a sentence, because an encouraging screen over an empty project is what makes
+  a person stop believing the rest of the product.
+- **Needs You reads as the settled state it usually is.** An empty inbox says
+  what continues without anybody and folds the standing authority to one line —
+  with the whole card still in the document, because a summary that pointed
+  somewhere else would move the withdraw control to a page that does not have
+  it. The approval a project cannot proceed without is never folded.
+
+**`/legacy` is not `/operator`, and the difference matters.** The operator
+console is deleted and stays deleted (§26). The old three-pane *main* console is
+one click away and holds seven archive operations — importing, extraction
+inspection, manual runs, freeze and reconcile, prompt and packet internals,
+provider configuration, ingestion review — every one of which §23 says belongs
+*away* from the product surface rather than on it. Ordinary operation happens
+entirely in Russell. `docs/STEP-12B-LEGACY-MIGRATION.md` is the inventory, taken
+from the code.
+
+
 ---
 
 ## Repository map
@@ -2350,7 +2465,17 @@ server/
       service.ts        registering a site's records, and its one typed command
       loop.ts           the tick that makes a state change visible to a poller
     storageHealth.ts    how much room is left, measured rather than guessed
+    fleet/
+      view.ts           three capacity numbers that are not each other, and why it is slow
+      lab.ts            the eight test modes, and the five this version refuses to run
     russell/
+      home.ts           the eight things home says, in the order S6 fixes them
+      collections.ts    threads organized without inventing a category, ranked by meaning
+      frontier.ts       where understanding runs out: five regions, five lenses answered, four asked
+      maps.ts           six maps over the authoritative graph, and an outline that is the same graph
+      search.ts         scope decided before the query, never filtered after
+      preferences.ts    a closed set of presentational keys; nothing here changes a fact
+      whyThisMatters.ts real milestones, quiet by default, no gamification
       routing.ts        which project a conversation is about, authorization-first
       judgment.ts       what is worth capturing, dedupe, and Russell's own priority
       similarity.ts     the floor a proposed semantic merge is held to
@@ -2434,6 +2559,12 @@ client/                 React UI
   src/Root.tsx          which shell this address wants, and who is signed in
   src/russell/          the whole product: conversation, thin views, states
   src/russell/Build.tsx the factory, as a person uses it: one objective, one approval
+  src/russell/Home.tsx  the command center: state, focus, maturity strip, collections
+  src/russell/Fleet.tsx capacity, surfaces, policy as rows, and the lab beside it
+  src/russell/Frontier.tsx  the five regions, each item naming what it came from
+  src/russell/Maps.tsx  six maps, with the outline always in the document
+  src/russell/Search.tsx one search over everything this person may see
+  src/russell/design.css the Step 12B design system: tokens, container reflow, both themes
   src/App.tsx           the legacy console, at /legacy
 objectives/             software objectives a person approved, in the image by design
 scripts/
@@ -2446,6 +2577,8 @@ scripts/
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
   migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites
+  step12bProduct.test.ts     the product decisions, where they are decided
+  step12bResponsive.test.ts  the widths that were clipping, and why they no longer do
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```
