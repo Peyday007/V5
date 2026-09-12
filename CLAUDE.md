@@ -1085,6 +1085,26 @@ is its own event, `AUDIT_ROUND_REOPENED`, with its own append-only record.
   from different events would offer a role as satisfied against a boundary that
   postdates it. Three readers share it — the brief, the runner and the admission
   check — for the reason the boundary itself has four.
+- **A transition that reopens work must also enqueue it, and this one did not
+  — the correction is recorded rather than quietly applied.** The first real
+  reopen ran in production on 2026-09-12 and did everything it was supposed to:
+  a reservation bound to `v1E`, three roles to rerun, the previous round's items
+  cancelled, the packet back to `AUDITING` with its verdict cleared, a bin
+  READY. Brain fired fifteen seconds later and a worker arrived fifteen seconds
+  after that — and released at 13:34:17 saying **"No open work item exists yet
+  for this reopened audit round"**, because nothing had called `advancePacket`.
+  It was fired again immediately. Left alone that is a loop which looks like
+  progress and ends with the bin's attempts spent against a packet whose own
+  state said a worker should be working. `advancePacket` is what turns AUDITING
+  into a claimable item and **every other reopening transition calls it** —
+  `startPacket`, `reissue`, `surfaceRecovery`, `needsHuman`, the launch and the
+  submit tools. §24's sentence at a fifth altitude, and §27's beside it: a stage
+  becomes fireable when something makes it fireable, and the reopen is that
+  something. Ahead of the bin, so there is no window where the fire exists and
+  the work does not. **The fixture is why reading did not find it**: it had a
+  filed document and no fragments, which production cannot produce, and with no
+  fragment `advancePacket` walks to the planning branch instead of the audit
+  one — so the tests pin the queue an arriving worker sees rather than the call.
 - **The scan reports and does not act.** `npm run admin -- packets independence`
   names every packet whose reviewer shared a session with an author, and opens
   none of them, because that decision is a person's. It reports a packet whose

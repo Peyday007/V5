@@ -72,6 +72,7 @@ import { cancelWork, listWorkItems } from '../../repos/workQueue.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { binByCreator, createBin, getBin } from '../../repos/bins.ts';
 import { lineageFromPasses } from '../research/independence.ts';
+import { advancePacket } from '../research/packetRunner.ts';
 import { ROLE_PASS_ORDINAL } from '../research/auditBrief.ts';
 import {
   listReopens,
@@ -511,6 +512,33 @@ export async function requestIntegrityReaudit(input: {
     failureReason: null,
   });
 
+  /* ---------------------------------------------------------------------
+   * The round's first item, enqueued by the thing that started the round.
+   *
+   * `advancePacket` is what turns "this packet is AUDITING" into a work item a
+   * worker can claim, and every other transition that reopens work calls it —
+   * `startPacket`, `reissue`, `surfaceRecovery`, `needsHuman`, the launch, and
+   * the submit tools. This one did not, and production measured the cost
+   * within ninety seconds of the first reopen: `bin_50336752dd134a2c97fa` went
+   * READY at 13:31:53, Brain fired at 13:32:00, a worker arrived at 13:32:15,
+   * found nothing to claim, and released at 13:34:17 saying *"No open work
+   * item exists yet for this reopened audit round"*. It was fired again
+   * immediately, and would have gone round until the bin's five attempts were
+   * spent — a loop that looks like progress, against a packet whose state said
+   * a worker should be doing something.
+   *
+   * §24's sentence at a fifth altitude, and §27's beside it: a stage becomes
+   * fireable when something makes it fireable, and the reopen is that
+   * something. Ahead of the bin rather than after it, so there is no window
+   * where the fire exists and the work does not.
+   *
+   * Idempotent by the round rather than by a flag: `advancePacket` asks
+   * `auditRoleSubmitted`, `stillRunning` and `alreadyCreated` of *this* round,
+   * so a replay, a restart mid-request or a concurrent tick enqueues one item
+   * for the first outstanding role and no more.
+   * ------------------------------------------------------------------ */
+  const advanced = await advancePacket(orchestration.id);
+
   const binId = await ensureReauditBin({ reopen, document, orchestration });
 
   return {
@@ -526,6 +554,8 @@ export async function requestIntegrityReaudit(input: {
       (reuse.carried.length > 0
         ? `${reuse.carried.map((c) => c.role).join(', ')} carried forward. `
         : 'No role could be carried forward. ') +
+      `The round is waiting on ${advanced.waitingOn ?? 'nothing'}; ` +
+      `${advanced.enqueued.length} item(s) enqueued. ` +
       'Nothing recorded was changed.',
   };
 }

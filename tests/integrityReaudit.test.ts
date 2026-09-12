@@ -26,6 +26,7 @@ import { addDocument, freshProject, restartDatabase } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser, grantMembership, setUserDisabled } from '../server/repos/identity.ts';
 import {
+  createFragments,
   createOrchestration,
   finishPass,
   getOrchestration,
@@ -44,6 +45,7 @@ import {
   scanAuthorReviewerOverlap,
 } from '../server/services/audit/integrityReaudit.ts';
 import { listOpenReopens, listReopens } from '../server/repos/auditReopens.ts';
+import { listWorkItems } from '../server/repos/workQueue.ts';
 import { auditRoundFor, auditRoundStartedAt } from '../server/services/research/auditRound.ts';
 import { earlierAuditRole } from '../server/services/research/auditBrief.ts';
 import type { Document } from '../server/domain/types.ts';
@@ -115,6 +117,36 @@ beforeEach(async () => {
   orchestrationId = orchestration.id;
 
   document = await addDocument(fixture, 'Monetization Logic', 'v1', { withFile: true });
+
+  /*
+   * The accepted fragment a filed document implies.
+   *
+   * The fixture went without one and that is what hid the enqueue gap: with no
+   * fragment at all `advancePacket` walks to the planning branch, so the tests
+   * below never reached the audit stage the transition exists to restart. A
+   * packet cannot have a document without having synthesized one, and it cannot
+   * synthesize without a fragment that cleared its gate — so a fixture with a
+   * document and no fragment is a shape production cannot produce.
+   */
+  await createFragments([
+    {
+      orchestrationId,
+      projectId,
+      layerId,
+      fragmentIndex: 0,
+      fragmentKey: 'the-one-question',
+      question: 'The one question this packet answered.',
+      requiredEvidence: [
+        { id: 'official_source', description: 'What the official source says.', necessity: 'REQUIRED' },
+      ],
+      acceptableSourceTypes: ['official source'],
+      excludedSourceTypes: ['forum posts'],
+      completionCriteria: ['The official source states the answer.'],
+      dependsOn: [],
+      minIndependentSources: 1,
+      status: 'ACCEPTED',
+    },
+  ]);
 
   /*
    * A real audit row, not a made-up id. `research_orchestrations.audit_id` is a
@@ -268,6 +300,63 @@ describe('the transition itself', () => {
     expect(packet?.status).toBe('AUDITING');
     expect(packet?.verdict).toBeNull();
     expect(packet?.auditId).toBeNull();
+  });
+
+  /*
+   * The defect production found ninety seconds after the first real reopen.
+   *
+   * Everything above was true and the round still had nothing in it: the packet
+   * said AUDITING, the bin said READY, Brain fired, a worker arrived — and there
+   * was no work item to claim, so it released saying exactly that and the bin was
+   * fired again. A loop that looks like progress. `advancePacket` is what turns
+   * "AUDITING" into a claimable item and every other reopening transition calls
+   * it; this one did not.
+   *
+   * Asked of the queue rather than of the call, because the point is that a
+   * worker arriving next has something to do.
+   */
+  it('leaves the first rerun role claimable, so an arriving worker has work', async () => {
+    await authorReviewedItsOwnWork();
+
+    const before = (await listWorkItems(projectId, { limit: 500 })).filter(
+      (item) => item.orchestrationId === orchestrationId && item.workType === 'RESEARCH_AUDIT',
+    );
+    expect(before.every((item) => item.state !== 'QUEUED')).toBe(true);
+
+    const outcome = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    expect(outcome.ok).toBe(true);
+
+    const round = await auditRoundFor(orchestrationId);
+    const queued = (await listWorkItems(projectId, { limit: 500 })).filter(
+      (item) =>
+        item.orchestrationId === orchestrationId &&
+        item.workType === 'RESEARCH_AUDIT' &&
+        item.state === 'QUEUED' &&
+        round.since !== null &&
+        item.createdAt > round.since,
+    );
+    // One, not three: the roles are built from each other, so ADVERSARIAL is
+    // enqueued once PRIMARY has argued and JUDGE once both have.
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?.payload['role']).toBe('PRIMARY');
+  });
+
+  it('a replay enqueues nothing further, because the round already holds it', async () => {
+    await authorReviewedItsOwnWork();
+    await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    const after = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    expect(after.created).toBe(false);
+
+    const round = await auditRoundFor(orchestrationId);
+    const queued = (await listWorkItems(projectId, { limit: 500 })).filter(
+      (item) =>
+        item.orchestrationId === orchestrationId &&
+        item.workType === 'RESEARCH_AUDIT' &&
+        item.state === 'QUEUED' &&
+        round.since !== null &&
+        item.createdAt > round.since,
+    );
+    expect(queued).toHaveLength(1);
   });
 
   it('lets a carried role satisfy the new round without being argued again', async () => {
