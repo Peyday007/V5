@@ -38,13 +38,20 @@ import { listBins } from '../../repos/bins.ts';
 import { listOrchestrationsByProject } from '../../repos/research.ts';
 import { groupOf, listMissions } from '../../repos/russellMissions.ts';
 import { getProject } from '../../repos/projects.ts';
+import { listCandidates } from '../../repos/russellCandidates.ts';
+// The one mapping for the five classes. It already exists in the domain; a
+// second copy here is how two screens come to disagree about one enum.
+import { CANDIDATE_PRIORITY_LABELS } from '../../domain/types.ts';
 import type {
   Bin,
+  CandidatePriority,
   MissionGroup,
   OrchestrationStatus,
   ResearchOrchestration,
+  RussellCandidate,
   RussellMission,
 } from '../../domain/types.ts';
+
 
 /**
  * Where a piece of work came from, and therefore whether it is somebody's.
@@ -93,6 +100,34 @@ export interface WorkEntry {
   waitingOn: string | null;
   /** When it last moved. Sorting key, and the "since" a person reads. */
   updatedAt: string;
+  /**
+   * The user-facing priority class, and the stored reason for it (§8).
+   *
+   * Both come from the candidate this work was launched from, because that is
+   * where Russell recorded its ranking and its reason. A mission with no
+   * candidate has neither, and says so by being null rather than by being
+   * given a default — "Worth doing" asserted about work nobody ranked is a
+   * judgment nothing made.
+   */
+  priority: CandidatePriority | null;
+  priorityLabel: string | null;
+  priorityReason: string | null;
+  /**
+   * Whether it is stopped rather than merely waiting.
+   *
+   * Waiting on a worker is ordinary; waiting on a person, a refusal, or a
+   * failure is not, and a card that showed both the same way would make the
+   * exceptional case stop registering.
+   */
+  blocked: boolean;
+  /**
+   * The technical account, for the depth that asks for it.
+   *
+   * Pairs rather than prose, and every value is an identifier or a state name
+   * the row already carries — nothing here is composed. §5 is explicit that
+   * technical identifiers stay inspectable rather than being discarded.
+   */
+  how: { label: string; value: string }[];
   /** Links to the rows this entry already knows about. */
   links: {
     missionId: string | null;
@@ -223,10 +258,29 @@ export async function workForProject(input: {
   const claimedOrchestrations = new Set<string>();
   const claimedBins = new Set<string>();
 
+  /*
+   * The candidate behind each mission, read once.
+   *
+   * Russell's ranking and its reason live on the candidate, so a mission card
+   * that shows "why it is ranked here" has to reach it. One listing indexed by
+   * id rather than one query per mission: a fan-out is invisible with four
+   * missions and unusable with four hundred.
+   */
+  const candidates = new Map<string, RussellCandidate>();
+  for (const candidate of await listCandidates({ projectId: input.projectId, limit: 500 })) {
+    candidates.set(candidate.id, candidate);
+  }
+
   for (const mission of missions) {
     if (mission.orchestrationId) claimedOrchestrations.add(mission.orchestrationId);
     if (mission.binId) claimedBins.add(mission.binId);
-    entries.push(fromMission(mission, label('PROJECT')));
+    entries.push(
+      fromMission(
+        mission,
+        label('PROJECT'),
+        mission.candidateId ? (candidates.get(mission.candidateId) ?? null) : null,
+      ),
+    );
   }
 
   for (const orchestration of orchestrations) {
@@ -261,7 +315,11 @@ export function groupWork(entries: WorkEntry[]): GroupedWork[] {
   }));
 }
 
-function fromMission(mission: RussellMission, provenance: WorkProvenance): WorkEntry {
+function fromMission(
+  mission: RussellMission,
+  provenance: WorkProvenance,
+  candidate: RussellCandidate | null,
+): WorkEntry {
   return {
     id: `mission:${mission.id}`,
     source: 'MISSION',
@@ -273,6 +331,18 @@ function fromMission(mission: RussellMission, provenance: WorkProvenance): WorkE
     state: mission.state,
     waitingOn: mission.waitingOn ?? mission.terminalReason,
     updatedAt: mission.updatedAt,
+    priority: candidate?.priority ?? null,
+    priorityLabel: candidate?.priority ? CANDIDATE_PRIORITY_LABELS[candidate.priority] : null,
+    priorityReason: candidate?.reason ?? null,
+    blocked: mission.state === 'NEEDS_HUMAN' || mission.state === 'FAILED',
+    how: [
+      { label: 'Mission', value: mission.id },
+      ...(mission.orchestrationId ? [{ label: 'Packet', value: mission.orchestrationId }] : []),
+      ...(mission.binId ? [{ label: 'Bin', value: mission.binId }] : []),
+      ...(mission.documentId ? [{ label: 'Filed document', value: mission.documentId }] : []),
+      { label: 'State', value: mission.state },
+      { label: 'Attempt', value: String(mission.attempt) },
+    ],
     links: {
       missionId: mission.id,
       orchestrationId: mission.orchestrationId,
@@ -308,6 +378,23 @@ function fromOrchestration(
       orchestration.heartbeatAt ??
       orchestration.startedAt ??
       orchestration.queuedAt,
+    // A packet that predates Russell has no candidate and therefore no ranking.
+    // That is an absence, not a default.
+    priority: null,
+    priorityLabel: null,
+    priorityReason: null,
+    blocked:
+      orchestration.status === 'NEEDS_HUMAN' ||
+      orchestration.status === 'AWAITING_APPROVAL' ||
+      orchestration.status === 'FAILED' ||
+      orchestration.status === 'PAUSED_QUOTA',
+    how: [
+      { label: 'Packet', value: orchestration.id },
+      { label: 'Status', value: orchestration.status },
+      ...(orchestration.documentId
+        ? [{ label: 'Filed document', value: orchestration.documentId }]
+        : []),
+    ],
     links: {
       missionId: null,
       orchestrationId: orchestration.id,
@@ -331,6 +418,16 @@ function fromBin(bin: Bin, provenance: WorkProvenance): WorkEntry {
     state: bin.state,
     waitingOn: bin.terminalReason,
     updatedAt: bin.updatedAt,
+    priority: null,
+    priorityLabel: null,
+    priorityReason: null,
+    blocked: bin.state === 'NEEDS_HUMAN' || bin.state === 'FAILED',
+    how: [
+      { label: 'Bin', value: bin.id },
+      { label: 'Kind', value: bin.kind },
+      { label: 'State', value: bin.state },
+      ...(bin.orchestrationId ? [{ label: 'Packet', value: bin.orchestrationId }] : []),
+    ],
     links: {
       missionId: null,
       orchestrationId: bin.orchestrationId,

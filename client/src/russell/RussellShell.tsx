@@ -36,7 +36,7 @@ import { RussellHome } from './Home.tsx';
 import { BuildView } from './Build.tsx';
 import {
   FleetView,
-  IdeasView,
+  ProjectView,
   KnowledgeView,
   NeedsYouView,
   SitesView,
@@ -354,7 +354,7 @@ export function RussellShell({
         ) : null}
         {route.name === 'WORK' ? <WorkView projectId={projectId} /> : null}
         {route.name === 'BUILD' ? <BuildView projectId={projectId} /> : null}
-        {route.name === 'PROJECTS' ? <IdeasView projectId={projectId} /> : null}
+        {route.name === 'PROJECTS' ? <ProjectView projectId={projectId} /> : null}
         {route.name === 'KNOWLEDGE' ? <KnowledgeView projectId={projectId} /> : null}
         {route.name === 'FLEET' ? (
           <>

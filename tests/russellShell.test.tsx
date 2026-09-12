@@ -1312,6 +1312,71 @@ describe('the thin views', () => {
     expect(screen.queryByLabelText(/waiting/)).toBeNull();
   });
 
+  /*
+   * The empty inbox.
+   *
+   * A long authority card taking over an otherwise empty Needs You was one of
+   * the rejected screens' named faults. Nothing needing a decision is good
+   * news and has to read as a settled state — while the card stays reachable,
+   * in the document, one click away, because folding a control into somewhere
+   * else is how a remedy stops existing.
+   */
+  it('reads an empty Needs You as settled, with the permission folded but reachable', async () => {
+    baseRoutes({
+      'GET /api/russell/projects/prj_1/authority': {
+        body: {
+          headline: 'Russell may research public records here.',
+          limits: [],
+          counters: [],
+          suggested: {},
+          suggestedApproval: null,
+          history: [],
+          grant: {
+            id: 'rgo_1',
+            name: 'Public records research',
+            grantedBy: 'Ada',
+            grantedAt: '2026-09-01T00:00:00.000Z',
+            expiresAt: '2026-12-01T00:00:00.000Z',
+            permits: ['research public records'],
+            neverPermits: ['spend money'],
+            spend: {},
+          },
+        },
+      },
+    });
+    window.history.pushState({}, '', '/needs-you');
+    await mount();
+    await waitFor(() => expect(screen.getByText(/Nothing needs your decision/)).toBeTruthy());
+    // Folded to one line, and the whole card is still in the document — so the
+    // withdraw control has somewhere to be rather than a pointer elsewhere.
+    const summary = document.querySelector('details.rs-authority > summary');
+    expect(summary?.textContent).toMatch(/What Russell may do on its own/);
+    expect(screen.getByRole('button', { name: /Withdraw this/i })).toBeTruthy();
+  });
+
+  it('never folds the approval a project cannot proceed without', async () => {
+    baseRoutes({
+      'GET /api/russell/projects/prj_1/authority': {
+        body: {
+          headline: 'Russell needs your permission before it can research anything here.',
+          limits: [],
+          counters: [],
+          suggested: { maxConcurrent: 1 },
+          suggestedApproval: { name: 'Public records research', expiresAt: '2026-12-01T00:00:00.000Z' },
+          history: [],
+          grant: null,
+        },
+      },
+    });
+    window.history.pushState({}, '', '/needs-you');
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy());
+    // Not behind a disclosure: nothing can proceed until it is answered, and a
+    // status that contradicts the control beside it teaches people to stop
+    // reading the status.
+    expect(document.querySelector('details.rs-authority')).toBeNull();
+  });
+
   it('says there is nothing at an address it does not know', async () => {
     baseRoutes();
     window.history.pushState({}, '', '/somewhere-else');

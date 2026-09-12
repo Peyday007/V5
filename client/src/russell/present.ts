@@ -308,25 +308,13 @@ export function foundationTone(status: string): 'settled' | 'working' | 'blocked
 }
 
 /**
- * The five priority classes, in the order §8 fixes them.
+ * The modifier a mission card carries for its class.
  *
- * The class is what a person reads; the internal rank stays on the row. A view
- * that sorted by rank and showed no class would be asking somebody to infer the
- * reason from the order, which is exactly the "do not merely reorder cards"
- * the specification rules out.
+ * A CSS decision and nothing more. The *words* for the five classes live in
+ * `domain/types.ts` and travel with the entry, because a second copy of an
+ * enum's labels in the client is how two screens come to disagree about one
+ * row — and the class a person reads must be the class the server ranked.
  */
-export const PRIORITY_CLASSES = ['MUST_DO', 'BIG_MOVE', 'WORTH_DOING', 'EXPLORE', 'PARKED'] as const;
-export type PriorityClass = (typeof PRIORITY_CLASSES)[number];
-
-export const PRIORITY_LABELS: Record<PriorityClass, string> = {
-  MUST_DO: 'Must do',
-  BIG_MOVE: 'Big move',
-  WORTH_DOING: 'Worth doing',
-  EXPLORE: 'Explore',
-  PARKED: 'Parked',
-};
-
-/** The modifier a mission card carries for its class. One mapping, tested. */
 export function priorityTone(priority: string): string {
   switch (priority) {
     case 'MUST_DO':
