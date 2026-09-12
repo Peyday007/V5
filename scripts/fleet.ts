@@ -38,6 +38,8 @@ import { proposeScale, shouldQuarantine } from '../server/services/dispatch/scal
 import { referenceFleet, REFERENCE_SIZES, simulate } from '../server/services/dispatch/simulate.ts';
 import { activationTrace, workloadProfile } from '../server/services/dispatch/profiles.ts';
 import { getBin, listBins } from '../server/repos/bins.ts';
+import { getWorker, getWorkerByName, getWorkerRouting } from '../server/repos/identity.ts';
+import { listTokensForWorker } from '../server/repos/oauth.ts';
 import { FLEET_STATES } from '../server/domain/types.ts';
 import type { FleetState } from '../server/domain/types.ts';
 
@@ -171,10 +173,21 @@ async function main(): Promise<void> {
 
   if (command === 'bind-worker') {
     const ref = option('ref');
-    const workerId = option('worker');
-    if (!ref || !workerId) return refuse('pass --ref <trig_…> --worker <wkr_…>.');
+    const given = option('worker');
+    if (!ref || !given) return refuse('pass --ref <trig_…> --worker <wkr_… or a worker name>.');
     const routine = await getRoutineByRef(ref);
     if (!routine) return refuse(`no Routine registered as ${ref}.`);
+    /*
+     * By name as well as by id, because onboarding names the worker and never
+     * shows the id. A runbook that has to say "find the id" is a runbook with a
+     * step somebody invents; `factory-<grant>` is a value the operator already
+     * has in front of them.
+     */
+    const named = await getWorkerByName(given);
+    const workerId = named?.id ?? given;
+    if (!named && !(await getWorker(workerId))) {
+      return refuse(`no worker "${given}" — pass its id or the name onboarding gave it.`);
+    }
     const changed = await bindRoutineWorker(routine.id, workerId);
     if (!changed) {
       return refuse(
@@ -511,6 +524,110 @@ async function main(): Promise<void> {
     return ok(`explain-route ${binId} ${decision.ok ? 'ROUTED' : decision.refusal}`);
   }
 
+  /*
+   * Is this surface the worker we meant, and is that a reading or an assumption?
+   *
+   * The question this answers is the one a second connector cannot answer by
+   * being named differently. A connector's name is a label in somebody's Claude
+   * account; the identity that reaches Brain is whatever worker the OAuth token
+   * resolves to, and a Routine whose connector was authorized against the
+   * *research* worker would be a factory surface in every respect except the one
+   * that decides what it may claim.
+   *
+   * So this prints two blocks that must not be confused, and labels them:
+   *
+   *   CONFIGURED — the rows an operator wrote. A binding, a scope, a secret.
+   *   OBSERVED   — what has actually happened. A token minted for this worker and
+   *                used, and a session that arrived on a fire Brain sent here.
+   *
+   * A green CONFIGURED block with an empty OBSERVED one is a plan, not a proof,
+   * and it says so. That distinction is `evidence_class` at an operator's
+   * command: a ceiling nobody has observed reads UNKNOWN and stays UNKNOWN.
+   */
+  if (command === 'verify-surface') {
+    const ref = option('ref') ?? arg(0);
+    if (!ref) return refuse('pass a Routine ref, e.g. --ref trig_...');
+    const routine = await getRoutineByRef(ref);
+    if (!routine) return refuse(`no Routine ${ref} is registered.`);
+    const account = (await listAccounts()).find((a) => a.id === routine.accountId) ?? null;
+
+    console.log('CONFIGURED');
+    console.log(`  routine     ${routine.name}  ${routine.state}  ref=${routine.routineRef}`);
+    console.log(`  account     ${account?.name ?? '—'}  ${account?.state ?? '—'}`);
+    console.log(`  caps        [${routine.capabilities.join(',')}]`);
+    console.log(
+      `  secret      ${routine.tokenSecretName}  ` +
+        (resolveToken(routine.tokenSecretName) ? 'present' : 'NOT PRESENT in this deployment'),
+    );
+
+    const problems: string[] = [];
+    if (!routine.workerId) {
+      console.log('  worker      — (no binding)');
+      problems.push('this Routine is bound to no worker, so nothing can be verified about its identity');
+    }
+    const worker = routine.workerId ? await getWorker(routine.workerId) : null;
+    const routing = routine.workerId ? await getWorkerRouting(routine.workerId) : null;
+    if (worker) {
+      console.log(`  worker      ${worker.name}  ${worker.id}${worker.archived ? '  ARCHIVED' : ''}`);
+      console.log(`  families    ${routing ? `[${routing.families.join(',')}]` : 'no routing row (derived default)'}`);
+      console.log(`  repos       ${routing ? `[${routing.repositories.join(',')}]` : '— (a worker with no row may never be handed repository work)'}`);
+      if (worker.archived) problems.push('the bound worker is archived');
+      if (!routing) problems.push('the bound worker has no routing row, so it may never be handed repository work');
+      if (routing && !routing.families.includes('FACTORY')) {
+        problems.push(`the bound worker serves [${routing.families.join(',')}] and not FACTORY`);
+      }
+      /*
+       * The check this command exists for. A worker that also serves research is
+       * not a separated identity however its connector is named — it is the
+       * research identity wearing a second label, and every routing boundary
+       * downstream would pass while separating nothing.
+       */
+      if (routing && routing.families.some((family) => family !== 'FACTORY')) {
+        problems.push(
+          `the bound worker also serves [${routing.families.filter((f) => f !== 'FACTORY').join(',')}] — ` +
+            'a factory surface must not share an identity with research work',
+        );
+      }
+      if (routing && routing.repositories.length === 0) {
+        problems.push('the bound worker is authorized for no repository, so no factory bin can route here');
+      }
+      for (const tag of ['repository', 'repository-write']) {
+        if (!routine.capabilities.includes(tag)) problems.push(`this Routine does not declare ${tag}`);
+      }
+    }
+
+    console.log('');
+    console.log('OBSERVED');
+    if (!worker) {
+      console.log('  nothing, because there is no worker to observe');
+    } else {
+      const tokens = await listTokensForWorker(worker.id);
+      const used = tokens.filter((token) => token.lastUsedAt !== null);
+      console.log(`  oauth       ${tokens.length} token(s) minted for this worker, ${used.length} used`);
+      if (tokens.length === 0) {
+        problems.push(
+          'no OAuth token has ever been minted for this worker, so no connector has authenticated as it',
+        );
+      } else if (used.length === 0) {
+        problems.push('a token exists for this worker but has never been used to call Brain');
+      }
+      console.log(`  fires       ${routine.totalFires} sent, ${routine.totalRefusals} refused`);
+      console.log(`  arrivals    ${routine.consecutiveNoShows} consecutive fire(s) with nobody arriving`);
+      if (routine.totalFires > 0 && routine.consecutiveNoShows >= routine.totalFires) {
+        problems.push('every fire to this Routine has gone unanswered');
+      }
+    }
+
+    console.log('');
+    if (problems.length === 0) {
+      console.log('  VERIFIED  this surface is the worker it is meant to be, and that worker has');
+      console.log('            authenticated to Brain at least once.');
+      return ok(`verify-surface ${ref} VERIFIED`);
+    }
+    for (const problem of problems) console.log(`  PROBLEM   ${problem}`);
+    return refuse(`verify-surface ${ref}: ${problems.length} problem(s) above.`);
+  }
+
   if (command === 'scale-advice') {
     const snapshot = await fleetSnapshot();
     const ready = (await listBins({ states: ['READY'], limit: 500 })).length;
@@ -591,7 +708,7 @@ async function main(): Promise<void> {
   refuse(
     `unknown command "${command}". Try: show, register-account, register-routine, bind-worker, ` +
       'repoint-worker, ' +
-      'set-state, set-target, boost, pause, resume, policy-history, explain-route, scale-advice, ' +
+      'set-state, set-target, boost, pause, resume, policy-history, explain-route, verify-surface, scale-advice, ' +
       'profile, simulate.',
   );
 }

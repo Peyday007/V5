@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'show | register-account | register-routine | set-capabilities | bind-worker | repoint-worker | set-state | set-target | boost | pause | resume | policy-history | explain-route | scale-advice | profile | simulate'
+        description: 'show | register-account | register-routine | set-capabilities | bind-worker | repoint-worker | set-state | set-target | boost | pause | resume | policy-history | explain-route | verify-surface | scale-advice | profile | simulate'
         required: true
         default: show
       name:

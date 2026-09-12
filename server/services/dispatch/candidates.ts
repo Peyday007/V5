@@ -149,10 +149,10 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
    * which is the same rule the assigner applies, so the two cannot disagree about
    * a worker nobody has narrowed.
    */
-  const familiesByWorker = new Map<string, string[]>();
+  const scopeByWorker = new Map<string, WorkerRoutingScope>();
   for (const routine of routines) {
-    if (!routine.workerId || familiesByWorker.has(routine.workerId)) continue;
-    familiesByWorker.set(routine.workerId, await servedFamiliesForWorker(routine.workerId));
+    if (!routine.workerId || scopeByWorker.has(routine.workerId)) continue;
+    scopeByWorker.set(routine.workerId, await routingScopeForWorker(routine.workerId));
   }
 
   for (const routine of routines) {
@@ -169,7 +169,12 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
     candidates.push({
       routine,
       account,
-      servesFamilies: routine.workerId ? familiesByWorker.get(routine.workerId) ?? null : null,
+      servesFamilies: routine.workerId
+        ? scopeByWorker.get(routine.workerId)?.families ?? null
+        : null,
+      servesRepositories: routine.workerId
+        ? scopeByWorker.get(routine.workerId)?.repositories ?? null
+        : null,
       routineInFlight: perRoutine.get(routine.id) ?? 0,
       accountInFlight: perAccount.get(account.id) ?? 0,
       routineTarget: routinePolicy ? effectiveTarget(routinePolicy, nowIso).target : null,
@@ -183,8 +188,15 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
   return { candidates, fleetPolicy, fleetInFlight, missingSecrets };
 }
 
+/** What one worker may be handed, in the two dimensions the fire decides on. */
+interface WorkerRoutingScope {
+  families: string[];
+  /** Explicit and exhaustive, or `null` when the worker has no routing row. */
+  repositories: string[] | null;
+}
+
 /**
- * The workload families one worker may be handed, for the routing snapshot.
+ * The routing scope of one worker, for the routing snapshot.
  *
  * Its own function because the *derived* default needs the worker's membership
  * scopes, and `fleetSnapshot` holds a Routine rather than a principal. Reading
@@ -196,13 +208,20 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
  * family, so a failure here can waste a fire and can never start a surface on
  * software work it is not authorized for.
  */
-async function servedFamiliesForWorker(workerId: string): Promise<string[]> {
+async function routingScopeForWorker(workerId: string): Promise<WorkerRoutingScope> {
   try {
     const explicit = await getWorkerRouting(workerId);
-    if (explicit) return explicit.families;
-    // The derived default, from the one function that defines it.
-    return derivedFamiliesFrom(await listMembershipsForPrincipal('WORKER', workerId));
+    // An explicit row is exhaustive in both dimensions, which is the same rule
+    // the admission hook reads it by.
+    if (explicit) return { families: explicit.families, repositories: explicit.repositories };
+    // The derived default, from the one function that defines it. Its
+    // repositories are *unknown* rather than empty — and unreachable, because
+    // the derived families never include a repository family.
+    return {
+      families: derivedFamiliesFrom(await listMembershipsForPrincipal('WORKER', workerId)),
+      repositories: null,
+    };
   } catch {
-    return ['RESEARCH', 'GENERAL'];
+    return { families: ['RESEARCH', 'GENERAL'], repositories: null };
   }
 }

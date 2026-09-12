@@ -2340,6 +2340,74 @@ remote.
   one intent per (bin, generation), `ON CONFLICT DO NOTHING`, so a duplicate
   tick, a restart mid-flight and two instances produce exactly one fire.
 
+- **The fire router scoped by family and not by repository, and I argued that
+  was right. It was not, and the correction is recorded rather than quietly
+  applied.** The reasoning I gave was §27's own: Brain cannot tell which surface
+  has *arrived*, because `worker_sessions` is keyed by a per-connector
+  credential, so a repository check on an arriving worker is a guess. Every word
+  of that is still true and none of it is about the fire. **Choosing which
+  Routine to fire is Brain's own decision over rows Brain wrote** —
+  `fleet_routines.worker_id` names the worker and that worker's `worker_routing`
+  row names its repositories — so there is no unknown to fail open on. With two
+  onboarded repositories in one family the router picked between their surfaces
+  on headroom, so onboarding A registered a surface Brain would fire for B's
+  bin, which the assigner then refused: an activation spent, an attempt charged,
+  and B's own surface never tried. `NO_SURFACE_SERVES_THIS_REPOSITORY` is the
+  refusal, named rather than reported as the nearest available one, and the
+  re-arm inherits it for free because the predicate *is* `routeBin`.
+- **Every routing refusal is a wait. There is no third kind, and believing there
+  was cost two of them.** `NO_ROUTINES_REGISTERED` and `ALL_SURFACES_INELIGIBLE`
+  exhausted a bin's five dispatch attempts and abandoned it — on the reasoning
+  that they mean "no surface exists at all", which is exactly the condition
+  `fleet register-routine` and `fleet set-state` exist to answer. A campaign must
+  not die of a condition whose fix a person is on their way to applying. What
+  still exhausts is unchanged and is not a routing refusal: `SUPERSEDED`, and a
+  fire the provider refused unretryably. **The permanent refusals are untouched
+  and are somewhere else entirely** — `decideRepository` before a campaign
+  exists, `services/bins/routing.ts` ahead of the compare-and-swap so it costs
+  nothing, `services/identity/policy.ts` with the same 404 a missing project
+  gives. None of them produces a `RoutingRefusal`.
+- **Two `Set`s that had to be total between them were not, which is how a
+  refusal fell into the exhausting branch by default.** `REFUSAL_WAIT` is a
+  `Record` keyed by the union, so a refusal added later is a compile error until
+  somebody classifies it — and it lives beside the union in `router.ts` rather
+  than in the loop, because the re-arm reads the same table to decide which
+  deferred intents a fleet write could have answered. The repository layer holds
+  no list at all now: `rearmSurfaceDeferredIntents` takes the kinds as a required
+  argument. It had its own copy, and the moment the router grew a refusal the two
+  disagreed — the loop deferred on a word the filter had never heard of, and the
+  intent waited out a wall no write could shorten. **A rule applied by one of two
+  readers is worse than none**, for the fourth time.
+- **A fleet that is merely switched off said it had no routing row.** Every
+  candidate was refused on its own state and `continue`d before any scope
+  question was asked, so the flags those questions set stayed false and the first
+  check after the loop claimed the refusal. A quarantined fleet therefore
+  reported `NO_SURFACE_SERVES_THIS_FAMILY`, sending an operator to write a
+  routing row when the answer was `fleet set-state`. §23's rule about naming the
+  right refusal, applied to the one condition that bypasses every test it names.
+- **Two repositories is where the mount and the target stop being the same
+  thing.** A fired worker reads `.claude/settings.json` from the checkout its
+  Routine attaches — that is what lets it call the connector without stopping for
+  approval — so a research Routine attaches `brain-worker-bootstrap` and a
+  factory Routine attaches the repository its work is in. Neither is a property
+  of the envelope, which is why removing the target from the envelope did not
+  stop the executor being whatever it last attached; it only left the factory
+  with nowhere to do real work. The file is in `UNIVERSAL_FORBIDDEN_PATHS` now
+  rather than on one grant, because a protection copied per repository is one
+  that will be missing from one — and the second repository is exactly when that
+  stops being hypothetical.
+- **A second connector name is not a second identity.** The MCP credential is
+  issued **per connector**, so one connector is one Brain worker however it is
+  labelled — and the converse is the trap: pointing an existing connector at a
+  new Routine hands it the old worker, and Brain's routing boundary, keyed on the
+  authenticated worker, then has nothing to separate. So the check is not that a
+  connector exists but that **a token was minted for the intended worker and
+  used**, which is a row. `fleet verify-surface` reads it and prints two blocks
+  that must not be confused: `CONFIGURED`, the rows an operator wrote, and
+  `OBSERVED`, what has actually happened. A perfect configured block over an
+  empty observed one is a plan, and it refuses rather than passing — the same
+  distinction `evidence_class` draws, at an operator's command.
+
 A worktree is the one factory path that is deliberately *not* authoritative
 state in either mode: it is execution scratch, the evidence is the commits, the
 rows and the artifacts, and retiring one destroys nothing that mattered. It

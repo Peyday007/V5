@@ -81,10 +81,70 @@ export const REPOSITORY_GRANTS: readonly RepositoryGrant[] = [
     forbiddenPaths: ['.claude/**'],
     mayOpenPullRequest: true,
   },
+  /*
+   * A real target, beside the proving ground.
+   *
+   * The paragraph below removed this entry on the argument that "the factory's
+   * own executor must not be whichever target it last proved itself on". The
+   * argument is right; the removal was the wrong instrument for it, and the
+   * correction is recorded rather than quietly applied.
+   *
+   * What the argument is actually about is a **Routine's attached repository**.
+   * A fired worker reads `.claude/settings.json` from the checkout its Routine
+   * attaches, which is how it may call the connector without stopping for
+   * approval — so a Routine that does research attaches
+   * `brain-worker-bootstrap`, which holds nothing, and a Routine that does
+   * factory work attaches the repository that work is *in*. Neither of those is
+   * a property of this list. Deleting the target did not stop the executor being
+   * whatever it last attached; it only left the factory with nowhere to do real
+   * work.
+   *
+   * What answers the original worry is machinery rather than an empty list: a
+   * grant authorizes nothing on its own, a `worker_routing` row scoped to *this*
+   * repository decides who may execute it, the fire router now refuses a surface
+   * registered for a different one, and access is granted where that worker
+   * runs. A repository nobody is watching is a repository nobody has onboarded a
+   * worker for, and Brain will not fire anything at it.
+   *
+   * It is the right target for the reasons it always was: a real site with its
+   * own continuous integration, so "the tests passed" is read from the
+   * repository rather than taken from a worker, and nothing this Brain or
+   * anybody's research depends on is inside it.
+   */
+  {
+    id: 'oakwood-site',
+    remote: 'https://github.com/Peyday007/oakwood-junk-removal',
+    description:
+      'The Oakwood Junk Removal site. A real static site with its own continuous ' +
+      'integration, and nothing Brain or its research depends on.',
+    defaultBranch: 'main',
+    /*
+     * Nothing beyond the universal floor, and that is a decision rather than an
+     * omission.
+     *
+     * Forbidding `.github/workflows/**` here was the first draft and it was
+     * wrong: `UNIVERSAL_FORBIDDEN_PATHS` already puts `deploy*` out of reach,
+     * which is the workflow that can publish, and blanket-forbidding the rest
+     * would have stopped the factory ever fixing this repository's own
+     * continuous integration. It has already had to — the repair unit that
+     * closed the last review's Node-floor finding changed `ci.yml`, correctly,
+     * and this list would have refused it. A rule that would have rejected work
+     * the record shows was right is a rule with the wrong boundary.
+     */
+    forbiddenPaths: [],
+    mayOpenPullRequest: true,
+  },
 ];
 
 /**
- * **One entry, and it is the factory's own proving ground.**
+ * **Two entries: a proving ground that holds nothing, and a real target.**
+ *
+ * `oakwood-site` was in it, was removed, and is back — see the entry above for
+ * why the removal's argument was right and its instrument was wrong.
+ *
+ * The paragraph that follows is the original reasoning, kept because half of it
+ * still governs: a grant is an authorization to be *pointed* at a repository and
+ * is never an authorization to execute in one.
  *
  * `oakwood-site` was in it. The Oakwood Junk Removal site was revived for one
  * purpose — to be the target the hosted factory proved itself against — and that
@@ -125,6 +185,17 @@ export const UNIVERSAL_FORBIDDEN_PATHS: readonly string[] = [
   '.github/workflows/deploy*',
   // The repository's own history and hooks.
   '.git/**',
+  /*
+   * The file that pre-approves the fleet's own connector.
+   *
+   * It was a per-grant rule on the proving ground, which was the right rule in
+   * the wrong place: the moment a Routine attaches a second repository, that
+   * repository's `.claude/settings.json` is what its fired worker reads, and a
+   * unit that owned it could take the whole fleet out with a diff that looks
+   * like a configuration tweak. This list exists precisely because a protection
+   * copied per repository is one that will be missing from one.
+   */
+  '.claude/**',
 ];
 
 export const REPOSITORY_ENVELOPE_ID = 'factory-repositories-2026-09-11';

@@ -77,11 +77,18 @@ putting it back. So the re-arm and the fire are one function and cannot disagree
 - no attempt is spent: a re-arm is not a retry;
 - the re-arm stamps the intent, so a second re-arm in the same state returns 0.
 
-The repository is deliberately **not** one of the dimensions the re-arm decides
-on, because it is not one the fire decides on either. §27 settles the repository
-at admission, where being wrong records something false; at the fire, being wrong
-costs one activation. Fail closed where the unknown could record something false;
-fail open where it could only waste a fire.
+**That paragraph originally continued "the repository is deliberately not one of
+the dimensions the re-arm decides on", and it was wrong. The correction is
+recorded rather than quietly applied.** The reasoning was §27's — Brain cannot
+tell which surface has *arrived*, because `worker_sessions` is keyed by a
+per-connector credential — and it is still true and was never about the fire.
+Choosing which Routine to fire is Brain's own decision over rows Brain wrote:
+`fleet_routines.worker_id` names the worker, and that worker's `worker_routing`
+row names its repositories. There is no unknown there to fail open on.
+
+The repository is therefore a dimension of both, and the re-arm inherits it for
+free because the predicate *is* `routeBin`. See **Two repositories** below for
+what leaving it out actually cost.
 
 ## Onboarding, as one action
 
@@ -195,21 +202,94 @@ lease_generation)` with `ON CONFLICT DO NOTHING` is what makes them one fire.
 - **Canonical deployment.** Shipped from `production`, the branch
   `.github/CANONICAL_BRANCH` names, by the one `Deploy` workflow (§28).
 
+## Two repositories, and the dimensions that keep them apart
+
+A second authorized grant is what made three questions answerable, and all three
+had wrong answers. `tests/factoryTwoRepositories.test.ts` is where they are now
+held.
+
+**Onboarding A registered a surface Brain would fire for B.** Two factory
+surfaces in one family were interchangeable to the router, which chose between
+them on headroom; the assigner then refused the wrong one with
+`REPOSITORY_NOT_AUTHORIZED`, so nothing false was recorded — what was spent was an
+activation, one of the bin's dispatch attempts, and the chance to try the surface
+that could have done it. The refusal is now
+`NO_SURFACE_SERVES_THIS_REPOSITORY`, it names the repository, and four dispatch
+ticks against a wrongly-registered surface produce **zero fires**. With both
+onboarded, each bin routes to its own Routine and the re-arm wakes only the one
+whose surface arrived.
+
+**Two conditions a person was on their way to fixing killed campaigns.**
+`NO_ROUTINES_REGISTERED` and `ALL_SURFACES_INELIGIBLE` exhausted the bin's five
+dispatch attempts and abandoned it — for an empty registry and a fully
+quarantined fleet, whose documented remedies are `fleet register-routine` and
+`fleet set-state`. Both are `OPERATOR` waits now. Six ticks against a quarantined
+fleet leave the intent `PENDING` with its attempts intact, no lease held and zero
+fires; lifting the quarantine fires it on the very next tick.
+
+**And a fleet that was merely switched off said it had no routing row.** Every
+candidate was refused on its own state before any scope question was asked, so
+the flags those questions set stayed false and the first check after the loop
+claimed the refusal. `ALL_SURFACES_INELIGIBLE` is checked first now and its
+reason names `fleet set-state`.
+
+The classification is a `Record` keyed by the refusal union rather than two sets
+that had to be total between them and were not — a missing key is a compile
+error — and it lives beside the union in `router.ts`, because
+`rearmSurfaceDeferredIntents` reads the same table. That repository function used
+to keep its own copy of the list; the moment the router grew a refusal the two
+disagreed, and an intent deferred on a word the filter had never heard of waited
+out a wall no operator write could shorten. It takes the kinds as a required
+argument now and holds no list at all.
+
+**What still refuses permanently, still does.** `decideRepository` refuses V5 in
+four spellings and every unauthorized remote; onboarding refuses an unknown grant
+without enumerating what it would have allowed; the admission hook refuses a
+worker the other repository's bin ahead of the compare-and-swap, so the bin's
+attempt count is still `0` afterwards. None of those produces a `RoutingRefusal`,
+so none of them is reached by any of the deferral above.
+
+## An onboarding whose response was lost
+
+The write commits and the caller never learns what it said, so the invitation —
+shown once — is gone and nothing in the rows says so. Recovery is to repeat it,
+and what makes that safe is that onboarding is a repair rather than an
+accumulation: the same worker, one membership, one routing row, one live
+invitation, and **the invitation whose link was lost is revoked**, because a
+token nobody read is still a token somebody could have. Three repeats spend no
+dispatch attempt, create no second intent, and leave the readiness a person reads
+identical each time.
+
 ## Verification
 
 ```
-npx tsc --noEmit          # clean
-npm test                  # 2294 passed | 37 skipped, 0 failed
-npx vite build            # clean
+npx tsc --noEmit     clean
+npm test             106 files, 2307 passed | 37 skipped, 0 failed      (SQLite)
+npm test             106 files, 2332 passed | 12 skipped, 0 failed      (Postgres 16)
+npx vite build       clean
 ```
 
-`BRAIN_TEST_DATABASE_URL` is not reachable from this environment, so the
-Postgres run is not recorded here. The only SQL changed is
-`rearmSurfaceDeferredIntents`, which became a `SELECT … WHERE … ORDER BY
-created_at LIMIT ?` followed by a guarded single-row `UPDATE`: positional
-parameters only, no `rowid`, no `DISTINCT`, and an `ORDER BY` on a real column —
-so it is sayable in both dialects. Nothing else touches persistence, and there is
-no migration.
+Against Postgres, with a local cluster initialised for it:
+
+```
+/usr/lib/postgresql/16/bin/initdb -D … -U brain --auth=trust
+/usr/lib/postgresql/16/bin/pg_ctl -D … -o '-p 5433' start
+BRAIN_TEST_DATABASE_URL='postgresql://brain@127.0.0.1:5433/braintest?sslmode=disable' npm test
+```
+
+Twenty-five tests that skip on SQLite run there, which is the point of the second
+backend and the reason the totals differ.
+
+**The Postgres run is recorded this time rather than reasoned about.** An earlier
+version of this file said the backend was not reachable from here and argued the
+changed SQL was portable by inspection. The inspection was correct and that is
+not the point: §25's own lesson is that a repository layer over two databases is
+true or merely compiling, and only one of the two can tell you which — the same
+sentence written after `012_checkpoint_seq.sql`, after the three connect tables,
+and after `workerSessionForBin` tiebroke on a column Postgres does not have.
+Portable-looking SQL is not a substitute for execution.
+
+There is no migration in this change.
 
 ## In production
 
@@ -240,6 +320,41 @@ browser, so the live half of it is the owner's — below.
 
 ---
 
+## Proving the connector is the worker it is meant to be
+
+A second connector *name* separates nothing. The MCP credential is issued **per
+connector**, so a connector is one Brain worker identity however it is labelled —
+and the trap is the converse: pointing an existing connector at a new Routine
+hands it the old worker, and Brain's routing boundary, keyed on the authenticated
+worker, then has nothing to separate.
+
+So the check is not that a connector exists. It is that **a token was minted for
+the intended worker and used**, which is a row. `npm run fleet -- verify-surface
+--ref <trig_…>` reads it and prints two blocks that must not be confused:
+
+* `CONFIGURED` — the rows an operator wrote: the Routine, its account, its
+  capabilities, whether its secret is present in this deployment, the worker it
+  is bound to, and that worker's families and repositories.
+* `OBSERVED` — what has actually happened: OAuth tokens minted for that worker
+  and how many were used, fires sent, and fires nobody answered.
+
+A perfect `CONFIGURED` block over an empty `OBSERVED` one is a plan rather than a
+proof, and the command **refuses** rather than passing — the same distinction
+`evidence_class` draws, at an operator's command. Exercised here against a
+scratch Brain: a Routine with no binding refuses naming that; bound to
+`factory-oakwood-site` by name it prints `families [FACTORY]`, `repos
+[peyday007/oakwood-junk-removal]` and still refuses, because no connector had
+authenticated as that worker yet.
+
+The refusal that matters most is *"the bound worker also serves [RESEARCH] — a
+factory surface must not share an identity with research work"*. That is what a
+reused connector looks like from Brain's side, and it is exactly what a second
+connector name would have hidden.
+
+`bind-worker` takes the worker **name** as well as its id, because onboarding
+names the worker and never shows the id — a runbook that has to say "find the id"
+has a step somebody invents.
+
 ## What is not proven, and cannot be from here
 
 **A Routine bound to the factory worker.** Brain cannot create one, and that is
@@ -248,19 +363,17 @@ authenticated by a connector, with a per-Routine deployment token. A Brain that
 could mint its own execution surfaces or choose their permissions is exactly what
 that split forbids.
 
-So the last mile is the owner's, and it is four steps:
+Everything on Brain's side of that line is done, including the two things that
+used to be left to the operator's judgement: both repositories' checked-in
+`.claude/settings.json` now pre-approve the factory connector's tool prefix, so a
+fired worker does not halt at a permission prompt with nobody there; and the
+walkthrough names every value rather than describing it.
 
-1. **Build → Repositories → Onboard** `Peyday007/brain-worker-bootstrap`. Copy
-   the invitation link; it is shown once.
-2. In Claude, **add a second connector** to this Brain's `/mcp` endpoint and open
-   the invitation link **first**, so the consent screen offers that worker and no
-   other. A second connector is required rather than preferred: the MCP
-   credential is per-connector, so reusing the research connector would make the
-   factory worker and the research worker one identity again.
-3. In Cowork, **create a Routine that uses that connector with the repository
-   attached**, and put its fire token in the deployment secrets.
-4. `fleet register-routine --account <name> --ref <trig_…> --secret <SECRET_NAME>
-   --capabilities repository,repository-write`.
+The remaining steps are the owner's and are written out in full in
+[`docs/workers/CONNECTING-THE-FACTORY-WORKER.md`](workers/CONNECTING-THE-FACTORY-WORKER.md)
+— connector name and URL, the invitation-before-connect ordering, the Routine's
+repository, branch, connector selection and trigger, the Fly secret's exact name,
+and the three Fleet commands that register, bind and verify it.
 
 What it unlocks, with no further prompt: readiness becomes `READY`, the next tick
 re-arms whatever is deferred for that repository, and the campaign runs the

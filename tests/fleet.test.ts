@@ -92,6 +92,9 @@ function candidate(
   counts: Partial<RoutingCandidate> = {},
 ): RoutingCandidate {
   return {
+    // Unknown rather than empty, which is what a worker with no explicit routing
+    // row resolves to — these fixtures are about capacity, not scope.
+    servesRepositories: null,
     routine: {
       id: 'rtn_1',
       accountId: 'acct_1',

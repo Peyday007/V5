@@ -147,14 +147,32 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
   return left.every((value, index) => value === right[index]);
 }
 
+/*
+ * The two steps Brain cannot take, in the order they have to happen, and worded
+ * so that neither has a value left to invent.
+ *
+ * The ordering in the first one is the whole of it: the invitation sets a cookie
+ * in the browser that opens it, and that cookie is what makes the consent screen
+ * offer *this* worker instead of a list. Connect first and a person is asked to
+ * choose, which is the one place this flow can go quietly wrong.
+ *
+ * The second names both capabilities rather than "the capabilities", because a
+ * surface that can read but not push produces a campaign that plans and then
+ * reports an honest blocker for ever.
+ */
 const CONNECTOR_STEP =
-  'In Claude, add a second connector to this Brain’s /mcp endpoint and open the ' +
-  'invitation link first, so the consent screen offers this worker and no other.';
+  'Open the invitation link below in the browser you will authorise from — first, before ' +
+  'anything else — then in Claude add a connector to this Brain’s /mcp endpoint and press ' +
+  'Connect. The consent screen must name this one worker; if it offers you a list, the link ' +
+  'was not opened in that browser.';
 const SURFACE_STEP =
-  'In Cowork, create a Routine that uses that connector with the repository attached, then ' +
-  'register it: `fleet register-routine --account <name> --ref <trig_…> --secret <SECRET_NAME> ' +
-  '--capabilities repository,repository-write`. Brain fires the Routine and never holds the ' +
-  'repository’s own credential.';
+  'In Cowork, create a Routine with this repository attached and that connector — and only ' +
+  'that connector — enabled, with an API trigger and no schedule. Put its trigger token in the ' +
+  'deployment secrets, then run Fleet: `register-routine --account <name> --ref <trig_…> ' +
+  '--secret <SECRET_NAME> --capabilities repository,repository-write`, `bind-worker --ref ' +
+  '<trig_…> --worker <this worker>`, and `verify-surface --ref <trig_…>`. Brain fires the ' +
+  'Routine and never holds the repository’s own credential. ' +
+  'The full walkthrough is docs/workers/CONNECTING-THE-FACTORY-WORKER.md.';
 
 /**
  * What each authorized repository's onboarding currently looks like.

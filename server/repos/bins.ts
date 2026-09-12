@@ -2584,26 +2584,26 @@ export async function markDispatchFailed(
  * count.
  */
 /**
- * The refusals an operator act resolves, and therefore the ones a write to the
- * fleet puts back.
+ * Put back what an operator's write could have made routable.
  *
- * Two of these are about a *scope* rather than a credential, and they are the
- * reason this list is a list rather than the original three. A factory stage whose
- * family no worker serves is refused `NO_SURFACE_SERVES_THIS_FAMILY` — and the act
- * that resolves it is onboarding a worker, which writes `worker_routing` and
- * touches no Routine at all. Left out, every intent written before the onboarding
- * kept its backoff, and a repository authorized at 10:00 would have waited until
- * whatever wall the last refusal set.
+ * The watermark is the fleet's own last write — to `fleet_routines` or to
+ * `worker_routing`, because onboarding a repository touches the second and no
+ * Routine at all. An intent deferred before that write is reconsidered; one
+ * deferred after it has already been asked.
  */
-const OPERATOR_RESOLVED_REFUSALS = [
-  'AUTH',
-  'NOT_FOUND',
-  'PAUSED',
-  'NO_SURFACE_SERVES_THIS_FAMILY',
-  'NO_CAPABLE_SURFACE',
-] as const;
-
-export async function rearmSurfaceDeferredIntents(
+export async function rearmSurfaceDeferredIntents(input: {
+  /**
+   * Which recorded refusals a fleet write could have answered.
+   *
+   * Passed in rather than listed here, and required rather than defaulted. It
+   * used to be a constant in this module, and the moment the router grew a
+   * refusal the two disagreed: the loop deferred an intent on a word this filter
+   * had never heard of, so the intent sat out a day-long wall that no operator
+   * write could shorten. One list, derived from the classification beside the
+   * type it classifies (`OPERATOR_RESOLVED_REFUSALS`), and a repository that
+   * holds no opinion about routing at all.
+   */
+  kinds: readonly string[];
   /**
    * Would this bin route *now*?
    *
@@ -2621,14 +2621,14 @@ export async function rearmSurfaceDeferredIntents(
    * rewritten its own reason. Correct, wasteful, and it makes the ledger read as
    * though something changed for work where nothing did.
    *
-   * What the recheck can decide is exactly what the *fire* decides on — the
-   * family the surface serves and the capabilities it declares. The repository
-   * is deliberately not among them, because §27 settles that at admission
-   * instead: being wrong there records something false, and being wrong here
-   * only wastes a fire.
+   * What the recheck decides on is exactly what the *fire* decides on, because
+   * it is the same function: the family, the repository the manifest names and
+   * the capabilities the surface declares.
    */
-  routesNow?: (bin: Bin) => Promise<boolean>,
-): Promise<number> {
+  routesNow?: (bin: Bin) => Promise<boolean>;
+}): Promise<number> {
+  const { kinds, routesNow } = input;
+  if (kinds.length === 0) return 0;
   const at = binNow();
   /*
    * The watermark is read in TypeScript and passed as a parameter rather than
@@ -2650,7 +2650,7 @@ export async function rearmSurfaceDeferredIntents(
   );
   if (marks.length === 0) return 0;
   const watermark = marks.reduce((latest, value) => (value > latest ? value : latest));
-  const placeholders = OPERATOR_RESOLVED_REFUSALS.map(() => '?').join(', ');
+  const placeholders = kinds.map(() => '?').join(', ');
   const candidates = await getDb().all<BinDispatchRow>(
     `SELECT * FROM bin_dispatch
       WHERE state = 'PENDING'
@@ -2659,7 +2659,7 @@ export async function rearmSurfaceDeferredIntents(
         AND updated_at < ?
       ORDER BY created_at
       LIMIT 200`,
-    [...OPERATOR_RESOLVED_REFUSALS, at, watermark],
+    [...kinds, at, watermark],
   );
 
   let rearmed = 0;

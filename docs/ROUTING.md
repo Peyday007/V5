@@ -116,10 +116,31 @@ same worker, the membership and routing rewritten from the constants, and the
 previous invitation revoked so there is never more than one live.
 
 Step 3 is deliberately still a person's, and the Build card says so rather than
-implying Brain will do it. What Brain does instead is notice: onboarding writes
-`worker_routing`, and `rearmSurfaceDeferredIntents` watches that table as well as
-`fleet_routines`, so work deferred for want of a surface is put back — after a
-re-check with `routeBin` itself, so only the work that condition was about moves.
+implying Brain will do it —
+[`docs/workers/CONNECTING-THE-FACTORY-WORKER.md`](workers/CONNECTING-THE-FACTORY-WORKER.md)
+is the whole of it, with every name, URL, branch and command written out. What
+Brain does instead is notice: onboarding writes `worker_routing`, and
+`rearmSurfaceDeferredIntents` watches that table as well as `fleet_routines`, so
+work deferred for want of a surface is put back — after a re-check with
+`routeBin` itself, so only the work that condition was about moves.
+
+**The routing row is read at the fire as well as at the assignment**, in both of
+its dimensions. A surface whose worker does not serve the bin's family is
+refused `NO_SURFACE_SERVES_THIS_FAMILY`; one whose worker is not authorized for
+the repository the bin's manifest names is refused
+`NO_SURFACE_SERVES_THIS_REPOSITORY`. Both are refusals to *start a session*,
+which Brain decides from rows it wrote, and neither is a guess about a worker
+that has already arrived — that is still settled by the admission hook, on the
+authenticated worker, and is still where an unknown fails closed.
+
+**A connector is an identity.** The MCP credential is issued per connector, so a
+second Routine that reuses an existing connector is the *same* Brain worker,
+whatever the Routine is called — and every routing boundary above would then pass
+while separating nothing. `npm run fleet -- verify-surface --ref <trig_…>` is the
+check: it prints the rows an operator wrote under `CONFIGURED`, and under
+`OBSERVED` whether a token was ever minted for that worker and ever used. It
+refuses on a configured surface nothing has authenticated as, because that is a
+plan rather than a proof.
 
 ## Operating it
 

@@ -65,59 +65,45 @@ import {
   supersedeStaleIntents,
   reopenNoShowDispatches,
 } from '../../repos/bins.ts';
-import { fireConfig, fireRoutine, isFireConfigured, isRetryable, recordAllowanceObservation, resolveToken } from './fire.ts';
+import {
+  fireConfig,
+  fireRoutine,
+  isFireConfigured,
+  isRetryable,
+  OPERATOR_RESOLVED_FIRE_FAILURES,
+  recordAllowanceObservation,
+  resolveToken,
+} from './fire.ts';
 import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from './candidates.ts';
 import { routeBin } from './router.ts';
-import type { RoutingRefusal } from './router.ts';
+import { OPERATOR_RESOLVED_ROUTING_REFUSALS, waitsForOperator } from './router.ts';
 import { markDispatchRoutine } from '../../repos/bins.ts';
 import { claimRoutineFireSlot, recordAccountRefusal, recordRoutineFire, setRoutineState } from '../../repos/fleet.ts';
 
-/**
- * Routing refusals that mean "wait", not "give up".
- *
- * Each of these resolves without anybody changing the fleet — an activation
- * finishes, a rate limit lapses, an operator un-pauses — so an intent that
- * meets one keeps its attempts and tries again. Everything outside this set
- * means no surface exists to take the work at all, and retrying into an empty
- * room forever would hide that from the person waiting.
- *
- * Declared as a constant next to the loop rather than as a property of the
- * refusal, so adding a refusal makes somebody decide which kind it is.
+/*
+ * How a routing refusal is classified now lives in `router.ts`, beside the union
+ * it classifies, because the re-arm reads the same table to decide which
+ * deferred intents a fleet write could have answered. See `REFUSAL_WAIT`.
  */
-const WAIT_FOR_CAPACITY = new Set<RoutingRefusal>([
-  'FLEET_TARGET_REACHED',
-  'ACCOUNT_TARGETS_REACHED',
-  'ALL_SURFACES_RATE_LIMITED',
-  'FLEET_PAUSED',
-]);
 
 /**
- * Routing refusals that mean "wait for a person to change the fleet".
+ * Everything a write to the fleet could have answered, from both vocabularies.
  *
- * A scope refusal is not capacity and it is not a fault in the work either: no
- * worker is registered to be handed this family, or none declares a capability the
- * bin needs. Nothing resolves it by itself — which is exactly why the first version
- * of this loop put both in the exhausting branch, on the sound-sounding reasoning
- * that "retrying into an empty room forever would hide that from the person
- * waiting".
+ * Two lists meet here and neither belongs to the other: a *routing* refusal is a
+ * decision Brain made before firing, and a *fire* failure is what the provider
+ * said when it did. Both are recorded in the same `last_error_kind` column, and
+ * both include conditions an operator fixes — so the re-arm's filter is the
+ * union, composed once, from the two modules that own the words.
  *
- * **That reasoning was right about the hiding and wrong about where to put the
- * cost.** Exhausting spends the bin's five dispatch attempts in five minutes and
- * abandons it, and an abandoned stage counts toward `MAX_BINS_PER_STAGE` — so a
- * campaign created an hour before its repository was onboarded had destroyed its
- * own planning stage by the time the worker existed, for a reason that was never
- * about the work. The person waiting learns nothing from that; they learn it from
- * the campaign, which now carries `NO_HEALTHY_EXECUTION_SURFACE` and the remedy.
- *
- * So these defer, and `rearmSurfaceDeferredIntents` puts them back the moment a
- * `worker_routing` or `fleet_routines` row is written — the derived condition, not
- * a timer, because the act that resolves this is an operator's and arrives
- * whenever it arrives.
+ * Composed rather than restated, because the last time this was a hand-written
+ * list it silently fell behind the router: a refusal the loop deferred on was a
+ * word the filter had never heard of, and the intent waited out a wall no write
+ * could shorten.
  */
-const WAIT_FOR_OPERATOR = new Set<RoutingRefusal>([
-  'NO_SURFACE_SERVES_THIS_FAMILY',
-  'NO_CAPABLE_SURFACE',
-]);
+export const OPERATOR_RESOLVED_KINDS: readonly string[] = [
+  ...OPERATOR_RESOLVED_ROUTING_REFUSALS,
+  ...OPERATOR_RESOLVED_FIRE_FAILURES,
+];
 
 /** Ten minutes, because the re-arm is what ends this wait rather than the clock. */
 const SCOPE_DEFER_MS = 10 * 60_000;
@@ -227,15 +213,18 @@ export async function dispatchTick(
    * admission, where being wrong records something false, and leaves the fire
    * free to be wrong at the cost of one activation.
    */
-  result.rearmed = await rearmSurfaceDeferredIntents(async (bin) => {
-    const decision = routeBin({
-      bin,
-      candidates: snapshot.candidates,
-      fleetPolicy: snapshot.fleetPolicy,
-      fleetInFlight: snapshot.fleetInFlight,
-      now: new Date().toISOString(),
-    });
-    return decision.ok || !WAIT_FOR_OPERATOR.has(decision.refusal);
+  result.rearmed = await rearmSurfaceDeferredIntents({
+    kinds: OPERATOR_RESOLVED_KINDS,
+    routesNow: async (bin) => {
+      const decision = routeBin({
+        bin,
+        candidates: snapshot.candidates,
+        fleetPolicy: snapshot.fleetPolicy,
+        fleetInFlight: snapshot.fleetInFlight,
+        now: new Date().toISOString(),
+      });
+      return decision.ok || !waitsForOperator(decision.refusal);
+    },
   });
 
   /*
@@ -348,48 +337,37 @@ export async function dispatchTick(
         measures: { considered: decision.considered },
       });
       /*
-       * Capacity waits; a missing fleet fails.
+       * An unrouted intent waits. It never fails.
        *
-       * The comment above already said an unrouted intent is "not a failure of
-       * this intent" — and then called `markDispatchFailed`, which spends an
-       * attempt and abandons at five. `attempt_count` is incremented at *claim*,
-       * so five ticks of a busy fleet exhausted the budget without a single
-       * activation having been tried. The frozen acceptance message died that
-       * way on 2026-09-04.
-       *
-       * `WAIT_FOR_CAPACITY` is the set of refusals that resolve by themselves or
-       * by a switch an operator flips: a target reached, a rate limit, a paused
-       * fleet. Those defer and keep their attempts. The rest — no Routine
-       * registered, no capable surface, every surface ineligible — mean nothing
-       * is coming without somebody changing the fleet, so they still exhaust and
-       * abandon rather than retrying into an empty room forever.
+       * The comment above already said this is "not a failure of this intent" —
+       * and then called `markDispatchFailed`, which spends an attempt and
+       * abandons at five. `attempt_count` is incremented at *claim*, so five
+       * ticks of a busy fleet exhausted the budget without a single activation
+       * having been tried. The frozen acceptance message died that way on
+       * 2026-09-04, and a factory planning stage died the same way against a
+       * repository nobody had onboarded yet. `REFUSAL_WAIT` is why there is no
+       * longer a branch here that can do it a third time.
        */
       const retryAfterMs = decision.retryAt
         ? Math.max(0, Date.parse(decision.retryAt) - Date.now())
         : null;
-      if (WAIT_FOR_CAPACITY.has(decision.refusal) || WAIT_FOR_OPERATOR.has(decision.refusal)) {
-        await markDispatchDeferred(intent.id, {
-          refusal: decision.refusal,
-          message: decision.reason,
-          /*
-           * A capacity wait is measured in the provider's own retry time or the
-           * default; a scope wait is measured in however long a person takes. So
-           * the second one backs off further and is put back by the write rather
-           * than by the clock — polling a scope that only an operator can change
-           * is a fire nobody asked for.
-           */
-          retryAfterMs: WAIT_FOR_OPERATOR.has(decision.refusal)
-            ? (retryAfterMs ?? SCOPE_DEFER_MS)
-            : retryAfterMs,
-        });
-        result.deferred += 1;
-      } else {
-        await markDispatchFailed(intent.id, {
-          kind: 'UNROUTED',
-          message: decision.reason,
-          retryAfterMs: retryAfterMs ?? 60_000,
-        });
-      }
+      /*
+       * Every routing refusal is a wait; which kind decides only how long.
+       *
+       * A capacity wait is measured in the provider's own retry time or the
+       * default; an operator wait is measured in however long a person takes. So
+       * the second one backs off further and is put back by the write rather
+       * than by the clock — polling a scope that only an operator can change is
+       * a fire nobody asked for.
+       */
+      await markDispatchDeferred(intent.id, {
+        refusal: decision.refusal,
+        message: decision.reason,
+        retryAfterMs: waitsForOperator(decision.refusal)
+          ? (retryAfterMs ?? SCOPE_DEFER_MS)
+          : retryAfterMs,
+      });
+      result.deferred += 1;
       // Every intent in this burst faces the same fleet, so walking the rest of
       // them into the same refusal spends nothing but time.
       break;

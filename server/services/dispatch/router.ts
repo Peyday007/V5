@@ -30,7 +30,7 @@
  * operator set, spends that resource to be told something the rows already say.
  */
 import type { Bin, FleetAccount, FleetPolicy, FleetRoutine } from '../../domain/types.ts';
-import { familyOf } from '../bins/routing.ts';
+import { familyOf, repositoryIdOf } from '../bins/routing.ts';
 
 /** Why no Routine was chosen. A closed set, because each one has its own fix. */
 export type RoutingRefusal =
@@ -41,7 +41,63 @@ export type RoutingRefusal =
   | 'ALL_SURFACES_RATE_LIMITED'
   | 'NO_CAPABLE_SURFACE'
   | 'NO_SURFACE_SERVES_THIS_FAMILY'
+  | 'NO_SURFACE_SERVES_THIS_REPOSITORY'
   | 'ACCOUNT_TARGETS_REACHED';
+
+/**
+ * What kind of wait each refusal is — and there is no third kind.
+ *
+ * It lives here, beside the union it classifies, because two modules act on it:
+ * the loop decides how long to defer, and the re-arm decides which deferred
+ * intents a fleet write could have made routable. A rule applied by one of two
+ * readers is worse than none, and this codebase has paid for that three times.
+ *
+ *   * `CAPACITY` — resolves by itself: an activation finishes, a rate limit
+ *     lapses, a paused fleet is un-paused.
+ *   * `OPERATOR` — resolves when somebody changes the fleet: registers a
+ *     Routine, fixes a secret, lifts a quarantine, onboards a repository.
+ *
+ * Nothing here exhausts. Routing answers "can any surface take this now", which
+ * is never a decision about whether the work may happen — those live in
+ * `decideRepository`, `services/bins/routing.ts` and
+ * `services/identity/policy.ts`, none of which produces a `RoutingRefusal`.
+ *
+ * A `Record` keyed by the union rather than a set, so a refusal added later is a
+ * compile error until somebody classifies it. Two `Set`s that had to be total
+ * between them were not, and that is exactly how `NO_ROUTINES_REGISTERED` and
+ * `ALL_SURFACES_INELIGIBLE` ended up exhausting a campaign's dispatch attempts
+ * against conditions a person was on their way to fixing.
+ */
+export type RefusalWait = 'CAPACITY' | 'OPERATOR';
+
+export const REFUSAL_WAIT: Record<RoutingRefusal, RefusalWait> = {
+  FLEET_TARGET_REACHED: 'CAPACITY',
+  ACCOUNT_TARGETS_REACHED: 'CAPACITY',
+  ALL_SURFACES_RATE_LIMITED: 'CAPACITY',
+  FLEET_PAUSED: 'CAPACITY',
+  NO_SURFACE_SERVES_THIS_FAMILY: 'OPERATOR',
+  NO_SURFACE_SERVES_THIS_REPOSITORY: 'OPERATOR',
+  NO_CAPABLE_SURFACE: 'OPERATOR',
+  NO_ROUTINES_REGISTERED: 'OPERATOR',
+  ALL_SURFACES_INELIGIBLE: 'OPERATOR',
+};
+
+/** Would an operator's next write make this decision different? */
+export function waitsForOperator(refusal: RoutingRefusal): boolean {
+  return REFUSAL_WAIT[refusal] === 'OPERATOR';
+}
+
+/**
+ * The refusals a fleet write could have answered, derived rather than restated.
+ *
+ * This is the set `rearmSurfaceDeferredIntents` filters `bin_dispatch` by. It is
+ * computed from the table above so the two can never drift — which they did the
+ * moment a refusal was added: the loop deferred on it and the re-arm did not
+ * know the word, so the intent waited out a wall nobody could shorten.
+ */
+export const OPERATOR_RESOLVED_ROUTING_REFUSALS: readonly RoutingRefusal[] = (
+  Object.keys(REFUSAL_WAIT) as RoutingRefusal[]
+).filter(waitsForOperator);
 
 export interface RoutingCandidate {
   routine: FleetRoutine;
@@ -60,6 +116,33 @@ export interface RoutingCandidate {
    * that is not an unknown.
    */
   servesFamilies: string[] | null;
+  /**
+   * The repository ids the worker this Routine is bound to may be handed, or
+   * `null` when it has no explicit routing row and the question cannot be asked.
+   *
+   * **I wrote that this dimension belongs at admission and not at the fire, and
+   * that was wrong. The correction is recorded rather than quietly applied.**
+   * The reasoning was §27's: Brain cannot tell which surface has *arrived*,
+   * because `worker_sessions` is keyed by a per-connector credential, so a
+   * repository check on an arriving worker is a guess. All of that is still true
+   * — and none of it is about this. Choosing which Routine to *fire* is Brain's
+   * own decision over rows Brain wrote: `fleet_routines.worker_id` names the
+   * worker, and that worker's `worker_routing` row names its repositories. There
+   * is no unknown here to fail open on.
+   *
+   * The cost of leaving it out was not theoretical either. Two onboarded
+   * repositories share one family, so without this the router picks between their
+   * surfaces on headroom alone: onboarding A registers a surface Brain will
+   * happily fire for B's bin, which the assigner then refuses with
+   * `REPOSITORY_NOT_AUTHORIZED` — an activation spent, an attempt charged, and
+   * B's own surface never tried.
+   *
+   * Null stays eligible, exactly as `servesFamilies` does, and for the same
+   * reason: a worker with no explicit row has an unknown scope rather than an
+   * empty one. It also cannot reach here, because the derived default serves no
+   * repository family at all.
+   */
+  servesRepositories: string[] | null;
   /** In-flight activations attributed to this Routine and its account. */
   routineInFlight: number;
   accountInFlight: number;
@@ -123,6 +206,19 @@ function servesFamily(candidate: RoutingCandidate, family: string): boolean {
   // surface, and a router that threw on it would stop all dispatch.
   if (!Array.isArray(candidate.servesFamilies)) return true;
   return candidate.servesFamilies.includes(family);
+}
+
+/**
+ * Does this surface's worker serve the repository this bin's work is a change to?
+ *
+ * Asked only of a bin that names one, and answered only from an explicit routing
+ * row — the same two conditions the assigner applies, so the fire and the
+ * hand-over cannot disagree about which surface this work is for.
+ */
+function servesRepository(candidate: RoutingCandidate, repository: string | null): boolean {
+  if (repository === null) return true;
+  if (!Array.isArray(candidate.servesRepositories)) return true;
+  return candidate.servesRepositories.includes(repository);
 }
 
 function capable(routine: FleetRoutine, required: string[]): boolean {
@@ -202,8 +298,11 @@ export function routeBin(input: RoutingInput): RoutingResult {
   // From the bin's own columns. One derivation, shared with the assigner, so the
   // fire and the hand-over cannot disagree about what kind of work this is.
   const family = familyOf(bin);
+  const repository = repositoryIdOf(bin);
+  let sawRoutable = false;
   let sawCapable = false;
   let sawServesFamily = false;
+  let sawServesRepository = false;
   let sawRateLimited: string | null = null;
   let sawTargetReached = false;
 
@@ -219,6 +318,7 @@ export function routeBin(input: RoutingInput): RoutingResult {
       considered.push({ routineId: routine.id, verdict: `routine ${routine.state}` });
       continue;
     }
+    sawRoutable = true;
     /*
      * Whether its worker may be handed this family at all, asked **before**
      * capabilities.
@@ -241,6 +341,18 @@ export function routeBin(input: RoutingInput): RoutingResult {
       continue;
     }
     sawServesFamily = true;
+    /*
+     * And whether its worker may be handed *this repository's* work, asked
+     * immediately after the family and before capabilities, for the identical
+     * reason: it is the more precise answer and it has its own remedy. "No
+     * surface serves this repository" is one onboarding away; "lacks a
+     * capability" sends a person to look at a Routine's tags.
+     */
+    if (!servesRepository(candidate, repository)) {
+      considered.push({ routineId: routine.id, verdict: `not authorized for ${repository}` });
+      continue;
+    }
+    sawServesRepository = true;
     if (!capable(routine, required)) {
       considered.push({ routineId: routine.id, verdict: 'lacks a required capability' });
       continue;
@@ -277,6 +389,27 @@ export function routeBin(input: RoutingInput): RoutingResult {
   }
 
   if (eligible.length === 0) {
+    /*
+     * Asked first, because a surface that never got past its own state was never
+     * asked any of the questions below — and the flags they set stay false, so
+     * whichever check comes first claims a fleet that is merely switched off.
+     * A fully quarantined fleet reported `NO_SURFACE_SERVES_THIS_FAMILY`, which
+     * sends an operator to write a routing row when the answer is `fleet
+     * set-state`. §23's own rule about naming the right refusal, applied to the
+     * one condition that bypasses every test it names.
+     */
+    if (!sawRoutable) {
+      return {
+        ok: false,
+        refusal: 'ALL_SURFACES_INELIGIBLE',
+        reason:
+          'Every registered Routine or its account is disabled, draining or quarantined, so ' +
+          'none of them was asked whether it could take this work. Fix the surface and put it ' +
+          'back with `fleet set-state`; the recorded reason on each says what took it out.',
+        considered,
+        retryAt: null,
+      };
+    }
     if (!sawServesFamily) {
       return {
         ok: false,
@@ -285,6 +418,19 @@ export function routeBin(input: RoutingInput): RoutingResult {
           `No enabled Routine is bound to a worker that may be handed ${family} work. That is a ` +
           'routing scope an operator sets, not a capacity problem: register a worker for this ' +
           'family, or widen one whose scope was narrowed too far.',
+        considered,
+        retryAt: null,
+      };
+    }
+    if (!sawServesRepository && repository !== null) {
+      return {
+        ok: false,
+        refusal: 'NO_SURFACE_SERVES_THIS_REPOSITORY',
+        reason:
+          `No enabled Routine is bound to a worker authorized for ${repository}. That is a ` +
+          'routing scope an operator sets by onboarding this repository, not a capacity ' +
+          'problem — and it is deliberately not answered by a surface registered for a ' +
+          'different repository.',
         considered,
         retryAt: null,
       };
