@@ -2602,6 +2602,28 @@ of an older dispatch is the same rollback wearing the right branch name.
   branch, do not add a second workflow that runs `flyctl deploy`, and do not
   "temporarily" deploy a branch to test something — that is precisely what
   happened, twice, and the cost was a deleted surface coming back.
+- **A worktree holding the canonical branch is a third way the same damage
+  arrives, and one turned up.** A scratch worktree had `production` checked out
+  with a *reversal of a whole session* staged in its index: `packets.yml`
+  deleted, the committed visual evidence deleted, `CLAUDE.md` and two suites
+  reverted — 72 files, 7 850 deletions, against a `HEAD` that was two commits
+  stale. Nothing had gone wrong yet, because a worktree deploys nothing by
+  itself. One `git commit -am` and a push from inside it would have put a
+  deleted surface back on `production` for the third time, and the commit would
+  have looked deliberate.
+
+  The remedy that does not depend on noticing it again is to **never advance the
+  canonical branch by checking it out**. `git push <verified-branch>:production`
+  moves the remote ref by a fast-forward the server itself verifies, touches no
+  working tree, and cannot carry a stale index with it. Confirm it with
+  `git merge-base --is-ancestor origin/production <branch>` first, so a
+  non-fast-forward is refused before it is attempted rather than after.
+
+  **A test cannot catch this**, and saying so is the point: a worktree is
+  machine state rather than repository content, so `deploymentOwnership` can
+  refuse a migration collision and a port collision and can never see this one.
+  What it is, is a reason the push is written down here rather than left to
+  whichever command came to hand.
 
 
 ## 29. A product is what a person can do, and every number in it is a row.
