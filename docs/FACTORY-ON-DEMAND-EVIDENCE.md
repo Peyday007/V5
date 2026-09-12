@@ -264,10 +264,12 @@ identical each time.
 
 ```
 npx tsc --noEmit     clean
-npm test             106 files, 2307 passed | 37 skipped, 0 failed      (SQLite)
-npm test             106 files, 2332 passed | 12 skipped, 0 failed      (Postgres 16)
+npm test             107 files, 2355 passed | 37 skipped, 0 failed      (SQLite)
+npm test             107 files, 2380 passed | 12 skipped, 0 failed      (Postgres 16)
 npx vite build       clean
 ```
+
+on the reconciled tree, after Step 12A's workstream merged into `production`.
 
 Against Postgres, with a local cluster initialised for it:
 
@@ -320,40 +322,145 @@ browser, so the live half of it is the owner's — below.
 
 ---
 
-## Proving the connector is the worker it is meant to be
+## Proving the Routine runs as the worker it is bound to
 
-A second connector *name* separates nothing. The MCP credential is issued **per
-connector**, so a connector is one Brain worker identity however it is labelled —
-and the trap is the converse: pointing an existing connector at a new Routine
-hands it the old worker, and Brain's routing boundary, keyed on the authenticated
-worker, then has nothing to separate.
+**The first version of this check was too weak, and the correction is recorded
+rather than quietly applied.** It read two things: `fleet_routines.worker_id`,
+and whether an OAuth token had ever been minted for that worker and used. Both
+are true facts and neither is the claim. The binding is an **operator's
+assertion** — a row somebody wrote — and a token is held by a **connector**,
+which is not a Routine. One Claude account can hold several connectors and
+several Routines, and nothing about a minted, used token says which Routine has
+the connector that holds it. So "registered for worker X" and "X authenticated
+somewhere" can both be true of a Routine whose Cowork configuration actually
+selects the *research* connector — which is exactly the mistake a second
+connector *name* invites, and the one this command exists to catch.
 
-So the check is not that a connector exists. It is that **a token was minted for
-the intended worker and used**, which is a row. `npm run fleet -- verify-surface
---ref <trig_…>` reads it and prints two blocks that must not be confused:
+What settles it is a chain of four links, every one a row Brain wrote itself:
 
-* `CONFIGURED` — the rows an operator wrote: the Routine, its account, its
-  capabilities, whether its secret is present in this deployment, the worker it
-  is bound to, and that worker's families and repositories.
-* `OBSERVED` — what has actually happened: OAuth tokens minted for that worker
-  and how many were used, fires sent, and fires nobody answered.
+| Link | The row | Why it cannot be faked |
+|---|---|---|
+| **Fired** | `bin_dispatch`, `routine_id` = this Routine, `sent_at` set | Brain chose the surface and sent the fire |
+| **Arrived** | `worker_sessions`, written *from that dispatch row* at arrival | the worker id is Brain's attribution, never the worker's claim |
+| **Assigned** | that session's `bin_id` | the bin the fire was for was handed to it |
+| **Completed** | that bin reached `COMPLETE` | it did work Brain accepted, not merely authenticated |
 
-A perfect `CONFIGURED` block over an empty `OBSERVED` one is a plan rather than a
-proof, and the command **refuses** rather than passing — the same distinction
-`evidence_class` draws, at an operator's command. Exercised here against a
-scratch Brain: a Routine with no binding refuses naming that; bound to
-`factory-oakwood-site` by name it prints `families [FACTORY]`, `repos
-[peyday007/oakwood-junk-removal]` and still refuses, because no connector had
-authenticated as that worker yet.
+`services/dispatch/surfaceProof.ts` is the decision, pure over rows it is handed
+so it is replayable and testable, and `tests/factoryTwoRepositories.test.ts`
+exercises all four outcomes: the closed chain, no arrivals at all, arrivals that
+never completed anything, and — the fault this is for — **arrivals that
+authenticated as a different worker**, which is reported as a fault rather than
+as a missing proof and names the worker it actually was.
 
-The refusal that matters most is *"the bound worker also serves [RESEARCH] — a
-factory surface must not share an identity with research work"*. That is what a
-reused connector looks like from Brain's side, and it is exactly what a second
-connector name would have hidden.
+**The controlled fire is `verify-surface --probe`.** It creates one bounded
+self-test bin: a `DETERMINISTIC_CHECK` asking for the sha-256 of a value carried
+inside the bin, belonging to no campaign, with every repository operation in its
+prohibited actions. It exists to be fired at, answered and finished, and nothing
+reads its result but this command. Smoke-tested against a scratch Brain: the bin
+is created with family `FACTORY`, the worker's own repository and the Routine's
+capabilities, so it routes to that one surface and nowhere else.
+
+`CONFIGURED` and `OBSERVED` stay two blocks that must not be confused, and a
+perfect configured block over an empty observed one refuses rather than passing.
 
 `bind-worker` takes the worker **name** as well as its id, because onboarding
 names the worker and never shows the id — a runbook that has to say "find the id"
 has a step somebody invents.
+
+## The campaign that was created here, and why it was retired
+
+A campaign was submitted and approved against the deployed Brain to exercise the
+deferral end to end, and it did exactly that:
+
+```
+campaign fcp_bd1725a9b19b4688ac8e PLANNING — waiting for a plan
+BLOCKER NO_HEALTHY_EXECUTION_SURFACE: FACTORY_PLAN bin bin_e6ae061e726e4918acbe
+  is ready and no registered worker may be handed it
+  (NO_SURFACE_SERVES_THIS_FAMILY). The work is fine; there is nobody to give it
+  to.
+units: 0/0 integrated, 0 ready, 0 leased, 0 failed
+paid-API executions recorded: 0
+```
+
+Every property this work was for, in one production reading: `PLANNING` rather
+than `BLOCKED`, the remedy in the blocker, the bin `READY` with no lease, nothing
+spent, and a resume derived from the write that fixes it rather than scheduled.
+
+**It has been retired, and the reason is the correction this section exists
+for.** It targeted `brain-worker-bootstrap` — the *checkout* a Routine attaches,
+not a target anybody asked for work in — against an objective I wrote rather than
+one a person chose. Neither the repository nor the objective was a decision that
+was mine to make, and a campaign that would start the moment a surface appeared
+is not made acceptable by being currently dormant.
+
+```
+factory retire --campaign fcp_bd1725a9b19b4688ac8e
+  retired bin_e6ae061e726e4918acbe FACTORY_PLAN (was READY)
+  retired fcp_bd1725a9b19b4688ac8e: was PLANNING, now CANCELLED;
+    1 bin(s) retired, 0 already terminal
+```
+
+`retire` is the supported transition and it destroys nothing: `CANCELLED` rather
+than `FAILED` because the work did not fail — something stopped wanting it — and
+the campaign's recorded reason, its change request, its pinned commit and its bin
+all stay exactly as written. `objectives/bootstrap-settings-guard.json` is
+removed from the repository for the same reason.
+
+The fleet it was waiting on, read the same way (`fleet show`): four accounts, six
+Routines, one eligible. `primary/V1` is the research surface — `caps=[]`, bound
+to `wkr_1cdd82cf…`, the identity `friend-2/V2` also carries. The two `V1-oak`
+Routines are `RETIRED` with *"oakwood factory proof complete surface out of
+active dispatch"* and bound to no worker. **There is no factory surface**, which
+is why the refusal above names the family rather than the repository.
+
+## Oakwood was re-authorized here, and that was a mistake
+
+`oakwood-site` was added back to the repository envelope during this work, on the
+argument that the retirement's stated rationale — *"the factory's own executor
+must not be whichever target it last proved itself on"* — was really about a
+Routine's attached checkout rather than about the envelope, so removing the grant
+had not fixed the thing it named.
+
+The distinction is real and is now written down properly. **What did not follow
+from it was authority to reverse the decision.** Oakwood's retirement is a
+standing operator decision; an imprecise rationale is a reason to write the
+rationale down better, never to widen what the rule allows.
+
+It is removed. What was preserved throughout, and is untouched now:
+
+* pull request #1, its four integrated units, its commits, its review and its one
+  open MINOR finding;
+* `docs/FACTORY-EXECUTION-PLANE-EVIDENCE.md` and the campaigns it records;
+* the two `V1-oak` Routines, retired with their recorded reason.
+
+The one change made to that repository during the mistake — a `.claude/settings.json`
+pre-approving the factory connector — is reverted on `main` (`19dc7df`), because
+a settings file for an unattended factory worker asserts that the repository is
+about to have one.
+
+**And the isolation properties it was re-added to demonstrate never needed it.**
+What separates two repositories is a `worker_routing` row and the bin's own
+manifest, both of which can be written for a repository the envelope refuses. The
+tests use a fixture remote now and assert that the envelope refuses it, which is
+strictly stronger: the same separation, proved without any production
+authorization at all.
+
+## Setup readiness is not a completed campaign
+
+These are two claims and this document keeps them apart on purpose.
+
+**Setup readiness** is everything above: the refusal classification, the
+repository dimension on the fire router, the deferral and its derived re-arm, the
+onboarding action and its rendered card, the correlated surface proof, and the
+walkthrough. All of it is verified on both backends and deployed.
+
+**A completed unattended campaign** is a different sentence and is **not
+claimed**. Nothing has run: there is no factory surface yet, no authorized target
+and no approved objective. When all three exist, what has to be shown is a
+campaign carried by the permanent workers through implementation, integration,
+independent review, repairs and a delivered pull request — across a Brain restart
+— with no prompt from any session supplying the work. Until that has actually
+happened, this document says only what it can.
 
 ## What is not proven, and cannot be from here
 
@@ -372,10 +479,14 @@ walkthrough names every value rather than describing it.
 The remaining steps are the owner's and are written out in full in
 [`docs/workers/CONNECTING-THE-FACTORY-WORKER.md`](workers/CONNECTING-THE-FACTORY-WORKER.md)
 — connector name and URL, the invitation-before-connect ordering, the Routine's
-repository, branch, connector selection and trigger, the Fly secret's exact name,
-and the three Fleet commands that register, bind and verify it.
+repository, branch, connector selection, paste-ready prompt and trigger, the Fly
+secret's exact name, and the Fleet commands that register, bind, probe and verify
+it.
 
-What it unlocks, with no further prompt: readiness becomes `READY`, the next tick
-re-arms whatever is deferred for that repository, and the campaign runs the
-existing plan → implement → integrate → review → repair path to a pull request
-Brain will not merge.
+**And two decisions after them that are also not automation gaps.** There is no
+authorized target repository and no approved objective, so when those steps
+finish the fleet is ready and idle. Naming a target is one reviewed entry in the
+envelope; saying what should become true in it is an objective a person approves.
+Until both exist, the correct state of this factory is a verified surface with
+nothing to do — which is what it now has, rather than a campaign somebody's agent
+invented for it.

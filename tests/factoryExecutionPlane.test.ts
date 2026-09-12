@@ -227,18 +227,25 @@ function reviewerPrincipal(workerId: string): Parameters<typeof binAdmission>[0]
 
 describe('the repository envelope', () => {
   /*
-   * `V5` is the one repository that may never be pointed at, and it is the only
-   * blanket refusal here: a campaign that could rewrite the machinery executing
-   * it is the one whose failure mode is not contained by declining a pull
-   * request. Spelling variants are refused too, because a normalisation the
+   * Two repositories may never be pointed at, for two different reasons, and both
+   * are asserted because both have been re-added by somebody who thought they had
+   * a good argument. `V5` is where the factory lives, so a bad unit there is not
+   * contained by declining a pull request. `oakwood-junk-removal` is **retired**:
+   * its proof is finished and kept, and taking it out of active dispatch was a
+   * standing decision of the operator's rather than a rule with a rationale to be
+   * re-litigated. Spelling variants are refused too, because a normalisation the
    * envelope did not do is an authorization somebody spelled their way into.
    */
-  it('refuses the repository it lives in, however it is spelled', () => {
+  it('refuses the repository it lives in and the one that was retired', () => {
     for (const remote of [
       'https://github.com/Peyday007/V5',
       'https://github.com/Peyday007/V5.git',
       'https://github.com/Peyday007/V5/',
       'https://github.com/peyday007/v5',
+      OAKWOOD,
+      `${OAKWOOD}.git`,
+      `${OAKWOOD}/`,
+      OAKWOOD.toUpperCase(),
     ]) {
       const refused = decideRepository(remote);
       expect(refused.ok).toBe(false);
@@ -247,42 +254,34 @@ describe('the repository envelope', () => {
   });
 
   /*
-   * What it authorizes is a mount and a target, and the properties that keep each
-   * one safe are asserted rather than described. Every grant must be an
-   * `owner/name` the router can compare a manifest against — a grant whose remote
-   * no routing row could ever match is a grant that authorizes nothing and says
-   * otherwise — and none of them may be V5.
+   * What it authorizes is one checkout, and the properties that keep it one are
+   * asserted rather than described. The grant must be an `owner/name` the router
+   * can compare a manifest against — a grant whose remote no routing row could
+   * ever match is a grant that authorizes nothing and says otherwise.
+   *
+   * **There is deliberately no target repository in here.** A grant says the
+   * factory may be *pointed* at something; the only entry is the checkout an
+   * unattended Routine attaches for its own connector permissions, so the factory
+   * currently has a proving ground and nowhere to do real work. Naming a target is
+   * a person's decision, and a test that quietly wanted a second entry is how the
+   * retired one came back.
    */
-  it('authorizes a proving ground and a real target, on terms that keep each one', async () => {
+  it('authorizes one checkout, and no target repository at all', async () => {
     const { repositoryIdOfRemote } = await import('../server/services/factory/onboard.ts');
     const grants = listRepositoryGrants();
-    expect(grants.length).toBe(2);
-    for (const grant of grants) {
-      expect(decideRepository(grant.remote).ok).toBe(true);
-      expect(grant.remote.toLowerCase()).not.toMatch(/peyday007\/v5$/);
-      expect(repositoryIdOfRemote(grant.remote)).toBeTruthy();
-    }
+    expect(grants).toHaveLength(1);
 
-    // The proving ground, which is also the checkout a research Routine attaches
-    // for its own connector permissions. No unit may own the file that grants
-    // them, or one diff takes out the fleet.
-    const mount = grants.find((grant) => grant.id === 'brain-worker-bootstrap');
-    expect(mount).toBeTruthy();
-    expect(mount!.forbiddenPaths).toContain('.claude/**');
+    const mount = grants[0]!;
+    expect(mount.id).toBe('brain-worker-bootstrap');
+    expect(decideRepository(mount.remote).ok).toBe(true);
+    expect(mount.remote.toLowerCase()).not.toMatch(/peyday007\/v5$/);
+    expect(mount.remote.toLowerCase()).not.toContain('oakwood');
+    expect(repositoryIdOfRemote(mount.remote)).toBeTruthy();
 
-    // The target: a real repository with its own continuous integration, so a
-    // claim that the tests passed is read rather than taken. It adds nothing to
-    // the universal floor on purpose — the publishing workflow is already out of
-    // reach there, and forbidding the rest would stop the factory repairing the
-    // continuous integration it is judged by.
-    const target = grants.find((grant) => grant.id === 'oakwood-site');
-    expect(target).toBeTruthy();
-    expect(target!.forbiddenPaths).toEqual([]);
+    // No unit may own the file that grants a fired worker its permissions, or one
+    // diff takes out the fleet. It is on the universal floor as well as here.
+    expect(mount.forbiddenPaths).toContain('.claude/**');
     expect(UNIVERSAL_FORBIDDEN_PATHS.some((p) => p.startsWith('.github/workflows/deploy'))).toBe(true);
-
-    // And they are two repositories rather than one wearing two names: a
-    // campaign against the proving ground must never be able to reach the site.
-    expect(repositoryIdOfRemote(mount!.remote)).not.toBe(repositoryIdOfRemote(target!.remote));
   });
 
   /*
@@ -296,8 +295,9 @@ describe('the repository envelope', () => {
     expect(UNIVERSAL_FORBIDDEN_PATHS).toContain('.github/workflows/deploy*');
     expect(UNIVERSAL_FORBIDDEN_PATHS).toContain('.git/**');
     // The file a fired worker reads to know it may call the connector. It was a
-    // per-grant rule until a second repository could be attached to a Routine,
-    // at which point "copied per repository" became "missing from one".
+    // per-grant rule, and it belongs here because a protection copied per
+    // repository is one that will be missing from one — which stops being
+    // hypothetical the moment a second repository is ever authorized.
     expect(UNIVERSAL_FORBIDDEN_PATHS).toContain('.claude/**');
     for (const grant of listRepositoryGrants()) {
       expect([...grant.forbiddenPaths, ...UNIVERSAL_FORBIDDEN_PATHS]).toContain('.claude/**');

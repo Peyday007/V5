@@ -91,16 +91,23 @@ function startServer(): ChildProcessByStdio<null, Readable, Readable> {
 
 async function waitForHealthy(): Promise<void> {
   /*
-   * Generous, because this file starts two servers in sequence and a machine
-   * running the rest of the suite in parallel takes far longer than an idle one
-   * to boot either. It failed exactly that way twice — under load, in the middle
-   * of a full run, the second time with the boot log showing migrations applied
-   * and the administrator created, so the process was healthy and merely slow.
-   * A test that only passes on a quiet machine is a test that will fail in CI for
-   * a reason that has nothing to do with the code, so the bound is well past
-   * anything a real boot takes rather than close to it.
+   * Absurdly generous, and deliberately so.
+   *
+   * This file starts two real servers in sequence while a hundred other test
+   * files run beside it, and it has now failed three times under exactly that
+   * load — twice with the boot log showing migrations applied and the
+   * administrator created, so the process was healthy and merely starved. Run on
+   * its own the same boot takes **4.4 seconds**.
+   *
+   * So the number is not a guess about how long booting takes; it is a bound on
+   * how long this process might be denied a CPU, and it is set two orders of
+   * magnitude above the measurement rather than a comfortable multiple of it.
+   * Raising it costs nothing when the code is right — the loop exits the instant
+   * `/healthz` answers — and a test that only passes on a quiet machine fails in
+   * CI for a reason that has nothing to do with the code, which is worse than a
+   * slow failure.
    */
-  const deadline = Date.now() + 240_000;
+  const deadline = Date.now() + 600_000;
   for (;;) {
     if (Date.now() > deadline) throw new Error(`server never became healthy:\n${log}`);
     try {
@@ -256,7 +263,7 @@ beforeAll(async () => {
   await waitForHealthy();
   adminCookie = await signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
   memberCookie = await signIn(MEMBER_EMAIL, MEMBER_PASSWORD);
-}, 900_000);
+}, 1_500_000);
 
 afterAll(async () => {
   await stopServer();

@@ -783,7 +783,7 @@ passed in as a required argument: the repository layer used to keep its own copy
 and the moment the router grew a refusal the two disagreed. The attempt count is
 untouched: a re-arm is not a retry.
 
-### Two repositories, and the dimensions that keep them apart
+### One checkout, no target, and the dimensions that would keep two apart
 
 The fire router scopes by **repository** as well as by family and capability, and
 that is a correction to what this file said before. The argument for leaving it
@@ -793,14 +793,25 @@ and was never about the fire. Choosing which Routine to fire is Brain's own
 decision over rows Brain wrote: `fleet_routines.worker_id` names the worker, and
 that worker's `worker_routing` row names its repositories.
 
-Left out, two onboarded repositories in one family were interchangeable to the
-router, which picked between them on headroom. Onboarding A registered a surface
-Brain would fire for B's bin; the assigner refused it with
-`REPOSITORY_NOT_AUTHORIZED`, so nothing false was recorded — what was spent was an
-activation, one of the bin's attempts, and the chance to try the surface that
-could have done it. The refusal is `NO_SURFACE_SERVES_THIS_REPOSITORY`, named
-rather than reported as the nearest available one, because its remedy is
-onboarding *that* repository.
+Left out, two factory surfaces in one family were interchangeable to the router,
+which picked between them on headroom. A surface registered for A would be fired
+for B's bin; the assigner refused it with `REPOSITORY_NOT_AUTHORIZED`, so nothing
+false was recorded — what was spent was an activation, one of the bin's attempts,
+and the chance to try the surface that could have done it. The refusal is
+`NO_SURFACE_SERVES_THIS_REPOSITORY`, named rather than reported as the nearest
+available one, because its remedy is authorizing and onboarding *that*
+repository.
+
+**The envelope holds one entry and it is a checkout rather than a target.**
+`brain-worker-bootstrap` is what an unattended Routine attaches for its connector
+permissions; there is no authorized target repository, so the factory has a
+proving ground and nowhere to do real work until a person names one. The
+isolation above is therefore proved against a **fixture** repository the envelope
+refuses — which is what it always should have used, since a routing boundary is a
+`worker_routing` row and a manifest and needs no grant at all. A test's
+convenience is never a reason to widen a production authorization, and
+`oakwood-junk-removal` being re-added for exactly that reason is recorded in
+§27.
 
 A `worker_routing` row with no explicit entry is unknown rather than empty and
 stays eligible, exactly as the family dimension does — and cannot reach here
