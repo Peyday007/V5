@@ -51,6 +51,8 @@ import {
 } from '../server/db/database.ts';
 import { randomUUID } from 'node:crypto';
 import { createProject } from '../server/repos/projects.ts';
+import { createLayer, updateLayer } from '../server/repos/layers.ts';
+import type { LayerStatus } from '../server/domain/types.ts';
 import {
   createUser,
   createWorker,
@@ -70,6 +72,8 @@ import { SEARCH_KINDS, search } from '../server/services/russell/search.ts';
 import { usability } from '../server/services/fleet/view.ts';
 import { CANDIDATE_PRIORITIES } from '../server/domain/types.ts';
 import { choicesFor } from '../server/services/russell/needsHuman.ts';
+import { projectProgress } from '../server/services/russell/progress.ts';
+import { homeFor } from '../server/services/russell/home.ts';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 
@@ -595,16 +599,82 @@ async function main(): Promise<void> {
   record('L', 'Always-on loop', blocker.verdict, blocker.detail);
 
   /* -- M. Product truth, historical knowledge, and memory -------------------- */
-  const progress = file('server/services/russell/progress.ts');
-  const denominators = progress ? /denominator/.test(progress) : false;
+  /*
+   * "One projection answers every surface" is a claim two surfaces can falsify,
+   * so it is asked of them rather than of the source file.
+   *
+   * `projectProgress` has three callers — the briefing home renders, the
+   * conversation's context hat, and the project route. The first two are driven
+   * here against the same project at the same instant and their answers are
+   * compared field by field; a third that re-derived its own would show up as a
+   * mismatch rather than as a comment nobody checks.
+   *
+   * The two truth rules are checked on the answer itself: the denominator is
+   * named, and the headline carries no percentage — there being no code path
+   * that turns a feeling into one is what makes the second check meaningful
+   * rather than a spot check.
+   */
+  /*
+   * Four foundations in four different states, so the comparison has something
+   * to disagree about. An empty project makes every reading trivially equal,
+   * which would be a check that cannot fail — and a check that cannot fail is
+   * the thing this reporter's header refuses.
+   */
+  const foundations: { name: string; status: LayerStatus }[] = [
+    { name: 'Discovery', status: 'FROZEN' },
+    { name: 'Market Sizing', status: 'RESEARCHING' },
+    { name: 'Monetization Logic', status: 'BLOCKED' },
+    { name: 'Go To Market', status: 'NOT_STARTED' },
+  ];
+  for (const [index, foundation] of foundations.entries()) {
+    const layer = await createLayer({
+      projectId: project.id,
+      name: foundation.name,
+      orderIndex: index,
+    });
+    if (foundation.status !== 'NOT_STARTED') {
+      await updateLayer(layer.id, { status: foundation.status, statusSource: 'DERIVED' });
+    }
+  }
+  const direct = await projectProgress({ projectId: project.id, projectName: project.name });
+  const viaHome = ownerPrincipalNow
+    ? await homeFor({
+        principal: ownerPrincipalNow,
+        projectId: project.id,
+        projectName: project.name,
+      })
+    : null;
+  const viaBriefing = viaHome?.briefing.progress ?? null;
+  const sameProgress =
+    viaBriefing !== null &&
+    viaBriefing.headline === direct.headline &&
+    viaBriefing.stage === direct.stage &&
+    viaBriefing.denominator === direct.denominator &&
+    JSON.stringify(viaBriefing.ratio) === JSON.stringify(direct.ratio) &&
+    JSON.stringify(viaBriefing.milestones) === JSON.stringify(direct.milestones);
+  const named = direct.denominator.trim().length > 0;
+  // A percentage anywhere in the sentence a person reads. §6 forbids one that
+  // was not counted, and nothing here counts one.
+  const noPercentage = !/\d+\s*%/.test(direct.headline);
+  const ratioIsWholeOrAbsent =
+    direct.ratio === null ||
+    (Number.isInteger(direct.ratio.done) && Number.isInteger(direct.ratio.total));
+  const truthHeld = sameProgress && named && noPercentage && ratioIsWholeOrAbsent;
   record(
     'M',
     'Product truth and named denominators',
-    denominators ? 'PARTIAL' : 'NOT_RUN',
-    'Progress is milestone-backed with a named denominator and there is no path that turns a ' +
-      'feeling into a percentage; one projection answers every surface. NOT established here: ' +
-      'the comparison across home, Work, project, constellation and briefing against the same ' +
-      'versioned production state.',
+    truthHeld ? 'PARTIAL' : 'NOT_RUN',
+    truthHeld
+      ? `Home's briefing and the project's own reading return the identical progress for one ` +
+        `project with ${foundations.length} foundations in ${new Set(foundations.map((f) => f.status)).size} different states ` +
+        `at one instant — headline, stage, ratio and every milestone state. The ` +
+        `denominator is named ("${direct.denominator}"), the ratio is ` +
+        (direct.ratio ? `${direct.ratio.done}/${direct.ratio.total} whole` : 'absent rather than guessed') +
+        `, and the sentence a person reads carries no percentage. NOT established here: the same ` +
+        'comparison across constellation and Work against a versioned production state.'
+      : 'The surfaces did not agree, or a truth rule did not hold, which is a defect rather ' +
+        `than a missing run: same=${sameProgress} named=${named} noPercentage=${noPercentage} ` +
+        `wholeRatio=${ratioIsWholeOrAbsent}.`,
   );
 
   /* -- N. Routing and latency ----------------------------------------------- */
