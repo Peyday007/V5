@@ -159,3 +159,43 @@ describe('touch, keyboard, motion and both themes', () => {
     }
   });
 });
+
+/**
+ * The two defects a screenshot found and an assertion could not.
+ *
+ * Everything above is decidable in jsdom because it is a *decision*: a
+ * breakpoint, a query type, a gutter, a minimum size. These two are not. They
+ * are a name that is wider than the box holding it and three labels that touch,
+ * and both need a layout engine and a font to exist at all — which is exactly
+ * why §24 says a passing assertion is not a passing design and keeps the visual
+ * confirmation with the owner.
+ *
+ * So these tests do not claim to detect the defect. They pin the *rule that
+ * fixes it*, so a later edit that removes it fails here instead of being found
+ * again by looking at a picture.
+ */
+describe('what the 900px capture found', () => {
+  it('lets a foundation name break inside a word rather than outside its cell', () => {
+    // `Which opportunities are worth it` lost its last letter at 900px: the
+    // longest token in the name was wider than a 96px track, and there is no
+    // space inside a word to break at.
+    const block = CSS.slice(CSS.indexOf('.rs-foundation-name'), CSS.indexOf('.rs-foundation-state'));
+    expect(block).toMatch(/overflow-wrap:\s*anywhere/);
+
+    const strip = CSS.slice(CSS.indexOf('.rs-foundations'), CSS.indexOf('.rs-foundation::before'));
+    // Wide enough for the longest token these names actually contain, and the
+    // grid item allowed to shrink to its track rather than to its content.
+    expect(strip).toMatch(/minmax\(120px, 1fr\)/);
+    expect(strip).toMatch(/min-width:\s*0/);
+  });
+
+  it('keeps the three depth labels apart, and truncates rather than overruns', () => {
+    // The capture read "Normal InterestedTechnical" — two of three controls
+    // with nothing between them. A gap separates them; the ellipsis is what a
+    // shrunk button does instead of painting over its neighbour.
+    const block = CSS.slice(CSS.indexOf('.rs-depth {'), CSS.indexOf(".rs-depth button[aria-pressed='true']"));
+    expect(block).toMatch(/gap:\s*2px/);
+    expect(block).toMatch(/text-overflow:\s*ellipsis/);
+    expect(block).toMatch(/overflow:\s*hidden/);
+  });
+});

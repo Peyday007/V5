@@ -19,44 +19,81 @@ production completion must not substitute for one another.
 
 ---
 
-## The scenarios
+## A recorded correction: this table over-claimed
 
-| # | Scenario | Evidence | Status |
+An earlier version of this file reported **fifteen PASS and two qualified
+PASSes** across the seventeen scenarios. That was wrong in a specific and
+avoidable way, and the correction is recorded here rather than applied quietly.
+
+Almost every row's evidence was **Code/test** — a suite assertion against the
+service production uses — and the head of this file already says in terms that
+such evidence *"proves the mechanism; proves nothing about production rows"*.
+Then the Status column said PASS anyway. §29's scenarios are not assertions
+about modules; they are about a person doing something on the deployed Brain,
+so a mechanism's test is a necessary condition and never the verdict.
+
+`scripts/step12b-acceptance.ts` is the answer to that, and it is deliberately
+harsher than a document can be: it **exercises** what it can, in a temporary
+database it creates and deletes, reads the **operational** fleet from the
+configured Brain before it writes anything, and has four verdicts rather than
+two — `PASS`, `PARTIAL`, `BLOCKED` and `NOT_RUN`, with `PARTIAL` required to
+print the named condition it did not establish. There is no verdict meaning
+"probably".
+
+**This table is now that reporter's output, not a second opinion about it.**
+Run `npm run step12b:acceptance` for the current reading, or the **Step 12B
+acceptance** workflow to take it against production. A row here that disagrees
+with the reporter is this file being stale, and the reporter wins.
+
+---
+
+## The scenarios, as the reporter reads them
+
+The reading below is from the reporter against a Brain with **no fleet rows**
+(a local run). Against production the three surface-dependent rows — A, B and
+L — resolve to what the deployed fleet can actually do rather than to
+`NOT_RUN`; that is the difference the workflow exists to close.
+
+| # | Scenario | Verdict | What is established, and what is not |
 | --- | --- | --- | --- |
-| A | Conversation routing and continuity | Code/test — `step12bProduct`: organization is deterministic and idempotent, a person's filing is never overwritten, standing is derived from live rows, one person sees nothing of another's threads. Production read — collections render for the live account. | **PASS** |
-| B | Independent judgment | Code/test — carried from 12A: `judgeCandidate`, the archive check, the probe envelope. Unchanged in 12B. | **PASS (carried)** |
-| C | Priority and backlog | Code/test — the five classes come from the candidate Russell ranked; a mission nobody ranked carries no class. Work groups by the five sections. | **PASS** |
-| D | Discovery Frontier v1 | Code/test — five regions classified from rows, new paths only where provenance says Russell had the idea, resolve-never-delete, dismissal attributed and reversible, refresh idempotent. Production effect — the durable tick refreshes it with nobody watching. | **PASS** |
-| E | Connected-site intelligence | Carried from 12C's 24-check golden loop. Unchanged in 12B. | **PASS (carried)** |
-| F | Needs You | Code/test — empty inbox reads as settled; the approval a project cannot proceed without is never folded; the folded card keeps its controls in the document. Carried from 12A: answers resume the same mission exactly once. | **PASS** |
-| G | Capability Lab | Code/test — health check runs and spends nothing; the ledger mode carries the ledger's evidence class; every pressure mode is refused without an envelope, outside an isolated scope, or without a person's authorization, and an unimplemented one refuses by name rather than returning numbers. | **PASS for what runs; the five pressure modes are DECLARED AND REFUSED.** See matrix §6. |
-| H | Visual maps | Code/test — six types over the authoritative graph, every edge joining nodes that exist, an outline that is the same graph, a cycle that terminates, and an empty map that says why. | **PASS** |
-| I | Collaboration | Code/test — the Owner/Member/Viewer/machine matrix, including that a machine with every scope still cannot administer and an unnamed machine write is refused. | **PASS** |
-| J | Mobile | Code/test — `step12bResponsive`: the navigation decision at 360/390/720/822/953/1440, container queries rather than viewport ones, no min-width wider than a phone, 44px targets, focus visibility, reduced motion, both themes from tokens. Not a screenshot: jsdom does not lay out, and a passing assertion is not a passing design. | **PASS for the decisions; visual confirmation is the owner's.** |
-| K | Legacy removal | Code/test — `operatorConsoleRemoved` reads the repository and refuses any link or instruction; the route 404s for every principal. `docs/STEP-12B-LEGACY-MIGRATION.md` inventories what `/legacy` still holds and why. | **PASS for `/operator`; `/legacy` retains seven archive operations by design.** |
-| L | Always-on loop | Production effect — the durable tick runs the frontier refresh alongside the existing steps, with nobody watching. Carried from 12A: dispatch, assignment, writeback. | **PASS** |
-| M | Product truth, historical knowledge, memory | Code/test — one projection everywhere; "nothing settled yet" says what is under way; the denominator is named; no branch turns a feeling into a percentage. | **PASS** |
-| N | Routing and latency explanation | Code/test — `explainSlowness` joins recorded events and names the largest gap from the two events either side; an unknown gap is said to be unattributed; a bin with no events reports what could not be determined. | **PASS** |
-| O | Visual and interaction approval | Owner approval recorded 2026-09-12 on all four open decisions. The preview is versioned at `docs/design/step-12b-direction.html`. | **PASS** |
-| P | Preserved integrations, migrations, restart | Code/test — full suite on SQLite and Postgres; both migration chains extended in step; `deploymentOwnership` walks both chains for a gap or collision. | **PASS** |
-| Q | Shared-product access and safe experiments | Code/test — search scopes before it queries; a pressure test outside an isolated scope is refused; no lab path writes a claim, a document or a knowledge row. | **PASS** |
+| A | Conversation routing and continuity | NOT_RUN | A turn is a bin and a bin needs a surface; a run holding no fleet rows can say nothing either way. |
+| B | Independent judgment | NOT_RUN | Same condition. The judgment pass itself is carried from 12A and unchanged. |
+| C | Priority and backlog | PARTIAL | 100 candidates classified from the domain's own vocabulary in an isolated scope. **Not established:** the semantic merge of duplicates, which needs a worker to name the repeat. |
+| D | Discovery Frontier v1 | PARTIAL | Five lenses answered from rows; five asked with a governed path; a derived lens refused as an inquiry; a finding citing a row the project does not hold discarded. **Not established:** the six discovery classes against a real project snapshot, which needs a worker for the asked half. |
+| E | Connected-site intelligence | NOT_RUN | The six-answer projection including `NEEDS_PERSON` is present and derived on the read path. No live site was read in this run. |
+| F | Needs You | NOT_RUN | The park and its answering transition are present and unit-tested. A genuine production boundary answered end to end is not established by this run. |
+| G | Capability Lab | **PASS** | 8/8 modes ran to COMPLETE in an isolated `TECHNICAL` scope, spending nothing, and every result names what it did not test. `npm run step12b:lab` additionally runs the canary apply → retest → compare → rollback cycle against real `fleet_policy` rows. |
+| H | Visual maps | PARTIAL | Six map types over the authoritative graph, each with a synchronized outline; the money-flow map returns a reason for being empty rather than inventing edges. **Not established:** interaction on a real project at phone width. |
+| I | Collaboration | NOT_RUN | A worker principal is refused at the conversation and decision routes by type; private threads are scoped by owner. Two real human identities were not exercised. |
+| J | Mobile | NOT_RUN | Rendered evidence at 390px is produced by `scripts/visual-qa.ts`, with driven interactions. A complete end-to-end mobile flow through a mission was not driven here. |
+| K | Legacy removal | **PASS** | `tests/operatorConsoleRemoved.test.ts` refuses the route for every principal, fails on any link to it, and fails on any instruction to go there. |
+| L | Always-on loop | NOT_RUN | Same surface condition as A and B. |
+| M | Product truth and named denominators | PARTIAL | Progress is milestone-backed with a named denominator; no path turns a feeling into a percentage; one projection answers every surface. **Not established:** the comparison across home, Work, project, constellation and briefing against the same versioned production state. |
+| N | Routing and latency explanation | PARTIAL | One routing decision is read by the candidate query, the admission hook and the fire router, and a refusal costs no claim state. **Not established:** a traced real dispatch, which needs a surface. |
+| O | Visual and interaction approval | PARTIAL | `scripts/visual-qa.ts` captures desktop, intermediate and phone, sweeps the 822–953 band, and drives three real interactions. It found and the build fixed one real clipping (the depth toggle at 822 and 860). **Not established:** your review of the images against the approved direction — that is yours to give. |
+| P | Migrations, restart and preserved integrations | PARTIAL | `npm run upgrade:populated` proves the upgrade over populated data on both chains with a per-table sha-256 census, and a second restart applying nothing. **Not established by the script:** the hosted pre/post-restart checks, which the Deploy workflow runs. |
+| Q | Shared access and safe experiments | PARTIAL | A preference outside its declared set is refused; an unauthenticated search is scoped to nothing; every preference key is presentational and has a default; every search kind is scoped before the query. **Not established:** invite/accept/role-change with two real identities, and a canary rollback in production. |
+
+**2 PASS · 8 PARTIAL · 0 BLOCKED · 7 NOT_RUN (of 17). Step 12B is not complete.**
 
 ---
 
 ## What is not claimed
 
-**No pressure measurement was taken.** Five Capability Lab modes are built,
-enveloped and refused. Nothing was simulated in their place, so there is no
-number anywhere in this build that describes a capacity Brain has not observed.
+**The five pressure modes now run.** They were declared-and-refused in the
+earlier version of this file; `server/services/fleet/labRunners.ts` implements
+them against Brain's own queue, and the acceptance run above is 8/8 COMPLETE.
+What is still **not** claimed is a measurement of a real Cowork surface: the
+pressure applied is to Brain's concurrency machinery, which costs nothing, and
+every result says so in its own `untested` list rather than once in a header.
 
 **No screenshot approves a design.** The responsive suite pins the decisions
-that caused the rejected clipping. §24 is explicit that a passing screenshot
-test protects an approved baseline and cannot approve a bad one, so the visual
-confirmation remains the owner's, against the approved direction.
+that caused the rejected clipping, and the sweep produces the images. §24 is
+explicit that a passing screenshot test protects an approved baseline and
+cannot approve a bad one, so the visual confirmation remains the owner's.
 
 **A22 stays deferred and disabled.** Paid inference is off at a `$0` ceiling,
-there is no key and no grant, and nothing in Step 12B activated it. Reporting
-anything else would be the "fast chat complete" §7.3 forbids by name.
+there is no key and no grant, and nothing in Step 12B activated it.
 
 **The person-authenticated ChatGPT-first connector does not exist in this
 repository.** Inspected and reported separately, as §0.4 requires. Native chat,

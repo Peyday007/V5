@@ -983,7 +983,22 @@ button.rs-card:hover {
    order, each carrying its own state — never a single global percentage. */
 .rs-foundations {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  /*
+   * 120px, not 96px, and the reason is a word.
+   *
+   * The screenshot at 900px showed "opportunities" running out of its cell and
+   * being painted over by the next one — a foundation named *Which
+   * opportunities are worth it* had lost its last letter, and *How we find
+   * opportunities* the same. 96px was narrower than the longest single token
+   * these names contain, and a token cannot be broken at a space that is not
+   * there. The track floor now fits it, and `overflow-wrap` below is what
+   * makes the cell honest when a future name is longer still.
+   *
+   * The responsive suite could not have caught this: jsdom lays nothing out,
+   * so there is no text width to overflow. This is the case §24 has in mind
+   * when it says a passing assertion is not a passing design.
+   */
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: var(--gap-2);
   margin: 0;
   padding: 0;
@@ -994,6 +1009,10 @@ button.rs-card:hover {
   display: flex;
   flex-direction: column;
   gap: var(--gap-1);
+  /* A grid item's default `min-width: auto` is its content's, so a long word
+     makes the *track* wider than its share and pushes the cell past its
+     neighbour. Zero lets the track hold, and the wrap below does the rest. */
+  min-width: 0;
   padding: var(--gap-2);
   border-radius: var(--r-1);
   background: var(--surface-sunk);
@@ -1021,6 +1040,9 @@ button.rs-card:hover {
 .rs-foundation-name {
   font: 600 var(--step--1) / 1.3 var(--body);
   color: var(--ink);
+  /* Break inside a word rather than outside the cell. A hyphenless break is
+     not pretty; a name with its last letter painted over is a defect. */
+  overflow-wrap: anywhere;
 }
 
 .rs-foundation-state {
@@ -1076,6 +1098,16 @@ button.rs-card:hover {
  */
 .rs-depth {
   display: flex;
+  /*
+   * A gap, because without one the three labels touch.
+   *
+   * At 900px the rail is at its narrowest and the screenshot read
+   * "Normal InterestedTechnical" — three separate controls with no space
+   * between two of them, which makes the middle one look like part of the
+   * third. The earlier fix here stopped the *strip* clipping and left the
+   * labels colliding, which is the same defect one step in.
+   */
+  gap: 2px;
   max-width: 100%;
   padding: 2px;
   border: 1px solid var(--rule);
@@ -1098,6 +1130,17 @@ button.rs-card:hover {
    * layout problem, and the room this control needs comes from its padding.
    */
   font: 500 var(--step--1) / 1.3 var(--body);
+  /*
+   * Truncate rather than overrun.
+   *
+   * `min-width: 0` lets a flex item shrink below its content, and with
+   * `nowrap` alone the text simply spills out of the button's rounded box and
+   * over its neighbour. An ellipsis says "there is more of this word" where a
+   * collision says nothing at all — and the accessible name is the button's
+   * full text either way, so nothing is lost to a screen reader.
+   */
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
   cursor: pointer;

@@ -121,6 +121,28 @@ async function main(): Promise<void> {
   const outputDir = path.resolve(process.argv[2] ?? path.join(os.tmpdir(), 'brain-visual-qa'));
   fs.mkdirSync(outputDir, { recursive: true });
 
+  /*
+   * Build the client first, because otherwise this photographs the last build.
+   *
+   * The server runs with `NODE_ENV=production` and serves `client/dist`, which
+   * is a *committed-time artefact* rather than anything this script produces.
+   * So every capture taken after a CSS edit and before a rebuild is a picture
+   * of the previous tree — and it is a convincing picture, because it renders
+   * perfectly and shows a defect that has already been fixed.
+   *
+   * That happened here: two real defects were found at 900px, repaired, and the
+   * re-capture came back byte-identical. The repair was fine; the bundle was
+   * five hours old. **A visual harness that serves a stale bundle is measuring
+   * the last build, not this tree** — the same family as the two cleanup faults
+   * above, and the most dangerous of the three, because its output looks like
+   * evidence.
+   *
+   * Built here rather than left to the caller for the reason every other guard
+   * in this repository is where it is: an instruction to remember something is
+   * not a mechanism.
+   */
+  await buildClient();
+
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-visual-qa-'));
   let log = '';
   const server: ChildProcessByStdio<null, Readable, Readable> = spawn(
@@ -251,9 +273,29 @@ async function main(): Promise<void> {
               `${sideways ? 'SCROLLS SIDEWAYS' : 'fits'}  ${text.slice(0, 90)}`,
           );
         }
+        /*
+         * Console errors, with the one that is about this machine named as one.
+         *
+         * `client/index.html` links the Google Fonts stylesheet, and outbound
+         * HTTPS here goes through a proxy that resets it — so every page load
+         * logs exactly one `ERR_CONNECTION_RESET` and the page renders on its
+         * fallback stack. Printing six of those beside a real console error
+         * with no distinction is how a reader learns to skim this section, and
+         * then misses the real one. It is counted and named rather than
+         * filtered out, because "no console errors" would be the other lie.
+         */
         if (problems.length > 0) {
+          const external = problems.filter((problem) => /ERR_CONNECTION_RESET/.test(problem));
+          const real = problems.filter((problem) => !/ERR_CONNECTION_RESET/.test(problem));
           console.log(`  console errors at ${viewport.name}:`);
-          for (const problem of problems.slice(0, 10)) console.log(`    ${problem}`);
+          if (external.length > 0) {
+            console.log(
+              `    ${external.length} × the Google Fonts stylesheet reset by this machine's ` +
+                'outbound proxy — an environment fact; the page renders on its fallback stack',
+            );
+          }
+          if (real.length === 0) console.log('    nothing else');
+          for (const problem of real.slice(0, 10)) console.log(`    ${problem}`);
         }
       }
     });
@@ -472,6 +514,34 @@ async function main(): Promise<void> {
     await endServerTree(server);
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
+}
+
+/**
+ * `vite build`, run to completion, with its failure as this script's failure.
+ *
+ * Not `npm run build`: that also typechecks, which the suite already does and
+ * which would add a minute to every capture. What this needs is the bundle the
+ * server is about to serve.
+ */
+async function buildClient(): Promise<void> {
+  process.stdout.write('Building the client so this captures the current tree... ');
+  const started = Date.now();
+  const build = spawn('npx', ['vite', 'build'], {
+    cwd: REPO_ROOT,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let output = '';
+  build.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
+  build.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
+  const code = await new Promise<number>((resolve) => {
+    build.on('close', (value) => resolve(value ?? 1));
+  });
+  if (code !== 0) {
+    console.log('FAILED');
+    console.log(output);
+    throw new Error('the client did not build, so there is nothing honest to photograph');
+  }
+  console.log(`done in ${Math.round((Date.now() - started) / 1000)}s`);
 }
 
 /**
