@@ -2664,27 +2664,52 @@ export async function rearmSurfaceDeferredIntents(input: {
 
   let rearmed = 0;
   for (const row of candidates) {
+    let putBack = true;
     if (routesNow) {
       const bin = await getBin(row.bin_id);
       // A bin that has moved on is somebody else's problem: `supersedeStaleIntents`
       // retires the intent, and putting it back first would only fire at a bin
       // nobody can be given.
-      if (!bin) continue;
-      if (!(await routesNow(bin))) continue;
+      putBack = bin !== null && (await routesNow(bin));
     }
+
     /*
-     * Guarded on the same two facts the candidate query matched, so a concurrent
-     * tick that already put this one back changes nothing here — and the fire it
-     * leads to is still claimed by a compare-and-swap, so two re-arms cannot
-     * become two activations.
+     * Considered is recorded, not just put back — and leaving that out was a
+     * defect with a production cost rather than an inefficiency.
+     *
+     * The candidate query is `updated_at < watermark`, so an intent this pass
+     * *skipped* still matched it on the next pass, and the one after that. With
+     * the recheck reading a bin per candidate, every ten-second tick re-read and
+     * re-routed up to two hundred intents that had already been answered "not
+     * yet" — for ever, because nothing about skipping them changed a row. It
+     * showed up as a deploy failing its post-restart verification: an audit step
+     * that normally takes seconds ran past five minutes and the work item's
+     * lease lapsed underneath it, `brain_complete_work: FENCE_LOST`.
+     *
+     * Stamping a skipped candidate is exactly as correct as stamping a re-armed
+     * one and says the same thing: *we asked, against this state of the fleet.*
+     * The watermark is the newest fleet write, so the next operator write is
+     * newer than this stamp and the intent is asked again then — which is the
+     * only moment the answer could have changed. `next_attempt_at` is untouched,
+     * so nothing about when it would next fire moves.
      */
     const updated = await getDb().run(
-      `UPDATE bin_dispatch
-          SET next_attempt_at = ?, updated_at = ?
-        WHERE id = ? AND state = 'PENDING' AND next_attempt_at > ?`,
-      [at, at, row.id, at],
+      putBack
+        ? /*
+           * Guarded on the same two facts the candidate query matched, so a
+           * concurrent tick that already put this one back changes nothing here
+           * — and the fire it leads to is still claimed by a compare-and-swap,
+           * so two re-arms cannot become two activations.
+           */
+          `UPDATE bin_dispatch
+              SET next_attempt_at = ?, updated_at = ?
+            WHERE id = ? AND state = 'PENDING' AND next_attempt_at > ?`
+        : `UPDATE bin_dispatch
+              SET updated_at = ?
+            WHERE id = ? AND state = 'PENDING' AND next_attempt_at > ?`,
+      putBack ? [at, at, row.id, at] : [at, row.id, at],
     );
-    rearmed += updated.changes;
+    if (putBack) rearmed += updated.changes;
   }
   return rearmed;
 }

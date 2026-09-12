@@ -2378,6 +2378,20 @@ remote.
   disagreed — the loop deferred on a word the filter had never heard of, and the
   intent waited out a wall no write could shorten. **A rule applied by one of two
   readers is worse than none**, for the fourth time.
+- **"Considered" has to be recorded, not only "put back" — and leaving that out
+  cost a production deploy.** The re-arm's candidate query is `updated_at <
+  watermark`, so an intent the recheck *skipped* still matched it on the next
+  tick, and the one after that. With the recheck reading a bin per candidate,
+  every ten-second tick re-read and re-routed up to two hundred intents that had
+  already been answered "not yet" — for ever, because nothing about skipping one
+  changed a row. It surfaced two deploys later as a post-restart hosted
+  verification whose audit step ran past five minutes and lost the work item's
+  lease: `brain_complete_work: FENCE_LOST`. **A scan that is self-limiting in one
+  direction is not self-limiting.** Stamping a skipped candidate says exactly
+  what stamping a re-armed one says — *we asked, against this state of the
+  fleet* — and the next operator write is newer than the stamp, which is the only
+  moment the answer could have changed. `next_attempt_at` and the attempt count
+  are untouched, so nothing about when it would fire moves.
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first

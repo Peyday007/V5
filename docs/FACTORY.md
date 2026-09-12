@@ -783,6 +783,15 @@ passed in as a required argument: the repository layer used to keep its own copy
 and the moment the router grew a refusal the two disagreed. The attempt count is
 untouched: a re-arm is not a retry.
 
+**A skipped candidate is stamped too, and that is not bookkeeping.** The
+candidate query is `updated_at < watermark`, so an intent the recheck answered
+"not yet" still matched on the next tick — and with a bin read per candidate that
+became up to two hundred extra reads every ten seconds, for ever. It showed up as
+a deploy's post-restart verification losing a work item's lease mid-audit.
+Stamping says *we asked, against this state of the fleet*; the next operator
+write is newer than the stamp, which is the only moment the answer could change.
+`next_attempt_at` does not move.
+
 ### One checkout, no target, and the dimensions that would keep two apart
 
 The fire router scopes by **repository** as well as by family and capability, and
