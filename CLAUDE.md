@@ -1105,6 +1105,14 @@ is its own event, `AUDIT_ROUND_REOPENED`, with its own append-only record.
   filed document and no fragments, which production cannot produce, and with no
   fragment `advancePacket` walks to the planning branch instead of the audit
   one — so the tests pin the queue an arriving worker sees rather than the call.
+  **The replay had to assert it too**, which is the same mistake one move along:
+  the advance went on the winning path only, so re-running the command against a
+  round already opened would have answered "nothing was opened twice" and left it
+  empty. **Idempotency means the effect is present after either call, not that
+  the second call does nothing.** Safe to repeat for the same reason it is safe
+  at all — idempotent by the round, not by a flag. Cancelling the previous
+  round's items and building a bin stay on the winning path, because those are
+  not.
 - **The scan reports and does not act.** `npm run admin -- packets independence`
   names every packet whose reviewer shared a session with an author, and opens
   none of them, because that decision is a person's. It reports a packet whose

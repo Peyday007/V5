@@ -341,6 +341,56 @@ describe('the transition itself', () => {
     expect(queued[0]?.payload['role']).toBe('PRIMARY');
   });
 
+  /*
+   * The half that makes the replay a recovery rather than a shrug.
+   *
+   * Idempotency means the effect is present after either call. A round that was
+   * opened before the enqueue existed has nothing in it, and a replay that did
+   * nothing would leave it that way — which is exactly the production state this
+   * was found in. Simulated by emptying the queue under an open reopen, because
+   * that is what "opened by the old code" looks like from here.
+   */
+  it('a replay restores a round that was left with nothing in it', async () => {
+    await authorReviewedItsOwnWork();
+    await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+
+    const round = await auditRoundFor(orchestrationId);
+    /*
+     * Removed rather than cancelled, because the two are different states and
+     * only one of them is the one being recovered from. A round opened before
+     * the enqueue existed never had an item; a *cancelled* item is one that was
+     * created and stopped, which `advancePacket` reads — correctly — as a role
+     * whose worker finished without recording anything.
+     */
+    for (const item of await listWorkItems(projectId, { limit: 500 })) {
+      if (item.orchestrationId !== orchestrationId) continue;
+      if (item.workType !== 'RESEARCH_AUDIT' || item.state !== 'QUEUED') continue;
+      await getDb().run('DELETE FROM work_items WHERE id = ?', [item.id]);
+    }
+    const emptied = (await listWorkItems(projectId, { limit: 500 })).filter(
+      (item) =>
+        item.orchestrationId === orchestrationId &&
+        item.workType === 'RESEARCH_AUDIT' &&
+        item.state === 'QUEUED',
+    );
+    expect(emptied).toHaveLength(0);
+
+    const replay = await requestIntegrityReaudit({ orchestrationId, personId: adminId });
+    expect(replay.created).toBe(false);
+    expect(replay.reopen?.state).toBe('OPEN');
+
+    const restored = (await listWorkItems(projectId, { limit: 500 })).filter(
+      (item) =>
+        item.orchestrationId === orchestrationId &&
+        item.workType === 'RESEARCH_AUDIT' &&
+        item.state === 'QUEUED' &&
+        round.since !== null &&
+        item.createdAt > round.since,
+    );
+    expect(restored).toHaveLength(1);
+    expect(restored[0]?.payload['role']).toBe('PRIMARY');
+  });
+
   it('a replay enqueues nothing further, because the round already holds it', async () => {
     await authorReviewedItsOwnWork();
     await requestIntegrityReaudit({ orchestrationId, personId: adminId });

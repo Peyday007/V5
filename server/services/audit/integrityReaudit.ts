@@ -414,11 +414,26 @@ export async function requestIntegrityReaudit(input: {
 
   if (!created) {
     /*
-     * A replay. Every effect below already happened under the row that won, and
+     * A replay. Most effects below already happened under the row that won, and
      * repeating them would cancel a *live* round's work items and build a
      * second bin for one packet. The answer is the same answer, which is the
      * whole point: retrying a request whose response was lost is safe.
+     *
+     * One of them is repeated, and it is the one that makes this true rather
+     * than merely quiet. **Idempotency means the effect is present after either
+     * call, not that the second call does nothing** — and the round holding a
+     * claimable item is the effect. Asserting it here rather than only on the
+     * winning path is what lets a replay *recover* a round that was opened
+     * before this was fixed, which is not a hypothetical: production has an
+     * open reopen whose round was left with nothing in it.
+     *
+     * Safe to repeat because it is idempotent by the round rather than by a
+     * flag — `auditRoleSubmitted`, `stillRunning` and `alreadyCreated` are all
+     * asked of *this* round, so a role already argued, already out or already
+     * enqueued adds nothing. Unlike cancelling items or building a bin, which
+     * are not.
      */
+    const advancedOnReplay = await advancePacket(orchestration.id);
     const bin = await binForReopen(reopen);
     return {
       ok: true,
@@ -429,7 +444,12 @@ export async function requestIntegrityReaudit(input: {
       refusal: null,
       detail:
         'This recovery was already reserved for exactly these bytes, so nothing was opened ' +
-        'twice. The round it started is the one already running.',
+        'twice. The round it started is the one already running, waiting on ' +
+        `${advancedOnReplay.waitingOn ?? 'nothing'}` +
+        (advancedOnReplay.enqueued.length > 0
+          ? ` (${advancedOnReplay.enqueued.length} item(s) it was missing are now queued)`
+          : '') +
+        '.',
     };
   }
 

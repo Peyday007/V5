@@ -242,6 +242,16 @@ for the first outstanding role and no more. One, not three — the roles are bui
 from each other, so `ADVERSARIAL` is enqueued once `PRIMARY` has argued and
 `JUDGE` once both have.
 
+**And the replay had to assert it too, which is the same mistake one move
+along.** The advance was put on the winning path only, and a replay returns
+before it — so re-running the command against the round production had *already*
+opened would have answered "nothing was opened twice" and left it with nothing in
+it. **Idempotency means the effect is present after either call, not that the
+second call does nothing.** It is safe to repeat for the same reason it is safe
+at all: it is idempotent by the round rather than by a flag, so a role already
+argued, already out or already enqueued adds nothing. Cancelling the previous
+round's items and building a bin stay on the winning path, because those are not.
+
 **The test fixture is why reading did not find it.** It had a filed document and
 no fragments, which is a shape production cannot produce: a packet cannot have a
 document without having synthesized one, and it cannot synthesize without a
