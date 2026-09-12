@@ -56,8 +56,8 @@ L — resolve to what the deployed fleet can actually do rather than to
 
 | # | Scenario | Verdict | What is established, and what is not |
 | --- | --- | --- | --- |
-| A | Conversation routing and continuity | NOT_RUN | A turn is a bin and a bin needs a surface; a run holding no fleet rows can say nothing either way. |
-| B | Independent judgment | NOT_RUN | Same condition. The judgment pass itself is carried from 12A and unchanged. |
+| A | Conversation routing and continuity | PARTIAL against a Brain that has run | Asked of the turns rather than of the fleet: how many a worker answered, across how many conversations, how many Brain routed to a project itself, and how many are pending or failed with their own recorded reason. The surface blocker is still reported where nothing has run, because then it is the reason. **Not established:** continuity across a restart mid-turn, driven deliberately. |
+| B | Independent judgment | PARTIAL against a Brain that has run | Two facts, both rows: ideas carrying a priority Russell decided, and completed audit passes. Neither is the fleet's health, which is what this used to report. **Not established:** a judgment a person disagreed with and overrode, end to end. |
 | C | Priority and backlog | PARTIAL | 100 candidates classified from the domain's own vocabulary in an isolated scope. **Not established:** the semantic merge of duplicates, which needs a worker to name the repeat. |
 | D | Discovery Frontier v1 | PARTIAL | Five lenses answered from rows; five asked with a governed path; a derived lens refused as an inquiry; a finding citing a row the project does not hold discarded. **Not established:** the six discovery classes against a real project snapshot, which needs a worker for the asked half. |
 | E | Connected-site intelligence | NOT_RUN | The six-answer projection including `NEEDS_PERSON` is present and derived on the read path. No live site was read in this run. |
@@ -67,14 +67,19 @@ L — resolve to what the deployed fleet can actually do rather than to
 | I | Collaboration | PARTIAL | Two real identities driven through the boundary every route uses: a non-member refused, a MEMBER that reads and is not an ADMIN, a role change read from rows, a project ADMIN that cannot read the owner's private thread but can read the shared one, and a revocation that lands on the next read rather than the next sign-in. Eight conditions, all held. A worker principal is refused at these routes by type. **Not established:** an invitation anybody received, and the same journey on the deployed product. |
 | J | Mobile | NOT_RUN | Rendered evidence at 390px is produced by `scripts/visual-qa.ts`, with driven interactions. A complete end-to-end mobile flow through a mission was not driven here. |
 | K | Legacy removal | **PASS** | `tests/operatorConsoleRemoved.test.ts` refuses the route for every principal, fails on any link to it, and fails on any instruction to go there. |
-| L | Always-on loop | NOT_RUN | Same surface condition as A and B. |
+| L | Always-on loop | PARTIAL against a Brain that has run | The durable cycle's own row — its state, how long ago it last ran, and any recorded error. `RUNNING` with no cursor is a loop that has never run rather than a broken one, so it is `NOT_RUN`; only `PAUSED` or `STOPPED` is `BLOCKED`. **Not established:** a measured uptime window rather than one reading. |
 | M | Product truth and named denominators | PARTIAL | Driven against one project with four foundations in four different states: home's briefing and the project's own reading return the identical progress at one instant — headline, stage, ratio and every milestone state — the denominator is named, the ratio is whole, and the sentence a person reads carries no percentage. **Not established:** the same comparison across constellation and Work against a versioned production state. |
 | N | Routing and latency explanation | PARTIAL | One real dispatch traced from the configured Brain's own `bin_events` — the recorded chain, and the largest gap named from the two events either side of it rather than inferred from the total. Against a Brain that has never fired anything the verdict is `NOT_RUN` and says so. One routing decision is read by the candidate query, the admission hook and the fire router, and a refusal costs no claim state. **Not established:** the same reading across a workload mix rather than one bin. |
 | O | Visual and interaction approval | PARTIAL | `scripts/visual-qa.ts` captures desktop, intermediate and phone, sweeps the 822–953 band, and drives three real interactions. It found and the build fixed one real clipping (the depth toggle at 822 and 860). **Not established:** your review of the images against the approved direction — that is yours to give. |
 | P | Migrations, restart and preserved integrations | PARTIAL | `npm run upgrade:populated` proves the upgrade over populated data on both chains with a per-table sha-256 census, and a second restart applying nothing. **Not established by the script:** the hosted pre/post-restart checks, which the Deploy workflow runs. |
 | Q | Shared access and safe experiments | PARTIAL | A preference outside its declared set is refused; an unauthenticated search is scoped to nothing; every preference key is presentational and has a default; every search kind is scoped before the query. **Not established:** an invitation anybody received, and a canary rollback in production. Role change with two real identities is exercised in I. |
 
-**2 PASS · 10 PARTIAL · 0 BLOCKED · 5 NOT_RUN (of 17). Step 12B is not complete.**
+Run locally against an empty database the reading is **2 PASS · 9 PARTIAL · 0
+BLOCKED · 6 NOT_RUN (of 17)**: A, B, L and N have nothing to read, which is
+*nothing has happened* rather than *something is wrong*. The verdicts above are
+what the same reporter returns against a Brain that has run. **Step 12B is not
+complete** either way, and the `Step 12B acceptance` workflow is the reading
+that counts.
 
 ---
 

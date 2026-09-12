@@ -135,6 +135,31 @@ interface FleetReading {
    * than a finding.
    */
   trace: SlownessExplanation | null;
+  /**
+   * What this Brain has actually done, for the three scenarios that are facts
+   * about work rather than about a mechanism.
+   *
+   * A, B and L were reported from the surface blocker — *can anything be
+   * fired* — which is a proxy for them and not one of them. "Can a turn be
+   * answered" is a different question from "has one been", and only the second
+   * is the scenario. These are the rows that answer it, counted in the same
+   * read-only phase and zero everywhere a Brain has not run.
+   */
+  history: {
+    /** A: conversations, and turns a worker actually answered. */
+    conversations: number;
+    answeredTurns: number;
+    pendingTurns: number;
+    failedTurns: number;
+    routedConversations: number;
+    /** B: ideas Russell formed its own priority on, and audit passes recorded. */
+    judgedCandidates: number;
+    auditPasses: number;
+    /** L: the durable tick, as its own row states it. */
+    cycleState: string | null;
+    cycleLastRanAt: string | null;
+    cycleLastError: string | null;
+  };
 }
 
 async function readOperationalFleet(): Promise<FleetReading> {
@@ -154,6 +179,55 @@ async function readOperationalFleet(): Promise<FleetReading> {
      * column only one dialect has — the `ORDER BY` rule this repository has
      * been caught by three times.
      */
+    /*
+     * What this Brain has done, counted rather than inferred.
+     *
+     * Six `SELECT COUNT`s and one singleton read, all in the same read-only
+     * phase. `attachment_source <> 'NONE'` is the routing half of A — a thread
+     * Brain decided a project for — and it is deliberately not the same count
+     * as "has a project", because a thread can carry one a person set.
+     */
+    const one = async (sql: string): Promise<number> => {
+      const row = await getDb().get<{ total: number }>(sql);
+      return Number(row?.total ?? 0);
+    };
+    const conversations = await one('SELECT COUNT(*) AS total FROM russell_conversations');
+    const routedConversations = await one(
+      "SELECT COUNT(*) AS total FROM russell_conversations WHERE attachment_source <> 'NONE'",
+    );
+    const answeredTurns = await one(
+      "SELECT COUNT(*) AS total FROM russell_messages WHERE role = 'RUSSELL' AND status = 'COMPLETE'",
+    );
+    const pendingTurns = await one(
+      "SELECT COUNT(*) AS total FROM russell_messages WHERE status = 'PENDING'",
+    );
+    const failedTurns = await one(
+      "SELECT COUNT(*) AS total FROM russell_messages WHERE status = 'FAILED'",
+    );
+    const judgedCandidates = await one(
+      'SELECT COUNT(*) AS total FROM russell_candidates WHERE priority IS NOT NULL',
+    );
+    const auditPasses = await one(
+      "SELECT COUNT(*) AS total FROM research_passes WHERE pass_key = 'AUDIT' AND status = 'COMPLETE'",
+    );
+    const cycle = await getDb().get<{
+      state: string;
+      last_ran_at: string | null;
+      last_error: string | null;
+    }>('SELECT state, last_ran_at, last_error FROM russell_cycle LIMIT 1');
+    const history = {
+      conversations,
+      answeredTurns,
+      pendingTurns,
+      failedTurns,
+      routedConversations,
+      judgedCandidates,
+      auditPasses,
+      cycleState: cycle?.state ?? null,
+      cycleLastRanAt: cycle?.last_ran_at ?? null,
+      cycleLastError: cycle?.last_error ?? null,
+    };
+
     const fired = await getDb().get<{ bin_id: string; last_at: string }>(
       `SELECT bin_id, MAX(at) AS last_at FROM bin_events
         WHERE event_type = 'DISPATCH_SENT'
@@ -164,7 +238,7 @@ async function readOperationalFleet(): Promise<FleetReading> {
     const trace = fired ? await explainSlowness(fired.bin_id) : null;
 
     await closeDatabase();
-    return { routines, accounts, unreadable: null, source, trace };
+    return { routines, accounts, unreadable: null, source, trace, history };
   } catch (error) {
     // A developer machine with nothing configured is the ordinary case here,
     // and it is not a finding about the fleet.
@@ -174,6 +248,18 @@ async function readOperationalFleet(): Promise<FleetReading> {
       unreadable: error instanceof Error ? error.message : String(error),
       source: 'nothing — no database was configured for this run',
       trace: null,
+      history: {
+        conversations: 0,
+        answeredTurns: 0,
+        pendingTurns: 0,
+        failedTurns: 0,
+        routedConversations: 0,
+        judgedCandidates: 0,
+        auditPasses: 0,
+        cycleState: null,
+        cycleLastRanAt: null,
+        cycleLastError: null,
+      },
     };
   }
 }
@@ -252,12 +338,47 @@ async function main(): Promise<void> {
   await initDatabase({ dbPath: path.join(dataDir, 'acceptance.db') });
 
   /* -- A. Conversation routing and continuity ----------------------------- */
-  // Needs a worker to answer a turn: no inference is bought (§24), so a turn is
-  // a bin and a bin needs a surface.
-  record('A', 'Conversation routing and continuity', blocker.verdict, blocker.detail);
+  /*
+   * Asked of the turns rather than of the fleet.
+   *
+   * A turn is a bin and a bin needs a surface (§24: no inference is bought), so
+   * this was reported from the surface blocker — *can anything be fired*. That
+   * is a proxy for the scenario and not the scenario: "a turn can be answered"
+   * and "a turn has been answered" are different facts, and only the second is
+   * what A asks. The blocker is still reported where nothing has run, because
+   * then it is the reason.
+   */
+  const seen = fleet.history;
+  record(
+    'A',
+    'Conversation routing and continuity',
+    seen.answeredTurns > 0 ? 'PARTIAL' : blocker.verdict,
+    seen.answeredTurns > 0
+      ? `${seen.answeredTurns} turn(s) answered by a worker across ${seen.conversations} ` +
+        `conversation(s) in ${fleet.source}, ${seen.routedConversations} of which Brain routed ` +
+        `to a project itself. ${seen.pendingTurns} pending and ${seen.failedTurns} failed, ` +
+        'each carrying its own recorded reason rather than an optimistic placeholder. ' +
+        'NOT established here: continuity across a restart mid-turn, driven deliberately.'
+      : blocker.detail,
+  );
 
   /* -- B. Independent judgment -------------------------------------------- */
-  record('B', 'Independent judgment', blocker.verdict, blocker.detail);
+  /*
+   * Two different things, and both are rows: Russell forming its own priority
+   * on an idea, and the three-role audit actually running. Neither is the
+   * fleet's health, which is what was being reported here.
+   */
+  record(
+    'B',
+    'Independent judgment',
+    seen.judgedCandidates > 0 && seen.auditPasses > 0 ? 'PARTIAL' : blocker.verdict,
+    seen.judgedCandidates > 0 && seen.auditPasses > 0
+      ? `${seen.judgedCandidates} idea(s) carry a priority Russell decided, and ` +
+        `${seen.auditPasses} audit pass(es) have completed in ${fleet.source} — the primary, ` +
+        'adversarial and judge roles this product does not let one session hold two of. ' +
+        'NOT established here: a judgment a person disagreed with and overrode, end to end.'
+      : blocker.detail,
+  );
 
   /* -- C. Priority and backlog -------------------------------------------- */
   // Ranking is deterministic and needs no worker, so this one is exercised.
@@ -625,7 +746,34 @@ async function main(): Promise<void> {
   );
 
   /* -- L. Always-on loop ---------------------------------------------------- */
-  record('L', 'Always-on loop', blocker.verdict, blocker.detail);
+  /*
+   * The tick's own row, which is the only thing that can say whether it runs.
+   * A loop is not "a surface exists"; it is a cursor that moved.
+   */
+  const ranAgoMs = seen.cycleLastRanAt ? Date.now() - Date.parse(seen.cycleLastRanAt) : null;
+  const ticking = seen.cycleState === 'RUNNING' && ranAgoMs !== null;
+  /*
+   * `RUNNING` with no cursor is a loop that has never run, not a broken one —
+   * which is what a fresh database looks like, and is the distinction this
+   * reporter's header insists on. Only a state somebody set is BLOCKED.
+   */
+  const halted = seen.cycleState === 'PAUSED' || seen.cycleState === 'STOPPED';
+  record(
+    'L',
+    'Always-on loop',
+    ticking ? 'PARTIAL' : halted ? 'BLOCKED' : blocker.verdict,
+    seen.cycleState === null || (!ticking && !halted)
+      ? blocker.detail
+      : ticking
+        ? `The durable cycle in ${fleet.source} is ${seen.cycleState} and last ran ` +
+          `${Math.round((ranAgoMs ?? 0) / 1000)}s ago` +
+          (seen.cycleLastError ? `, with a recorded last error: ${seen.cycleLastError.slice(0, 160)}` : ', with no recorded error') +
+          '. NOT established here: a measured uptime window rather than one reading.'
+        : `The durable cycle is ${seen.cycleState}` +
+          (seen.cycleLastError ? ` — ${seen.cycleLastError.slice(0, 200)}` : '') +
+          '. A paused or stopped loop is an operational fact with an operational remedy, ' +
+          'and resuming it is a person\u2019s decision rather than this reporter\u2019s.',
+  );
 
   /* -- M. Product truth, historical knowledge, and memory -------------------- */
   /*
