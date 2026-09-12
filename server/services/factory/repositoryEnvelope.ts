@@ -39,11 +39,18 @@ export interface RepositoryGrant {
 /**
  * The authorized set.
  *
- * `V5` is deliberately absent. The factory lives in it, and a campaign that could
- * rewrite the machinery executing it is a campaign whose failure mode is
- * unbounded — the one repository where a bad unit cannot be contained by
- * declining a pull request. It is authorized for the *bootstrap* campaign only,
- * which ran locally with a person watching every tick, and that is not this.
+ * `V5` is deliberately absent, and it is worth being exact about *whose* decision
+ * that is. The reasoning is mine: the factory lives in this repository, and a
+ * campaign that could rewrite the machinery executing it is the one failure mode
+ * declining a pull request does not contain. It ran here once, for the bootstrap
+ * campaign, locally with a person watching every tick, and that is not this.
+ *
+ * That is a default written by the agent that built this, not a standing operator
+ * decision and not a permanent property of the product — unlike
+ * `oakwood-junk-removal`, whose retirement *is* the operator's and is recorded in
+ * `docs/OAKWOOD-RETIREMENT.md`. Every repository is unauthorized until a reviewed
+ * entry says otherwise, so `V5`'s absence needs no special rule; what it must not
+ * be described as is permanently out of reach.
  */
 export const REPOSITORY_GRANTS: readonly RepositoryGrant[] = [
   /*
