@@ -1,0 +1,111 @@
+# The guarded re-audit, and the scope report that comes before deciding on it.
+#
+# Narrow for the reason `routing.yml` is narrow. `scripts/admin.ts` is the whole
+# terminal surface, and a workflow that exposed all of it would be §26's console
+# again with a YAML file instead of a page. This one reaches exactly two
+# commands in one area:
+#
+#   packets independence [project]   read-only; opens nothing, proposes nothing
+#   packets reaudit <orchestration>  the §23 integrity transition, guarded
+#
+# `reaudit` is the only write here, and every control it has is in the service
+# rather than in this file: the principal is resolved from `--admin` against the
+# database and authorized at ADMIN on the packet's own project, the reservation
+# key is a sha-256 of server facts so a duplicate dispatch is a replay rather
+# than a second reopen, and a document whose bytes moved is superseded instead
+# of resolved. Reaching this workflow is the authentication — write access to
+# the repository and the Fly token — exactly as `Fleet`, `Factory` and `Routing`
+# already are; `--admin` is the attribution.
+#
+# It never deploys, never restarts the machine and never sets a secret.
+name: Packets
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'independence | reaudit'
+        required: true
+        default: independence
+      target:
+        description: 'independence: a project slug or id (optional). reaudit: the orchestration id.'
+        required: false
+        default: ''
+      admin:
+        description: '--admin <email>: the administrator the reopen is recorded against (reaudit)'
+        required: false
+        default: ''
+
+# Never at the same time as a deploy: the machine is being replaced during one.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  packets:
+    name: Packet integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Run
+        timeout-minutes: 10
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Through the environment, never interpolated into the shell. An input
+          # pasted into a command line is an injection whatever the dispatcher
+          # intended, and "only I can run this workflow" is not a guard.
+          PACKETS_COMMAND: ${{ inputs.command }}
+          PACKETS_TARGET: ${{ inputs.target }}
+          PACKETS_ADMIN: ${{ inputs.admin }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+
+          case "$PACKETS_COMMAND" in
+            independence|reaudit) ;;
+            *)
+              echo "::error::Refusing '$PACKETS_COMMAND': one of independence, reaudit."
+              exit 1
+              ;;
+          esac
+
+          # Identifiers: letters, digits, dot, colon, dash, underscore.
+          case "$PACKETS_TARGET" in
+            '') ;;
+            *[!A-Za-z0-9_.:-]*)
+              echo "::error::Refusing '$PACKETS_TARGET': letters, digits, dot, colon, dash, underscore."
+              exit 1
+              ;;
+          esac
+          # An address additionally needs @ and +.
+          case "$PACKETS_ADMIN" in
+            '') ;;
+            *[!A-Za-z0-9_.@+-]*)
+              echo "::error::Refusing the administrator address: that is not an address."
+              exit 1
+              ;;
+          esac
+
+          if [ "$PACKETS_COMMAND" = reaudit ]; then
+            if [ -z "$PACKETS_TARGET" ]; then
+              echo "::error::reaudit needs the orchestration id in 'target'."
+              exit 1
+            fi
+            if [ -z "$PACKETS_ADMIN" ]; then
+              echo "::error::reaudit needs '--admin <email>': a reopen records who asked for it."
+              exit 1
+            fi
+          fi
+
+          args="packets $PACKETS_COMMAND"
+          if [ -n "$PACKETS_TARGET" ]; then args="$args $PACKETS_TARGET"; fi
+          if [ -n "$PACKETS_ADMIN" ]; then args="$args --admin $PACKETS_ADMIN"; fi
+
+          echo "admin $args"
+          set +e
+          flyctl ssh console --app "$app" -C "sh /app/scripts/admin.sh $args" 2>&1 | tee packets.txt
+          set -e
+          # The verdict comes from a line the command printed, not from an exit
+          # code that had to survive an SSH session, a shell and a CLI.
+          grep -q '^ADMIN: OK' packets.txt
