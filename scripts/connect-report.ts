@@ -23,6 +23,7 @@ import {
 } from '../server/repos/externalRecords.ts';
 import { listEvents } from '../server/repos/events.ts';
 import { projectRecord } from '../server/services/connect/projection.ts';
+import { isKnownSite, siteDefinitions, siteFor } from '../server/services/connect/sites.ts';
 import { nowIso } from '../server/repos/util.ts';
 
 function flag(name: string): string | null {
@@ -44,7 +45,41 @@ async function main(): Promise<void> {
   await initDatabase();
 
   const projectRef = flag('project');
-  const sourceSystem = (flag('site') ?? 'deal-dispatch').trim().toLowerCase();
+  /*
+   * The site's own vocabulary, from the module that owns it.
+   *
+   * This read `.toLowerCase()` and reimplemented a normalisation that already
+   * existed — `services/connect/sites.ts` canonicalises `deal-dispatch`,
+   * `deal_dispatch` and `DEAL_DISPATCH` alike by replacing hyphens and
+   * upper-casing, because `EXTERNAL_SOURCE_SYSTEMS` is `['DEAL_DISPATCH']` and
+   * that is what `external_records.source_system` stores. Lower-casing produced
+   * `deal-dispatch`, which matches no row that can ever exist.
+   *
+   * **So the one reader a person would use to check on a connected site told
+   * them it held nothing.** In production on 2026-09-12 it printed
+   * `records 0 registered` and `rejections 0` for a site whose own connector
+   * events showed `EXTERNAL_RECORD_UPDATED` sixty times, the most recent
+   * ninety minutes earlier. The events section was right because it reads
+   * `project_events` by type and never touches `source_system`; everything
+   * keyed on the site was wrong, and nothing about the output said so.
+   *
+   * §29's rule, at a fifth reader: **a rule applied by one of two readers is
+   * worse than none**, because the two disagree about the same subject and the
+   * quiet one wins. And an unknown name is now refused by name rather than
+   * queried — reporting zero for a site that cannot exist is the same lie in a
+   * smaller font.
+   */
+  const requestedSite = (flag('site') ?? 'deal-dispatch').trim();
+  if (!isKnownSite(requestedSite.replace(/-/g, '_').toUpperCase())) {
+    console.error(
+      `No site called ${requestedSite}. This Brain speaks to: ` +
+        `${siteDefinitions().map((site) => site.slug).join(', ')}.`,
+    );
+    console.log('CONNECT-REPORT: FAIL');
+    process.exitCode = 1;
+    return;
+  }
+  const sourceSystem = siteFor(requestedSite).system;
   const limit = Math.min(Math.max(Number(flag('limit') ?? 20) || 20, 1), 200);
 
   if (!projectRef) {

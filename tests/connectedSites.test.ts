@@ -21,13 +21,17 @@
  * every claim here is about authorization and about what a caller can actually
  * reach, and neither is answerable from inside the process that decides them.
  */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { EXTERNAL_SOURCE_SYSTEMS } from '../server/domain/types.ts';
+import { isKnownSite, siteFor } from '../server/services/connect/sites.ts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
-import fs from 'node:fs';
 import os from 'node:os';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+
+const REPO_ROOT_FOR_SITES = fileURLToPath(new URL('..', import.meta.url));
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = 6300 + Math.floor(Math.random() * 200);
@@ -435,5 +439,63 @@ describe('connecting a site', () => {
       cookie: adminCookie,
     });
     expect(unknown.status).toBe(404);
+  });
+});
+
+/* ==========================================================================
+ * The site's name means one thing, and every reader must agree what
+ * ========================================================================== */
+
+/*
+ * `external_records.source_system` stores what `EXTERNAL_SOURCE_SYSTEMS` says —
+ * `DEAL_DISPATCH` — and `services/connect/sites.ts` is the one module that
+ * canonicalises a person's spelling of it, by replacing hyphens and
+ * upper-casing. `scripts/connect-report.ts` reimplemented that as
+ * `.toLowerCase()`, which produces `deal-dispatch`: a value no row can hold.
+ *
+ * So the one reader a person uses to check on a connected site reported
+ * `records 0 registered` and `rejections 0` for a site that had sixty connector
+ * events and had updated records ninety minutes earlier. Everything keyed on
+ * the site was wrong; the events list was right because it reads
+ * `project_events` by type and never touches `source_system` — which is exactly
+ * what made the output look coherent.
+ *
+ * Pinned on the source because the property is *which normalisation the script
+ * uses*, and a test that ran the script would need a populated Brain to show
+ * the difference. §29: a rule applied by one of two readers is worse than none.
+ */
+describe('every reader canonicalises a site name the same way', () => {
+  const report = fs.readFileSync(
+    path.join(REPO_ROOT_FOR_SITES, 'scripts', 'connect-report.ts'),
+    'utf8',
+  );
+
+  it('the stored vocabulary is upper case with underscores', () => {
+    for (const system of EXTERNAL_SOURCE_SYSTEMS) {
+      expect(system).toBe(system.toUpperCase());
+      expect(system).not.toContain('-');
+    }
+  });
+
+  it('canonicalising accepts every spelling a person writes and lands on the stored one', () => {
+    for (const spelling of ['deal-dispatch', 'deal_dispatch', 'DEAL_DISPATCH', 'Deal-Dispatch']) {
+      expect(siteFor(spelling).system).toBe('DEAL_DISPATCH');
+    }
+  });
+
+  it('the report never lower-cases the site into a value no row can hold', () => {
+    // The exact defect: `.toLowerCase()` applied to the site name.
+    expect(report).not.toMatch(/flag\('site'\)[^\n]*toLowerCase\(\)/);
+    // And it uses the module that owns the vocabulary.
+    expect(report).toContain("from '../server/services/connect/sites.ts'");
+    expect(report).toMatch(/siteFor\(/);
+  });
+
+  it('an unknown site is refused by name rather than reported as holding nothing', () => {
+    expect(isKnownSite('NOT_A_SITE')).toBe(false);
+    // Reporting zero for a site that cannot exist is the same lie in a smaller
+    // font, so the script must fail rather than query.
+    expect(report).toContain('CONNECT-REPORT: FAIL');
+    expect(report).toMatch(/No site called/);
   });
 });
