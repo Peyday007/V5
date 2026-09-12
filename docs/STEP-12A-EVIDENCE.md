@@ -9300,3 +9300,207 @@ open, and the same operator answered the identical decision on
 report short of its goal is a judgement the domain reserves to a person
 (invariant 20, §16, §24), and that reservation is the reason the gate is worth
 passing.
+
+## 96. The hour was Brain's own token clock — 2026-09-11
+
+The product owner asked for enough distinct, immediately fireable worker
+identities to complete PRIMARY, ADVERSARIAL and JUDGE "without waiting for
+hourly schedules". Reading production found the hourly thing, and it is not a
+schedule.
+
+**The mechanism, end to end.** `auditEligibility` compares audit roles on
+`ExecutorLineage.sessionRef`, and `lineageForWorker` sets that to the credential
+the request authenticated with — `oauth_tokens.id` for the Cowork connector.
+`ACCESS_TOKEN_TTL_MS` in `server/repos/oauth.ts` is `60 * 60 * 1000`. So two
+activations of one Routine inside one hour authenticate as **the same session**,
+and Brain correctly refuses the second the next audit role. It then records the
+refusal and walks `REFUSAL_BACKOFF_MS` — 1, 2, 5, 15, 30 minutes, then 30
+minutes for ever — re-firing at a surface whose answer could not change until
+the token aged out.
+
+**Measured, on the live packet.** `packet-report` on
+`orc_08b94f87a71a4b588829` at 2026-09-11T23:15Z:
+
+```
+BIN
+  bin_aa20917c0c1a418895cd  NEEDS_HUMAN  gen 18 attempts 4/5 refusals 6
+EVIDENCE
+  passes      9
+      audit role ordinal 5 COMPLETE 2026-09-11T05:35:49.064Z
+      audit role ordinal 6 COMPLETE 2026-09-11T06:28:19.591Z
+      audit role ordinal 7 COMPLETE 2026-09-11T07:25:35.729Z
+      audit role ordinal 5 COMPLETE 2026-09-11T07:49:13.267Z
+      audit role ordinal 6 COMPLETE 2026-09-11T08:25:09.116Z
+      audit role ordinal 7 COMPLETE 2026-09-11T09:26:12.825Z
+```
+
+Six session refusals, and consecutive roles 53, 57, 36 and 61 minutes apart on
+work that takes minutes. Two complete audit rounds cost the best part of four
+hours, almost all of it Brain waiting on its own clock.
+
+**The first gap is the ladder, exactly.** `REFUSAL_BACKOFF_MS` is
+`[60, 120, 300, 900, 1800]` seconds, so five refusals put the next question
+`1 + 2 + 5 + 15 + 30 = 53` minutes after the first — and PRIMARY completed at
+05:35:49 with ADVERSARIAL completing at 06:28:19, **53 minutes later**, against
+a bin carrying six refusals. That is worth stating precisely rather than
+attributing the whole delay to the token: the token's hour is the outer bound on
+*when a distinct session can first exist*, and the ladder is what decides *when
+Brain next asks*. The two compound, and only the second is Brain's to fix. A
+session that became distinct at minute 12 was not asked about until minute 53.
+
+**What was changed.** `recordSessionRefusal` now takes an upper bound and clamps
+the rung to it (`retryAtWithin` in `repos/util.ts`), and
+`services/research/sessionWindow.ts` answers where the bound comes from: the
+blocking access token's own `expires_at`. `auditAdmission` says *whether* the
+refusal was a session collision as a boolean and never the value, because that
+value is a credential id. Everything else is untouched — the ladder, the
+refusal, the recorded reason, `bin_session_refusals`, and every comparison the
+matrix makes. The clamp can only move a retry **earlier**.
+
+Load-bearing, checked by reverting it: with `retryAtWithin` ignoring its bound,
+five of the eleven tests in `tests/sessionWindow.test.ts` fail, including the
+production shape — a credential expiring inside the first rung must set the
+bin's `dispatch_not_before` to that expiry rather than to a minute later.
+
+**Two fixes were available, both refused, and the refusal is the substance of
+this section.** Brain minted the token and could revoke it the moment it refuses
+a role; the connector would refresh within seconds and a distinct session would
+arrive at once. It would also mean the one model context Brain had just refused
+coming straight back under a second session id, eligible for the role it was
+refused — which defeats the control outright, since the whole content of the
+session dimension is that one context cannot hold two roles. Shortening
+`ACCESS_TOKEN_TTL_MS` is the same hole reached more slowly: a lifetime short
+enough to guarantee a fresh session per activation is short enough to expire
+*inside* one, and then the credential stops identifying a context at all.
+
+So the honest limit is recorded rather than engineered around: **Brain cannot
+manufacture a second simultaneous worker identity.** §22 settles it — "Brain
+owns dispatch. The surface owns whether a worker may act" — and that is about
+*who* a worker is as much as what it may do. More simultaneous identities are an
+operator provisioning fact (another authorized connector on another account),
+not something application code may mint, and §22 is explicit that Brain must
+never mint its own workers. What Brain can do, and now does, is refuse to wait
+longer than the answer is true for.
+
+## 97. A13 is one decision, and nothing else — 2026-09-11
+
+The same production read settles what is left. `claimable=0`: there is no work
+item any worker could be sent for, on the packet or anywhere near it. The report
+is filed — `doc_e9eaeab710b148d29fdd`, Execution Playbooks v1D, 42,621 bytes,
+`extraction READY`, `30/30 cited claim id(s) present in the stored bytes`. Two
+audits are recorded, both `MORE_RESEARCH`, carrying five `TARGETED_RESEARCH_GAP`
+entries between them with questions the judge wrote.
+
+`A13_AUTO_NEXT` counts `russell_missions.next_mission_id IS NOT NULL` inside the
+declared scope. `unresolvedFollowOn` produces that from `COMPLETE_WITH_GAPS`,
+which `outcomeFor` produces from `unresolved_gap_policy = 'RECORD_GAPS'`, whose
+only writer is `authorizeUnresolvedGaps` — and `recordGaps` calls it with
+`request.answeredByUserId`, which `answerHumanRequest` took from the
+authenticated principal. There is no path to it from a script, a worker or this
+session, and §95 already recorded why that must stay true: it is the property
+that makes `A14_HUMAN_RESUME` mean anything, and routing around it to pass A13
+would hollow out both.
+
+`scripts/authorize-gap-policy.ts` writes the column but does not answer the
+request, so it would leave the mission at `NEEDS_HUMAN` with an open decision,
+no writeback, and therefore no follow-on. It is not a way round this and was not
+used.
+
+## 98. A19 closed; 20/21, and the last one is a decision — 2026-09-12
+
+The refusal clamp was delivered as **34659204629** from `production` at
+`9cbd5f7`, guard first, `npm test` and `npm run build` in CI, then verified
+either side of a real restart — *Prove the live Brain is actually shut* at
+23:51:50Z, *Restart it, so persistence means something*, *Prove it survived the
+restart*, all three green. Both backends passed before it left: **2166 on
+SQLite** and **2191 on Postgres**, the second because this change reads
+`oauth_tokens` and §25's own lesson is that a repository layer over two
+databases is true or merely compiling.
+
+Ledgered as entry 56. A19 had been `NOT_RUN` about something true — the branch
+had moved well past `34586165112`, so what was deployed was not what the
+acceptance was reading — and it is now:
+
+```
+STEP 12A — composed: 20/21 PASS · 0 FAIL · 0 BLOCKED · 1 NOT_RUN · 1 DEFERRED
+A19_DELIVERY PASS
+A13_AUTO_NEXT NOT_RUN
+A22_FAST_CHAT_ROUTING DEFERRED
+```
+
+`A13_AUTO_NEXT` is the one gate left and it is the decision §95 and §97 already
+recorded. Nothing about worker capacity stands in its way: the packet reads
+`claimable=0`, the report is filed with bytes, and both audits are recorded.
+`recordGaps` reads `request.answeredByUserId`, which `answerHumanRequest` takes
+from the authenticated principal — so the answer has to come from a person
+signed in at `/needs-you`, and that is the property that makes `A14_HUMAN_RESUME`
+mean anything rather than an obstacle to route around.
+
+## 99. 21/21 — the decision, the follow-on, and nothing manufactured — 2026-09-12
+
+The operator answered the Needs You request at `/needs-you`. Every link is read
+from production rows below, in the order they happened.
+
+**The decision is authenticated and attributed to the person who made it.**
+`chain-watch` on `rcv_cd79bff8d3e941fda5e0`:
+
+```
+NEEDS YOU  1
+  rhr_36a4f59793274ac08598  RESUMED  mission=rms_aca21b51ac6b41cb8472
+                            choice=RECORD_GAPS by=usr_14439966398243339341
+                            at=2026-09-12T01:28:23.377Z
+```
+
+and the packet carries the same id, which is the condition `A14_HUMAN_RESUME`
+requires and the reason no script could have produced it:
+
+```
+gap policy  RECORD_GAPS — by usr_14439966398243339341 at 2026-09-12T01:28:33.522Z
+status      COMPLETE_WITH_GAPS   pass AUDIT
+completed   2026-09-12T01:28:34.329Z
+```
+
+**The follow-on launched by itself, and exactly once.**
+
+```
+MISSIONS  2
+  rms_aca21b51ac6b41cb8472  DONE     orch=orc_08b94f87a71a4b588829
+      writeback=2026-09-12T01:29:02.375Z  next=rms_683d8907fcb94e94bb63
+  rms_683d8907fcb94e94bb63  RUNNING  orch=orc_abab7d7130d545eaa1a1  bin=bin_2a66343bb7ea4e38a2d9
+      writeback=—  next=—
+```
+
+Exactly one candidate in the chain carries the parent —
+`rcn_532c878641984f1c8ee0 QUEUED followOnOf=rms_aca21b51ac6b41cb8472` — one
+child mission exists, and the parent's `next` is set once. Nobody was involved
+after 01:28:23: ten seconds to the authorization, eleven to the packet's
+terminal status, thirty-nine more to the writeback, and the child was `RUNNING`
+by 01:31:29. The loop reads `RUNNING … launches 1 · events 50`, `last error
+none`.
+
+**Nothing was manufactured, and the way to see that is that none of it moved.**
+Claims `60 stored, 57 accepted` — the same numbers as before the decision. Two
+audits, nine gaps and seven, every classification unchanged: the same four
+`TARGETED_RESEARCH_GAP`s, the same `PATCH`es, the same `OTHER_LAYER`. The
+document is byte-identical at 42,621 with `30/30 cited claim id(s) present in
+the stored bytes` and `extraction READY`. The fragment is still `ACCEPTED …
+integrity PASS sufficiency SUFFICIENT`, the requirement still `SATISFIED`, and
+the six audit passes still carry their 2026-09-11 completion stamps. The
+independence evidence reads `distinct sessions 5, predicted (future:) 0` — real
+credentials, no allocator predictions. `COMPLETION LINKS` reports
+`rms_aca21b51ac6b41cb8472 ALIGNED` with layer, audit and document matching the
+packet on both sides.
+
+What changed is only what the decision is *for*: the packet's status, the
+authorization row naming the person, the writeback, and one new mission.
+
+**The canonical reporter, run 34665158457 against the deployed tree:**
+
+```
+STEP 12A — composed: 21/21 PASS · 0 FAIL · 0 BLOCKED · 0 NOT_RUN · 1 DEFERRED (of 22 gates)
+Deferred by the owner and excluded from the denominator:
+  A22_FAST_CHAT_ROUTING
+Every in-scope gate is PASS.
+```
+
+**Step 12A is complete.**

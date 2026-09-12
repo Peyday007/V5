@@ -27,7 +27,7 @@
 import { createHash } from 'node:crypto';
 import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
-import { newId, nowIso, parseJson, toJson } from './util.ts';
+import { newId, nowIso, parseJson, retryAtWithin, toJson } from './util.ts';
 import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSession } from './fleet.ts';
 import type { BinConfinement } from './workQueue.ts';
 import type {
@@ -997,6 +997,18 @@ export async function markBinReady(id: string): Promise<Bin | null> {
  */
 const REFUSAL_BACKOFF_MS = [60_000, 120_000, 300_000, 900_000, 1_800_000] as const;
 
+/**
+ * The floor under a clamped backoff: one dispatcher tick.
+ *
+ * A bound can be in the past — a credential that has already expired, a clock
+ * that has moved — and a retry point in the past is a bin fired at on every
+ * tick for ever, which is the exact loop the ladder exists to prevent. Stated
+ * as a duration here rather than imported from `services/dispatch/loop.ts`,
+ * because a repository reaching into a service to learn its own floor is the
+ * dependency this layer does not have.
+ */
+const MIN_REFUSAL_BACKOFF_MS = 10_000;
+
 export function refusalBackoffMs(refusals: number): number {
   const index = Math.min(Math.max(1, refusals), REFUSAL_BACKOFF_MS.length) - 1;
   return REFUSAL_BACKOFF_MS[index]!;
@@ -1095,6 +1107,11 @@ export async function recordSessionRefusal(input: {
   projectId?: string | null;
   orchestrationId?: string | null;
   workerId?: string | null;
+  /**
+   * The moment this refusal stops being able to be true, when the caller knows
+   * one. See `services/research/sessionWindow.ts`.
+   */
+  notLaterThan?: string | null;
 }): Promise<BinSessionRefusal> {
   const db = getDb();
   const now = binNow();
@@ -1103,7 +1120,22 @@ export async function recordSessionRefusal(input: {
     [input.binId, input.sessionRef],
   );
   const refusals = (existing?.refusals ?? 0) + 1;
-  const retryAt = plusMs(now, refusalBackoffMs(refusals));
+  /*
+   * The ladder, then clamped to the moment the answer can change.
+   *
+   * Both halves matter. Without the ladder a bin is fired at on a tight loop;
+   * without the clamp a refusal that expires in four minutes is honoured for
+   * thirty, and a packet whose remaining audit roles are waiting on nothing but
+   * a credential clock finishes at the pace of that clock. The clamp can only
+   * move a retry *earlier* — `retryAtWithin` takes the earlier of the two and
+   * then floors it — so no existing refusal is honoured for longer than it was
+   * and none is honoured for less than one dispatcher tick.
+   */
+  const retryAt = retryAtWithin(
+    plusMs(now, refusalBackoffMs(refusals)),
+    input.notLaterThan ?? null,
+    plusMs(now, MIN_REFUSAL_BACKOFF_MS),
+  );
   const reason = bounded(input.reason, MAX_REASON_CHARS) ?? 'refused by admission';
 
   if (existing) {
@@ -1183,7 +1215,25 @@ export interface AssignBinInput {
    * no generation and no history — the candidate is simply skipped, exactly as
    * losing the compare-and-swap skips it.
    */
-  admit?: (bin: Bin) => Promise<{ ok: boolean; reason?: string }>;
+  admit?: (
+    bin: Bin,
+  ) => Promise<{
+    ok: boolean;
+    reason?: string;
+    /**
+     * The latest instant this refusal is worth honouring, when the caller can
+     * establish one.
+     *
+     * An upper bound on the ladder and never a replacement for it: the refusal
+     * is recorded exactly as before and the backoff is computed exactly as
+     * before, then clamped to this. It exists because one refusal has a
+     * knowable expiry — a session that may not take a second audit role stops
+     * being that session when its credential does — and walking a ladder to
+     * half-hourly polls past the moment the condition clears is waiting longer
+     * than the answer is true for. It carries an instant and never a credential.
+     */
+    retryNotLaterThan?: string | null;
+  }>;
   /**
    * The workload classes this worker may be offered, as prefixes, and whether a
    * bin with no class at all may be offered.
@@ -1410,6 +1460,7 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
               projectId: row.project_id,
               orchestrationId: row.orchestration_id,
               workerId: input.workerId,
+              notLaterThan: verdict.retryNotLaterThan ?? null,
             });
           }
           continue;

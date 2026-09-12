@@ -960,6 +960,35 @@ a value the claimant does not supply.**
   `DISPATCHABLE_SQL`, so the assigner ignores it and a fresh eligible session is
   still handed the bin the moment it asks. None of it is a ceiling: nothing is
   ever refused because of those rows, and the independence floor is untouched.
+
+  **And a refusal must not outlive the moment it can stop being true.** The
+  session dimension is the credential a request authenticated with, the Cowork
+  connector presents one OAuth access token, and `ACCESS_TOKEN_TTL_MS` is an
+  hour — so two activations of one Routine inside one hour are the same session
+  and the second is correctly refused the next audit role. What was wrong is
+  what happened next: the ladder walked to half-hourly polls and nothing in it
+  knew the answer could not change until the token aged out. Production measured
+  it on `bin_aa20917c0c1a418895cd` — six recorded session refusals, and
+  consecutive roles completing 53, 57, 36 and 61 minutes apart on work that
+  takes minutes. **The 53 is the ladder to the digit**: `1 + 2 + 5 + 15 + 30`.
+  The token's hour bounds when a distinct session can first *exist*; the ladder
+  decides when Brain next *asks*, and only the second is Brain's to fix — a
+  session that became distinct at minute twelve was not asked about until minute
+  fifty-three. So `recordSessionRefusal` takes an upper bound and clamps the
+  rung to it: the ladder, the refusal and every comparison are untouched, the
+  bound exists only for a session-dimension refusal on a credential that
+  actually expires, and it can only ever move a retry *earlier*, never later.
+  **The two tempting fixes are refused and the refusal is the point.** Brain
+  issued the token and could revoke it on refusal, and the connector would
+  refresh in seconds — which would let the one model context Brain had just
+  refused a role come back under a second session id and take it. Shortening
+  the token's life is the same hole reached more slowly: a lifetime short enough
+  to guarantee a fresh session per activation is short enough to expire *inside*
+  one, and then the identity the matrix compares stops identifying a context.
+  **Brain cannot manufacture a second simultaneous identity** — §22's "the
+  surface owns whether a worker may act" is about *who* a worker is as much as
+  what it may do — so what it does instead is stop waiting longer than it has
+  to. See `services/research/sessionWindow.ts`.
 - **Audit independence is execution lineage, not a role name.**
   `research_passes` records which worker, Routine, account and session produced
   each pass, and `services/research/independence.ts` checks the recorded lineage.
