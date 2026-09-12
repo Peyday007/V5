@@ -51,6 +51,12 @@ import { briefing, focusLayer } from '../services/russell/projections.ts';
 import { homeFor } from '../services/russell/home.ts';
 import { collectionsFor } from '../services/russell/collections.ts';
 import { frontierFor } from '../services/russell/frontier.ts';
+import {
+  askableLenses,
+  decideFinding,
+  listInquiries,
+  openInquiry,
+} from '../services/russell/inquiry.ts';
 import { SAVED_VIEWS, SEARCH_KINDS, search, type SearchKind } from '../services/russell/search.ts';
 import { explainSlowness, fleetView } from '../services/fleet/view.ts';
 import {
@@ -768,6 +774,83 @@ russellRouter.patch(
     });
     if (!changed) throw notFound('No frontier item with that id.');
     return { ok: true, dismissed };
+  }),
+);
+
+/**
+ * The asked lenses, and what has been asked of them.
+ *
+ * A separate read from the frontier itself because it answers a different
+ * question: the frontier says where understanding runs out, and this says what
+ * has been *done* about the part of it only a reader can settle.
+ */
+russellRouter.get(
+  '/projects/:projectId/lenses',
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    return {
+      askable: askableLenses(),
+      inquiries: await listInquiries({ projectId: project.id, includePrivate: false }),
+    };
+  }),
+);
+
+/**
+ * A person asking one.
+ *
+ * `requirePerson` and nothing else: a worker principal is refused by type here,
+ * because a machine that could ask itself a discovery question could also
+ * answer it and propose the result — which is the whole loop this path is built
+ * to keep open.
+ */
+russellRouter.post(
+  '/projects/:projectId/lenses',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const opened = await openInquiry({
+      projectId: project.id,
+      projectName: project.name,
+      lens: requiredString(body['lens'], 'lens'),
+      subject: optionalString(body['subject'], 'subject'),
+      openedBy: principal.id,
+    });
+    if (!opened.ok) throw badRequest(opened.reason);
+    return { inquiry: opened.inquiry };
+  }),
+);
+
+/**
+ * A person deciding about one finding.
+ *
+ * Accepting is what turns a proposal into a frontier item; dismissing keeps the
+ * reason. Neither deletes what the worker proposed, and deciding twice is
+ * refused by the unique index rather than silently applied again.
+ */
+russellRouter.patch(
+  '/projects/:projectId/lenses/:inquiryId',
+  handler(async (req) => {
+    const principal = requirePerson();
+    await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const index = optionalInteger(body['findingIndex'], 'findingIndex');
+    if (index === undefined || index === null || index < 0) {
+      throw badRequest('Name which finding, by index.');
+    }
+    const decision = requiredString(body['decision'], 'decision');
+    if (decision !== 'ACCEPTED' && decision !== 'DISMISSED') {
+      throw badRequest('A decision is ACCEPTED or DISMISSED.');
+    }
+    const decided = await decideFinding({
+      inquiryId: pathId(req, 'inquiryId'),
+      findingIndex: index,
+      decision,
+      reason: optionalString(body['reason'], 'reason'),
+      decidedBy: principal.id,
+    });
+    if (!decided.ok) throw badRequest(decided.reason);
+    return { ok: true, frontierItemId: decided.frontierItemId };
   }),
 );
 

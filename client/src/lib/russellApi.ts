@@ -38,6 +38,7 @@ import type { FleetView as FleetReading, SlownessExplanation } from '../../../se
 import type { LabExperiment, LabMode, TestEnvelope } from '../../../server/services/fleet/lab.ts';
 import type { MapType, MapView } from '../../../server/services/russell/maps.ts';
 import type { WhyThisMatters } from '../../../server/services/russell/whyThisMatters.ts';
+import type { LensFinding, LensInquiry } from '../../../server/services/russell/inquiry.ts';
 import type { Preferences, PreferenceKey } from '../../../server/services/russell/preferences.ts';
 import type {
   AuthorityView,
@@ -45,6 +46,8 @@ import type {
 } from '../../../server/services/russell/authority.ts';
 
 export type {
+  LensFinding,
+  LensInquiry,
   AuthorityLimitKey,
   AuthorityView,
   Briefing,
@@ -378,6 +381,32 @@ export const RussellApi = {
    */
   frontier: (projectId: string): Promise<{ frontier: FrontierView }> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/frontier`),
+
+  /** The asked lenses, and every inquiry opened against them. */
+  lenses: (
+    projectId: string,
+  ): Promise<{ askable: { key: string; question: string }[]; inquiries: LensInquiry[] }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/lenses`),
+
+  /** A person asking one of the questions Russell cannot answer by itself. */
+  askLens: (projectId: string, lens: string): Promise<{ inquiry: LensInquiry }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/lenses`, {
+      method: 'POST',
+      body: JSON.stringify({ lens }),
+    }),
+
+  /** Keep one finding — which puts it on the frontier — or dismiss it. */
+  decideLensFinding: (
+    projectId: string,
+    inquiryId: string,
+    findingIndex: number,
+    decision: 'ACCEPTED' | 'DISMISSED',
+    reason?: string,
+  ): Promise<{ ok: true; frontierItemId: string | null }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/lenses/${encodeURIComponent(inquiryId)}`,
+      { method: 'PATCH', body: JSON.stringify({ findingIndex, decision, reason }) },
+    ),
 
   /** Say an area is deliberately not required, or take that back. */
   setFrontierDismissed: (

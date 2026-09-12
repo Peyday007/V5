@@ -31,6 +31,7 @@ import { listLayers } from '../../repos/layers.ts';
 import { listCurrentKnowledge } from '../../repos/russellMissions.ts';
 import { listCandidates } from '../../repos/russellCandidates.ts';
 import { listGapsByLayer } from '../../repos/audits.ts';
+import { listAcceptedLensFindings } from '../../repos/russellLenses.ts';
 import {
   listFrontier,
   observeFrontierItem,
@@ -358,8 +359,37 @@ export async function refreshFrontier(projectId: string): Promise<{
     byRegion[item.region] += 1;
   }
 
+  /*
+   * And the findings a person accepted from an asked lens.
+   *
+   * `resolveUnseenFrontierItems` resolves whatever this pass did not observe,
+   * which is exactly right for a derived reading and would quietly retire every
+   * accepted lens finding on the very next tick — a person's decision undone by
+   * a loop, silently, which is the worst shape a correctness rule can have.
+   *
+   * An accepted finding *is* currently true: that is what accepting one means,
+   * and it stops being true when somebody dismisses the item rather than when a
+   * derivation stops producing it. So it is re-observed here, in the same pass,
+   * carrying the lens it came from.
+   */
+  let fromLenses = 0;
+  for (const accepted of await listAcceptedLensFindings(projectId)) {
+    await observeFrontierItem({
+      projectId,
+      region: 'NEW_PATH',
+      subject: accepted.subject,
+      detail: accepted.statement,
+      sourceKind: 'ABSENCE',
+      sourceId: accepted.inquiryId,
+      lens: accepted.lens,
+      visibility: accepted.visibility,
+    });
+    byRegion.NEW_PATH += 1;
+    fromLenses += 1;
+  }
+
   const resolved = await resolveUnseenFrontierItems({ projectId, startedAt });
-  return { observed: observed.length, resolved, byRegion };
+  return { observed: observed.length + fromLenses, resolved, byRegion };
 }
 
 export interface FrontierRegionView {

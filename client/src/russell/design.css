@@ -718,6 +718,19 @@
   font-size: var(--step--1);
 }
 
+/*
+ * A block that belongs to the card above it.
+ *
+ * Findings from an asked lens sit inside the lens card, and without an indent
+ * and a rule they read as siblings of it — which would make a proposal look
+ * like a question rather than an answer to one.
+ */
+.rs-nested {
+  margin-block-start: var(--gap-3);
+  padding-inline-start: var(--gap-3);
+  border-inline-start: 2px solid var(--rule);
+}
+
 .rs-card {
   display: block;
   width: 100%;

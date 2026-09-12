@@ -42,7 +42,32 @@ import { getProject } from '../../repos/projects.ts';
 import { listAccounts, listRoutines, setPolicy, currentPolicy } from '../../repos/fleet.ts';
 import { workloadProfile } from '../dispatch/profiles.ts';
 import { fleetView, usability, type Evidence } from './view.ts';
+import {
+  MAX_CONCURRENCY,
+  MAX_ITEMS_PER_RUN,
+  NoLabClaimant,
+  PROVIDER_UNTESTED,
+  deadlineForRung,
+  drain,
+  evidenceFor,
+  knee,
+  labClaimants,
+  ladder,
+  runRecoveryDrill,
+  throughput,
+  type DrainRound,
+} from './labRunners.ts';
 import { AUDIT_SEPARATION_MINIMUM } from '../research/auditEligibility.ts';
+
+/**
+ * What a rollback restores when the canary displaced nothing at all.
+ *
+ * Named rather than inlined, because it is a real decision: an experiment
+ * applied over an empty policy history has no prior value to return to, and the
+ * honest restoration is the fleet's own conservative default rather than the
+ * canary's number wearing the word "rolled back".
+ */
+export const DEFAULT_TARGET_WITH_NO_PRIOR_POLICY = 1;
 
 /** The eight modes §15.1 names. */
 export const LAB_MODES = [
@@ -115,6 +140,15 @@ export interface LabExperiment {
   actor: string;
   staleReason: string | null;
   appliedPolicyId: string | null;
+  /**
+   * The policy this experiment's canary displaced, recorded when it applied.
+   *
+   * Null means it displaced nothing, which is a different fact from not
+   * knowing: rolling back then restores no target, because no target is what
+   * was there.
+   */
+  displacedPolicyId: string | null;
+  displacedTarget: number | null;
   appliedAt: string | null;
   rolledBackAt: string | null;
   version: number;
@@ -162,6 +196,8 @@ interface Row {
   actor: string;
   stale_reason: string | null;
   applied_policy_id: string | null;
+  displaced_policy_id: string | null;
+  displaced_target: number | null;
   applied_at: string | null;
   rolled_back_at: string | null;
   version: number;
@@ -194,6 +230,8 @@ function map(row: Row): LabExperiment {
     actor: row.actor,
     staleReason: row.stale_reason,
     appliedPolicyId: row.applied_policy_id,
+    displacedPolicyId: row.displaced_policy_id,
+    displacedTarget: row.displaced_target,
     appliedAt: row.applied_at,
     rolledBackAt: row.rolled_back_at,
     version: row.version,
@@ -603,19 +641,379 @@ export async function runExperiment(input: {
   }
 
   /*
-   * The remaining modes are declared and not implemented, and say so.
+   * The five pressure modes, run for real against Brain's own concurrency
+   * machinery.
    *
-   * This is the one place a half-built capability could quietly look finished,
-   * so it does the opposite: the experiment settles as REFUSED with the exact
-   * reason, which is that running it means putting real pressure on real
-   * surfaces and Brain has no way to do that without spending the
-   * subscription. A stub that returned plausible numbers would be the worst
-   * thing this lab could produce.
+   * An earlier version of this file settled all five as REFUSED with "declared
+   * but not implemented", on the reasoning that running them means putting real
+   * pressure on real surfaces and Brain cannot do that without spending the
+   * subscription. **The correction is recorded rather than quietly applied.**
+   * The reasoning was half right — Brain must not fire Routines to find a number
+   * — and the half that was wrong turned a declared capability into a permanent
+   * refusal that no authorization could open, which is the "waiting for a person
+   * who cannot resolve it" defect §24 names, at a lab.
+   *
+   * What was missed is that the surface is not the only thing under pressure.
+   * Claiming, leasing, fencing, contention, recovery and backlog shape are
+   * `repos/workQueue.ts`, which runs in this process against this database and
+   * costs nothing external. `labRunners.ts` drives it with synthetic work in the
+   * isolated TECHNICAL scope the declaration already requires, and every result
+   * carries `PROVIDER_UNTESTED` — because what a real Cowork surface holds is
+   * the one thing here that spends money, and it is a person's to authorize.
+   */
+  const started = Date.now();
+  const rungs = ladder(experiment.envelope.ceiling);
+
+  /*
+   * A pressure run needs somewhere legitimate to hold a lease.
+   *
+   * `work_leases.worker_id` is a foreign key to a real worker, which is §19's
+   * "ownership is proved against a principal" expressed as a constraint. With
+   * no registered claimant in the isolated scope the run is **refused with the
+   * remedy named** rather than attempted — and the remedy is a person's, on a
+   * terminal, because creating an identity to make a lab test pass is what §22
+   * forbids. This is an answering transition, not a dead end: registering one
+   * and running the test again is all it takes.
+   */
+  const claimants = await labClaimants(experiment.projectId);
+  if (claimants.length === 0) {
+    await settle(experiment.id, {
+      state: 'REFUSED',
+      at: nowIso(),
+      refusalReason: new NoLabClaimant(experiment.projectId).message,
+    });
+    return (await getExperiment(experiment.id))!;
+  }
+
+  if (experiment.mode === 'PUSH_TO_FAILURE' || experiment.mode === 'ONE_ROUTINE_FIT') {
+    const perRung = deadlineForRung(experiment.envelope.durationMinutes, rungs.length);
+    const walk = experiment.mode === 'ONE_ROUTINE_FIT' ? [rungs[rungs.length - 1]!] : rungs;
+    const rounds: DrainRound[] = [];
+    for (const concurrency of walk) {
+      rounds.push(
+        await drain({
+          experimentId: experiment.id,
+          projectId: experiment.projectId,
+          concurrency,
+          items: Math.min(MAX_ITEMS_PER_RUN, Math.max(concurrency * 4, 20)),
+          deadlineMs: perRung,
+        }),
+      );
+      if (Date.now() - started > experiment.envelope.durationMinutes * 60_000) break;
+    }
+    const stopped = knee(rounds);
+    const top = rounds[rounds.length - 1] ?? null;
+    const anythingFailed = rounds.some(
+      (round) => round.refusedCompletions > 0 || round.leftOver > 0,
+    );
+    await settle(experiment.id, {
+      state: 'COMPLETE',
+      at: nowIso(),
+      result: {
+        whatWasTested:
+          experiment.mode === 'ONE_ROUTINE_FIT'
+            ? 'How much one claimant-equivalent lane holds, measured against the real queue.'
+            : 'How many concurrent claimants the queue admits before contention stops paying.',
+        whatHappened: rounds
+          .map(
+            (round) =>
+              `${round.concurrency} claimant(s): ${round.completed}/${round.items} completed in ${round.elapsedMs}ms, ${round.lostRaces} lost races`,
+          )
+          .join('; '),
+        degradationBegan: {
+          value: stopped
+            ? `${stopped.concurrency} concurrent claimants. ${stopped.reason}`
+            : 'Nothing completed, so no degradation point exists to report.',
+          evidence: evidenceFor(rounds),
+        },
+        bottleneck: {
+          value:
+            top && top.lostRaces > top.claimed
+              ? 'Claim contention: most claim calls lost their compare-and-swap rather than doing work.'
+              : 'The backlog drained without contention dominating.',
+          evidence: evidenceFor(rounds),
+        },
+        recommendedSetting: {
+          value: stopped
+            ? `Run ${stopped.concurrency} concurrent claimants for this workload.`
+            : 'Not enough completed to recommend a setting.',
+          evidence: evidenceFor(rounds),
+        },
+        higherSetting:
+          stopped && top && top.concurrency > stopped.concurrency
+            ? {
+                value: `${top.concurrency} was reached without a refusal.`,
+                tradeoff:
+                  'Above the knee the extra claimants mostly lose races, so throughput stops improving while contention keeps rising.',
+                evidence: evidenceFor(rounds),
+              }
+            : null,
+        configurationChanges: [],
+        effectOnBacklog: `${rounds.reduce((sum, round) => sum + round.completed, 0)} synthetic items were drained end to end. No real work was touched.`,
+        confidence: {
+          sampleSize: rounds.reduce((sum, round) => sum + round.completed, 0),
+          note: 'Every number is a real claim, lease and completion against the deployed queue code.',
+        },
+        untested: [
+          PROVIDER_UNTESTED,
+          'Whether a real research or audit workload behaves like a synthetic echo at this concurrency.',
+        ],
+        highestTested: { value: top?.concurrency ?? null, anythingFailed },
+        findings: [
+          top
+            ? `Tested safely through ${top.concurrency} concurrent claimants. That is a lower bound on Brain's own machinery, not a maximum and not a statement about any provider.`
+            : 'No rung completed, so nothing is established.',
+          `${rounds.reduce((sum, round) => sum + round.refusedCompletions, 0)} completion(s) were refused by the queue's ownership proof.`,
+        ],
+      },
+    });
+    return (await getExperiment(experiment.id))!;
+  }
+
+  if (experiment.mode === 'LAYOUT_TOURNAMENT') {
+    /*
+     * Two materially different layouts over the *same* work.
+     *
+     * The items are identical; what differs is how the backlog is shaped and
+     * how many a claimant may take at once. That is what makes the comparison
+     * mean anything: a tournament between two different workloads would be
+     * measuring the workloads.
+     */
+    const concurrency = Math.max(2, Math.min(8, Math.floor(experiment.envelope.ceiling)));
+    const perLayout = deadlineForRung(experiment.envelope.durationMinutes, 2);
+    const flat = await drain({
+      experimentId: experiment.id,
+      projectId: experiment.projectId,
+      concurrency,
+      items: 60,
+      batch: 1,
+      deadlineMs: perLayout,
+      priorityShape: 'FLAT',
+    });
+    const batched = await drain({
+      experimentId: experiment.id,
+      projectId: experiment.projectId,
+      concurrency,
+      items: 60,
+      batch: 5,
+      deadlineMs: perLayout,
+      priorityShape: 'STAGGERED',
+    });
+    const flatRate = throughput(flat);
+    const batchedRate = throughput(batched);
+    const winner =
+      flatRate === null || batchedRate === null
+        ? null
+        : batchedRate > flatRate
+          ? 'batched'
+          : 'one-at-a-time';
+    const margin =
+      flatRate !== null && batchedRate !== null && flatRate > 0
+        ? Math.round(((batchedRate - flatRate) / flatRate) * 100)
+        : null;
+    await settle(experiment.id, {
+      state: 'COMPLETE',
+      at: nowIso(),
+      result: {
+        whatWasTested:
+          'Two materially different work layouts over the same backlog: one item per claim with a flat priority, against five per claim with a staggered one.',
+        whatHappened: `one-at-a-time ${flat.completed}/${flat.items} in ${flat.elapsedMs}ms; batched ${batched.completed}/${batched.items} in ${batched.elapsedMs}ms.`,
+        degradationBegan: {
+          value: 'Not applicable: both layouts ran at one concurrency.',
+          evidence: 'UNKNOWN',
+        },
+        bottleneck: {
+          value:
+            flat.lostRaces > batched.lostRaces
+              ? 'One item per claim spends more of each claimant on losing races.'
+              : 'Batching did not reduce contention here.',
+          evidence: evidenceFor([flat, batched]),
+        },
+        recommendedSetting: {
+          value:
+            winner === null
+              ? 'Neither layout completed enough to recommend one.'
+              : `Prefer the ${winner} layout at ${concurrency} claimants${margin === null ? '' : ` (${Math.abs(margin)}% ${margin >= 0 ? 'faster' : 'slower'} than the alternative)`}.`,
+          evidence: evidenceFor([flat, batched]),
+        },
+        higherSetting: null,
+        configurationChanges: [],
+        effectOnBacklog: `${flat.completed + batched.completed} synthetic items drained across both layouts.`,
+        confidence: {
+          sampleSize: flat.completed + batched.completed,
+          note: 'Both layouts drained identical work through the same code path; only the shape differed.',
+        },
+        untested: [
+          PROVIDER_UNTESTED,
+          'Whether the same ordering holds for work whose per-item cost is dominated by a provider rather than by the queue.',
+        ],
+        highestTested: {
+          value: concurrency,
+          anythingFailed: flat.refusedCompletions + batched.refusedCompletions > 0,
+        },
+        findings: [
+          winner === null
+            ? 'No defensible recommendation: not enough completed.'
+            : `The ${winner} layout won on measured throughput at this concurrency.`,
+          'This compares layouts, not capacity. It says nothing about how many surfaces the fleet has.',
+        ],
+      },
+    });
+    return (await getExperiment(experiment.id))!;
+  }
+
+  if (experiment.mode === 'QUALITY_UNDER_PRESSURE') {
+    /*
+     * Quality measured separately from throughput, which is the whole point.
+     *
+     * §15.4 requires degradation to be a different reading from speed, so this
+     * drains the same backlog twice — once quietly, once at the declared
+     * ceiling — and compares the *failure* signals rather than the rate.
+     */
+    const low = await drain({
+      experimentId: experiment.id,
+      projectId: experiment.projectId,
+      concurrency: 1,
+      items: 40,
+      deadlineMs: deadlineForRung(experiment.envelope.durationMinutes, 2),
+    });
+    const high = await drain({
+      experimentId: experiment.id,
+      projectId: experiment.projectId,
+      concurrency: Math.max(2, Math.min(MAX_CONCURRENCY, Math.floor(experiment.envelope.ceiling))),
+      items: 40,
+      deadlineMs: deadlineForRung(experiment.envelope.durationMinutes, 2),
+    });
+    const lowLossRate = low.claimed === 0 ? null : low.lostRaces / (low.lostRaces + low.claimed);
+    const highLossRate =
+      high.claimed === 0 ? null : high.lostRaces / (high.lostRaces + high.claimed);
+    const degraded =
+      lowLossRate !== null && highLossRate !== null && highLossRate > lowLossRate + 0.1;
+    await settle(experiment.id, {
+      state: 'COMPLETE',
+      at: nowIso(),
+      result: {
+        whatWasTested:
+          'Whether quality signals worsen under concurrency, read separately from how fast the backlog drained.',
+        whatHappened: `quiet: ${low.completed} completed, ${low.refusedCompletions} refused, ${low.lostRaces} lost races. Pressed: ${high.completed} completed, ${high.refusedCompletions} refused, ${high.lostRaces} lost races.`,
+        degradationBegan: {
+          value: degraded
+            ? `Between 1 and ${high.concurrency} claimants: the share of claim calls that lost a race rose from ${Math.round((lowLossRate ?? 0) * 100)}% to ${Math.round((highLossRate ?? 0) * 100)}%.`
+            : 'No quality degradation was observed between the quiet and pressed runs.',
+          evidence: evidenceFor([low, high]),
+        },
+        bottleneck: {
+          value: degraded
+            ? 'Contention on the claim, not completion: the work still succeeded, the claimants just competed for it.'
+            : 'Neither run showed a quality signal worth acting on.',
+          evidence: evidenceFor([low, high]),
+        },
+        recommendedSetting: {
+          value: degraded
+            ? `Stay below ${high.concurrency} claimants for this workload unless throughput matters more than wasted claims.`
+            : `Quality held to ${high.concurrency} claimants.`,
+          evidence: evidenceFor([low, high]),
+        },
+        higherSetting: null,
+        configurationChanges: [],
+        effectOnBacklog: `${low.completed + high.completed} synthetic items drained. Nothing real was touched.`,
+        confidence: {
+          sampleSize: low.completed + high.completed,
+          note: 'Quality here means refused completions and lost claims — queue-level facts, not a judgement about research output.',
+        },
+        untested: [
+          PROVIDER_UNTESTED,
+          'Whether the *content* quality of real research degrades under concurrency. Nothing in this lab reads a claim or an audit, so it cannot say.',
+        ],
+        highestTested: {
+          value: high.concurrency,
+          anythingFailed: low.refusedCompletions + high.refusedCompletions > 0,
+        },
+        findings: [
+          degraded
+            ? 'Quality degraded before throughput did, which is the reading this mode exists to produce.'
+            : 'No degradation found inside the declared ceiling. That is a bound, not an absence of one.',
+          'Research quality under pressure is explicitly not measured here and is named in the untested list.',
+        ],
+      },
+    });
+    return (await getExperiment(experiment.id))!;
+  }
+
+  if (experiment.mode === 'RECOVERY_DRILL') {
+    const drill = await runRecoveryDrill({
+      experimentId: experiment.id,
+      projectId: experiment.projectId,
+    });
+    const allHeld = drill.leaseTakenOver && drill.lateCompletionFenced && drill.cancellationFenced;
+    await settle(experiment.id, {
+      state: 'COMPLETE',
+      at: nowIso(),
+      result: {
+        whatWasTested:
+          'A worker abandoning a lease mid-flight: whether the work comes back, whether the dead owner is fenced, and whether cancellation wins.',
+        whatHappened: `lease taken over: ${drill.leaseTakenOver}; late completion fenced: ${drill.lateCompletionFenced}${drill.lateCompletionRejection ? ` (${drill.lateCompletionRejection})` : ''}; completion after cancellation fenced: ${drill.cancellationFenced}. Waited ${drill.waitedMs}ms for the lease to expire.`,
+        degradationBegan: {
+          value: 'Not applicable to a recovery drill.',
+          evidence: 'UNKNOWN',
+        },
+        bottleneck: {
+          value: allHeld
+            ? 'Nothing: recovery is automatic and does not depend on any process staying alive.'
+            : 'A recovery guarantee did not hold and must be investigated before anything is dispatched.',
+          evidence: 'MEASURED',
+        },
+        recommendedSetting: {
+          value: allHeld
+            ? 'No change. An expired lease is claimable work and a late write cannot land.'
+            : 'Do not raise concurrency until the failing guarantee is understood.',
+          evidence: 'MEASURED',
+        },
+        higherSetting: null,
+        configurationChanges: [],
+        effectOnBacklog: 'One synthetic item, cancelled at the end of the drill.',
+        confidence: {
+          sampleSize: 1,
+          note: 'A real lease was allowed to expire rather than edited, so the recovery is the deployed behaviour.',
+        },
+        untested: [
+          PROVIDER_UNTESTED,
+          'Whether a Cowork session that dies mid-bin is noticed as quickly as a queue lease expiring.',
+          ...(drill.crossIdentity
+            ? []
+            : ['Takeover by a *different* worker identity: only one is registered in this scope.']),
+        ],
+        highestTested: { value: 1, anythingFailed: !allHeld },
+        findings: [
+          drill.leaseTakenOver
+            ? drill.crossIdentity
+              ? 'An abandoned lease was claimed by a different worker identity, with no sweeper involved.'
+              : 'An abandoned lease became claimable again and was reclaimed. Only one claimant identity is registered in this scope, so cross-identity takeover is NOT established by this run.'
+            : 'The abandoned lease was NOT reclaimed — this is a failure, recorded as one.',
+          drill.lateCompletionFenced
+            ? `The dead owner's completion matched nothing (${drill.lateCompletionRejection}).`
+            : 'The dead owner was able to complete after its lease expired — this is a failure, recorded as one.',
+          drill.cancellationFenced
+            ? 'A completion after cancellation matched nothing, so cancellation wins.'
+            : 'Cancellation did not fence the live owner — this is a failure, recorded as one.',
+        ],
+      },
+    });
+    return (await getExperiment(experiment.id))!;
+  }
+
+  /*
+   * A mode with no runner at all.
+   *
+   * Unreachable while `LAB_MODES` and the branches above agree, and kept
+   * because the alternative is a mode falling through to `RUNNING` for ever.
+   * It names the mode rather than describing a category, so adding one without
+   * a runner produces a sentence somebody can act on.
    */
   await settle(experiment.id, {
     state: 'REFUSED',
     at: nowIso(),
-    refusalReason: `${MODE_LABELS[experiment.mode]} puts real pressure on real surfaces and is declared but not implemented in this version. Nothing was run and nothing was spent.`,
+    refusalReason: `${MODE_LABELS[experiment.mode]} has no runner in this build. Nothing was run and nothing was spent.`,
   });
   return (await getExperiment(experiment.id))!;
 }
@@ -668,6 +1066,16 @@ export async function applyFinding(input: {
   if (experiment.state !== 'COMPLETE') {
     throw new Error('Only a completed experiment can be applied.');
   }
+  /*
+   * What is being displaced, read *before* the canary replaces it.
+   *
+   * This is the whole fix. Reading it afterwards — "the newest policy that is
+   * not this one" — answers a different question, and the two answers differ in
+   * both directions: over an empty history it finds nothing and falls back to
+   * the canary itself, and after any later policy it finds that one instead.
+   */
+  const displaced = await currentPolicy('FLEET', null);
+
   const policy = await setPolicy({
     scope: 'FLEET',
     target: input.target,
@@ -677,9 +1085,10 @@ export async function applyFinding(input: {
   const now = nowIso();
   await getDb().run(
     `UPDATE capability_experiments
-        SET applied_policy_id = ?, applied_at = ?, rolled_back_at = NULL, updated_at = ?
+        SET applied_policy_id = ?, displaced_policy_id = ?, displaced_target = ?,
+            applied_at = ?, rolled_back_at = NULL, updated_at = ?
       WHERE id = ?`,
-    [policy.id, now, now, input.experimentId],
+    [policy.id, displaced?.id ?? null, displaced?.target ?? null, now, now, input.experimentId],
   );
   return (await getExperiment(input.experimentId))!;
 }
@@ -701,18 +1110,23 @@ export async function rollbackFinding(input: {
   if (!experiment.appliedPolicyId) {
     throw new Error('That experiment has not been applied, so there is nothing to roll back.');
   }
-  const before = await getDb().get<{ target: number }>(
-    `SELECT target FROM fleet_policy
-      WHERE scope = 'FLEET' AND scope_id IS NULL AND id <> ?
-      ORDER BY version DESC LIMIT 1`,
-    [experiment.appliedPolicyId],
-  );
-  const current = await currentPolicy('FLEET', null);
+  /*
+   * The named prior policy, read from the row rather than searched for.
+   *
+   * An experiment that displaced nothing rolls back to nothing — and "nothing"
+   * has to mean something concrete, so it is the dispatcher's own default
+   * rather than whatever the canary happened to set. Restoring the canary's
+   * value and calling it a rollback is the defect this replaced.
+   */
+  const target = experiment.displacedTarget;
   await setPolicy({
     scope: 'FLEET',
-    target: before?.target ?? current?.target ?? 1,
+    target: target ?? DEFAULT_TARGET_WITH_NO_PRIOR_POLICY,
     actor: input.actor,
-    reason: `Rolled back: ${input.reason}`,
+    reason:
+      target === null
+        ? `Rolled back to no prior policy (the dispatcher default): ${input.reason}`
+        : `Rolled back to the target this canary displaced (${target}): ${input.reason}`,
   });
   const now = nowIso();
   await getDb().run(

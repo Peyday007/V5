@@ -3898,6 +3898,12 @@ export const COMPLETION_CONTRACTS = [
   // One conversation turn. The worker submits a structured proposal and Brain
   // decides what, if anything, it causes — see `services/russell/turn.ts`.
   'RUSSELL_TURN_V1',
+  // One discovery lens that only a reader can answer. The worker submits
+  // findings that each cite rows the project already holds; Brain validates
+  // them, discards the ones whose citations do not resolve or that restate
+  // something already held, and stores the rest as proposals a person accepts.
+  // See `services/russell/inquiry.ts`.
+  'RUSSELL_LENS_V1',
   // One captured idea, read. The worker submits what only a reader of the
   // question can judge — is the uncertainty cheap to reduce, what would a
   // packet have to establish, what is it worth — and Brain turns that into a

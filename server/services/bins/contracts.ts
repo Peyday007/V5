@@ -842,6 +842,7 @@ const EVALUATORS: Record<string, Evaluator> = {
   RESEARCH_PACKET_V1: evaluateResearchPacket,
   SURFACE_PROBE_V1: evaluateSurfaceProbe,
   RUSSELL_TURN_V1: evaluateRussellTurn,
+  RUSSELL_LENS_V1: evaluateRussellLens,
   FACTORY_PLAN_V1: evaluateFactoryPlan,
   FACTORY_UNITS_V1: evaluateFactoryUnits,
   FACTORY_INTEGRATION_V1: evaluateFactoryIntegration,
@@ -886,6 +887,44 @@ async function evaluateRussellTurn(bin: Bin): Promise<ContractVerdict> {
   }
   if (typeof (parsed as Record<string, unknown>)['action'] !== 'string') {
     return refuse('RETRY', ['The proposal named no action.'], observed);
+  }
+  return satisfied(observed);
+}
+
+/**
+ * One discovery lens, answered.
+ *
+ * Deliberately shallow, and the shallowness is the design. This decides only
+ * whether the *bin* may finish — whether something answering the question
+ * arrived at all — and every judgement about whether a finding is real happens
+ * in `services/russell/inquiry.ts`, after the lease is gone. Putting the
+ * validation here would make a worker's bin fail because its findings did not
+ * survive, which would charge an attempt against a worker that answered
+ * correctly and found nothing.
+ *
+ * An empty `findings` array is therefore a **pass**: "I looked and there is
+ * nothing" is the answer this lens most often has, and a contract that refused
+ * it would be paying for optimism.
+ */
+async function evaluateRussellLens(bin: Bin): Promise<ContractVerdict> {
+  const results = await listBinUnitResults(bin.id);
+  const submitted = results.find((row) => row.unitKey === 'lens_findings');
+  const observed = { unitsSubmitted: results.length, hasFindings: Boolean(submitted) };
+
+  if (!submitted) {
+    return refuse('RETRY', ['No findings were submitted, so the lens was not answered.'], observed);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(submitted.value);
+  } catch {
+    return refuse('RETRY', ['The findings were not valid JSON.'], observed);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return refuse('RETRY', ['The findings were not a structured object.'], observed);
+  }
+  if (!Array.isArray((parsed as Record<string, unknown>)['findings'])) {
+    return refuse('RETRY', ['The reply carried no "findings" array.'], observed);
   }
   return satisfied(observed);
 }

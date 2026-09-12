@@ -97,17 +97,7 @@ export function FrontierView_({ projectId }: { projectId: string | null }): JSX.
         must not do. Each carries the subject it is about, because the same
         question asked about nothing is a slogan.
       */}
-      <section className="rs-group rs-at-interested">
-        <h4 className="rs-group-title">Questions Russell cannot answer by itself</h4>
-        <ul className="rs-list">
-          {frontier.openLenses.map((lens) => (
-            <li key={lens.lens}>
-              <span className="rs-item-title">{lens.question}</span>
-              {lens.about ? <span className="rs-item-meta">About: {lens.about}</span> : null}
-            </li>
-          ))}
-        </ul>
-      </section>
+      <AskedLenses projectId={projectId} openLenses={frontier.openLenses} />
 
       {/* What this pass produced, so the capability can be measured rather
           than merely claimed. */}
@@ -115,6 +105,190 @@ export function FrontierView_({ projectId }: { projectId: string | null }): JSX.
         {frontier.counts.live} live · {frontier.counts.dismissed} marked not required ·{' '}
         {frontier.counts.resolved} no longer on the frontier
       </p>
+    </div>
+  );
+}
+
+/**
+ * The questions only a reader can settle, and the path to settling one.
+ *
+ * These used to be a list with nothing behind it: five questions on a screen
+ * and no way to ask any of them. A question a person can read and cannot act
+ * on is the same defect as a state that says "waiting for a person" with no
+ * transition out — so each one now carries **Ask this**, which opens a governed
+ * inquiry, and the findings that come back are decided here rather than
+ * applied.
+ *
+ * What is deliberately *not* here: any way for this screen to accept a finding
+ * automatically, and any rendering of a finding that did not survive
+ * validation. A discarded proposal is shown as a count and a reason, never as
+ * something a person can promote — the server already decided it does not
+ * resolve to a row, and offering it anyway would put the judgement back in the
+ * place this whole path took it out of.
+ */
+function AskedLenses({
+  projectId,
+  openLenses,
+}: {
+  projectId: string | null;
+  openLenses: { lens: string; question: string; about: string | null }[];
+}): JSX.Element {
+  const query = useAsync(
+    () => (projectId ? RussellApi.lenses(projectId) : Promise.resolve(null)),
+    [projectId],
+  );
+  const [busy, setBusy] = useState<string | null>(null);
+  const inquiries = query.data?.inquiries ?? [];
+
+  return (
+    <section className="rs-group rs-at-interested">
+      <h4 className="rs-group-title">Questions Russell cannot answer by itself</h4>
+      <ul className="rs-list">
+        {openLenses.map((lens) => {
+          const inquiry = inquiries.find((entry) => entry.lens === lens.lens) ?? null;
+          return (
+            <li key={lens.lens}>
+              <article className="rs-card">
+                <div className="rs-row">
+                  <span className="rs-item-title">{lens.question}</span>
+                  {inquiry ? (
+                    <span className="rs-pill">{INQUIRY_WORDS[inquiry.state] ?? inquiry.state}</span>
+                  ) : null}
+                </div>
+                {lens.about ? <p className="rs-item-meta">About: {lens.about}</p> : null}
+
+                {inquiry === null || inquiry.state === 'FAILED' || inquiry.state === 'REFUSED' ? (
+                  <button
+                    type="button"
+                    className="rs-button"
+                    disabled={busy !== null || !projectId}
+                    onClick={() => {
+                      if (!projectId) return;
+                      setBusy(lens.lens);
+                      void RussellApi.askLens(projectId, lens.lens)
+                        .then(() => query.reload())
+                        .finally(() => setBusy(null));
+                    }}
+                  >
+                    {busy === lens.lens ? 'Asking…' : 'Ask this'}
+                  </button>
+                ) : null}
+
+                {inquiry?.refusalReason ? (
+                  <p className="rs-item-meta">{inquiry.refusalReason}</p>
+                ) : null}
+
+                {inquiry && inquiry.state === 'ANSWERED' ? (
+                  <Findings inquiry={inquiry} projectId={projectId} onChanged={query.reload} />
+                ) : null}
+              </article>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** What an inquiry's state means, in words rather than an enum. */
+const INQUIRY_WORDS: Record<string, string> = {
+  REQUESTED: 'Waiting for a worker',
+  RUNNING: 'A worker is reading',
+  ANSWERED: 'Answered',
+  REFUSED: 'The answer did not hold up',
+  FAILED: 'Nothing came back',
+  CANCELLED: 'Stopped',
+};
+
+/**
+ * What came back, and what a person does with it.
+ *
+ * Each finding shows the rows it cites, because that is what separates it from
+ * an opinion: every one of those ids resolved to something this project holds
+ * when the server stored it.
+ */
+function Findings({
+  inquiry,
+  projectId,
+  onChanged,
+}: {
+  inquiry: {
+    id: string;
+    findings: { subject: string; statement: string; rationale: string; references: { kind: string; id: string }[] }[];
+    discarded: number;
+    discardReasons: string[];
+    decisions: { findingIndex: number; decision: string; reason: string | null }[];
+  };
+  projectId: string | null;
+  onChanged(): void;
+}): JSX.Element {
+  const [busy, setBusy] = useState<number | null>(null);
+  const decide = (index: number, decision: 'ACCEPTED' | 'DISMISSED'): void => {
+    if (!projectId) return;
+    setBusy(index);
+    void RussellApi.decideLensFinding(projectId, inquiry.id, index, decision)
+      .then(() => onChanged())
+      .finally(() => setBusy(null));
+  };
+
+  return (
+    <div className="rs-nested">
+      {inquiry.findings.length === 0 ? (
+        <p className="rs-item-meta">
+          Nothing survived. That is an answer: the worker looked and proposed nothing this
+          project's own rows could support.
+        </p>
+      ) : null}
+      <ul className="rs-list">
+        {inquiry.findings.map((finding, index) => {
+          const decided = inquiry.decisions.find((entry) => entry.findingIndex === index) ?? null;
+          return (
+            <li key={`${inquiry.id}-${index}`}>
+              <div className="rs-row">
+                <span className="rs-item-title">{finding.subject}</span>
+                {decided ? <span className="rs-pill">{decided.decision === 'ACCEPTED' ? 'Kept' : 'Dismissed'}</span> : null}
+              </div>
+              <p className="rs-item-meta">{finding.statement}</p>
+              <p className="rs-item-meta rs-at-interested">{finding.rationale}</p>
+              <p className="rs-ref rs-at-technical">
+                cites {finding.references.map((ref) => `${ref.kind} ${ref.id}`).join(', ')}
+              </p>
+              {decided === null ? (
+                <div className="rs-row">
+                  <button
+                    type="button"
+                    className="rs-button"
+                    disabled={busy !== null}
+                    onClick={() => decide(index, 'ACCEPTED')}
+                  >
+                    Put it on the frontier
+                  </button>
+                  <button
+                    type="button"
+                    className="rs-button rs-button-quiet"
+                    disabled={busy !== null}
+                    onClick={() => decide(index, 'DISMISSED')}
+                  >
+                    Not this
+                  </button>
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      {inquiry.discarded > 0 ? (
+        <details className="rs-at-technical">
+          <summary>{inquiry.discarded} proposal(s) did not survive validation</summary>
+          <ul className="rs-list">
+            {inquiry.discardReasons.map((reason, index) => (
+              <li key={index}>
+                <p className="rs-item-meta">{reason}</p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }

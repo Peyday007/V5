@@ -1,0 +1,23 @@
+-- Which policy a canary displaced, so rolling back returns to *that* one.
+--
+-- `rollbackFinding` looked for "the highest-version policy that is not the one
+-- the canary applied", which is not the same thing as "the one the canary
+-- displaced" and differs from it in two ways that both matter:
+--
+--   - with **no** prior policy it finds nothing and falls back to the current
+--     target, which is the canary's own value — so the rollback silently keeps
+--     what it was supposed to undo. Found by running the cycle: applied v1
+--     target=8 over no policy, rolled back to v2 target=8.
+--   - with a **later** policy written after the canary — a boost, an operator
+--     raising the target — it returns that one, so the rollback lands on
+--     whatever happened most recently rather than on what was there before.
+--
+-- §29 Q's words are "canaries roll back to the named prior policy", and a
+-- policy is only named if it was recorded at the moment it was displaced. So
+-- apply records it, and rollback reads it rather than searching for it.
+--
+-- Nullable because an experiment applied over an empty policy history genuinely
+-- displaced nothing, and that is a different fact from not knowing: the
+-- rollback then restores *no target*, which is the state it found.
+ALTER TABLE capability_experiments ADD COLUMN displaced_policy_id TEXT;
+ALTER TABLE capability_experiments ADD COLUMN displaced_target INTEGER;

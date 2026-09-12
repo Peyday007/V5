@@ -33,11 +33,31 @@ const EMAIL = 'visual-qa@example.invalid';
 const BOOTSTRAP = 'bootstrap-password-01';
 const PASSWORD = 'visual-qa-password-01';
 
-/** The two widths the requirement names. Nothing in between is claimed. */
+/**
+ * Three widths, and the middle one is the one that mattered.
+ *
+ * Desktop and phone were the original pair, and they were not enough: the
+ * rejected September 11 interface clipped between **822 and 953 pixels**, which
+ * is neither. That band is not an arbitrary sample — it is the width at which a
+ * rail, a main column and a detail column stop fitting side by side, and it is
+ * exactly where a viewport media query lies about how much room a component
+ * has. So 900 is captured as a first-class width rather than interpolated
+ * between the other two, and the band's edges are swept below.
+ */
 const VIEWPORTS = [
   { name: 'desktop', width: 1280, height: 900 },
+  { name: 'intermediate', width: 900, height: 900 },
   { name: 'phone', width: 390, height: 844 },
 ];
+
+/**
+ * The band the rejected build clipped in, swept rather than sampled.
+ *
+ * One width inside a range proves that width. The defect was a *range*, so the
+ * check walks its edges and its middle and fails on any of them — which is what
+ * makes "the clipping is gone" a claim about the band rather than about 900.
+ */
+const CLIPPING_BAND = [822, 860, 900, 953];
 
 /** Every destination in the shell, by the address that opens it. */
 const DESTINATIONS = [
@@ -47,6 +67,54 @@ const DESTINATIONS = [
   { name: 'knows', path: '/knowledge' },
   { name: 'who', path: '/fleet' },
   { name: 'needs-you', path: '/needs-you' },
+];
+
+/**
+ * Three things a person does, driven for real.
+ *
+ * Each one reads something before, does the thing, and reads the same something
+ * after — so the evidence is a *change*, not a click that may have landed on
+ * nothing. `act` returns false when the control is not there at all, which is a
+ * finding rather than a crash.
+ */
+const INTERACTIONS = [
+  {
+    name: 'open-a-section',
+    path: '/',
+    read: 'location.pathname',
+    act: `(() => {
+      const link = [...document.querySelectorAll('a,button')].find(
+        (el) => (el.textContent || '').trim().toLowerCase() === 'work',
+      );
+      if (!link) return false;
+      link.click();
+      return true;
+    })()`,
+  },
+  {
+    name: 'reveal-details',
+    path: '/needs-you',
+    read: "String(document.querySelectorAll('details[open]').length)",
+    act: `(() => {
+      const first = document.querySelector('details:not([open]) > summary');
+      if (!first) return false;
+      first.click();
+      return true;
+    })()`,
+  },
+  {
+    name: 'refuse-empty-search',
+    path: '/search',
+    read: "String(document.body.innerText).replace(/\\s+/g, ' ').slice(0, 60)",
+    act: `(() => {
+      const box = document.querySelector('input[type=search], input[type=text]');
+      if (!box) return false;
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(box, 'a');
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`,
+  },
 ];
 
 async function main(): Promise<void> {
@@ -171,6 +239,103 @@ async function main(): Promise<void> {
           console.log(`  console errors at ${viewport.name}:`);
           for (const problem of problems.slice(0, 10)) console.log(`    ${problem}`);
         }
+      }
+
+      /*
+       * The band, swept.
+       *
+       * Nothing is captured here unless something is wrong: a screenshot per
+       * width across four widths and six destinations is twenty-four images
+       * nobody looks at. What is recorded is the reading — does anything stick
+       * out past the viewport — and an image only where it does, because that
+       * is the one a person would need.
+       */
+      console.log('');
+      console.log('Sweeping the 822-953 band that the rejected build clipped in:');
+      let clipped = 0;
+      for (const width of CLIPPING_BAND) {
+        await cdp.send('Emulation.setDeviceMetricsOverride', {
+          width,
+          height: 900,
+          deviceScaleFactor: 1,
+          mobile: false,
+        });
+        for (const destination of DESTINATIONS) {
+          await cdp.send('Page.navigate', { url: `${BASE}${destination.path}` });
+          await waitFor(cdp, "document.querySelector('.rs-shell') !== null");
+          await sleep(500);
+          const overflow = String(
+            await evaluate(
+              cdp,
+              `(() => {
+                const limit = document.documentElement.clientWidth;
+                const bad = [];
+                for (const el of document.querySelectorAll('*')) {
+                  const box = el.getBoundingClientRect();
+                  if (box.right > limit + 1 || box.left < -1) {
+                    bad.push((el.className || el.tagName) + '@' + Math.round(box.left) + '..' + Math.round(box.right));
+                  }
+                }
+                return bad.slice(0, 4).join(' | ');
+              })()`,
+            ),
+          );
+          if (overflow) {
+            clipped += 1;
+            console.log(`  ${width}px ${destination.name}: CLIPS -> ${overflow}`);
+            const shot = (await cdp.send('Page.captureScreenshot', {
+              format: 'png',
+              captureBeyondViewport: true,
+            })) as { data: string };
+            fs.writeFileSync(
+              path.join(outputDir, `clip-${width}-${destination.name}.png`),
+              Buffer.from(shot.data, 'base64'),
+            );
+          }
+        }
+      }
+      console.log(
+        clipped === 0
+          ? `  nothing clips at any of ${CLIPPING_BAND.join(', ')}px across ${DESTINATIONS.length} destinations`
+          : `  ${clipped} clipping(s) found — images written`,
+      );
+
+      /*
+       * And that the thing a person does actually works.
+       *
+       * A screenshot proves a layout rendered. It cannot tell you whether the
+       * control under the cursor does anything, and §29's own rule is that the
+       * visual gate is not passed by tests alone. So this drives three real
+       * interactions at phone width — where the rail collapses and where a
+       * broken control is most likely — and prints what changed.
+       */
+      console.log('');
+      console.log('Interactions, at phone width:');
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 2,
+        mobile: true,
+      });
+      for (const step of INTERACTIONS) {
+        await cdp.send('Page.navigate', { url: `${BASE}${step.path}` });
+        await waitFor(cdp, "document.querySelector('.rs-shell') !== null");
+        await sleep(600);
+        const before = String(await evaluate(cdp, step.read));
+        const acted = await evaluate(cdp, step.act);
+        await sleep(700);
+        const after = String(await evaluate(cdp, step.read));
+        const shot = (await cdp.send('Page.captureScreenshot', { format: 'png' })) as {
+          data: string;
+        };
+        fs.writeFileSync(
+          path.join(outputDir, `interaction-${step.name}.png`),
+          Buffer.from(shot.data, 'base64'),
+        );
+        console.log(
+          `  ${step.name.padEnd(18)} ${acted ? 'acted' : 'NO CONTROL FOUND'}  ` +
+            `${before.slice(0, 40)} -> ${after.slice(0, 40)}`,
+        );
       }
     });
 
