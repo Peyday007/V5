@@ -667,21 +667,111 @@ const JOURNEY_DECISION: JourneyStep[] = [
     act: railPress('Work'),
     until: "location.pathname === '/work'",
     patience: 30_000,
-    read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 110)",
+    /*
+     * The mission's own card, by the objective on it — not the first 110
+     * characters of the page.
+     *
+     * The owner's objection to the previous version of this leg was that it
+     * only checked arrival. A screen at `/work` is routing; a card carrying the
+     * objective of the mission this journey caused is the work.
+     */
+    read: `(() => {
+      const cards = [...document.querySelectorAll('.rs-mission')];
+      const mine = cards.find((card) => /recording|deed|Parcel 118/i.test(card.textContent || ''));
+      if (!mine) return cards.length + ' mission card(s), none matching the journey’s idea';
+      const objective = mine.querySelector('.rs-mission-objective');
+      const next = mine.querySelector('.rs-mission-next');
+      return (objective ? (objective.textContent || '').trim().slice(0, 50) : 'no objective') +
+        ' — ' + (next ? (next.textContent || '').trim().slice(0, 50) : 'no state');
+    })()`,
   },
 ];
 
 /** Where a result is read, once the decision above has let the work carry on. */
 const JOURNEY_AFTER: JourneyStep[] = [
   {
-    name: '21-knows',
-    what: 'Knows, from the thumb bar: what the project believes and what each thing rests on. Where the result of work is read, once there is one.',
-    act: railPress('Knows'),
-    until: "location.pathname === '/knowledge'",
-    read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 90)",
+    name: '21-what-the-work-actually-is',
+    what:
+      'The work identified rather than merely visible: the reader turns the depth up to ' +
+      'Technical from the More sheet, opens “How it is being done” on that mission, and reads ' +
+      'the ids Brain is working under — the mission, its packet, its bin, and the document it ' +
+      'has filed once there is one.',
+    /*
+     * Three presses in one step, because they are one gesture from a person's
+     * side: open More, choose Technical, expand the mission's detail. The
+     * `details` element is `rs-at-technical`, so it is not in the document at
+     * all until the depth changes — which is what makes this a real depth
+     * control rather than a class toggle.
+     */
+    act: `(async () => {
+      const more = [...document.querySelectorAll('.rs-more button')].find(
+        (b) => /more/i.test(b.textContent || ''),
+      );
+      if (!more) return false;
+      more.click();
+      await new Promise((r) => setTimeout(r, 400));
+      const technical = [...document.querySelectorAll('button')].find(
+        (b) => (b.textContent || '').trim() === 'Technical',
+      );
+      if (!technical) return 'the depth control is not on the screen';
+      technical.click();
+      await new Promise((r) => setTimeout(r, 900));
+      const card = [...document.querySelectorAll('.rs-mission')].find(
+        (el) => /recording|deed|Parcel 118/i.test(el.textContent || ''),
+      );
+      if (!card) return 'no mission card for the journey’s idea';
+      const how = card.querySelector('.rs-mission-how');
+      if (!how) return 'the technical detail is not on the card';
+      how.open = true;
+      how.scrollIntoView({ block: 'center' });
+      return 'turned the depth up and opened the mission’s detail';
+    })()`,
+    until: "document.querySelector('.rs-mission-how[open]') !== null",
+    patience: 30_000,
+    read: `(() => {
+      const how = document.querySelector('.rs-mission-how[open]');
+      if (!how) return 'nothing opened';
+      const pairs = [];
+      const terms = [...how.querySelectorAll('dt')];
+      const values = [...how.querySelectorAll('dd')];
+      for (let i = 0; i < terms.length; i += 1) {
+        pairs.push((terms[i].textContent || '').trim() + '=' + ((values[i] || {}).textContent || '').trim());
+      }
+      return pairs.join(' ');
+    })()`,
   },
   {
-    name: '22-who-and-fleet',
+    name: '22-knows',
+    what:
+      'Knows: what this project actually believes, read rather than arrived at. Either it names ' +
+      'a conclusion and what it rests on, or it says in its own words that nothing has been ' +
+      'concluded here yet — and which of those it is, is the evidence.',
+    act: railPress('Knows'),
+    until: "location.pathname === '/knowledge'",
+    /*
+     * What the page *holds*, not its first ninety characters. A count of real
+     * knowledge rows, grouped as the server classified them, or the server's
+     * own sentence for why there are none.
+     */
+    read: `(() => {
+      const groups = [...document.querySelectorAll('.rs-group')].map((g) => {
+        const title = g.querySelector('.rs-group-title');
+        const count = g.querySelector('.rs-count');
+        return (title ? (title.textContent || '').replace(/\\s+/g, ' ').trim() : '?') +
+          (count ? '' : '');
+      });
+      const cards = document.querySelectorAll('.rs-card .rs-item-title');
+      if (cards.length === 0) {
+        const empty = document.querySelector('.rs-state, .rs-nothing, .rs-empty');
+        return 'nothing concluded yet — ' +
+          (empty ? (empty.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 80) : 'no reason given');
+      }
+      return cards.length + ' conclusion(s): ' + groups.join(' | ') + ' — ' +
+        [...cards].slice(0, 2).map((c) => (c.textContent || '').trim().slice(0, 40)).join(' · ');
+    })()`,
+  },
+  {
+    name: '23-who-and-fleet',
     what: 'Who, from the thumb bar: the people on the project and the fleet behind it — three capacity numbers that are not each other.',
     act: railPress('Who'),
     // `/fleet`, not `/who`. The rail's label and the address are different
@@ -1690,6 +1780,23 @@ const JOURNEY_EFFECTS: {
   missionStateBefore: string | null;
   missionStateAfter: string | null;
   requestSettled: boolean | null;
+  /**
+   * The result half, which navigation cannot supply.
+   *
+   * The owner named this exactly: *"'21-knows' only checks arrival at
+   * /knowledge; no assertion identifies and inspects the resulting answer or
+   * work output."* Both were true. Arriving at an address is routing. These
+   * are what the reader can actually **read** about the work the journey
+   * caused, and the last three are deliberately the ones a checkout cannot
+   * settle — a filed document, a conclusion, an answered question all need a
+   * worker that reached the sources.
+   */
+  workIdentifiedOnScreen: boolean | null;
+  workIdsOnScreen: string | null;
+  filedDocumentOnScreen: string | null;
+  knowledgeRows: number | null;
+  knowledgeCitingThisMission: number | null;
+  askedTurnStatus: string | null;
 } = {
   standingAuthorityGranted: null,
   ideaOverriddenByAPerson: null,
@@ -1701,6 +1808,12 @@ const JOURNEY_EFFECTS: {
   missionStateBefore: null,
   missionStateAfter: null,
   requestSettled: null,
+  workIdentifiedOnScreen: null,
+  workIdsOnScreen: null,
+  filedDocumentOnScreen: null,
+  knowledgeRows: null,
+  knowledgeCitingThisMission: null,
+  askedTurnStatus: null,
 };
 
 /**
@@ -2345,6 +2458,69 @@ async function persistedEffects(
     }
   }
 
+  /*
+   * The result, and the honest absence of one.
+   *
+   * Knows is where the *answer* to work is read, and the journey's step 22
+   * reads what the page holds rather than that it arrived. This is the same
+   * question asked of the rows, so the reporter can tell three things apart:
+   * a conclusion that cites this mission, a project that truthfully holds
+   * none yet, and a read that failed.
+   *
+   * A checkout Brain fires no worker, so the expected answer here is **none**
+   * — and that is recorded as an open condition needing production rather
+   * than passed over. Inventing one would be inventing a research result.
+   */
+  if (seeded.projectId) {
+    const knowledge = await read(`/api/russell/projects/${seeded.projectId}/knowledge`);
+    const rows = Array.isArray(knowledge?.['knowledge'])
+      ? (knowledge['knowledge'] as Record<string, unknown>[])
+      : [];
+    JOURNEY_EFFECTS.knowledgeRows = knowledge === null ? null : rows.length;
+    JOURNEY_EFFECTS.knowledgeCitingThisMission =
+      knowledge === null
+        ? null
+        : rows.filter((row) => row['missionId'] === parked.missionId).length;
+    console.log(
+      `  what Russell knows   ${
+        knowledge === null
+          ? 'could not be read'
+          : `${rows.length} conclusion(s), ${JOURNEY_EFFECTS.knowledgeCitingThisMission} citing ` +
+            `${parked.missionId ?? 'the journey’s mission'}`
+      }` +
+        (JOURNEY_EFFECTS.filedDocumentOnScreen
+          ? `, filed document ${JOURNEY_EFFECTS.filedDocumentOnScreen}`
+          : ', no filed document yet'),
+    );
+  }
+
+  /*
+   * And the question a person typed at step 03, which is the other half of the
+   * same boundary: no inference is bought here, so Russell's answer is a bin a
+   * worker has to take. A checkout leaves it PENDING, truthfully.
+   */
+  if (seeded.projectId) {
+    const conversations = await read('/api/russell/conversations');
+    const threads = Array.isArray(conversations?.['conversations'])
+      ? (conversations['conversations'] as Record<string, unknown>[])
+      : [];
+    const thread = threads[0];
+    if (thread && typeof thread['id'] === 'string') {
+      const detail = await read(`/api/russell/conversations/${thread['id']}`);
+      // `turns`, which is what the route returns — the same rows the
+      // conversation screen renders, with their pending detail derived.
+      const messages = Array.isArray(detail?.['turns'])
+        ? (detail['turns'] as Record<string, unknown>[])
+        : [];
+      const reply = [...messages].reverse().find((message) => message['role'] === 'RUSSELL');
+      JOURNEY_EFFECTS.askedTurnStatus =
+        reply && typeof reply['status'] === 'string' ? (reply['status'] as string) : null;
+      console.log(
+        `  the question asked   Russell's turn is ${JOURNEY_EFFECTS.askedTurnStatus ?? 'not readable'}`,
+      );
+    }
+  }
+
   /* And that the work surface now reflects it, rather than only the idea. */
   if (seeded.projectId) {
     const work = await read(`/api/russell/projects/${seeded.projectId}/work`);
@@ -2646,6 +2822,47 @@ async function driveJourney(
     }
     findings.push(...(await walk(cdp, outputDir, JOURNEY_DECISION)));
     findings.push(...(await walk(cdp, outputDir, JOURNEY_AFTER)));
+    /*
+     * What the technical detail actually said, held against the ids Brain
+     * wrote.
+     *
+     * Read off the screen after the walk rather than inside the step, because
+     * the step's job is to press and this one's is to check — and what it
+     * checks is that the pairs a person can see name **this** mission and
+     * **this** packet, rather than merely being present and plausible.
+     */
+    const pairs = String(
+      await evaluate(
+        cdp,
+        `(() => {
+          const how = document.querySelector('.rs-mission-how[open]');
+          if (!how) return '';
+          const terms = [...how.querySelectorAll('dt')].map((t) => (t.textContent || '').trim());
+          const values = [...how.querySelectorAll('dd')].map((d) => (d.textContent || '').trim());
+          return terms.map((t, i) => t + '=' + (values[i] || '')).join(' ');
+        })()`,
+      ),
+    );
+    JOURNEY_EFFECTS.workIdsOnScreen = pairs || null;
+    JOURNEY_EFFECTS.workIdentifiedOnScreen =
+      parked.missionId !== null &&
+      pairs.includes(parked.missionId) &&
+      (parked.orchestrationId === null || pairs.includes(parked.orchestrationId));
+    const filed = /Filed document=(\S+)/.exec(pairs);
+    JOURNEY_EFFECTS.filedDocumentOnScreen = filed ? (filed[1] ?? null) : null;
+    console.log(
+      `  the work, identified ${
+        JOURNEY_EFFECTS.workIdentifiedOnScreen
+          ? `on screen by its own ids — ${pairs.slice(0, 90)}`
+          : `NOT MATCHED — read "${pairs.slice(0, 90)}"`
+      }`,
+    );
+    if (parked.missionId !== null && JOURNEY_EFFECTS.workIdentifiedOnScreen === false) {
+      findings.push(
+        'the mission’s technical detail on the phone does not name the mission and packet the ' +
+          'journey actually caused',
+      );
+    }
     /*
      * The effects, read out of the database rather than off the screen.
      *

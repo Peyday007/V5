@@ -4965,6 +4965,12 @@ async function main(): Promise<void> {
       missionStateBefore: string | null;
       missionStateAfter: string | null;
       requestSettled: boolean | null;
+      workIdentifiedOnScreen?: boolean | null;
+      workIdsOnScreen?: string | null;
+      filedDocumentOnScreen?: string | null;
+      knowledgeRows?: number | null;
+      knowledgeCitingThisMission?: number | null;
+      askedTurnStatus?: string | null;
     };
     findings: string[];
   }
@@ -5082,6 +5088,61 @@ async function main(): Promise<void> {
           `(packet ${effects.parkedOrchestrationId ?? 'none'})`
         : 'the record carries no effects at all',
     ),
+    /* -- the result, which navigation cannot supply -------------------------- */
+    /*
+     * The owner's second review of J, and it was right: *"'21-knows' only
+     * checks arrival at /knowledge; no assertion identifies and inspects the
+     * resulting answer or work output."*
+     *
+     * Three conditions replace that, and they are deliberately of two kinds.
+     * The first is a **checkout** fact — the work this journey caused can be
+     * identified on the phone, by the ids Brain wrote, at the depth a reader
+     * turns up to see them. The other two are facts about a **result**, which
+     * needs a worker that reached the sources; they are open against
+     * PRODUCTION rather than passed from navigation, and rather than blocking
+     * the deployment that would answer them.
+     */
+    fromCheckout(
+      'the work the journey caused is identifiable on the phone, by the ids Brain wrote for it',
+      effects?.workIdentifiedOnScreen === true,
+      effects?.workIdsOnScreen
+        ? `the mission's own detail reads: ${effects.workIdsOnScreen.slice(0, 150)}`
+        : 'no technical detail was read off the mission card',
+    ),
+    effects && (effects.knowledgeCitingThisMission ?? 0) > 0
+      ? fromCheckout(
+          'and its result was inspected there — a conclusion under Knows citing that mission',
+          true,
+          `${effects.knowledgeCitingThisMission} conclusion(s) cite ` +
+            `${effects.parkedMissionId ?? 'the mission'}, of ${effects.knowledgeRows ?? 0} in the project`,
+        )
+      : {
+          name: 'and its result was inspected there — a conclusion under Knows citing that mission',
+          held: null,
+          saw:
+            `Knows holds ${effects?.knowledgeRows ?? 'an unread number of'} conclusion(s) and none ` +
+            `cites ${effects?.parkedMissionId ?? 'the journey’s mission'}` +
+            `${effects?.filedDocumentOnScreen ? `, though a document ${effects.filedDocumentOnScreen} is filed` : ', and no document is filed'}` +
+            '. A conclusion needs a claim through gate.ts and a judge’s verdict, which needs a ' +
+            'worker that reached the sources — so this Brain is correct to hold none, and ' +
+            'inventing one would be inventing a research result.',
+          needs: 'PRODUCTION',
+        },
+    effects?.askedTurnStatus === 'COMPLETE'
+      ? fromCheckout(
+          'the question a person typed was answered rather than left waiting',
+          true,
+          'Russell’s turn is COMPLETE',
+        )
+      : {
+          name: 'the question a person typed was answered rather than left waiting',
+          held: null,
+          saw:
+            `Russell’s turn is ${effects?.askedTurnStatus ?? 'not readable'}. §24: no inference is ` +
+            'bought, so a turn persists as PENDING with its reason and a worker answers it — ' +
+            'which a Brain with no fleet cannot do.',
+          needs: 'PRODUCTION',
+        },
     fromCheckout(
       'the harness itself found nothing outstanding on that run',
       journey !== null && journey.findings.length === 0,
@@ -5159,6 +5220,11 @@ async function main(): Promise<void> {
       'launches that idea and its packet stops outside what was preauthorized, answers the ' +
       'resulting decision, and reads the same mission carrying on — every one of those read ' +
       'back out of the rows through the product’s own routes, in that same journey. ' +
+      'The **result** half is separated from the navigation half deliberately, because the ' +
+      'owner caught this row awarding a pass from arrival: identifying the work on the phone by ' +
+      'the ids Brain wrote is a checkout fact and is asserted; a conclusion under Knows and an ' +
+      'answered question are facts about a worker having run, and stay open against PRODUCTION ' +
+      'rather than being read off a screen that merely loaded. ' +
       'The bound on all of it, stated rather than scored: portrait only, one device pixel ' +
       'ratio, Chromium only, no touch gestures and no on-screen keyboard. P13 asks for ' +
       'container reflow, the thumb bar and 44px targets and does not ask for a second engine, ' +
