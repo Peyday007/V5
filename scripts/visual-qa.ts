@@ -762,9 +762,23 @@ const JOURNEY_DECISION: JourneyStep[] = [
       button.click();
       return 'chose ' + (choice.querySelector('strong').textContent || '').trim();
     })()`,
-    // The card is gone because the list re-read from the server, not because
-    // anything here hid it — `NeedsYouView` takes no optimistic update.
-    until: "document.querySelector('.rs-decision-what') === null",
+    /*
+     * The *answered* offer is gone — not "no decision is on the page".
+     *
+     * The card goes because the list re-read from the server, not because
+     * anything here hid it: `NeedsYouView` takes no optimistic update. What
+     * changed is what else is allowed to be beside it. This used to wait for
+     * `.rs-decision-what === null`, which was true while this branch was the
+     * only thing seeding Needs You and became false the moment the Software
+     * Factory's conversational entrance merged and seeded a software decision
+     * of its own. **Neither branch was wrong; the merged tree was**, and a
+     * predicate about "no decision anywhere" is a predicate about what every
+     * other workstream happens to be doing. `deploymentOwnership` refuses a
+     * migration collision and a port collision and can never see this one.
+     */
+    until:
+      "![...document.querySelectorAll('.rs-choice')].some((el) => " +
+      "/authorize this plan/i.test(el.textContent || ''))",
     patience: 30_000,
     read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 90)",
   },
@@ -3245,6 +3259,16 @@ async function waitForParkedDecision(cookie: string, seeded: Seeded): Promise<Pa
  * `deviceScaleFactor: 2`; reusing its session would mean leaving the journey's
  * last screen in a state the next reader has to reason about.
  */
+/** The project this harness seeded everything into. */
+async function firstProjectId(cookie: string): Promise<string> {
+  const response = await fetch(`${BASE}/api/projects`, { headers: { cookie } });
+  if (!response.ok) return '';
+  const body = (await response.json()) as Record<string, unknown>;
+  const rows = Array.isArray(body['projects']) ? (body['projects'] as Record<string, unknown>[]) : [];
+  const first = rows[0]?.['id'];
+  return typeof first === 'string' ? first : '';
+}
+
 async function captureSettledNeedsYou(
   cookie: string,
   rendersDir: string,
@@ -3258,6 +3282,46 @@ async function captureSettledNeedsYou(
         'state of Needs You was never rendered',
     );
     return found;
+  }
+
+  /*
+   * Settle the *other* workstream's card before photographing "settled".
+   *
+   * `NeedsYouView` reaches `.rs-nothing` only when the request list is empty
+   * **and** `software.length === 0` **and** no grant is outstanding — which is
+   * right: §29 records that a page holding a software card must not announce
+   * "nothing needs your decision". `seedSoftwareDecision` puts one there so the
+   * Software Factory's entrance can be photographed earlier in this same pass,
+   * and it is still outstanding by the time this runs. So this address is
+   * genuinely not settled, and waiting for `.rs-nothing` was waiting for a
+   * state the merged tree cannot reach.
+   *
+   * It is **declined**, which is a real terminal answer that creates nothing —
+   * no campaign, no branch, no worker. Authorizing it would settle the card by
+   * starting work nobody asked for, which is the more expensive way to get the
+   * same picture. The card was already photographed with its Authorize button
+   * intact; what this removes is a decision that has been made.
+   */
+  const pending = await fetch(`${BASE}/api/russell/projects/${await firstProjectId(cookie)}/software`, {
+    headers: { cookie },
+  })
+    .then(async (response) => (response.ok ? ((await response.json()) as Record<string, unknown>) : null))
+    .catch(() => null);
+  const requests = Array.isArray(pending?.['software'])
+    ? (pending['software'] as Record<string, unknown>[])
+    : [];
+  for (const entry of requests) {
+    const request = entry['request'] as Record<string, unknown> | undefined;
+    const id = request?.['id'];
+    if (typeof id !== 'string') continue;
+    // The view's own derivation of "this is what a person has to answer next",
+    // rather than a state string guessed from outside the module that owns it.
+    if (entry['awaitingPerson'] !== true) continue;
+    await fetch(`${BASE}/api/russell/software/${id}/decline`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: BASE, cookie },
+      body: JSON.stringify({ reason: 'Not part of this run — the card has already been captured.' }),
+    }).catch(() => null);
   }
   console.log('');
   await withChromium(async (cdp) => {
