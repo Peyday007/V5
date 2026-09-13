@@ -1,0 +1,234 @@
+{
+  "takenAt": "2026-09-13T15:41:06.105Z",
+  "revision": "d62f64392a8b9db9c28e8bb93e35468c389827f7",
+  "phoneWidth": 390,
+  "steps": [
+    {
+      "step": "01-home",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "02-conversation",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "03-said-something",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "04-work",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "05-project-map",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "06-project-maps",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "map:System",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "map:Workflow",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "map:Knowledge",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "map:Decisions",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "map:Timeline",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "map:Money flow",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "15-ideas",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "16-open-the-idea",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "17-changed-the-priority",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "18-the-parked-decision",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "19-authorized-the-plan",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "20-the-mission-resumed",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "21-what-the-work-actually-is",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "22-knows",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "23-who-and-fleet",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "13-needs-you",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "14-back-home",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    }
+  ],
+  "effects": {
+    "standingAuthorityGranted": true,
+    "ideaOverriddenByAPerson": true,
+    "ideaPriority": "MUST_DO",
+    "russellsJudgmentKept": true,
+    "parkedMissionId": "rms_c48e96d27b51438098e0",
+    "parkedRequestId": "rhr_c442765bf6144e8c9a9f",
+    "parkedOrchestrationId": "orc_bd5188acdca2442189bd",
+    "missionStateBefore": "NEEDS_HUMAN",
+    "missionStateAfter": "RUNNING",
+    "requestSettled": true,
+    "workIdentifiedOnScreen": true,
+    "workIdsOnScreen": "Mission=rms_c48e96d27b51438098e0 Packet=orc_bd5188acdca2442189bd Bin=bin_d94695e5b3ac44daa5c2 State=NEEDS_HUMAN Attempt=1",
+    "filedDocumentOnScreen": null,
+    "knowledgeRows": 0,
+    "knowledgeCitingThisMission": 0,
+    "askedTurnStatus": "PENDING"
+  },
+  "stepsWalked": 23,
+  "stepsThatArrived": 23,
+  "stepsThatFit": 23,
+  "stepsWithNothingClipped": 23,
+  "unreachableControls": [],
+  "constellation": [
+    {
+      "width": 1180,
+      "layout": "orbit",
+      "nodes": 9,
+      "listed": 8,
+      "overlaps": 0,
+      "canvas": "866×541"
+    },
+    {
+      "width": 953,
+      "layout": "spine",
+      "nodes": 9,
+      "listed": 8,
+      "overlaps": 0,
+      "canvas": "647×256"
+    },
+    {
+      "width": 390,
+      "layout": "spine",
+      "nodes": 9,
+      "listed": 8,
+      "overlaps": 0,
+      "canvas": "316×341"
+    },
+    {
+      "width": 390,
+      "layout": "spine",
+      "nodes": 10,
+      "listed": 9,
+      "overlaps": 0,
+      "canvas": "316×434"
+    },
+    {
+      "width": 360,
+      "layout": "spine",
+      "nodes": 9,
+      "listed": 8,
+      "overlaps": 0,
+      "canvas": "286×358"
+    }
+  ],
+  "findings": []
+}

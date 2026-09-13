@@ -236,6 +236,11 @@ export const EVENT_TYPES = [
   // having to know there is a second log.
   'ACCESS_GRANTED',
   'ACCESS_REVOKED',
+  // An offer of access, which is not the same fact as access. A project's own
+  // history has to be able to say that somebody was invited and never came, or
+  // an invitation that was never accepted leaves no trace anywhere a person
+  // reading the project would look.
+  'ACCESS_INVITED',
 
   // Step 12A. A mission's completion writeback is a project-history fact:
   // it is the moment what the project believes actually changed, and the
@@ -3027,6 +3032,55 @@ export interface WorkerInvitation {
   expiresAt: string;
   redeemedAt: string | null;
   revokedAt: string | null;
+  note: string | null;
+}
+
+/**
+ * An invitation to a *person*, and the row behind §26's missing journey.
+ *
+ * Deliberately not `WorkerInvitationRow` under a wider name. A worker
+ * invitation names a worker and is redeemed by a browser approving a connector;
+ * this one names an email and a role and is redeemed by a person becoming a
+ * member. One table serving both would make a lookup for either satisfiable by
+ * the other, which is the kind of conflation invariant 23 exists to stop.
+ */
+export interface ProjectInvitationRow {
+  id: string;
+  project_id: string;
+  invited_email: string;
+  role: string;
+  token_prefix: string;
+  token_digest: string;
+  invited_by_user_id: string;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  accepted_user_id: string | null;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+  note: string | null;
+}
+
+/**
+ * One offer of membership, made in advance and carried to another browser.
+ *
+ * Carries `tokenPrefix` and never the digest. The prefix is the public half —
+ * it is how the row is found and is safe to display — while a digest of a live
+ * credential is still a fact about that credential.
+ */
+export interface ProjectInvitation {
+  id: string;
+  projectId: string;
+  invitedEmail: string;
+  role: ProjectRole;
+  tokenPrefix: string;
+  invitedByUserId: string;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  acceptedUserId: string | null;
+  revokedAt: string | null;
+  revokedReason: string | null;
   note: string | null;
 }
 

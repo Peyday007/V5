@@ -87,6 +87,17 @@ describe('no journey and no document sends a person there', () => {
     for (const file of tracked()) {
       if (file.startsWith('tests/')) continue;
       if (!(file.startsWith('docs/') || file.startsWith('client/') || file === 'README.md')) continue;
+      /*
+       * Text only, like the check above it.
+       *
+       * `docs/` holds committed screenshots, and this read every one of them as
+       * UTF-8 looking for a sentence. Harmless until a run replaced the image
+       * set: the deleted names were still in the index until the commit was
+       * staged, so the suite died with `ENOENT` on a PNG — which reads as the
+       * console-removal check failing, and is nothing of the kind. A binary
+       * file cannot carry an instruction to go anywhere.
+       */
+      if (!/\.(ts|tsx|md|css|html|yml|json)$/.test(file)) continue;
       const source = read(file);
       for (const line of source.split('\n')) {
         if (INSTRUCTION.test(line)) offenders.push(`${file}: ${line.trim().slice(0, 100)}`);

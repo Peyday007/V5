@@ -28,15 +28,27 @@
  * is the record of one run and not a baseline anything is compared against.
  * Nothing reads those files; deleting them breaks no test.
  */
-import { spawn, type ChildProcessByStdio } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { pickPort } from '../tests/helpers/ports.ts';
+
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 6400 + Math.floor(Math.random() * 200);
+/*
+ * Through the same helper every suite uses, and for the same reason.
+ *
+ * `6400 + random(200)` reaches 6566, which is on the WHATWG bad-port list —
+ * Node's `fetch` refuses it before it opens a socket, so the server would boot,
+ * answer nothing this harness could see, and the run would report the product
+ * broken. That is the defect the test suites were just corrected for; a second
+ * copy of it in the harness that photographs the product would be the "a rule
+ * applied by one of two readers is worse than none" this file keeps recording.
+ */
+const PORT = pickPort(6400, 200);
 const BASE = `http://127.0.0.1:${PORT}`;
 const EMAIL = 'visual-qa@example.invalid';
 const BOOTSTRAP = 'bootstrap-password-01';
@@ -54,10 +66,42 @@ const PASSWORD = 'visual-qa-password-01';
  * between the other two, and the band's edges are swept below.
  */
 const VIEWPORTS = [
-  { name: 'desktop', width: 1280, height: 900 },
-  { name: 'intermediate', width: 900, height: 900 },
+  { name: 'desktop', width: 1180, height: 900 },
+  { name: 'intermediate', width: 953, height: 900 },
   { name: 'phone', width: 390, height: 844 },
 ];
+
+/**
+ * The four screens the approved preview covered, and why they are named here.
+ *
+ * §24's design gate is a decision a person makes by **looking**, and the preview
+ * they approved the direction from showed exactly these four at exactly the
+ * three widths above. A handoff that showed different screens, or the same
+ * screens at different widths, would not be comparable with the thing it is
+ * asking to be judged against — so the set is declared rather than assembled
+ * from whatever the run happened to capture.
+ *
+ * `needs-you-populated` and `needs-you-empty` are one address in its two real
+ * states. Nothing is faked to produce either: a Brain with no standing grant has
+ * exactly one decision outstanding — the approval nothing can proceed without —
+ * and pressing that page's own Approve button is what settles it. No request row
+ * is invented, and the grant lands in the throwaway database this run deletes
+ * afterwards.
+ */
+const HANDOFF_SCREENS: Record<string, string> = {
+  russell: 'russell-home',
+  ideas: 'project-constellation',
+  'needs-you': 'needs-you-populated',
+};
+
+/** Where the approval set is written, and the declaration written beside it. */
+const RENDERS_DEFAULT = path.join('docs', 'evidence', 'step12b-renders');
+
+interface Render {
+  screen: string;
+  width: number;
+  file: string;
+}
 
 /**
  * The band the rejected build clipped in, swept rather than sampled.
@@ -253,7 +297,9 @@ const MUST_REACH = [
  * Measured rather than eyeballed, and reported as a count with the worst pairs,
  * because "the ring seats its labels" has to be a number before it is a claim.
  */
-const OVERLAPPING_NODES = `(() => {
+const CONSTELLATION = `(() => {
+  const canvas = document.querySelector('.lim-canvas');
+  const box = canvas ? canvas.getBoundingClientRect() : null;
   const nodes = [...document.querySelectorAll('.lim-node')];
   const pairs = [];
   for (let i = 0; i < nodes.length; i += 1) {
@@ -274,9 +320,24 @@ const OVERLAPPING_NODES = `(() => {
     }
   }
   pairs.sort((left, right) => right.area - left.area);
+  /*
+   * The outline beside the picture, counted from the same screen.
+   *
+   * §29: every map carries a synchronized outline built in the same pass, and
+   * the screen-reader path and the picture may never describe different graphs.
+   * The diagram draws the nucleus and its children; the list beside it is the
+   * children — so the two agree when there is exactly one more node than row,
+   * and a layout change that dropped a node would show up here as a number
+   * rather than as something somebody eventually noticed.
+   */
+  const lim = document.querySelector('.lim');
+  const list = lim && lim.parentElement ? lim.parentElement.querySelector('ul.rs-list') : null;
   return {
+    layout: canvas ? canvas.getAttribute('data-layout') || 'unmarked' : 'none',
     nodes: nodes.length,
+    listed: list ? list.querySelectorAll(':scope > li').length : 0,
     overlaps: pairs.length,
+    canvas: box ? Math.round(box.width) + '×' + Math.round(box.height) : 'none',
     worst: pairs.slice(0, 3).map((pair) => pair.what + ' (' + pair.area + 'px²)').join(' | '),
   };
 })()`;
@@ -332,6 +393,15 @@ interface JourneyStep {
   act: string;
   /** Polled afterwards. False means the press landed on nothing. */
   until?: string;
+  /**
+   * How long to poll `until`, when the default is not enough.
+   *
+   * Fifteen seconds is right for a press that renders. It is wrong for a step
+   * whose answer is a re-read after a write, where the shell has to go back to
+   * the server — so the few steps that wait on a row rather than on a paint say
+   * so here rather than making every step slow.
+   */
+  patience?: number;
   /** Read back after, so the evidence is a change rather than a press. */
   read?: string;
 }
@@ -436,7 +506,298 @@ const JOURNEY_IN: JourneyStep[] = [
   },
 ];
 
-/** The rest of the journey, after the maps pass has run inside the project. */
+/**
+ * The half of the journey where a person changes something.
+ *
+ * Everything before this demonstrates that the product can be *reached* on a
+ * phone — every screen arrived at by pressing, nothing clipped, no control a
+ * thumb cannot land on. That is necessary and it is not J: a person does not
+ * use Brain to look at Brain. These steps do the work, and each one's effect is
+ * read back out of the database afterwards, because a screen that says
+ * something changed and a row that changed are different facts.
+ *
+ * The idea they act on was put there by a connected site asking for research
+ * through §25's own command — not written into a table, and not typed by the
+ * harness pretending to be a worker.
+ */
+const JOURNEY_WORK: JourneyStep[] = [
+  {
+    name: '15-ideas',
+    what: 'Ideas, reached from the thumb bar: the backlog with the site’s request in it, carrying the priority Russell formed and the reason it will be asked for.',
+    act: railPress('Ideas'),
+    until: "location.pathname === '/projects'",
+    read: `(() => {
+      const nodes = [...document.querySelectorAll('.lim-node')];
+      const named = nodes.map((n) => (n.textContent || '').trim()).filter(Boolean);
+      return nodes.length + ' node(s): ' + named.slice(0, 4).join(' · ');
+    })()`,
+  },
+  {
+    name: '16-open-the-idea',
+    what: 'The idea a site asked about, opened. Russell’s own judgment is on it — the priority, and the sentence behind it.',
+    /*
+     * The **list** entry, not the constellation node.
+     *
+     * `IdeaDecision` renders from `focused`, which `select(node.id)` sets from
+     * a `.rs-node` button in the list beneath the map. Pressing the matching
+     * `.lim-node` on the map opened nothing, and the step reported "pressed,
+     * and the screen never arrived" — accurate about the screen and wrong
+     * about which control produces it. The map is the front door; the list is
+     * where an idea is chosen.
+     */
+    act: `(() => {
+      const node = [...document.querySelectorAll('.rs-node')]
+        .find((el) => (el.textContent || '').includes('recording takes'));
+      if (!node) return false;
+      node.scrollIntoView({ block: 'center' });
+      node.click();
+      return 'opened ' + (node.textContent || '').trim().slice(0, 40);
+    })()`,
+    until: "document.querySelector('.rs-choices') !== null",
+    read: `(() => {
+      const pressed = [...document.querySelectorAll('.rs-choices button[aria-pressed=true]')];
+      return pressed.length > 0
+        ? 'Russell says ' + pressed.map((b) => (b.textContent || '').trim()).join(', ')
+        : 'no priority is shown';
+    })()`,
+  },
+  {
+    name: '17-changed-the-priority',
+    what: 'A person disagreeing with Russell: a different priority chosen, a reason typed, and the decision saved. §24’s override — the thing that makes Russell’s judgment a proposal rather than a verdict.',
+    act: `(async () => {
+      const choices = [...document.querySelectorAll('.rs-choices button')];
+      const mustDo = choices.find((b) => /must do/i.test(b.textContent || ''));
+      if (!mustDo) return false;
+      mustDo.click();
+      // The reason field is an <input>, and it is the one the label points at.
+      // Querying for a textarea found nothing, so nothing was typed, so the
+      // save button stayed correctly disabled and the step reported "the save
+      // button never enabled" — accurate about the button and wrong about why.
+      const reason = document.querySelector('#rs-decision-reason');
+      if (!reason) return false;
+      // React reads the value through its own descriptor, so assigning .value
+      // directly changes the DOM and not the component. The native setter plus
+      // a bubbling input event is what a keystroke actually looks like.
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(reason, 'The site is waiting on this one, so it goes first.');
+      reason.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const save = [...document.querySelectorAll('button')].find(
+        (b) => /set this priority/i.test(b.textContent || ''),
+      );
+      if (!save) return false;
+      if (save.disabled) return 'the save button never enabled';
+      save.click();
+      return true;
+    })()`,
+    /*
+     * The *server's* answer, not the local one. `aria-pressed` is component
+     * state the click already set, so waiting on it would pass whether or not
+     * the save reached the server. `overriddenReason` comes back from the row.
+     */
+    until: "document.body.innerText.includes('You already overruled Russell here')",
+    read: `(() => {
+      const line = [...document.querySelectorAll('.rs-item-meta')]
+        .map((el) => (el.textContent || '').trim())
+        .find((text) => text.startsWith('You already overruled Russell here'));
+      return line || document.body.innerText.replace(/\\s+/g, ' ').slice(0, 80);
+    })()`,
+  },
+];
+
+/**
+ * The decision the journey exists to reach, and what answering it does.
+ *
+ * Separate from the work pass because there is a **wait** between them that is
+ * not a control: Russell's tick is thirty seconds, and launching the idea a
+ * person just promoted and then parking its packet takes more than one of them.
+ * A person checks back; the harness waits in Node and then presses once, which
+ * is the same thing without pretending a poll is a gesture.
+ *
+ * Nothing here is seeded. The request is written by `parkStoppedMissions` from
+ * the packet's own recorded status, the choices are the ones `choicesFor`
+ * decides this packet can actually take, and the answer goes through
+ * `answerHumanRequest` — the same transition the acceptance chain drives
+ * in-process. What this adds is that a person can reach all of it with a thumb.
+ */
+const JOURNEY_DECISION: JourneyStep[] = [
+  {
+    name: '18-the-parked-decision',
+    what:
+      'The decision Russell could not take: its packet stopped outside what was preauthorized, ' +
+      'and the card carries the packet’s own recorded reason and the answers that can act on it.',
+    act: railPress('Needs you'),
+    until: "document.querySelector('.rs-decision-what') !== null",
+    patience: 30_000,
+    read: `(() => {
+      const what = document.querySelector('.rs-decision-what');
+      const choices = [...document.querySelectorAll('.rs-choice strong')]
+        .map((el) => (el.textContent || '').trim());
+      return (what ? (what.textContent || '').trim().slice(0, 60) : 'no decision on the page') +
+        ' — offers: ' + (choices.join(' / ') || 'none');
+    })()`,
+  },
+  {
+    name: '19-authorized-the-plan',
+    what:
+      'A person authorizing the plan, on a phone. §16’s other way a start gets authorized: the ' +
+      'same `approvePlan` the envelope calls, recorded as this person’s decision.',
+    act: `(() => {
+      const choice = [...document.querySelectorAll('.rs-choice')].find(
+        (el) => /authorize this plan/i.test(el.textContent || ''),
+      );
+      if (!choice) return false;
+      const button = choice.querySelector('button');
+      if (!button) return false;
+      choice.scrollIntoView({ block: 'center' });
+      button.click();
+      return 'chose ' + (choice.querySelector('strong').textContent || '').trim();
+    })()`,
+    // The card is gone because the list re-read from the server, not because
+    // anything here hid it — `NeedsYouView` takes no optimistic update.
+    until: "document.querySelector('.rs-decision-what') === null",
+    patience: 30_000,
+    read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 90)",
+  },
+  {
+    name: '20-the-mission-resumed',
+    what:
+      'The same mission, carrying on. It was the one parked a moment ago; the answer moved it ' +
+      'rather than starting a replacement, and Work is where a person reads that.',
+    act: railPress('Work'),
+    until: "location.pathname === '/work'",
+    patience: 30_000,
+    /*
+     * The mission's own card, by the objective on it — not the first 110
+     * characters of the page.
+     *
+     * The owner's objection to the previous version of this leg was that it
+     * only checked arrival. A screen at `/work` is routing; a card carrying the
+     * objective of the mission this journey caused is the work.
+     */
+    read: `(() => {
+      const cards = [...document.querySelectorAll('.rs-mission')];
+      const mine = cards.find((card) => /recording|deed|Parcel 118/i.test(card.textContent || ''));
+      if (!mine) return cards.length + ' mission card(s), none matching the journey’s idea';
+      const objective = mine.querySelector('.rs-mission-objective');
+      const next = mine.querySelector('.rs-mission-next');
+      return (objective ? (objective.textContent || '').trim().slice(0, 50) : 'no objective') +
+        ' — ' + (next ? (next.textContent || '').trim().slice(0, 50) : 'no state');
+    })()`,
+  },
+];
+
+/** Where a result is read, once the decision above has let the work carry on. */
+const JOURNEY_AFTER: JourneyStep[] = [
+  {
+    name: '21-what-the-work-actually-is',
+    what:
+      'The work identified rather than merely visible: the reader turns the depth up to ' +
+      'Technical from the More sheet, opens “How it is being done” on that mission, and reads ' +
+      'the ids Brain is working under — the mission, its packet, its bin, and the document it ' +
+      'has filed once there is one.',
+    /*
+     * Three presses in one step, because they are one gesture from a person's
+     * side: open More, choose Technical, expand the mission's detail. The
+     * `details` element is `rs-at-technical`, so it is not in the document at
+     * all until the depth changes — which is what makes this a real depth
+     * control rather than a class toggle.
+     */
+    act: `(async () => {
+      const more = [...document.querySelectorAll('.rs-more button')].find(
+        (b) => /more/i.test(b.textContent || ''),
+      );
+      if (!more) return false;
+      more.click();
+      await new Promise((r) => setTimeout(r, 400));
+      const technical = [...document.querySelectorAll('button')].find(
+        (b) => (b.textContent || '').trim() === 'Technical',
+      );
+      if (!technical) return 'the depth control is not on the screen';
+      technical.click();
+      await new Promise((r) => setTimeout(r, 900));
+      const card = [...document.querySelectorAll('.rs-mission')].find(
+        (el) => /recording|deed|Parcel 118/i.test(el.textContent || ''),
+      );
+      if (!card) return 'no mission card for the journey’s idea';
+      const how = card.querySelector('.rs-mission-how');
+      if (!how) return 'the technical detail is not on the card';
+      how.open = true;
+      how.scrollIntoView({ block: 'center' });
+      /*
+       * Close the sheet, because a person who has chosen goes back to reading.
+       *
+       * Leaving it open is what a person would see if they walked away
+       * mid-gesture, and it made every step from here on report *"Send: covered
+       * by Sign out"* — five findings from one unclosed menu, none of them
+       * about the product. A sheet covering the composer is a sheet doing its
+       * job; measuring reachability underneath one is measuring nothing.
+       */
+      more.click();
+      await new Promise((r) => setTimeout(r, 300));
+      return 'turned the depth up and opened the mission’s detail';
+    })()`,
+    until: "document.querySelector('.rs-mission-how[open]') !== null",
+    patience: 30_000,
+    read: `(() => {
+      const how = document.querySelector('.rs-mission-how[open]');
+      if (!how) return 'nothing opened';
+      const pairs = [];
+      const terms = [...how.querySelectorAll('dt')];
+      const values = [...how.querySelectorAll('dd')];
+      for (let i = 0; i < terms.length; i += 1) {
+        pairs.push((terms[i].textContent || '').trim() + '=' + ((values[i] || {}).textContent || '').trim());
+      }
+      return pairs.join(' ');
+    })()`,
+  },
+  {
+    name: '22-knows',
+    what:
+      'Knows: what this project actually believes, read rather than arrived at. Either it names ' +
+      'a conclusion and what it rests on, or it says in its own words that nothing has been ' +
+      'concluded here yet — and which of those it is, is the evidence.',
+    act: railPress('Knows'),
+    until: "location.pathname === '/knowledge'",
+    /*
+     * What the page *holds*, not its first ninety characters. A count of real
+     * knowledge rows, grouped as the server classified them, or the server's
+     * own sentence for why there are none.
+     */
+    read: `(() => {
+      const groups = [...document.querySelectorAll('.rs-group')].map((g) => {
+        const title = g.querySelector('.rs-group-title');
+        const count = g.querySelector('.rs-count');
+        return (title ? (title.textContent || '').replace(/\\s+/g, ' ').trim() : '?') +
+          (count ? '' : '');
+      });
+      const cards = document.querySelectorAll('.rs-card .rs-item-title');
+      if (cards.length === 0) {
+        // One element, not three. Querying a list of selectors and taking the
+        // first match concatenated the panel's own empty state with the
+        // shell's, and read back "There is no There is nothing here yet. yet."
+        const panel = document.querySelector('.rs-panel .rs-state') ||
+          document.querySelector('.rs-state');
+        return 'nothing concluded yet — ' +
+          (panel ? (panel.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 80) : 'no reason given');
+      }
+      return cards.length + ' conclusion(s): ' + groups.join(' | ') + ' — ' +
+        [...cards].slice(0, 2).map((c) => (c.textContent || '').trim().slice(0, 40)).join(' · ');
+    })()`,
+  },
+  {
+    name: '23-who-and-fleet',
+    what: 'Who, from the thumb bar: the people on the project and the fleet behind it — three capacity numbers that are not each other.',
+    act: railPress('Who'),
+    // `/fleet`, not `/who`. The rail's label and the address are different
+    // things, and a predicate written from the label reported a screen that had
+    // plainly arrived as never arriving.
+    until: "location.pathname === '/fleet'",
+    read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 110)",
+  },
+];
+
+/** The rest of the journey, after the work pass has run. */
 const JOURNEY_OUT: JourneyStep[] = [
   {
     name: '13-needs-you',
@@ -457,9 +818,66 @@ const JOURNEY_OUT: JourneyStep[] = [
 /** The six maps, by the label on their tab. */
 const MAP_TABS = ['System', 'Workflow', 'Knowledge', 'Decisions', 'Timeline', 'Money flow'];
 
+/* -------------------------------------------------------------------------
+ * What this invocation was asked for.
+ *
+ * Two flags and a positional directory. `--renders` is where the **approval
+ * set** goes — the four screens at the three widths, plus the declaration that
+ * says what the set is — and it is separate from the throwaway output directory
+ * because those images are the thing a person is asked to decide on rather than
+ * a diagnostic. `--only=constellation` skips everything except the one
+ * measurement, which is what makes a geometry change something you can iterate
+ * on in ninety seconds rather than twenty minutes.
+ * ---------------------------------------------------------------------- */
+
+interface Options {
+  outputDir: string;
+  rendersDir: string | null;
+  only: 'constellation' | null;
+}
+
+function parseOptions(argv: string[]): Options {
+  let positional: string | null = null;
+  let rendersDir: string | null = null;
+  let only: 'constellation' | null = null;
+  for (const argument of argv) {
+    if (argument.startsWith('--renders=')) rendersDir = argument.slice('--renders='.length);
+    else if (argument === '--renders') rendersDir = RENDERS_DEFAULT;
+    else if (argument === '--only=constellation') only = 'constellation';
+    else if (argument.startsWith('--')) throw new Error(`unknown option ${argument}`);
+    else if (positional === null) positional = argument;
+  }
+  return {
+    outputDir: path.resolve(positional ?? path.join(os.tmpdir(), 'brain-visual-qa')),
+    rendersDir: rendersDir === null ? null : path.resolve(REPO_ROOT, rendersDir),
+    only,
+  };
+}
+
 async function main(): Promise<void> {
-  const outputDir = path.resolve(process.argv[2] ?? path.join(os.tmpdir(), 'brain-visual-qa'));
+  const options = parseOptions(process.argv.slice(2));
+  const { outputDir } = options;
   fs.mkdirSync(outputDir, { recursive: true });
+  /*
+   * The approval directory is emptied of images before it is refilled.
+   *
+   * `scripts/design-manifest.ts` refuses a `.png` that the declaration does not
+   * name, and it is right to: an undeclared image would make the digest an
+   * approval of a subset wearing the name of the whole set. A previous run's
+   * leftover is exactly that, so it is removed here rather than discovered
+   * there.
+   */
+  if (options.rendersDir) {
+    fs.mkdirSync(options.rendersDir, { recursive: true });
+    for (const entry of fs.readdirSync(options.rendersDir)) {
+      if (entry.endsWith('.png') || entry === 'index.json') {
+        fs.rmSync(path.join(options.rendersDir, entry));
+      }
+    }
+  }
+  const declared: Render[] = [];
+  const captureFindings: string[] = [];
+  const constellation: ({ width: number } & ConstellationReading)[] = [];
 
   /*
    * Build the client first, because otherwise this photographs the last build.
@@ -546,6 +964,58 @@ async function main(): Promise<void> {
     });
     const cookie = await signIn(PASSWORD);
 
+    /*
+     * The one measurement, on its own, for when that is the whole question.
+     *
+     * A geometry change is iterated on by looking at a number, and the number
+     * costs ninety seconds here against twenty minutes for the full walk. It
+     * shares every line of the harness above it — the same build, the same real
+     * server, the same real rows, the same predicate — because a second harness
+     * that measured the same thing slightly differently is how two readings of
+     * one canvas come to disagree.
+     */
+    if (options.only === 'constellation') {
+      await withChromium(async (cdp) => {
+        await signInBrowser(cdp, cookie);
+        for (const width of CONSTELLATION_WIDTHS) {
+          await cdp.send('Emulation.setDeviceMetricsOverride', {
+            width,
+            height: width < 600 ? 844 : 900,
+            deviceScaleFactor: 1,
+            mobile: width < 600,
+          });
+          await cdp.send('Page.navigate', { url: `${BASE}/projects` });
+          await waitFor(cdp, "document.querySelector('.lim-canvas') !== null", 20_000);
+          await sleep(1200);
+          const reading = await constellationReading(cdp);
+          console.log(describeConstellation(width, reading));
+          constellation.push({ width, ...reading });
+          if (reading.overlaps > 0) {
+            captureFindings.push(
+              `${reading.overlaps} constellation node pair(s) painted over each other at ` +
+                `${width}px — ${reading.worst}`,
+            );
+          }
+          const shot = (await cdp.send('Page.captureScreenshot', {
+            format: 'png',
+            captureBeyondViewport: true,
+          })) as { data: string };
+          fs.writeFileSync(
+            path.join(outputDir, `constellation-${width}.png`),
+            Buffer.from(shot.data, 'base64'),
+          );
+        }
+      });
+      reportConstellation(constellation);
+      console.log(`\nImages in ${outputDir}`);
+      if (captureFindings.length > 0) {
+        console.log('');
+        for (const finding of captureFindings) console.log(`  ${finding}`);
+        process.exitCode = 1;
+      }
+      return;
+    }
+
     await withChromium(async (cdp) => {
       for (const viewport of VIEWPORTS) {
         const problems: string[] = [];
@@ -576,6 +1046,12 @@ async function main(): Promise<void> {
           })) as { data: string };
           const file = path.join(outputDir, `${viewport.name}-${destination.name}.png`);
           fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
+          const screen = HANDOFF_SCREENS[destination.name];
+          if (screen && options.rendersDir) {
+            declared.push(
+              writeRender(options.rendersDir, screen, viewport.width, Buffer.from(shot.data, 'base64')),
+            );
+          }
           const sideways = (await evaluate(
             cdp,
             'document.documentElement.scrollWidth > document.documentElement.clientWidth',
@@ -612,6 +1088,26 @@ async function main(): Promise<void> {
               `${rendered ? 'rendered' : 'NEVER RENDERED'}  ` +
               `${sideways ? 'SCROLLS SIDEWAYS' : 'fits'}  ${text.slice(0, 90)}`,
           );
+          /*
+           * The constellation, measured at every width rather than only on a
+           * phone.
+           *
+           * It used to be asked once, at 390px, inside the journey — which is
+           * where the pile-up was, and which is also why nobody knew whether the
+           * ring seated its labels at 953px or only looked as though it did. A
+           * reading taken at one width is a claim about that width.
+           */
+          if (destination.name === 'ideas') {
+            const reading = await constellationReading(cdp);
+            console.log(`    ${describeConstellation(viewport.width, reading)}`);
+            constellation.push({ width: viewport.width, ...reading });
+            if (reading.overlaps > 0) {
+              captureFindings.push(
+                `${viewport.name}: ${reading.overlaps} constellation node pair(s) painted over ` +
+                  `each other at ${viewport.width}px — ${reading.worst}`,
+              );
+            }
+          }
         }
         /*
          * Console errors, with the one that is about this machine named as one.
@@ -638,6 +1134,25 @@ async function main(): Promise<void> {
           for (const problem of real.slice(0, 10)) console.log(`    ${problem}`);
         }
       }
+
+      /*
+       * The settled state of Needs You is captured **after the journey**, and
+       * the ordering is the whole correctness of this harness.
+       *
+       * Everything above runs against a Brain with no standing grant, which is
+       * why `/needs-you` here is the **populated** screen: an ungranted project
+       * has exactly one decision outstanding and the page refuses to fold it.
+       * Getting the settled screen means answering that decision — and the
+       * journey is what answers it, on a phone, with a thumb.
+       *
+       * This used to happen right here, before the journey, and it quietly
+       * rewrote the journey's own starting conditions: with the authority
+       * already granted, an idea Brain captures is judged and launched within a
+       * tick or two, so by the time a person opened Ideas there was no backlog
+       * row to press. The run reported three missing controls, every one of
+       * them the harness racing the product it was measuring. See
+       * `captureSettledNeedsYou`.
+       */
     });
 
     /*
@@ -772,12 +1287,35 @@ async function main(): Promise<void> {
      * journey at phone width — where the rail collapses and where a broken
      * control is most likely — and prints what changed at every step.
      */
-    const findings = await driveJourney(cookie, outputDir);
+    const findings = [...captureFindings, ...(await driveJourney(cookie, outputDir, constellation))];
+
+    /*
+     * The settled Needs You, photographed once the journey has settled it.
+     *
+     * The journey approves the standing authority on a phone; this captures the
+     * same address afterwards at all three widths, so the approval set holds
+     * two real states of one screen separated by one press on a real control.
+     * Nothing is invented and nothing is stubbed — and, unlike the version that
+     * did this before the journey, nothing about the journey's own starting
+     * state is rewritten to get the picture.
+     */
+    if (options.rendersDir) {
+      findings.push(
+        ...(await captureSettledNeedsYou(cookie, options.rendersDir, outputDir, declared)),
+      );
+      writeDeclaration(options.rendersDir, declared);
+      console.log(
+        `\n${declared.length} render(s) declared in ${path.join(options.rendersDir, 'index.json')}`,
+      );
+    }
+
+    reportConstellation(constellation);
+    writeJourneyRecord(outputDir, constellation, findings);
 
     console.log(`\nImages in ${outputDir}`);
     if (findings.length > 0) {
       console.log('');
-      console.log(`${findings.length} finding(s) from the phone journey:`);
+      console.log(`${findings.length} finding(s):`);
       for (const finding of findings) console.log(`  ${finding}`);
       process.exitCode = 1;
     }
@@ -785,6 +1323,428 @@ async function main(): Promise<void> {
     await endServerTree(server);
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
+}
+
+/* -------------------------------------------------------------------------
+ * The approval set: the images, and the declaration that says what they are.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * The journey, written down so something other than a person can read it.
+ *
+ * Stamped with the revision it was taken at, for the same reason the render
+ * manifest is: an image set that outlives the tree it was taken from is a
+ * picture of a different product, and a reading of it is a claim about a
+ * different product. The reporter refuses a record whose revision does not
+ * match the tree it is running in.
+ *
+ * It records what was *read*, not a verdict. `findings` is the harness's own
+ * list; whether a run with findings is acceptable is not the harness's to say.
+ */
+function writeJourneyRecord(
+  dir: string,
+  constellation: ({ width: number } & ConstellationReading)[],
+  findings: string[],
+): void {
+  let revision: string | null = null;
+  try {
+    revision = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    }).trim();
+  } catch {
+    revision = null;
+  }
+  const controls = new Set<string>();
+  for (const entry of JOURNEY_RECORD) {
+    for (const name of entry.unreachable.split(',')) {
+      const trimmed = name.trim();
+      if (trimmed) controls.add(trimmed);
+    }
+  }
+  const record = {
+    takenAt: new Date().toISOString(),
+    revision,
+    phoneWidth: PHONE.width,
+    steps: JOURNEY_RECORD,
+    /*
+     * What the journey *changed*, beside what it walked past.
+     *
+     * A list of steps that arrived is a claim about navigation. These are the
+     * rows the presses wrote, read back through the product's own routes by
+     * `persistedEffects` inside the same journey — so a reader can tell a
+     * sequence that happened from a sequence that rendered.
+     */
+    effects: JOURNEY_EFFECTS,
+    stepsWalked: JOURNEY_RECORD.length,
+    stepsThatArrived: JOURNEY_RECORD.filter((entry) => entry.arrived).length,
+    stepsThatFit: JOURNEY_RECORD.filter((entry) => entry.fits).length,
+    stepsWithNothingClipped: JOURNEY_RECORD.filter((entry) => !entry.clipped).length,
+    unreachableControls: [...controls],
+    constellation: constellation.map((reading) => ({
+      width: reading.width,
+      layout: reading.layout,
+      nodes: reading.nodes,
+      listed: reading.listed,
+      overlaps: reading.overlaps,
+      canvas: reading.canvas,
+    })),
+    findings,
+  };
+  fs.writeFileSync(path.join(dir, 'journey.json'), `${JSON.stringify(record, null, 2)}\n`);
+  console.log(`\nJourney record written to ${path.join(dir, 'journey.json')}`);
+}
+
+/** One render, written under the name the declaration will give it. */
+function writeRender(dir: string, screen: string, width: number, bytes: Buffer): Render {
+  const file = `${screen}-${width}.png`;
+  fs.writeFileSync(path.join(dir, file), bytes);
+  return { screen, width, file };
+}
+
+/**
+ * `index.json`, and why the set is declared rather than inferred.
+ *
+ * `scripts/design-manifest.ts` digests **what this file names**, so an approval
+ * is bound to a set somebody stated rather than to whatever happened to be in a
+ * directory when the digest ran. That cuts both ways, which is the point: a
+ * declared file that is missing and an undeclared file that is present are both
+ * refusals there, so this writes the declaration from the captures it actually
+ * took and then refuses anything else in the directory itself — the same fact
+ * found at the cheaper end.
+ */
+function writeDeclaration(dir: string, renders: Render[]): void {
+  const named = new Set(renders.map((render) => render.file));
+  const strays = fs
+    .readdirSync(dir)
+    .filter((entry) => entry.endsWith('.png') && !named.has(entry));
+  if (strays.length > 0) {
+    throw new Error(
+      `${strays.length} image(s) in ${dir} that this run did not take: ${strays.join(', ')}. ` +
+        'An undeclared image would make the digest an approval of a subset wearing the name ' +
+        'of the whole set.',
+    );
+  }
+  const ordered = [...renders].sort(
+    (left, right) =>
+      left.screen.localeCompare(right.screen) || right.width - left.width,
+  );
+  fs.writeFileSync(path.join(dir, 'index.json'), `${JSON.stringify(ordered, null, 2)}\n`);
+}
+
+/* -------------------------------------------------------------------------
+ * The constellation, measured.
+ * ---------------------------------------------------------------------- */
+
+/** The widths the constellation is asked about when it is the whole question. */
+const CONSTELLATION_WIDTHS = [1180, 953, 390, 360];
+
+interface ConstellationReading {
+  layout: string;
+  nodes: number;
+  listed: number;
+  overlaps: number;
+  worst: string;
+  canvas: string;
+}
+
+/** Read the canvas: which arrangement, how many nodes, how much overlap. */
+async function constellationReading(cdp: Cdp): Promise<ConstellationReading> {
+  return (await evaluate(cdp, CONSTELLATION)) as ConstellationReading;
+}
+
+/** One line about one canvas, in the words the report uses. */
+function describeConstellation(width: number, reading: ConstellationReading): string {
+  return (
+    `constellation at ${width}px: ${reading.layout} — ${reading.nodes} node(s) on a ` +
+    `${reading.canvas} canvas, ${reading.listed} listed beside it, ` +
+    `${reading.overlaps} overlapping pair(s)` +
+    (reading.worst ? ` — ${reading.worst}` : '')
+  );
+}
+
+/**
+ * Every reading together, because the claim being made is about a range.
+ *
+ * "It does not overlap on a phone" is four separate facts about four widths,
+ * and printing them one at a time inside three different phases is how a run
+ * ends with the evidence scattered through six hundred lines of log.
+ */
+function reportConstellation(readings: ({ width: number } & ConstellationReading)[]): void {
+  if (readings.length === 0) return;
+  console.log('');
+  console.log('The constellation, at every width this run looked at:');
+  for (const reading of [...readings].sort((left, right) => right.width - left.width)) {
+    console.log(
+      `  ${String(reading.width).padStart(4)}px  ${reading.layout.padEnd(6)}  ` +
+        `${String(reading.nodes).padStart(2)} drawn / ${String(reading.listed).padStart(2)} listed  ` +
+        `${reading.canvas.padEnd(9)}  ` +
+        (reading.overlaps === 0
+          ? 'no overlap'
+          : `${reading.overlaps} OVERLAPPING PAIR(S) — ${reading.worst}`),
+    );
+  }
+}
+
+/**
+ * What the journey needs to act on, put there through the product's own doors.
+ *
+ * The fourteen steps before this one demonstrated navigation and layout: every
+ * screen reached, nothing clipped, every control a thumb can land on. That is a
+ * necessary condition for J and it is not J — a person does not use Brain to
+ * look at Brain. The journey has to change something and the change has to
+ * still be there afterwards.
+ *
+ * So this seeds an idea, and it does it the way the product does rather than by
+ * writing rows: a connected site registers a record and asks for research, which
+ * is §25's `RESEARCH_FURTHER` — an idea, spending nothing, with a person in
+ * Russell the only one who may authorize the spending. Every call is a real
+ * route with a real credential, and the site's credential is issued by the same
+ * **Connected sites** action a person uses.
+ *
+ * Returns what the journey needs to press things: the project it seeded into,
+ * and the id of the idea, so the steps that follow can read the row back rather
+ * than trust the screen.
+ */
+interface Seeded {
+  projectId: string | null;
+  projectName: string | null;
+  candidateId: string | null;
+  note: string;
+}
+
+async function seedSomethingToDecide(cookie: string): Promise<Seeded> {
+  const json = async (path: string, body?: unknown): Promise<Record<string, unknown> | null> => {
+    const response = await fetch(`${BASE}${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: BASE,
+        cookie,
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    if (!response.ok) return null;
+    try {
+      return (await response.json()) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  const projects = (await json('/api/projects')) as { projects?: { id: string; name: string }[] } | null;
+  const project = projects?.projects?.[0] ?? null;
+  if (!project) return { projectId: null, projectName: null, candidateId: null, note: 'no project exists to seed into' };
+
+  /*
+   * A connected site, made through the action a person uses. `connectSite`
+   * writes the identity, the membership and the fixed scope set from constants
+   * and issues one secret, shown once — so this is the same rotation an
+   * operator performs, not a back door built for the harness.
+   */
+  const connected = await json(`/api/russell/projects/${project.id}/sites/DEAL_DISPATCH/connect`, {});
+  const secret = typeof connected?.['secret'] === 'string' ? (connected['secret'] as string) : null;
+  if (!secret) {
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      candidateId: null,
+      note: 'the site connector issued no credential, so nothing could be seeded',
+    };
+  }
+
+  const asSite = async (path: string, body: unknown): Promise<Record<string, unknown> | null> => {
+    const response = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: BASE,
+        authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) return null;
+    try {
+      return (await response.json()) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  const recordId = `opp-visual-${Date.now().toString(36)}`;
+  const delivered = await asSite(`/api/projects/${project.id}/connect/DEAL_DISPATCH/records`, {
+    records: [
+      {
+        sourceRecordId: recordId,
+        sourceRecordType: 'OPPORTUNITY',
+        sourceVersion: new Date().toISOString(),
+        title: 'Parcel 118 — how long recording takes in this county',
+        /*
+         * A question whose compiled plan the standing envelope will not
+         * auto-approve, and that is the point of the seed rather than a
+         * flourish.
+         *
+         * `RUSSELL_PUBLIC_RECORDS_V1` authorizes reading published Michigan
+         * records and nothing else, so its `forbiddenActions` matches
+         * "email the …". The compiler does not check that list — it checks the
+         * jurisdiction and the source classes — so this idea judges, compiles,
+         * launches, and is refused by `planFitsEnvelope` at the approval gate.
+         * That is §16's escalation, and it is the only way this journey can
+         * reach a **real** parked decision to answer: one Brain derived from a
+         * packet's own rows, with a request nobody wrote by hand.
+         *
+         * The jurisdiction is in the record's own column as well as its prose,
+         * so `jurisdictionFor` reads it from the row (§25) rather than falling
+         * back to the envelope's.
+         */
+        summary:
+          'The site cannot settle how long a deed takes to become searchable after ' +
+          'recording, and wants somebody to email the register of deeds to confirm the figure.',
+        sourceRef: `https://deal-dispatch.example.invalid/opportunities/${recordId}`,
+        attributes: {
+          status: 'OPEN',
+          state: 'MI',
+          county: 'Washtenaw',
+          location: 'Washtenaw County, Michigan',
+          primaryBlocker:
+            'nobody can say how far the electronic index lags a recording, and the site ' +
+            'wants the register of deeds emailed to confirm it',
+        },
+      },
+    ],
+  });
+  if (delivered === null) {
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      candidateId: null,
+      note: 'the site could not register a record',
+    };
+  }
+
+  const commanded = await asSite(
+    `/api/projects/${project.id}/connect/DEAL_DISPATCH/records/${recordId}/commands`,
+    {
+    command: 'RESEARCH_FURTHER',
+    actor: 'someone at the site',
+    },
+  );
+  if (commanded === null) {
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      candidateId: null,
+      note: 'the site could not issue its command',
+    };
+  }
+
+  /*
+   * The command answers with the **record's** projection, not with an idea —
+   * which is right: what a site is told is what Brain will do about its record,
+   * and the candidate is Brain's own business. So the idea is found where ideas
+   * are, by the title the record carried into it.
+   *
+   * The first version read `candidateId` off the command's reply and got null
+   * every time, then reported "the command was accepted and returned no idea"
+   * — true of the field it looked at and wrong about what happened.
+   */
+  const ideas = (await json(`/api/russell/projects/${project.id}/candidates`)) as {
+    candidates?: { id: string; title: string }[];
+  } | null;
+  const mine =
+    ideas?.candidates?.find((candidate) => candidate.title.includes('recording takes')) ?? null;
+
+  return {
+    projectId: project.id,
+    projectName: project.name,
+    candidateId: mine?.id ?? null,
+    note: mine
+      ? `a site asked for research and Brain captured idea ${mine.id}`
+      : `the command was accepted and no idea carries the record's title ` +
+        `(${ideas?.candidates?.length ?? 0} idea(s) in the project)`,
+  };
+}
+
+/**
+ * Approve the standing authority, by pressing the page's own Approve button.
+ *
+ * Not a POST to the route: the question this answers is whether the settled
+ * state of Needs You is *reachable from the screen*, and a request sent behind
+ * the interface's back would render the settled page while proving nothing
+ * about the control that is supposed to produce it. It presses what a person
+ * presses, and reports false if that control is not there.
+ */
+/**
+ * Does this Brain already hold a standing authority, asked of the server?
+ *
+ * Read rather than remembered, because the two passes that can create one — the
+ * render capture and the journey — do not share a variable, and a flag one of
+ * them set would be exactly the second copy of a fact this file keeps being
+ * bitten by.
+ */
+async function standingGrantExists(cookie: string): Promise<boolean> {
+  try {
+    const projects = (await (
+      await fetch(`${BASE}/api/projects`, {
+        headers: { origin: BASE, cookie },
+        signal: AbortSignal.timeout(20_000),
+      })
+    ).json()) as { projects?: { id: string }[] };
+    const project = projects.projects?.[0];
+    if (!project) return false;
+    const authority = (await (
+      await fetch(`${BASE}/api/russell/projects/${project.id}/authority`, {
+        headers: { origin: BASE, cookie },
+        signal: AbortSignal.timeout(20_000),
+      })
+    ).json()) as { grant?: unknown };
+    return authority.grant !== null && authority.grant !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+async function grantStandingAuthority(cdp: Cdp): Promise<boolean> {
+  await cdp.send('Page.navigate', { url: `${BASE}/needs-you` });
+  await waitFor(cdp, "document.querySelector('.rs-authority') !== null", 20_000);
+  await sleep(900);
+  const pressed = await evaluate(
+    cdp,
+    `(() => {
+      const button = [...document.querySelectorAll('.rs-authority button')].find(
+        (candidate) => (candidate.textContent || '').trim() === 'Approve',
+      );
+      if (!button) return false;
+      if (button.disabled) return 'disabled';
+      button.click();
+      return true;
+    })()`,
+  );
+  if (pressed !== true) return false;
+  /*
+   * Wait for the card to hold a grant, not for the page around it to say so.
+   *
+   * Its first version waited for `.rs-nothing` — the settled sentence — and
+   * reported that the standing authority could not be approved while all three
+   * later captures showed it plainly granted. **The press had worked and the
+   * check was wrong**, which is the one kind of harness failure that costs more
+   * than the defect it was looking for: a false finding is a finding somebody
+   * spends an hour on.
+   *
+   * It was, though, pointing at something real — the page around the card did
+   * not re-read, so answering the one decision on it changed nothing visible
+   * until you navigated away and back. That is fixed in `Views.tsx`, and this
+   * deliberately does **not** depend on the fix: it waits for the control the
+   * card itself swaps in, so it would still pass against the build that had the
+   * staleness and still fail if the grant genuinely did not land.
+   */
+  return waitFor(
+    cdp,
+    `[...document.querySelectorAll('.rs-authority button')].some(
+      (button) => (button.textContent || '').trim() === 'Withdraw this',
+    )`,
+    20_000,
+  );
 }
 
 /* -------------------------------------------------------------------------
@@ -797,6 +1757,91 @@ interface Reading {
   offenders: string;
   unreachable: string;
 }
+
+/**
+ * What the journey saw, per step, in a form something other than a person can
+ * read.
+ *
+ * The images are the evidence a person looks at; this is the evidence the
+ * acceptance reporter reads. Without it J's row had to quote its own findings
+ * as literal prose — "all 15 chrome controls answer elementFromPoint" — which
+ * stays true in the sentence after it stops being true of the product. A count
+ * that is re-read from a file the harness wrote cannot do that.
+ */
+interface JourneyStepRecord {
+  step: string;
+  arrived: boolean;
+  fits: boolean;
+  clipped: boolean;
+  unreachable: string;
+}
+const JOURNEY_RECORD: JourneyStepRecord[] = [];
+
+/**
+ * What each step read, kept by name.
+ *
+ * A check that needs a step's reading has to use *that step's*, taken while its
+ * screen was on the display. The first version of the technical-detail check
+ * re-read the DOM after the whole walk had finished — by which time the journey
+ * had moved on to Knows and Who, `.rs-mission-how[open]` no longer existed, and
+ * it reported the ids "NOT MATCHED" against an empty string. The screen was
+ * right and the reader was late.
+ */
+const JOURNEY_READS: Record<string, string> = {};
+
+/**
+ * The persisted consequences of the journey, filled in as they are read back.
+ *
+ * Declared with every field null so an unwalked journey records "we did not
+ * find out" rather than "it did not happen" — the distinction the whole
+ * reporter is built on, at the smallest scale it appears in.
+ */
+const JOURNEY_EFFECTS: {
+  standingAuthorityGranted: boolean | null;
+  ideaOverriddenByAPerson: boolean | null;
+  ideaPriority: string | null;
+  russellsJudgmentKept: boolean | null;
+  parkedMissionId: string | null;
+  parkedRequestId: string | null;
+  parkedOrchestrationId: string | null;
+  missionStateBefore: string | null;
+  missionStateAfter: string | null;
+  requestSettled: boolean | null;
+  /**
+   * The result half, which navigation cannot supply.
+   *
+   * The owner named this exactly: *"'21-knows' only checks arrival at
+   * /knowledge; no assertion identifies and inspects the resulting answer or
+   * work output."* Both were true. Arriving at an address is routing. These
+   * are what the reader can actually **read** about the work the journey
+   * caused, and the last three are deliberately the ones a checkout cannot
+   * settle — a filed document, a conclusion, an answered question all need a
+   * worker that reached the sources.
+   */
+  workIdentifiedOnScreen: boolean | null;
+  workIdsOnScreen: string | null;
+  filedDocumentOnScreen: string | null;
+  knowledgeRows: number | null;
+  knowledgeCitingThisMission: number | null;
+  askedTurnStatus: string | null;
+} = {
+  standingAuthorityGranted: null,
+  ideaOverriddenByAPerson: null,
+  ideaPriority: null,
+  russellsJudgmentKept: null,
+  parkedMissionId: null,
+  parkedRequestId: null,
+  parkedOrchestrationId: null,
+  missionStateBefore: null,
+  missionStateAfter: null,
+  requestSettled: null,
+  workIdentifiedOnScreen: null,
+  workIdsOnScreen: null,
+  filedDocumentOnScreen: null,
+  knowledgeRows: null,
+  knowledgeCitingThisMission: null,
+  askedTurnStatus: null,
+};
 
 /**
  * One capture and the readings that go with it, at whatever the screen now is.
@@ -861,7 +1906,7 @@ async function walk(
       console.log(`  ${step.name.padEnd(18)} NO CONTROL FOUND`);
       continue;
     }
-    const landed = step.until ? await waitFor(cdp, step.until) : true;
+    const landed = step.until ? await waitFor(cdp, step.until, step.patience ?? 15_000) : true;
     if (!landed) {
       findings.push(`${step.name}: pressed, and the screen never arrived — ${String(step.until)}`);
     }
@@ -870,8 +1915,16 @@ async function walk(
     await sleep(1200);
 
     const reading = await capture(cdp, outputDir, `journey-${step.name}.png`);
+    JOURNEY_RECORD.push({
+      step: step.name,
+      arrived: landed,
+      fits: !reading.sideways,
+      clipped: reading.cutOff.length > 0,
+      unreachable: reading.unreachable,
+    });
     findings.push(...judge(step.name, reading));
     const read = step.read ? String(await evaluate(cdp, step.read)) : '';
+    JOURNEY_READS[step.name] = read;
     console.log(
       `  ${step.name.padEnd(18)} ${landed ? 'arrived' : 'NEVER ARRIVED'}  ` +
         `${reading.sideways ? 'SCROLLS SIDEWAYS' : 'fits'}  ` +
@@ -885,22 +1938,82 @@ async function walk(
 }
 
 /** The constellation, measured for nodes painted over each other. */
-async function constellationProbe(cdp: Cdp): Promise<string[]> {
-  const reading = (await evaluate(cdp, OVERLAPPING_NODES)) as {
-    nodes: number;
-    overlaps: number;
-    worst: string;
-  };
-  console.log(
-    `    constellation: ${reading.nodes} nodes, ${reading.overlaps} overlapping pair(s)` +
-      (reading.worst ? ` — ${reading.worst}` : ''),
-  );
-  return reading.overlaps > 0
-    ? [
+function constellationProbe(
+  collected: ({ width: number } & ConstellationReading)[],
+): (cdp: Cdp) => Promise<string[]> {
+  return async (cdp) => {
+    const reading = await constellationReading(cdp);
+    console.log(`    ${describeConstellation(PHONE.width, reading)}`);
+    collected.push({ width: PHONE.width, ...reading });
+    const found: string[] = [];
+    if (reading.overlaps > 0) {
+      found.push(
         `05-project-map: ${reading.overlaps} constellation node pair(s) painted over each other ` +
           `at ${PHONE.width}px — ${reading.worst}`,
-      ]
-    : [];
+      );
+    }
+    /*
+     * The picture and the outline, held against each other rather than each
+     * checked against nothing. `mapsPass` already does this for the six
+     * specialized maps; the constellation had no such reading at all, so a
+     * change that lost a node would have been invisible to everything except a
+     * person counting circles in a screenshot.
+     */
+    if (reading.nodes > 0 && reading.nodes - 1 !== reading.listed) {
+      found.push(
+        `05-project-map: the constellation and its list are different graphs — ` +
+          `${reading.nodes - 1} node(s) around the nucleus against ${reading.listed} listed`,
+      );
+    }
+    return found;
+  };
+}
+
+/**
+ * The same canvas at the narrower phone §24 names, reached by pressing.
+ *
+ * 390 is not a proof about 360: the canvas is thirty pixels narrower there, and
+ * thirty pixels is the difference between a label wrapping to two lines and to
+ * three. It is a press on the thumb bar rather than a navigation, because that
+ * is the rule the whole journey runs under.
+ */
+async function narrowConstellation(
+  cdp: Cdp,
+  outputDir: string,
+  collected: ({ width: number } & ConstellationReading)[],
+): Promise<string[]> {
+  const pressed = await evaluate(cdp, railPress('Ideas'));
+  if (pressed !== true) {
+    return [`18-constellation-${NARROW_PHONE}: there is no Ideas cell to press at this width`];
+  }
+  const arrived = await waitFor(cdp, "document.querySelector('.lim-canvas') !== null", 20_000);
+  await sleep(1200);
+  const capture0 = await capture(
+    cdp,
+    outputDir,
+    `journey-26-constellation-${NARROW_PHONE}.png`,
+  );
+  const found = judge(`18-constellation-${NARROW_PHONE}`, capture0);
+  if (!arrived) {
+    found.push(`18-constellation-${NARROW_PHONE}: the map never rendered at this width`);
+    return found;
+  }
+  const reading = await constellationReading(cdp);
+  console.log(`  ${describeConstellation(NARROW_PHONE, reading)}`);
+  collected.push({ width: NARROW_PHONE, ...reading });
+  if (reading.overlaps > 0) {
+    found.push(
+      `18-constellation-${NARROW_PHONE}: ${reading.overlaps} constellation node pair(s) ` +
+        `painted over each other at ${NARROW_PHONE}px — ${reading.worst}`,
+    );
+  }
+  if (reading.nodes > 0 && reading.nodes - 1 !== reading.listed) {
+    found.push(
+      `18-constellation-${NARROW_PHONE}: the constellation and its list are different graphs — ` +
+        `${reading.nodes - 1} node(s) around the nucleus against ${reading.listed} listed`,
+    );
+  }
+  return found;
 }
 
 /**
@@ -988,6 +2101,16 @@ async function mapsPass(cdp: Cdp, outputDir: string): Promise<string[]> {
     } | null;
 
     const capture0 = await capture(cdp, outputDir, file);
+    // Recorded like any other step: a map opened by pressing its own tab is a
+    // step of the journey, and leaving six of them out of the record made the
+    // walk look a third shorter than it is.
+    JOURNEY_RECORD.push({
+      step: `map:${label}`,
+      arrived: selected,
+      fits: !capture0.sideways,
+      clipped: capture0.cutOff.length > 0,
+      unreachable: capture0.unreachable,
+    });
     findings.push(...judge(`map:${label}`, capture0));
 
     if (!reading) {
@@ -1179,7 +2302,7 @@ async function narrowPhoneBar(cdp: Cdp, outputDir: string): Promise<string[]> {
     mobile: true,
   });
   await sleep(900);
-  const reading = await capture(cdp, outputDir, `journey-16-thumb-bar-${NARROW_PHONE}.png`);
+  const reading = await capture(cdp, outputDir, `journey-24-thumb-bar-${NARROW_PHONE}.png`);
   /*
    * The cells that are actually on the bar, not every rail item in the markup.
    *
@@ -1205,9 +2328,450 @@ async function narrowPhoneBar(cdp: Cdp, outputDir: string): Promise<string[]> {
   return judge(`16-thumb-bar-${NARROW_PHONE}`, reading);
 }
 
+/**
+ * What the journey actually changed, asked of the product's read routes.
+ *
+ * The screen saying a priority changed and the row having changed are two
+ * facts, and only the second one survives a reload. So every effect the working
+ * half of the journey was supposed to produce is read back here, as the same
+ * signed-in person, through the routes the product itself serves — inside the
+ * same journey rather than in a separate pass, because an assertion made later
+ * is an assertion about a different session.
+ *
+ * Each miss is a finding in the harness's own list, so a step that looked like
+ * it worked and did not fails the run rather than going unnoticed.
+ */
+async function persistedEffects(
+  cookie: string,
+  seeded: Seeded,
+  parked: Parked,
+): Promise<string[]> {
+  const found: string[] = [];
+  const read = async (path: string): Promise<Record<string, unknown> | null> => {
+    try {
+      const response = await fetch(`${BASE}${path}`, {
+        headers: { origin: BASE, cookie },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) return null;
+      return (await response.json()) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  console.log('');
+  console.log('What the journey changed, read back from the rows:');
+
+  /* The standing authority, which the journey approved by pressing Approve. */
+  if (seeded.projectId) {
+    const authority = await read(`/api/russell/projects/${seeded.projectId}/authority`);
+    const granted =
+      authority !== null &&
+      typeof authority['grant'] === 'object' &&
+      authority['grant'] !== null;
+    JOURNEY_EFFECTS.standingAuthorityGranted = granted;
+    console.log(`  standing authority   ${granted ? 'granted, and still there' : 'NOT GRANTED'}`);
+    if (!granted) {
+      found.push('the standing authority was approved on screen and no grant is recorded');
+    }
+  }
+
+  /* The priority a person set over Russell's, which is §24's override. */
+  if (seeded.candidateId) {
+    const idea = await read(`/api/russell/candidates/${seeded.candidateId}`);
+    const node = (idea?.['candidate'] ?? idea) as Record<string, unknown> | undefined;
+    const priority = typeof node?.['priority'] === 'string' ? (node['priority'] as string) : null;
+    const overrideBy =
+      typeof node?.['overrideUserId'] === 'string' ? (node['overrideUserId'] as string) : null;
+    const superseded = node?.['supersededDecision'] ?? null;
+    console.log(
+      `  the idea             priority ${priority ?? 'unknown'}` +
+        `${overrideBy ? `, overridden by a person` : ', no override recorded'}` +
+        `${superseded ? ', and Russell’s own judgment kept beside it' : ''}`,
+    );
+    /*
+     * One cause, one finding. The first version reported the priority, the
+     * missing author and the missing superseded judgment as three separate
+     * findings when the single fact was that the press never happened — three
+     * lines for one defect is how a list of findings stops being read.
+     */
+    JOURNEY_EFFECTS.ideaOverriddenByAPerson = overrideBy !== null;
+    JOURNEY_EFFECTS.ideaPriority = priority;
+    JOURNEY_EFFECTS.russellsJudgmentKept = superseded !== null;
+    if (overrideBy === null) {
+      found.push(
+        `no override is recorded on the idea, so the press did not reach the server ` +
+          `(the row still says ${priority ?? 'nothing'})`,
+      );
+    } else {
+      if (priority !== 'MUST_DO') {
+        found.push(
+          `the priority was set to Must do on screen and the row says ${priority ?? 'nothing'}`,
+        );
+      }
+      if (superseded === null) {
+        found.push("the override destroyed Russell's own judgment rather than superseding it");
+      }
+    }
+  }
+
+  /*
+   * The decision the person answered, and the mission it was about.
+   *
+   * Three facts, and they have to be about **one** id or the sequence proves
+   * nothing: the request the card carried is settled; the mission that was
+   * parked is no longer parked; and it is the same mission, not a replacement
+   * the tick started beside it. A journey that answered a decision and then
+   * read a different mission's state would report a resumption that never
+   * happened.
+   */
+  if (seeded.projectId && parked.missionId) {
+    /*
+     * Polled, because the transition is a tick rather than a response.
+     *
+     * `answerHumanRequest` records the decision and `approvePlan` moves the
+     * fragments; the mission's own state follows on Russell's next cycle, which
+     * is thirty seconds. Reading once, ten seconds after the press, recorded
+     * `NEEDS_HUMAN → NEEDS_HUMAN` on a run where Work was already showing the
+     * assignment — a finding about how fast this file reads, not about the
+     * product. The acceptance chain settles three ticks for the same reason;
+     * this waits for the same thing from outside.
+     *
+     * It is a wait, not a weakening: the state it is waiting for is the one
+     * asserted, and a mission still parked at the deadline is still a finding.
+     */
+    let mission: Record<string, unknown> | null = null;
+    let stateAfter: string | null = null;
+    const resumeBy = Date.now() + 150_000;
+    for (;;) {
+      const work = await read(`/api/russell/projects/${seeded.projectId}/work`);
+      const missions = Array.isArray(work?.['missions'])
+        ? (work['missions'] as Record<string, unknown>[])
+        : [];
+      mission = missions.find((row) => row['id'] === parked.missionId) ?? null;
+      stateAfter = typeof mission?.['state'] === 'string' ? (mission['state'] as string) : null;
+      if (stateAfter !== 'NEEDS_HUMAN' || Date.now() >= resumeBy) break;
+      await sleep(5_000);
+    }
+    const needsYou = await read(`/api/russell/projects/${seeded.projectId}/needs-you`);
+    const stillOpen = Array.isArray(needsYou?.['requests'])
+      ? (needsYou['requests'] as Record<string, unknown>[]).some(
+          (request) => request['id'] === parked.requestId,
+        )
+      : false;
+    JOURNEY_EFFECTS.parkedMissionId = parked.missionId;
+    JOURNEY_EFFECTS.parkedRequestId = parked.requestId;
+    JOURNEY_EFFECTS.parkedOrchestrationId = parked.orchestrationId;
+    JOURNEY_EFFECTS.missionStateBefore = parked.stateBefore;
+    JOURNEY_EFFECTS.missionStateAfter = stateAfter;
+    JOURNEY_EFFECTS.requestSettled = !stillOpen;
+    console.log(
+      `  the parked mission   ${parked.missionId} ${parked.stateBefore ?? 'unknown'} → ` +
+        `${stateAfter ?? 'gone'}, its request ${stillOpen ? 'STILL OPEN' : 'settled'}`,
+    );
+    if (mission === null) {
+      found.push(
+        `the mission the journey answered a decision about (${parked.missionId}) is no longer ` +
+          'on the work surface at all',
+      );
+    } else if (stateAfter === 'NEEDS_HUMAN') {
+      found.push(
+        'the decision was answered on screen and the mission is still parked — the answer ' +
+          'reached no transition',
+      );
+    }
+    if (stillOpen) {
+      found.push('the answered request is still open, so the answer did not settle it');
+    }
+  }
+
+  /*
+   * The result, and the honest absence of one.
+   *
+   * Knows is where the *answer* to work is read, and the journey's step 22
+   * reads what the page holds rather than that it arrived. This is the same
+   * question asked of the rows, so the reporter can tell three things apart:
+   * a conclusion that cites this mission, a project that truthfully holds
+   * none yet, and a read that failed.
+   *
+   * A checkout Brain fires no worker, so the expected answer here is **none**
+   * — and that is recorded as an open condition needing production rather
+   * than passed over. Inventing one would be inventing a research result.
+   */
+  if (seeded.projectId) {
+    const knowledge = await read(`/api/russell/projects/${seeded.projectId}/knowledge`);
+    const rows = Array.isArray(knowledge?.['knowledge'])
+      ? (knowledge['knowledge'] as Record<string, unknown>[])
+      : [];
+    JOURNEY_EFFECTS.knowledgeRows = knowledge === null ? null : rows.length;
+    JOURNEY_EFFECTS.knowledgeCitingThisMission =
+      knowledge === null
+        ? null
+        : rows.filter((row) => row['missionId'] === parked.missionId).length;
+    console.log(
+      `  what Russell knows   ${
+        knowledge === null
+          ? 'could not be read'
+          : `${rows.length} conclusion(s), ${JOURNEY_EFFECTS.knowledgeCitingThisMission} citing ` +
+            `${parked.missionId ?? 'the journey’s mission'}`
+      }` +
+        (JOURNEY_EFFECTS.filedDocumentOnScreen
+          ? `, filed document ${JOURNEY_EFFECTS.filedDocumentOnScreen}`
+          : ', no filed document yet'),
+    );
+  }
+
+  /*
+   * And the question a person typed at step 03, which is the other half of the
+   * same boundary: no inference is bought here, so Russell's answer is a bin a
+   * worker has to take. A checkout leaves it PENDING, truthfully.
+   */
+  if (seeded.projectId) {
+    const conversations = await read('/api/russell/conversations');
+    const threads = Array.isArray(conversations?.['conversations'])
+      ? (conversations['conversations'] as Record<string, unknown>[])
+      : [];
+    const thread = threads[0];
+    if (thread && typeof thread['id'] === 'string') {
+      const detail = await read(`/api/russell/conversations/${thread['id']}`);
+      // `turns`, which is what the route returns — the same rows the
+      // conversation screen renders, with their pending detail derived.
+      const messages = Array.isArray(detail?.['turns'])
+        ? (detail['turns'] as Record<string, unknown>[])
+        : [];
+      const reply = [...messages].reverse().find((message) => message['role'] === 'RUSSELL');
+      JOURNEY_EFFECTS.askedTurnStatus =
+        reply && typeof reply['status'] === 'string' ? (reply['status'] as string) : null;
+      console.log(
+        `  the question asked   Russell's turn is ${JOURNEY_EFFECTS.askedTurnStatus ?? 'not readable'}`,
+      );
+    }
+  }
+
+  /* And that the work surface now reflects it, rather than only the idea. */
+  if (seeded.projectId) {
+    const work = await read(`/api/russell/projects/${seeded.projectId}/work`);
+    const groups = Array.isArray(work?.['groups']) ? (work['groups'] as unknown[]) : [];
+    console.log(`  work                 ${groups.length} group(s) after the change`);
+  }
+
+  return found;
+}
+
+/**
+ * What the journey found parked, so the effects check can prove it *moved*.
+ *
+ * Captured before the answer rather than derived after it, because "a mission
+ * is RUNNING" is not the claim — the claim is that **this** mission was parked,
+ * a person answered its request, and that same mission carried on. Two readings
+ * of one id, either side of one press.
+ */
+interface Parked {
+  missionId: string | null;
+  requestId: string | null;
+  orchestrationId: string | null;
+  stateBefore: string | null;
+  packetBefore: string | null;
+  note: string;
+}
+
+/**
+ * Wait for Russell to reach a decision it cannot take, without taking it for it.
+ *
+ * Every row this waits for is written by the product: the tick judges the idea
+ * a person has just promoted, compiles a specification, launches a mission,
+ * `planFitsEnvelope` refuses the plan because it describes emailing somebody,
+ * `advancePacket` stops the packet at NEEDS_HUMAN with that reason, and
+ * `parkStoppedMissions` writes the request. Nothing here creates any of it, and
+ * a run where none of it happens reports that rather than inventing a card.
+ *
+ * Bounded, because a wait with no end is indistinguishable from a hang — and
+ * the bound is generous on purpose: the chain above is four tick-driven steps
+ * at thirty seconds each.
+ */
+async function waitForParkedDecision(cookie: string, seeded: Seeded): Promise<Parked> {
+  const empty: Parked = {
+    missionId: null,
+    requestId: null,
+    orchestrationId: null,
+    stateBefore: null,
+    packetBefore: null,
+    note: 'nothing parked',
+  };
+  if (!seeded.projectId) return { ...empty, note: 'no project to watch' };
+
+  const read = async (path: string): Promise<Record<string, unknown> | null> => {
+    try {
+      const response = await fetch(`${BASE}${path}`, {
+        headers: { origin: BASE, cookie },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) return null;
+      return (await response.json()) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  const deadline = Date.now() + 300_000;
+  let lastSeen = 'no mission yet';
+  while (Date.now() < deadline) {
+    const needsYou = await read(`/api/russell/projects/${seeded.projectId}/needs-you`);
+    const requests = Array.isArray(needsYou?.['requests'])
+      ? (needsYou['requests'] as Record<string, unknown>[])
+      : [];
+    const missionRequest = requests.find((request) => typeof request['missionId'] === 'string');
+    if (missionRequest) {
+      const missionId = String(missionRequest['missionId']);
+      const work = await read(`/api/russell/projects/${seeded.projectId}/work`);
+      const missions = Array.isArray(work?.['missions'])
+        ? (work['missions'] as Record<string, unknown>[])
+        : [];
+      const mission = missions.find((row) => row['id'] === missionId) ?? null;
+      const orchestrationId =
+        typeof mission?.['orchestrationId'] === 'string'
+          ? (mission['orchestrationId'] as string)
+          : null;
+      return {
+        missionId,
+        requestId: String(missionRequest['id']),
+        orchestrationId,
+        stateBefore: typeof mission?.['state'] === 'string' ? (mission['state'] as string) : null,
+        packetBefore: 'NEEDS_HUMAN',
+        note:
+          `mission ${missionId} parked at ${String(mission?.['state'] ?? 'unknown')}, ` +
+          `request ${String(missionRequest['id'])}`,
+      };
+    }
+    const work = await read(`/api/russell/projects/${seeded.projectId}/work`);
+    const missions = Array.isArray(work?.['missions'])
+      ? (work['missions'] as Record<string, unknown>[])
+      : [];
+    /*
+     * When nothing has happened, say what the idea itself looks like.
+     *
+     * "No mission has launched yet" is a fact about the mission table and tells
+     * nobody why. The idea's own state, priority and reason are what separate
+     * "Brain has not got to it" from "Brain decided against it" from "a person
+     * queued it and nothing can launch it" — which is the defect this journey
+     * found, and which a bare mission count hid for a whole run.
+     */
+    const idea = seeded.candidateId
+      ? await read(`/api/russell/candidates/${seeded.candidateId}`)
+      : null;
+    const node = (idea?.['candidate'] ?? idea) as Record<string, unknown> | undefined;
+    lastSeen =
+      missions.length === 0
+        ? `no mission has launched yet; the idea is ${String(node?.['state'] ?? 'unknown')}/` +
+          `${String(node?.['priority'] ?? 'none')} — "${String(node?.['reason'] ?? '').slice(0, 70)}"`
+        : `${missions.length} mission(s): ${missions
+            .map((row) => String(row['state']))
+            .join(', ')}`;
+    await sleep(5_000);
+  }
+  return { ...empty, note: `nothing parked within 240s — ${lastSeen}` };
+}
+
+/**
+ * `/needs-you` in its settled state, at all three widths, after the journey.
+ *
+ * The grant it depends on is the journey's own — a person opening Needs You on
+ * a phone and pressing Approve. This only photographs the consequence, and it
+ * refuses to photograph one that is not there: a run where the page still shows
+ * a decision is reported rather than captured as though it were settled.
+ *
+ * It is a separate browser session from the journey's on purpose. The journey
+ * emulates a 390px phone throughout and this needs three widths at
+ * `deviceScaleFactor: 2`; reusing its session would mean leaving the journey's
+ * last screen in a state the next reader has to reason about.
+ */
+async function captureSettledNeedsYou(
+  cookie: string,
+  rendersDir: string,
+  outputDir: string,
+  declared: Render[],
+): Promise<string[]> {
+  const found: string[] = [];
+  if (!(await standingGrantExists(cookie))) {
+    found.push(
+      'needs-you-empty: no standing authority is recorded after the journey, so the settled ' +
+        'state of Needs You was never rendered',
+    );
+    return found;
+  }
+  console.log('');
+  await withChromium(async (cdp) => {
+    await signInBrowser(cdp, cookie);
+    for (const viewport of VIEWPORTS) {
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: viewport.width,
+        height: viewport.height,
+        deviceScaleFactor: 2,
+        mobile: viewport.width < 600,
+      });
+      await cdp.send('Page.navigate', { url: `${BASE}/needs-you` });
+      await waitFor(cdp, "document.querySelector('.rs-shell') !== null");
+      const settled = await waitFor(cdp, "document.querySelector('.rs-nothing') !== null", 15_000);
+      await sleep(900);
+      const shot = (await cdp.send('Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: true,
+      })) as { data: string };
+      const bytes = Buffer.from(shot.data, 'base64');
+      fs.writeFileSync(path.join(outputDir, `${viewport.name}-needs-you-settled.png`), bytes);
+      declared.push(writeRender(rendersDir, 'needs-you-empty', viewport.width, bytes));
+      console.log(
+        `${viewport.name.padEnd(8)} ${'needs-you-empty'.padEnd(10)} ` +
+          `${settled ? 'settled' : 'STILL SHOWS A DECISION'}`,
+      );
+      if (!settled) {
+        found.push(
+          `needs-you-empty at ${viewport.width}px: the page still shows a decision after the ` +
+            'journey answered the only one there was',
+        );
+      }
+    }
+  });
+  return found;
+}
+
 /** One browser, one signed-in person, one path through the product. */
-async function driveJourney(cookie: string, outputDir: string): Promise<string[]> {
+async function driveJourney(
+  cookie: string,
+  outputDir: string,
+  constellation: ({ width: number } & ConstellationReading)[],
+): Promise<string[]> {
   const findings: string[] = [];
+  console.log('');
+  console.log('Seeding something to decide, through the product’s own doors:');
+  /*
+   * Seeded first, and **before** the standing authority is granted, because
+   * that ordering is the story this journey tells.
+   *
+   * An idea captured into a project with no standing grant is judged and
+   * *parked* — Brain may not research here yet — so it stays in the backlog
+   * where a person can find it. An idea captured after the grant is judged,
+   * specified and launched within a tick or two, which is correct and leaves
+   * nothing on the Ideas page to press.
+   *
+   * Both orderings have now been run. The second produced three findings that
+   * all read as missing controls and were all the harness racing the product,
+   * which is why this comment is longer than the line it explains.
+   */
+  const seeded = await seedSomethingToDecide(cookie);
+  console.log(`  ${seeded.note}`);
+  if (seeded.candidateId === null) {
+    findings.push(`the journey had nothing to act on: ${seeded.note}`);
+  }
+  let parked: Parked = {
+    missionId: null,
+    requestId: null,
+    orchestrationId: null,
+    stateBefore: null,
+    packetBefore: null,
+    note: 'the journey did not get that far',
+  };
   console.log('');
   console.log(
     `One journey on a ${PHONE.width}×${PHONE.height} phone, pressing real controls:`,
@@ -1223,15 +2787,115 @@ async function driveJourney(cookie: string, outputDir: string): Promise<string[]
     // The only navigation in the whole journey. Everything after this is a press.
     await cdp.send('Page.navigate', { url: `${BASE}/` });
     findings.push(
-      ...(await walk(cdp, outputDir, JOURNEY_IN, { '05-project-map': constellationProbe })),
+      ...(await walk(cdp, outputDir, JOURNEY_IN, {
+        '05-project-map': constellationProbe(constellation),
+      })),
     );
     findings.push(...(await mapsPass(cdp, outputDir)));
+    /*
+     * The Needs You answer, pressed inside the journey rather than only in the
+     * render pass.
+     *
+     * The standing authority is the one decision a project cannot proceed
+     * without, and answering it is a **journey** step: a person opens Needs
+     * You, reads what Russell may do, and approves. It used to happen only when
+     * `--renders` was passed, so a journey run reached the effects check with
+     * nothing pressed and reported "approved on screen and no grant is
+     * recorded" — a finding about the harness, not the product.
+     *
+     * It is also what unblocks everything after it: no grant, no mission, and
+     * Work has nothing to show.
+     */
+    /*
+     * Already granted is a fact, not a failure — and reporting it as one cost a
+     * whole run.
+     *
+     * With `--renders`, the capture pass answers this same decision before the
+     * journey starts, because `needs-you-empty` is the settled state of one
+     * address and pressing its own Approve is how you get there. The journey
+     * then found no Approve control and called it "the one decision on Needs
+     * You could not be answered from the screen" — which is false of a build
+     * where it had just been answered twenty minutes earlier.
+     */
+    const alreadyGranted = await standingGrantExists(cookie);
+    const answered = alreadyGranted ? true : await grantStandingAuthority(cdp);
+    console.log(
+      `  needs-you answer   ${
+        alreadyGranted
+          ? 'already granted earlier in this run — the render pass pressed the same control'
+          : answered
+            ? 'approved, and the card swapped its control'
+            : 'COULD NOT APPROVE'
+      }`,
+    );
+    if (!answered) {
+      findings.push('the one decision on Needs You could not be answered from the screen');
+    }
+
+    findings.push(...(await walk(cdp, outputDir, JOURNEY_WORK)));
+    /*
+     * The wait between promoting an idea and being asked about it.
+     *
+     * Not a control, so not a step. Russell's tick is thirty seconds and the
+     * chain is four of them — judge, compile, launch, park — so this is the
+     * harness doing what a person does between opening the app twice.
+     */
+    console.log('  waiting for Russell to reach a decision it cannot take…');
+    parked = await waitForParkedDecision(cookie, seeded);
+    console.log(`  the parked decision  ${parked.note}`);
+    if (parked.requestId === null) {
+      findings.push(
+        `the journey never reached a parked decision to answer: ${parked.note}`,
+      );
+    }
+    findings.push(...(await walk(cdp, outputDir, JOURNEY_DECISION)));
+    findings.push(...(await walk(cdp, outputDir, JOURNEY_AFTER)));
+    /*
+     * What the technical detail actually said, held against the ids Brain
+     * wrote.
+     *
+     * Read off the screen after the walk rather than inside the step, because
+     * the step's job is to press and this one's is to check — and what it
+     * checks is that the pairs a person can see name **this** mission and
+     * **this** packet, rather than merely being present and plausible.
+     */
+    const pairs = JOURNEY_READS['21-what-the-work-actually-is'] ?? '';
+    JOURNEY_EFFECTS.workIdsOnScreen = pairs || null;
+    JOURNEY_EFFECTS.workIdentifiedOnScreen =
+      parked.missionId !== null &&
+      pairs.includes(parked.missionId) &&
+      (parked.orchestrationId === null || pairs.includes(parked.orchestrationId));
+    const filed = /Filed document=(\S+)/.exec(pairs);
+    JOURNEY_EFFECTS.filedDocumentOnScreen = filed ? (filed[1] ?? null) : null;
+    console.log(
+      `  the work, identified ${
+        JOURNEY_EFFECTS.workIdentifiedOnScreen
+          ? `on screen by its own ids — ${pairs.slice(0, 90)}`
+          : `NOT MATCHED — read "${pairs.slice(0, 90)}"`
+      }`,
+    );
+    if (parked.missionId !== null && JOURNEY_EFFECTS.workIdentifiedOnScreen === false) {
+      findings.push(
+        'the mission’s technical detail on the phone does not name the mission and packet the ' +
+          'journey actually caused',
+      );
+    }
+    /*
+     * The effects, read out of the database rather than off the screen.
+     *
+     * A page that says a priority changed and a row that changed are different
+     * facts, and only the second one survives a reload. This asks the product's
+     * own read routes, as the same signed-in person, inside the same journey —
+     * so a step that appeared to work and did not is a finding here rather than
+     * something noticed weeks later.
+     */
+    findings.push(...(await persistedEffects(cookie, seeded, parked)));
     findings.push(...(await walk(cdp, outputDir, JOURNEY_OUT)));
     findings.push(
       ...(await reachabilityProbe(
         cdp,
         outputDir,
-        `journey-15-everywhere-from-${PHONE.width}.png`,
+        `journey-23-everywhere-from-${PHONE.width}.png`,
         PHONE.width,
       )),
     );
@@ -1240,10 +2904,11 @@ async function driveJourney(cookie: string, outputDir: string): Promise<string[]
       ...(await reachabilityProbe(
         cdp,
         outputDir,
-        `journey-17-everywhere-from-${NARROW_PHONE}.png`,
+        `journey-25-everywhere-from-${NARROW_PHONE}.png`,
         NARROW_PHONE,
       )),
     );
+    findings.push(...(await narrowConstellation(cdp, outputDir, constellation)));
   });
   return findings;
 }
@@ -1448,6 +3113,7 @@ async function withChromium(body: (cdp: Cdp) => Promise<void>): Promise<void> {
     };
 
     await cdp.send('Page.enable');
+    await serveWebFonts(cdp);
     try {
       await body(cdp);
     } finally {
@@ -1481,6 +3147,92 @@ async function withChromium(body: (cdp: Cdp) => Promise<void>): Promise<void> {
       /* left behind in the temp directory, deliberately */
     }
   }
+}
+
+/* -------------------------------------------------------------------------
+ * The product's own typefaces, fetched the way this machine can fetch them.
+ *
+ * `client/index.html` links the Google Fonts stylesheet, and Chromium here is
+ * launched with no proxy, so every page load reset that request and the whole
+ * product rendered on its fallback stack: Georgia where Fraunces should be,
+ * system-ui where Public Sans should be. The harness reported it correctly as
+ * an environment fact and carried on — which is right for a layout check and
+ * wrong for the thing these captures are now for.
+ *
+ * **A render in the wrong typefaces is a picture of a different product**, and
+ * a person asked to approve a visual direction from one is being asked about
+ * something that does not exist. Type is not a detail here: it sets every line
+ * height, every label width and therefore where a name wraps, which is the
+ * measurement this run exists to take.
+ *
+ * So the two font hosts are intercepted and answered from Node, whose fetch
+ * goes through this machine's outbound proxy. Nothing about the page changes —
+ * the same URLs, the same bytes, the same stylesheet — and nothing about the
+ * browser's trust is loosened, which is the reason this is interception rather
+ * than `--ignore-certificate-errors`: a harness that disables certificate
+ * checking to get a picture is a pattern somebody copies into something that
+ * matters. A font that genuinely cannot be fetched still fails, and the page
+ * still falls back, because pretending otherwise would be the same lie one step
+ * along.
+ * ---------------------------------------------------------------------- */
+
+const FONT_HOSTS = ['https://fonts.googleapis.com/*', 'https://fonts.gstatic.com/*'];
+
+/** One process-wide cache: the same six files on every page of every width. */
+const fontCache = new Map<string, { type: string; body: string } | null>();
+
+async function fetchFont(url: string): Promise<{ type: string; body: string } | null> {
+  const cached = fontCache.get(url);
+  if (cached !== undefined) return cached;
+  let answer: { type: string; body: string } | null = null;
+  try {
+    const response = await fetch(url, {
+      // Google serves woff2 to a browser and truetype to something it does not
+      // recognise, so the stylesheet this returns has to be the one Chromium
+      // would have been given.
+      headers: { 'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) Chrome/141.0.0.0 Safari/537.36' },
+    });
+    if (response.ok) {
+      answer = {
+        type: response.headers.get('content-type') ?? 'application/octet-stream',
+        body: Buffer.from(await response.arrayBuffer()).toString('base64'),
+      };
+    }
+  } catch {
+    answer = null;
+  }
+  fontCache.set(url, answer);
+  return answer;
+}
+
+async function serveWebFonts(cdp: Cdp): Promise<void> {
+  cdp.on('Fetch.requestPaused', (params) => {
+    const requestId = String(params['requestId']);
+    const request = params['request'] as { url?: string } | undefined;
+    void (async (): Promise<void> => {
+      const answer = request?.url ? await fetchFont(request.url) : null;
+      try {
+        if (answer) {
+          await cdp.send('Fetch.fulfillRequest', {
+            requestId,
+            responseCode: 200,
+            responseHeaders: [
+              { name: 'content-type', value: answer.type },
+              { name: 'access-control-allow-origin', value: '*' },
+            ],
+            body: answer.body,
+          });
+        } else {
+          await cdp.send('Fetch.failRequest', { requestId, errorReason: 'ConnectionFailed' });
+        }
+      } catch {
+        /* the page navigated away from the request; nothing to answer */
+      }
+    })();
+  });
+  await cdp.send('Fetch.enable', {
+    patterns: FONT_HOSTS.map((urlPattern) => ({ urlPattern })),
+  });
 }
 
 /**

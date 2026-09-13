@@ -2397,6 +2397,93 @@ describe('the acceptance reporter writes to a scratch database, never the config
     expect(source).toContain('DEFAULT_TARGET_WITH_NO_PRIOR_POLICY');
   });
 
+  /*
+   * The chain gate, pinned on the two things that make it evidence rather than
+   * a description: that it drives the real services, and that it fabricates
+   * nothing to get there.
+   *
+   * The second half is the one worth a test. The owner's rejection was that a
+   * tick summary is not a chain, and the obvious way to make the chain "pass"
+   * is to write the packet's terminal status, a document row and an audit row
+   * by hand — which would be a report of invented citations (§12) and a verdict
+   * nobody reached (§8), wearing an acceptance gate's clothes. So the reporter
+   * is refused those tools by absence: it never imports them.
+   */
+  it('drives R through the services and writes no research, document or verdict', () => {
+    // The chain, through the entrances production uses.
+    expect(source).toContain("from '../server/services/russell/launch.ts'");
+    expect(source).toContain("from '../server/services/russell/loop.ts'");
+    expect(source).toContain('answerHumanRequest');
+    expect(source).toContain('NEEDS_HUMAN_CHOICES');
+    expect(source).toContain('reserve');
+
+    /*
+     * And the tools that could fabricate a finished packet, none of which it
+     * has. `createAudit` is deliberately not in this list: gate D uses it to
+     * build a frontier snapshot, which is a reading about classification rather
+     * than a claim that a packet was judged. What must never appear is a way to
+     * mint evidence for the chain.
+     */
+    const imported = [...source.matchAll(/^import[\s\S]*?from '[^']+';$/gm)]
+      .map((match) => match[0])
+      .join('\n');
+    for (const forbidden of [
+      'updateOrchestration',
+      'recordFragmentClaims',
+      'gateFragment',
+      'createDocument',
+      'storeFile',
+      'registerRunArtifact',
+      'recordAuditPasses',
+      'authorizeUnresolvedGaps',
+    ]) {
+      // Neither imported nor called. Named in prose is fine and is the point:
+      // the reporter has to be able to say what it did not do and why.
+      expect(imported, `the reporter must not import ${forbidden}`).not.toContain(forbidden);
+      expect(source, `the reporter must not call ${forbidden}`).not.toMatch(
+        new RegExp(`\\b${forbidden}\\s*\\(`),
+      );
+    }
+
+    // The guard that stops it is executed rather than described.
+    expect(source).toContain('fileResearchPacket');
+    expect(source).toContain('cleared its fragment evidence gate');
+
+    // And what it could not drive is named with what would close it, rather
+    // than left as an absence a reader has to infer.
+    expect(source).toContain("needs: 'A REAL WORKER'");
+    expect(source).toContain("needs: 'THE OWNER'");
+  });
+
+  /*
+   * A check that ran and did not hold must never read as one nobody ran.
+   *
+   * That is a property of the reporter rather than of any run: the union has to
+   * carry the verdict, the summary has to count it, and the failing scenarios
+   * have to be named on their own line — otherwise a reader tells a defect from
+   * a backlog by counting.
+   */
+  it('has a verdict for an executed check that failed, and counts it', () => {
+    expect(source).toMatch(/type Verdict =[^;]*'FAIL'/);
+    expect(source).toContain('{ PASS: 0, PARTIAL: 0, BLOCKED: 0, FAIL: 0, NOT_RUN: 0 }');
+    expect(source).toContain('counts.FAIL');
+    expect(source).toContain('SCENARIO(S) FAILED');
+  });
+
+  /*
+   * The store is pinned the way the database is, and for the identical reason.
+   *
+   * Nothing in the reporter files a document today. "Safe because nobody calls
+   * the other function" is the kind of guarantee this repository refuses
+   * everywhere else, and a reporter that could reach a real bucket would be a
+   * mutation rather than a reading.
+   */
+  it('names the local store explicitly, so no run can reach a real bucket', () => {
+    expect(source).toContain('initStorage');
+    expect(source).toMatch(/initStorage\([\s\S]*?provider: 'local'/);
+    expect(source).toMatch(/initStorage\([\s\S]*?root: dataDir/);
+  });
+
   it('takes its operational reading before it opens anything it writes to', () => {
     // Order matters: the real Brain is read and closed, and only then is the
     // scratch database opened. Reversed, the read would see the scratch one.
@@ -2447,9 +2534,16 @@ describe('the acceptance reporter, read where the image cannot see the repositor
   });
 
   it('reads no directory without first asking whether it is there', () => {
+    /*
+     * `REPO_VISIBLE` counts as the guard, and is the stronger one: it is itself
+     * computed from an `existsSync` probe of `tests/`, and a row that consults
+     * it says *which half it could not see* rather than merely not crashing.
+     * Requiring the literal call would have forced the weaker shape on rows
+     * that already ask the better question.
+     */
     for (const [, before] of source.matchAll(/([\s\S]{0,400})fs\s*\n?\s*\.?readdirSync/g)) {
       expect(before, 'an unguarded readdirSync is how gate K crashed in the container').toMatch(
-        /existsSync/,
+        /existsSync|REPO_VISIBLE/,
       );
     }
   });
@@ -2466,9 +2560,510 @@ describe('the acceptance reporter, read where the image cannot see the repositor
       expect(start, `gate ${gate} is not where this test expects it`).toBeGreaterThan(-1);
       const end = rows.indexOf('/* --', start + 6);
       const body = end === -1 ? rows.slice(start) : rows.slice(start, end);
+      /*
+       * `fromCheckout(` counts, and is the better spelling: it consults
+       * `REPO_VISIBLE` *and* keeps the condition's name the same in both
+       * environments, which is what lets the combiner join the two runs. A
+       * test that insisted on the literal flag would push the gates back
+       * towards the pair-of-branches shape that let a name drift.
+       */
       expect(body, `gate ${gate} does not say when it could not look`).toMatch(
-        /REPO_VISIBLE|NOT_FROM_A_CHECKOUT|clientHasOperator === null/,
+        /REPO_VISIBLE|NOT_FROM_A_CHECKOUT|fromCheckout\(/,
       );
     }
+  });
+});
+
+/**
+ * The acceptance reporter evaluates the design decision. It can never record
+ * one, and that separation is the whole point of gate O.
+ *
+ * The owner drew the distinction in those words: *"O must consume a genuine
+ * recorded owner approval; evaluating that approval is different from granting
+ * itself approval."* A reporter that could write the row it is waiting for
+ * would be approving its own work — which is exactly the defect
+ * `independenceEvidence.ts` re-checks its own guard to prevent, and exactly
+ * what `assemble.ts` refuses when it produces a pull request and stops.
+ *
+ * So the writer lives in the repository and **nothing under `scripts/` imports
+ * it**. That is checkable, and this is the check.
+ */
+/**
+ * A source file with its comments removed, for *negative* assertions only.
+ *
+ * The first version of the verb test failed against the **fixed** file, because
+ * the comment explaining the defect quotes the defect verbatim — so the
+ * assertion was reading the prose about the code rather than the code. A
+ * negative source assertion that a sentence describing the forbidden thing can
+ * trip is worse than none: it punishes writing down why, which is most of what
+ * the comments in this repository are for.
+ */
+const codeOf = (source: string): string =>
+  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+describe('nothing in scripts/ can record a design decision', () => {
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+
+  it('is the acceptance reporter reading, never writing', () => {
+    const reporter = fs.readFileSync(
+      path.join(repo, 'scripts', 'step12b-acceptance.ts'),
+      'utf8',
+    );
+    // It reads the standing decision and digests the render set…
+    expect(reporter).toContain('standingDecision');
+    expect(reporter).toContain('digestRenderSet');
+    // …and imports no writer.
+    expect(codeOf(reporter)).not.toContain('recordDesignDecision');
+  });
+
+  it('is true of every script, not only the reporter', () => {
+    const dir = path.join(repo, 'scripts');
+    const offenders = fs
+      .readdirSync(dir)
+      .filter((name) => name.endsWith('.ts'))
+      .filter((name) => fs.readFileSync(path.join(dir, name), 'utf8').includes('recordDesignDecision'));
+    /*
+     * `admin.ts` is the one permitted writer, because reaching a shell inside
+     * the deployment is the authentication §26 already relies on and `--admin`
+     * is the attribution. Everything else is refused: a guard on one entrance
+     * is not a guard.
+     */
+    expect(offenders.filter((name) => name !== 'admin.ts')).toEqual([]);
+  });
+
+  it('keeps the decision vocabulary closed, so a rejection is a recorded answer', () => {
+    const repoModule = fs.readFileSync(
+      path.join(repo, 'server', 'repos', 'designApprovals.ts'),
+      'utf8',
+    );
+    expect(repoModule).toContain("'APPROVED'");
+    expect(repoModule).toContain("'REJECTED'");
+    expect(repoModule).toContain("'WITHDRAWN'");
+    // Append-only: no UPDATE and no DELETE anywhere in it.
+    expect(repoModule).not.toMatch(/\bUPDATE design_approvals\b/);
+    expect(repoModule).not.toMatch(/\bDELETE FROM design_approvals\b/);
+  });
+});
+
+/**
+ * The three defects the owner found in the acceptance plumbing, pinned.
+ *
+ * All three shared a shape worth naming: each would have produced a *plausible*
+ * wrong answer rather than an error. A combiner that declared completion over
+ * three rows, a gate that reported "nobody has approved" against a database
+ * that could never hold an approval, and a verb that wrote `APPROVE` where every
+ * reader looks for `APPROVED`. None of them would have thrown, and the last two
+ * compose into the worst version: a correctly recorded approval reading back as
+ * a rejection.
+ */
+describe('the acceptance plumbing, where a plausible wrong answer was possible', () => {
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+  const combiner = fs.readFileSync(path.join(repo, 'scripts', 'step12b-combine.ts'), 'utf8');
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+  const admin = fs.readFileSync(path.join(repo, 'scripts', 'admin.ts'), 'utf8');
+
+
+  it('names all seventeen scenarios in the combiner, not in the input', () => {
+    const declared = /const SCENARIOS = \[([^\]]+)\]/.exec(combiner);
+    expect(declared, 'the combiner must declare the scenario set itself').not.toBeNull();
+    const ids = [...(declared?.[1] ?? '').matchAll(/'([A-Q])'/g)].map((m) => m[1]);
+    expect(ids).toEqual('ABCDEFGHIJKLMNOPQ'.split(''));
+    // Taking the set from the first reading is what let a truncated input
+    // define its own completeness.
+    expect(codeOf(combiner)).not.toContain('new Set(readings.flatMap');
+  });
+
+  it('refuses a reading that is missing, duplicates or invents a gate', () => {
+    for (const refusal of ['unknown', 'duplicate', 'absent']) {
+      expect(combiner, `the ${refusal} refusal`).toContain(refusal);
+    }
+    expect(combiner).toMatch(/is missing gate\(s\)/);
+    expect(combiner).toMatch(/carries duplicate record\(s\)/);
+    expect(combiner).toMatch(/are not Step 12B scenarios/);
+  });
+
+  it('requires the full denominator before declaring completion', () => {
+    // `counts.PASS === combined.length` alone is true of any set where
+    // everything present passed — including one missing fourteen rows.
+    expect(combiner).toContain('counts.PASS === SCENARIOS.length');
+    expect(combiner).toContain('combined.length === SCENARIOS.length');
+  });
+
+  it('reads the design decision while the configured database is still open', () => {
+    /*
+     * The ordering is the whole fix. `readOperationalFleet` closes the
+     * configured database and the exercising half then opens a temporary
+     * SQLite one, so anything asking `getDb()` after that point is asking the
+     * scratch database — which has `design_approvals` and can never have a row.
+     */
+    /*
+     * Scoped to `main`, because the exercises defined above it open scratch
+     * databases of their own — the continuity check closes and re-opens one on
+     * purpose, and `reReadCycle` re-opens the configured one for a second
+     * reading. Comparing positions across the whole file compared the wrong two
+     * occurrences and failed on a correct ordering, which is the false finding
+     * that costs more than the defect it was looking for.
+     */
+    const main = reporter.slice(reporter.indexOf('async function main(): Promise<void> {'));
+    const readsDesign = main.indexOf('await readDesignDecision(');
+    const opensScratch = main.indexOf("config: { provider: 'sqlite'");
+    expect(readsDesign, 'the design reading must exist').toBeGreaterThan(-1);
+    expect(opensScratch, 'the scratch database must exist').toBeGreaterThan(-1);
+    expect(
+      readsDesign,
+      'the design decision must be read before the scratch database replaces the configured one',
+    ).toBeLessThan(opensScratch);
+    // And gate O must consume that reading rather than querying again.
+    const gateO = reporter.slice(reporter.indexOf('/* -- O. Visual and interaction approval'));
+    expect(codeOf(gateO)).not.toContain('standingDecision(');
+  });
+
+  it('maps each verb to a decision the vocabulary recognises', () => {
+    // `approve`.toUpperCase() is `APPROVE`, which no reader matches — and
+    // because gate O asks `!== 'APPROVED'`, it would have read as a rejection.
+    expect(codeOf(admin)).not.toContain('command.toUpperCase() as DesignDecision');
+    expect(admin).toContain("approve: 'APPROVED'");
+    expect(admin).toContain("reject: 'REJECTED'");
+    expect(admin).toContain("withdraw: 'WITHDRAWN'");
+  });
+
+  it('still cannot record the decision it evaluates', () => {
+    expect(codeOf(reporter)).not.toContain('recordDesignDecision');
+  });
+});
+
+/* ==========================================================================
+ * The condition rule, and the join it makes possible.
+ *
+ * The owner's finding was that fifteen of seventeen scenarios had no branch
+ * that could return PASS. The remedy is that a scenario declares what it is
+ * made of and the verdict is derived — and that remedy has two halves which
+ * must agree: the reporter derives a verdict from conditions, and the combiner
+ * re-derives one from the union of two runs' conditions. A rule applied by one
+ * of two readers is worse than none, which this repository has now recorded
+ * four times, so both are pinned here against the same table of cases.
+ * ======================================================================== */
+describe('a verdict is derived from conditions, by both readers, identically', () => {
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+  const combiner = fs.readFileSync(path.join(repo, 'scripts', 'step12b-combine.ts'), 'utf8');
+
+  /**
+   * The rule, written once here so the assertions below are about behaviour
+   * rather than about a copy of the implementation.
+   */
+  type Cond = {
+    name: string;
+    held: boolean | null;
+    saw: string;
+    awaits?: string;
+    deferredBy?: { owner: string; recordedAt: string; where: string };
+  };
+  const expected = (conditions: Cond[]): string => {
+    if (conditions.length === 0) return 'NOT_RUN';
+    const judged = conditions.filter((c) => c.deferredBy === undefined);
+    if (judged.some((c) => c.held === false)) return 'FAIL';
+    if (judged.length === 0) return 'PASS';
+    if (judged.some((c) => c.held === null && c.awaits !== undefined)) return 'BLOCKED';
+    if (judged.every((c) => c.held === null)) return 'NOT_RUN';
+    if (judged.some((c) => c.held === null)) return 'PARTIAL';
+    return 'PASS';
+  };
+
+  const cases: { why: string; conditions: Cond[]; verdict: string }[] = [
+    { why: 'nothing declared is nothing run', conditions: [], verdict: 'NOT_RUN' },
+    {
+      why: 'every condition exercised and holding is the PASS path that did not exist',
+      conditions: [
+        { name: 'a', held: true, saw: 'held' },
+        { name: 'b', held: true, saw: 'held' },
+      ],
+      verdict: 'PASS',
+    },
+    {
+      why: 'a condition that ran and broke is a defect, never a missing run',
+      conditions: [
+        { name: 'a', held: true, saw: 'held' },
+        { name: 'b', held: false, saw: 'did not' },
+      ],
+      verdict: 'FAIL',
+    },
+    {
+      why: 'a defect outranks an unreachable condition — a FAIL is not softened by a gap',
+      conditions: [
+        { name: 'a', held: false, saw: 'did not' },
+        { name: 'b', held: null, saw: 'elsewhere' },
+      ],
+      verdict: 'FAIL',
+    },
+    {
+      why: 'one condition this environment cannot reach is PARTIAL, which the combiner then joins',
+      conditions: [
+        { name: 'a', held: true, saw: 'held' },
+        { name: 'b', held: null, saw: 'elsewhere' },
+      ],
+      verdict: 'PARTIAL',
+    },
+    {
+      why: 'nothing exercisable here is NOT_RUN — we could not look is not we looked',
+      conditions: [{ name: 'a', held: null, saw: 'elsewhere' }],
+      verdict: 'NOT_RUN',
+    },
+    {
+      why: 'a condition waiting on a person is BLOCKED, not PARTIAL — nowhere else can answer it',
+      conditions: [
+        { name: 'a', held: true, saw: 'held' },
+        { name: 'an approval', held: null, saw: 'nobody has decided', awaits: 'the owner' },
+      ],
+      verdict: 'BLOCKED',
+    },
+    {
+      why: 'and a defect still outranks it, because a broken check is somebody\u2019s bug today',
+      conditions: [
+        { name: 'a', held: false, saw: 'did not' },
+        { name: 'an approval', held: null, saw: 'nobody has decided', awaits: 'the owner' },
+      ],
+      verdict: 'FAIL',
+    },
+    {
+      why: 'a condition nobody has proved stays open, whatever the matrix argues about it',
+      conditions: [
+        { name: 'a', held: true, saw: 'held' },
+        { name: 'expensive to prove', held: null, saw: 'nobody has measured it' },
+      ],
+      verdict: 'PARTIAL',
+    },
+    {
+      why: 'only an owner-recorded deferral takes a condition out of the denominator',
+      conditions: [
+        { name: 'a', held: true, saw: 'held' },
+        {
+          name: 'expensive to prove',
+          held: null,
+          saw: 'nobody has measured it',
+          deferredBy: { owner: 'the owner', recordedAt: '2026-09-13', where: 'the matrix' },
+        },
+      ],
+      verdict: 'PASS',
+    },
+  ];
+
+  for (const entry of cases) {
+    it(entry.why, () => {
+      expect(expected(entry.conditions)).toBe(entry.verdict);
+    });
+  }
+
+  it('is the same rule in the reporter and in the combiner, not two that drifted', () => {
+    /*
+     * Compared as normalised source rather than by calling them: both live in
+     * scripts with `main()` at the bottom, so importing either would run a
+     * reporter. What is compared is the decision, with whitespace and the two
+     * different local names collapsed — so a change to either arm that is not
+     * made to the other fails here.
+     */
+    const ruleOf = (source: string, name: string): string => {
+      const start = source.indexOf(name);
+      expect(start, `${name} is not in this file at all`).toBeGreaterThan(-1);
+      const body = source.slice(start, source.indexOf("return 'PASS';", start) + 15);
+      return codeOf(body)
+        .replace(/conditions|merged/g, 'C')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+    const inReporter = ruleOf(reporter, 'function verdictOf(');
+    const inCombiner = ruleOf(combiner, 'const verdictOfConditions =');
+    // The signatures differ; the decision must not.
+    const decisionOnly = (rule: string): string =>
+      rule.slice(rule.indexOf('if (C.length === 0)'));
+    expect(decisionOnly(inCombiner)).toBe(decisionOnly(inReporter));
+  });
+
+  it('joins two runs at the condition level, because joining verdicts loses the answer', () => {
+    /*
+     * The case this exists for, which is every PARTIAL row in a real reading: a
+     * checkout run cannot see the fleet and a container run cannot see the
+     * repository, so both report PARTIAL on the same scenario for opposite
+     * reasons. Joined by verdict that is PARTIAL agreeing with PARTIAL. Joined
+     * by condition it is PASS, and the second is the true answer.
+     */
+    const checkout: Cond[] = [
+      { name: 'a repository fact', held: true, saw: 'read from the tree' },
+      { name: 'a fleet fact', held: null, saw: 'no fleet here' },
+    ];
+    const production: Cond[] = [
+      { name: 'a repository fact', held: null, saw: 'not in the image' },
+      { name: 'a fleet fact', held: true, saw: 'read from the rows' },
+    ];
+    expect(expected(checkout)).toBe('PARTIAL');
+    expect(expected(production)).toBe('PARTIAL');
+
+    const union = new Map<string, Cond>();
+    for (const condition of [...checkout, ...production]) {
+      const existing = union.get(condition.name);
+      if (!existing || existing.held === null) union.set(condition.name, condition);
+    }
+    expect(expected([...union.values()])).toBe('PASS');
+
+    // And the combiner says in its own source that this is what it does, so a
+    // future edit that quietly reverts to picking a verdict is visible.
+    expect(combiner).toContain('joined by condition');
+    expect(combiner).toContain('joined by verdict, no conditions recorded');
+  });
+
+  it('makes a condition two runs disagree about a CONFLICT rather than a tie to break', () => {
+    const combine = combiner.slice(combiner.indexOf('const byName = new Map'));
+    expect(combine).toContain("conflicts.push(");
+    expect(combine).toContain("conflicts.length > 0 ? 'CONFLICT'");
+  });
+
+  it('carries the conditions into the emitted record, or the join has nothing to work with', () => {
+    expect(reporter).toContain('conditions: gate.conditions,');
+    expect(codeOf(reporter)).toContain('conditions: GateCondition[]');
+  });
+
+  it('binds a committed reading to the product rather than to a commit id', () => {
+    /*
+     * An exact revision match is unsatisfiable by construction: evidence is
+     * committed *after* it is taken, so a record naming HEAD is stale the
+     * moment it lands. What matters is whether anything it looked at moved —
+     * and a docs commit does not change what a browser renders.
+     */
+    /*
+     * Read in two pieces, because it is now written in two.
+     *
+     * `productUnchangedSince` was the whole implementation when this was
+     * written; it is a one-line delegation to `unchangedSince(revision, paths)`
+     * since P started asking the same question about `server/db` alone. Slicing
+     * from its name therefore reached past the git call and this assertion
+     * failed against a helper that had not lost a property — the second time in
+     * this file a test has been about the shape of a function rather than about
+     * what it decides. What is pinned is the decision: a git diff of the
+     * product's own directories, and a failure that reads as changed.
+     */
+    const generic = reporter.slice(reporter.indexOf('function unchangedSince('));
+    expect(generic).toContain("'diff', '--quiet'");
+    expect(generic.slice(0, generic.indexOf('\n}'))).toContain('return false;');
+
+    const product = reporter.slice(
+      reporter.indexOf('function productUnchangedSince('),
+      reporter.indexOf('function visualEvidence('),
+    );
+    expect(product).toContain('unchangedSince(revision, ');
+    expect(product).toContain("'client'");
+    expect(product).toContain("'server'");
+  });
+});
+
+/* ==========================================================================
+ * A condition's name is its identity across two runs.
+ *
+ * `step12b-combine.ts` unions conditions **by name**, which makes the name the
+ * join key — and a join key that changes with the environment joins nothing.
+ * Gate J had exactly that defect: ten named conditions from a checkout and one
+ * lumped "the phone journey was walked and written down" from a container, so
+ * the union would have carried eleven conditions, one of which nothing could
+ * ever answer, and J would have read PARTIAL for ever however green both runs
+ * were.
+ *
+ * The two helpers are the remedy — they hold the name fixed and move only the
+ * answer — so what is pinned here is that the reporter uses them rather than
+ * writing a pair of branches whose names can drift apart.
+ * ======================================================================== */
+describe('a condition keeps its name whichever environment answered it', () => {
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+  const combiner = fs.readFileSync(path.join(repo, 'scripts', 'step12b-combine.ts'), 'utf8');
+
+  it('joins by name, which is what makes the name load-bearing', () => {
+    expect(combiner).toContain('const byName = new Map');
+    expect(combiner).toContain('byName.get(condition.name)');
+  });
+
+  it('has one helper per environment, each keeping the name and moving only the answer', () => {
+    for (const helper of ['function fromCheckout(', 'function fromProduction(']) {
+      const start = reporter.indexOf(helper);
+      expect(start, `${helper} is missing`).toBeGreaterThan(-1);
+      const body = reporter.slice(start, reporter.indexOf('\n}', start)).replace(/\s+/g, ' ');
+      /*
+       * The name is passed straight through in both arms; only `held` and
+       * `saw` differ. Whitespace is collapsed first because the two helpers
+       * are formatted differently — one fits on a line and one does not — and
+       * a test that depended on that would be pinning the formatter rather
+       * than the property.
+       */
+      expect(body).toContain('? { name, held, saw }');
+      expect(body).toMatch(/: \{ name, held: null,/);
+    }
+  });
+
+  it('writes no environment branch that could give one condition two names', () => {
+    /*
+     * The shape being refused is a ternary on REPO_VISIBLE (or the production
+     * flag) whose two arms each carry their own `name:` literal — which is how
+     * J's defect was written. Both helpers exist precisely so that shape is
+     * never needed.
+     */
+    const gates = codeOf(reporter.slice(reporter.indexOf('/* -- A.')));
+    const branches = [...gates.matchAll(/(?:REPO_VISIBLE|READING_PRODUCTION)\s*\n?\s*\?[\s\S]{0,900}?:/g)];
+    for (const [branch] of branches) {
+      const names = [...branch.matchAll(/name:\s*['"`]/g)];
+      expect(
+        names.length,
+        'an environment branch that names a condition in both arms can name it differently in ' +
+          'each — use fromCheckout or fromProduction, which keep the name fixed',
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+/* ==========================================================================
+ * A required condition cannot leave the denominator by itself.
+ *
+ * `verdictOf` used to skip every condition carrying `standing: true` — a flag
+ * the reporter set on its own conditions — so a gate could read PASS with a
+ * required condition unproved underneath it. Two of the seven it was used on
+ * were requirements: the hosted pre/post-restart check is R13, and what a real
+ * Cowork surface holds is what T3, T4 and T5 are about.
+ *
+ * The replacement is a deferral that names a decision: who, when and where it
+ * is recorded. Nothing in the reporter constructs one, which is the property
+ * pinned here — a self-set exemption must not come back under a new name.
+ * ======================================================================== */
+describe('nothing removes a requirement from completion except a recorded decision', () => {
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+  const combiner = fs.readFileSync(path.join(repo, 'scripts', 'step12b-combine.ts'), 'utf8');
+
+  it('has no self-set exemption flag left in either reader', () => {
+    for (const [name, source] of [
+      ['the reporter', reporter],
+      ['the combiner', combiner],
+    ] as const) {
+      expect(codeOf(source), `${name} still has a standing flag`).not.toMatch(/standing\??:\s*true/);
+    }
+  });
+
+  it('exempts only on a deferral that names who decided, when, and where', () => {
+    for (const [name, source] of [
+      ['the reporter', reporter],
+      ['the combiner', combiner],
+    ] as const) {
+      expect(source, `${name} does not declare a deferral shape`).toMatch(
+        /deferredBy\?:\s*\{\s*owner:\s*string;\s*recordedAt:\s*string;\s*where:\s*string\s*\}/,
+      );
+      expect(source, `${name} judges on something other than the deferral`).toContain(
+        'c.deferredBy === undefined',
+      );
+    }
+  });
+
+  it('constructs no deferral anywhere, so every condition today is scored', () => {
+    /*
+     * The shape exists so a real decision can be read in later. A reporter that
+     * wrote one itself would be granting its own exemption, which is the same
+     * defect as approving its own design.
+     */
+    expect(codeOf(reporter)).not.toMatch(/deferredBy:\s*\{/);
   });
 });

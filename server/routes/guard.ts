@@ -57,7 +57,31 @@ import {
  * again on every refresh. It needs authentication to *run* and to *not refuse*,
  * which is a third thing, and now has its own set.
  */
-const UNAUTHENTICATED_PATHS = new Set(['/api/auth/login']);
+/**
+ * The two invitation routes are the third and fourth entries, and they are here
+ * for `/api/auth/login`'s exact reason rather than as a convenience.
+ *
+ * An invited person may have no Brain account at all, so there is no credential
+ * for them to present and no session for the guard to resolve. What they hold is
+ * a 256-bit single-use secret a named administrator issued — which is a
+ * credential, and these two routes are the only way it can be spent. Requiring
+ * a session here would make the journey reachable only by people who are already
+ * in, which is precisely the dead end §26 records as missing.
+ *
+ * They are not a hole for three reasons that live in the routes rather than in
+ * this comment: the token is the whole authority and is verified in constant time
+ * against a digest; spending it is one guarded `UPDATE`; and everything either
+ * route reveals or grants comes from the invitation's own row — the project, the
+ * role and the email — so nothing a caller sent decides anything. No CSRF check
+ * applies because no cookie is consulted: a cross-site page cannot make somebody
+ * else's browser accept an invitation it does not already hold the secret for,
+ * and a page that holds the secret did not need a browser.
+ */
+const UNAUTHENTICATED_PATHS = new Set([
+  '/api/auth/login',
+  '/api/invitations/preview',
+  '/api/invitations/accept',
+]);
 
 /** Authenticated when a credential is presented; anonymous when one is not. */
 const OPTIONAL_AUTH_PATHS = new Set(['/api/auth/session']);

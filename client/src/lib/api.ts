@@ -41,6 +41,20 @@ import type { ResearchPlanReview, ReviewDecisions } from '../../../server/servic
 import type { LedgerSummary } from '../../../server/services/research/sources.ts';
 import type { ProviderStatus } from '../../../server/providers/types.ts';
 import type { ChatTurnResult } from '../../../server/services/agent/chat.ts';
+import type { InvitationPreview } from '../../../server/services/identity/invitations.ts';
+
+export type { InvitationPreview };
+
+/** What comes back from spending an invitation. Deliberately carries no session. */
+export interface AcceptedInvitation {
+  projectId: string;
+  projectName: string;
+  role: string;
+  userId: string;
+  email: string;
+  createdAccount: boolean;
+  signInRequired: boolean;
+}
 
 export type { ChatTurnResult, ProviderStatus, MigrationReport, IngestionReport };
 export type { ResearchOrchestration, ResearchFragment, ResearchPass, ResearchClaim };
@@ -237,6 +251,37 @@ export const Api = {
 
   login(email: string, password: string): Promise<{ user: SessionUser }> {
     return post<{ user: SessionUser }>('/api/auth/login', { email, password });
+  },
+
+  /*
+   * An invitation, and accepting it.
+   *
+   * Beside `login` rather than in `russellApi`, because these are the only other
+   * two calls a person with no Brain account may make — and for the same reason
+   * `login` is here: they are how a credential is obtained. The token goes in
+   * the **body**. It reaches the browser in the URL fragment, which is never
+   * sent to a server and never written to an access log, and putting it back
+   * into a path here would undo exactly that.
+   */
+
+  /** What accepting would do. Reads the invitation; never consumes it. */
+  previewInvitation(token: string): Promise<InvitationPreview> {
+    return post<InvitationPreview>('/api/invitations/preview', { token });
+  },
+
+  /**
+   * Spend it.
+   *
+   * `password` is only read when the invitation's own address has no account
+   * yet — the server decides that from rows, and a password sent when one is not
+   * needed changes nothing. No session comes back: signing in is a separate act.
+   */
+  acceptInvitation(input: {
+    token: string;
+    password?: string;
+    displayName?: string;
+  }): Promise<AcceptedInvitation> {
+    return post<AcceptedInvitation>('/api/invitations/accept', input);
   },
 
   logout(): Promise<{ ok: boolean }> {

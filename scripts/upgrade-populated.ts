@@ -29,12 +29,16 @@
  *   BRAIN_TEST_DATABASE_URL=postgresql://… npm run upgrade:populated
  */
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { getSchemaVersion, loadMigrationFiles, migrationsDirFor } from '../server/db/migrate.ts';
 import type { Database } from '../server/db/types.ts';
+
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /**
  * The last version before Step 12B.
@@ -319,8 +323,60 @@ async function main(): Promise<void> {
   console.log(`  restarted again          schema ${settled}, nothing further applied`);
 
   console.log('UPGRADE: OK populated upgrade preserved every pre-existing row');
+  writeRecord({
+    dialect,
+    preVersion: before,
+    postVersion: after,
+    settledVersion: settled,
+    rowsBefore,
+    preservedTables: PRESERVED.length,
+    addedTables: ADDED.length,
+    layersAfter: layers.length,
+  });
   await closeDatabase();
   fs.rmSync(scratch, { recursive: true, force: true });
+}
+
+/**
+ * The result, written down so something other than a person can read it.
+ *
+ * P used to assert that this script **exists**, which is the weakest form of
+ * "the code looks like it would": a script that exists and fails reads exactly
+ * like one that passes. What it needs instead is this run's own numbers, and
+ * those numbers are only worth reading if they describe the tree being
+ * reported on — so the record is stamped with the revision, and the reporter
+ * refuses one whose `server/db` has moved since.
+ *
+ * One file per dialect, because the whole point is that both chains are
+ * proved: a single file would let the second run overwrite the first and the
+ * reporter would happily read one backend twice.
+ */
+function writeRecord(result: {
+  dialect: string;
+  preVersion: number;
+  postVersion: number;
+  settledVersion: number;
+  rowsBefore: number;
+  preservedTables: number;
+  addedTables: number;
+  layersAfter: number;
+}): void {
+  let revision: string | null = null;
+  try {
+    revision = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    }).trim();
+  } catch {
+    revision = null;
+  }
+  const dir = path.join(REPO_ROOT, 'docs', 'evidence', 'step12b-upgrade');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, `${result.dialect}.json`),
+    `${JSON.stringify({ ...result, revision, ranAt: new Date().toISOString() }, null, 2)}\n`,
+  );
+  console.log(`  record written           docs/evidence/step12b-upgrade/${result.dialect}.json`);
 }
 
 main().catch((error) => {

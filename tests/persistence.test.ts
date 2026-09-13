@@ -599,7 +599,15 @@ onPostgres('against a real Postgres', () => {
         // An invitation is looked up by prefix and then verified in constant
         // time on the secret, so two rows sharing a prefix would make "which
         // invitation is this" ambiguous in the same way as the three above.
+        // Both kinds are on this list, and they are not the same table: a
+        // worker invitation redeems an OAuth consent screen, a person's
+        // invitation redeems a membership. The local chain spells the second
+        // as an inline UNIQUE on the column and the cloud chain as a named
+        // `uq_` index, which is exactly the divergence this list exists to
+        // catch — the Postgres run found it missing here, from a table that
+        // had been added to both chains correctly.
         'worker_invitations(token_prefix)',
+        'project_invitations(token_prefix)',
       ].sort(),
     );
   });

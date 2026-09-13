@@ -20,6 +20,7 @@ import type { ConnectSiteResult, SiteConnectionState } from '../lib/russellApi.t
 import type {
   CandidatePriority,
   IdeaNode,
+  IssuedInvitation,
   KnowsEntry,
   Progress,
   RussellHumanRequest,
@@ -723,6 +724,200 @@ export function IdeaDecision({
 }
 
 /**
+ * Inviting somebody, and the invitations already out.
+ *
+ * One action, prefilled, in the shape §24 gives the authority card: an address
+ * and **Invite**, with the role starting on the server's own default and the
+ * detailed choice behind *Change role*. Nothing asks a person to configure
+ * machinery — there is no scope to pick, no user id to find, and no account to
+ * create first.
+ *
+ * The link is shown **once**, held in this component's memory and nowhere else:
+ * not in storage, not in the URL, and never fetched again. Navigating away loses
+ * it, which is correct — a secret you can come back to is a secret that is
+ * stored. If it is lost, inviting again issues a new one and withdraws the old.
+ *
+ * The list underneath shows expired and withdrawn invitations rather than hiding
+ * them, each with the server's own sentence about what happened: an invitation
+ * that quietly vanished when it aged out would leave a person unable to tell it
+ * from one that was never sent.
+ */
+function InvitePanel({
+  projectId,
+  view,
+  onChanged,
+}: {
+  projectId: string;
+  view: WhoData;
+  onChanged: () => void;
+}): JSX.Element {
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<string>(view.defaultInviteRole ?? 'MEMBER');
+  const [showRole, setShowRole] = useState(false);
+  const [issued, setIssued] = useState<IssuedInvitation | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const invitations = view.invitations ?? [];
+  const pending = invitations.filter((entry) => entry.state === 'PENDING');
+  const past = invitations.filter((entry) => entry.state !== 'PENDING');
+
+  async function invite(event: React.FormEvent): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      setIssued(await RussellApi.invite(projectId, email, role));
+      setEmail('');
+      setCopied(false);
+      onChanged();
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : 'That did not go through.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rs-invite" aria-labelledby="rs-invite-heading">
+      <h3 className="rs-group-title" id="rs-invite-heading">
+        Invite somebody
+      </h3>
+
+      {issued ? (
+        <div className="rs-site-secret" role="group" aria-labelledby="rs-invite-link-heading">
+          <h4 id="rs-invite-link-heading">Send this link to {issued.invitation.invitedEmail}</h4>
+          {/* The server's own sentence about which branch accepting will take,
+              rather than one composed here that could disagree with it. */}
+          <p className="rs-item-meta">{issued.whatHappensNext}</p>
+          <p>
+            <code className="rs-secret">{issued.invitationUrl}</code>
+          </p>
+          <div className="rs-row">
+            <button
+              type="button"
+              className="rs-primary"
+              onClick={() => {
+                void navigator.clipboard
+                  ?.writeText(issued.invitationUrl)
+                  .then(() => setCopied(true))
+                  .catch(() => setCopied(false));
+              }}
+            >
+              {copied ? 'Copied' : 'Copy the link'}
+            </button>
+            <button type="button" onClick={() => setIssued(null)}>
+              I have sent it
+            </button>
+          </div>
+          <p className="rs-item-meta">
+            Shown once. Nobody can read it back afterwards, including an administrator — if it
+            is lost, invite them again and a new link replaces this one. It expires{' '}
+            {issued.expiresAt.slice(0, 10)}.
+          </p>
+        </div>
+      ) : (
+        <form className="rs-invite-form" onSubmit={(event) => void invite(event)}>
+          <label className="rs-field-label" htmlFor="rs-invite-email">
+            Their email address
+          </label>
+          <div className="rs-row">
+            <input
+              id="rs-invite-email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="someone@example.com"
+              required
+            />
+            <button type="submit" className="rs-primary" disabled={busy || email.length === 0}>
+              {busy ? 'Inviting…' : 'Invite'}
+            </button>
+          </div>
+          {showRole ? (
+            <p className="rs-row">
+              <label htmlFor="rs-invite-role">They join as</label>
+              <select
+                id="rs-invite-role"
+                value={role}
+                onChange={(event) => setRole(event.target.value)}
+              >
+                {(view.invitableRoles ?? []).map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </p>
+          ) : (
+            <p className="rs-item-meta">
+              They join as {role.toLowerCase()}.{' '}
+              <button type="button" className="rs-linklike" onClick={() => setShowRole(true)}>
+                Change role
+              </button>
+            </p>
+          )}
+        </form>
+      )}
+
+      {error ? (
+        <p className="rs-state rs-state-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {pending.length > 0 ? (
+        <>
+          <h4 className="rs-group-title">Waiting to be accepted</h4>
+          <ul className="rs-list">
+            {pending.map((entry) => (
+              <li key={entry.id}>
+                <span className="rs-item-title">{entry.email}</span>
+                <span className="rs-item-meta">
+                  {entry.roleLabel} · invited by {entry.invitedByName} · {entry.status}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void RussellApi.withdrawInvitation(projectId, entry.id).then(
+                      onChanged,
+                      (problem: unknown) =>
+                        setError(
+                          problem instanceof Error ? problem.message : 'That did not go through.',
+                        ),
+                    );
+                  }}
+                >
+                  Withdraw
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {past.length > 0 ? (
+        <>
+          <h4 className="rs-group-title">Earlier invitations</h4>
+          <ul className="rs-list">
+            {past.map((entry) => (
+              <li key={entry.id}>
+                <span className="rs-item-title">{entry.email}</span>
+                <span className="rs-item-meta">
+                  {entry.roleLabel} · {entry.status}
+                  {entry.remedy ? ` ${entry.remedy}` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+/**
  * Who is here, and what can run.
  *
  * Two lists with different rules. People are collaborators; surfaces are
@@ -764,6 +959,12 @@ export function WhoView({ projectId }: { projectId: string | null }): JSX.Elemen
           </ul>
           {view.people.length <= 1 ? (
             <p className="rs-state rs-state-empty">Nobody else is on this project yet.</p>
+          ) : null}
+          {/* Only an administrator of this project is sent invitations at all —
+              the server returns null otherwise, so there is nothing here to
+              hide, which is the point of gating it there rather than here. */}
+          {view.invitations ? (
+            <InvitePanel projectId={projectId!} view={view} onChanged={query.reload} />
           ) : null}
           <h3 className="rs-group-title">What can run</h3>
           <p className="rs-fleet-line">{view.capacityExplanation}</p>
@@ -828,9 +1029,19 @@ export function KnowledgeView({ projectId }: { projectId: string | null }): JSX.
      * data, arrived at from the other direction.
      */
     items: query.data?.knows?.items ?? null,
-    // The server's own sentence when it gave one, so "nothing active" is never
-    // rendered as "nothing yet".
-    noun: query.data?.knows?.explanation ?? 'findings',
+    noun: 'findings',
+    /*
+     * The server's own sentence when it gave one, so "nothing active" is never
+     * rendered as "nothing yet".
+     *
+     * It used to be passed as `noun`, which is a *slot* — "There is no ${noun}
+     * yet." — so this screen read "There is no There is nothing here yet. yet."
+     * for any project with nothing concluded, which is every project before its
+     * first filed report. The intent in this comment was right the whole time
+     * and the parameter was wrong; `explanation` replaces the sentence instead
+     * of being folded into one.
+     */
+    explanation: query.data?.knows?.explanation ?? null,
   });
   /*
    * Understanding, organized — not a prettier document library (§10).
@@ -1258,8 +1469,26 @@ export function SitesView({ projectId }: { projectId: string | null }): JSX.Elem
 export function AuthorityPanel({
   projectId,
   folded = false,
+  onChanged,
 }: {
   projectId: string | null;
+  /**
+   * Told when the grant changed, so whoever is above can re-read.
+   *
+   * Found by driving the product rather than by reading it: the harness pressed
+   * **Approve**, the grant was written, and the page around the card went on
+   * saying what it had said before — because `NeedsYouView` reads the authority
+   * through its *own* query and nothing told it to look again. The nav badge
+   * beside it counts the same fact from the same route and was equally stale.
+   *
+   * It is not the "false settled" direction — the page under-claims rather than
+   * over-claims, which is the way round §29 asks for — but it is the same defect
+   * the section already records twice: **a status that does not agree with the
+   * control beside it teaches a person to stop reading it**, and here the
+   * control is the one decision nothing can proceed without. Answering it and
+   * seeing nothing change is worse than either state on its own.
+   */
+  onChanged?: () => void;
   /**
    * Whether an existing grant is folded behind a one-line summary.
    *
@@ -1314,6 +1543,10 @@ export function AuthorityPanel({
       setReason('');
       setWithdrawing(false);
       query.reload();
+      // Only on the far side of the await, so a refusal never announces a
+      // change. Everything else that reads this grant re-reads from the server
+      // rather than being handed what this card believes.
+      onChanged?.();
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : 'That did not go through.');
     } finally {
@@ -1648,7 +1881,27 @@ export function NeedsYouView({
       ) : null}
       {/* Above the list when a decision is outstanding, folded to one line when
           the grant already exists — §16, and the rejected page's own fault. */}
-      <AuthorityPanel key={projectId} projectId={projectId} folded={nothingWaiting} />
+      <AuthorityPanel
+        key={projectId}
+        projectId={projectId}
+        folded={nothingWaiting}
+        /*
+         * Both readings of the same fact, and the badge above them.
+         *
+         * This page asks the authority route itself rather than inferring the
+         * answer from the list — which is right, and left it with a second copy
+         * of a fact the card can change. So the card says when it changed it,
+         * and every reader goes back to the server. `onAnswered` is the shell's
+         * own refresh, already wired for answering a request: granting the
+         * standing authority resolves exactly the same kind of decision, so it
+         * belongs on the same hook rather than a second one beside it.
+         */
+        onChanged={() => {
+          authority.reload();
+          query.reload();
+          onAnswered?.();
+        }}
+      />
       <ul className="rs-list">
         {state.items.map((request) => (
           <li key={request.id}>

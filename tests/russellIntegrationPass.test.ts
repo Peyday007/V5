@@ -64,6 +64,8 @@ import {
   updateOrchestration,
 } from '../server/repos/research.ts';
 import { listProbesForCandidate } from '../server/repos/russellProbes.ts';
+import { listWorkItems } from '../server/repos/workQueue.ts';
+import { capture } from '../server/services/russell/judgment.ts';
 import { ideaMapForProject } from '../server/services/russell/ideas.ts';
 import { clearsFloor } from '../server/services/russell/similarity.ts';
 import express from 'express';
@@ -1041,4 +1043,136 @@ describe('the floor under a semantic merge', () => {
     expect(rows).toHaveLength(2);
     expect(rows.every((row) => row.canonical_candidate_id === null)).toBe(true);
   });
+});
+
+describe('a plan the standing envelope will not approve', () => {
+  /*
+   * The park `needsHuman.ts` was written for, produced without a worker.
+   *
+   * Every other park in this file is arranged by writing the packet's status.
+   * This one is not: the idea is captured, compiled and launched through the
+   * ordinary path, and `advancePacket` refuses its plan against
+   * `RUSSELL_PUBLIC_RECORDS_V1` because the question asks for an action outside
+   * reading published sources. That refusal is Brain's own, over rows, and it
+   * is what `parkStoppedMissions` then derives the mission's park from.
+   *
+   * It matters because it is the only park this Brain can reach with nothing
+   * simulated, which makes it the one `scripts/step12b-acceptance.ts` drives
+   * for gate F — and a mechanism an acceptance gate rests on should fail
+   * `npm test` when it breaks rather than only the reporter.
+   *
+   * The question is a fixture and reads like one on purpose. Nothing here is
+   * research, and a question that read like real work is one somebody
+   * eventually cites.
+   */
+  const OUTSIDE_ENVELOPE =
+    'Establish, for each Michigan county register of deeds, how long after a deed is recorded ' +
+    'it becomes available in the public electronic index, and email the register of deeds to ' +
+    'confirm the figure.';
+
+  it('parks from the packet’s own rows, and a person’s approval makes its work claimable', async () => {
+    await authorize();
+    const captured = await capture({
+      title: 'Recording-to-availability delay',
+      statement: OUTSIDE_ENVELOPE,
+      projectId,
+      conversationId,
+      visibility: 'SHARED',
+    });
+    const candidateId = captured.candidate!.id;
+
+    // Judged, compiled, launched and parked — all inside the ordinary loop.
+    for (let pass = 0; pass < 6; pass += 1) await tick('journey');
+
+    const mission = (await listMissions({ projectId })).find(
+      (entry) => entry.candidateId === candidateId,
+    );
+    expect(mission, 'the idea never launched').toBeTruthy();
+    const packet = await getOrchestration(mission!.orchestrationId!);
+    // Brain's own refusal, in the packet's own words. Not a worker's report and
+    // not a status this test wrote.
+    expect(packet!.status).toBe('NEEDS_HUMAN');
+    expect(packet!.failureReason).toMatch(/outside the preauthorized envelope/i);
+    expect((await getMission(mission!.id))!.state).toBe('NEEDS_HUMAN');
+    // The mission carries the packet's sentence rather than one composed here.
+    expect((await getMission(mission!.id))!.waitingOn).toBe(packet!.failureReason);
+
+    const open = (await listOpenRequests(projectId)).filter(
+      (request) => request.missionId === mission!.id,
+    );
+    expect(open).toHaveLength(1);
+    // The plan is unapproved, so the two answers that can act on it are the
+    // approval and the stop. `RECORD_GAPS` would be a button with no report.
+    expect(open[0]!.choices.map((choice) => choice.key)).toEqual(['APPROVE_PLAN', 'STOP']);
+
+    // Nothing is claimable while it waits: the park is a real stop, not a label.
+    const before = (await listWorkItems(projectId, { limit: 200 })).filter(
+      (item) => item.orchestrationId === mission!.orchestrationId,
+    );
+    expect(before).toHaveLength(0);
+
+    await answerHumanRequest({
+      requestId: open[0]!.id,
+      actorUserId: userId,
+      choice: NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key,
+    });
+    const resumed = await tick('journey');
+    expect(resumed.resumed).toContain(open[0]!.id);
+
+    // The answering transition reached the packet, not only the mission — which
+    // is the defect §24 records at three altitudes.
+    expect((await getMission(mission!.id))!.state).toBe('RUNNING');
+    expect((await getOrchestration(mission!.orchestrationId!))!.status).not.toBe('NEEDS_HUMAN');
+
+    const after = (await listWorkItems(projectId, { limit: 200 })).filter(
+      (item) => item.orchestrationId === mission!.orchestrationId && item.state === 'QUEUED',
+    );
+    expect(after.length).toBeGreaterThan(0);
+    expect(after.map((item) => item.workType)).toContain('RESEARCH_FRAGMENT');
+
+    // And the card is gone rather than left open on a decision already taken.
+    expect(
+      (await listOpenRequests(projectId)).some((request) => request.id === open[0]!.id),
+    ).toBe(false);
+  }, 60_000);
+
+  it('cancels the mission and settles its hold when the person says stop', async () => {
+    await authorize();
+    const captured = await capture({
+      title: 'Recording-to-availability delay',
+      statement: OUTSIDE_ENVELOPE,
+      projectId,
+      conversationId,
+      visibility: 'SHARED',
+    });
+    for (let pass = 0; pass < 6; pass += 1) await tick('journey');
+
+    const mission = (await listMissions({ projectId })).find(
+      (entry) => entry.candidateId === captured.candidate!.id,
+    )!;
+    const open = (await listOpenRequests(projectId)).filter(
+      (request) => request.missionId === mission.id,
+    );
+    expect(open).toHaveLength(1);
+
+    await answerHumanRequest({
+      requestId: open[0]!.id,
+      actorUserId: userId,
+      choice: NEEDS_HUMAN_CHOICES.STOP.key,
+    });
+    await tick('journey');
+
+    const stopped = (await getMission(mission.id))!;
+    expect(stopped.state).toBe('CANCELLED');
+    /*
+     * And the concurrency it was holding comes back, which is what lets the
+     * next authorized idea start with nobody involved. A hold that stayed HELD
+     * after a person stopped the work would be a ceiling nothing could clear.
+     */
+    const reservation = await getDb().all<{ state: string }>(
+      `SELECT state FROM russell_budget_reservations WHERE id = ?`,
+      [stopped.reservationId],
+    );
+    expect(reservation[0]!.state).toBe('SETTLED');
+  }, 60_000);
 });

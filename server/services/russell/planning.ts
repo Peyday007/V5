@@ -41,7 +41,7 @@
  * claims that contradict the idea — and by a person's override.
  */
 
-import { getCandidate, recordJudgment } from '../../repos/russellCandidates.ts';
+import { attachMissionSpec, getCandidate, recordJudgment } from '../../repos/russellCandidates.ts';
 import { getConversation } from '../../repos/russellConversations.ts';
 import { getProject } from '../../repos/projects.ts';
 import { listLayers } from '../../repos/layers.ts';
@@ -591,6 +591,44 @@ export async function judgeCandidate(
     binId: null,
     launchable: launchable && Boolean(spec),
   };
+}
+
+/**
+ * Compile the specification for an idea a *person* queued, without re-deciding it.
+ *
+ * The other half of `attachMissionSpec`'s repair, and the division is the
+ * point: the repository decides whether this candidate may have a
+ * specification at all (queued, and put there by a named person), and this
+ * decides what the specification *is* — from the same compiler, over the same
+ * rows, with `judgeCandidate`'s own refusals intact.
+ *
+ * It never touches state, priority, reason, supporting or contradicting.
+ * Russell's judgment and the person's override both stay exactly as recorded;
+ * what changes is that the thing the person asked for can now happen. A
+ * candidate whose compile is refused, or whose project has no standing
+ * authority, is left alone — `missionSpecFor` returns null for both, and an
+ * idea with no specification is one nothing launches, which is the correct
+ * outcome rather than a silent one.
+ */
+export async function specifyOverriddenCandidate(candidateId: string): Promise<boolean> {
+  const candidate = await getCandidate(candidateId);
+  if (!candidate) return false;
+  if (candidate.state !== 'QUEUED' || !candidate.overrideUserId) return false;
+  if (candidate.judgment['missionSpec'] !== undefined) return false;
+  if (!candidate.projectId) return false;
+
+  const project = await getProject(candidate.projectId);
+  if (!project) return false;
+  const archive = await askArchive(candidate);
+  const compiled = await compileMission({
+    candidate,
+    project,
+    archive: { claimsConsidered: archive.claimsConsidered, contradicting: archive.contradicting },
+  });
+  if (!compiled.ok) return false;
+  const spec = await missionSpecFor(candidate, compiled.mission);
+  if (!spec) return false;
+  return attachMissionSpec({ candidateId: candidate.id, spec });
 }
 
 function outcome(ok: boolean, reason: string): JudgeOutcome {

@@ -16,6 +16,7 @@ import type {
   DocumentChunk,
   ImportJob,
   Layer,
+  Principal,
   Project,
   ResearchOrchestration,
   ResearchRun,
@@ -67,6 +68,31 @@ export class HttpError extends Error {
 
 export function badRequest(message: string, detail?: unknown): HttpError {
   return new HttpError(400, message, detail);
+}
+
+/**
+ * The signed-in person, or a refusal — one reader, in one place.
+ *
+ * A worker has no conversations, no Needs You list and no business approving a
+ * release: those are a person's, and a worker principal reaching them would be
+ * a machine reading somebody's private thread or authorizing its own work. So
+ * the refusal is by principal *type* rather than by scope — there is no
+ * membership configuration that makes a worker into a person.
+ *
+ * It was two identical private copies, in `russell.ts` and `factory.ts`, which
+ * is the shape this repository has been caught by four times: a rule applied by
+ * one of two readers is worse than none, because the two eventually disagree
+ * about the same caller. Exported so the acceptance reporter can drive the
+ * refusal rather than assert that the routes contain the string — the guard is
+ * the thing worth checking, and a regex over a route file checks the spelling.
+ *
+ * The refusal is deliberately `No such route.` and not "you are not a person":
+ * invariant 23, at the door a machine is most likely to knock on.
+ */
+export function requirePerson(): Principal {
+  const principal = currentPrincipal();
+  if (!principal || principal.type !== 'HUMAN') throw notFound('No such route.');
+  return principal;
 }
 
 export function notFound(message: string, detail?: unknown): HttpError {

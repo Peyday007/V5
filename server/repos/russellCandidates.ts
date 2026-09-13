@@ -283,6 +283,81 @@ export async function overrideJudgment(input: {
 }
 
 /**
+ * Give a queued idea the specification it needs to be launchable, and nothing else.
+ *
+ * **A person's override was half a transition, and the correction is recorded
+ * rather than quietly applied.** `IdeaDecision` says in its own comment that "a
+ * person moving an idea up is saying to do it, so it goes into the queue
+ * Russell launches from" — and it did go into that queue, and nothing there
+ * could ever launch it. `judgeCandidate` stores the compiled specification
+ * under `missionSpec` only for a verdict that could launch one, and under
+ * `proposedMission` otherwise; `nextLaunchable` reads `missionSpec` alone. So
+ * an idea Brain parked for want of a standing authority, which a person then
+ * promoted to Must do, sat `QUEUED` for ever with a specification one key away
+ * from the reader that needed it. Driving the journey on a phone is what found
+ * it: the override landed, the row said `MUST_DO`, and no mission ever started.
+ *
+ * That is §24's sentence at a new altitude — *a state that says waiting which
+ * nobody can resolve is not waiting, it is stuck* — except the person had
+ * already done the resolving.
+ *
+ * The guard is the whole safety argument, and it is deliberately narrow.
+ * `planning.ts` withholds the key so that "writing one onto a PARKED or EXPLORE
+ * candidate would make a park launchable the moment somebody changed its state
+ * by hand". This writes it only where the state is *already* `QUEUED` and only
+ * where `override_user_id` names the person who put it there — so the
+ * authorization is a recorded human decision rather than a state somebody
+ * changed. It cannot promote a park, it cannot move a priority, and it refuses
+ * to overwrite a specification that already exists.
+ *
+ * Nothing downstream is relaxed: `launch` still calls `checkAuthority`, the
+ * approval envelope still judges the plan, and the evidence gate is untouched.
+ * `proposedMission` is kept beside the new key, because §5 — what the compiler
+ * proposed is the provenance of what is about to run.
+ */
+export async function attachMissionSpec(input: {
+  candidateId: string;
+  spec: Record<string, unknown>;
+}): Promise<boolean> {
+  const current = await getCandidate(input.candidateId);
+  if (!current) return false;
+  if (current.judgment['missionSpec'] !== undefined) return false;
+  const judgment = {
+    ...current.judgment,
+    missionSpec: input.spec,
+    specifiedAfterOverride: true,
+  };
+  const result = await getDb().run(
+    `UPDATE russell_candidates
+        SET judgment = ?, updated_at = ?
+      WHERE id = ? AND state = 'QUEUED' AND override_user_id IS NOT NULL`,
+    [toJson(judgment), nowIso(), input.candidateId],
+  );
+  return result.changes === 1;
+}
+
+/**
+ * Ideas a person queued that Brain has not specified, derived rather than hooked.
+ *
+ * Read from rows instead of from the moment the override happens, for the
+ * reason this repository has had to rediscover four times: a hook fixes one
+ * entrance, and the rows reach every entrance plus the ones already stranded.
+ * An override recorded before this existed is picked up by the next tick.
+ */
+export async function overriddenWithoutSpec(limit: number): Promise<{ id: string }[]> {
+  return getDb().all<{ id: string }>(
+    `SELECT id FROM russell_candidates
+      WHERE state = 'QUEUED'
+        AND override_user_id IS NOT NULL
+        AND project_id IS NOT NULL
+        AND judgment NOT LIKE '%"missionSpec"%'
+      ORDER BY updated_at, id
+      LIMIT ?`,
+    [Math.max(1, limit)],
+  );
+}
+
+/**
  * Fold one candidate into another.
  *
  * Guarded on the loser not already being merged, so two concurrent dedupe
