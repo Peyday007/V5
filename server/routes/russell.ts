@@ -133,9 +133,10 @@ import {
   optionalString,
   pathId,
   queryOf,
-  requireLayerOfProject,
-  requireProject,
   requiredString,
+  requireLayerOfProject,
+  requirePerson,
+  requireProject,
 } from './helpers.ts';
 import { getProjectBySlug } from '../repos/projects.ts';
 import type {
@@ -149,21 +150,6 @@ import { CANDIDATE_PRIORITIES, CANDIDATE_STATES, MISSION_STATES } from '../domai
 
 export const russellRouter = Router();
 
-/**
- * The signed-in person, or a refusal.
- *
- * A worker has no conversations and no Needs You list — those are a person's,
- * and a worker principal reaching them would be a machine reading somebody's
- * private thread. So the refusal is by principal *type* rather than by scope:
- * there is no membership configuration that makes a worker into a person.
- */
-function requirePerson(): Principal {
-  const principal = currentPrincipal();
-  if (!principal || principal.type !== 'HUMAN') {
-    throw notFound('No such route.');
-  }
-  return principal;
-}
 
 /** A conversation this caller may read, or the same 404 a missing one gives. */
 async function requireConversation(conversationId: string) {

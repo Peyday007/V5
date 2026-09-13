@@ -177,6 +177,8 @@ import {
   setBrainAdmin,
 } from '../server/repos/identity.ts';
 import { listEvents } from '../server/repos/events.ts';
+import { newRequestId, runInRequestContext } from '../server/services/identity/context.ts';
+import { requirePerson } from '../server/routes/helpers.ts';
 import {
   projectionFor,
   runCommand,
@@ -3941,8 +3943,6 @@ async function main(): Promise<void> {
    * than on the deployed product, so it establishes the mechanism and not the
    * experience.
    */
-  const routes = file('server/routes/russell.ts');
-  const workerRefused = routes ? /requirePerson\(\)/.test(routes) : false;
   const owner = await createUser({
     email: 'acceptance-owner@example.invalid',
     displayName: 'Owner',
@@ -3966,6 +3966,69 @@ async function main(): Promise<void> {
     grantedById: owner.id,
   });
   const ownerPrincipalNow = await ownerPrincipal(owner.id);
+  /*
+   * The refusal a machine gets, driven rather than grepped.
+   *
+   * This was `/requirePerson\(\)/.test(routes)` — the route file contains the
+   * string — which checks a spelling. `requirePerson` is one exported guard now
+   * (it was two identical private copies, in `russell.ts` and `factory.ts`), so
+   * a worker principal can be put through it inside a real request context and
+   * the refusal read off what it throws. What matters is both halves: that it
+   * refuses, and that it refuses in the same words a missing route gives, which
+   * is invariant 23 at the door a machine is most likely to knock on.
+   */
+  const machine = await createWorker({
+    name: `s12b-acc-person-${Date.now()}`,
+    createdByType: 'SYSTEM',
+    createdById: 'acceptance',
+  });
+  await grantMembership({
+    projectId: project.id,
+    principalType: 'WORKER',
+    principalId: machine.id,
+    role: 'ADMIN',
+    scopes: [...WORKER_SCOPES],
+    grantedByType: 'SYSTEM',
+    grantedById: 'acceptance',
+  });
+  const machinePrincipal: Principal = {
+    type: 'WORKER',
+    id: machine.id,
+    handle: machine.name,
+    displayName: machine.name,
+    isBrainAdmin: false,
+    mustChangePassword: false,
+    credentialId: `cred_${randomUUID().slice(0, 12)}`,
+    authMethod: 'WORKER_BEARER',
+    // Every scope there is, deliberately: the refusal must not depend on the
+    // machine being under-privileged. A worker holding everything is still not
+    // a person.
+    memberships: (await listMembershipsForPrincipal('WORKER', machine.id)),
+    requestId: `req_${randomUUID().slice(0, 12)}`,
+  };
+  const asContext = (principal: Principal) => ({
+    principal,
+    requestId: principal.requestId,
+    method: 'GET',
+    path: '/api/russell/conversations',
+    remoteAddr: null,
+    userAgent: null,
+  });
+  let workerRefused = false;
+  let workerRefusalBody: string | null = null;
+  try {
+    runInRequestContext(asContext(machinePrincipal), () => requirePerson());
+  } catch (error) {
+    workerRefused = true;
+    workerRefusalBody = error instanceof Error ? error.message : String(error);
+  }
+  let personAdmitted = false;
+  try {
+    const admitted = runInRequestContext(asContext(ownerPrincipalNow!), () => requirePerson());
+    personAdmitted = admitted.type === 'HUMAN';
+  } catch {
+    personAdmitted = false;
+  }
   const strangerBefore = await ownerPrincipal(colleague.id);
   // A person with no membership may not read the project at all.
   const strangerRefused =
@@ -4048,37 +4111,45 @@ async function main(): Promise<void> {
   const inviteFailed = invite.conditions.filter(([, held]) => !held).map(([name]) => name);
   const collaborationFailed = [...failed, ...inviteFailed];
 
-  record(
+  recordConditions(
     'I',
     'Collaboration',
-    collaborationFailed.length > 0
-      ? // Executed and did not hold. Never NOT_RUN: something ran.
-        'FAIL'
-      : workerRefused
-        ? 'PARTIAL'
-        : 'FAIL',
-    collaborationFailed.length > 0
-      ? `Exercised with real identities and ${collaborationFailed.length} condition(s) did not ` +
-        `hold: ${collaborationFailed.join('; ')}. That is a defect rather than a missing run.`
-      : `Two real human identities on one project: ${collaboration.length}/${collaboration.length} ` +
-        'boundary conditions held — non-member refused, MEMBER reads but is not ADMIN, a role ' +
-        "change is read from rows, a project ADMIN cannot read the owner's private thread but " +
-        'can read the shared one, and revoking lands on the next read rather than the next ' +
-        `sign-in. A worker principal is refused at these routes by type (${workerRefused ? 'requirePerson' : 'NOT FOUND — defect'}). ` +
-        `The invitation journey is driven end to end with test identities (@example.invalid, ` +
-        `created by this reporter — no real person approved, granted or accepted anything): ` +
-        `${invite.conditions.length}/${invite.conditions.length} conditions held. Issued, ` +
-        'previewed without consuming, accepted, and the membership exists at the role the ' +
-        'invitation named rather than one the acceptor asked for — an acceptance carrying ' +
-        'role: OWNER and isBrainAdmin: true changed neither. The refusals are driven too: a ' +
-        'worker holding every scope is refused by principal type, a MEMBER who does not ' +
-        'administer the project is refused in the words a missing project gets, a guessed ' +
-        "invitation id and another project's real one are refused with the identical body, a " +
-        'second redemption and an expired one are refused in the same words an unknown token ' +
-        'gets, and two simultaneous redemptions leave exactly one winner. The token is in the ' +
-        'link fragment only and is absent from the row, from identity_events and from ' +
-        `project_events. ${invite.notes.join('; ')}. NOT established here: the same journey on ` +
-        'the deployed product rather than in this isolated database.',
+    [
+      ...collaboration.map(([name, held]) => ({
+        name,
+        held,
+        saw: held ? 'held' : 'did not hold',
+      })),
+      {
+        name: 'a worker holding every scope and an ADMIN membership is refused by principal type',
+        held: workerRefused,
+        saw: workerRefused ? 'refused' : 'it was admitted — defect',
+      },
+      {
+        name: 'and the refusal is the same body a missing route gives, so it is not an oracle',
+        held: workerRefusalBody === 'No such route.',
+        saw: workerRefusalBody ?? 'nothing was thrown',
+      },
+      {
+        name: 'the same guard admits a person, so it refuses by type rather than by always refusing',
+        held: personAdmitted,
+        saw: personAdmitted ? 'the owner passed' : 'the owner was refused too — defect',
+      },
+      ...invite.conditions.map(([name, held]) => ({
+        name,
+        held,
+        saw: held ? 'held' : 'did not hold',
+      })),
+    ],
+    'Two real human identities on one project, and a machine holding every scope beside them. ' +
+      'The boundary is asked of `decideProjectAccess` and `conversationIsReadable` — the same ' +
+      'functions every route calls, never a second copy of the rule — and the type refusal is ' +
+      'put through `requirePerson` inside a real request context rather than matched as a ' +
+      'string in a route file. The invitation journey is driven end to end: issued, previewed ' +
+      'without consuming, accepted, and the membership exists at the role the invitation named ' +
+      'rather than one the acceptor asked for. Every identity is a test identity at ' +
+      '@example.invalid created by this reporter — no real person approved, granted or ' +
+      `accepted anything. ${invite.notes.join('; ')}.`,
   );
 
   /* -- J. Mobile ----------------------------------------------------------- */

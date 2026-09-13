@@ -63,10 +63,11 @@ import {
   optionalEnum,
   optionalString,
   optionalStringArray,
-  unprocessable,
   pathId,
   requiredString,
+  requirePerson,
   requireProject,
+  unprocessable,
 } from './helpers.ts';
 
 export const factoryRouter: Router = Router();
@@ -78,11 +79,6 @@ export const factoryRouter: Router = Router();
  * gives one: a distinguishable refusal tells a caller that the thing they may
  * not have exists.
  */
-function requirePerson(): Principal {
-  const principal = currentPrincipal();
-  if (!principal || principal.type !== 'HUMAN') throw notFound('No such route.');
-  return principal;
-}
 
 /**
  * Refuse with one answer, whatever the reason.
