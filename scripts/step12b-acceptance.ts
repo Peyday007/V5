@@ -177,6 +177,13 @@ import {
   setBrainAdmin,
 } from '../server/repos/identity.ts';
 import { listEvents } from '../server/repos/events.ts';
+import {
+  projectionFor,
+  runCommand,
+  syncRecords,
+} from '../server/services/connect/service.ts';
+import { projectRecord } from '../server/services/connect/projection.ts';
+import { findExternalRecord } from '../server/repos/externalRecords.ts';
 import { WORKER_SCOPES } from '../server/domain/types.ts';
 import type { ExistingClaim, Principal, Project } from '../server/domain/types.ts';
 
@@ -2520,6 +2527,170 @@ async function runJudgmentExercise(): Promise<{
   }
 }
 
+/**
+ * A connected site, driven through the generic contract.
+ *
+ * E was a regex for `NEEDS_PERSON` over `projection.ts` beside a count of
+ * production rows — "the code looks like it would", which this reporter's own
+ * header refuses, next to a tally nothing here produced. So the site is
+ * simulated *as a site*: deliveries go through `syncRecords` exactly as the
+ * connector posts them, and every answer is read back off `projectRecord`.
+ *
+ * The three properties §25 rests on are the three driven here, because each of
+ * them is a way the design could be wrong without any row looking wrong:
+ *
+ *   the version guard   a redelivered or reordered copy matches nothing and is
+ *                       reported STALE — an ordinary outcome, not an error.
+ *   identical content   compared *before* the version, so a poll that finds
+ *                       nothing changed moves no timestamp and reports no churn
+ *                       it caused itself.
+ *   NEEDS_PERSON        a project with no standing authority reads as a
+ *                       decision nobody is being asked for, rather than
+ *                       QUEUED for ever. §24's sentence at this boundary.
+ *
+ * The command is `RESEARCH_FURTHER`, which captures an idea and spends
+ * nothing — a site connector is a worker, and §22 says a worker cannot create
+ * its own work. That the *idea* is all it creates is asserted, not assumed.
+ */
+async function runConnectedSiteExercise(): Promise<{
+  conditions: GateCondition[];
+  error: string | null;
+  notes: string[];
+}> {
+  const conditions: GateCondition[] = [];
+  const notes: string[] = [];
+  const hold = (name: string, held: boolean, saw: string): void => {
+    conditions.push({ name, held, saw });
+  };
+  try {
+    const project = await createProject({
+      name: 'Ashfield Dispatch',
+      slug: `ashfield-${randomUUID().slice(0, 8)}`,
+      description: 'A connected-site fixture, in a database this run deletes.',
+    });
+    await createLayer({ projectId: project.id, name: 'Opportunity Review', orderIndex: 1 });
+    const recordId = `opp-${randomUUID().slice(0, 8)}`;
+    const delivery = (version: string, title: string, state: string) => ({
+      sourceRecordId: recordId,
+      sourceRecordType: 'OPPORTUNITY',
+      sourceVersion: version,
+      title,
+      summary: 'A parcel whose recording history the site cannot settle by itself.',
+      sourceRef: `https://ashfield.example.invalid/opportunities/${recordId}`,
+      attributes: { state, county: 'Washtenaw' },
+    });
+
+    const first = await syncRecords({
+      projectId: project.id,
+      sourceSystem: 'DEAL_DISPATCH',
+      records: [delivery('2026-09-01T10:00:00.000Z', 'Parcel 118 — chain of title', 'OPEN')],
+    });
+    hold(
+      'a delivery through the wire contract registers a record',
+      first.imported === 1 && first.rejected.length === 0,
+      `imported=${first.imported} updated=${first.updated} rejected=${first.rejected.length}`,
+    );
+
+    const replay = await syncRecords({
+      projectId: project.id,
+      sourceSystem: 'DEAL_DISPATCH',
+      records: [delivery('2026-09-01T10:00:00.000Z', 'Parcel 118 — chain of title', 'OPEN')],
+    });
+    hold(
+      'an identical redelivery is not a write, so the site cannot see churn it caused itself',
+      replay.unchanged === 1 && replay.updated === 0 && replay.imported === 0,
+      `unchanged=${replay.unchanged} updated=${replay.updated}`,
+    );
+
+    const newer = await syncRecords({
+      projectId: project.id,
+      sourceSystem: 'DEAL_DISPATCH',
+      records: [delivery('2026-09-02T10:00:00.000Z', 'Parcel 118 — chain of title (revised)', 'OPEN')],
+    });
+    const older = await syncRecords({
+      projectId: project.id,
+      sourceSystem: 'DEAL_DISPATCH',
+      records: [delivery('2026-09-01T09:00:00.000Z', 'Parcel 118 — stale copy', 'CLOSED')],
+    });
+    hold(
+      'a newer version lands and an older one is refused as STALE rather than as an error',
+      newer.updated === 1 && older.stale === 1 && older.rejected.length === 0,
+      `updated=${newer.updated}, stale=${older.stale}, rejected=${older.rejected.length}`,
+    );
+
+    const malformed = await syncRecords({
+      projectId: project.id,
+      sourceSystem: 'DEAL_DISPATCH',
+      records: [{ sourceRecordId: 'no-version', sourceRecordType: 'OPPORTUNITY', title: 'x' }],
+    });
+    hold(
+      'a delivery that cannot be ordered is refused with a category rather than its payload',
+      malformed.rejected.length === 1 &&
+        malformed.rejected[0]?.reason === 'MISSING_VERSION' &&
+        !JSON.stringify(malformed.rejected[0]).includes('no-version-payload'),
+      `reason=${malformed.rejected[0]?.reason ?? 'none'}`,
+    );
+
+    const registered = await findExternalRecord('DEAL_DISPATCH', recordId);
+    if (!registered) throw new Error('the record vanished after being registered');
+    const beforeAsking = await projectRecord(registered, new Date().toISOString());
+    hold(
+      'a registered record nobody has asked about reads NOT_EVALUATED, with a reason',
+      beforeAsking.state === 'NOT_EVALUATED' && beforeAsking.stateReason.length > 0,
+      `${beforeAsking.state} — "${beforeAsking.stateReason.slice(0, 56)}…"`,
+    );
+    hold(
+      'the version the site owns is carried through untouched, and Brain writes no operational field',
+      beforeAsking.sourceVersion === '2026-09-02T10:00:00.000Z' &&
+        beforeAsking.sourceState === 'OPEN',
+      `sourceVersion=${beforeAsking.sourceVersion} sourceState=${beforeAsking.sourceState ?? 'none'}`,
+    );
+
+    /*
+     * The command, and the boundary it must not cross. `RESEARCH_FURTHER` is an
+     * idea; a person in Russell is the only one who may authorize the spending.
+     */
+    const commanded = await runCommand({
+      projectId: project.id,
+      sourceSystem: 'DEAL_DISPATCH',
+      sourceRecordId: recordId,
+      command: 'RESEARCH_FURTHER',
+      actor: 'someone at the site',
+    });
+    const missionsAfter = await listMissions({ projectId: project.id });
+    hold(
+      'the site may ask, and asking creates an idea rather than a mission',
+      commanded.candidateId !== null && missionsAfter.length === 0,
+      `candidate ${commanded.candidateId ?? 'none'}, ${missionsAfter.length} mission(s)`,
+    );
+    const afterAsking = await projectionFor({
+      projectId: project.id,
+      sourceSystem: 'DEAL_DISPATCH',
+      sourceRecordId: recordId,
+    });
+    hold(
+      'with no standing authority the answer is NEEDS_PERSON, naming the decision nobody is being asked for',
+      afterAsking?.state === 'NEEDS_PERSON' && (afterAsking.stateReason ?? '').length > 0,
+      `${afterAsking?.state ?? 'no projection'} — "${(afterAsking?.stateReason ?? '').slice(0, 64)}…"`,
+    );
+    hold(
+      'the projection is derived on the read path and observed now, never a stored memory',
+      afterAsking !== null &&
+        Date.now() - Date.parse(afterAsking.observedAt) < 60_000 &&
+        !(await columnExists('external_records', 'projection_state')),
+      'observedAt is this moment and external_records has no projection column',
+    );
+    notes.push(`record ${registered.id}`, `project ${project.id}`);
+    return { conditions, error: null, notes };
+  } catch (error) {
+    return {
+      conditions,
+      error: error instanceof Error ? error.message : String(error),
+      notes,
+    };
+  }
+}
+
 async function main(): Promise<void> {
   // Read the real fleet first, then close it. Everything after this line writes.
   const fleet = await readOperationalFleet();
@@ -3318,25 +3489,35 @@ async function main(): Promise<void> {
    * Dispatch has been delivering to this Brain all along; the reading was
    * simply not being taken.
    */
-  const connect = file('server/services/connect/projection.ts');
-  const sixAnswers = connect ? /NEEDS_PERSON/.test(connect) && /stateReason/.test(connect) : false;
-  const live = seen.connectorEvents > 0;
-  record(
+  const site = await runConnectedSiteExercise();
+  recordConditions(
     'E',
     'Connected-site intelligence',
-    live && sixAnswers ? 'PARTIAL' : sixAnswers ? 'NOT_RUN' : 'NOT_RUN',
-    live
-      ? `A connected site is delivering into ${fleet.source}: ${seen.connectorEvents} connector ` +
-        `event(s), ${seen.connectorCommands} accepted command(s), ${seen.externalRecords} ` +
-        `registered record(s) and ${seen.externalRejections} recorded rejection(s)` +
-        (seen.lastRecordAt ? `, most recently at ${seen.lastRecordAt}` : '') +
-        '. The six-answer projection including NEEDS_PERSON is derived on the read path and is ' +
-        'never stored. NOT established here: a command driven from the site through to a ' +
-        'launched mission in one observed pass, which needs the site to send one.'
-      : sixAnswers
-        ? `The six-answer projection including NEEDS_PERSON is present and derived on the read ` +
-          `path. ${fleet.source} holds no connector event, so no live site was read.`
-        : 'The projection could not be read.',
+    site.error !== null
+      ? [
+          {
+            name: 'the connected-site exercise completed',
+            held: false,
+            saw: site.error,
+          },
+        ]
+      : [
+          ...site.conditions,
+          fromProduction(
+            'a real connected site is delivering into the deployed Brain',
+            seen.connectorEvents > 0,
+            `${seen.connectorEvents} connector event(s), ${seen.connectorCommands} accepted ` +
+              `command(s), ${seen.externalRecords} registered record(s), ` +
+              `${seen.externalRejections} recorded rejection(s)` +
+              (seen.lastRecordAt ? `, most recently ${seen.lastRecordAt}` : ''),
+          ),
+        ],
+    site.error !== null
+      ? 'The exercise that drives a connected site threw before it could answer.'
+      : 'A site is simulated as a site: every delivery goes through `syncRecords` exactly as ' +
+        'the connector posts it, and every answer is read back off `projectRecord` rather than ' +
+        'off a regex over its source.' +
+        (site.notes.length > 0 ? ` Trace: ${site.notes.join(', ')}.` : ''),
   );
 
   /* -- F. Needs You -------------------------------------------------------- */
