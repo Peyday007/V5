@@ -1,6 +1,6 @@
 {
-  "takenAt": "2026-09-13T14:05:21.225Z",
-  "revision": "b5f09314072d79244580d5a9424cd173da9ba498",
+  "takenAt": "2026-09-13T15:41:06.105Z",
+  "revision": "d62f64392a8b9db9c28e8bb93e35468c389827f7",
   "phoneWidth": 390,
   "steps": [
     {
@@ -130,14 +130,21 @@
       "unreachable": ""
     },
     {
-      "step": "21-knows",
+      "step": "21-what-the-work-actually-is",
       "arrived": true,
       "fits": true,
       "clipped": false,
       "unreachable": ""
     },
     {
-      "step": "22-who-and-fleet",
+      "step": "22-knows",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "23-who-and-fleet",
       "arrived": true,
       "fits": true,
       "clipped": false,
@@ -163,17 +170,23 @@
     "ideaOverriddenByAPerson": true,
     "ideaPriority": "MUST_DO",
     "russellsJudgmentKept": true,
-    "parkedMissionId": "rms_7afca7aff4a342d69180",
-    "parkedRequestId": "rhr_461060758de14f039709",
-    "parkedOrchestrationId": "orc_511ccd6f73da4a4ea2d5",
+    "parkedMissionId": "rms_c48e96d27b51438098e0",
+    "parkedRequestId": "rhr_c442765bf6144e8c9a9f",
+    "parkedOrchestrationId": "orc_bd5188acdca2442189bd",
     "missionStateBefore": "NEEDS_HUMAN",
     "missionStateAfter": "RUNNING",
-    "requestSettled": true
+    "requestSettled": true,
+    "workIdentifiedOnScreen": true,
+    "workIdsOnScreen": "Mission=rms_c48e96d27b51438098e0 Packet=orc_bd5188acdca2442189bd Bin=bin_d94695e5b3ac44daa5c2 State=NEEDS_HUMAN Attempt=1",
+    "filedDocumentOnScreen": null,
+    "knowledgeRows": 0,
+    "knowledgeCitingThisMission": 0,
+    "askedTurnStatus": "PENDING"
   },
-  "stepsWalked": 22,
-  "stepsThatArrived": 22,
-  "stepsThatFit": 22,
-  "stepsWithNothingClipped": 22,
+  "stepsWalked": 23,
+  "stepsThatArrived": 23,
+  "stepsThatFit": 23,
+  "stepsWithNothingClipped": 23,
   "unreachableControls": [],
   "constellation": [
     {

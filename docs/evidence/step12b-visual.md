@@ -11,8 +11,8 @@ files breaks no test — it drops J back to what the code alone can say.
 
 | | |
 | --- | --- |
-| Commit | `b5f09314072d79244580d5a9424cd173da9ba498` |
-| Taken | 2026-09-13, 14:05 UTC |
+| Commit | `d62f64392a8b9db9c28e8bb93e35468c389827f7` |
+| Taken | 2026-09-13, 15:41 UTC |
 | Command | `npx tsx scripts/visual-qa.ts <dir> --renders docs/evidence/step12b-renders` |
 | Browser | Chromium, headless, `--hide-scrollbars` |
 | Server | a real Brain booted against a throwaway data directory, ordinary seed, signed in as a real account |
@@ -55,9 +55,21 @@ routes, **inside that same journey**:
 | --- | --- |
 | standing authority | granted, and still there |
 | the idea | priority `MUST_DO`, overridden by a person, and Russell's own judgment kept beside it |
-| the parked mission | `rms_7afca7aff4a342d69180` · **NEEDS_HUMAN → RUNNING** |
-| its request | `rhr_461060758de14f039709` · settled |
-| its packet | `orc_511ccd6f73da4a4ea2d5` |
+| the parked mission | `rms_c48e96d27b51438098e0` · **NEEDS_HUMAN → RUNNING** |
+| its request | `rhr_c442765bf6144e8c9a9f` · settled |
+| its packet | `orc_bd5188acdca2442189bd` |
+| the work, on screen | identified by the ids Brain wrote: `Mission=rms_c48e96d27b51438098e0 Packet=orc_bd5188acdca2442189bd Bin=bin_d94695e5b3ac44daa5c2 State=NEEDS_HUMA` |
+| its result | **none yet** — 0 conclusion(s) in the project, 0 citing this mission, no filed document |
+| the question asked | Russell's turn is **PENDING** |
+
+**The last two are the honest open ones, and they are open on purpose.** A
+conclusion needs a claim through `gate.ts` and a judge's verdict; an answered
+question needs a worker to take the bin. Neither is something a checkout Brain
+with no fleet can produce, and inventing either would be inventing a research
+result. They are carried into gate J as conditions needing PRODUCTION rather
+than passed from a screen that merely loaded — which is the correction the
+owner asked for after the first version of this leg awarded a pass from
+arriving at `/knowledge`.
 
 **Three readings are taken at every step.** The first two are the predicates the
 822–953px band sweep uses: the page body scrolling sideways, which §29 forbids;
@@ -92,9 +104,10 @@ later. The journey reads that sentence and moves on.
 | `journey-17-changed-the-priority.png` | 390 | 17 — **disagree** | A person overruling Russell, with the reason the control requires. The screen reads back *"You already overruled Russell here…"*, which comes from the row rather than from the click. |
 | `journey-18-the-parked-decision.png` | 390 | 18 — **the decision Brain could not take** | Written by `parkStoppedMissions` from the packet's own recorded status, offering the answers `choicesFor` says this packet can actually take. |
 | `journey-19-authorized-the-plan.png` | 390 | 19 — **answered** | §16's other way a start gets authorized: the same `approvePlan` the envelope calls, recorded as this person's decision. |
-| `journey-20-the-mission-resumed.png` | 390 | 20 — **the same mission, carrying on** | Work showing its assignment. Not a replacement started beside it — the id is the one that was parked. |
-| `journey-21-knows.png` | 390 | 21 — Knows | What the project believes, and what each thing rests on. |
-| `journey-22-who-and-fleet.png` | 390 | 22 — Who | The people on the project and the fleet behind it. |
+| `journey-20-the-mission-resumed.png` | 390 | 20 — **the same mission, carrying on** | Its own card, found by the objective on it. Not a replacement started beside it — the id is the one that was parked. |
+| `journey-21-what-the-work-actually-is.png` | 390 | 21 — **what the work actually is** | The reader turns the depth up to Technical from the More sheet and opens *"How it is being done"*. The ids are the mission, its packet and its bin — and the filed document, once there is one. |
+| `journey-22-knows.png` | 390 | 22 — Knows | What the project believes, **read** rather than arrived at: a conclusion and what it rests on, or the server's own sentence for why there is none. |
+| `journey-23-who-and-fleet.png` | 390 | 23 — Who | The people on the project and the fleet behind it. |
 | `journey-23-everywhere-from-390.png` | 390 | reachability | The More sheet open: Search, Build, Connected sites, the depth control, Full console, Sign out. |
 | `journey-24-thumb-bar-360.png` | 360 | the narrower phone | Seven cells still fit, and the composer's hint is one line rather than half of a second. |
 | `journey-25-everywhere-from-360.png` | 360 | reachability | The same fifteen controls, reachable at the narrower width too. |
@@ -201,7 +214,7 @@ The journey half of this run's output, unedited:
 ```
 One journey on a 390×844 phone, pressing real controls:
   01-home            arrived  fits  BAR
-  02-conversation    arrived  fits  [opened the thread already there] /conversation/rcv_590d43dcc7d946988a33
+  02-conversation    arrived  fits  [opened the thread already there] /conversation/rcv_9ba057b4714d4642b0e7
   03-said-something  arrived  fits  2 turn(s), Russell says: This is waiting to be handed to a worker.
   04-work            arrived  fits  /work
   05-project-map     arrived  fits  10 nodes on a 316×434 canvas
@@ -220,17 +233,21 @@ One journey on a 390×844 phone, pressing real controls:
   16-open-the-idea   arrived  fits  [opened Parcel 118 — how long recording takes in] Russell says Worth doing
   17-changed-the-priority arrived  fits  You already overruled Russell here: The site is waiting on this one, so it goes 
   waiting for Russell to reach a decision it cannot take…
-  the parked decision  mission rms_7afca7aff4a342d69180 parked at NEEDS_HUMAN, request rhr_461060758de14f039709
+  the parked decision  mission rms_c48e96d27b51438098e0 parked at NEEDS_HUMAN, request rhr_c442765bf6144e8c9a9f
   18-the-parked-decision arrived  fits  Authorizing research Brain was not preauthorized to start. B — offers: Authorize
   19-authorized-the-plan arrived  fits  [chose Authorize this plan and let it run] Russell Work Ideas Knows Who Needs you 1 More Needs you Nothing needs your decis
-  20-the-mission-resumed arrived  fits  Russell Work Ideas Knows Who Needs you 1 More Work Waiting 1 ESTABLISH, FROM OFF
-  21-knows           arrived  fits  Russell Work Ideas Knows Who Needs you 1 More What Russell knows There is no The
-  22-who-and-fleet   arrived  fits  Russell Work Ideas Knows Who Needs you 1 More Who visual-qa@example.invalid (you
+  20-the-mission-resumed arrived  fits  Establish, from official Michigan public records,  — waiting on The proposed pla
+  21-what-the-work-actually-is arrived  fits  [turned the depth up and opened the mission’s detail] Mission=rms_c48e96d27b51438098e0 Packet=orc_bd5188acdca2442189bd Bin=bin_d94695e
+  22-knows           arrived  fits  nothing concluded yet — There is nothing here yet.
+  23-who-and-fleet   arrived  fits  Russell Work Ideas Knows Who Needs you 1 More Who visual-qa@example.invalid (you
+  the work, identified on screen by its own ids — Mission=rms_c48e96d27b51438098e0 Packet=orc_bd5188acdca2442189bd Bin=bin_d94695e5b3ac44daa
 
 What the journey changed, read back from the rows:
   standing authority   granted, and still there
   the idea             priority MUST_DO, overridden by a person, and Russell’s own judgment kept beside it
-  the parked mission   rms_7afca7aff4a342d69180 NEEDS_HUMAN → RUNNING, its request settled
+  the parked mission   rms_c48e96d27b51438098e0 NEEDS_HUMAN → RUNNING, its request settled
+  what Russell knows   0 conclusion(s), 0 citing rms_c48e96d27b51438098e0, no filed document yet
+  the question asked   Russell's turn is PENDING
   work                 0 group(s) after the change
   13-needs-you       arrived  fits  Russell Work Ideas Knows Who Needs you 1 More Needs you Nothing needs your decis
   14-back-home       arrived  fits  /
