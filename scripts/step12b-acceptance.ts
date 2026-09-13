@@ -76,8 +76,15 @@ import {
   revokeMembership,
 } from '../server/repos/identity.ts';
 import { decideProjectAccess } from '../server/services/identity/policy.ts';
-import { conversationIsReadable, ownerPrincipal } from '../server/services/russell/turn.ts';
-import { createConversation } from '../server/repos/russellConversations.ts';
+import { beginTurn, conversationIsReadable, ownerPrincipal } from '../server/services/russell/turn.ts';
+import {
+  addMessage,
+  createConversation,
+  getConversation,
+  getMessage,
+} from '../server/repos/russellConversations.ts';
+import { ensureCollection, fileConversation } from '../server/repos/russellCollections.ts';
+import { withPendingDetail } from '../server/services/russell/pending.ts';
 import {
   currentPolicy,
   listAccounts,
@@ -110,12 +117,14 @@ import {
 } from '../server/services/russell/progress.ts';
 import { homeFor } from '../server/services/russell/home.ts';
 import { capture } from '../server/services/russell/judgment.ts';
+import { judgeCandidate } from '../server/services/russell/planning.ts';
 import { SEMANTIC_MERGE_FLOOR } from '../server/services/russell/similarity.ts';
 import {
   createCandidate,
   getCandidate,
   listCandidates,
   listMergeHistory,
+  overrideJudgment,
   splitCandidate,
 } from '../server/repos/russellCandidates.ts';
 import {
@@ -142,7 +151,7 @@ import { currentFragments, getOrchestration } from '../server/repos/research.ts'
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { fileResearchPacket } from '../server/services/research/filing.ts';
 import { currentLinksFor, driftOf } from '../server/services/russell/completionLinks.ts';
-import { collectionsFor } from '../server/services/russell/collections.ts';
+import { collectionsFor, organize } from '../server/services/russell/collections.ts';
 
 import {
   DEFAULT_INVITED_ROLE,
@@ -164,7 +173,7 @@ import {
 } from '../server/repos/identity.ts';
 import { listEvents } from '../server/repos/events.ts';
 import { WORKER_SCOPES } from '../server/domain/types.ts';
-import type { Principal, Project } from '../server/domain/types.ts';
+import type { ExistingClaim, Principal, Project } from '../server/domain/types.ts';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 
@@ -278,6 +287,17 @@ const GATE_EVIDENCE: Record<string, Environment> = {
 const gates: Gate[] = [];
 
 /**
+ * Where the exercising database lives, so one exercise can close and re-open it.
+ *
+ * A module-level handle rather than an argument because the continuity check is
+ * the only thing that needs it and threading it through would put a parameter on
+ * every exercise for the benefit of one. It is set in `main` beside the
+ * `initDatabase` that creates the file, and stays null against a Brain that is
+ * not the local one — where closing the connection would be closing production's.
+ */
+let CONTINUITY_DB_PATH: string | null = null;
+
+/**
  * Evidence a scenario cites, which is not itself a scenario.
  *
  * The mission chain below is a real exercise with two dozen asserted
@@ -303,6 +323,104 @@ function recordEvidence(key: string, title: string, detail: string): void {
 }
 function record(id: string, title: string, verdict: Verdict, detail: string): void {
   gates.push({ id, title, verdict, detail });
+}
+
+/**
+ * One condition a scenario is made of, and the rule that turns a list of them
+ * into a verdict.
+ *
+ * The owner's finding was that fifteen scenarios had **no branch** that could
+ * return `PASS` — not a threshold nobody had reached, but a verdict expression
+ * whose arms were `PARTIAL` and `NOT_RUN` and nothing else. Every one of them
+ * ended its prose with a sentence beginning *"NOT established here: …"*, which
+ * is an unmet condition written where nothing can ever satisfy it.
+ *
+ * So a scenario declares what it is made of, and the verdict is derived:
+ *
+ *   held === true    the condition was exercised and holds.
+ *   held === false   it was exercised and did **not** hold. That is `FAIL`,
+ *                    and it is named. Never `NOT_RUN`, which asserts nothing
+ *                    happened and is the opposite of what occurred.
+ *   held === null    it could not be exercised **from here**, and `needs` says
+ *                    which environment can. That is `PARTIAL`, because
+ *                    *we could not look* and *we looked and it is absent* are
+ *                    different facts with different remedies — and the
+ *                    combiner exists precisely to join a run that could look
+ *                    with one that could not.
+ *
+ * A condition may also be permanently out of reach, and three are: a decision
+ * that is the owner's, a capability this version declares and refuses, and a
+ * measurement that would spend the subscription. Those carry `standing: true`
+ * and are reported in the detail without holding the verdict down — the matrix
+ * records them as the answer rather than as a shortfall, and a gate that could
+ * never pass because of one would be a gate nobody can finish.
+ */
+interface GateCondition {
+  name: string;
+  held: boolean | null;
+  saw: string;
+  needs?: Environment;
+  standing?: true;
+}
+
+function verdictOf(conditions: GateCondition[]): Verdict {
+  if (conditions.length === 0) return 'NOT_RUN';
+  const judged = conditions.filter((c) => c.standing !== true);
+  if (judged.some((c) => c.held === false)) return 'FAIL';
+  if (judged.every((c) => c.held === null)) return 'NOT_RUN';
+  if (judged.some((c) => c.held === null)) return 'PARTIAL';
+  return 'PASS';
+}
+
+/**
+ * Record a scenario from its conditions, composing the detail from them.
+ *
+ * The detail is built rather than written, so what a reader is told and what
+ * the verdict was computed from cannot drift — the failure this whole file
+ * exists to refuse, one altitude down. `lede` is the sentence that says what
+ * was exercised; the conditions say whether it held.
+ */
+function recordConditions(
+  id: string,
+  title: string,
+  conditions: GateCondition[],
+  lede: string,
+): void {
+  const verdict = verdictOf(conditions);
+  const broke = conditions.filter((c) => c.held === false);
+  const unreachable = conditions.filter((c) => c.held === null && c.standing !== true);
+  const standing = conditions.filter((c) => c.standing === true);
+  const parts: string[] = [lede];
+  if (broke.length > 0) {
+    parts.push(
+      `${broke.length} condition(s) were exercised and did NOT hold: ` +
+        broke.map((c) => `${c.name} (saw ${c.saw})`).join('; ') +
+        '. That is a defect rather than a missing run.',
+    );
+  }
+  const held = conditions.filter((c) => c.held === true);
+  if (held.length > 0) {
+    parts.push(
+      `${held.length}/${conditions.filter((c) => c.standing !== true).length} condition(s) held: ` +
+        held.map((c) => `${c.name} — ${c.saw}`).join('; ') +
+        '.',
+    );
+  }
+  if (unreachable.length > 0) {
+    parts.push(
+      `Not exercisable from a ${RUN_ENVIRONMENT} run: ` +
+        unreachable.map((c) => `${c.name} (needs ${c.needs ?? 'another environment'})`).join('; ') +
+        '. A run in that environment answers it, and `step12b-combine.ts` joins the two.',
+    );
+  }
+  if (standing.length > 0) {
+    parts.push(
+      'Standing and recorded as the answer rather than as a shortfall: ' +
+        standing.map((c) => `${c.name} — ${c.saw}`).join('; ') +
+        '.',
+    );
+  }
+  record(id, title, verdict, parts.join(' '));
 }
 
 /** Read a repository file, or null. Used where the evidence is the code itself. */
@@ -1934,6 +2052,395 @@ async function inviteJourney(
   };
 }
 
+/**
+ * Conversation routing and continuity, driven rather than counted.
+ *
+ * A named this as satisfied by `answeredTurns > 0` — a tally of rows somebody
+ * else's Brain produced. That says turns *have been* answered. It does not say
+ * this build routes a thread it was never told about, that a waiting turn
+ * explains itself from its **current** condition rather than from the sentence
+ * stored when it began, or that any of it survives the process losing its
+ * database — which are the three things P3, P4 and R4 actually ask for.
+ *
+ * So this creates a thread with no project, says something that names one, and
+ * asserts Brain attached it itself. Then it drives the two pending shapes that
+ * matter and closes the database underneath them.
+ *
+ * **The restart is real within the only scope a reporter has.** It closes the
+ * connection, re-opens the same file, and re-reads through the repositories —
+ * so a projection that had cached anything in module state, or a row that had
+ * only ever existed in a transaction, fails here. What it is not is a process
+ * restart, and P is where that is claimed, from `upgrade:populated` and the
+ * hosted pre/post-restart halves. Saying which of the two this is, is the whole
+ * difference between evidence and a word.
+ */
+async function runContinuityExercise(): Promise<{
+  conditions: GateCondition[];
+  error: string | null;
+  notes: string[];
+}> {
+  const conditions: GateCondition[] = [];
+  const notes: string[] = [];
+  const hold = (name: string, held: boolean, saw: string): void => {
+    conditions.push({ name, held, saw });
+  };
+  try {
+    const person = await createUser({
+      email: 'step12b-continuity@example.invalid',
+      displayName: 'Step 12B continuity (test identity, not the owner)',
+      password: `acc-${randomUUID()}`,
+      isBrainAdmin: false,
+    });
+    const project = await createProject({
+      name: 'Riverbend Easement Register',
+      slug: `riverbend-${randomUUID().slice(0, 8)}`,
+      description: 'A continuity fixture, in a database this run deletes.',
+    });
+    await grantMembership({
+      projectId: project.id,
+      principalType: 'HUMAN',
+      principalId: person.id,
+      role: 'MEMBER',
+      scopes: ['project:read'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'step12b-acceptance',
+    });
+    const principal = await ownerPrincipal(person.id);
+    if (!principal) throw new Error('the test identity did not resolve to a principal');
+
+    /* -- P4. Brain decides which project a thread is about --------------- */
+    const thread = await createConversation({
+      ownerUserId: person.id,
+      title: 'Where did we get to',
+      projectId: null,
+    });
+    const begun = await beginTurn({
+      principal,
+      conversationId: thread.id,
+      content:
+        'What is outstanding on the Riverbend Easement Register before it can be frozen?',
+    });
+    hold(
+      'a thread with no project was routed to one by Brain itself',
+      begun.ok && begun.attachedProjectId === project.id,
+      begun.attachedProjectId === project.id
+        ? 'attached, source AUTOMATIC'
+        : `attachedProjectId=${begun.attachedProjectId ?? 'null'}`,
+    );
+    const routed = await getConversation(thread.id);
+    hold(
+      'the routing is a recorded fact on the thread, not a per-turn guess',
+      routed?.attachmentSource === 'AUTOMATIC' && routed.projectId === project.id,
+      `attachment_source=${routed?.attachmentSource ?? 'none'}`,
+    );
+
+    /* -- R4. A waiting turn explains its own condition ------------------- */
+    const waiting = begun.pendingMessage;
+    if (!waiting) throw new Error('beginTurn produced no pending turn to wait on');
+    const withBin = await withPendingDetail([waiting]);
+    const binDetail = withBin[0]?.pendingDetail ?? null;
+    hold(
+      'a turn that reached a worker is explained from its bin rather than from the stored sentence',
+      binDetail !== null && binDetail !== waiting.pendingReason,
+      binDetail ? `"${binDetail.slice(0, 64)}…"` : 'no derived detail',
+    );
+
+    /*
+     * The shape the stored sentence covered up: a pending turn with no bin.
+     * Nothing is running for it and nothing ever will be, so the one thing it
+     * must not read as is patience. Written directly because no ordinary path
+     * produces it — which is exactly why it went unnoticed.
+     */
+    const orphan = await addMessage({
+      conversationId: thread.id,
+      role: 'RUSSELL',
+      content: '',
+      status: 'PENDING',
+      pendingReason: 'Russell is thinking — a worker is picking this up.',
+    });
+    const withoutBin = await withPendingDetail([orphan]);
+    const orphanDetail = withoutBin[0]?.pendingDetail ?? '';
+    hold(
+      'a pending turn with no bin says nothing is running, rather than repeating the reassurance',
+      orphanDetail !== orphan.pendingReason && /did not reach a worker/.test(orphanDetail),
+      `"${orphanDetail.slice(0, 72)}…"`,
+    );
+    hold(
+      'the stored reason is kept as history rather than overwritten by the projection',
+      (await getMessage(orphan.id))?.pendingReason === orphan.pendingReason,
+      'pending_reason unchanged on the row',
+    );
+
+    /* -- P4. A person's filing outranks the automatic pass ---------------- */
+    const mine = await ensureCollection({
+      ownerUserId: person.id,
+      name: 'Things I keep coming back to',
+      kind: 'CATEGORY',
+      projectId: null,
+    });
+    await fileConversation({
+      conversationId: thread.id,
+      ownerUserId: person.id,
+      collectionId: mine.id,
+      actor: 'USER',
+    });
+    await organize(person.id);
+    const afterOrganize = await getConversation(thread.id);
+    hold(
+      'the automatic pass may only ever write over its own decisions',
+      afterOrganize?.collectionId === mine.id && afterOrganize.collectionSource === 'USER',
+      `collection_source=${afterOrganize?.collectionSource ?? 'none'}`,
+    );
+
+    /* -- Continuity. The database goes away underneath all of it ---------- */
+    const dbFile = activeDatabaseConfig()?.provider === 'sqlite' ? CONTINUITY_DB_PATH : null;
+    if (!dbFile) {
+      conditions.push({
+        name: 'a waiting turn survives the database being closed and re-opened',
+        held: null,
+        saw: 'the exercising database is not the local file this can re-open',
+        needs: 'ISOLATED',
+      });
+    } else {
+      await closeDatabase();
+      await initDatabase({
+        dbPath: dbFile,
+        config: { provider: 'sqlite', connectionString: null, poolSize: 1 },
+      });
+      const survived = await getMessage(waiting.id);
+      const survivedOrphan = await getMessage(orphan.id);
+      hold(
+        'a waiting turn survives the database being closed and re-opened',
+        survived?.status === 'PENDING' && survivedOrphan?.status === 'PENDING',
+        `${survived?.status ?? 'gone'} / ${survivedOrphan?.status ?? 'gone'}`,
+      );
+      const again = await withPendingDetail([survived!, survivedOrphan!]);
+      hold(
+        'and still explains itself afterwards, from rows rather than from anything held in memory',
+        again[0]?.pendingDetail === binDetail && again[1]?.pendingDetail === orphanDetail,
+        'both derived sentences identical across the reconnection',
+      );
+      const threadAgain = await getConversation(thread.id);
+      hold(
+        "and so does the person's filing and the routing decision",
+        threadAgain?.collectionSource === 'USER' && threadAgain.projectId === project.id,
+        'both read back unchanged',
+      );
+      notes.push(`thread ${thread.id}`, `turn ${waiting.id}`);
+    }
+    return { conditions, error: null, notes };
+  } catch (error) {
+    return {
+      conditions,
+      error: error instanceof Error ? error.message : String(error),
+      notes,
+    };
+  }
+}
+
+/**
+ * The two halves of B the chain does not reach: refusing work, and being
+ * overruled.
+ *
+ * A1 and A3 — capturing an idea and forming a priority with a reason — are
+ * driven by the mission chain's L1 links. A4 and A5 are not, and they are the
+ * two that decide whether Russell's judgment is a judgment at all: something
+ * that can only ever say yes is not forming a view, and something that cannot
+ * be overruled is not a proposal.
+ *
+ * **The archive path is driven against the real classifier, not a stub of it.**
+ * `askArchive` exposes a `claims` seam precisely so a caller that has already
+ * read them can pass them in; this passes one claim that answers the question
+ * and lets `coverBeforeWork` decide whether it does. A fake coverage result
+ * would be testing the fake — the classifier is the part worth exercising, and
+ * it is the part that can be wrong.
+ *
+ * The override is a person's, and every identity here is a test identity at
+ * `example.invalid` created by this script. Nothing in it is, or may be read
+ * as, the owner deciding anything.
+ */
+async function runJudgmentExercise(): Promise<{
+  conditions: GateCondition[];
+  error: string | null;
+  notes: string[];
+}> {
+  const conditions: GateCondition[] = [];
+  const notes: string[] = [];
+  const hold = (name: string, held: boolean, saw: string): void => {
+    conditions.push({ name, held, saw });
+  };
+  try {
+    const person = await createUser({
+      email: 'step12b-judgment@example.invalid',
+      displayName: 'Step 12B judgment (test identity, not the owner)',
+      password: `acc-${randomUUID()}`,
+      isBrainAdmin: false,
+    });
+    const project = await createProject({
+      name: 'Calder County Recording Fees',
+      slug: `calder-${randomUUID().slice(0, 8)}`,
+      description: 'A judgment fixture, in a database this run deletes.',
+    });
+    const layer = await createLayer({
+      projectId: project.id,
+      name: 'Statutory Baseline',
+      orderIndex: 1,
+    });
+    await grantMembership({
+      projectId: project.id,
+      principalType: 'HUMAN',
+      principalId: person.id,
+      role: 'MEMBER',
+      scopes: ['project:read'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'step12b-acceptance',
+    });
+
+    /* -- A4. An idea the project already answers is refused, not researched -- */
+    const settled = await capture({
+      title: 'Calder County recording fee for a standard deed',
+      statement:
+        'What is the recording fee charged by Calder County for a standard deed in 2026?',
+      projectId: project.id,
+      visibility: 'SHARED',
+    });
+    if (!settled.candidate) throw new Error('the idea that should be refused was not captured');
+    /*
+     * Two claims, two publishers, and that is not padding.
+     *
+     * `SATISFIED` is the only coverage status that stops research happening, so
+     * `assessRequirement` holds it to corroboration: two distinct publisher
+     * hostnames, a relevance of at least 0.5 and a combined strength of 0.55.
+     * §14's rule in code — an organisation's own page is conclusive about what
+     * it says and worth nothing as independent confirmation.
+     *
+     * The first version of this fixture supplied one claim from one publisher
+     * and the exercise reported `answeredByArchive=false`. That was the product
+     * being right and the fixture being wrong, and it is worth recording which
+     * way round it was: a fixture that had "passed" would have been proving
+     * that one uncorroborated claim is enough to cancel a piece of research.
+     */
+    const answering = (publisher: string, host: string, text: string): ExistingClaim =>
+      ({
+        id: `clm_${randomUUID().slice(0, 12)}`,
+        projectId: project.id,
+        documentId: `doc_${randomUUID().slice(0, 12)}`,
+        extractionRunId: null,
+        layerId: layer.id,
+        claim: text,
+        claimType: 'SOURCED_FACT',
+        page: 4,
+        blockIndex: 2,
+        charStart: null,
+        charEnd: null,
+        locator: 'MCL 600.2567',
+        sourceUrl: `https://${host}/calder/fees`,
+        sourceTitle: 'Calder County recording fee schedule',
+        sourcePublisher: publisher,
+        sourceDate: '2026-01-01',
+        retrievedAt: '2026-01-02T00:00:00.000Z',
+        supportingPassage:
+          'Standard deed: $30.00 first page, $3.00 each additional page. Effective 1 January 2026.',
+        geography: 'Michigan',
+        timeframe: '2026',
+        population: null,
+        definition: null,
+        extractionConfidence: 0.95,
+        evidenceConfidence: 0.9,
+        contradictionState: 'UNCHALLENGED',
+        verificationState: 'VERIFIED',
+        verificationDetail: null,
+        priorAuditId: null,
+        documentVersion: 'v1',
+        superseded: false,
+        contentHash: randomUUID().replace(/-/g, ''),
+        createdAt: '2026-01-02T00:00:00.000Z',
+      });
+    const answeringClaims = [
+      answering(
+        'Calder County Register of Deeds',
+        'calder-county.example.invalid',
+        'The recording fee charged by Calder County for a standard deed in 2026 is $30 for the ' +
+          'first page and $3 for each additional page.',
+      ),
+      answering(
+        'Michigan Association of Registers of Deeds',
+        'mard.example.invalid',
+        'Calder County charges a standard deed recording fee of $30 for the first page in 2026, ' +
+          'with $3 for each additional page.',
+      ),
+    ];
+    const refused = await judgeCandidate(settled.candidate.id, {
+      claims: answeringClaims,
+    });
+    hold(
+      'an idea the archive already answers is refused rather than researched',
+      refused.ok && refused.answeredByArchive,
+      `answeredByArchive=${refused.answeredByArchive}, priority=${refused.priority ?? 'none'}`,
+    );
+    const refusedRow = await getCandidate(settled.candidate.id);
+    hold(
+      'the refusal is a recorded decision with the claims that settled it, not a silent disappearance',
+      refusedRow !== null &&
+        (refusedRow.state === 'PARKED' || refusedRow.state === 'REJECTED') &&
+        (refusedRow.reason ?? '').length > 0,
+      `state=${refusedRow?.state ?? 'gone'}, reason="${(refusedRow?.reason ?? '').slice(0, 48)}…"`,
+    );
+    const missionsAfterRefusal = await listMissions({ projectId: project.id });
+    hold(
+      'nothing was spent on it: no mission, no packet, no dispatch',
+      missionsAfterRefusal.length === 0,
+      `${missionsAfterRefusal.length} mission(s) exist for this project`,
+    );
+
+    /* -- A5. A person disagrees, and their decision stands ----------------- */
+    const beforeOverride = refusedRow?.priority ?? null;
+    const overridden = await overrideJudgment({
+      candidateId: settled.candidate.id,
+      actorUserId: person.id,
+      priority: 'MUST_DO',
+      state: 'CAPTURED',
+      reason: 'The fee schedule changed in March and the claim predates it.',
+    });
+    const afterOverride = await getCandidate(settled.candidate.id);
+    hold(
+      "a person's override replaces Russell's judgment",
+      overridden && afterOverride?.priority === 'MUST_DO',
+      `${beforeOverride ?? 'none'} → ${afterOverride?.priority ?? 'none'}`,
+    );
+    hold(
+      'the superseded judgment is kept rather than destroyed',
+      (afterOverride?.supersededDecision ?? null) !== null &&
+        afterOverride?.overrideUserId === person.id &&
+        (afterOverride.overrideReason ?? '').length > 0,
+      afterOverride?.supersededDecision
+        ? 'superseded_decision, override_user_id and override_reason all present'
+        : 'superseded_decision is null',
+    );
+
+    /*
+     * And Russell does not quietly re-take a decision a person made. The
+     * ordinary judging pass runs again over the same idea; it must decline,
+     * because a decision is not re-taken because something happened beside it.
+     */
+    const reJudged = await judgeCandidate(settled.candidate.id);
+    const stillPersons = await getCandidate(settled.candidate.id);
+    hold(
+      'a later automatic pass does not re-take the decision a person made',
+      !reJudged.ok && stillPersons?.priority === 'MUST_DO' && stillPersons.overrideUserId === person.id,
+      `judge said "${reJudged.reason}", priority still ${stillPersons?.priority ?? 'none'}`,
+    );
+    notes.push(`idea ${settled.candidate.id}`, `project ${project.id}`);
+    return { conditions, error: null, notes };
+  } catch (error) {
+    return {
+      conditions,
+      error: error instanceof Error ? error.message : String(error),
+      notes,
+    };
+  }
+}
+
 async function main(): Promise<void> {
   // Read the real fleet first, then close it. Everything after this line writes.
   const fleet = await readOperationalFleet();
@@ -1947,6 +2454,17 @@ async function main(): Promise<void> {
    */
   const design = await readDesignDecision(revisionOf().revision);
   const blocker = surfaceBlocker(fleet);
+  /*
+   * Whether the rows just read are the deployed Brain's.
+   *
+   * Several scenarios turn on facts only a real fleet has — a worker has
+   * answered a turn, a site is delivering, a dispatch was traced. A checkout
+   * run reads whatever local database is configured, which is usually empty,
+   * and reporting *empty* as *absent* would be the exact substitution this file
+   * refuses: "we could not look here" and "we looked and it is not there" are
+   * different facts. Named by provider, never by connection string.
+   */
+  const READING_PRODUCTION = fleet.source === 'the cloud database';
 
   /*
    * The temporary database, and the reason it is named explicitly.
@@ -1974,6 +2492,7 @@ async function main(): Promise<void> {
    * taken and closed.
    */
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-12b-acc-'));
+  CONTINUITY_DB_PATH = path.join(dataDir, 'acceptance.db');
   await initDatabase({
     dbPath: path.join(dataDir, 'acceptance.db'),
     config: { provider: 'sqlite', connectionString: null, poolSize: 1 },
@@ -2017,17 +2536,50 @@ async function main(): Promise<void> {
    * then it is the reason.
    */
   const seen = fleet.history;
-  record(
+  const continuity = await runContinuityExercise();
+  /*
+   * One condition A has that no exercise can manufacture: a turn a **worker**
+   * actually answered. Answering is a worker's act, and a reporter that wrote a
+   * `COMPLETE` reply into `russell_messages` itself would be fabricating the
+   * one row the scenario is about. So it is read where such rows exist, and
+   * reported as unreachable from anywhere else rather than as absent.
+   */
+  const productionConditions: GateCondition[] = READING_PRODUCTION
+    ? [
+        {
+          name: 'a worker has answered real turns in the deployed Brain',
+          held: seen.answeredTurns > 0,
+          saw:
+            `${seen.answeredTurns} answered, ${seen.pendingTurns} pending, ` +
+            `${seen.failedTurns} failed across ${seen.conversations} conversation(s)`,
+        },
+      ]
+    : [
+        {
+          name: 'a worker has answered real turns in the deployed Brain',
+          held: null,
+          saw: `this run reads ${fleet.source}, which is not the deployed Brain`,
+          needs: 'PRODUCTION',
+        },
+      ];
+  recordConditions(
     'A',
     'Conversation routing and continuity',
-    seen.answeredTurns > 0 ? 'PARTIAL' : blocker.verdict,
-    seen.answeredTurns > 0
-      ? `${seen.answeredTurns} turn(s) answered by a worker across ${seen.conversations} ` +
-        `conversation(s) in ${fleet.source}, ${seen.routedConversations} of which Brain routed ` +
-        `to a project itself. ${seen.pendingTurns} pending and ${seen.failedTurns} failed, ` +
-        'each carrying its own recorded reason rather than an optimistic placeholder. ' +
-        'NOT established here: continuity across a restart mid-turn, driven deliberately.'
-      : blocker.detail,
+    continuity.error !== null
+      ? [
+          {
+            name: 'the continuity exercise completed',
+            held: false,
+            saw: continuity.error,
+          },
+          ...productionConditions,
+        ]
+      : [...continuity.conditions, ...productionConditions],
+    continuity.error !== null
+      ? 'The exercise that drives routing and continuity threw before it could answer.'
+      : 'Driven in an isolated scope: a thread with no project, routed by Brain, waiting on ' +
+        'a worker, then the database closed underneath it and re-opened.' +
+        (continuity.notes.length > 0 ? ` Trace: ${continuity.notes.join(', ')}.` : ''),
   );
 
   /* -- B. Independent judgment -------------------------------------------- */
@@ -2046,37 +2598,55 @@ async function main(): Promise<void> {
     (entry) => entry.name.startsWith('L1 ·') && entry.held,
   ).length;
   const judgedHereTotal = chain.checks.filter((entry) => entry.name.startsWith('L1 ·')).length;
-  const judgmentDrivenHere = judgedHereTotal > 0 && judgedHere === judgedHereTotal;
-  record(
+  const judgment = await runJudgmentExercise();
+  /*
+   * The three-role audit is B's remaining half and is deliberately not driven
+   * here. A pass is a worker's output, and a reporter that wrote `research_passes`
+   * rows itself would be manufacturing the independence the scenario is about —
+   * §23's floor is three distinct **authenticated sessions**, which is precisely
+   * the thing a single process cannot have. So it is read where such rows exist
+   * and reported as unreachable from anywhere else.
+   */
+  const auditCondition: GateCondition = READING_PRODUCTION
+    ? {
+        name: 'the three-role audit has run on real work, in separated sessions',
+        held: seen.auditPasses > 0,
+        saw: `${seen.auditPasses} completed AUDIT pass(es) in ${fleet.source}`,
+      }
+    : {
+        name: 'the three-role audit has run on real work, in separated sessions',
+        held: null,
+        saw: `this run reads ${fleet.source}; a pass needs a worker and a session Brain fired`,
+        needs: 'PRODUCTION',
+      };
+  recordConditions(
     'B',
     'Independent judgment',
-    chain.error !== null || (judgedHereTotal > 0 && !judgmentDrivenHere)
-      ? 'FAIL'
-      : judgmentDrivenHere
-        ? 'PARTIAL'
-        : seen.judgedCandidates > 0 && seen.auditPasses > 0
-          ? 'PARTIAL'
-          : blocker.verdict,
     chain.error !== null
-      ? `The chain exercise that drives this threw before it could answer: ${chain.error}`
-      : judgedHereTotal > 0 && !judgmentDrivenHere
-        ? 'Russell’s own judgment was driven in an isolated scope and did not hold: ' +
-          chain.checks
-            .filter((entry) => entry.name.startsWith('L1 ·') && !entry.held)
-            .map((entry) => `${entry.name} (saw ${entry.saw})`)
-            .join('; ') +
-          '. That is a defect rather than a missing run.'
-        : judgmentDrivenHere
-          ? `${judgedHere}/${judgedHereTotal} conditions held when this run drove it: an idea ` +
-            'captured here was judged against the archive first, given a priority and a reason ' +
-            'Russell decided, and specified by the compiler naming its envelope and the ' +
-            'jurisdiction it read — with no worker dispatched and nothing spent. See R for ' +
-            `the rows. Beside it, ${fleet.source} holds ${seen.judgedCandidates} judged idea(s) ` +
-            `and ${seen.auditPasses} completed audit pass(es). NOT established here: the ` +
-            'three-role audit driven end to end, which needs a worker (R names why), and a ' +
-            'judgment a person disagreed with and overrode, which is driven through the real ' +
-            'route in tests/russellIntegrationPass.test.ts rather than by this reporter.'
-          : blocker.detail,
+      ? [
+          { name: 'the mission chain completed', held: false, saw: chain.error },
+          auditCondition,
+        ]
+      : judgment.error !== null
+        ? [
+            ...chain.checks
+              .filter((entry) => entry.name.startsWith('L1 ·'))
+              .map((entry) => ({ name: entry.name, held: entry.held, saw: entry.saw })),
+            { name: 'the judgment exercise completed', held: false, saw: judgment.error },
+            auditCondition,
+          ]
+        : [
+            ...chain.checks
+              .filter((entry) => entry.name.startsWith('L1 ·'))
+              .map((entry) => ({ name: entry.name, held: entry.held, saw: entry.saw })),
+            ...judgment.conditions,
+            auditCondition,
+          ],
+    `Russell's own judgment driven end to end in an isolated scope: ${judgedHere}/` +
+      `${judgedHereTotal} capture-and-specify conditions from the mission chain (see R), plus ` +
+      'an idea the archive already answered being refused rather than researched, and a ' +
+      "person's override standing over it." +
+      (judgment.notes.length > 0 ? ` Trace: ${judgment.notes.join(', ')}.` : ''),
   );
 
   /* -- C. Priority and backlog -------------------------------------------- */
@@ -3634,29 +4204,12 @@ async function main(): Promise<void> {
    * and did not hold" is a defect somebody has to look at today, and a reader
    * scanning one line must not have to tell them apart by counting.
    */
-  if (counts.FAIL > 0) {
+  const failedGates = gates.filter((gate) => gate.verdict === 'FAIL');
+  if (failedGates.length > 0) {
     console.log(
-      `STEP 12B — ${counts.FAIL} SCENARIO(S) FAILED: ` +
-        gates
-          .filter((gate) => gate.verdict === 'FAIL')
-          .map((gate) => `${gate.id} ${gate.title}`)
-          .join('; '),
-    );
-  }
-  /*
-   * A failure is named on its own line, ahead of the completeness verdict.
-   *
-   * The autonomy track asked for this and it is right: a reader distinguishing
-   * a defect from a backlog by comparing two numbers in one sentence will
-   * eventually not bother. `FAIL` means a check ran and the product was wrong,
-   * which is somebody's bug — different in kind from the scenarios nobody has
-   * exercised yet, and it should not have to be inferred from a count.
-   */
-  const failed = gates.filter((gate) => gate.verdict === 'FAIL');
-  if (failed.length > 0) {
-    console.log(
-      `${failed.length} SCENARIO(S) FAILED — a check ran and the product did not hold: ` +
-        failed.map((gate) => `${gate.id} ${gate.title}`).join('; '),
+      `STEP 12B — ${failedGates.length} SCENARIO(S) FAILED, a check ran and the product did ` +
+        `not hold: ` +
+        failedGates.map((gate) => `${gate.id} ${gate.title}`).join('; '),
     );
   }
   if (counts.PASS !== gates.length) {
