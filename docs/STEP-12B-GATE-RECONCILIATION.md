@@ -46,9 +46,26 @@ held === null     not exercisable from the environment that ran, and `needs`
                   says which one can. That is PARTIAL, because "we could not
                   look" and "we looked and it is absent" are different facts
                   with different remedies.
-standing: true    out of reach on purpose, and recorded as the answer rather
-                  than as a shortfall. Reported; never counted against.
+held === null     waiting on a person, and `awaits` names them. That is
+  + awaits        BLOCKED: still open, still counted, and nothing here can
+                  close it.
+deferredBy        removed from the denominator, and only ever by an
+                  owner-recorded deferral naming who deferred it, when, and
+                  where the record is.
 ```
+
+**`standing: true` used to be the fifth state, and it was a self-granted
+exemption.** It meant "out of reach on purpose", and this reporter decided
+which conditions carried it — so a requirement nobody had met could be taken
+out of scoring by the thing being scored. The owner named it exactly: *"Required
+conditions cannot disappear from scoring. That currently excludes unverified
+production restart evidence and untested worker measurements. Keep required,
+unproved conditions open. Only an actual owner-approved deferral may remove a
+requirement from completion."*
+
+It is `deferredBy` now, which no code under `scripts/` writes. The reading it
+produced dropped from 7 PASS to 3 the moment the flag stopped exempting
+anything, and that drop is the correction working rather than a regression.
 
 `verdictOf` in `scripts/step12b-acceptance.ts` is that rule. `recordConditions`
 composes the row's prose **from** the conditions, so what a reader is told and
@@ -94,9 +111,9 @@ which is how it hid.
 | G | P10, T1–T5 | `complete === LAB_MODES.length` — the **state**, not the content | asks what T3, T4 and T5 name *of the results*: a limit found or honestly bounded, a recommendation with its evidence class, quality reported apart from throughput — plus the two refusals that make pressure safe, driven |
 | H | P6, P12 | a regex for `emptyReason`, and node counts quoted as literal prose | builds all six maps over real rows and compares each diagram to its own outline in the same pass; reads the constellation overlap measurement taken at four viewports in the product's own typefaces |
 | I | P14, R1, R2 | `/requirePerson\(\)/.test(routes)` — a spelling | puts a worker principal holding every scope and an ADMIN membership through `requirePerson` inside a real request context, checks the refusal body is the one a missing route gives, and checks the same guard admits a person |
-| J | P13 | quoted its own findings as literal text | reads `journey.json`, which `visual-qa.ts` now writes: every step, arrival, fit, clipping, unreachable control and constellation reading, stamped with the revision it was taken at |
+| J | P13 | quoted its own findings as literal text | reads `journey.json`, which `visual-qa.ts` now writes: every step, arrival, fit, clipping, unreachable control and constellation reading, stamped with the revision it was taken at — **and what the journey changed**, read back out of the rows in that same journey |
 | K | P18, R11 | asserted the removal **test file exists** | runs the suite, and holds the legacy inventory against the client both ways round — every declared archive operation still on `/legacy`, and none of them on the product surface |
-| L | A8, A9, R4 | one reading of a state column | three questions: does the next authorized priority start by itself (driven), is the deployed loop error-free, and **did its cursor move between two readings** taken either side of this run's own exercises |
+| L | A8, A9, R4 | one reading of a state column | the whole chain rather than its last link: `L6 ·` knowledge arriving and being read, `L4 ·` the backlog reranking because of it, `L5 ·` the mission that can start next — plus, from production, one completed mission followed through its own foreign keys to the conclusion it produced, and whether the deployed loop's cursor moved between two readings |
 | M | P3, P7, P19 | four readers compared, capped on "over HTTP" | the same four, plus the deployed Brain's own projects read through `projectProgress` for a named denominator and no uncounted percentage |
 | N | P9, T7, T8 | one trace beside `file('routing.ts')` | drives a named routing refusal before any surface exists, three capacity readings that are not each other, `fits` **null** because no throughput was observed, and a target raised by writing a policy row |
 | O | P20 | consumed nothing; a markdown row read `— pending —` | evaluates a recorded decision bound to this revision **and** to a digest over the render bytes, read from the configured Brain. Nothing in `scripts/` can write that row |
@@ -174,3 +191,58 @@ none of them has a branch it cannot reach.
 Every PARTIAL names a condition only the deployed Brain's rows can answer,
 which is precisely what the combiner joins. The BLOCKED one is O, and it is
 the owner's.
+
+## What the owner's source review of `ea3b984` changed
+
+Five findings, all correct, and three of them were about a gate reporting
+something adjacent to what it claimed.
+
+**1. The port lottery.** `tests/factoryPersistence.test.ts` drew a port from
+6600–6699, which contains 6665–6669, 6679 and 6697 — all on the WHATWG bad-port
+list, which Node's `fetch` refuses before opening a socket. A server can answer
+HTTP normally while `fetch` refuses it, and the harness's `catch` hid the cause.
+Reproduced, and the historical failures confirmed: the three failing runs drew
+6665, 6668 and 6666. Two earlier hypotheses of mine — starvation, and a dead
+child — were both wrong, **and so was the TCP probe I had added to settle it**,
+which would have connected and given a fourth wrong answer. Every suite now
+allocates through `tests/helpers/ports.ts`, `deploymentOwnership` refuses the
+old pattern, and `scripts/visual-qa.ts` — which had the same defect in
+6400–6599 — goes through the same helper.
+
+**2. The scoring exemption.** Above.
+
+**3. J's journey demonstrated navigation.** It walks a *sequence* now, and
+asserts its effects: the standing authority approved on the phone; Russell's
+priority overruled by a person with Russell's own judgment kept beside it; a
+wait while Russell launches that idea and its packet stops outside the
+preauthorized envelope; the resulting decision answered with a thumb; and the
+same mission carrying on. The production mission count is **gone** from J — it
+is true, worth knowing, and about a different claim.
+
+Driving it found a real defect that reading had not: **a person's override was
+half a transition.** `judgeCandidate` writes the compiled specification under
+`missionSpec` only for a verdict that could launch one, and `nextLaunchable`
+reads that key alone — so an idea Brain parked for want of a standing
+authority, which a person then promoted to Must do, went into the queue Russell
+launches from and could never leave it. Fixed in `attachMissionSpec` (the
+guard: already `QUEUED`, and `override_user_id` names who put it there) and
+`specifyOverriddenCandidate` (the specification, from the same compiler,
+touching no verdict), driven from rows on the tick rather than hooked to the
+override.
+
+**4. L's chain was scored at its last link.** It takes all four now, and each
+is read where it is honest. Completed mission → knowledge is **production**: one
+row followed through its foreign keys to the document with bytes, the audit that
+judged it, and the knowledge row citing both. Knowledge → rerank → next
+authorized mission is the **canary**: a document a person imported, read by the
+extraction pipeline and inventoried mechanically, changing what Brain decides
+about a new idea. The boundary between them is the product's own and is named
+rather than blurred.
+
+**5. P consumes executed evidence.** `docs/evidence/step12b-upgrade/{sqlite,
+postgres}.json` are what `npm run upgrade:populated` actually did on each
+backend — schema 40→50 and 31→41, eight pre-existing rows across fourteen tables
+byte-identical, six new tables readable, a second restart settling — and the
+condition re-checks that `server/db` has not moved since. The hosted pre/post-
+restart half is the Deploy workflow's record, keyed to an exact revision, and it
+is **open until a deploy of that revision produces one**.

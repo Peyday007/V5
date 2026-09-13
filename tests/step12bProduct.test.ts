@@ -2929,12 +2929,29 @@ describe('a verdict is derived from conditions, by both readers, identically', (
      * moment it lands. What matters is whether anything it looked at moved —
      * and a docs commit does not change what a browser renders.
      */
-    const helper = reporter.slice(reporter.indexOf('function productUnchangedSince('));
-    expect(helper).toContain("'diff', '--quiet'");
-    expect(helper).toContain("'client'");
-    expect(helper).toContain("'server'");
-    // Fails closed: an unknown revision is not a pass.
-    expect(helper.slice(0, helper.indexOf('\n}'))).toContain('return false;');
+    /*
+     * Read in two pieces, because it is now written in two.
+     *
+     * `productUnchangedSince` was the whole implementation when this was
+     * written; it is a one-line delegation to `unchangedSince(revision, paths)`
+     * since P started asking the same question about `server/db` alone. Slicing
+     * from its name therefore reached past the git call and this assertion
+     * failed against a helper that had not lost a property — the second time in
+     * this file a test has been about the shape of a function rather than about
+     * what it decides. What is pinned is the decision: a git diff of the
+     * product's own directories, and a failure that reads as changed.
+     */
+    const generic = reporter.slice(reporter.indexOf('function unchangedSince('));
+    expect(generic).toContain("'diff', '--quiet'");
+    expect(generic.slice(0, generic.indexOf('\n}'))).toContain('return false;');
+
+    const product = reporter.slice(
+      reporter.indexOf('function productUnchangedSince('),
+      reporter.indexOf('function visualEvidence('),
+    );
+    expect(product).toContain('unchangedSince(revision, ');
+    expect(product).toContain("'client'");
+    expect(product).toContain("'server'");
   });
 });
 

@@ -1850,7 +1850,7 @@ async function narrowConstellation(
   const capture0 = await capture(
     cdp,
     outputDir,
-    `journey-18-constellation-${NARROW_PHONE}.png`,
+    `journey-26-constellation-${NARROW_PHONE}.png`,
   );
   const found = judge(`18-constellation-${NARROW_PHONE}`, capture0);
   if (!arrived) {
@@ -2161,7 +2161,7 @@ async function narrowPhoneBar(cdp: Cdp, outputDir: string): Promise<string[]> {
     mobile: true,
   });
   await sleep(900);
-  const reading = await capture(cdp, outputDir, `journey-16-thumb-bar-${NARROW_PHONE}.png`);
+  const reading = await capture(cdp, outputDir, `journey-24-thumb-bar-${NARROW_PHONE}.png`);
   /*
    * The cells that are actually on the bar, not every rail item in the markup.
    *
@@ -2563,7 +2563,7 @@ async function driveJourney(
       ...(await reachabilityProbe(
         cdp,
         outputDir,
-        `journey-15-everywhere-from-${PHONE.width}.png`,
+        `journey-23-everywhere-from-${PHONE.width}.png`,
         PHONE.width,
       )),
     );
@@ -2572,7 +2572,7 @@ async function driveJourney(
       ...(await reachabilityProbe(
         cdp,
         outputDir,
-        `journey-17-everywhere-from-${NARROW_PHONE}.png`,
+        `journey-25-everywhere-from-${NARROW_PHONE}.png`,
         NARROW_PHONE,
       )),
     );
