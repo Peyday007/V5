@@ -2397,6 +2397,93 @@ describe('the acceptance reporter writes to a scratch database, never the config
     expect(source).toContain('DEFAULT_TARGET_WITH_NO_PRIOR_POLICY');
   });
 
+  /*
+   * The chain gate, pinned on the two things that make it evidence rather than
+   * a description: that it drives the real services, and that it fabricates
+   * nothing to get there.
+   *
+   * The second half is the one worth a test. The owner's rejection was that a
+   * tick summary is not a chain, and the obvious way to make the chain "pass"
+   * is to write the packet's terminal status, a document row and an audit row
+   * by hand — which would be a report of invented citations (§12) and a verdict
+   * nobody reached (§8), wearing an acceptance gate's clothes. So the reporter
+   * is refused those tools by absence: it never imports them.
+   */
+  it('drives R through the services and writes no research, document or verdict', () => {
+    // The chain, through the entrances production uses.
+    expect(source).toContain("from '../server/services/russell/launch.ts'");
+    expect(source).toContain("from '../server/services/russell/loop.ts'");
+    expect(source).toContain('answerHumanRequest');
+    expect(source).toContain('NEEDS_HUMAN_CHOICES');
+    expect(source).toContain('reserve');
+
+    /*
+     * And the tools that could fabricate a finished packet, none of which it
+     * has. `createAudit` is deliberately not in this list: gate D uses it to
+     * build a frontier snapshot, which is a reading about classification rather
+     * than a claim that a packet was judged. What must never appear is a way to
+     * mint evidence for the chain.
+     */
+    const imported = [...source.matchAll(/^import[\s\S]*?from '[^']+';$/gm)]
+      .map((match) => match[0])
+      .join('\n');
+    for (const forbidden of [
+      'updateOrchestration',
+      'recordFragmentClaims',
+      'gateFragment',
+      'createDocument',
+      'storeFile',
+      'registerRunArtifact',
+      'recordAuditPasses',
+      'authorizeUnresolvedGaps',
+    ]) {
+      // Neither imported nor called. Named in prose is fine and is the point:
+      // the reporter has to be able to say what it did not do and why.
+      expect(imported, `the reporter must not import ${forbidden}`).not.toContain(forbidden);
+      expect(source, `the reporter must not call ${forbidden}`).not.toMatch(
+        new RegExp(`\\b${forbidden}\\s*\\(`),
+      );
+    }
+
+    // The guard that stops it is executed rather than described.
+    expect(source).toContain('fileResearchPacket');
+    expect(source).toContain('cleared its fragment evidence gate');
+
+    // And what it could not drive is named with what would close it, rather
+    // than left as an absence a reader has to infer.
+    expect(source).toContain("needs: 'A REAL WORKER'");
+    expect(source).toContain("needs: 'THE OWNER'");
+  });
+
+  /*
+   * A check that ran and did not hold must never read as one nobody ran.
+   *
+   * That is a property of the reporter rather than of any run: the union has to
+   * carry the verdict, the summary has to count it, and the failing scenarios
+   * have to be named on their own line — otherwise a reader tells a defect from
+   * a backlog by counting.
+   */
+  it('has a verdict for an executed check that failed, and counts it', () => {
+    expect(source).toMatch(/type Verdict =[^;]*'FAIL'/);
+    expect(source).toContain('{ PASS: 0, PARTIAL: 0, BLOCKED: 0, FAIL: 0, NOT_RUN: 0 }');
+    expect(source).toContain('counts.FAIL');
+    expect(source).toContain('SCENARIO(S) FAILED');
+  });
+
+  /*
+   * The store is pinned the way the database is, and for the identical reason.
+   *
+   * Nothing in the reporter files a document today. "Safe because nobody calls
+   * the other function" is the kind of guarantee this repository refuses
+   * everywhere else, and a reporter that could reach a real bucket would be a
+   * mutation rather than a reading.
+   */
+  it('names the local store explicitly, so no run can reach a real bucket', () => {
+    expect(source).toContain('initStorage');
+    expect(source).toMatch(/initStorage\([\s\S]*?provider: 'local'/);
+    expect(source).toMatch(/initStorage\([\s\S]*?root: dataDir/);
+  });
+
   it('takes its operational reading before it opens anything it writes to', () => {
     // Order matters: the real Brain is read and closed, and only then is the
     // scratch database opened. Reversed, the read would see the scratch one.
