@@ -2745,12 +2745,19 @@ describe('a verdict is derived from conditions, by both readers, identically', (
    * The rule, written once here so the assertions below are about behaviour
    * rather than about a copy of the implementation.
    */
-  type Cond = { name: string; held: boolean | null; saw: string; standing?: true };
+  type Cond = {
+    name: string;
+    held: boolean | null;
+    saw: string;
+    awaits?: string;
+    standing?: true;
+  };
   const expected = (conditions: Cond[]): string => {
     if (conditions.length === 0) return 'NOT_RUN';
     const judged = conditions.filter((c) => c.standing !== true);
     if (judged.some((c) => c.held === false)) return 'FAIL';
     if (judged.length === 0) return 'PASS';
+    if (judged.some((c) => c.held === null && c.awaits !== undefined)) return 'BLOCKED';
     if (judged.every((c) => c.held === null)) return 'NOT_RUN';
     if (judged.some((c) => c.held === null)) return 'PARTIAL';
     return 'PASS';
@@ -2794,6 +2801,22 @@ describe('a verdict is derived from conditions, by both readers, identically', (
       why: 'nothing exercisable here is NOT_RUN — we could not look is not we looked',
       conditions: [{ name: 'a', held: null, saw: 'elsewhere' }],
       verdict: 'NOT_RUN',
+    },
+    {
+      why: 'a condition waiting on a person is BLOCKED, not PARTIAL — nowhere else can answer it',
+      conditions: [
+        { name: 'a', held: true, saw: 'held' },
+        { name: 'an approval', held: null, saw: 'nobody has decided', awaits: 'the owner' },
+      ],
+      verdict: 'BLOCKED',
+    },
+    {
+      why: 'and a defect still outranks it, because a broken check is somebody\u2019s bug today',
+      conditions: [
+        { name: 'a', held: false, saw: 'did not' },
+        { name: 'an approval', held: null, saw: 'nobody has decided', awaits: 'the owner' },
+      ],
+      verdict: 'FAIL',
     },
     {
       why: 'a standing condition is reported and never holds the verdict down',

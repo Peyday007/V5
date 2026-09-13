@@ -399,6 +399,19 @@ interface GateCondition {
   held: boolean | null;
   saw: string;
   needs?: Environment;
+  /**
+   * Not unexercisable and not standing: **waiting on somebody**.
+   *
+   * A third shape of `held: null`, and it needs its own word because the other
+   * two would both say something false about it. `needs` means *another
+   * environment can answer this*, so reporting the owner's design approval that
+   * way would tell a reader to go and run the reporter somewhere else.
+   * `standing` means *this is the answer*, and an approval nobody has given is
+   * not an answer. It is an operational fact with an operational remedy, and
+   * the remedy belongs to a person — which is exactly what `BLOCKED` has meant
+   * in this reporter since it was written.
+   */
+  awaits?: string;
   standing?: true;
 }
 
@@ -453,6 +466,13 @@ function verdictOf(conditions: GateCondition[]): Verdict {
    * No gate in this file is standing-only today.
    */
   if (judged.length === 0) return 'PASS';
+  /*
+   * Asked before the environment question, because it is the stronger claim.
+   * "One person must decide" is a complete account of why the scenario has not
+   * moved; "another environment could look" is not, when the thing being
+   * waited on is not in any environment yet.
+   */
+  if (judged.some((c) => c.held === null && c.awaits !== undefined)) return 'BLOCKED';
   if (judged.every((c) => c.held === null)) return 'NOT_RUN';
   if (judged.some((c) => c.held === null)) return 'PARTIAL';
   return 'PASS';
@@ -474,7 +494,12 @@ function recordConditions(
 ): void {
   const verdict = verdictOf(conditions);
   const broke = conditions.filter((c) => c.held === false);
-  const unreachable = conditions.filter((c) => c.held === null && c.standing !== true);
+  const waiting = conditions.filter(
+    (c) => c.held === null && c.standing !== true && c.awaits !== undefined,
+  );
+  const unreachable = conditions.filter(
+    (c) => c.held === null && c.standing !== true && c.awaits === undefined,
+  );
   const standing = conditions.filter((c) => c.standing === true);
   const parts: string[] = [lede];
   if (broke.length > 0) {
@@ -490,6 +515,11 @@ function recordConditions(
       `${held.length}/${conditions.filter((c) => c.standing !== true).length} condition(s) held: ` +
         held.map((c) => `${c.name} — ${c.saw}`).join('; ') +
         '.',
+    );
+  }
+  if (waiting.length > 0) {
+    parts.push(
+      `Waiting on ${waiting.map((c) => `${c.awaits} — ${c.name}: ${c.saw}`).join('; ')}.`,
     );
   }
   if (unreachable.length > 0) {
@@ -3917,35 +3947,35 @@ async function main(): Promise<void> {
   const singleAnswerDoesNotPark = offers[1]!.decidable === false;
   const parkChecks = chain.checks.filter((entry) => entry.name.startsWith('F ·'));
   const parkFailed = parkChecks.filter((entry) => !entry.held);
-  const parkDriven = parkChecks.length > 0 && parkFailed.length === 0;
-  record(
+  recordConditions(
     'F',
     'Needs You',
-    chain.error !== null || parkFailed.length > 0 || !offersHeld || !singleAnswerDoesNotPark
-      ? 'FAIL'
-      : parkDriven
-        ? 'PASS'
-        : 'PARTIAL',
     chain.error !== null
-      ? `The chain exercise that drives the park threw before it could answer: ${chain.error}`
-      : !offersHeld || !singleAnswerDoesNotPark
-        ? 'The offer did not match the domain for at least one shape, which is a defect rather ' +
-          `than a missing run: ${offers.map((entry) => `${entry.name} → ${entry.keys.join('+')}`).join('; ')}.`
-        : parkFailed.length > 0
-          ? `The park was driven end to end and ${parkFailed.length} of ${parkChecks.length} ` +
-            'conditions did not hold: ' +
-            parkFailed.map((entry) => `${entry.name} (saw ${entry.saw})`).join('; ') +
-            '. That is a defect rather than a missing run.'
-          : `${offers.length}/${offers.length} packet shapes produce the offer the domain says ` +
-            `they should (${offers.map((entry) => `${entry.name} → ${entry.keys.join('+')}`).join('; ')}), ` +
-            'and the shape with one answer is not parked — which is the condition being the ' +
-            'offer rather than a row count standing in for it. ' +
-            `And the journey is driven, not implied: ${parkChecks.length}/${parkChecks.length} ` +
-            'conditions held for a packet Brain parked from its own rows, a person answering ' +
-            'it, and the packet moving with its work claimable again — ' +
-            parkChecks.map((entry) => entry.saw).join('; ') +
-            '. Both answers a packet in that state can take were exercised: APPROVE_PLAN, ' +
-            'which moved it, and STOP, which cancelled it and settled its hold.',
+      ? [{ name: 'the mission chain completed', held: false, saw: chain.error }]
+      : [
+          ...offers.map((entry) => ({
+            name: `the offer for "${entry.name}" is the answers the domain says can act on it`,
+            held: entry.held,
+            saw: entry.keys.join('+') || 'nothing offered',
+          })),
+          {
+            name: 'a packet with only one possible answer is not parked at all',
+            held: singleAnswerDoesNotPark,
+            saw: singleAnswerDoesNotPark
+              ? 'nobody is asked to press the only button there is'
+              : 'it parked with one choice — defect',
+          },
+          ...parkChecks.map((entry) => ({
+            name: entry.name,
+            held: entry.held,
+            saw: entry.saw,
+          })),
+        ],
+    'The condition is the offer rather than a row count standing in for it, and the journey is ' +
+      'driven rather than implied: a packet Brain parked from its own rows, a person answering ' +
+      'it, and the packet moving with its work claimable again. Both answers that packet could ' +
+      'take were exercised — APPROVE_PLAN, which moved it, and STOP, which cancelled it and ' +
+      'settled its hold.',
   );
 
   /* -- G. Capability Lab --------------------------------------------------- */
@@ -5246,73 +5276,81 @@ async function main(): Promise<void> {
    * a design gate. Nothing in this file can write one of those rows, and a test
    * asserts no module under `scripts/` imports the writer but `admin.ts`.
    */
-  if (!REPO_VISIBLE) {
-    record(
-      'O',
-      'Visual and interaction approval',
-      'NOT_RUN',
-      `O needs the render set, which is a repository fact. ${NOT_FROM_A_CHECKOUT}`,
-    );
-  } else if (design.absent) {
-    record(
-      'O',
-      'Visual and interaction approval',
-      'FAIL',
-      `There is nothing for a person to have decided about, and nothing here to evaluate: ` +
-        `${design.absent}. Produce the renders and run \`npm run design:manifest\`.`,
-    );
-  } else if (design.unreadable) {
-    record(
-      'O',
-      'Visual and interaction approval',
-      'FAIL',
-      `The render set digests to ${design.digest?.slice(0, 12)}…, and the decisions table could ` +
-        `not be read (${design.unreadable}) — so whether it was approved is unknown rather than ` +
-        'unapproved.',
-    );
-  } else {
-    const covers =
-      `${design.count} render(s) covering ${design.screens.length} screen(s) ` +
-      `(${design.screens.join(', ')}) at ${design.widths.join(' / ')}px`;
-    const decision = design.decision;
-    if (!decision) {
-      record(
-        'O',
-        'Visual and interaction approval',
-        'BLOCKED',
-        `${covers}, digesting to ${design.digest?.slice(0, 12)}…. **No decision is recorded for ` +
-          'this exact revision and render set.** Read from the configured Brain, not from this ' +
-          'run\u2019s scratch database. One remedy, and it is not this reporter\u2019s: a person ' +
-          'records it in Russell or runs `npm run admin -- design approve`. Nothing in scripts/ ' +
-          'can write that row, deliberately \u2014 a reporter that could record the approval it ' +
-          'is waiting for would be approving its own work.',
-      );
-    } else if (decision.decision !== 'APPROVED') {
-      record(
-        'O',
-        'Visual and interaction approval',
-        'FAIL',
-        `The standing decision for this render set is **${decision.decision}**, recorded by ` +
-          `${decision.approvedByUserId} at ${decision.createdAt}` +
-          (decision.note ? ` \u2014 "${decision.note}"` : '') +
-          '. A withdrawal or a rejection is as much a recorded decision as an approval, and is ' +
-          'reported as the answer rather than as a missing one.',
-      );
-    } else {
-      record(
-        'O',
-        'Visual and interaction approval',
-        'PASS',
-        `Approved by ${decision.approvedByUserId} at ${decision.createdAt}` +
-          (decision.note ? ` \u2014 "${decision.note}"` : '') +
-          `, bound to revision ${decision.revision.slice(0, 8)} and to render-set digest ` +
-          `${decision.renderSetDigest.slice(0, 12)}… (${covers}). The digest was recomputed from ` +
-          'the bytes on disk in this run and the decision was read from the configured Brain, so ' +
-          'the approval stops applying the moment either the tree or a render changes. This ' +
-          'reporter evaluated that decision and cannot record one.',
-      );
-    }
-  }
+  /*
+   * Recorded as conditions like every other scenario, so the combiner reads it
+   * the same way. The branch structure is unchanged: what the conditions do is
+   * make a row that says *which* of the four things is true, rather than a
+   * verdict a reader has to take on trust.
+   */
+  const designConditions: GateCondition[] = !REPO_VISIBLE
+    ? [
+        {
+          name: 'a render set of the built product exists and digests consistently',
+          held: null,
+          saw: 'the render set is a repository fact',
+          needs: 'CHECKOUT',
+        },
+        {
+          name: "the owner's approval of the complete design, bound to this revision and these bytes",
+          held: null,
+          saw: 'read from the configured Brain by a run that can also digest the renders',
+          needs: 'CHECKOUT',
+        },
+      ]
+    : design.absent
+      ? [
+          {
+            name: 'a render set of the built product exists and digests consistently',
+            held: false,
+            saw: design.absent,
+          },
+        ]
+      : design.unreadable
+        ? [
+            {
+              name: 'a render set of the built product exists and digests consistently',
+              held: true,
+              saw: `${design.count} render(s), digest ${design.digest?.slice(0, 12)}…`,
+            },
+            {
+              name: "the owner's approval of the complete design, bound to this revision and these bytes",
+              held: false,
+              saw: `the decisions table could not be read (${design.unreadable}), so whether it was approved is unknown rather than unapproved`,
+            },
+          ]
+        : [
+            {
+              name: 'a render set of the built product exists and digests consistently',
+              held: true,
+              saw:
+                `${design.count} render(s) covering ${design.screens.length} screen(s) ` +
+                `(${design.screens.join(', ')}) at ${design.widths.join(' / ')}px, digest ` +
+                `${design.digest?.slice(0, 12)}…`,
+            },
+            {
+              name: "the owner's approval of the complete design, bound to this revision and these bytes",
+              held: design.decision ? design.decision.decision === 'APPROVED' : null,
+              ...(design.decision ? {} : { awaits: 'the owner' }),
+              saw: design.decision
+                ? `**${design.decision.decision}** by ${design.decision.approvedByUserId} at ` +
+                  `${design.decision.createdAt}` +
+                  (design.decision.note ? ` — "${design.decision.note}"` : '')
+                : 'no decision is recorded for this exact revision and render set. One remedy, ' +
+                  "and it is not this reporter's: a person records it in Russell or runs " +
+                  '`npm run admin -- design approve`. Nothing in scripts/ can write that row, ' +
+                  'deliberately — a reporter that could record the approval it is waiting for ' +
+                  'would be approving its own work.',
+            },
+          ];
+  recordConditions(
+    'O',
+    'Visual and interaction approval',
+    designConditions,
+    'This scenario evaluates a decision and cannot record one. The digest is recomputed from ' +
+      'the bytes on disk in this run and the decision is read from the Brain a person signs in ' +
+      'to, never from this run\u2019s scratch database — so an approval stops applying the ' +
+      'moment either the tree or a render changes.',
+  );
 
   /* -- P. Preserved integrations, migrations, and restart --------------------- */
   /*

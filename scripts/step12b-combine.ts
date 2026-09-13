@@ -55,6 +55,16 @@ interface ConditionRecord {
   held: boolean | null;
   saw: string;
   needs?: 'CHECKOUT' | 'PRODUCTION' | 'ISOLATED';
+  /**
+   * Waiting on somebody — the third shape of `held: null`.
+   *
+   * `needs` says another environment could answer it; `standing` says this is
+   * the answer. Neither is true of a decision a person has not taken, and
+   * reporting it either way says something false: the first sends a reader to
+   * run the reporter somewhere else, the second calls an ungiven approval an
+   * answer. It is `BLOCKED` — an operational fact with an operational remedy.
+   */
+  awaits?: string;
   standing?: true;
 }
 
@@ -251,6 +261,7 @@ function main(): void {
     const judged = conditions.filter((c) => c.standing !== true);
     if (judged.some((c) => c.held === false)) return 'FAIL';
     if (judged.length === 0) return 'PASS';
+    if (judged.some((c) => c.held === null && c.awaits !== undefined)) return 'BLOCKED';
     if (judged.every((c) => c.held === null)) return 'NOT_RUN';
     if (judged.some((c) => c.held === null)) return 'PARTIAL';
     return 'PASS';
@@ -364,7 +375,12 @@ function main(): void {
 
     const verdict = conflicts.length > 0 ? 'CONFLICT' : verdictOfConditions(merged);
     const broke = merged.filter((c) => c.held === false && c.standing !== true);
-    const unreachable = merged.filter((c) => c.held === null && c.standing !== true);
+    const waiting = merged.filter(
+      (c) => c.held === null && c.standing !== true && c.awaits !== undefined,
+    );
+    const unreachable = merged.filter(
+      (c) => c.held === null && c.standing !== true && c.awaits === undefined,
+    );
     const standing = merged.filter((c) => c.standing === true);
     const held = merged.filter((c) => c.held === true);
     const judged = merged.filter((c) => c.standing !== true).length;
@@ -390,6 +406,13 @@ function main(): void {
       parts.push(
         `${broke.length} condition(s) were exercised and did NOT hold: ` +
           broke.map((c) => `${c.name} (saw ${c.saw})`).join('; ') +
+          '.',
+      );
+    }
+    if (waiting.length > 0) {
+      parts.push(
+        `${waiting.length} condition(s) are waiting on somebody: ` +
+          waiting.map((c) => `${c.awaits} — ${c.name}`).join('; ') +
           '.',
       );
     }
