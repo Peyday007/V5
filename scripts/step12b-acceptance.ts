@@ -684,6 +684,49 @@ function productUnchangedSince(revision: string): boolean {
   return unchangedSince(revision, ['client', 'server']);
 }
 
+/**
+ * Everything that decides what a deploy put on the machine.
+ *
+ * **P compared the hosted record's revision to `HEAD` exactly, and that made
+ * the condition unsatisfiable — then worse than unsatisfiable.** The record is
+ * written by the Deploy workflow, which cannot commit to the branch it just
+ * deployed (it holds the deployment credential, and the workflow says so). So
+ * the record arrives as an artifact and lands in a commit *after* the deploy —
+ * at which point `HEAD` is one commit past the revision named in it, the exact
+ * match fails, and `held` goes to `false`: P **fails on the strength of its own
+ * evidence**. Every future deploy reproduces it, one commit behind, for ever.
+ *
+ * The rule that fixes it is already in this file, written for the visual
+ * record, with its reasoning: *"an exact revision match is unsatisfiable by
+ * construction: evidence is committed after it is taken, so a record naming
+ * HEAD is stale the moment it lands. What matters is whether anything it
+ * looked at moved."* This is that rule at the deploy boundary.
+ *
+ * It is deliberately **wider** than `productUnchangedSince`, not narrower: a
+ * deploy is the client, the server, the image, the machine configuration, the
+ * dependency tree and the workflow that assembled them. Any of those moving
+ * means the record describes something other than what is running, and the
+ * condition should read as not-this-revision again.
+ *
+ * **This is a loosening and I am flagging it rather than burying it.** A
+ * commit-id match is stricter, and it is stricter about the wrong thing —
+ * it fails for a docs commit, which changes nothing about the running Brain.
+ * If the owner would rather keep the exact match, the honest consequence is
+ * that P can never hold and the remedy is to stop committing the record at
+ * all, not to accept a permanently failing row.
+ */
+function deployedUnchangedSince(revision: string): boolean {
+  return unchangedSince(revision, [
+    'client',
+    'server',
+    'Dockerfile',
+    'fly.toml',
+    'package.json',
+    'package-lock.json',
+    '.github/workflows/deploy.yml',
+  ]);
+}
+
 function visualEvidence(): { index: string | null; images: number; journeySteps: number } {
   const index = file('docs/evidence/step12b-visual.md');
   const dir = path.join(REPO, 'docs', 'evidence', 'step12b-visual');
@@ -6024,7 +6067,9 @@ async function main(): Promise<void> {
       hosted = null;
     }
   }
-  const hostedMatches = hosted !== null && hosted.revision === revisionOf().revision;
+  const hostedMatches =
+    hosted !== null &&
+    (hosted.revision === revisionOf().revision || deployedUnchangedSince(hosted.revision));
   /*
    * Probed directly rather than gated on `REPO_VISIBLE`, and the difference is
    * not pedantry.
@@ -6149,8 +6194,13 @@ async function main(): Promise<void> {
               'file would check that the steps are written down rather than that they passed.'
             : hostedMatches
               ? `run ${hosted.workflowRun} at ${hosted.revision.slice(0, 8)}: before=` +
-                `${hosted.beforeRestart}, after=${hosted.afterRestart}`
-              : `the only hosted record is for ${hosted.revision.slice(0, 8)}, not this revision`,
+                `${hosted.beforeRestart}, after=${hosted.afterRestart}` +
+                (hosted.revision === revisionOf().revision
+                  ? ' (this exact revision)'
+                  : ' — and nothing that decides what a deploy puts on the machine has moved since')
+              : `the only hosted record is for ${hosted.revision.slice(0, 8)}, and the client, ` +
+                'server, image, machine configuration, dependencies or deploy workflow have ' +
+                'moved since — so it describes something other than what is running',
       },
     ],
     'Three of these are facts about what this run itself did — it migrated an empty database, ' +
