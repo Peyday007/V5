@@ -22,6 +22,12 @@
  */
 import { Router } from 'express';
 import {
+  DESIGN_DECISIONS,
+  decisionsForRevision,
+  recordDesignDecision,
+  type DesignDecision,
+} from '../repos/designApprovals.ts';
+import {
   answerHumanRequest,
   getHumanRequest,
   listCurrentKnowledge,
@@ -1649,6 +1655,85 @@ russellRouter.post(
       actor,
       reason: nullableString(body['reason'], 'reason') ?? null,
     });
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The design decision
+ * ------------------------------------------------------------------------ */
+
+/**
+ * What a person has decided about how the product looks, and recording it.
+ *
+ * §24's design gate asks for a recorded visual, mobile and interaction
+ * approval. It has lived in a markdown table, which nothing can read and
+ * nothing binds to the code it describes. These two routes make it a row.
+ *
+ * Three things about the guard, and none of them is incidental:
+ *
+ *  - **`requirePerson`, refused by principal type.** A machine cannot approve
+ *    how the product looks, whatever its memberships say. §22's split, and the
+ *    same refusal Connected sites and the standing authority already carry.
+ *  - **The approver is the authenticated principal.** There is no field for it,
+ *    so nothing a caller sends can record a decision as somebody else's — the
+ *    property `oauth_tokens` relies on for exactly the same reason.
+ *  - **Brain administrator, not project ADMIN.** This is a decision about the
+ *    product rather than about one project's data, so it is not project-scoped;
+ *    scoping it to a project would let a member of any project approve the
+ *    interface for everybody.
+ *
+ * The read is deliberately available to any signed-in person: a person should be
+ * able to see whether the interface they are using was ever approved, and by
+ * whom, without being able to decide it.
+ */
+russellRouter.get(
+  '/design/decisions',
+  handler(async (req) => {
+    requirePerson();
+    const revision = typeof req.query['revision'] === 'string' ? req.query['revision'] : null;
+    if (!revision) throw badRequest('Name the revision to read decisions for.');
+    return { revision, decisions: await decisionsForRevision(revision) };
+  }),
+);
+
+russellRouter.post(
+  '/design/decisions',
+  handler(async (req) => {
+    const principal = requirePerson();
+    /*
+     * A Brain administrator, checked here rather than in a policy module,
+     * because `services/identity/policy.ts` decides *project* access and this
+     * is not a project-scoped resource. Deny by default: anything that is not
+     * demonstrably an administrator gets the 404 a missing route gives, so this
+     * endpoint is not an oracle for who is one.
+     */
+    if (!principal.isBrainAdmin) throw notFound('No such route.');
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const revision = requiredString(body['revision'], 'revision');
+    const renderSetDigest = requiredString(body['renderSetDigest'], 'renderSetDigest');
+    const manifestPath = requiredString(body['manifestPath'], 'manifestPath');
+    const decision = requiredString(body['decision'], 'decision').toUpperCase();
+    if (!(DESIGN_DECISIONS as readonly string[]).includes(decision)) {
+      throw badRequest(`decision must be one of ${DESIGN_DECISIONS.join(', ')}.`);
+    }
+    const renderCount = Number(body['renderCount']);
+    if (!Number.isInteger(renderCount) || renderCount <= 0) {
+      throw badRequest('renderCount must be the number of renders this decision covers.');
+    }
+
+    return {
+      decision: await recordDesignDecision({
+        revision,
+        renderSetDigest,
+        renderCount,
+        manifestPath,
+        decision: decision as DesignDecision,
+        // From the principal. There is no field for this and there must not be.
+        approvedByUserId: principal.id,
+        note: nullableString(body['note'], 'note') ?? null,
+      }),
+    };
   }),
 );
 

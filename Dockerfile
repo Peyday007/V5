@@ -80,6 +80,21 @@ USER node
 # authoritative is kept here — losing this directory loses nothing.
 ENV BRAIN_DATA_DIR=/app/data
 
+# Which commit this image was built from.
+#
+# The acceptance reporter combines rows read from the deployed Brain with facts
+# read from the repository tree, and that combination is only sound if both name
+# the same revision. Without this the revision on a production reading is the
+# claim of whichever workflow did the SSH, not of the running image — so a
+# re-run of an older dispatch or a machine that never took the new release would
+# still be labelled with the newer sha.
+#
+# Unset is a legitimate answer (a plain `docker run`, a local build) and the
+# reporter treats an unstamped production record as unusable rather than
+# trusting it. Passed by the deploy workflow as `--build-arg`.
+ARG BRAIN_REVISION=""
+ENV BRAIN_REVISION=$BRAIN_REVISION
+
 # The host tells us the port; 8080 is the fallback for a plain `docker run`.
 ENV PORT=8080
 EXPOSE 8080

@@ -43,12 +43,23 @@
  *   npm run admin -- packets scope [project]
  *   npm run admin -- packets reaudit <orchestration> --admin someone@example.com
  */
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import {
   requestIntegrityReaudit,
   scanAuthorReviewerOverlap,
 } from '../server/services/audit/integrityReaudit.ts';
 import { scopeIndependence } from '../server/services/audit/independenceScope.ts';
+import {
+  decisionsForRevision,
+  digestRenderSet,
+  recordDesignDecision,
+  standingDecision,
+  type DesignDecision,
+} from '../server/repos/designApprovals.ts';
 import {
   archiveWorker,
   clearWorkerRouting,
@@ -173,6 +184,9 @@ async function workerFrom(ref: string) {
   return worker;
 }
 
+/** The checkout this command is running from — how it finds the render set. */
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
+
 const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@example.com]
 
   workers   list | disable <name> | enable <name> | archive <name>
@@ -183,6 +197,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
   projects  list | create <name>
   access    show <worker> | grant <worker> <project> | revoke <worker> <project>
   queue     list <project>
+  design    show | approve | reject | withdraw   (reads docs/evidence/step12b-renders)
   packets   list <project> | approve <orchestration>
             independence [project] | scope [project] | reaudit <orchestration>
             retry-fragment <fragment> | reissue <workItem>
@@ -601,6 +616,110 @@ async function main(): Promise<void> {
      * It needs no `--admin` because it changes nothing: no reopen, no bin, no
      * row. §23 — the scan reports and does not act.
      */
+    /*
+     * The design decision, recorded by the person who made it.
+     *
+     * §24's design gate wanted a recorded visual, mobile and interaction
+     * approval and got a markdown table. This is the row version, and it is on
+     * a terminal for §26's reason: reaching the shell is the authentication and
+     * `--admin` is the attribution, resolved against the database rather than
+     * trusted. The browser route beside it (`POST /api/russell/design/decisions`)
+     * is the same write behind a real session.
+     *
+     * **Nothing else may write it**, and `tests/step12bProduct.test.ts` asserts
+     * that this file is the only script that does. The acceptance reporter
+     * reads it and has no path that records one, because a reporter that could
+     * record the approval it is waiting for would be approving its own work.
+     */
+    case 'design show':
+    case 'design approve':
+    case 'design reject':
+    case 'design withdraw': {
+      const dir = path.join(REPO_ROOT, 'docs', 'evidence', 'step12b-renders');
+      const indexPath = path.join(dir, 'index.json');
+      if (!fs.existsSync(indexPath)) {
+        fail(
+          `No render set at ${path.relative(REPO_ROOT, indexPath)}. There is nothing to decide ` +
+            'about yet — produce the renders and run `npm run design:manifest` first.',
+        );
+      }
+      const declared = JSON.parse(fs.readFileSync(indexPath, 'utf8')) as {
+        screen: string;
+        width: number;
+        file: string;
+      }[];
+      const missing = declared.filter((entry) => !fs.existsSync(path.join(dir, entry.file)));
+      if (missing.length > 0) {
+        fail(
+          `The index declares ${missing.length} render(s) that are not on disk. A decision bound ` +
+            'to this set would name bytes that do not exist.',
+        );
+      }
+      const { digest, count } = digestRenderSet(
+        declared.map((entry) => ({
+          path: entry.file,
+          width: entry.width,
+          screen: entry.screen,
+          bytes: fs.readFileSync(path.join(dir, entry.file)),
+        })),
+      );
+      const revision = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+      }).trim();
+      const dirty =
+        execFileSync('git', ['status', '--porcelain'], { cwd: REPO_ROOT, encoding: 'utf8' })
+          .trim().length > 0;
+
+      console.log(`  revision  ${revision}${dirty ? '  (TREE DIRTY)' : ''}`);
+      console.log(`  renders   ${count}`);
+      for (const entry of declared) {
+        console.log(`    ${entry.screen.padEnd(26)} ${String(entry.width).padStart(5)}px  ${entry.file}`);
+      }
+      console.log(`  digest    ${digest}`);
+
+      if (command === 'show') {
+        const standing = await standingDecision(revision, digest);
+        console.log(
+          `  standing  ${standing ? `${standing.decision} by ${standing.approvedByUserId} at ${standing.createdAt}` : 'none for this revision and render set'}`,
+        );
+        for (const entry of await decisionsForRevision(revision)) {
+          console.log(
+            `    ${entry.createdAt}  ${entry.decision.padEnd(9)} ${entry.approvedByUserId}` +
+              `  ${entry.renderSetDigest.slice(0, 12)}…${entry.note ? `  "${entry.note}"` : ''}`,
+          );
+        }
+        break;
+      }
+
+      /*
+       * A decision that is not the owner's is not a decision. `administrator()`
+       * resolves `--admin` against `users` and refuses anybody who is not an
+       * enabled administrator — attribution, which §23 is careful to say is not
+       * the same act as authentication. Reaching this shell is what
+       * authenticated it.
+       */
+      const actor = await administrator();
+      if (dirty) {
+        fail(
+          'The tree is dirty, so this decision could only be bound to a revision that exists ' +
+            'nowhere. Commit, re-run `npm run design:manifest`, then decide.',
+        );
+      }
+      const decision = command.toUpperCase() as DesignDecision;
+      const recorded = await recordDesignDecision({
+        revision,
+        renderSetDigest: digest,
+        renderCount: count,
+        manifestPath: path.relative(REPO_ROOT, path.join(dir, 'manifest.json')),
+        decision,
+        approvedByUserId: actor.id,
+        note: rest.join(' ') || null,
+      });
+      console.log(`  recorded  ${recorded.decision} ${recorded.id} by ${actor.email}`);
+      console.log('  Appended, never replacing: an earlier decision keeps its row.');
+      break;
+    }
     case 'packets scope': {
       const project = rest[0] ? await projectFrom(rest[0]) : null;
       const { summary, findings } = await scopeIndependence({ projectId: project?.id ?? null });
