@@ -2389,7 +2389,7 @@ async function waitForParkedDecision(cookie: string, seeded: Seeded): Promise<Pa
     }
   };
 
-  const deadline = Date.now() + 240_000;
+  const deadline = Date.now() + 300_000;
   let lastSeen = 'no mission yet';
   while (Date.now() < deadline) {
     const needsYou = await read(`/api/russell/projects/${seeded.projectId}/needs-you`);
@@ -2423,9 +2423,23 @@ async function waitForParkedDecision(cookie: string, seeded: Seeded): Promise<Pa
     const missions = Array.isArray(work?.['missions'])
       ? (work['missions'] as Record<string, unknown>[])
       : [];
+    /*
+     * When nothing has happened, say what the idea itself looks like.
+     *
+     * "No mission has launched yet" is a fact about the mission table and tells
+     * nobody why. The idea's own state, priority and reason are what separate
+     * "Brain has not got to it" from "Brain decided against it" from "a person
+     * queued it and nothing can launch it" — which is the defect this journey
+     * found, and which a bare mission count hid for a whole run.
+     */
+    const idea = seeded.candidateId
+      ? await read(`/api/russell/candidates/${seeded.candidateId}`)
+      : null;
+    const node = (idea?.['candidate'] ?? idea) as Record<string, unknown> | undefined;
     lastSeen =
       missions.length === 0
-        ? 'no mission has launched yet'
+        ? `no mission has launched yet; the idea is ${String(node?.['state'] ?? 'unknown')}/` +
+          `${String(node?.['priority'] ?? 'none')} — "${String(node?.['reason'] ?? '').slice(0, 70)}"`
         : `${missions.length} mission(s): ${missions
             .map((row) => String(row['state']))
             .join(', ')}`;

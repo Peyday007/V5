@@ -124,6 +124,10 @@ import {
 } from '../server/services/russell/progress.ts';
 import { homeFor } from '../server/services/russell/home.ts';
 import { capture } from '../server/services/russell/judgment.ts';
+import { importFile } from '../server/services/importer.ts';
+import { whenExtractionIdle } from '../server/services/documents/queue.ts';
+import { inventoryDocument } from '../server/services/reconcile/claims.ts';
+import { listLayers } from '../server/repos/layers.ts';
 import { judgeCandidate } from '../server/services/russell/planning.ts';
 import { SEMANTIC_MERGE_FLOOR } from '../server/services/russell/similarity.ts';
 import {
@@ -763,6 +767,32 @@ interface FleetReading {
     knowledgeRows: number;
     missions: number;
     filedDocuments: number;
+    /**
+     * One completed mission, followed all the way to what the project believes.
+     *
+     * L's first link, and a count cannot supply it. "127 missions" and "a
+     * mission finished and the project learned something from it" are different
+     * claims, and only the second one is what `outcomeOf` → `recordKnowledge` →
+     * `linkFiledWork` is *for*. So this is one row followed by its foreign
+     * keys: the mission, the packet it ran, the document it filed, the audit
+     * that judged it, and the knowledge row citing both.
+     *
+     * Null where no such chain exists, which a Brain that has never finished a
+     * mission truthfully reports rather than reading as a failure.
+     */
+    completionChain: {
+      missionId: string;
+      missionState: string;
+      packetStatus: string | null;
+      documentId: string | null;
+      auditId: string | null;
+      knowledgeId: string | null;
+      knowledgeKind: string | null;
+      citesDocument: boolean;
+      citesAudit: boolean;
+      filedUnderLayer: boolean;
+      documentHasBytes: boolean;
+    } | null;
     /** A: conversations, and turns a worker actually answered. */
     conversations: number;
     answeredTurns: number;
@@ -976,6 +1006,68 @@ async function readOperationalFleet(): Promise<FleetReading> {
       "SELECT COUNT(*) AS total FROM russell_missions WHERE document_id IS NOT NULL",
     );
     /*
+     * The completion chain, followed rather than counted.
+     *
+     * Newest first and bounded, because what is being established is that such
+     * a chain *exists and resolves* — not how many there are. Every join is on
+     * a real foreign key, and the two provenance questions are asked of the
+     * knowledge row's own JSON rather than of anything this file remembers
+     * about how the writeback composes it.
+     */
+    let completionChain: FleetReading['history']['completionChain'] = null;
+    const finished = await getDb().all<{
+      id: string;
+      state: string;
+      orchestration_id: string | null;
+      document_id: string | null;
+      audit_id: string | null;
+      layer_id: string | null;
+    }>(
+      `SELECT id, state, orchestration_id, document_id, audit_id, layer_id
+         FROM russell_missions
+        WHERE document_id IS NOT NULL
+        ORDER BY updated_at DESC
+        LIMIT 10`,
+    );
+    for (const mission of finished) {
+      const knowledge = await getDb().get<{
+        id: string;
+        kind: string;
+        provenance: string | null;
+        layer_id: string | null;
+      }>('SELECT id, kind, provenance, layer_id FROM russell_knowledge WHERE mission_id = ?', [
+        mission.id,
+      ]);
+      if (!knowledge) continue;
+      const packet = mission.orchestration_id
+        ? await getDb().get<{ status: string }>(
+            'SELECT status FROM research_orchestrations WHERE id = ?',
+            [mission.orchestration_id],
+          )
+        : null;
+      const document = mission.document_id
+        ? await getDb().get<{ storage_key: string | null; file_size: number | null }>(
+            'SELECT storage_key, file_size FROM documents WHERE id = ?',
+            [mission.document_id],
+          )
+        : null;
+      const provenance = knowledge.provenance ?? '';
+      completionChain = {
+        missionId: mission.id,
+        missionState: mission.state,
+        packetStatus: packet?.status ?? null,
+        documentId: mission.document_id,
+        auditId: mission.audit_id,
+        knowledgeId: knowledge.id,
+        knowledgeKind: knowledge.kind,
+        citesDocument: mission.document_id !== null && provenance.includes(mission.document_id),
+        citesAudit: mission.audit_id !== null && provenance.includes(mission.audit_id),
+        filedUnderLayer: knowledge.layer_id !== null,
+        documentHasBytes: Number(document?.file_size ?? 0) > 0,
+      };
+      break;
+    }
+    /*
      * M's production half: the progress a real project actually reports.
      *
      * Driven rather than counted, because M is not about how many projects
@@ -1048,6 +1140,7 @@ async function readOperationalFleet(): Promise<FleetReading> {
       knowledgeRows,
       missions,
       filedDocuments,
+      completionChain,
       conversations,
       answeredTurns,
       pendingTurns,
@@ -1093,6 +1186,7 @@ async function readOperationalFleet(): Promise<FleetReading> {
         knowledgeRows: 0,
         missions: 0,
         filedDocuments: 0,
+        completionChain: null,
         conversations: 0,
         answeredTurns: 0,
         pendingTurns: 0,
@@ -1268,6 +1362,49 @@ const OUTSIDE_ENVELOPE_B =
 const INSIDE_ENVELOPE =
   'Establish which Michigan county registers of deeds publish their recording fee schedule ' +
   'on an official county web page, and what each one states.';
+
+/**
+ * A question the project's own archive speaks to once a document is in it.
+ *
+ * Michigan, so the envelope's geography check passes and the refusal — if there
+ * is one — is about what the archive holds rather than about where the question
+ * is. It is a *different* question from `INSIDE_ENVELOPE`, because `capture`
+ * deduplicates and re-capturing the same statement would exercise the merge
+ * instead of the archive.
+ */
+const ARCHIVE_SPEAKS_TO_THIS =
+  'Establish what each Michigan county register of deeds charges to record a deed, ' +
+  'and where the county states that charge.';
+/** And one the same document says nothing about, so the two can be told apart. */
+const ARCHIVE_SILENT_ON_THIS =
+  'Establish which Michigan county registers of deeds accept electronic recording, ' +
+  'and which vendors each one names.';
+
+/**
+ * An archive document, written to be unmistakably a fixture.
+ *
+ * The counties are invented and the hosts are `.invalid`, which is reserved
+ * and cannot resolve, for the reason `OUTSIDE_ENVELOPE_A` gives about fixture
+ * questions: a plausible-looking Michigan fee is a sentence somebody eventually
+ * cites. Nothing here is research and nothing here is true of the world.
+ *
+ * What it *is* is a real document in a real archive: imported through
+ * `importFile`, read by the extraction pipeline, and inventoried by
+ * `inventoryDocument` — the mechanical extractor, no model anywhere near it.
+ * Two distinct publishers because `assessRequirement` counts them, and every
+ * claim it yields is `UNVERIFIED`, which is the whole point of the link below.
+ */
+const ARCHIVE_NOTE = [
+  'Recording charges, as stated by the counties themselves',
+  '',
+  'The register of deeds for the Step 12B fixture county states a charge of thirty dollars to',
+  'record a deed, on its own county page. https://fixture-county-a.example.invalid/register-of-deeds/fees',
+  '',
+  'The register of deeds for the second Step 12B fixture county states the same thirty dollar',
+  'charge to record a deed. https://fixture-county-b.example.invalid/rod/recording-charges',
+  '',
+  'Neither fixture county page states what a register of deeds charges for anything else.',
+].join('\n');
 
 /** The derived backlog, exactly as `listCandidates` orders it for the product. */
 async function backlogOrder(projectId: string): Promise<string[]> {
@@ -1795,6 +1932,169 @@ async function runMissionChain(): Promise<ChainResult> {
       linksSaw,
     );
 
+    /* -- Link 6: knowledge arrives, and what Brain does next changes ------- */
+    /*
+     * The owner asked for **completed mission → knowledge update → backlog
+     * reranking → next authorized mission**, and this is the second half of it
+     * driven here. The first half — a mission finishing and the project
+     * believing something because of it — is read from production rows, where a
+     * real worker did it, and the two are reported separately rather than
+     * joined into one sentence they cannot both support.
+     *
+     * What can be driven here, honestly, is everything downstream of knowledge
+     * *arriving*: the archive gains claims, `coverBeforeWork` reads them, the
+     * judgment changes, the derived backlog moves, and the next mission Brain
+     * starts by itself is a different one because of it.
+     *
+     * **The knowledge comes from a document in the archive, not from a filed
+     * report, and that boundary is the product's rather than the harness's.**
+     * Extracted claims are `UNVERIFIED`; `CLOSING_STATUSES` is `SATISFIED`
+     * alone; and only a verification pass — a judgement only a reader of the
+     * source can make — moves a claim there. Writing one would be inventing the
+     * answer to the question the whole evidence gate exists to ask. So this
+     * drives the branch the archive genuinely reaches: `PRESENT_BUT_UNVERIFIED`
+     * makes `cheapToReduce` true, and Brain looks cheaply before it spends a
+     * packet.
+     */
+    const layers = await listLayers(projectId);
+    const archiveLayer = layers[0] ?? null;
+    let documentId: string | null = null;
+    let extractedClaims = 0;
+    if (archiveLayer) {
+      const imported = await importFile({
+        projectId,
+        originalFilename: `${archiveLayer.name} v1.txt`,
+        contents: Buffer.from(ARCHIVE_NOTE, 'utf8'),
+        layerId: archiveLayer.id,
+        version: 'v1',
+        documentType: 'FOUNDATION',
+      });
+      documentId = imported.documentId ?? null;
+      if (documentId) {
+        await whenExtractionIdle();
+        extractedClaims = (await inventoryDocument(documentId)).length;
+      }
+    }
+    check(
+      'L6 · a document a person put in the archive was read, and its claims extracted mechanically',
+      documentId !== null && extractedClaims > 0,
+      `document ${documentId ?? 'none'} under ${archiveLayer?.name ?? 'no layer'}, ` +
+        `${extractedClaims} claim(s) — no model was asked anything`,
+    );
+
+    const backlogBeforeKnowledge = await backlogOrder(projectId);
+    const capturedCovered = await capture({
+      title: 'What a county charges to record',
+      statement: ARCHIVE_SPEAKS_TO_THIS,
+      projectId,
+      conversationId: threadA.id,
+      visibility: 'SHARED',
+    });
+    const capturedSilent = await capture({
+      title: 'Electronic recording vendors',
+      statement: ARCHIVE_SILENT_ON_THIS,
+      projectId,
+      conversationId: threadB.id,
+      visibility: 'SHARED',
+    });
+    await settle(8);
+
+    const covered = capturedCovered.candidate
+      ? await getCandidate(capturedCovered.candidate.id)
+      : null;
+    const silent = capturedSilent.candidate
+      ? await getCandidate(capturedSilent.candidate.id)
+      : null;
+    const coveredJudgment = covered?.judgment ?? {};
+    const silentJudgment = silent?.judgment ?? {};
+    check(
+      'L6 · the archive was read against the new idea, and it was the claims that were read',
+      Number(coveredJudgment['claimsConsidered'] ?? 0) >= extractedClaims && extractedClaims > 0,
+      `${String(coveredJudgment['claimsConsidered'] ?? 'none')} claim(s) considered, ` +
+        `against ${extractedClaims} in the archive`,
+    );
+    /*
+     * What the archive actually did with it, rather than what I expected.
+     *
+     * The first version of this check asserted the `cheapToReduce` branch, on
+     * the reading that extracted claims are `UNVERIFIED` and `CLOSING_STATUSES`
+     * is `SATISFIED` alone, so the archive could never close a requirement
+     * without a verification pass. Run, it recorded
+     * `cheapToReduce=undefined, priority PARKED` — because `judgeCandidate`
+     * returned *earlier* than that: `assessRequirement` read the two extracted
+     * claims, from two publishers, against the compiled requirement and settled
+     * it, so `answeredByArchive` short-circuited the whole judgment.
+     *
+     * The product was right and the expectation was wrong, which is the third
+     * time in this file a canary has reported a defect that was not there. The
+     * check now asserts what happened, and the gap below is narrowed to the
+     * claim that genuinely still needs a worker.
+     */
+    check(
+      'L6 · so the archive settles the new idea, and Brain refuses to spend a packet on it',
+      covered?.state === 'REJECTED' &&
+        covered?.priority === 'PARKED' &&
+        /already answers this/i.test(covered?.reason ?? ''),
+      `state ${covered?.state ?? 'none'} / ${covered?.priority ?? 'none'} — ` +
+        `"${(covered?.reason ?? '').slice(0, 80)}"`,
+    );
+    check(
+      'L6 · the idea the same document says nothing about is unaffected, so this is the archive and not the tick',
+      silentJudgment['cheapToReduce'] === false && silent?.state === 'QUEUED',
+      `cheapToReduce=${String(silentJudgment['cheapToReduce'])}, ` +
+        `state ${silent?.state ?? 'none'} / ${silent?.priority ?? 'none'}`,
+    );
+    const backlogAfterKnowledge = await backlogOrder(projectId);
+    check(
+      'L4 · the derived backlog moved again, and this time because the project learned something',
+      backlogBeforeKnowledge.join(' | ') !== backlogAfterKnowledge.join(' | '),
+      `[${backlogBeforeKnowledge.join(' | ')}] → [${backlogAfterKnowledge.join(' | ')}]`,
+    );
+
+    /*
+     * And which idea is next in line, which is what the knowledge changed.
+     *
+     * Not "a third mission started": by this point two are live and this
+     * project's standing authority allows two at a time, so nothing can start
+     * until one ends — which is the ceiling a person set doing exactly its job,
+     * and is asserted below rather than worked around. Raising the test grant
+     * to make a mission appear would be tuning the fixture until the assertion
+     * passed, and the assertion would then be about the fixture.
+     *
+     * What *is* a fact about the rows is which candidate Brain can launch next.
+     * `nextLaunchable` reads `QUEUED` candidates carrying a `missionSpec`, and
+     * a spec is stored only for a verdict that could launch one (planning.ts) —
+     * so the covered idea is not merely behind the uncovered one, it can never
+     * be launched at all. The link that a queued idea does start by itself with
+     * nobody involved is the `L5 ·` pair above, driven earlier in this same run.
+     */
+    await settle(8);
+    const missionsNow = await listMissions({ projectId });
+    const missionForCovered =
+      missionsNow.find((mission) => mission.candidateId === covered?.id) ?? null;
+    const silentLaunchable =
+      silent?.state === 'QUEUED' && (silent?.judgment ?? {})['missionSpec'] !== undefined;
+    const coveredLaunchable =
+      covered?.state === 'QUEUED' && (covered?.judgment ?? {})['missionSpec'] !== undefined;
+    check(
+      'L5 · the next idea Brain can launch is the one the archive could not answer, and the covered one never can be',
+      silentLaunchable && !coveredLaunchable && missionForCovered === null,
+      `uncovered ${silent?.state ?? 'none'} with a mission spec; covered ` +
+        `${covered?.state ?? 'none'} with ${coveredLaunchable ? 'one' : 'none'}, and ` +
+        `${missionForCovered === null ? 'no mission was created for it' : `mission ${missionForCovered.id} exists`}`,
+    );
+    const ceilingNow = await reserve({
+      goalId: goal.id,
+      kind: 'MISSION',
+      idempotencyKey: `step12b:acceptance:ceiling-after-knowledge:${randomUUID()}`,
+    });
+    check(
+      'L5 · and what is holding it is the ceiling a person set, not anything the archive decided',
+      !ceilingNow.ok && ceilingNow.refusedBy === 'AT_ONCE',
+      `refusedBy=${ceilingNow.refusedBy ?? 'none'} — "${ceilingNow.reason}"`,
+    );
+    trace.push(`archive-reranked backlog, next in line ${silent?.id ?? 'none'}`);
+
     gaps.push(
       {
         name:
@@ -1818,13 +2118,14 @@ async function runMissionChain(): Promise<ChainResult> {
           'line. tests/otherLayerHandoff.test.ts covers the derivation in isolation.',
       },
       {
-        name: 'L4 · a rerank caused by new knowledge rather than by the chain',
+        name: 'L4 · a rerank caused by a project’s own filed report rather than by a document in its archive',
         needs: 'A REAL WORKER',
         why:
-          'The archive check `coverBeforeWork` reads `existing_claims`, which are extracted ' +
-          'from a filed document — so the reading that flips an idea to "already answered" ' +
-          'moves only after a mission files a report. The rerank driven above is real and is ' +
-          'caused by the chain, which is a weaker claim and is the one made.',
+          'Link 6 drives the rerank and names where its knowledge came from: a document a ' +
+          'person imported, read mechanically. Knowledge arriving the *other* way — a mission ' +
+          'filing a report — needs a claim through gate.ts and a judge’s verdict, which needs ' +
+          'a worker that reached the sources. Production answers it: L’s first two conditions ' +
+          'follow one such mission to the conclusion it produced.',
       },
       {
         name: 'L5 · the automatic follow-on, created from what the filed report left unsettled',
@@ -4988,13 +5289,80 @@ async function main(): Promise<void> {
     seen.cycleLastRanAt !== null &&
     Date.parse(secondReading.lastRanAt) > Date.parse(seen.cycleLastRanAt);
   const halted = seen.cycleState === 'PAUSED' || seen.cycleState === 'STOPPED';
-  const autoNext = chain.checks.filter((entry) => entry.name.startsWith('L5 ·'));
+  /*
+   * L's four links, by the prefix each one was checked under.
+   *
+   * It used to take `L5 ·` alone — the automatic follow-on — which is the last
+   * link and not the chain. The owner named the whole of it: *completed mission
+   * → knowledge update → backlog reranking → next authorized mission.* `L4 ·`
+   * is the rerank, `L6 ·` is the knowledge arriving and being read, and `L5 ·`
+   * is the mission that starts because of it. A gate scoring one link of four
+   * is a gate that passes while three of them are broken.
+   */
+  const autoNext = chain.checks.filter(
+    (entry) =>
+      entry.name.startsWith('L4 ·') ||
+      entry.name.startsWith('L5 ·') ||
+      entry.name.startsWith('L6 ·'),
+  );
+  const completion = seen.completionChain;
 
   recordConditions(
     'L',
     'Always-on loop',
     [
       ...autoNext.map((entry) => ({ name: entry.name, held: entry.held, saw: entry.saw })),
+      /*
+       * The first link, from production, because it is the one a checkout
+       * cannot reach: a mission that *finished* and a project that believes
+       * something because of it. Not a count — one row followed through its own
+       * foreign keys to the conclusion it produced, because "127 missions" and
+       * "a mission finished and the project learned from it" are different
+       * claims and only the second is L's.
+       */
+      READING_PRODUCTION
+        ? {
+            name: 'a mission completed and the project believes something because of it',
+            held:
+              completion !== null &&
+              completion.knowledgeId !== null &&
+              completion.documentId !== null &&
+              completion.documentHasBytes,
+            saw: completion
+              ? `mission ${completion.missionId} (${completion.missionState}), packet ` +
+                `${completion.packetStatus ?? 'none'}, document ${completion.documentId ?? 'none'}` +
+                `${completion.documentHasBytes ? ' with bytes' : ' with NO bytes'}, ` +
+                `knowledge ${completion.knowledgeId ?? 'none'} (${completion.knowledgeKind ?? '—'})`
+              : 'no mission in this Brain has filed a document and a conclusion',
+          }
+        : {
+            name: 'a mission completed and the project believes something because of it',
+            held: null,
+            saw:
+              'a finished mission needs a worker that reached the sources, which is not ' +
+              `something ${fleet.source} holds`,
+            needs: 'PRODUCTION',
+          },
+      READING_PRODUCTION
+        ? {
+            name: 'and the conclusion cites the document it came from and the audit that judged it',
+            held:
+              completion !== null &&
+              completion.citesDocument &&
+              completion.citesAudit &&
+              completion.filedUnderLayer,
+            saw: completion
+              ? `provenance names the document: ${completion.citesDocument ? 'yes' : 'NO'}; ` +
+                `names audit ${completion.auditId ?? 'none'}: ${completion.citesAudit ? 'yes' : 'NO'}; ` +
+                `filed under a layer: ${completion.filedUnderLayer ? 'yes' : 'NO'}`
+              : 'there is no such conclusion to read',
+          }
+        : {
+            name: 'and the conclusion cites the document it came from and the audit that judged it',
+            held: null,
+            saw: '`linkFiledWork` has nothing to link where no mission has filed anything',
+            needs: 'PRODUCTION',
+          },
       READING_PRODUCTION
         ? {
             name: 'the deployed loop is running, and carries no recorded error',
@@ -5025,10 +5393,19 @@ async function main(): Promise<void> {
             needs: 'PRODUCTION',
           },
     ],
-    'The loop is asked three questions rather than one: does it start the next authorized ' +
-      'priority by itself (driven in an isolated scope by the mission chain — see R), is the ' +
-      'deployed one running and error-free, and did its cursor actually move while this report ' +
-      'was being produced. A state column alone answers none of them.' +
+    'The chain the owner named, in the two places its links can honestly be read. ' +
+      '**Completed mission → knowledge** is production, because a finished mission needs a ' +
+      'worker that reached the sources: one row followed through its own foreign keys to the ' +
+      'document, the audit and the conclusion citing both. **Knowledge → rerank → next ' +
+      'authorized mission** is driven in an isolated scope by the mission chain: a document a ' +
+      'person put in the archive is read mechanically, its claims change what Brain decides ' +
+      'about a new idea, the derived backlog moves, and the mission Brain starts next with ' +
+      'nobody involved is the idea the archive could not answer. The boundary between the two ' +
+      'halves is the product’s own and is named rather than blurred — extracted claims are ' +
+      'UNVERIFIED, only a verification pass makes one closing, and inventing that verification ' +
+      'here would be inventing the answer the evidence gate exists to ask for. Beside all of ' +
+      'it: is the deployed loop running and error-free, and did its cursor actually move while ' +
+      'this report was being produced. A state column alone answers none of them.' +
       (halted
         ? ` The deployed cycle is ${seen.cycleState}, which is an operational fact with an ` +
           "operational remedy, and resuming it is a person's decision rather than this " +
