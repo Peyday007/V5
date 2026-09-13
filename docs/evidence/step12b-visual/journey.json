@@ -1,6 +1,6 @@
 {
-  "takenAt": "2026-09-13T10:58:20.818Z",
-  "revision": "907774d97647803b1c17bbb78d25b5354e8920fe",
+  "takenAt": "2026-09-13T11:00:32.118Z",
+  "revision": "063e38e2fc3a2ef607d6ec955222f1c16decbbc5",
   "phoneWidth": 390,
   "steps": [
     {
@@ -46,6 +46,48 @@
       "unreachable": ""
     },
     {
+      "step": "map:System",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "map:Workflow",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "map:Knowledge",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "map:Decisions",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "map:Timeline",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "map:Money flow",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
       "step": "13-needs-you",
       "arrived": true,
       "fits": true,
@@ -60,10 +102,10 @@
       "unreachable": ""
     }
   ],
-  "stepsWalked": 8,
-  "stepsThatArrived": 8,
-  "stepsThatFit": 8,
-  "stepsWithNothingClipped": 8,
+  "stepsWalked": 14,
+  "stepsThatArrived": 14,
+  "stepsThatFit": 14,
+  "stepsWithNothingClipped": 14,
   "unreachableControls": [],
   "constellation": [
     {

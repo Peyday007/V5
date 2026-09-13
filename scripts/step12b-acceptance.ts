@@ -2721,6 +2721,49 @@ async function runConnectedSiteExercise(): Promise<{
   }
 }
 
+/**
+ * The loop's cursor, read a second time.
+ *
+ * L's unmet condition was "a measured uptime window rather than one reading",
+ * and one reading is genuinely all a single `SELECT` can give: a cursor with a
+ * timestamp on it says the loop ran once, which a loop that died immediately
+ * afterwards also says. Two readings either side of this run's own exercises —
+ * a minute or two of real elapsed time, several ticks at the loop's own
+ * interval — is a window, and the difference between the two cursors is the
+ * measurement.
+ *
+ * It re-opens the **configured** database, which the exercising half deliberately
+ * replaced with a scratch file. One `SELECT`, nothing written, and the scratch
+ * database is put back afterwards so everything downstream sees what it expects.
+ * Returns null rather than throwing: a second reading that could not be taken
+ * is a missing measurement, never a finding about the loop.
+ */
+async function reReadCycle(): Promise<{ state: string; lastRanAt: string | null } | null> {
+  try {
+    await closeDatabase();
+    await initDatabase();
+    const row = await getDb().get<{ state: string; last_ran_at: string | null }>(
+      'SELECT state, last_ran_at FROM russell_cycle LIMIT 1',
+    );
+    return row ? { state: row.state, lastRanAt: row.last_ran_at } : null;
+  } catch {
+    return null;
+  } finally {
+    try {
+      await closeDatabase();
+      if (CONTINUITY_DB_PATH) {
+        await initDatabase({
+          dbPath: CONTINUITY_DB_PATH,
+          config: { provider: 'sqlite', connectionString: null, poolSize: 1 },
+        });
+      }
+    } catch {
+      // The scratch database is gone and nothing after this needs it. The
+      // reading above is what this function exists for.
+    }
+  }
+}
+
 async function main(): Promise<void> {
   // Read the real fleet first, then close it. Everything after this line writes.
   const fleet = await readOperationalFleet();
@@ -4475,32 +4518,69 @@ async function main(): Promise<void> {
 
   /* -- L. Always-on loop ---------------------------------------------------- */
   /*
-   * The tick's own row, which is the only thing that can say whether it runs.
-   * A loop is not "a surface exists"; it is a cursor that moved.
+   * Three separate things, and they were being reported as one reading of a
+   * state column.
+   *
+   * A loop is not "a surface exists" and it is not "the row says RUNNING": it
+   * is a cursor that **moved**, work that started without anybody asking, and
+   * nothing sitting in a wait nobody can resolve. The first needs two readings
+   * separated in time, the second is driven by the mission chain, and the third
+   * is A's pending-turn projection.
    */
   const ranAgoMs = seen.cycleLastRanAt ? Date.now() - Date.parse(seen.cycleLastRanAt) : null;
-  const ticking = seen.cycleState === 'RUNNING' && ranAgoMs !== null;
-  /*
-   * `RUNNING` with no cursor is a loop that has never run, not a broken one —
-   * which is what a fresh database looks like, and is the distinction this
-   * reporter's header insists on. Only a state somebody set is BLOCKED.
-   */
+  const secondReading = READING_PRODUCTION ? await reReadCycle() : null;
+  const cursorMoved =
+    secondReading !== null &&
+    secondReading.lastRanAt !== null &&
+    seen.cycleLastRanAt !== null &&
+    Date.parse(secondReading.lastRanAt) > Date.parse(seen.cycleLastRanAt);
   const halted = seen.cycleState === 'PAUSED' || seen.cycleState === 'STOPPED';
-  record(
+  const autoNext = chain.checks.filter((entry) => entry.name.startsWith('L5 ·'));
+
+  recordConditions(
     'L',
     'Always-on loop',
-    ticking ? 'PARTIAL' : halted ? 'BLOCKED' : blocker.verdict,
-    seen.cycleState === null || (!ticking && !halted)
-      ? blocker.detail
-      : ticking
-        ? `The durable cycle in ${fleet.source} is ${seen.cycleState} and last ran ` +
-          `${Math.round((ranAgoMs ?? 0) / 1000)}s ago` +
-          (seen.cycleLastError ? `, with a recorded last error: ${seen.cycleLastError.slice(0, 160)}` : ', with no recorded error') +
-          '. NOT established here: a measured uptime window rather than one reading.'
-        : `The durable cycle is ${seen.cycleState}` +
-          (seen.cycleLastError ? ` — ${seen.cycleLastError.slice(0, 200)}` : '') +
-          '. A paused or stopped loop is an operational fact with an operational remedy, ' +
-          'and resuming it is a person\u2019s decision rather than this reporter\u2019s.',
+    [
+      ...autoNext.map((entry) => ({ name: entry.name, held: entry.held, saw: entry.saw })),
+      READING_PRODUCTION
+        ? {
+            name: 'the deployed loop is running, and carries no recorded error',
+            held: seen.cycleState === 'RUNNING' && !halted && seen.cycleLastError === null,
+            saw:
+              `${seen.cycleState ?? 'no cycle row'}` +
+              (seen.cycleLastError ? ` — ${seen.cycleLastError.slice(0, 120)}` : ', no error') +
+              (ranAgoMs !== null ? `, last ran ${Math.round(ranAgoMs / 1000)}s ago` : ''),
+          }
+        : {
+            name: 'the deployed loop is running, and carries no recorded error',
+            held: null,
+            saw: `this run reads ${fleet.source}, which has no deployed loop`,
+            needs: 'PRODUCTION',
+          },
+      READING_PRODUCTION
+        ? {
+            name: 'and its cursor moved between two readings — a window, not a timestamp',
+            held: cursorMoved,
+            saw: secondReading
+              ? `${seen.cycleLastRanAt ?? 'none'} → ${secondReading.lastRanAt ?? 'none'}`
+              : 'the second reading could not be taken',
+          }
+        : {
+            name: 'and its cursor moved between two readings — a window, not a timestamp',
+            held: null,
+            saw: 'a moving cursor is a fact about a Brain that is running',
+            needs: 'PRODUCTION',
+          },
+    ],
+    'The loop is asked three questions rather than one: does it start the next authorized ' +
+      'priority by itself (driven in an isolated scope by the mission chain — see R), is the ' +
+      'deployed one running and error-free, and did its cursor actually move while this report ' +
+      'was being produced. A state column alone answers none of them.' +
+      (halted
+        ? ` The deployed cycle is ${seen.cycleState}, which is an operational fact with an ` +
+          "operational remedy, and resuming it is a person's decision rather than this " +
+          "reporter's."
+        : ''),
   );
 
   /* -- M. Product truth, historical knowledge, and memory -------------------- */
