@@ -1,0 +1,81 @@
+{
+  "revision": "d54abc4c9ee91cd2a94ea1e78ae295274f0309b2",
+  "treeDirtyAtManifestTime": false,
+  "renderSetDigest": "30a11180bc3b8047f122a70b6790d850a0057c53214901422ceca3d67e48f05e",
+  "renderCount": 12,
+  "generatedAt": "2026-09-13T03:25:39.302Z",
+  "renders": [
+    {
+      "screen": "needs-you-empty",
+      "width": 1180,
+      "file": "needs-you-empty-1180.png",
+      "bytes": 153695
+    },
+    {
+      "screen": "needs-you-empty",
+      "width": 953,
+      "file": "needs-you-empty-953.png",
+      "bytes": 149195
+    },
+    {
+      "screen": "needs-you-empty",
+      "width": 390,
+      "file": "needs-you-empty-390.png",
+      "bytes": 110115
+    },
+    {
+      "screen": "needs-you-populated",
+      "width": 1180,
+      "file": "needs-you-populated-1180.png",
+      "bytes": 207636
+    },
+    {
+      "screen": "needs-you-populated",
+      "width": 953,
+      "file": "needs-you-populated-953.png",
+      "bytes": 210379
+    },
+    {
+      "screen": "needs-you-populated",
+      "width": 390,
+      "file": "needs-you-populated-390.png",
+      "bytes": 177205
+    },
+    {
+      "screen": "project-constellation",
+      "width": 1180,
+      "file": "project-constellation-1180.png",
+      "bytes": 219391
+    },
+    {
+      "screen": "project-constellation",
+      "width": 953,
+      "file": "project-constellation-953.png",
+      "bytes": 228934
+    },
+    {
+      "screen": "project-constellation",
+      "width": 390,
+      "file": "project-constellation-390.png",
+      "bytes": 162917
+    },
+    {
+      "screen": "russell-home",
+      "width": 1180,
+      "file": "russell-home-1180.png",
+      "bytes": 231080
+    },
+    {
+      "screen": "russell-home",
+      "width": 953,
+      "file": "russell-home-953.png",
+      "bytes": 231415
+    },
+    {
+      "screen": "russell-home",
+      "width": 390,
+      "file": "russell-home-390.png",
+      "bytes": 155460
+    }
+  ]
+}

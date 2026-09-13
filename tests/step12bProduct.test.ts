@@ -2487,6 +2487,19 @@ describe('the acceptance reporter, read where the image cannot see the repositor
  * So the writer lives in the repository and **nothing under `scripts/` imports
  * it**. That is checkable, and this is the check.
  */
+/**
+ * A source file with its comments removed, for *negative* assertions only.
+ *
+ * The first version of the verb test failed against the **fixed** file, because
+ * the comment explaining the defect quotes the defect verbatim — so the
+ * assertion was reading the prose about the code rather than the code. A
+ * negative source assertion that a sentence describing the forbidden thing can
+ * trip is worse than none: it punishes writing down why, which is most of what
+ * the comments in this repository are for.
+ */
+const codeOf = (source: string): string =>
+  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
 describe('nothing in scripts/ can record a design decision', () => {
   const repo = fileURLToPath(new URL('..', import.meta.url));
 
@@ -2548,17 +2561,6 @@ describe('the acceptance plumbing, where a plausible wrong answer was possible',
   const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
   const admin = fs.readFileSync(path.join(repo, 'scripts', 'admin.ts'), 'utf8');
 
-  /*
-   * Comments stripped before any *negative* assertion.
-   *
-   * The first version of the verb test failed against the fixed file, because
-   * the comment explaining the defect quotes the defect verbatim — so the
-   * assertion was reading the prose about the code rather than the code. A
-   * negative source assertion that can be tripped by a sentence describing the
-   * thing it forbids is worse than none: it punishes writing down why.
-   */
-  const codeOf = (source: string): string =>
-    source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
   it('names all seventeen scenarios in the combiner, not in the input', () => {
     const declared = /const SCENARIOS = \[([^\]]+)\]/.exec(combiner);
@@ -2616,6 +2618,6 @@ describe('the acceptance plumbing, where a plausible wrong answer was possible',
   });
 
   it('still cannot record the decision it evaluates', () => {
-    expect(reporter).not.toContain('recordDesignDecision');
+    expect(codeOf(reporter)).not.toContain('recordDesignDecision');
   });
 });

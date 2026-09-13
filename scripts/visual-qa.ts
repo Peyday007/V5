@@ -54,10 +54,42 @@ const PASSWORD = 'visual-qa-password-01';
  * between the other two, and the band's edges are swept below.
  */
 const VIEWPORTS = [
-  { name: 'desktop', width: 1280, height: 900 },
-  { name: 'intermediate', width: 900, height: 900 },
+  { name: 'desktop', width: 1180, height: 900 },
+  { name: 'intermediate', width: 953, height: 900 },
   { name: 'phone', width: 390, height: 844 },
 ];
+
+/**
+ * The four screens the approved preview covered, and why they are named here.
+ *
+ * §24's design gate is a decision a person makes by **looking**, and the preview
+ * they approved the direction from showed exactly these four at exactly the
+ * three widths above. A handoff that showed different screens, or the same
+ * screens at different widths, would not be comparable with the thing it is
+ * asking to be judged against — so the set is declared rather than assembled
+ * from whatever the run happened to capture.
+ *
+ * `needs-you-populated` and `needs-you-empty` are one address in its two real
+ * states. Nothing is faked to produce either: a Brain with no standing grant has
+ * exactly one decision outstanding — the approval nothing can proceed without —
+ * and pressing that page's own Approve button is what settles it. No request row
+ * is invented, and the grant lands in the throwaway database this run deletes
+ * afterwards.
+ */
+const HANDOFF_SCREENS: Record<string, string> = {
+  russell: 'russell-home',
+  ideas: 'project-constellation',
+  'needs-you': 'needs-you-populated',
+};
+
+/** Where the approval set is written, and the declaration written beside it. */
+const RENDERS_DEFAULT = path.join('docs', 'evidence', 'step12b-renders');
+
+interface Render {
+  screen: string;
+  width: number;
+  file: string;
+}
 
 /**
  * The band the rejected build clipped in, swept rather than sampled.
@@ -253,7 +285,9 @@ const MUST_REACH = [
  * Measured rather than eyeballed, and reported as a count with the worst pairs,
  * because "the ring seats its labels" has to be a number before it is a claim.
  */
-const OVERLAPPING_NODES = `(() => {
+const CONSTELLATION = `(() => {
+  const canvas = document.querySelector('.lim-canvas');
+  const box = canvas ? canvas.getBoundingClientRect() : null;
   const nodes = [...document.querySelectorAll('.lim-node')];
   const pairs = [];
   for (let i = 0; i < nodes.length; i += 1) {
@@ -274,9 +308,24 @@ const OVERLAPPING_NODES = `(() => {
     }
   }
   pairs.sort((left, right) => right.area - left.area);
+  /*
+   * The outline beside the picture, counted from the same screen.
+   *
+   * §29: every map carries a synchronized outline built in the same pass, and
+   * the screen-reader path and the picture may never describe different graphs.
+   * The diagram draws the nucleus and its children; the list beside it is the
+   * children — so the two agree when there is exactly one more node than row,
+   * and a layout change that dropped a node would show up here as a number
+   * rather than as something somebody eventually noticed.
+   */
+  const lim = document.querySelector('.lim');
+  const list = lim && lim.parentElement ? lim.parentElement.querySelector('ul.rs-list') : null;
   return {
+    layout: canvas ? canvas.getAttribute('data-layout') || 'unmarked' : 'none',
     nodes: nodes.length,
+    listed: list ? list.querySelectorAll(':scope > li').length : 0,
     overlaps: pairs.length,
+    canvas: box ? Math.round(box.width) + '×' + Math.round(box.height) : 'none',
     worst: pairs.slice(0, 3).map((pair) => pair.what + ' (' + pair.area + 'px²)').join(' | '),
   };
 })()`;
@@ -457,9 +506,66 @@ const JOURNEY_OUT: JourneyStep[] = [
 /** The six maps, by the label on their tab. */
 const MAP_TABS = ['System', 'Workflow', 'Knowledge', 'Decisions', 'Timeline', 'Money flow'];
 
+/* -------------------------------------------------------------------------
+ * What this invocation was asked for.
+ *
+ * Two flags and a positional directory. `--renders` is where the **approval
+ * set** goes — the four screens at the three widths, plus the declaration that
+ * says what the set is — and it is separate from the throwaway output directory
+ * because those images are the thing a person is asked to decide on rather than
+ * a diagnostic. `--only=constellation` skips everything except the one
+ * measurement, which is what makes a geometry change something you can iterate
+ * on in ninety seconds rather than twenty minutes.
+ * ---------------------------------------------------------------------- */
+
+interface Options {
+  outputDir: string;
+  rendersDir: string | null;
+  only: 'constellation' | null;
+}
+
+function parseOptions(argv: string[]): Options {
+  let positional: string | null = null;
+  let rendersDir: string | null = null;
+  let only: 'constellation' | null = null;
+  for (const argument of argv) {
+    if (argument.startsWith('--renders=')) rendersDir = argument.slice('--renders='.length);
+    else if (argument === '--renders') rendersDir = RENDERS_DEFAULT;
+    else if (argument === '--only=constellation') only = 'constellation';
+    else if (argument.startsWith('--')) throw new Error(`unknown option ${argument}`);
+    else if (positional === null) positional = argument;
+  }
+  return {
+    outputDir: path.resolve(positional ?? path.join(os.tmpdir(), 'brain-visual-qa')),
+    rendersDir: rendersDir === null ? null : path.resolve(REPO_ROOT, rendersDir),
+    only,
+  };
+}
+
 async function main(): Promise<void> {
-  const outputDir = path.resolve(process.argv[2] ?? path.join(os.tmpdir(), 'brain-visual-qa'));
+  const options = parseOptions(process.argv.slice(2));
+  const { outputDir } = options;
   fs.mkdirSync(outputDir, { recursive: true });
+  /*
+   * The approval directory is emptied of images before it is refilled.
+   *
+   * `scripts/design-manifest.ts` refuses a `.png` that the declaration does not
+   * name, and it is right to: an undeclared image would make the digest an
+   * approval of a subset wearing the name of the whole set. A previous run's
+   * leftover is exactly that, so it is removed here rather than discovered
+   * there.
+   */
+  if (options.rendersDir) {
+    fs.mkdirSync(options.rendersDir, { recursive: true });
+    for (const entry of fs.readdirSync(options.rendersDir)) {
+      if (entry.endsWith('.png') || entry === 'index.json') {
+        fs.rmSync(path.join(options.rendersDir, entry));
+      }
+    }
+  }
+  const declared: Render[] = [];
+  const captureFindings: string[] = [];
+  const constellation: ({ width: number } & ConstellationReading)[] = [];
 
   /*
    * Build the client first, because otherwise this photographs the last build.
@@ -546,6 +652,58 @@ async function main(): Promise<void> {
     });
     const cookie = await signIn(PASSWORD);
 
+    /*
+     * The one measurement, on its own, for when that is the whole question.
+     *
+     * A geometry change is iterated on by looking at a number, and the number
+     * costs ninety seconds here against twenty minutes for the full walk. It
+     * shares every line of the harness above it — the same build, the same real
+     * server, the same real rows, the same predicate — because a second harness
+     * that measured the same thing slightly differently is how two readings of
+     * one canvas come to disagree.
+     */
+    if (options.only === 'constellation') {
+      await withChromium(async (cdp) => {
+        await signInBrowser(cdp, cookie);
+        for (const width of CONSTELLATION_WIDTHS) {
+          await cdp.send('Emulation.setDeviceMetricsOverride', {
+            width,
+            height: width < 600 ? 844 : 900,
+            deviceScaleFactor: 1,
+            mobile: width < 600,
+          });
+          await cdp.send('Page.navigate', { url: `${BASE}/projects` });
+          await waitFor(cdp, "document.querySelector('.lim-canvas') !== null", 20_000);
+          await sleep(1200);
+          const reading = await constellationReading(cdp);
+          console.log(describeConstellation(width, reading));
+          constellation.push({ width, ...reading });
+          if (reading.overlaps > 0) {
+            captureFindings.push(
+              `${reading.overlaps} constellation node pair(s) painted over each other at ` +
+                `${width}px — ${reading.worst}`,
+            );
+          }
+          const shot = (await cdp.send('Page.captureScreenshot', {
+            format: 'png',
+            captureBeyondViewport: true,
+          })) as { data: string };
+          fs.writeFileSync(
+            path.join(outputDir, `constellation-${width}.png`),
+            Buffer.from(shot.data, 'base64'),
+          );
+        }
+      });
+      reportConstellation(constellation);
+      console.log(`\nImages in ${outputDir}`);
+      if (captureFindings.length > 0) {
+        console.log('');
+        for (const finding of captureFindings) console.log(`  ${finding}`);
+        process.exitCode = 1;
+      }
+      return;
+    }
+
     await withChromium(async (cdp) => {
       for (const viewport of VIEWPORTS) {
         const problems: string[] = [];
@@ -576,6 +734,12 @@ async function main(): Promise<void> {
           })) as { data: string };
           const file = path.join(outputDir, `${viewport.name}-${destination.name}.png`);
           fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
+          const screen = HANDOFF_SCREENS[destination.name];
+          if (screen && options.rendersDir) {
+            declared.push(
+              writeRender(options.rendersDir, screen, viewport.width, Buffer.from(shot.data, 'base64')),
+            );
+          }
           const sideways = (await evaluate(
             cdp,
             'document.documentElement.scrollWidth > document.documentElement.clientWidth',
@@ -612,6 +776,26 @@ async function main(): Promise<void> {
               `${rendered ? 'rendered' : 'NEVER RENDERED'}  ` +
               `${sideways ? 'SCROLLS SIDEWAYS' : 'fits'}  ${text.slice(0, 90)}`,
           );
+          /*
+           * The constellation, measured at every width rather than only on a
+           * phone.
+           *
+           * It used to be asked once, at 390px, inside the journey — which is
+           * where the pile-up was, and which is also why nobody knew whether the
+           * ring seated its labels at 953px or only looked as though it did. A
+           * reading taken at one width is a claim about that width.
+           */
+          if (destination.name === 'ideas') {
+            const reading = await constellationReading(cdp);
+            console.log(`    ${describeConstellation(viewport.width, reading)}`);
+            constellation.push({ width: viewport.width, ...reading });
+            if (reading.overlaps > 0) {
+              captureFindings.push(
+                `${viewport.name}: ${reading.overlaps} constellation node pair(s) painted over ` +
+                  `each other at ${viewport.width}px — ${reading.worst}`,
+              );
+            }
+          }
         }
         /*
          * Console errors, with the one that is about this machine named as one.
@@ -638,7 +822,76 @@ async function main(): Promise<void> {
           for (const problem of real.slice(0, 10)) console.log(`    ${problem}`);
         }
       }
+
+      /*
+       * The second state of Needs You, produced rather than mocked.
+       *
+       * Everything above ran against a Brain with no standing grant, which is
+       * why `/needs-you` above is the **populated** screen: an ungranted project
+       * has exactly one decision outstanding and the page refuses to fold it.
+       * Pressing that page's own Approve button settles it, and the same address
+       * then becomes the settled, empty inbox. Two real states of one screen,
+       * separated by one press on a real control — no request row is invented
+       * and nothing is stubbed.
+       *
+       * It happens **after** every width has been captured, because there is one
+       * database behind all three: granting between widths would leave the first
+       * two showing a decision the third no longer had.
+       */
+      if (options.rendersDir) {
+        const granted = await grantStandingAuthority(cdp);
+        console.log(
+          granted
+            ? '  standing authority approved through the page’s own control'
+            : '  COULD NOT APPROVE the standing authority — the empty inbox is not reachable',
+        );
+        if (!granted) {
+          captureFindings.push(
+            'needs-you-empty: the standing authority could not be approved, so the settled ' +
+              'state of Needs You was never rendered',
+          );
+        }
+        for (const viewport of VIEWPORTS) {
+          await cdp.send('Emulation.setDeviceMetricsOverride', {
+            width: viewport.width,
+            height: viewport.height,
+            deviceScaleFactor: 2,
+            mobile: viewport.width < 600,
+          });
+          await cdp.send('Page.navigate', { url: `${BASE}/needs-you` });
+          await waitFor(cdp, "document.querySelector('.rs-shell') !== null");
+          await waitFor(cdp, "document.querySelector('.rs-nothing') !== null", 15_000);
+          await sleep(900);
+          const shot = (await cdp.send('Page.captureScreenshot', {
+            format: 'png',
+            captureBeyondViewport: true,
+          })) as { data: string };
+          const bytes = Buffer.from(shot.data, 'base64');
+          fs.writeFileSync(
+            path.join(outputDir, `${viewport.name}-needs-you-settled.png`),
+            bytes,
+          );
+          declared.push(
+            writeRender(options.rendersDir, 'needs-you-empty', viewport.width, bytes),
+          );
+          const settled = await evaluate(
+            cdp,
+            "document.querySelector('.rs-nothing') !== null",
+          );
+          console.log(
+            `${viewport.name.padEnd(8)} ${'needs-you-empty'.padEnd(10)} ` +
+              `${settled === true ? 'settled' : 'STILL SHOWS A DECISION'}`,
+          );
+        }
+      }
     });
+
+    if (options.rendersDir) {
+      writeDeclaration(options.rendersDir, declared);
+      console.log(
+        `\n${declared.length} render(s) declared in ${path.join(options.rendersDir, 'index.json')}`,
+      );
+    }
 
     /*
      * The band, swept — each width in its own browser.
@@ -772,12 +1025,14 @@ async function main(): Promise<void> {
      * journey at phone width — where the rail collapses and where a broken
      * control is most likely — and prints what changed at every step.
      */
-    const findings = await driveJourney(cookie, outputDir);
+    const findings = [...captureFindings, ...(await driveJourney(cookie, outputDir, constellation))];
+
+    reportConstellation(constellation);
 
     console.log(`\nImages in ${outputDir}`);
     if (findings.length > 0) {
       console.log('');
-      console.log(`${findings.length} finding(s) from the phone journey:`);
+      console.log(`${findings.length} finding(s):`);
       for (const finding of findings) console.log(`  ${finding}`);
       process.exitCode = 1;
     }
@@ -785,6 +1040,153 @@ async function main(): Promise<void> {
     await endServerTree(server);
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
+}
+
+/* -------------------------------------------------------------------------
+ * The approval set: the images, and the declaration that says what they are.
+ * ---------------------------------------------------------------------- */
+
+/** One render, written under the name the declaration will give it. */
+function writeRender(dir: string, screen: string, width: number, bytes: Buffer): Render {
+  const file = `${screen}-${width}.png`;
+  fs.writeFileSync(path.join(dir, file), bytes);
+  return { screen, width, file };
+}
+
+/**
+ * `index.json`, and why the set is declared rather than inferred.
+ *
+ * `scripts/design-manifest.ts` digests **what this file names**, so an approval
+ * is bound to a set somebody stated rather than to whatever happened to be in a
+ * directory when the digest ran. That cuts both ways, which is the point: a
+ * declared file that is missing and an undeclared file that is present are both
+ * refusals there, so this writes the declaration from the captures it actually
+ * took and then refuses anything else in the directory itself — the same fact
+ * found at the cheaper end.
+ */
+function writeDeclaration(dir: string, renders: Render[]): void {
+  const named = new Set(renders.map((render) => render.file));
+  const strays = fs
+    .readdirSync(dir)
+    .filter((entry) => entry.endsWith('.png') && !named.has(entry));
+  if (strays.length > 0) {
+    throw new Error(
+      `${strays.length} image(s) in ${dir} that this run did not take: ${strays.join(', ')}. ` +
+        'An undeclared image would make the digest an approval of a subset wearing the name ' +
+        'of the whole set.',
+    );
+  }
+  const ordered = [...renders].sort(
+    (left, right) =>
+      left.screen.localeCompare(right.screen) || right.width - left.width,
+  );
+  fs.writeFileSync(path.join(dir, 'index.json'), `${JSON.stringify(ordered, null, 2)}\n`);
+}
+
+/* -------------------------------------------------------------------------
+ * The constellation, measured.
+ * ---------------------------------------------------------------------- */
+
+/** The widths the constellation is asked about when it is the whole question. */
+const CONSTELLATION_WIDTHS = [1180, 953, 390, 360];
+
+interface ConstellationReading {
+  layout: string;
+  nodes: number;
+  listed: number;
+  overlaps: number;
+  worst: string;
+  canvas: string;
+}
+
+/** Read the canvas: which arrangement, how many nodes, how much overlap. */
+async function constellationReading(cdp: Cdp): Promise<ConstellationReading> {
+  return (await evaluate(cdp, CONSTELLATION)) as ConstellationReading;
+}
+
+/** One line about one canvas, in the words the report uses. */
+function describeConstellation(width: number, reading: ConstellationReading): string {
+  return (
+    `constellation at ${width}px: ${reading.layout} — ${reading.nodes} node(s) on a ` +
+    `${reading.canvas} canvas, ${reading.listed} listed beside it, ` +
+    `${reading.overlaps} overlapping pair(s)` +
+    (reading.worst ? ` — ${reading.worst}` : '')
+  );
+}
+
+/**
+ * Every reading together, because the claim being made is about a range.
+ *
+ * "It does not overlap on a phone" is four separate facts about four widths,
+ * and printing them one at a time inside three different phases is how a run
+ * ends with the evidence scattered through six hundred lines of log.
+ */
+function reportConstellation(readings: ({ width: number } & ConstellationReading)[]): void {
+  if (readings.length === 0) return;
+  console.log('');
+  console.log('The constellation, at every width this run looked at:');
+  for (const reading of [...readings].sort((left, right) => right.width - left.width)) {
+    console.log(
+      `  ${String(reading.width).padStart(4)}px  ${reading.layout.padEnd(6)}  ` +
+        `${String(reading.nodes).padStart(2)} drawn / ${String(reading.listed).padStart(2)} listed  ` +
+        `${reading.canvas.padEnd(9)}  ` +
+        (reading.overlaps === 0
+          ? 'no overlap'
+          : `${reading.overlaps} OVERLAPPING PAIR(S) — ${reading.worst}`),
+    );
+  }
+}
+
+/**
+ * Approve the standing authority, by pressing the page's own Approve button.
+ *
+ * Not a POST to the route: the question this answers is whether the settled
+ * state of Needs You is *reachable from the screen*, and a request sent behind
+ * the interface's back would render the settled page while proving nothing
+ * about the control that is supposed to produce it. It presses what a person
+ * presses, and reports false if that control is not there.
+ */
+async function grantStandingAuthority(cdp: Cdp): Promise<boolean> {
+  await cdp.send('Page.navigate', { url: `${BASE}/needs-you` });
+  await waitFor(cdp, "document.querySelector('.rs-authority') !== null", 20_000);
+  await sleep(900);
+  const pressed = await evaluate(
+    cdp,
+    `(() => {
+      const button = [...document.querySelectorAll('.rs-authority button')].find(
+        (candidate) => (candidate.textContent || '').trim() === 'Approve',
+      );
+      if (!button) return false;
+      if (button.disabled) return 'disabled';
+      button.click();
+      return true;
+    })()`,
+  );
+  if (pressed !== true) return false;
+  /*
+   * Wait for the card to hold a grant, not for the page around it to say so.
+   *
+   * Its first version waited for `.rs-nothing` — the settled sentence — and
+   * reported that the standing authority could not be approved while all three
+   * later captures showed it plainly granted. **The press had worked and the
+   * check was wrong**, which is the one kind of harness failure that costs more
+   * than the defect it was looking for: a false finding is a finding somebody
+   * spends an hour on.
+   *
+   * It was, though, pointing at something real — the page around the card did
+   * not re-read, so answering the one decision on it changed nothing visible
+   * until you navigated away and back. That is fixed in `Views.tsx`, and this
+   * deliberately does **not** depend on the fix: it waits for the control the
+   * card itself swaps in, so it would still pass against the build that had the
+   * staleness and still fail if the grant genuinely did not land.
+   */
+  return waitFor(
+    cdp,
+    `[...document.querySelectorAll('.rs-authority button')].some(
+      (button) => (button.textContent || '').trim() === 'Withdraw this',
+    )`,
+    20_000,
+  );
 }
 
 /* -------------------------------------------------------------------------
@@ -885,22 +1287,82 @@ async function walk(
 }
 
 /** The constellation, measured for nodes painted over each other. */
-async function constellationProbe(cdp: Cdp): Promise<string[]> {
-  const reading = (await evaluate(cdp, OVERLAPPING_NODES)) as {
-    nodes: number;
-    overlaps: number;
-    worst: string;
-  };
-  console.log(
-    `    constellation: ${reading.nodes} nodes, ${reading.overlaps} overlapping pair(s)` +
-      (reading.worst ? ` — ${reading.worst}` : ''),
-  );
-  return reading.overlaps > 0
-    ? [
+function constellationProbe(
+  collected: ({ width: number } & ConstellationReading)[],
+): (cdp: Cdp) => Promise<string[]> {
+  return async (cdp) => {
+    const reading = await constellationReading(cdp);
+    console.log(`    ${describeConstellation(PHONE.width, reading)}`);
+    collected.push({ width: PHONE.width, ...reading });
+    const found: string[] = [];
+    if (reading.overlaps > 0) {
+      found.push(
         `05-project-map: ${reading.overlaps} constellation node pair(s) painted over each other ` +
           `at ${PHONE.width}px — ${reading.worst}`,
-      ]
-    : [];
+      );
+    }
+    /*
+     * The picture and the outline, held against each other rather than each
+     * checked against nothing. `mapsPass` already does this for the six
+     * specialized maps; the constellation had no such reading at all, so a
+     * change that lost a node would have been invisible to everything except a
+     * person counting circles in a screenshot.
+     */
+    if (reading.nodes > 0 && reading.nodes - 1 !== reading.listed) {
+      found.push(
+        `05-project-map: the constellation and its list are different graphs — ` +
+          `${reading.nodes - 1} node(s) around the nucleus against ${reading.listed} listed`,
+      );
+    }
+    return found;
+  };
+}
+
+/**
+ * The same canvas at the narrower phone §24 names, reached by pressing.
+ *
+ * 390 is not a proof about 360: the canvas is thirty pixels narrower there, and
+ * thirty pixels is the difference between a label wrapping to two lines and to
+ * three. It is a press on the thumb bar rather than a navigation, because that
+ * is the rule the whole journey runs under.
+ */
+async function narrowConstellation(
+  cdp: Cdp,
+  outputDir: string,
+  collected: ({ width: number } & ConstellationReading)[],
+): Promise<string[]> {
+  const pressed = await evaluate(cdp, railPress('Ideas'));
+  if (pressed !== true) {
+    return [`18-constellation-${NARROW_PHONE}: there is no Ideas cell to press at this width`];
+  }
+  const arrived = await waitFor(cdp, "document.querySelector('.lim-canvas') !== null", 20_000);
+  await sleep(1200);
+  const capture0 = await capture(
+    cdp,
+    outputDir,
+    `journey-18-constellation-${NARROW_PHONE}.png`,
+  );
+  const found = judge(`18-constellation-${NARROW_PHONE}`, capture0);
+  if (!arrived) {
+    found.push(`18-constellation-${NARROW_PHONE}: the map never rendered at this width`);
+    return found;
+  }
+  const reading = await constellationReading(cdp);
+  console.log(`  ${describeConstellation(NARROW_PHONE, reading)}`);
+  collected.push({ width: NARROW_PHONE, ...reading });
+  if (reading.overlaps > 0) {
+    found.push(
+      `18-constellation-${NARROW_PHONE}: ${reading.overlaps} constellation node pair(s) ` +
+        `painted over each other at ${NARROW_PHONE}px — ${reading.worst}`,
+    );
+  }
+  if (reading.nodes > 0 && reading.nodes - 1 !== reading.listed) {
+    found.push(
+      `18-constellation-${NARROW_PHONE}: the constellation and its list are different graphs — ` +
+        `${reading.nodes - 1} node(s) around the nucleus against ${reading.listed} listed`,
+    );
+  }
+  return found;
 }
 
 /**
@@ -1206,7 +1668,11 @@ async function narrowPhoneBar(cdp: Cdp, outputDir: string): Promise<string[]> {
 }
 
 /** One browser, one signed-in person, one path through the product. */
-async function driveJourney(cookie: string, outputDir: string): Promise<string[]> {
+async function driveJourney(
+  cookie: string,
+  outputDir: string,
+  constellation: ({ width: number } & ConstellationReading)[],
+): Promise<string[]> {
   const findings: string[] = [];
   console.log('');
   console.log(
@@ -1223,7 +1689,9 @@ async function driveJourney(cookie: string, outputDir: string): Promise<string[]
     // The only navigation in the whole journey. Everything after this is a press.
     await cdp.send('Page.navigate', { url: `${BASE}/` });
     findings.push(
-      ...(await walk(cdp, outputDir, JOURNEY_IN, { '05-project-map': constellationProbe })),
+      ...(await walk(cdp, outputDir, JOURNEY_IN, {
+        '05-project-map': constellationProbe(constellation),
+      })),
     );
     findings.push(...(await mapsPass(cdp, outputDir)));
     findings.push(...(await walk(cdp, outputDir, JOURNEY_OUT)));
@@ -1244,6 +1712,7 @@ async function driveJourney(cookie: string, outputDir: string): Promise<string[]
         NARROW_PHONE,
       )),
     );
+    findings.push(...(await narrowConstellation(cdp, outputDir, constellation)));
   });
   return findings;
 }
@@ -1448,6 +1917,7 @@ async function withChromium(body: (cdp: Cdp) => Promise<void>): Promise<void> {
     };
 
     await cdp.send('Page.enable');
+    await serveWebFonts(cdp);
     try {
       await body(cdp);
     } finally {
@@ -1481,6 +1951,92 @@ async function withChromium(body: (cdp: Cdp) => Promise<void>): Promise<void> {
       /* left behind in the temp directory, deliberately */
     }
   }
+}
+
+/* -------------------------------------------------------------------------
+ * The product's own typefaces, fetched the way this machine can fetch them.
+ *
+ * `client/index.html` links the Google Fonts stylesheet, and Chromium here is
+ * launched with no proxy, so every page load reset that request and the whole
+ * product rendered on its fallback stack: Georgia where Fraunces should be,
+ * system-ui where Public Sans should be. The harness reported it correctly as
+ * an environment fact and carried on — which is right for a layout check and
+ * wrong for the thing these captures are now for.
+ *
+ * **A render in the wrong typefaces is a picture of a different product**, and
+ * a person asked to approve a visual direction from one is being asked about
+ * something that does not exist. Type is not a detail here: it sets every line
+ * height, every label width and therefore where a name wraps, which is the
+ * measurement this run exists to take.
+ *
+ * So the two font hosts are intercepted and answered from Node, whose fetch
+ * goes through this machine's outbound proxy. Nothing about the page changes —
+ * the same URLs, the same bytes, the same stylesheet — and nothing about the
+ * browser's trust is loosened, which is the reason this is interception rather
+ * than `--ignore-certificate-errors`: a harness that disables certificate
+ * checking to get a picture is a pattern somebody copies into something that
+ * matters. A font that genuinely cannot be fetched still fails, and the page
+ * still falls back, because pretending otherwise would be the same lie one step
+ * along.
+ * ---------------------------------------------------------------------- */
+
+const FONT_HOSTS = ['https://fonts.googleapis.com/*', 'https://fonts.gstatic.com/*'];
+
+/** One process-wide cache: the same six files on every page of every width. */
+const fontCache = new Map<string, { type: string; body: string } | null>();
+
+async function fetchFont(url: string): Promise<{ type: string; body: string } | null> {
+  const cached = fontCache.get(url);
+  if (cached !== undefined) return cached;
+  let answer: { type: string; body: string } | null = null;
+  try {
+    const response = await fetch(url, {
+      // Google serves woff2 to a browser and truetype to something it does not
+      // recognise, so the stylesheet this returns has to be the one Chromium
+      // would have been given.
+      headers: { 'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) Chrome/141.0.0.0 Safari/537.36' },
+    });
+    if (response.ok) {
+      answer = {
+        type: response.headers.get('content-type') ?? 'application/octet-stream',
+        body: Buffer.from(await response.arrayBuffer()).toString('base64'),
+      };
+    }
+  } catch {
+    answer = null;
+  }
+  fontCache.set(url, answer);
+  return answer;
+}
+
+async function serveWebFonts(cdp: Cdp): Promise<void> {
+  cdp.on('Fetch.requestPaused', (params) => {
+    const requestId = String(params['requestId']);
+    const request = params['request'] as { url?: string } | undefined;
+    void (async (): Promise<void> => {
+      const answer = request?.url ? await fetchFont(request.url) : null;
+      try {
+        if (answer) {
+          await cdp.send('Fetch.fulfillRequest', {
+            requestId,
+            responseCode: 200,
+            responseHeaders: [
+              { name: 'content-type', value: answer.type },
+              { name: 'access-control-allow-origin', value: '*' },
+            ],
+            body: answer.body,
+          });
+        } else {
+          await cdp.send('Fetch.failRequest', { requestId, errorReason: 'ConnectionFailed' });
+        }
+      } catch {
+        /* the page navigated away from the request; nothing to answer */
+      }
+    })();
+  });
+  await cdp.send('Fetch.enable', {
+    patterns: FONT_HOSTS.map((urlPattern) => ({ urlPattern })),
+  });
 }
 
 /**

@@ -90,8 +90,22 @@ worth reading.
   reason §6 gave for refusing them remains true of the half that is still
   refused. The correction is recorded rather than applied quietly, because the
   refusal was argued for in detail and the argument was half right.
-- **The design gate's own table reads `— pending —` while its four sub-decisions
-  read `APPROVED 2026-09-12`.** Both cannot be true of the same gate. The
-  sub-decisions are real and recorded; what was never recorded is the approval
-  of the *implementation* against them, which is what §24 actually asks for and
-  what `design_approvals` now holds.
+- **The design gate's own row reads `— pending —` beside four sub-decisions
+  marked `APPROVED 2026-09-12`, and I first called that a contradiction. It is
+  not, and the correction matters more than the original observation.** They are
+  records of two different things. The four are direction decisions taken
+  against a hand-drawn preview which states of itself *"Nothing in it is
+  implemented. It is a proposal to approve."* The pending row is the approval of
+  the complete design. **No approval of the complete design is recorded at
+  either stage**, and the row is an accurate record rather than an oversight.
+
+  Four approved sub-decisions are not an overall approval, and nothing may infer
+  one from them: a person choosing between two drawn rail layouts has said
+  something about rail layouts, not that the product looks right. The four were
+  the questions the preview called out as genuinely a person's, never the whole
+  of what a design approval covers.
+
+  The distinction is now structural rather than a convention.
+  `design_approvals` binds every row to a revision and to a digest over an
+  enumerated set of renders **of the built product**; a direction sub-decision
+  has no render set, so the table cannot hold one.

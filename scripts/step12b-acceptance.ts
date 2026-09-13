@@ -458,10 +458,29 @@ async function readDesignDecision(revision: string | null): Promise<DesignReadin
     decision: null,
     unreadable: null,
   };
+  /*
+   * Its own read-only phase, opened and closed here.
+   *
+   * `readOperationalFleet` closes the configured database before it returns, so
+   * a caller that ran afterwards found `getDb()` throwing "not initialised" —
+   * which the catch below reported, correctly, as *unknown rather than
+   * unapproved*. The wiring was wrong and the honesty held, which is the right
+   * way round; this makes the wiring right too. Symmetric with the fleet read:
+   * open, two statements, close.
+   */
   try {
+    await initDatabase();
     reading.decision = await standingDecision(revision, digest);
   } catch (error) {
     reading.unreadable = error instanceof Error ? error.message : String(error);
+  } finally {
+    // Closed whatever happened, so the exercising half opens its scratch
+    // database against a clean slate rather than inheriting this one.
+    try {
+      await closeDatabase();
+    } catch {
+      /* already closed */
+    }
   }
   return reading;
 }
