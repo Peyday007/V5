@@ -128,7 +128,7 @@ committed by the thing checking for it.** The cycle is driven both ways round
 against real `fleet_policy` rows in an isolated scope, which is the strongest
 form of it that does not corrupt what it measures.
 
-## 6 · Closed this round
+## 6 · Closed this round, and what the evidence for each actually is
 
 | | condition | how |
 | --- | --- | --- |
@@ -141,3 +141,25 @@ else. **A scenario whose unmet condition is a paragraph is a scenario nobody can
 finish.** It is answered in the journey rather than in the reporter because the
 question needs a real server on a real socket and a person signed into it, and
 that harness already has both while a read-only reporter has neither.
+
+
+---
+
+## 7 · One thing this page must not be read as saying
+
+**P reads PASS 8/8 from a checkout in the reading taken at `7a7f9f9`, and that
+is a test of the mechanism rather than evidence of a deploy.** The attachment
+was written by hand naming that revision, precisely to exercise the four
+outcomes:
+
+| attachment | reads |
+| --- | --- |
+| names this revision, before and after true | `held: true` — *"this exact revision, attested by git in this checkout"* |
+| names `dd1f9be`, the previously deployed one | `held: false` — *"run 34771692417 proved dd1f9be2, and this run is 7a7f9f9e — so what is running is not what was proved"* |
+| names a run of a different repository | `held: false` — *"workflowRun does not name a run of Peyday007/V5"* |
+| absent | `held: null`, awaiting a Deploy run at this revision |
+
+The evidence that closes P for real is the artifact from a `Deploy` run of this
+revision, fetched by the acceptance workflow from that run through the API,
+with its `head_sha` checked against the record. Until that has happened, **P is
+open**, and the container reading is the one that says so.
