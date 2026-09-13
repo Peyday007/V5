@@ -1534,6 +1534,16 @@ async function mapsPass(cdp: Cdp, outputDir: string): Promise<string[]> {
     } | null;
 
     const capture0 = await capture(cdp, outputDir, file);
+    // Recorded like any other step: a map opened by pressing its own tab is a
+    // step of the journey, and leaving six of them out of the record made the
+    // walk look a third shorter than it is.
+    JOURNEY_RECORD.push({
+      step: `map:${label}`,
+      arrived: selected,
+      fits: !capture0.sideways,
+      clipped: capture0.cutOff.length > 0,
+      unreachable: capture0.unreachable,
+    });
     findings.push(...judge(`map:${label}`, capture0));
 
     if (!reading) {

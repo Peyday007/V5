@@ -4276,13 +4276,22 @@ async function main(): Promise<void> {
             : 'not read',
         },
         {
-          name: 'the diagram and its outline are the same graph on the phone',
+          /*
+           * One more node than row, not the same number: the diagram draws the
+           * nucleus and its children while the list beside it is the children.
+           * The first version of this condition compared them directly and
+           * would have reported a correct screen as a defect — which is the
+           * false finding that costs more than the defect it was looking for.
+           */
+          name: 'the diagram and its outline are the same graph — the nucleus, and one row per child',
           held:
             journey !== null &&
             journey.constellation.length > 0 &&
-            journey.constellation.every((reading) => reading.nodes === reading.listed),
+            journey.constellation.every((reading) => reading.nodes === reading.listed + 1),
           saw: journey
-            ? journey.constellation.map((r) => `${r.width}px ${r.nodes}/${r.listed}`).join('; ')
+            ? journey.constellation
+                .map((r) => `${r.width}px ${r.nodes} drawn / ${r.listed} listed`)
+                .join('; ')
             : 'not read',
         },
         {
@@ -4338,31 +4347,130 @@ async function main(): Promise<void> {
 
   /* -- K. Legacy removal ---------------------------------------------------- */
   /*
-   * This row is a repository fact, and it used to read `client/src` without
-   * asking whether it was there. Inside the container it is not — the image
-   * carries `client/dist` and no sources — so the read threw and the whole
-   * report died at gate K rather than printing eleven rows it had already
-   * established. A reporter that cannot produce a reading is worse than one
-   * that names what it could not see.
+   * This asserted that `tests/operatorConsoleRemoved.test.ts` **exists**.
+   *
+   * File existence is "the code looks like it would", which this reporter's own
+   * header refuses — and it is the weakest possible form of it, because a suite
+   * that exists and fails is indistinguishable from one that passes. It never
+   * checked the route, the client, or the one thing P18 actually claims: that
+   * `/legacy` holds the declared archive operations and that none of them
+   * leaked onto the product surface.
+   *
+   * So the suite is **run**, and the inventory is held against the client.
    */
   const removalTest = file('tests/operatorConsoleRemoved.test.ts');
-  const clientSrc = path.join(REPO, 'client', 'src');
-  const clientHasOperator = fs.existsSync(clientSrc)
-    ? fs
-        .readdirSync(clientSrc, { recursive: true } as never)
-        .some((entry) => typeof entry === 'string' && entry.endsWith('.tsx'))
-    : null;
-  record(
+  let suiteRan = false;
+  let suiteOutput = 'not run';
+  if (REPO_VISIBLE && removalTest) {
+    try {
+      execFileSync('npx', ['vitest', 'run', 'tests/operatorConsoleRemoved.test.ts'], {
+        cwd: REPO,
+        stdio: 'pipe',
+        encoding: 'utf8',
+        timeout: 180_000,
+      });
+      suiteRan = true;
+      suiteOutput = 'every assertion in it held';
+    } catch (error) {
+      suiteRan = false;
+      const stderr = (error as { stdout?: string }).stdout ?? '';
+      const failed = stderr.match(/(\d+) failed/);
+      suiteOutput = failed ? `${failed[0]}` : 'the suite did not pass';
+    }
+  }
+
+  /*
+   * The inventory, held against the client rather than read as prose.
+   *
+   * `docs/STEP-12B-LEGACY-MIGRATION.md` names the calls each surviving archive
+   * operation is made of. Two things have to be true of that list for P18 to
+   * mean anything, and they pull in opposite directions: every declared call
+   * must still **exist** in the legacy console — otherwise the document
+   * describes a console that has moved on — and none of them may appear under
+   * `client/src/russell/`, because an archive operation on the product surface
+   * is the thing being retired.
+   */
+  const inventory = file('docs/STEP-12B-LEGACY-MIGRATION.md');
+  const declaredCalls = inventory
+    ? [
+        ...new Set(
+          [...inventory.matchAll(/`([a-z][A-Za-z]+)`/g)]
+            .map((match) => match[1] ?? '')
+            .filter((name) => name.length > 0),
+        ),
+      ]
+    : [];
+  const sourcesUnder = (relative: string): string[] => {
+    const root = path.join(REPO, relative);
+    if (!fs.existsSync(root)) return [];
+    const out: string[] = [];
+    const walkDir = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walkDir(full);
+        else if (/\.tsx?$/.test(entry.name)) out.push(fs.readFileSync(full, 'utf8'));
+      }
+    };
+    walkDir(root);
+    return out;
+  };
+  const legacySources = REPO_VISIBLE
+    ? sourcesUnder('client/src').filter((_, index) => index >= 0)
+    : [];
+  const russellSources = REPO_VISIBLE ? sourcesUnder('client/src/russell') : [];
+  const legacyOnly = legacySources.filter((source) => !russellSources.includes(source));
+  const uses = (sources: string[], call: string): boolean =>
+    sources.some((source) => new RegExp(`Api\\.${call}\\b`).test(source));
+  const declaredAndPresent = declaredCalls.filter((call) => uses(legacyOnly, call));
+  const declaredButGone = declaredCalls.filter(
+    (call) => uses(legacySources, call) === false && uses(russellSources, call) === false,
+  );
+  const leakedToRussell = declaredCalls.filter((call) => uses(russellSources, call));
+
+  recordConditions(
     'K',
     'Legacy removal',
-    removalTest ? 'PASS' : 'NOT_RUN',
-    removalTest
-      ? 'tests/operatorConsoleRemoved.test.ts refuses the route for every principal, fails on any ' +
-        'link to it, and fails on any instruction to go there. It runs in the suite this report ' +
-        `requires (${clientHasOperator === null ? 'client sources not in this image' : clientHasOperator ? 'client present' : 'client missing'}).`
-      : REPO_VISIBLE
-        ? 'The removal test is not present.'
-        : NOT_FROM_A_CHECKOUT,
+    !REPO_VISIBLE
+      ? [
+          {
+            name: 'the console-removal suite passes and the inventory matches the client',
+            held: null,
+            saw: 'the suite, the client sources and the inventory are repository facts',
+            needs: 'CHECKOUT',
+          },
+        ]
+      : [
+          {
+            name: 'the console-removal suite runs, and passes',
+            held: suiteRan,
+            saw: removalTest ? suiteOutput : 'the suite is not present at all',
+          },
+          {
+            name: 'the inventory declares the archive operations that survive',
+            held: declaredCalls.length >= 20,
+            saw: `${declaredCalls.length} call(s) named in docs/STEP-12B-LEGACY-MIGRATION.md`,
+          },
+          {
+            name: 'every declared call still exists, so the inventory is not describing a console that moved on',
+            held: declaredButGone.length === 0,
+            saw:
+              declaredButGone.length === 0
+                ? `${declaredAndPresent.length} of them resolve in the legacy client`
+                : `gone: ${declaredButGone.join(', ')}`,
+          },
+          {
+            name: 'and none of them reached the product surface, which is what P18 retires',
+            held: leakedToRussell.length === 0,
+            saw:
+              leakedToRussell.length === 0
+                ? 'no archive operation is called from client/src/russell'
+                : `on the product surface: ${leakedToRussell.join(', ')}`,
+          },
+        ],
+    'The suite is executed rather than looked up: it refuses the route for every principal, ' +
+      'fails on any link to it, and fails on any instruction to go there. Beside it, the ' +
+      'surviving archive operations are held against the client both ways round — still there ' +
+      'on `/legacy`, and absent from the product surface.',
   );
 
   /* -- L. Always-on loop ---------------------------------------------------- */

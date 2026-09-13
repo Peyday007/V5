@@ -1,0 +1,111 @@
+{
+  "takenAt": "2026-09-13T10:58:20.818Z",
+  "revision": "907774d97647803b1c17bbb78d25b5354e8920fe",
+  "phoneWidth": 390,
+  "steps": [
+    {
+      "step": "01-home",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "02-conversation",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "03-said-something",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "04-work",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "05-project-map",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "06-project-maps",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "13-needs-you",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "14-back-home",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    }
+  ],
+  "stepsWalked": 8,
+  "stepsThatArrived": 8,
+  "stepsThatFit": 8,
+  "stepsWithNothingClipped": 8,
+  "unreachableControls": [],
+  "constellation": [
+    {
+      "width": 1180,
+      "layout": "orbit",
+      "nodes": 9,
+      "listed": 8,
+      "overlaps": 0,
+      "canvas": "866×541"
+    },
+    {
+      "width": 953,
+      "layout": "spine",
+      "nodes": 9,
+      "listed": 8,
+      "overlaps": 0,
+      "canvas": "647×256"
+    },
+    {
+      "width": 390,
+      "layout": "spine",
+      "nodes": 9,
+      "listed": 8,
+      "overlaps": 0,
+      "canvas": "316×341"
+    },
+    {
+      "width": 390,
+      "layout": "spine",
+      "nodes": 9,
+      "listed": 8,
+      "overlaps": 0,
+      "canvas": "316×341"
+    },
+    {
+      "width": 360,
+      "layout": "spine",
+      "nodes": 9,
+      "listed": 8,
+      "overlaps": 0,
+      "canvas": "286×358"
+    }
+  ],
+  "findings": []
+}
