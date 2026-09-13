@@ -2856,6 +2856,65 @@ than a failure. **The reporter never promotes O to `PASS` however good the
 images are** — a reporter that could would be approving its own work.
 
 
+**A ring cannot seat nine labels on a 316px canvas, and no value of the stagger
+makes it — so the narrow arrangement is a different one rather than the same one
+squeezed.** The pile-up had been fixed twice by looking: first by spreading eight
+nodes on one ellipse, then by staggering every other node onto `0.62` of the
+radius. Measured, the second is not imperfect, it is **arithmetically
+impossible**: at a 390px viewport the canvas is 316px wide, so the inner ring
+lands 59-75px from the centre while a node's half-width alone reaches 73px. An
+inner node cannot clear the nucleus at any label size. Below `RING_MIN_CANVAS`
+the same graph is drawn as a **spine** — the nucleus at the top, its children in
+two grid columns, one connector each running down the gutter between them — and
+the difference that matters is not how it looks but what it guarantees: **the
+ring is only known not to overlap for the labels this projection produces, while
+two nodes in two grid cells are disjoint whatever the label does.** Nothing is
+truncated, nothing is abbreviated, and the node count is untouched; the picture
+and the outline are still the same graph, and the harness now counts both rather
+than assuming it.
+
+**A reading taken at one width is a claim about that width.** The overlap was
+asked about once, at 390px, inside the phone journey — so nobody knew whether
+the ring seated its labels at 953px or only looked as though it did. It did not:
+the intermediate width carried a pair the whole time, at every reading taken.
+It is measured at every width now, and `RING_MIN_ARC` is set from what was
+measured rather than derived — 179px of arc per node at a desktop canvas holds,
+134px at the intermediate one does not — which is why the constant says
+"measured" in its own comment. A number chosen by looking is fine; one that
+*claims* to be derived is not.
+
+**A render in the wrong typefaces is a picture of a different product.**
+`client/index.html` links the Google Fonts stylesheet and the harness's Chromium
+has no proxy, so every capture ever taken rendered on the fallback stack — which
+the run reported honestly as an environment fact and then carried on. That is
+right for a layout check and wrong for the thing these captures are now for: type
+sets every label width, and a label width is what an overlap is made of. The two
+font hosts are answered from Node, which does have the proxy — the same URLs, the
+same bytes, and **no loosening of the browser's trust**, because a harness that
+disabled certificate checking to get a picture is a pattern somebody copies
+somewhere it matters. The superseded ring measures differently in the two font
+sets (9 pairs against 8 at 390px) and both readings are kept, because the claim
+is what they agree on rather than either number alone.
+
+**Answering the one decision on a page must change the page.** Driving the
+approval found it: pressing **Approve** wrote the grant, and `NeedsYouView` went
+on saying what it had said before, because it reads the authority through its own
+query and nothing told it to look again — the nav badge beside it counting the
+same fact from the same route was equally stale. It is the *under*-claiming
+direction, which is the way round §29 asks for, and it is still the defect this
+section already records twice: a status that does not agree with the control
+beside it teaches a person to stop reading it. The card says when it changed
+something and every reader goes back to the server.
+
+**And the harness's own check was wrong in the more expensive direction.** It
+waited for the settled sentence on the page around the card, so it reported that
+the standing authority *could not be approved* while three later captures showed
+it plainly granted. **A false finding costs more than the defect it was looking
+for**, because somebody spends an hour on it. It waits for the control the card
+itself swaps in now — which is deliberately not the thing the fix above
+changed, so it would have passed against the stale build and still fails if the
+grant does not land.
+
 ---
 
 ## Repository map

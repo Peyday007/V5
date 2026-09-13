@@ -1258,8 +1258,26 @@ export function SitesView({ projectId }: { projectId: string | null }): JSX.Elem
 export function AuthorityPanel({
   projectId,
   folded = false,
+  onChanged,
 }: {
   projectId: string | null;
+  /**
+   * Told when the grant changed, so whoever is above can re-read.
+   *
+   * Found by driving the product rather than by reading it: the harness pressed
+   * **Approve**, the grant was written, and the page around the card went on
+   * saying what it had said before — because `NeedsYouView` reads the authority
+   * through its *own* query and nothing told it to look again. The nav badge
+   * beside it counts the same fact from the same route and was equally stale.
+   *
+   * It is not the "false settled" direction — the page under-claims rather than
+   * over-claims, which is the way round §29 asks for — but it is the same defect
+   * the section already records twice: **a status that does not agree with the
+   * control beside it teaches a person to stop reading it**, and here the
+   * control is the one decision nothing can proceed without. Answering it and
+   * seeing nothing change is worse than either state on its own.
+   */
+  onChanged?: () => void;
   /**
    * Whether an existing grant is folded behind a one-line summary.
    *
@@ -1314,6 +1332,10 @@ export function AuthorityPanel({
       setReason('');
       setWithdrawing(false);
       query.reload();
+      // Only on the far side of the await, so a refusal never announces a
+      // change. Everything else that reads this grant re-reads from the server
+      // rather than being handed what this card believes.
+      onChanged?.();
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : 'That did not go through.');
     } finally {
@@ -1648,7 +1670,27 @@ export function NeedsYouView({
       ) : null}
       {/* Above the list when a decision is outstanding, folded to one line when
           the grant already exists — §16, and the rejected page's own fault. */}
-      <AuthorityPanel key={projectId} projectId={projectId} folded={nothingWaiting} />
+      <AuthorityPanel
+        key={projectId}
+        projectId={projectId}
+        folded={nothingWaiting}
+        /*
+         * Both readings of the same fact, and the badge above them.
+         *
+         * This page asks the authority route itself rather than inferring the
+         * answer from the list — which is right, and left it with a second copy
+         * of a fact the card can change. So the card says when it changed it,
+         * and every reader goes back to the server. `onAnswered` is the shell's
+         * own refresh, already wired for answering a request: granting the
+         * standing authority resolves exactly the same kind of decision, so it
+         * belongs on the same hook rather than a second one beside it.
+         */
+        onChanged={() => {
+          authority.reload();
+          query.reload();
+          onAnswered?.();
+        }}
+      />
       <ul className="rs-list">
         {state.items.map((request) => (
           <li key={request.id}>

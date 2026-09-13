@@ -193,6 +193,69 @@ decisions below are the only ones that are genuinely a person's.
 
 ---
 
+## Design handoff — the built product, rendered (2026-09-13)
+
+The preview above is a proposal drawn by hand. **This is the product itself**,
+captured by `scripts/visual-qa.ts` from the built client served by a real server
+with real rows, at the same four screens and the same three widths the direction
+was reviewed at.
+
+    npx tsx scripts/visual-qa.ts <dir> --renders=docs/evidence/step12b-renders
+
+| | |
+| --- | --- |
+| Renders | `docs/evidence/step12b-renders/`, declared by its own `index.json` |
+| Screens | `russell-home`, `project-constellation`, `needs-you-populated`, `needs-you-empty` |
+| Widths | 1180, 953, 390 |
+| Published for review | see the artifact link recorded with this handoff |
+
+`needs-you-populated` and `needs-you-empty` are one address in its two real
+states. Nothing is faked to produce either: a Brain with no standing grant has
+exactly one decision outstanding — the approval nothing can proceed without — and
+the harness presses that page's own **Approve** button to reach the settled
+state. No request row is invented, and the grant lands in a throwaway database
+the run deletes afterwards. **That is a state of a disposable Brain, not a
+decision about this design.**
+
+### The constellation, measured
+
+The rejection named an obstructed diagram. The number behind it, and what it is
+now:
+
+| Viewport | Canvas | Before | After |
+| --- | --- | --- | --- |
+| 1180 | 866×541 | ring — 0 overlapping pairs | ring — 0 |
+| 953 | 647×404 → 647×256 | ring — **1 pair**, 214px² | spine — 0 |
+| 390 | 316×316 → 316×341 | ring — **8 pairs**, worst 1703px² | spine — 0 |
+| 360 | 286×286 → 286×358 | ring — **12 pairs**, worst 2316px² | spine — 0 |
+
+Taken in the product's own typefaces. The pass that ran before the harness served
+them read **9 pairs / 2385px² at 390 and 13 at 360** — the figure this work was
+given — because a fallback face sets different label widths, and a label width is
+what an overlap is made of. Both readings are kept in
+`docs/evidence/step12b-constellation/README.md`; what they agree on is the claim.
+
+The 953 pair had never been measured. Nothing looked at the constellation
+anywhere but 390px, which is why it sat in the product unreported.
+
+### The one decision this handoff asks for
+
+| Decision | Proposed | Approved |
+| --- | --- | --- |
+| Where the ring stops, and what replaces it below that | Ring at desktop; a two-column **spine** — same nucleus, same edges, same node count — at 953 and on a phone | *(not recorded — the owner's)* |
+
+The phone half of that is not really a choice: the ring is arithmetically
+impossible at 316px, and `docs/evidence/step12b-constellation/` shows what it
+does there. **The genuine question is 953**, where the ring overlaps by one small
+pair rather than eight: keeping it there means one covered label at the
+intermediate width and one visual idea at every width; taking the spine there
+means no overlap anywhere and a front door that looks like a ring only on a
+desktop. Both are rendered, adjacently, in the published handoff.
+
+Nothing in this section records an approval, and nothing in `scripts/` can.
+
+---
+
 ## 6. What is declared and refused, and why that is the answer
 
 Three of §15's eight Capability Lab modes can run in this version, and five

@@ -18,7 +18,16 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
-import { Constellation, curvePath, ringPositions } from '../client/src/russell/Constellation.tsx';
+import {
+  Constellation,
+  curvePath,
+  limLayout,
+  RING_MIN_ARC,
+  RING_MIN_CANVAS,
+  ringPerimeter,
+  ringPositions,
+  spinePath,
+} from '../client/src/russell/Constellation.tsx';
 import type { IdeaMap, IdeaNode } from '../client/src/lib/russellApi.ts';
 
 afterEach(cleanup);
@@ -74,7 +83,7 @@ function sampleMap(): IdeaMap {
 describe('the ring generalises rather than reproducing five fixed points', () => {
   it('spaces any number of nodes evenly and keeps them on the canvas', () => {
     for (const count of [1, 2, 3, 5, 8, 11]) {
-      const ring = ringPositions(count, 900);
+      const ring = ringPositions(count);
       expect(ring).toHaveLength(count);
       // Distinct: two nodes at the same coordinates are one node as far as a
       // person can tell.
@@ -89,7 +98,7 @@ describe('the ring generalises rather than reproducing five fixed points', () =>
   });
 
   it('puts an odd count’s first node at the top and goes clockwise', () => {
-    const ring = ringPositions(5, 900);
+    const ring = ringPositions(5);
     const first = ring[0]!;
     const second = ring[1]!;
     const last = ring[4]!;
@@ -108,7 +117,7 @@ describe('the ring generalises rather than reproducing five fixed points', () =>
      * nucleus. Half a step guarantees a vertical gap.
      */
     for (const count of [2, 4, 6, 8, 10]) {
-      const ring = ringPositions(count, 390);
+      const ring = ringPositions(count);
       const centreY = ring.reduce((total, point) => total + point[1], 0) / count;
       for (const [, y] of ring) {
         expect(Math.abs(y - centreY), `count ${count}`).toBeGreaterThan(1);
@@ -116,15 +125,24 @@ describe('the ring generalises rather than reproducing five fixed points', () =>
     }
   });
 
-  it('uses a narrower, taller ring on a phone', () => {
-    const desktop = ringPositions(5, 900);
-    const phone = ringPositions(5, 400);
-    // The canvas is taller and the ring reaches further down it, so the
-    // vertical spread is larger and the horizontal spread is not.
-    const spread = (ring: [number, number][], index: 0 | 1): number =>
-      Math.max(...ring.map((p) => p[index])) - Math.min(...ring.map((p) => p[index]));
-    expect(spread(phone, 1)).toBeGreaterThan(spread(desktop, 1));
-    expect(spread(phone, 0)).toBeLessThanOrEqual(spread(desktop, 0));
+  it('puts every node on one ellipse, because the stagger did not work', () => {
+    /*
+     * The stagger is gone and this is what stops it coming back.
+     *
+     * It put every other node on 0.62 of the radius, to separate neighbours
+     * radially rather than relying on an arc the label widths do not respect.
+     * At phone width that is not imperfect, it is impossible: the inner ring
+     * lands 59-75px from the centre of a 316px canvas while a node's half-width
+     * alone reaches 73px, so an inner node cannot clear the nucleus at any label
+     * size. The narrow case is a different arrangement now (see below), and the
+     * ring is one ellipse again.
+     */
+    for (const count of [7, 8, 11]) {
+      const ring = ringPositions(count);
+      // Normalised by the ellipse's own radii, every node is one unit out.
+      const radii = ring.map(([x, y]) => Math.hypot((x - 50) / 31, (y - 46) / 34));
+      for (const radius of radii) expect(radius).toBeCloseTo(1, 6);
+    }
   });
 
   it('bends a curve without letting a long spoke bow across the canvas', () => {
@@ -134,6 +152,94 @@ describe('the ring generalises rather than reproducing five fixed points', () =>
     // Capped at 38 however long the spoke is.
     const controlX = Number(/Q (-?[\d.]+) /.exec(long)![1]);
     expect(controlX - 1000).toBeCloseTo(38, 5);
+  });
+});
+
+/**
+ * What the measurement found, and what is now impossible.
+ *
+ * These numbers are not invented for the test. They are the canvases the real
+ * product produced at the three widths §24 names, read by
+ * `scripts/visual-qa.ts --only=constellation` against a real server with the
+ * ordinary seed's eight ideas:
+ *
+ *   1180px viewport -> 866x541 canvas -> 0 overlapping pairs
+ *    953px viewport -> 647x404 canvas -> 1 pair before, 2 after the stagger went
+ *    390px viewport -> 316x316 canvas -> 9 pairs, worst 2385px²
+ *    360px viewport -> 286x286 canvas -> 13 pairs, worst 2316px²
+ *
+ * A jsdom test cannot reproduce any of that — it has no layout engine, which is
+ * exactly why the pile-up survived a full suite. What it *can* pin is the
+ * decision those readings produced, so an edit that quietly widens the ring back
+ * over 647px fails here rather than in a screenshot somebody has to look at.
+ */
+describe('a canvas too small for a ring gets a different arrangement', () => {
+  it('keeps the ring only where it was measured not to overlap', () => {
+    expect(limLayout(8, 866)).toBe('ORBIT');
+    expect(limLayout(8, 647)).toBe('SPINE');
+    expect(limLayout(8, 316)).toBe('SPINE');
+    expect(limLayout(8, 286)).toBe('SPINE');
+  });
+
+  it('decides from the count and the width, and from nothing else', () => {
+    /*
+     * The property that stops it oscillating. A spine's height comes from its
+     * own content, so a decision that read the canvas's measured height would
+     * flip back to a ring, which would change the height, for ever. There is no
+     * height parameter to pass, and the same width and count always answer the
+     * same thing.
+     */
+    expect(limLayout(8, 647)).toBe(limLayout(8, 647));
+    // More nodes on one canvas can only ever move it toward the spine.
+    const widths = [560, 700, 900, 1400];
+    for (const width of widths) {
+      const few = limLayout(3, width);
+      const many = limLayout(40, width);
+      expect(`${few}/${many}`).not.toBe('SPINE/ORBIT');
+    }
+  });
+
+  it('refuses a ring narrower than one, whatever the count', () => {
+    for (const count of [1, 2, 3, 8]) {
+      expect(limLayout(count, RING_MIN_CANVAS - 1)).toBe('SPINE');
+    }
+  });
+
+  it('is the ring while the canvas has not been measured yet', () => {
+    // First paint and jsdom both arrive here. Deciding SPINE on an unmeasured
+    // canvas would show the narrow arrangement for a frame on every desktop.
+    expect(limLayout(8, 0)).toBe('ORBIT');
+  });
+
+  it('turns a crowded desktop ring into a spine rather than a pile', () => {
+    // The case nothing could see before: the arc per node shrinks as the count
+    // grows, and there was no rule that noticed.
+    const width = 900;
+    const roomy = Math.floor(ringPerimeter(width) / RING_MIN_ARC);
+    expect(limLayout(roomy, width)).toBe('ORBIT');
+    expect(limLayout(roomy + 1, width)).toBe('SPINE');
+  });
+});
+
+describe('a spine connector leaves the hub, runs the gutter and turns out', () => {
+  it('ends on the node’s own edge rather than in the middle of its label', () => {
+    const path = spinePath([158, 60], [230, 300]);
+    expect(path.endsWith('L 230 300')).toBe(true);
+    expect(path.startsWith('M 158 60')).toBe(true);
+  });
+
+  it('runs down the gutter before it turns, so it cannot cross a row above', () => {
+    const path = spinePath([158, 60], [230, 300], 12);
+    // Straight down the trunk's own x to just above the target row, and only
+    // then out. A direct line from the hub to the last row would be drawn
+    // across every node between them.
+    expect(path).toContain('L 158 288');
+  });
+
+  it('does not double back when the node is level with or beside the hub', () => {
+    // Degenerate cases: an elbow here would leave the gutter and come back.
+    expect(spinePath([158, 60], [160, 300])).toBe('M 158 60 L 158 300 L 160 300');
+    expect(spinePath([158, 60], [230, 66])).toBe('M 158 60 L 158 66 L 230 66');
   });
 });
 
@@ -209,5 +315,81 @@ describe('drilling in and back keeps a person oriented', () => {
       // vocabulary — Discovery, Qualification, Monetization and the rest.
       expect(titles.has(label)).toBe(true);
     }
+  });
+});
+
+/**
+ * The rule §29 states about every map, asked of the arrangement that changed.
+ *
+ * *Every map carries a synchronized outline built in the same pass, so the
+ * screen-reader path and the picture cannot describe different graphs.* A
+ * narrow layout that dropped a node to make room would satisfy every geometry
+ * assertion above and break that — so what is pinned here is the count, at both
+ * arrangements, from one projection.
+ *
+ * jsdom has no layout engine, so the canvas's width is stubbed. That is the
+ * honest limit of this file and the reason `scripts/visual-qa.ts` measures the
+ * same two facts — nodes drawn against rows listed — on a real screen.
+ */
+describe('the narrow arrangement is the same graph, not a smaller one', () => {
+  function atCanvasWidth(width: number, body: () => void): void {
+    const previous = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get(): number {
+        return width;
+      },
+    });
+    try {
+      body();
+    } finally {
+      if (previous) Object.defineProperty(HTMLElement.prototype, 'clientWidth', previous);
+    }
+  }
+
+  it('marks which arrangement it drew, so a capture can be read back', () => {
+    atCanvasWidth(316, () => {
+      const { container } = render(
+        <Constellation map={sampleMap()} focusId="site:prj" onFocus={() => {}} />,
+      );
+      expect(container.querySelector('.lim-canvas')?.getAttribute('data-layout')).toBe('spine');
+    });
+    cleanup();
+    atCanvasWidth(866, () => {
+      const { container } = render(
+        <Constellation map={sampleMap()} focusId="site:prj" onFocus={() => {}} />,
+      );
+      expect(container.querySelector('.lim-canvas')?.getAttribute('data-layout')).toBe('orbit');
+    });
+  });
+
+  it('draws the nucleus and every child at both arrangements', () => {
+    const map = sampleMap();
+    const children = map.nodes.filter((entry) => entry.parentId === 'site:prj').length;
+    for (const width of [316, 286, 647, 866]) {
+      cleanup();
+      atCanvasWidth(width, () => {
+        const { container } = render(
+          <Constellation map={map} focusId="site:prj" onFocus={() => {}} />,
+        );
+        expect(container.querySelectorAll('.lim-node').length, `at ${width}px`).toBe(
+          children + 1,
+        );
+      });
+    }
+  });
+
+  it('stops positioning nodes by hand once the grid is placing them', () => {
+    // Percentage coordinates left on a grid item would fight the cell it is in,
+    // which is how a "responsive" absolute layout ends up overlapping anyway.
+    atCanvasWidth(316, () => {
+      const { container } = render(
+        <Constellation map={sampleMap()} focusId="site:prj" onFocus={() => {}} />,
+      );
+      for (const node of container.querySelectorAll<HTMLElement>('.lim-node')) {
+        expect(node.style.left).toBe('');
+        expect(node.style.top).toBe('');
+      }
+    });
   });
 });

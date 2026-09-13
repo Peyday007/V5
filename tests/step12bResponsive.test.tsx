@@ -313,3 +313,80 @@ describe('what the phone journey found', () => {
     expect(SHELL.match(/function DepthChoice/g)).toHaveLength(1);
   });
 });
+
+/**
+ * What measuring the constellation found, which every assertion above passed.
+ *
+ * The owner's rejection named an obstructed diagram, and the number behind it
+ * was taken by `scripts/visual-qa.ts --only=constellation` against a real
+ * server: at a 390px viewport the project constellation drew **nine nodes with
+ * nine overlapping pairs on a 316×316 canvas, worst pair 2385px²**, and at 360px
+ * thirteen pairs. The 953px intermediate — which nothing had ever measured —
+ * overlapped too, by one pair.
+ *
+ * Two rules in this stylesheet were making it worse rather than better, and both
+ * are gone: a container query turned the canvas into a **square** below 520px,
+ * which is shorter than a 16/10 box at the same width and took away the one axis
+ * the ring had room on; and it widened a node to `46cqw`, which is a bigger box
+ * in a smaller space.
+ *
+ * What replaced them is a different arrangement rather than the same one
+ * squeezed — a grid, where two nodes in different cells are disjoint whatever
+ * the label does. These pin the rules that make that true, in the spirit of the
+ * two blocks above: the assertion cannot see the overlap, so it holds the
+ * decision that removed it.
+ */
+describe('what measuring the constellation found', () => {
+  const rule = (selector: string): string => {
+    const at = CSS.indexOf(selector);
+    expect(at, `no rule for ${selector}`).toBeGreaterThan(-1);
+    return CSS.slice(at, CSS.indexOf('}', at));
+  };
+
+  it('never squeezes the canvas into a square on a narrow screen', () => {
+    // The square was a container query, and it is the thing that has to stay
+    // absent: it is invisible to every other test here and it made the pile-up
+    // worse at exactly the width it was written for.
+    expect(CSS).not.toMatch(/aspect-ratio:\s*1\s*\/\s*1/);
+    expect(CSS).not.toMatch(/max-width:\s*46cqw/);
+  });
+
+  it('takes the canvas’s proportions from the component, in one place', () => {
+    /*
+     * The layout decision needs the canvas's height to know how much room the
+     * ellipse has, and the stylesheet needs it to size the box. One of them owns
+     * it — `Constellation.tsx` — and this reads it, so the two cannot drift into
+     * describing different canvases.
+     */
+    expect(rule('.lim-canvas {')).toMatch(/aspect-ratio:\s*var\(--lim-aspect/);
+  });
+
+  it('places the narrow arrangement with a grid rather than with arithmetic', () => {
+    /*
+     * The whole of the fix, as a property rather than a tuning. Two nodes in two
+     * cells cannot be painted over each other however long their labels are,
+     * which is what "no overlap" now means here — where the ring's own record is
+     * only that it was measured not to overlap.
+     */
+    const nodes = rule(".lim-canvas[data-layout='spine'] .lim-nodes {");
+    expect(nodes).toMatch(/display:\s*grid/);
+    expect(nodes).toMatch(/grid-template-columns:\s*1fr 1fr/);
+    // The column gap is the trunk's gutter: every connector runs down the middle
+    // of the canvas, so a route to the last row cannot cross the rows above it.
+    expect(nodes).toMatch(/gap:\s*var\(--gap-4\) var\(--gap-5\)/);
+
+    const node = rule(".lim-canvas[data-layout='spine'] .lim-node {");
+    expect(node).toMatch(/position:\s*static/);
+    expect(node).toMatch(/transform:\s*none/);
+
+    const hub = rule(".lim-canvas[data-layout='spine'] .lim-node.is-centre {");
+    expect(hub).toMatch(/grid-column:\s*1 \/ -1/);
+  });
+
+  it('keeps a long name inside its own node instead of over its neighbour', () => {
+    // `Decision Routing Rules · 2` at a 119px column has no space to break at in
+    // its longest token, which is the same defect `.rs-foundation-name` already
+    // carries this declaration for.
+    expect(rule('.lim-node {')).toMatch(/overflow-wrap:\s*anywhere/);
+  });
+});
