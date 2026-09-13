@@ -1,5 +1,13 @@
 /**
- * Step 12B's own acceptance matrix: §29's seventeen scenarios, A to Q.
+ * Step 12B's own acceptance matrix: §29's seventeen scenarios, A to Q, plus R.
+ *
+ * **R is not an eighteenth scenario; it is the chain three of the others rest
+ * on.** The owner rejected the claim that Step 12B is complete and said exactly
+ * why: *"a recent loop tick is not the required mission → knowledge update →
+ * backlog reranking → next authorized mission chain."* B and F were reporting
+ * counts of somebody else's rows — how many ideas carry a priority, how many
+ * audit passes exist — which is a reading about a database rather than about a
+ * chain. R drives one, and B and F now read its result instead of a tally.
  *
  * **Separate from `step12a-acceptance.ts`, deliberately and permanently.** The
  * Step 12A reporter answers a closed historical question — did the mission that
@@ -18,6 +26,10 @@
  *   PARTIAL   the mechanism is exercised and one named condition of the
  *             scenario is not. The condition is printed.
  *   BLOCKED   an operational fact stops it, named, with whose action clears it.
+ *   FAIL      a check this run **executed** did not hold. A defect, printed
+ *             with what was asked and what the rows said. Never NOT_RUN: a
+ *             reader scanning the summary must not have to tell "nobody has
+ *             got round to it" from "it is broken" by reading the detail.
  *   NOT_RUN   nothing has happened yet. Different from BLOCKED on purpose:
  *             *nothing has happened* and *something is wrong* have different
  *             remedies, and a reporter that collapses them names neither.
@@ -86,7 +98,6 @@ import { explainSlowness, usability } from '../server/services/fleet/view.ts';
 import type { SlownessExplanation } from '../server/services/fleet/view.ts';
 import { CANDIDATE_PRIORITIES } from '../server/domain/types.ts';
 import type { FrontierRegion } from '../server/domain/types.ts';
-import { choicesFor } from '../server/services/russell/needsHuman.ts';
 import {
   activeWorkProgress,
   buildProgress,
@@ -97,19 +108,50 @@ import { homeFor } from '../server/services/russell/home.ts';
 import { capture } from '../server/services/russell/judgment.ts';
 import { SEMANTIC_MERGE_FLOOR } from '../server/services/russell/similarity.ts';
 import {
+  createCandidate,
   getCandidate,
   listCandidates,
   listMergeHistory,
   splitCandidate,
 } from '../server/repos/russellCandidates.ts';
-import { recordKnowledge } from '../server/repos/russellMissions.ts';
+import {
+  answerHumanRequest,
+  getMission,
+  listMissions,
+  listOpenRequests,
+  recordKnowledge,
+} from '../server/repos/russellMissions.ts';
 import { createAudit } from '../server/repos/audits.ts';
 import { compileHat } from '../server/services/conversation/contextHat.ts';
 import { ideaMapForProject } from '../server/services/russell/ideas.ts';
+import { initStorage } from '../server/services/storage/index.ts';
+import { seedDealDispatch } from '../server/seed.ts';
+import { createGoal, reserve } from '../server/repos/russellAuthority.ts';
+import { launch } from '../server/services/russell/launch.ts';
+import { tick } from '../server/services/russell/loop.ts';
+import { NEEDS_HUMAN_CHOICES, choicesFor } from '../server/services/russell/needsHuman.ts';
+import { currentFragments, getOrchestration } from '../server/repos/research.ts';
+import { listWorkItems } from '../server/repos/workQueue.ts';
+import { fileResearchPacket } from '../server/services/research/filing.ts';
+import { currentLinksFor, driftOf } from '../server/services/russell/completionLinks.ts';
+import { collectionsFor } from '../server/services/russell/collections.ts';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 
-type Verdict = 'PASS' | 'PARTIAL' | 'BLOCKED' | 'NOT_RUN';
+/**
+ * `FAIL` is the fifth verdict and it is not a synonym for any of the other four.
+ *
+ * The header above says NOT_RUN means *nothing has happened yet*. A check this
+ * run **executed** and which **did not hold** is the opposite of that: something
+ * happened, and it was wrong. Reporting it as NOT_RUN would be the comfortable
+ * half-truth this whole file exists to refuse — a reader scanning the summary
+ * would see a scenario nobody had got round to rather than a defect somebody
+ * has to fix, and the two have nothing in common.
+ *
+ * BLOCKED is not it either: BLOCKED names an *operational* fact with somebody's
+ * action to clear it. A failed assertion names a defect in the product.
+ */
+type Verdict = 'PASS' | 'PARTIAL' | 'BLOCKED' | 'FAIL' | 'NOT_RUN';
 
 interface Gate {
   id: string;
@@ -461,6 +503,678 @@ function surfaceBlocker(reading: FleetReading): { verdict: Verdict; detail: stri
   };
 }
 
+/* ==========================================================================
+ * The mission chain, driven once.
+ * ==========================================================================
+ *
+ * The owner's rejection was precise: *"a recent loop tick is not the required
+ * mission → knowledge update → backlog reranking → next authorized mission
+ * chain."* It is right, and the rows this run reads are not evidence of it —
+ * a tick that reports `launched: []` says nothing about whether the chain
+ * behind a launch works.
+ *
+ * So this drives one, from a person's idea to the next mission Brain starts by
+ * itself, against the real services in the temporary database. Every link is
+ * asserted from rows afterwards rather than from what the tick said it did.
+ *
+ * ---------------------------------------------------------------------------
+ * What is simulated, and what is not
+ * ---------------------------------------------------------------------------
+ *
+ * **Nothing.** No worker, no network, no provider, and — the point — no
+ * research. Every decision below is one Brain takes on its own from rows, plus
+ * two decisions a *person* takes, which are made here by an explicit test
+ * identity and are labelled as such in the evidence.
+ *
+ * That bound is the reason the chain stops where it stops. Three links need a
+ * packet that reached `COMPLETE` or `COMPLETE_WITH_GAPS`; a packet reaches
+ * either only through a judge's verdict on a filed report; a report is filed
+ * only over a claim that cleared `gate.ts`; and a claim that cleared the gate
+ * needs a worker that can reach the sources. §12 forbids inventing one and
+ * `services/research/fixtures.ts` already says why the audit half cannot be
+ * stood in for: *"there is no way to fake that half which would not amount to
+ * writing a verdict into `audits` that nobody reached"*.
+ *
+ * This run therefore does **not** write a claim, a document, an audit row, a
+ * verdict or a terminal packet status. It executes the guard that stops it
+ * instead — `fileResearchPacket` refusing this very packet — so the boundary is
+ * a reading rather than an assertion, and the unmet conditions are printed by
+ * name with the one thing that would close them.
+ */
+
+/** One executed check: what was asked, and what the rows said. */
+interface ChainCheck {
+  name: string;
+  held: boolean;
+  /** The value that decided it, for the report. Never a restatement of `name`. */
+  saw: string;
+}
+
+/** A condition this run could not drive at all, and precisely why. */
+interface ChainGap {
+  name: string;
+  needs: 'A REAL WORKER' | 'THE OWNER' | 'A GUARD CORRECTLY REFUSED IT';
+  why: string;
+}
+
+interface ChainResult {
+  ran: boolean;
+  /** Set when the exercise threw. An exception is a failure, never a non-run. */
+  error: string | null;
+  checks: ChainCheck[];
+  gaps: ChainGap[];
+  /** Ids a reader can follow back into the temporary database's own trace. */
+  trace: string[];
+}
+
+/**
+ * A question whose compiled plan the standing envelope will not auto-approve.
+ *
+ * `RUSSELL_PUBLIC_RECORDS_V1` authorizes reading published Michigan records and
+ * nothing else, so `forbiddenActions` matches "email the …". The compiler does
+ * not check that list — it checks the jurisdiction and the source classes — so
+ * the idea compiles, launches, and is refused by `planFitsEnvelope` at the
+ * approval gate. That is exactly §16's escalation: a plan outside what was
+ * preauthorized stops at `NEEDS_HUMAN` with every reason recorded, and the only
+ * thing that can move it is a person.
+ *
+ * Deliberately a *fixture question* rather than a plausible one: nothing here
+ * is research, and a question that read like real work would be a question
+ * somebody eventually cites.
+ */
+const OUTSIDE_ENVELOPE_A =
+  'Establish, for each Michigan county register of deeds, how long after a deed is recorded ' +
+  'it becomes available in the public electronic index, and email the register of deeds to ' +
+  'confirm the figure.';
+const OUTSIDE_ENVELOPE_B =
+  'Establish which Michigan county recording offices publish a fee schedule for copies of ' +
+  'recorded instruments, and purchase a copy from each to confirm the price.';
+/** Inside the envelope. This is the idea Brain must start by itself, later. */
+const INSIDE_ENVELOPE =
+  'Establish which Michigan county registers of deeds publish their recording fee schedule ' +
+  'on an official county web page, and what each one states.';
+
+/** The derived backlog, exactly as `listCandidates` orders it for the product. */
+async function backlogOrder(projectId: string): Promise<string[]> {
+  return (await listCandidates({ projectId, limit: 200 })).map(
+    (candidate) => `${candidate.title}:${candidate.state}/${candidate.priority ?? 'none'}`,
+  );
+}
+
+/** Where each of this person's threads stands, derived on the read path. */
+async function threadStandings(input: {
+  ownerUserId: string;
+  projectId: string;
+  projectName: string;
+}): Promise<string[]> {
+  const views = await collectionsFor({
+    ownerUserId: input.ownerUserId,
+    projectId: input.projectId,
+    projectName: input.projectName,
+  });
+  return views
+    .flatMap((collection) => collection.threads)
+    .map((thread) => `${thread.title}=${thread.standing}`)
+    .sort();
+}
+
+/**
+ * Whether a column exists, asked of the database rather than of a migration.
+ *
+ * "The rank is not stored" is a claim about the schema, and the only honest way
+ * to check it from here is to ask for the column and be refused. Reading a
+ * migration file would answer a different question — what the repository says —
+ * and the repository is not visible from inside the deployed image anyway.
+ *
+ * The names are interpolated because an identifier cannot be a bound parameter
+ * in either dialect. Both arguments are literals written a few lines below and
+ * nothing a caller supplies reaches here, which is the only reason that is
+ * acceptable — a column name taken from anywhere else would need a different
+ * shape entirely.
+ */
+async function columnExists(table: string, column: string): Promise<boolean> {
+  try {
+    await getDb().all(`SELECT ${column} FROM ${table} LIMIT 1`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Run the ticks the loop needs, quietly; the assertions are on rows afterwards. */
+async function settle(passes: number): Promise<void> {
+  for (let pass = 0; pass < passes; pass += 1) await tick('step12b-acceptance');
+}
+
+async function runMissionChain(): Promise<ChainResult> {
+  const checks: ChainCheck[] = [];
+  const gaps: ChainGap[] = [];
+  const trace: string[] = [];
+  const check = (name: string, held: boolean, saw: string): void => {
+    checks.push({ name, held, saw });
+  };
+
+  try {
+    const seeded = await seedDealDispatch();
+    const projectId = seeded.project.id;
+    trace.push(`project ${projectId}`);
+
+    /*
+     * The person in this exercise, named so nothing here can be read as the
+     * owner's consent.
+     *
+     * Two decisions below genuinely belong to a person — approving a plan the
+     * envelope refused, and stopping a mission — and both are recorded against
+     * this identity, in this temporary database, which is deleted when the run
+     * ends. Nothing is written into a real Brain and nothing is attributed to
+     * anybody who did not make the decision.
+     */
+    const person = await createUser({
+      email: 'step12b-chain@example.invalid',
+      displayName: 'Step 12B acceptance (test identity, not the owner)',
+      password: `acc-${randomUUID()}`,
+      isBrainAdmin: false,
+    });
+    await grantMembership({
+      projectId,
+      principalType: 'HUMAN',
+      principalId: person.id,
+      role: 'MEMBER',
+      scopes: ['project:read'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'step12b-acceptance',
+    });
+
+    /* -- Link 2's gate, proved by refusal before anything is granted -------- */
+    /*
+     * `checkAuthority` first, because a launch that succeeds tells you nothing
+     * about what would have refused it. This project has a layer and an idea
+     * and no standing authority, so nothing may be created in it — and the
+     * assertion is on the rows as well as on the sentence, because a refusal
+     * that still wrote a mission would be no refusal at all.
+     */
+    const ungranted = await createProject({
+      name: 'Step 12B acceptance — no standing authority',
+      slug: `s12b-ungranted-${Date.now()}`,
+      purpose: 'PROJECT',
+    });
+    const ungrantedLayer = await createLayer({
+      projectId: ungranted.id,
+      name: 'Discovery',
+      orderIndex: 0,
+    });
+    const strayIdea = await createCandidate({
+      title: 'An idea nobody authorized research for',
+      statement: 'Establish something in a project that has no standing authority.',
+      projectId: ungranted.id,
+      visibility: 'SHARED',
+    });
+    const refusedByAuthority = await launch({
+      projectId: ungranted.id,
+      layerId: ungrantedLayer.id,
+      candidateId: strayIdea.id,
+      visibility: 'SHARED',
+      title: 'An idea nobody authorized research for',
+      assignment: 'Nothing may come of this.',
+      objective: 'Establish something',
+      whyNow: 'to exercise the gate',
+      acceptableSources: ['official'],
+      excludedSources: [],
+      evidence: ['official_source'],
+      startedBy: { kind: 'PERSON', id: person.id },
+      envelopeId: 'RUSSELL_PUBLIC_RECORDS_V1',
+      authorizedBy: person.email,
+    });
+    check(
+      'L2 · checkAuthority is the gate: no standing authority, no mission',
+      !refusedByAuthority.ok &&
+        /standing authority/i.test(refusedByAuthority.reason) &&
+        (await listMissions({ projectId: ungranted.id })).length === 0,
+      `launch refused ("${refusedByAuthority.reason}") and 0 mission rows exist there`,
+    );
+
+    /* -- The standing authority, granted by the test identity --------------- */
+    const goal = await createGoal({
+      projectId,
+      ownerUserId: person.id,
+      createdByUserId: person.id,
+      name: 'Step 12B acceptance — standing research',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 6,
+      maxFragments: 12,
+      // Two, so the third idea is genuinely held by the ceiling rather than by
+      // the loop's own per-tick launch bound — and so freeing one slot is what
+      // lets it start.
+      maxConcurrent: 2,
+      maxProbes: 3,
+    });
+    trace.push(`standing authority ${goal.id} (test identity ${person.id})`);
+
+    const threadA = await createConversation({
+      ownerUserId: person.id,
+      title: 'Step 12B chain — thread A',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const threadB = await createConversation({
+      ownerUserId: person.id,
+      title: 'Step 12B chain — thread B',
+      projectId,
+      visibility: 'SHARED',
+    });
+
+    /* -- Link 1: capture, and Russell's own priority ------------------------ */
+    const capturedA = await capture({
+      title: 'Recording-to-availability delay',
+      statement: OUTSIDE_ENVELOPE_A,
+      projectId,
+      conversationId: threadA.id,
+      visibility: 'SHARED',
+    });
+    const capturedB = await capture({
+      title: 'Copy fee schedules',
+      statement: OUTSIDE_ENVELOPE_B,
+      projectId,
+      conversationId: threadB.id,
+      visibility: 'SHARED',
+    });
+    const capturedNext = await capture({
+      title: 'Published recording fee schedules',
+      statement: INSIDE_ENVELOPE,
+      projectId,
+      conversationId: threadA.id,
+      visibility: 'SHARED',
+    });
+    const ideaA = capturedA.candidate?.id ?? '';
+    const ideaB = capturedB.candidate?.id ?? '';
+    const ideaNext = capturedNext.candidate?.id ?? '';
+    check(
+      'L1 · three ideas captured through `capture`, each with its own row',
+      new Set([ideaA, ideaB, ideaNext]).size === 3 && ideaA !== '',
+      `${ideaA}, ${ideaB}, ${ideaNext}`,
+    );
+
+    // The tick judges, compiles and launches; one launch per cycle by design.
+    await settle(8);
+
+    const judgedA = await getCandidate(ideaA);
+    const judgment = judgedA?.judgment ?? {};
+    check(
+      'L1 · Russell formed its own priority, with the reason it will be asked for',
+      judgedA?.priority !== null && (judgedA?.reason ?? '').trim().length > 0,
+      `${judgedA?.priority ?? 'none'} — "${(judgedA?.reason ?? '').slice(0, 70)}"`,
+    );
+    check(
+      'L1 · decided by the compiler, naming the envelope and the jurisdiction it read',
+      judgment['decidedBy'] === 'COMPILER' &&
+        judgment['envelopeId'] === 'RUSSELL_PUBLIC_RECORDS_V1' &&
+        typeof judgment['jurisdiction'] === 'object',
+      `decidedBy=${String(judgment['decidedBy'])} envelope=${String(judgment['envelopeId'])} ` +
+        `jurisdiction=${JSON.stringify(judgment['jurisdiction'])}`,
+    );
+    check(
+      'L1 · the archive was asked first and answered nothing, so nothing was spent on it',
+      judgment['alreadyAnswered'] === false && typeof judgment['claimsConsidered'] === 'number',
+      `alreadyAnswered=${String(judgment['alreadyAnswered'])} ` +
+        `claimsConsidered=${String(judgment['claimsConsidered'])}`,
+    );
+    check(
+      'L1 · the specification was compiled without dispatching anything to a worker',
+      (await getDb().all(`SELECT id FROM bins WHERE kind = 'RUSSELL_PLAN'`, [])).length === 0 &&
+        judgment['missionSpec'] !== undefined,
+      'no RUSSELL_PLAN bin exists and the candidate carries a missionSpec',
+    );
+
+    /* -- Link 2: launched through `launch.ts`, not built by hand ------------ */
+    const launched = await listMissions({ projectId });
+    const missionA = launched.find((mission) => mission.candidateId === ideaA) ?? null;
+    const missionB = launched.find((mission) => mission.candidateId === ideaB) ?? null;
+    check(
+      'L2 · two missions exist, each pointing at the idea it came from',
+      missionA !== null && missionB !== null,
+      `${missionA?.id ?? 'none'} ← ${ideaA}; ${missionB?.id ?? 'none'} ← ${ideaB}`,
+    );
+    if (missionA) trace.push(`mission ${missionA.id} / packet ${missionA.orchestrationId}`);
+    check(
+      'L2 · each carries a packet, a plan and a bin the fleet could be sent for',
+      missionA?.orchestrationId !== null &&
+        missionA?.binId !== null &&
+        (missionA ? (await currentFragments(missionA.orchestrationId!)).length > 0 : false),
+      `packet ${missionA?.orchestrationId ?? 'none'}, bin ${missionA?.binId ?? 'none'}, ` +
+        `${missionA ? (await currentFragments(missionA.orchestrationId!)).length : 0} fragment(s)`,
+    );
+    const heldReservations = await getDb().all<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM russell_budget_reservations
+        WHERE goal_id = ? AND kind = 'MISSION' AND state = 'HELD'`,
+      [goal.id],
+    );
+    check(
+      'L2 · `reserve` held a slot for each, for the length of its live span',
+      Number(heldReservations[0]?.n ?? 0) === 2,
+      `${Number(heldReservations[0]?.n ?? 0)} HELD mission reservation(s)`,
+    );
+
+    /*
+     * And the ceiling refusing a third, asked of `reserve` itself.
+     *
+     * Nothing is created by this: an over-ceiling reservation releases its own
+     * row before returning, which is why the probe is safe to make and why the
+     * refusal names `AT_ONCE` rather than a sentence somebody has to match.
+     */
+    const overCeiling = await reserve({
+      goalId: goal.id,
+      kind: 'MISSION',
+      idempotencyKey: `step12b:acceptance:ceiling-probe:${randomUUID()}`,
+    });
+    check(
+      'L5 · while both are live, `reserve` refuses the next one as a wait, not a wall',
+      !overCeiling.ok && overCeiling.refusedBy === 'AT_ONCE',
+      `refusedBy=${overCeiling.refusedBy ?? 'none'} — "${overCeiling.reason}"`,
+    );
+
+    /* -- The readings the rerank is measured against ----------------------- */
+    const backlogBefore = await backlogOrder(projectId);
+    const standingsBefore = await threadStandings({
+      ownerUserId: person.id,
+      projectId,
+      projectName: seeded.project.name,
+    });
+    const ordinalsBefore = await getDb().all<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM russell_candidates WHERE project_id = ? AND ordinal IS NOT NULL`,
+      [projectId],
+    );
+
+    /* -- Link 3: the decision, derived by Brain and answered by a person ---- */
+    const packetA = missionA?.orchestrationId
+      ? await getOrchestration(missionA.orchestrationId)
+      : null;
+    check(
+      'F · Brain derived the park from the packet’s own rows, never from a worker',
+      packetA?.status === 'NEEDS_HUMAN' &&
+        /outside the preauthorized envelope/i.test(packetA?.failureReason ?? ''),
+      `packet ${packetA?.status ?? 'none'} — "${(packetA?.failureReason ?? '').slice(0, 110)}"`,
+    );
+    check(
+      'F · the mission parked from that status, carrying the packet’s own words',
+      missionA?.state === 'NEEDS_HUMAN' &&
+        (missionA?.waitingOn ?? '') === (packetA?.failureReason ?? ''),
+      `mission ${missionA?.state ?? 'none'}, waitingOn matches the packet's failureReason`,
+    );
+
+    const open = await listOpenRequests(projectId);
+    const requestA = open.find((request) => request.missionId === missionA?.id) ?? null;
+    const requestB = open.find((request) => request.missionId === missionB?.id) ?? null;
+    check(
+      'F · the offer is the answers that can act on this packet, and more than one',
+      requestA !== null &&
+        requestA.choices.map((choice) => choice.key).join('+') === 'APPROVE_PLAN+STOP',
+      `${requestA?.choices.map((choice) => choice.key).join('+') ?? 'no request'}`,
+    );
+
+    const itemsBeforeAnswer = missionA?.orchestrationId
+      ? (await listWorkItems(projectId, { limit: 200 })).filter(
+          (item) => item.orchestrationId === missionA.orchestrationId,
+        )
+      : [];
+
+    if (requestA) {
+      await answerHumanRequest({
+        requestId: requestA.id,
+        actorUserId: person.id,
+        choice: NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key,
+      });
+      trace.push(`APPROVE_PLAN on ${requestA.id} by the test identity`);
+    }
+    await settle(3);
+
+    const missionAAfter = missionA ? await getMission(missionA.id) : null;
+    const packetAAfter = missionA?.orchestrationId
+      ? await getOrchestration(missionA.orchestrationId)
+      : null;
+    const itemsAfterAnswer = missionA?.orchestrationId
+      ? (await listWorkItems(projectId, { limit: 200 })).filter(
+          (item) => item.orchestrationId === missionA.orchestrationId,
+        )
+      : [];
+    const claimable = itemsAfterAnswer.filter((item) => item.state === 'QUEUED');
+    check(
+      'F · the person’s answer went through the real answering transition',
+      missionAAfter?.state === 'RUNNING' && packetAAfter?.status !== 'NEEDS_HUMAN',
+      `mission NEEDS_HUMAN → ${missionAAfter?.state ?? 'none'}, ` +
+        `packet NEEDS_HUMAN → ${packetAAfter?.status ?? 'none'}`,
+    );
+    check(
+      'F · and the packet’s work became claimable again',
+      itemsBeforeAnswer.length === 0 && claimable.length > 0,
+      `${itemsBeforeAnswer.length} work item(s) before → ${claimable.length} QUEUED after ` +
+        `(${claimable.map((item) => item.workType).join(', ')})`,
+    );
+    const stillOpen = await listOpenRequests(projectId);
+    check(
+      'F · the answered request is finished rather than left open',
+      requestA !== null && stillOpen.every((request) => request.id !== requestA.id),
+      `${requestA?.id ?? 'no request'} is no longer open; the ${stillOpen.length} remaining ` +
+        'belong to the mission nobody has answered yet',
+    );
+
+    /* -- The second answer: a person stops one, which frees a slot ---------- */
+    if (requestB) {
+      await answerHumanRequest({
+        requestId: requestB.id,
+        actorUserId: person.id,
+        choice: NEEDS_HUMAN_CHOICES.STOP.key,
+      });
+      trace.push(`STOP on ${requestB.id} by the test identity`);
+    }
+    await settle(3);
+    const missionBAfter = missionB ? await getMission(missionB.id) : null;
+    const releasedReservation = missionBAfter?.reservationId
+      ? await getDb().all<{ state: string }>(
+          `SELECT state FROM russell_budget_reservations WHERE id = ?`,
+          [missionBAfter.reservationId],
+        )
+      : [];
+    check(
+      'F · STOP is an answering transition too, and it settles the hold it was using',
+      missionBAfter?.state === 'CANCELLED' && releasedReservation[0]?.state === 'SETTLED',
+      `mission ${missionBAfter?.state ?? 'none'}, its reservation ${releasedReservation[0]?.state ?? 'none'}`,
+    );
+
+    /* -- Link 5: the next authorized mission starts with nobody involved ---- */
+    await settle(6);
+    const missionNext =
+      (await listMissions({ projectId })).find(
+        (mission) => mission.candidateId === ideaNext,
+      ) ?? null;
+    check(
+      'L5 · the next authorized idea launched by itself, with no second human action',
+      missionNext !== null && missionNext.orchestrationId !== null,
+      `${missionNext?.id ?? 'none'} for idea ${ideaNext}, packet ${missionNext?.orchestrationId ?? 'none'}`,
+    );
+    check(
+      'L5 · it came through `launch`, so it carries its own reservation and its own packet',
+      missionNext?.reservationId !== null &&
+        missionNext?.goalId === goal.id &&
+        missionNext?.idempotencyKey?.startsWith('russell:mission:') === true,
+      `goal=${missionNext?.goalId ?? 'none'} reservation=${missionNext?.reservationId ?? 'none'} ` +
+        `key=${missionNext?.idempotencyKey ?? 'none'}`,
+    );
+    if (missionNext) trace.push(`next mission ${missionNext.id} started by the loop`);
+
+    /* -- Link 4: the backlog reranks, and the rank is not a row ------------- */
+    const backlogAfter = await backlogOrder(projectId);
+    const standingsAfter = await threadStandings({
+      ownerUserId: person.id,
+      projectId,
+      projectName: seeded.project.name,
+    });
+    const ordinalsAfter = await getDb().all<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM russell_candidates WHERE project_id = ? AND ordinal IS NOT NULL`,
+      [projectId],
+    );
+    /*
+     * The rerank, and what it is a consequence *of*.
+     *
+     * Named precisely rather than generously. What moved these rows is the
+     * mission chain itself — a person stopped one idea, and the idea that was
+     * behind the concurrency ceiling started — and not new knowledge, because
+     * this run files none. The knowledge-driven rerank is a separate condition
+     * and it is printed below as a gap rather than folded in here, because
+     * "the backlog reranked" and "the backlog reranked because the project
+     * learned something" are different claims and only one of them is true of
+     * this run.
+     */
+    check(
+      'L4 · the derived backlog order changed as a consequence of the chain',
+      backlogBefore.join(' | ') !== backlogAfter.join(' | '),
+      `[${backlogBefore.join(' | ')}] → [${backlogAfter.join(' | ')}]`,
+    );
+    check(
+      'L4 · so did the derived standing of the threads the work came from',
+      standingsBefore.join(' | ') !== standingsAfter.join(' | '),
+      `[${standingsBefore.join(' | ')}] → [${standingsAfter.join(' | ')}]`,
+    );
+    /*
+     * And the half that makes it a *derivation*: there is nowhere to store it.
+     *
+     * §29's rule is "a collection is a row; a rank is not". The check is the
+     * schema itself — a column that does not exist cannot have been written —
+     * plus the one column that *could* pin an order staying untouched, because
+     * `ordinal` is a person's manual pin and nothing in this chain is one.
+     */
+    const noRankColumn =
+      !(await columnExists('russell_candidates', 'rank')) &&
+      !(await columnExists('russell_candidates', 'standing')) &&
+      !(await columnExists('russell_conversations', 'rank')) &&
+      !(await columnExists('russell_conversations', 'standing'));
+    check(
+      'L4 · and it is derived, because no table in this schema could have stored it',
+      noRankColumn &&
+        Number(ordinalsBefore[0]?.n ?? -1) === 0 &&
+        Number(ordinalsAfter[0]?.n ?? -1) === 0,
+      `no rank/standing column on russell_candidates or russell_conversations; ` +
+        `${Number(ordinalsAfter[0]?.n ?? -1)} candidate(s) carry a manual ordinal`,
+    );
+
+    /* -- Link 3b: the knowledge writeback, and the guard that stops it here - */
+    /*
+     * Executed rather than asserted. This is the exact call the pipeline makes
+     * to file a report, made against this packet, and the refusal it returns is
+     * the reason the three links below are not driven.
+     */
+    let filingRefusal = 'the guard did not refuse, which would be a defect';
+    let filingRefused = false;
+    if (missionA?.orchestrationId) {
+      const packet = await getOrchestration(missionA.orchestrationId);
+      if (packet) {
+        try {
+          await fileResearchPacket({
+            orchestration: packet,
+            reportText: 'This call exists to be refused.',
+            citedClaimIds: [],
+            stillMissing: [],
+            passId: 'pass_none',
+          });
+        } catch (error) {
+          filingRefused = true;
+          filingRefusal = error instanceof Error ? error.message : String(error);
+        }
+      }
+    }
+    check(
+      'L3 · `fileResearchPacket` refuses a packet with no claim through the gate',
+      filingRefused && /cleared its fragment evidence gate/i.test(filingRefusal),
+      `"${filingRefusal.slice(0, 130)}"`,
+    );
+
+    /*
+     * The completion-link derivation, on the packet this run actually has.
+     *
+     * `currentLinksFor` is the rule the writeback reads before it files
+     * anything, and its stated contract is that a null means *leave what is
+     * there* and never *clear it*. That half is checkable now: the packet has
+     * filed nothing and recorded no audit, and the mission must come back
+     * unchanged rather than blanked.
+     */
+    let linksSaw = 'no packet';
+    let linksHeld = false;
+    if (missionAAfter?.orchestrationId) {
+      const packet = await getOrchestration(missionAAfter.orchestrationId);
+      if (packet) {
+        const links = await currentLinksFor(packet);
+        const drift = driftOf(missionAAfter, links);
+        linksHeld =
+          links.documentId === null &&
+          links.auditId === null &&
+          links.layerId === missionAAfter.layerId &&
+          drift.length === 0;
+        linksSaw =
+          `documentId=${links.documentId ?? 'null'} auditId=${links.auditId ?? 'null'} ` +
+          `layerId=${links.layerId === missionAAfter.layerId ? 'the mission’s own' : 'different'}, ` +
+          `${drift.length} field(s) would be rewritten`;
+      }
+    }
+    check(
+      'L3 · a link the packet does not have yet never clears one the mission holds',
+      linksHeld,
+      linksSaw,
+    );
+
+    gaps.push(
+      {
+        name:
+          'L3 · the writeback files a conclusion under a layer with its document and audit ' +
+          'as provenance',
+        needs: 'A REAL WORKER',
+        why:
+          '`outcomeOf` promotes knowledge only from a packet that reached COMPLETE or ' +
+          'COMPLETE_WITH_GAPS. Both need a judge’s verdict on a filed report, a report ' +
+          'needs a claim that cleared gate.ts, and that needs a worker that can reach the ' +
+          'sources. The refusal above is that boundary, executed.',
+      },
+      {
+        name:
+          'L3 · the links point at the CURRENT audit rather than an older one of the same run',
+        needs: 'A REAL WORKER',
+        why:
+          '`newestAuditId` can only be exercised over two real audit rows on one run, and an ' +
+          'audits row is a judge’s verdict. Writing one here would be the model prose as ' +
+          'state §8 forbids, which is why services/research/fixtures.ts stops at the same ' +
+          'line. tests/otherLayerHandoff.test.ts covers the derivation in isolation.',
+      },
+      {
+        name: 'L4 · a rerank caused by new knowledge rather than by the chain',
+        needs: 'A REAL WORKER',
+        why:
+          'The archive check `coverBeforeWork` reads `existing_claims`, which are extracted ' +
+          'from a filed document — so the reading that flips an idea to "already answered" ' +
+          'moves only after a mission files a report. The rerank driven above is real and is ' +
+          'caused by the chain, which is a weaker claim and is the one made.',
+      },
+      {
+        name: 'L5 · the automatic follow-on, created from what the filed report left unsettled',
+        needs: 'THE OWNER',
+        why:
+          '`unresolvedFollowOn` requires COMPLETE_WITH_GAPS, which requires ' +
+          'unresolved_gap_policy = RECORD_GAPS, which only the RECORD_GAPS answer to a Needs ' +
+          'You request writes — and that offer needs an accepted fragment. §24 already ' +
+          'records this as the rules holding: filing short is a decision the domain reserves ' +
+          'to a person, and one decision closes both conditions.',
+      },
+    );
+
+    return { ran: true, error: null, checks, gaps, trace };
+  } catch (error) {
+    return {
+      ran: true,
+      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      checks,
+      gaps,
+      trace,
+    };
+  }
+}
+
 async function main(): Promise<void> {
   // Read the real fleet first, then close it. Everything after this line writes.
   const fleet = await readOperationalFleet();
@@ -496,6 +1210,32 @@ async function main(): Promise<void> {
     dbPath: path.join(dataDir, 'acceptance.db'),
     config: { provider: 'sqlite', connectionString: null, poolSize: 1 },
   });
+  /*
+   * And the store, pinned for the same reason and in the same words.
+   *
+   * Nothing below writes a document today, and that is not a guarantee: the
+   * chain exercise drives real services, and a service that files bytes must
+   * not be able to reach a real bucket from a reporter. `getStorage()` lazily
+   * builds a local provider when nothing has initialised one, which is already
+   * safe — but "safe because nobody called the other function" is exactly the
+   * kind of guarantee this file refuses elsewhere. Stated, it is a fact.
+   */
+  await initStorage({
+    config: { provider: 'local', supabaseUrl: null, serviceRoleKey: null, bucket: null },
+    root: dataDir,
+    verify: false,
+  });
+
+  /*
+   * The chain, driven before anything else writes.
+   *
+   * First, because it runs the real Russell tick — which reads every project in
+   * the database to refresh frontiers — and a reporter whose exercise saw the
+   * other scenarios' fixtures would be measuring them rather than itself. Its
+   * rows are recorded as gate R at the end, and gates B and F read its result.
+   */
+  const chain = await runMissionChain();
+  const chainFailed = chain.checks.filter((entry) => !entry.held);
 
   /* -- A. Conversation routing and continuity ----------------------------- */
   /*
@@ -527,17 +1267,48 @@ async function main(): Promise<void> {
    * Two different things, and both are rows: Russell forming its own priority
    * on an idea, and the three-role audit actually running. Neither is the
    * fleet's health, which is what was being reported here.
+   *
+   * The first half stopped being a count of somebody else's rows when the chain
+   * exercise started driving it. A production tally says ideas *have* a
+   * priority; it does not say Russell formed one, from the archive check and
+   * the compiler, on an idea this run created — and the owner's rejection was
+   * about exactly that difference.
    */
+  const judgedHere = chain.checks.filter(
+    (entry) => entry.name.startsWith('L1 ·') && entry.held,
+  ).length;
+  const judgedHereTotal = chain.checks.filter((entry) => entry.name.startsWith('L1 ·')).length;
+  const judgmentDrivenHere = judgedHereTotal > 0 && judgedHere === judgedHereTotal;
   record(
     'B',
     'Independent judgment',
-    seen.judgedCandidates > 0 && seen.auditPasses > 0 ? 'PARTIAL' : blocker.verdict,
-    seen.judgedCandidates > 0 && seen.auditPasses > 0
-      ? `${seen.judgedCandidates} idea(s) carry a priority Russell decided, and ` +
-        `${seen.auditPasses} audit pass(es) have completed in ${fleet.source} — the primary, ` +
-        'adversarial and judge roles this product does not let one session hold two of. ' +
-        'NOT established here: a judgment a person disagreed with and overrode, end to end.'
-      : blocker.detail,
+    chain.error !== null || (judgedHereTotal > 0 && !judgmentDrivenHere)
+      ? 'FAIL'
+      : judgmentDrivenHere
+        ? 'PARTIAL'
+        : seen.judgedCandidates > 0 && seen.auditPasses > 0
+          ? 'PARTIAL'
+          : blocker.verdict,
+    chain.error !== null
+      ? `The chain exercise that drives this threw before it could answer: ${chain.error}`
+      : judgedHereTotal > 0 && !judgmentDrivenHere
+        ? 'Russell’s own judgment was driven in an isolated scope and did not hold: ' +
+          chain.checks
+            .filter((entry) => entry.name.startsWith('L1 ·') && !entry.held)
+            .map((entry) => `${entry.name} (saw ${entry.saw})`)
+            .join('; ') +
+          '. That is a defect rather than a missing run.'
+        : judgmentDrivenHere
+          ? `${judgedHere}/${judgedHereTotal} conditions held when this run drove it: an idea ` +
+            'captured here was judged against the archive first, given a priority and a reason ' +
+            'Russell decided, and specified by the compiler naming its envelope and the ' +
+            'jurisdiction it read — with no worker dispatched and nothing spent. See R for ' +
+            `the rows. Beside it, ${fleet.source} holds ${seen.judgedCandidates} judged idea(s) ` +
+            `and ${seen.auditPasses} completed audit pass(es). NOT established here: the ` +
+            'three-role audit driven end to end, which needs a worker (R names why), and a ' +
+            'judgment a person disagreed with and overrode, which is driven through the real ' +
+            'route in tests/russellIntegrationPass.test.ts rather than by this reporter.'
+          : blocker.detail,
   );
 
   /* -- C. Priority and backlog -------------------------------------------- */
@@ -1040,9 +1811,17 @@ async function main(): Promise<void> {
    * and `choicesFor` is where that is decided. It is a pure function over a
    * shape read from fragment rows, so it is driven here directly with the three
    * shapes rather than through a fixture that would have to arrange a packet to
-   * ask it. What this does *not* establish is the end-to-end journey: a real
-   * packet parking, a person answering, and the packet moving — that needs a
-   * production boundary and is reported as missing rather than implied.
+   * ask it.
+   *
+   * **The end-to-end journey used to be the named unmet condition here, and it
+   * is not any more.** The sentence it carried — "that needs a production
+   * boundary" — was wrong, and the correction is recorded rather than quietly
+   * applied: a park needs a packet Brain stops on its own, and `advancePacket`
+   * produces one without any worker at all when a compiled plan falls outside
+   * the standing envelope. The chain exercise drives that park, a person's
+   * answer to it, and the packet moving; the conditions are printed under R and
+   * the ones about the park are repeated here, because a gate that pointed
+   * somewhere else for its own evidence is a gate nobody reads.
    */
   const shapes = [
     {
@@ -1074,18 +1853,37 @@ async function main(): Promise<void> {
   // The production case: one refused fragment, nothing accepted. One answer,
   // so nothing is parked and nobody is asked to press the only button there is.
   const singleAnswerDoesNotPark = offers[1]!.decidable === false;
+  const parkChecks = chain.checks.filter((entry) => entry.name.startsWith('F ·'));
+  const parkFailed = parkChecks.filter((entry) => !entry.held);
+  const parkDriven = parkChecks.length > 0 && parkFailed.length === 0;
   record(
     'F',
     'Needs You',
-    offersHeld && singleAnswerDoesNotPark ? 'PARTIAL' : 'NOT_RUN',
-    offersHeld && singleAnswerDoesNotPark
-      ? `${offers.length}/${offers.length} packet shapes produce the offer the domain says they ` +
-        `should (${offers.map((entry) => `${entry.name} → ${entry.keys.join('+')}`).join('; ')}), ` +
-        'and the shape with one answer is not parked — which is the condition being the offer ' +
-        'rather than a row count standing in for it. NOT established here: a real packet ' +
-        'parking on a production boundary, a person answering it, and the packet moving.'
-      : 'The offer did not match the domain for at least one shape, which is a defect rather ' +
-        `than a missing run: ${offers.map((entry) => `${entry.name} → ${entry.keys.join('+')}`).join('; ')}.`,
+    chain.error !== null || parkFailed.length > 0 || !offersHeld || !singleAnswerDoesNotPark
+      ? 'FAIL'
+      : parkDriven
+        ? 'PASS'
+        : 'PARTIAL',
+    chain.error !== null
+      ? `The chain exercise that drives the park threw before it could answer: ${chain.error}`
+      : !offersHeld || !singleAnswerDoesNotPark
+        ? 'The offer did not match the domain for at least one shape, which is a defect rather ' +
+          `than a missing run: ${offers.map((entry) => `${entry.name} → ${entry.keys.join('+')}`).join('; ')}.`
+        : parkFailed.length > 0
+          ? `The park was driven end to end and ${parkFailed.length} of ${parkChecks.length} ` +
+            'conditions did not hold: ' +
+            parkFailed.map((entry) => `${entry.name} (saw ${entry.saw})`).join('; ') +
+            '. That is a defect rather than a missing run.'
+          : `${offers.length}/${offers.length} packet shapes produce the offer the domain says ` +
+            `they should (${offers.map((entry) => `${entry.name} → ${entry.keys.join('+')}`).join('; ')}), ` +
+            'and the shape with one answer is not parked — which is the condition being the ' +
+            'offer rather than a row count standing in for it. ' +
+            `And the journey is driven, not implied: ${parkChecks.length}/${parkChecks.length} ` +
+            'conditions held for a packet Brain parked from its own rows, a person answering ' +
+            'it, and the packet moving with its work claimable again — ' +
+            parkChecks.map((entry) => entry.saw).join('; ') +
+            '. Both answers a packet in that state can take were exercised: APPROVE_PLAN, ' +
+            'which moved it, and STOP, which cancelled it and settled its hold.',
   );
 
   /* -- G. Capability Lab --------------------------------------------------- */
@@ -1852,8 +2650,54 @@ async function main(): Promise<void> {
         'database — where the policy it displaced would be one a person is actually running on.',
   );
 
+  /* -- R. The mission chain ------------------------------------------------ */
+  /*
+   * Every condition printed, held or not, because the owner's rejection was
+   * that a summary of a tick is not a chain. A reader has to be able to see
+   * which links were driven without taking this reporter's word for the shape.
+   */
+  const chainDetail = chain.error
+    ? `The exercise threw after ${chain.checks.length} check(s): ${chain.error}. ` +
+      'An exception is a failure rather than a non-run — something happened and it was wrong.'
+    : [
+        `${chain.checks.length - chainFailed.length}/${chain.checks.length} executed ` +
+          'conditions held, driven in one pass against the real services in an isolated ' +
+          'database. Nothing is simulated: no worker, no network, no provider and no ' +
+          'research. Two decisions belong to a person and were made by an explicit test ' +
+          'identity, never the owner.',
+        ...chain.checks.map(
+          (entry) => `  ${entry.held ? 'HELD' : 'DID NOT HOLD'}  ${entry.name} — ${entry.saw}`,
+        ),
+        ...(chainFailed.length > 0
+          ? [
+              `  ${chainFailed.length} condition(s) ran and did not hold: ` +
+                chainFailed.map((entry) => entry.name).join('; ') +
+                '. That is a defect rather than a missing run.',
+            ]
+          : []),
+        ...(chain.gaps.length > 0
+          ? [
+              'NOT established here, by name:',
+              ...chain.gaps.map(
+                (entry) => `  ${entry.name} — needs ${entry.needs}: ${entry.why}`,
+              ),
+            ]
+          : []),
+        `Trace: ${chain.trace.join(' · ')}`,
+      ].join('\n     ');
+  record(
+    'R',
+    'The mission chain: idea → launch → decision → next',
+    chain.error !== null || chainFailed.length > 0
+      ? 'FAIL'
+      : chain.gaps.length === 0
+        ? 'PASS'
+        : 'PARTIAL',
+    chainDetail,
+  );
+
   /* ------------------------------------------------------------------------ */
-  console.log('STEP 12B — acceptance, A to Q');
+  console.log('STEP 12B — acceptance, A to R');
   console.log('  (separate from the Step 12A reporter, which answers a different, closed question)');
   console.log(
     `  operational reading from ${fleet.source}: ` +
@@ -1881,13 +2725,29 @@ async function main(): Promise<void> {
 
   const counts = gates.reduce<Record<Verdict, number>>(
     (acc, gate) => ({ ...acc, [gate.verdict]: acc[gate.verdict] + 1 }),
-    { PASS: 0, PARTIAL: 0, BLOCKED: 0, NOT_RUN: 0 },
+    { PASS: 0, PARTIAL: 0, BLOCKED: 0, FAIL: 0, NOT_RUN: 0 },
   );
   console.log('');
   console.log(
-    `STEP 12B — ${counts.PASS} PASS · ${counts.PARTIAL} PARTIAL · ${counts.BLOCKED} BLOCKED · ` +
-      `${counts.NOT_RUN} NOT_RUN (of ${gates.length} scenarios)`,
+    `STEP 12B — ${counts.PASS} PASS · ${counts.PARTIAL} PARTIAL · ${counts.FAIL} FAIL · ` +
+      `${counts.BLOCKED} BLOCKED · ${counts.NOT_RUN} NOT_RUN (of ${gates.length} scenarios)`,
   );
+  /*
+   * A failure is named separately from incompleteness, and it is named first.
+   *
+   * "Not complete" is the ordinary state of a step in progress. "A check ran
+   * and did not hold" is a defect somebody has to look at today, and a reader
+   * scanning one line must not have to tell them apart by counting.
+   */
+  if (counts.FAIL > 0) {
+    console.log(
+      `STEP 12B — ${counts.FAIL} SCENARIO(S) FAILED: ` +
+        gates
+          .filter((gate) => gate.verdict === 'FAIL')
+          .map((gate) => `${gate.id} ${gate.title}`)
+          .join('; '),
+    );
+  }
   if (counts.PASS !== gates.length) {
     console.log('STEP 12B IS NOT COMPLETE.');
   }
