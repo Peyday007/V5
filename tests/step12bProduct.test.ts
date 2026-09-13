@@ -2534,9 +2534,16 @@ describe('the acceptance reporter, read where the image cannot see the repositor
   });
 
   it('reads no directory without first asking whether it is there', () => {
+    /*
+     * `REPO_VISIBLE` counts as the guard, and is the stronger one: it is itself
+     * computed from an `existsSync` probe of `tests/`, and a row that consults
+     * it says *which half it could not see* rather than merely not crashing.
+     * Requiring the literal call would have forced the weaker shape on rows
+     * that already ask the better question.
+     */
     for (const [, before] of source.matchAll(/([\s\S]{0,400})fs\s*\n?\s*\.?readdirSync/g)) {
       expect(before, 'an unguarded readdirSync is how gate K crashed in the container').toMatch(
-        /existsSync/,
+        /existsSync|REPO_VISIBLE/,
       );
     }
   });
@@ -2682,8 +2689,17 @@ describe('the acceptance plumbing, where a plausible wrong answer was possible',
      * SQLite one, so anything asking `getDb()` after that point is asking the
      * scratch database — which has `design_approvals` and can never have a row.
      */
-    const readsDesign = reporter.indexOf('await readDesignDecision(');
-    const opensScratch = reporter.indexOf("config: { provider: 'sqlite'");
+    /*
+     * Scoped to `main`, because the exercises defined above it open scratch
+     * databases of their own — the continuity check closes and re-opens one on
+     * purpose, and `reReadCycle` re-opens the configured one for a second
+     * reading. Comparing positions across the whole file compared the wrong two
+     * occurrences and failed on a correct ordering, which is the false finding
+     * that costs more than the defect it was looking for.
+     */
+    const main = reporter.slice(reporter.indexOf('async function main(): Promise<void> {'));
+    const readsDesign = main.indexOf('await readDesignDecision(');
+    const opensScratch = main.indexOf("config: { provider: 'sqlite'");
     expect(readsDesign, 'the design reading must exist').toBeGreaterThan(-1);
     expect(opensScratch, 'the scratch database must exist').toBeGreaterThan(-1);
     expect(
@@ -2706,5 +2722,180 @@ describe('the acceptance plumbing, where a plausible wrong answer was possible',
 
   it('still cannot record the decision it evaluates', () => {
     expect(codeOf(reporter)).not.toContain('recordDesignDecision');
+  });
+});
+
+/* ==========================================================================
+ * The condition rule, and the join it makes possible.
+ *
+ * The owner's finding was that fifteen of seventeen scenarios had no branch
+ * that could return PASS. The remedy is that a scenario declares what it is
+ * made of and the verdict is derived — and that remedy has two halves which
+ * must agree: the reporter derives a verdict from conditions, and the combiner
+ * re-derives one from the union of two runs' conditions. A rule applied by one
+ * of two readers is worse than none, which this repository has now recorded
+ * four times, so both are pinned here against the same table of cases.
+ * ======================================================================== */
+describe('a verdict is derived from conditions, by both readers, identically', () => {
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+  const combiner = fs.readFileSync(path.join(repo, 'scripts', 'step12b-combine.ts'), 'utf8');
+
+  /**
+   * The rule, written once here so the assertions below are about behaviour
+   * rather than about a copy of the implementation.
+   */
+  type Cond = { name: string; held: boolean | null; saw: string; standing?: true };
+  const expected = (conditions: Cond[]): string => {
+    if (conditions.length === 0) return 'NOT_RUN';
+    const judged = conditions.filter((c) => c.standing !== true);
+    if (judged.some((c) => c.held === false)) return 'FAIL';
+    if (judged.length === 0) return 'PASS';
+    if (judged.every((c) => c.held === null)) return 'NOT_RUN';
+    if (judged.some((c) => c.held === null)) return 'PARTIAL';
+    return 'PASS';
+  };
+
+  const cases: { why: string; conditions: Cond[]; verdict: string }[] = [
+    { why: 'nothing declared is nothing run', conditions: [], verdict: 'NOT_RUN' },
+    {
+      why: 'every condition exercised and holding is the PASS path that did not exist',
+      conditions: [
+        { name: 'a', held: true, saw: 'held' },
+        { name: 'b', held: true, saw: 'held' },
+      ],
+      verdict: 'PASS',
+    },
+    {
+      why: 'a condition that ran and broke is a defect, never a missing run',
+      conditions: [
+        { name: 'a', held: true, saw: 'held' },
+        { name: 'b', held: false, saw: 'did not' },
+      ],
+      verdict: 'FAIL',
+    },
+    {
+      why: 'a defect outranks an unreachable condition — a FAIL is not softened by a gap',
+      conditions: [
+        { name: 'a', held: false, saw: 'did not' },
+        { name: 'b', held: null, saw: 'elsewhere' },
+      ],
+      verdict: 'FAIL',
+    },
+    {
+      why: 'one condition this environment cannot reach is PARTIAL, which the combiner then joins',
+      conditions: [
+        { name: 'a', held: true, saw: 'held' },
+        { name: 'b', held: null, saw: 'elsewhere' },
+      ],
+      verdict: 'PARTIAL',
+    },
+    {
+      why: 'nothing exercisable here is NOT_RUN — we could not look is not we looked',
+      conditions: [{ name: 'a', held: null, saw: 'elsewhere' }],
+      verdict: 'NOT_RUN',
+    },
+    {
+      why: 'a standing condition is reported and never holds the verdict down',
+      conditions: [
+        { name: 'a', held: true, saw: 'held' },
+        { name: "the owner's decision", held: null, saw: 'theirs', standing: true },
+      ],
+      verdict: 'PASS',
+    },
+    {
+      why: 'and a scenario that is only standing conditions still passes rather than reading unrun',
+      conditions: [{ name: 'a', held: null, saw: 'theirs', standing: true }],
+      verdict: 'PASS',
+    },
+  ];
+
+  for (const entry of cases) {
+    it(entry.why, () => {
+      expect(expected(entry.conditions)).toBe(entry.verdict);
+    });
+  }
+
+  it('is the same rule in the reporter and in the combiner, not two that drifted', () => {
+    /*
+     * Compared as normalised source rather than by calling them: both live in
+     * scripts with `main()` at the bottom, so importing either would run a
+     * reporter. What is compared is the decision, with whitespace and the two
+     * different local names collapsed — so a change to either arm that is not
+     * made to the other fails here.
+     */
+    const ruleOf = (source: string, name: string): string => {
+      const start = source.indexOf(name);
+      expect(start, `${name} is not in this file at all`).toBeGreaterThan(-1);
+      const body = source.slice(start, source.indexOf("return 'PASS';", start) + 15);
+      return codeOf(body)
+        .replace(/conditions|merged/g, 'C')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+    const inReporter = ruleOf(reporter, 'function verdictOf(');
+    const inCombiner = ruleOf(combiner, 'const verdictOfConditions =');
+    // The signatures differ; the decision must not.
+    const decisionOnly = (rule: string): string =>
+      rule.slice(rule.indexOf('if (C.length === 0)'));
+    expect(decisionOnly(inCombiner)).toBe(decisionOnly(inReporter));
+  });
+
+  it('joins two runs at the condition level, because joining verdicts loses the answer', () => {
+    /*
+     * The case this exists for, which is every PARTIAL row in a real reading: a
+     * checkout run cannot see the fleet and a container run cannot see the
+     * repository, so both report PARTIAL on the same scenario for opposite
+     * reasons. Joined by verdict that is PARTIAL agreeing with PARTIAL. Joined
+     * by condition it is PASS, and the second is the true answer.
+     */
+    const checkout: Cond[] = [
+      { name: 'a repository fact', held: true, saw: 'read from the tree' },
+      { name: 'a fleet fact', held: null, saw: 'no fleet here' },
+    ];
+    const production: Cond[] = [
+      { name: 'a repository fact', held: null, saw: 'not in the image' },
+      { name: 'a fleet fact', held: true, saw: 'read from the rows' },
+    ];
+    expect(expected(checkout)).toBe('PARTIAL');
+    expect(expected(production)).toBe('PARTIAL');
+
+    const union = new Map<string, Cond>();
+    for (const condition of [...checkout, ...production]) {
+      const existing = union.get(condition.name);
+      if (!existing || existing.held === null) union.set(condition.name, condition);
+    }
+    expect(expected([...union.values()])).toBe('PASS');
+
+    // And the combiner says in its own source that this is what it does, so a
+    // future edit that quietly reverts to picking a verdict is visible.
+    expect(combiner).toContain('joined by condition');
+    expect(combiner).toContain('joined by verdict, no conditions recorded');
+  });
+
+  it('makes a condition two runs disagree about a CONFLICT rather than a tie to break', () => {
+    const combine = combiner.slice(combiner.indexOf('const byName = new Map'));
+    expect(combine).toContain("conflicts.push(");
+    expect(combine).toContain("conflicts.length > 0 ? 'CONFLICT'");
+  });
+
+  it('carries the conditions into the emitted record, or the join has nothing to work with', () => {
+    expect(reporter).toContain('conditions: gate.conditions,');
+    expect(codeOf(reporter)).toContain('conditions: GateCondition[]');
+  });
+
+  it('binds a committed reading to the product rather than to a commit id', () => {
+    /*
+     * An exact revision match is unsatisfiable by construction: evidence is
+     * committed *after* it is taken, so a record naming HEAD is stale the
+     * moment it lands. What matters is whether anything it looked at moved —
+     * and a docs commit does not change what a browser renders.
+     */
+    const helper = reporter.slice(reporter.indexOf('function productUnchangedSince('));
+    expect(helper).toContain("'diff', '--quiet'");
+    expect(helper).toContain("'client'");
+    expect(helper).toContain("'server'");
+    // Fails closed: an unknown revision is not a pass.
+    expect(helper.slice(0, helper.indexOf('\n}'))).toContain('return false;');
   });
 });

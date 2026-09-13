@@ -436,6 +436,23 @@ function verdictOf(conditions: GateCondition[]): Verdict {
   if (conditions.length === 0) return 'NOT_RUN';
   const judged = conditions.filter((c) => c.standing !== true);
   if (judged.some((c) => c.held === false)) return 'FAIL';
+  /*
+   * A scenario whose conditions are **all** standing is answered, not unrun.
+   *
+   * `[].every(...)` is true, so without this line such a gate reads NOT_RUN —
+   * which the combiner, written afterwards, does not do, and a rule applied
+   * differently by two readers is worse than none. It is also the wrong answer
+   * on its own terms: a standing condition is the matrix recording something
+   * *as* the answer rather than as a shortfall, so a gate made only of them has
+   * been answered in the only way it can be.
+   *
+   * The loophole is real and is left open deliberately: marking every condition
+   * standing would pass any scenario. What stops that is that `standing: true`
+   * appears in source, once per use, with the argument for it written beside
+   * it — the same thing that keeps `PREFERENCES` and `PRESSURE_MODES` honest.
+   * No gate in this file is standing-only today.
+   */
+  if (judged.length === 0) return 'PASS';
   if (judged.every((c) => c.held === null)) return 'NOT_RUN';
   if (judged.some((c) => c.held === null)) return 'PARTIAL';
   return 'PASS';
