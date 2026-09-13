@@ -21,6 +21,8 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
+import net from 'node:net';
+import { readFile } from 'node:fs/promises';
 import type { Readable } from 'node:stream';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -117,6 +119,58 @@ function startServer(): ChildProcessByStdio<null, Readable, Readable> {
   return child;
 }
 
+/**
+ * What is actually wrong, asked of the operating system rather than guessed.
+ *
+ * Two explanations have now been tested and refuted. **Starvation**: eight busy
+ * loops on four cores make this suite take 14.5s against 4.6s quiet — three
+ * times, not the hundred and thirty a ten-minute timeout would need. **A dead
+ * child**: the exit watcher above would have said so, and it does not fire.
+ *
+ * So the process is alive, it printed a banner that is `listen`'s own callback,
+ * and `/healthz` does not answer. The remaining candidates are distinguishable
+ * from outside, and this asks which:
+ *
+ *   refused          nothing is listening on that TCP port, whatever the child
+ *                    thinks it bound.
+ *   connected, mute  something is listening and is not answering, which is a
+ *                    blocked event loop rather than a networking problem.
+ *
+ * It runs only at the deadline, so it costs nothing on a healthy run. The
+ * point is that the *next* failure arrives with the answer attached instead of
+ * a third round of hypotheses.
+ */
+async function whyNot(): Promise<string> {
+  const alive = current !== null && current.exitCode === null && current.signalCode === null;
+  const reach = await new Promise<string>((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port: PORT });
+    const done = (answer: string): void => {
+      socket.destroy();
+      resolve(answer);
+    };
+    socket.setTimeout(5_000, () => done('the port accepted nothing within five seconds'));
+    socket.once('connect', () => done('the port accepted a TCP connection but HTTP never answered'));
+    socket.once('error', (error: NodeJS.ErrnoException) =>
+      done(`the port refused a TCP connection (${error.code ?? error.message})`),
+    );
+  });
+  let state = 'unknown';
+  if (current?.pid) {
+    try {
+      state = (await readFile(`/proc/${current.pid}/status`, 'utf8'))
+        .split('\n')
+        .filter((line) => /^(State|Threads|VmRSS):/.test(line))
+        .join(' · ');
+    } catch {
+      state = 'the process table would not answer';
+    }
+  }
+  return (
+    `the server did not answer /healthz within ten minutes. ` +
+    `Process ${alive ? 'still alive' : 'gone'} (${state}). ${reach}`
+  );
+}
+
 async function waitForHealthy(): Promise<void> {
   /*
    * Absurdly generous, and deliberately so.
@@ -143,7 +197,7 @@ async function waitForHealthy(): Promise<void> {
           `signal ${exited.signal ?? 'none'}${exited.signal === 'SIGKILL' ? ' (killed from outside; out of memory is the usual reason)' : ''}:\n${log}`,
       );
     }
-    if (Date.now() > deadline) throw new Error(`server never became healthy:\n${log}`);
+    if (Date.now() > deadline) throw new Error(`${await whyNot()}:\n${log}`);
     try {
       if ((await fetch(`${BASE}/healthz`)).ok) return;
     } catch {
