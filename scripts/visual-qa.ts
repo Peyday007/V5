@@ -1031,74 +1031,24 @@ async function main(): Promise<void> {
       }
 
       /*
-       * The second state of Needs You, produced rather than mocked.
+       * The settled state of Needs You is captured **after the journey**, and
+       * the ordering is the whole correctness of this harness.
        *
-       * Everything above ran against a Brain with no standing grant, which is
-       * why `/needs-you` above is the **populated** screen: an ungranted project
+       * Everything above runs against a Brain with no standing grant, which is
+       * why `/needs-you` here is the **populated** screen: an ungranted project
        * has exactly one decision outstanding and the page refuses to fold it.
-       * Pressing that page's own Approve button settles it, and the same address
-       * then becomes the settled, empty inbox. Two real states of one screen,
-       * separated by one press on a real control — no request row is invented
-       * and nothing is stubbed.
+       * Getting the settled screen means answering that decision — and the
+       * journey is what answers it, on a phone, with a thumb.
        *
-       * It happens **after** every width has been captured, because there is one
-       * database behind all three: granting between widths would leave the first
-       * two showing a decision the third no longer had.
+       * This used to happen right here, before the journey, and it quietly
+       * rewrote the journey's own starting conditions: with the authority
+       * already granted, an idea Brain captures is judged and launched within a
+       * tick or two, so by the time a person opened Ideas there was no backlog
+       * row to press. The run reported three missing controls, every one of
+       * them the harness racing the product it was measuring. See
+       * `captureSettledNeedsYou`.
        */
-      if (options.rendersDir) {
-        const granted = await grantStandingAuthority(cdp);
-        console.log(
-          granted
-            ? '  standing authority approved through the page’s own control'
-            : '  COULD NOT APPROVE the standing authority — the empty inbox is not reachable',
-        );
-        if (!granted) {
-          captureFindings.push(
-            'needs-you-empty: the standing authority could not be approved, so the settled ' +
-              'state of Needs You was never rendered',
-          );
-        }
-        for (const viewport of VIEWPORTS) {
-          await cdp.send('Emulation.setDeviceMetricsOverride', {
-            width: viewport.width,
-            height: viewport.height,
-            deviceScaleFactor: 2,
-            mobile: viewport.width < 600,
-          });
-          await cdp.send('Page.navigate', { url: `${BASE}/needs-you` });
-          await waitFor(cdp, "document.querySelector('.rs-shell') !== null");
-          await waitFor(cdp, "document.querySelector('.rs-nothing') !== null", 15_000);
-          await sleep(900);
-          const shot = (await cdp.send('Page.captureScreenshot', {
-            format: 'png',
-            captureBeyondViewport: true,
-          })) as { data: string };
-          const bytes = Buffer.from(shot.data, 'base64');
-          fs.writeFileSync(
-            path.join(outputDir, `${viewport.name}-needs-you-settled.png`),
-            bytes,
-          );
-          declared.push(
-            writeRender(options.rendersDir, 'needs-you-empty', viewport.width, bytes),
-          );
-          const settled = await evaluate(
-            cdp,
-            "document.querySelector('.rs-nothing') !== null",
-          );
-          console.log(
-            `${viewport.name.padEnd(8)} ${'needs-you-empty'.padEnd(10)} ` +
-              `${settled === true ? 'settled' : 'STILL SHOWS A DECISION'}`,
-          );
-        }
-      }
     });
-
-    if (options.rendersDir) {
-      writeDeclaration(options.rendersDir, declared);
-      console.log(
-        `\n${declared.length} render(s) declared in ${path.join(options.rendersDir, 'index.json')}`,
-      );
-    }
 
     /*
      * The band, swept — each width in its own browser.
@@ -1233,6 +1183,26 @@ async function main(): Promise<void> {
      * control is most likely — and prints what changed at every step.
      */
     const findings = [...captureFindings, ...(await driveJourney(cookie, outputDir, constellation))];
+
+    /*
+     * The settled Needs You, photographed once the journey has settled it.
+     *
+     * The journey approves the standing authority on a phone; this captures the
+     * same address afterwards at all three widths, so the approval set holds
+     * two real states of one screen separated by one press on a real control.
+     * Nothing is invented and nothing is stubbed — and, unlike the version that
+     * did this before the journey, nothing about the journey's own starting
+     * state is rewritten to get the picture.
+     */
+    if (options.rendersDir) {
+      findings.push(
+        ...(await captureSettledNeedsYou(cookie, options.rendersDir, outputDir, declared)),
+      );
+      writeDeclaration(options.rendersDir, declared);
+      console.log(
+        `\n${declared.length} render(s) declared in ${path.join(options.rendersDir, 'index.json')}`,
+      );
+    }
 
     reportConstellation(constellation);
     writeJourneyRecord(outputDir, constellation, findings);
@@ -2499,6 +2469,69 @@ async function waitForParkedDecision(cookie: string, seeded: Seeded): Promise<Pa
   return { ...empty, note: `nothing parked within 240s — ${lastSeen}` };
 }
 
+/**
+ * `/needs-you` in its settled state, at all three widths, after the journey.
+ *
+ * The grant it depends on is the journey's own — a person opening Needs You on
+ * a phone and pressing Approve. This only photographs the consequence, and it
+ * refuses to photograph one that is not there: a run where the page still shows
+ * a decision is reported rather than captured as though it were settled.
+ *
+ * It is a separate browser session from the journey's on purpose. The journey
+ * emulates a 390px phone throughout and this needs three widths at
+ * `deviceScaleFactor: 2`; reusing its session would mean leaving the journey's
+ * last screen in a state the next reader has to reason about.
+ */
+async function captureSettledNeedsYou(
+  cookie: string,
+  rendersDir: string,
+  outputDir: string,
+  declared: Render[],
+): Promise<string[]> {
+  const found: string[] = [];
+  if (!(await standingGrantExists(cookie))) {
+    found.push(
+      'needs-you-empty: no standing authority is recorded after the journey, so the settled ' +
+        'state of Needs You was never rendered',
+    );
+    return found;
+  }
+  console.log('');
+  await withChromium(async (cdp) => {
+    await signInBrowser(cdp, cookie);
+    for (const viewport of VIEWPORTS) {
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: viewport.width,
+        height: viewport.height,
+        deviceScaleFactor: 2,
+        mobile: viewport.width < 600,
+      });
+      await cdp.send('Page.navigate', { url: `${BASE}/needs-you` });
+      await waitFor(cdp, "document.querySelector('.rs-shell') !== null");
+      const settled = await waitFor(cdp, "document.querySelector('.rs-nothing') !== null", 15_000);
+      await sleep(900);
+      const shot = (await cdp.send('Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: true,
+      })) as { data: string };
+      const bytes = Buffer.from(shot.data, 'base64');
+      fs.writeFileSync(path.join(outputDir, `${viewport.name}-needs-you-settled.png`), bytes);
+      declared.push(writeRender(rendersDir, 'needs-you-empty', viewport.width, bytes));
+      console.log(
+        `${viewport.name.padEnd(8)} ${'needs-you-empty'.padEnd(10)} ` +
+          `${settled ? 'settled' : 'STILL SHOWS A DECISION'}`,
+      );
+      if (!settled) {
+        found.push(
+          `needs-you-empty at ${viewport.width}px: the page still shows a decision after the ` +
+            'journey answered the only one there was',
+        );
+      }
+    }
+  });
+  return found;
+}
+
 /** One browser, one signed-in person, one path through the product. */
 async function driveJourney(
   cookie: string,
@@ -2508,12 +2541,25 @@ async function driveJourney(
   const findings: string[] = [];
   console.log('');
   console.log('Seeding something to decide, through the product’s own doors:');
-  let seeded: Seeded = {
-    projectId: null,
-    projectName: null,
-    candidateId: null,
-    note: 'not seeded yet',
-  };
+  /*
+   * Seeded first, and **before** the standing authority is granted, because
+   * that ordering is the story this journey tells.
+   *
+   * An idea captured into a project with no standing grant is judged and
+   * *parked* — Brain may not research here yet — so it stays in the backlog
+   * where a person can find it. An idea captured after the grant is judged,
+   * specified and launched within a tick or two, which is correct and leaves
+   * nothing on the Ideas page to press.
+   *
+   * Both orderings have now been run. The second produced three findings that
+   * all read as missing controls and were all the harness racing the product,
+   * which is why this comment is longer than the line it explains.
+   */
+  const seeded = await seedSomethingToDecide(cookie);
+  console.log(`  ${seeded.note}`);
+  if (seeded.candidateId === null) {
+    findings.push(`the journey had nothing to act on: ${seeded.note}`);
+  }
   let parked: Parked = {
     missionId: null,
     requestId: null,
@@ -2582,28 +2628,6 @@ async function driveJourney(
       findings.push('the one decision on Needs You could not be answered from the screen');
     }
 
-    /*
-     * Seeded **here**, not before the browser opened, and the ordering is the
-     * defect it fixes rather than a preference.
-     *
-     * With the standing authority already in place, an idea Brain captures is
-     * judged and launched within a tick or two. Seeding at the top of the
-     * journey left ten minutes of renders, six maps and fourteen steps between
-     * the capture and the moment a person opens Ideas — so by then Russell had
-     * quite correctly launched it, there was no backlog row to press, and the
-     * run reported two missing controls and an override that never happened.
-     * Every one of those was the harness racing the product it was measuring.
-     *
-     * Seeding immediately before the three steps that act on it leaves seconds
-     * rather than minutes, which is inside one thirty-second cycle by a wide
-     * margin — and if it ever loses that race the finding says so truthfully
-     * rather than blaming a control.
-     */
-    seeded = await seedSomethingToDecide(cookie);
-    console.log(`  the site’s request ${seeded.note}`);
-    if (seeded.candidateId === null) {
-      findings.push(`the journey had nothing to act on: ${seeded.note}`);
-    }
     findings.push(...(await walk(cdp, outputDir, JOURNEY_WORK)));
     /*
      * The wait between promoting an idea and being asked about it.
