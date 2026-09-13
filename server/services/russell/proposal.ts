@@ -49,6 +49,14 @@ export const PROPOSAL_ACTIONS = [
   'PROMOTE_MISSION',
   'PARK_CANDIDATE',
   'REJECT_CANDIDATE',
+  /*
+   * A change to a site's code, asked for in the conversation.
+   *
+   * It proposes and it cannot execute: the whole effect is an unauthorized row
+   * a person answers in Needs You. Deliberately *not* carrying a repository —
+   * see `software` below.
+   */
+  'REQUEST_SOFTWARE_CHANGE',
 ] as const;
 export type ProposalAction = (typeof PROPOSAL_ACTIONS)[number];
 
@@ -77,6 +85,17 @@ export interface ValidatedProposal {
   } | null;
   probe: { question: string; maxLookups: number } | null;
   priority: CandidatePriority | null;
+  /**
+   * A change to a site's code somebody asked for.
+   *
+   * No repository, no branch and no paths, on purpose. Which repository a
+   * project may change — and which directories inside it — is an authorization
+   * that lives in rows a person wrote, and a model naming one would be a model
+   * proposing where its own work may reach. The person chooses from the
+   * repositories this project was actually given, and the scope comes with the
+   * choice.
+   */
+  software: { title: string; objective: string; expectedOutcome: string } | null;
 }
 
 export interface ProposalRefusal {
@@ -109,6 +128,7 @@ const KNOWN_FIELDS = new Set([
   'candidate',
   'probe',
   'priority',
+  'software',
 ]);
 
 /**
@@ -131,6 +151,16 @@ export const FIELD_LIMITS = {
   candidateStatement: 2_000,
   probeQuestion: 500,
   reason: 1_000,
+  softwareTitle: 200,
+  /*
+   * An objective is the contract's own field and the contract has its own
+   * minimum; this is only the ceiling. Generous, because an objective that says
+   * what should become true in a repository is longer than an idea's statement
+   * and truncating one is the outcome §27 records as the worst kind: refused is
+   * recoverable, cut in half is reported as success.
+   */
+  softwareObjective: 4_000,
+  softwareOutcome: 2_000,
 } as const;
 
 /**
@@ -183,6 +213,15 @@ export const EXECUTABLE_ACTIONS = [
   'CAPTURE_CANDIDATE',
   'ANSWER_ONLY',
   'ASK_WHICH_PROJECT',
+  /*
+   * Executable in the sense this list means: something happens, and the person
+   * sees it. What happens is a row they must authorize before anything is
+   * submitted, spent or run — which is why it can be advertised to a worker at
+   * all. The four missing actions are missing because they are accepted and do
+   * nothing; this one is here because it does exactly what its name says and no
+   * more.
+   */
+  'REQUEST_SOFTWARE_CHANGE',
 ] as const satisfies readonly ProposalAction[];
 
 export const REQUIRED_PART: Partial<Record<ProposalAction, string>> = {
@@ -192,6 +231,7 @@ export const REQUIRED_PART: Partial<Record<ProposalAction, string>> = {
   PROMOTE_MISSION: 'projectId',
   PARK_CANDIDATE: 'priority',
   REJECT_CANDIDATE: 'reason',
+  REQUEST_SOFTWARE_CHANGE: 'software',
 };
 
 /** The hardest bound a proposed probe may name. The envelope narrows further. */
@@ -346,6 +386,43 @@ export function validateProposal(input: {
     probe = { question, maxLookups: lookups };
   }
 
+  let software: ValidatedProposal['software'] = null;
+  if (body['software'] !== undefined && body['software'] !== null) {
+    const value = body['software'];
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return refuse('MISSING_REQUIRED_PART', 'the proposed software change was not readable');
+    }
+    const record = value as Record<string, unknown>;
+    const title = text(record['title'], FIELD_LIMITS.softwareTitle);
+    const objective = text(record['objective'], FIELD_LIMITS.softwareObjective);
+    const expectedOutcome = text(record['expectedOutcome'], FIELD_LIMITS.softwareOutcome);
+    if (!title || !objective || !expectedOutcome) {
+      return refuse(
+        'MISSING_REQUIRED_PART',
+        'a proposed software change needs a title, an objective and an expected outcome',
+      );
+    }
+    /*
+     * Refused rather than trimmed, and refused here rather than at the
+     * contract. `submitObjective` has its own minimums and would refuse a
+     * two-word objective — at authorization time, in front of a person who has
+     * already decided to say yes, on a card that should never have been shown.
+     */
+    if (objective.length < 12) {
+      return refuse(
+        'MISSING_REQUIRED_PART',
+        'an objective has to say what should become true in the repository',
+      );
+    }
+    if (expectedOutcome.length < 8) {
+      return refuse(
+        'MISSING_REQUIRED_PART',
+        'an expected outcome has to say what a person would see differently afterwards',
+      );
+    }
+    software = { title, objective, expectedOutcome };
+  }
+
   // Actions that cannot be carried out without the part they act on. Checked
   // after the parts are validated, so the refusal names the missing piece
   // rather than the first thing that happened to be wrong.
@@ -360,6 +437,7 @@ export function validateProposal(input: {
     PROMOTE_MISSION: () => projectId !== null,
     PARK_CANDIDATE: () => priority !== null,
     REJECT_CANDIDATE: () => text(body['reason'], FIELD_LIMITS.reason) !== null,
+    REQUEST_SOFTWARE_CHANGE: () => software !== null,
   };
   const required = needs[action as ProposalAction];
   if (required && !required()) {
@@ -377,6 +455,7 @@ export function validateProposal(input: {
       candidate,
       probe,
       priority,
+      software,
     },
   };
 }

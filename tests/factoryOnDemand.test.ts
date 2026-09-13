@@ -220,6 +220,7 @@ describe('an authorized objective survives its setup being missing', () => {
     const outcome = await onboardRepository({
       projectId: fixture.project.id,
       grantId: GRANT().id,
+      scope: { kind: 'WHOLE_REPOSITORY' },
       actor,
       origin: 'https://brain.example',
     });
@@ -288,6 +289,7 @@ describe('an authorized objective survives its setup being missing', () => {
     const outcome = await onboardRepository({
       projectId: fixture.project.id,
       grantId: GRANT().id,
+      scope: { kind: 'WHOLE_REPOSITORY' },
       actor,
       origin: 'https://brain.example',
     });

@@ -18,6 +18,10 @@ import { useAsync } from './useAsync.ts';
 import { RussellApi } from '../lib/russellApi.ts';
 import type { ConnectSiteResult, SiteConnectionState } from '../lib/russellApi.ts';
 import type {
+  SoftwareRepositoryChoice,
+  SoftwareRequestView,
+} from '../../../server/services/russell/software.ts';
+import type {
   CandidatePriority,
   IdeaNode,
   KnowsEntry,
@@ -1562,6 +1566,174 @@ export function AuthorityPanel({
   );
 }
 
+/**
+ * A software change somebody asked for in a conversation, and the decision that
+ * lets it run.
+ *
+ * Two things this card does that are not decoration.
+ *
+ * **It names the reach before the button.** The scope is the server's own
+ * sentence, travelling down with the repository choice rather than being
+ * composed here — so the reach a person is shown and the reach the validator
+ * enforces are one object. A screen that paraphrased a permission would
+ * eventually paraphrase it wrongly, which is `authority.ts`'s rule applied to
+ * one more form.
+ *
+ * **It shows the campaign's own state rather than a second opinion about it.**
+ * Once authorized, the line comes from `campaignBriefing` — the derivation Build
+ * renders — so the two surfaces cannot say different things about one campaign.
+ * Build stays the detailed work view; this is the decision and the sentence.
+ */
+function SoftwareDecisions({
+  software,
+  repositories,
+  onAnswered,
+}: {
+  software: SoftwareRequestView[];
+  repositories: SoftwareRepositoryChoice[];
+  onAnswered(): void;
+}): JSX.Element | null {
+  const [chosen, setChosen] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  if (software.length === 0) return null;
+
+  async function authorize(requestId: string): Promise<void> {
+    const grantId = chosen[requestId] ?? (repositories.length === 1 ? repositories[0]?.grantId : undefined);
+    if (!grantId) return;
+    setBusy(requestId);
+    setProblem(null);
+    try {
+      await RussellApi.authorizeSoftware(requestId, { grantId });
+      onAnswered();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : 'That did not work.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function decline(requestId: string): Promise<void> {
+    setBusy(requestId);
+    setProblem(null);
+    try {
+      await RussellApi.declineSoftware(requestId, 'Not wanted.');
+      onAnswered();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : 'That did not work.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="rs-software" aria-labelledby="rs-software-heading">
+      <h3 id="rs-software-heading">Changes to your sites</h3>
+      <ul className="rs-list">
+        {software.map((entry) => {
+          const grantId =
+            chosen[entry.request.id] ??
+            (repositories.length === 1 ? repositories[0]?.grantId ?? '' : '');
+          const choice = repositories.find((candidate) => candidate.grantId === grantId) ?? null;
+          const proposed = entry.request.state === 'PROPOSED';
+          return (
+            <li key={entry.request.id}>
+              <article className="rs-decision rs-decision-software">
+                <span className="rs-decision-label">
+                  {proposed ? 'Waiting for you' : 'Under way'}
+                </span>
+                <h4 className="rs-decision-what">{entry.request.title}</h4>
+                <p className="rs-decision-why">{entry.request.objective}</p>
+                <p className="rs-hint">
+                  Afterwards: {entry.request.expectedOutcome}
+                </p>
+
+                {proposed ? (
+                  <>
+                    {repositories.length === 0 ? (
+                      /*
+                       * A request nobody can authorize, said in those words
+                       * rather than shown as a button that will always refuse.
+                       * §24: a state that says "waiting for a person" which
+                       * that person cannot resolve is not waiting, it is stuck.
+                       */
+                      <p className="rs-state rs-state-empty">
+                        This project has not been given a repository yet, so there is nowhere
+                        to run this. Onboard one on Build → Repositories, where the directories
+                        it may change are declared too.
+                      </p>
+                    ) : (
+                      <>
+                        {repositories.length > 1 ? (
+                          <label className="rs-software-where">
+                            <span>Where should this happen?</span>
+                            <select
+                              value={grantId}
+                              onChange={(event) =>
+                                setChosen((current) => ({
+                                  ...current,
+                                  [entry.request.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Choose a repository…</option>
+                              {repositories.map((candidate) => (
+                                <option key={candidate.grantId} value={candidate.grantId}>
+                                  {candidate.repositoryId}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : null}
+                        {choice ? (
+                          <p className="rs-software-scope">
+                            {choice.scopeSentence} Anything outside that is rejected whole, and
+                            nothing is merged or deployed without you.
+                          </p>
+                        ) : null}
+                        <div className="rs-software-actions">
+                          <button
+                            type="button"
+                            className="rs-primary"
+                            disabled={busy !== null || !choice}
+                            onClick={() => void authorize(entry.request.id)}
+                          >
+                            {busy === entry.request.id ? 'Authorizing…' : 'Authorize'}
+                          </button>
+                          <button
+                            type="button"
+                            className="rs-button"
+                            disabled={busy !== null}
+                            onClick={() => void decline(entry.request.id)}
+                          >
+                            Not this
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <p className="rs-software-progress">{entry.line}</p>
+                )}
+
+                {entry.pullRequestUrl ? (
+                  <p className="rs-software-pr">
+                    <a href={entry.pullRequestUrl} rel="noreferrer noopener" target="_blank">
+                      Review the pull request
+                    </a>
+                  </p>
+                ) : null}
+              </article>
+            </li>
+          );
+        })}
+      </ul>
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+    </section>
+  );
+}
+
 export function NeedsYouView({
   projectId,
   onAnswered,
@@ -1570,7 +1742,10 @@ export function NeedsYouView({
   onAnswered?: () => void;
 }): JSX.Element {
   const query = useAsync(
-    () => (projectId ? RussellApi.needsYou(projectId) : Promise.resolve({ requests: [] })),
+    () =>
+      projectId
+        ? RussellApi.needsYou(projectId)
+        : Promise.resolve({ requests: [], software: [], repositories: [] }),
     [projectId],
   );
   const state = listState<RussellHumanRequest>({
@@ -1579,6 +1754,8 @@ export function NeedsYouView({
     items: query.data?.requests ?? null,
     noun: 'decisions',
   });
+  const software = query.data?.software ?? [];
+  const repositories = query.data?.repositories ?? [];
 
   async function answer(requestId: string, choice: string): Promise<void> {
     // No optimistic update. The list re-reads from the server, so what a person
@@ -1620,9 +1797,19 @@ export function NeedsYouView({
     () => (projectId ? RussellApi.authority(projectId) : Promise.resolve(null)),
     [projectId],
   );
+  /*
+   * Three things can be waiting, and settled means none of them is.
+   *
+   * The request list is one, the standing approval is the second, and a
+   * software change waiting to be authorized is the third — the same defect
+   * arriving from a third direction. `listEmpty` stays the *list's* own
+   * emptiness, because it decides whether the panel prints its own "no
+   * decisions" message and a page holding a software card must not; settled is
+   * the conjunction.
+   */
   const listEmpty = state.phase === 'EMPTY';
   const grantOutstanding = authority.data ? authority.data.grant === null : null;
-  const nothingWaiting = listEmpty && grantOutstanding === false;
+  const nothingWaiting = listEmpty && software.length === 0 && grantOutstanding === false;
 
   return (
     <Panel
@@ -1649,6 +1836,14 @@ export function NeedsYouView({
       {/* Above the list when a decision is outstanding, folded to one line when
           the grant already exists — §16, and the rejected page's own fault. */}
       <AuthorityPanel key={projectId} projectId={projectId} folded={nothingWaiting} />
+      <SoftwareDecisions
+        software={software}
+        repositories={repositories}
+        onAnswered={() => {
+          query.reload();
+          onAnswered?.();
+        }}
+      />
       <ul className="rs-list">
         {state.items.map((request) => (
           <li key={request.id}>

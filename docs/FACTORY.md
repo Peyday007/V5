@@ -923,3 +923,113 @@ no control there for decomposition, worker count, branches, retries, integration
 order, review rounds or repairs, because none of them is a decision a person
 should be asked to take. The two decisions it does offer are the two the server
 guards by principal type. It is not `/operator`, which remains deleted.
+
+### Asking for a change in a conversation
+
+`/build` is the detailed work view and it is no longer the only entrance. A
+person can say what they want changed in an ordinary Russell thread, and the
+change reaches the same contract, the same approval and the same campaign — the
+factory gained an entrance rather than a second pipeline.
+
+Four properties are what make that safe rather than a shortcut past the two
+decisions the factory reserves to a person.
+
+**Discussing a change is not asking for one, and the distinction is drawn
+twice.** `asksForExecution` reads the *person's own message* — not a worker's
+restatement of it, which is `shouldCapture`'s own correction — and is narrow by
+construction: deliberation (`I wonder whether…`, `would it be worth…`, `one
+day…`) and past-tense reports lose to nothing, however many execution verbs they
+contain. Its failure mode must stay *missing* a request, which a later sentence
+restates, rather than inventing one, which would put an authorization card in
+front of somebody who was thinking aloud.
+
+**A capture's whole effect is an unauthorized row.** Even when the gate and the
+model agree, nothing is submitted, nothing is spent, no repository is touched and
+no worker is fired: `russell_software_requests` holds the ask in `PROPOSED`, and
+that is the only state a worker can cause. This is not a check inside the turn
+that could be forgotten; it is that the turn has no other effect available to it.
+
+**A model never names the repository.** The proposal carries a title, an
+objective and an expected outcome and nothing else — an extra field refuses the
+whole proposal — because which repository a project may change is an
+authorization in rows a person wrote. The person chooses from the list the
+project was actually given, and the reach travels down with the choice.
+
+**One starter, two entrances.** `services/factory/start.ts` is what both the
+Build route and the Russell authorization call, so approving an objective and
+starting its campaign cannot be done two ways. This codebase has paid four times
+for a rule applied by one of two runners — `reconcileAcceptedFragment`,
+`reconcileRepairs`, the re-arm's refusal list, `linkFiledWork` — and a second way
+to start a campaign is exactly that shape.
+
+Duplicate submissions are refused in two independent places, and both are needed.
+`UNIQUE (project_id, submission_key)` on the request means the same ask captured
+twice — a second thread, a redelivered turn, a person repeating themselves — is
+one row and therefore one card; it cannot see a rewording. `submissionKeyFor` at
+the factory catches the rewording when the second one is authorized. And
+`claimSoftwareRequest` is a guarded `UPDATE ... WHERE state = 'PROPOSED'`, so two
+clicks produce one campaign and the loser is told it is already answered. The
+effect is on the far side of that claim, and a refusal there releases it —
+because a card that vanished is a decision nobody can retake.
+
+Reporting back is a projection in `pending.ts`'s shape: derived on the read path,
+writing nothing, and taking the campaign half from `campaignBriefing` — the same
+derivation Build renders. Two surfaces inferring their own status from one set of
+rows is how a person reads two different answers about one piece of work. The
+thread shows the sentence and the pull request; Needs You shows the decision;
+Build stays the detail.
+
+### The directory boundary, and why an optional scope was never one
+
+`ObjectiveSubmission.mutationScope` is optional and defaulted to `['**']`. That
+is fine as a *narrowing* and it was never a boundary, for two reasons that
+compound:
+
+1. **The default was the widest value.** A submission that omitted the field got
+   the whole repository, so the safe answer was the one somebody had to remember
+   and the unsafe one was free.
+2. **Narrowing afterwards cannot reach back past it.** `amendContract` lets a
+   scope shrink and never grow, which is right for keeping a campaign honest —
+   and it means the *initial* scope is the widest reach that campaign will ever
+   be judged against. The units are planned against that surface, and the diff
+   check that rejects work outside a unit's declared paths is measured against
+   paths that were allowed to exist.
+
+So the boundary is established before any objective is written, by somebody with
+ADMIN on the project, in the action that authorizes the repository for that
+project at all: onboarding. `factory_project_repositories` holds it, with
+`scope_kind` recording whether a person chose `WHOLE_REPOSITORY` or named
+directories — because `['**']` has to be a *choice*, and the difference between
+"somebody said the whole repository" and "nobody said anything" is the whole
+correction. A person types directories; the server writes the globs, because a
+glob is a small language and a boundary written in one is a boundary somebody
+widens by accident.
+
+`submitObjective` then reads it, and this is authorization **at submission**
+rather than only at assignment. `services/bins/routing.ts` already refuses to
+hand a repository bin to a worker not registered for that repository, and that
+check is real — it is also late, firing after a change request, a campaign, a
+plan and bins exist. The boundary asks a strictly stronger question at the moment
+it is cheap: not "is some worker registered for this repository" but "is *this
+project* authorized to change it, and inside which paths". A submission that says
+nothing about its reach gets the boundary rather than `['**']`; one that reaches
+outside it is refused, naming what was outside and saying that narrowing later
+would not have corrected it.
+
+It applies to a **remote** submission and not to a local one, on the line
+`execution_mode` is already derived from. A submission naming a repository the
+forge can read becomes a hosted campaign that a worker somewhere else will be
+handed, and where that worker may write is a question about an authorization. A
+submission with no remote is pinned from a checkout on the machine running the
+code — `npm run factory`, §26's "reaching the shell is the authentication" — and
+is how the bootstrap campaign ran, in the one repository the envelope
+deliberately does not grant.
+
+**Separate repositories and folders in a shared one are both supported, and
+choosing between them is not a prerequisite for anything.** Separate
+repositories: one grant, one onboarding, one worker, one surface each, separated
+by `worker_routing.repositories`. A shared repository: one grant, one worker, one
+surface, and one boundary row per project — two projects with `sites/v4/**` and
+`sites/v2/**` cannot reach each other's files, and neither needs the other to
+exist. Moving a site from one arrangement to the other is additive and changes no
+campaign, commit, review or row.
