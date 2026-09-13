@@ -2499,7 +2499,7 @@ describe('nothing in scripts/ can record a design decision', () => {
     expect(reporter).toContain('standingDecision');
     expect(reporter).toContain('digestRenderSet');
     // …and imports no writer.
-    expect(reporter).not.toContain('recordDesignDecision');
+    expect(codeOf(reporter)).not.toContain('recordDesignDecision');
   });
 
   it('is true of every script, not only the reporter', () => {
@@ -2528,5 +2528,94 @@ describe('nothing in scripts/ can record a design decision', () => {
     // Append-only: no UPDATE and no DELETE anywhere in it.
     expect(repoModule).not.toMatch(/\bUPDATE design_approvals\b/);
     expect(repoModule).not.toMatch(/\bDELETE FROM design_approvals\b/);
+  });
+});
+
+/**
+ * The three defects the owner found in the acceptance plumbing, pinned.
+ *
+ * All three shared a shape worth naming: each would have produced a *plausible*
+ * wrong answer rather than an error. A combiner that declared completion over
+ * three rows, a gate that reported "nobody has approved" against a database
+ * that could never hold an approval, and a verb that wrote `APPROVE` where every
+ * reader looks for `APPROVED`. None of them would have thrown, and the last two
+ * compose into the worst version: a correctly recorded approval reading back as
+ * a rejection.
+ */
+describe('the acceptance plumbing, where a plausible wrong answer was possible', () => {
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+  const combiner = fs.readFileSync(path.join(repo, 'scripts', 'step12b-combine.ts'), 'utf8');
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+  const admin = fs.readFileSync(path.join(repo, 'scripts', 'admin.ts'), 'utf8');
+
+  /*
+   * Comments stripped before any *negative* assertion.
+   *
+   * The first version of the verb test failed against the fixed file, because
+   * the comment explaining the defect quotes the defect verbatim — so the
+   * assertion was reading the prose about the code rather than the code. A
+   * negative source assertion that can be tripped by a sentence describing the
+   * thing it forbids is worse than none: it punishes writing down why.
+   */
+  const codeOf = (source: string): string =>
+    source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  it('names all seventeen scenarios in the combiner, not in the input', () => {
+    const declared = /const SCENARIOS = \[([^\]]+)\]/.exec(combiner);
+    expect(declared, 'the combiner must declare the scenario set itself').not.toBeNull();
+    const ids = [...(declared?.[1] ?? '').matchAll(/'([A-Q])'/g)].map((m) => m[1]);
+    expect(ids).toEqual('ABCDEFGHIJKLMNOPQ'.split(''));
+    // Taking the set from the first reading is what let a truncated input
+    // define its own completeness.
+    expect(codeOf(combiner)).not.toContain('new Set(readings.flatMap');
+  });
+
+  it('refuses a reading that is missing, duplicates or invents a gate', () => {
+    for (const refusal of ['unknown', 'duplicate', 'absent']) {
+      expect(combiner, `the ${refusal} refusal`).toContain(refusal);
+    }
+    expect(combiner).toMatch(/is missing gate\(s\)/);
+    expect(combiner).toMatch(/carries duplicate record\(s\)/);
+    expect(combiner).toMatch(/are not Step 12B scenarios/);
+  });
+
+  it('requires the full denominator before declaring completion', () => {
+    // `counts.PASS === combined.length` alone is true of any set where
+    // everything present passed — including one missing fourteen rows.
+    expect(combiner).toContain('counts.PASS === SCENARIOS.length');
+    expect(combiner).toContain('combined.length === SCENARIOS.length');
+  });
+
+  it('reads the design decision while the configured database is still open', () => {
+    /*
+     * The ordering is the whole fix. `readOperationalFleet` closes the
+     * configured database and the exercising half then opens a temporary
+     * SQLite one, so anything asking `getDb()` after that point is asking the
+     * scratch database — which has `design_approvals` and can never have a row.
+     */
+    const readsDesign = reporter.indexOf('await readDesignDecision(');
+    const opensScratch = reporter.indexOf("config: { provider: 'sqlite'");
+    expect(readsDesign, 'the design reading must exist').toBeGreaterThan(-1);
+    expect(opensScratch, 'the scratch database must exist').toBeGreaterThan(-1);
+    expect(
+      readsDesign,
+      'the design decision must be read before the scratch database replaces the configured one',
+    ).toBeLessThan(opensScratch);
+    // And gate O must consume that reading rather than querying again.
+    const gateO = reporter.slice(reporter.indexOf('/* -- O. Visual and interaction approval'));
+    expect(codeOf(gateO)).not.toContain('standingDecision(');
+  });
+
+  it('maps each verb to a decision the vocabulary recognises', () => {
+    // `approve`.toUpperCase() is `APPROVE`, which no reader matches — and
+    // because gate O asks `!== 'APPROVED'`, it would have read as a rejection.
+    expect(codeOf(admin)).not.toContain('command.toUpperCase() as DesignDecision');
+    expect(admin).toContain("approve: 'APPROVED'");
+    expect(admin).toContain("reject: 'REJECTED'");
+    expect(admin).toContain("withdraw: 'WITHDRAWN'");
+  });
+
+  it('still cannot record the decision it evaluates', () => {
+    expect(reporter).not.toContain('recordDesignDecision');
   });
 });

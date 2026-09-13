@@ -364,6 +364,108 @@ interface FleetReading {
   };
 }
 
+/**
+ * The render set on disk, and the decision the **authoritative** Brain holds
+ * about it.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this cannot live down in gate O
+ * ---------------------------------------------------------------------------
+ *
+ * It did, and it was wrong in a way that would never have shown up as an error.
+ * `readOperationalFleet` closes the configured database, and the exercising half
+ * then opens a **temporary SQLite** one it creates and deletes. Gate O runs
+ * after that, so `standingDecision(...)` was querying the scratch database —
+ * which has a `design_approvals` table (every migration runs there) and can
+ * never have a row in it. O would have reported "no decision is recorded for
+ * this revision" forever, however many times the owner recorded one, and the
+ * message would have looked entirely reasonable.
+ *
+ * So the decision is read here, in the same read-only phase as the fleet, from
+ * the Brain a person actually signed in to. The digest is pure file I/O and is
+ * computed here too, because the query needs it.
+ *
+ * A database that cannot be read is reported as **not read** rather than as an
+ * absent approval — the same three-answer rule the fleet reading follows, and
+ * for the same reason: *we could not look* and *we looked and it is not there*
+ * have different remedies.
+ */
+export interface DesignReading {
+  /** Null when there is no render set to decide about. */
+  digest: string | null;
+  count: number;
+  screens: string[];
+  widths: number[];
+  /** Why there is nothing to digest, when there is nothing. */
+  absent: string | null;
+  /** The standing decision, or null when none is recorded for this exact pair. */
+  decision: Awaited<ReturnType<typeof standingDecision>>;
+  /** Set when the decisions table could not be read at all. */
+  unreadable: string | null;
+}
+
+async function readDesignDecision(revision: string | null): Promise<DesignReading> {
+  const empty = (absent: string): DesignReading => ({
+    digest: null,
+    count: 0,
+    screens: [],
+    widths: [],
+    absent,
+    decision: null,
+    unreadable: null,
+  });
+
+  if (!REPO_VISIBLE) return empty('this run cannot see the repository');
+  if (!revision) return empty('this run cannot name its revision');
+
+  const dir = path.join(REPO, 'docs', 'evidence', 'step12b-renders');
+  const indexPath = path.join(dir, 'index.json');
+  if (!fs.existsSync(indexPath)) {
+    return empty('docs/evidence/step12b-renders/index.json does not exist');
+  }
+
+  let declared: { screen: string; width: number; file: string }[];
+  try {
+    declared = JSON.parse(fs.readFileSync(indexPath, 'utf8')) as typeof declared;
+  } catch {
+    return empty('the render index is not readable JSON');
+  }
+  if (!Array.isArray(declared) || declared.length === 0) {
+    return empty('the render index declares no renders');
+  }
+  const missing = declared.filter((entry) => !fs.existsSync(path.join(dir, entry.file)));
+  if (missing.length > 0) {
+    return empty(
+      `the index declares ${missing.length} render(s) that are not on disk ` +
+        `(${missing.slice(0, 3).map((entry) => entry.file).join(', ')})`,
+    );
+  }
+
+  const { digest, count } = digestRenderSet(
+    declared.map((entry) => ({
+      path: entry.file,
+      width: entry.width,
+      screen: entry.screen,
+      bytes: fs.readFileSync(path.join(dir, entry.file)),
+    })),
+  );
+  const reading: DesignReading = {
+    digest,
+    count,
+    screens: [...new Set(declared.map((entry) => entry.screen))].sort(),
+    widths: [...new Set(declared.map((entry) => entry.width))].sort((a, b) => a - b),
+    absent: null,
+    decision: null,
+    unreadable: null,
+  };
+  try {
+    reading.decision = await standingDecision(revision, digest);
+  } catch (error) {
+    reading.unreadable = error instanceof Error ? error.message : String(error);
+  }
+  return reading;
+}
+
 async function readOperationalFleet(): Promise<FleetReading> {
   try {
     await initDatabase();
@@ -567,6 +669,15 @@ function surfaceBlocker(reading: FleetReading): { verdict: Verdict; detail: stri
 async function main(): Promise<void> {
   // Read the real fleet first, then close it. Everything after this line writes.
   const fleet = await readOperationalFleet();
+  /*
+   * Taken here, while the **configured** database is still the one `getDb()`
+   * answers. Down in gate O it would have queried the temporary SQLite the
+   * exercising half opens — which has the table and can never have a row — so
+   * O would have reported "no decision is recorded" however many times a person
+   * recorded one. `revisionOf()` is pure, so this is safe to call before the
+   * scratch database exists.
+   */
+  const design = await readDesignDecision(revisionOf().revision);
   const blocker = surfaceBlocker(fleet);
 
   /*
@@ -1725,30 +1836,24 @@ async function main(): Promise<void> {
    * distinction the owner drew is the whole design: **evaluating an approval is
    * a different act from granting one.**
    *
-   * So this reads three things and judges none of them:
+   * Everything it judges was read in the read-only phase, against the Brain a
+   * person actually signed in to — see `readDesignDecision`, and the defect that
+   * moved it there. What it does here is compare, and say what it found:
    *
-   *   1. the render set on disk, digested over the *bytes* of every declared
-   *      render — because an approval names what somebody looked at, and a
-   *      directory is mutable;
-   *   2. whether a decision exists for **this revision and that digest**; and
-   *   3. what the decision says.
+   *   PASS     a standing APPROVED decision for this exact revision and this
+   *            exact set of render bytes.
+   *   FAIL     a standing REJECTED or WITHDRAWN decision — a recorded answer,
+   *            reported as the answer rather than as a missing one — or a
+   *            render set that is absent, unreadable or inconsistent, which is
+   *            a check that ran and did not hold.
+   *   BLOCKED  the set is sound and nobody has decided about it yet. An
+   *            operational fact with one remedy, and the remedy is a person's.
    *
-   * An approval for a different revision, or for a render set that has since
-   * changed, is **stale** and is reported as such rather than carried forward —
-   * §23's reservation-bound-to-the-bytes rule, at a design gate. A `WITHDRAWN`
-   * row after an `APPROVED` one means there is no approval, because the standing
-   * decision is the newest one and the table is append-only.
-   *
-   * Nothing in this file can write one of those rows. `designApprovals.ts`
-   * exports the writer, this script does not import it, and a test asserts that
-   * no module under `scripts/` does — because a reporter that could record the
-   * approval it is waiting for would be approving its own work, which is the
-   * defect `independenceEvidence.ts` re-checks its own guard to prevent.
+   * An approval for a different revision or a changed render set does not match
+   * and therefore does not apply — §23's reservation-bound-to-the-bytes rule at
+   * a design gate. Nothing in this file can write one of those rows, and a test
+   * asserts no module under `scripts/` imports the writer but `admin.ts`.
    */
-  const renderDir = path.join(REPO, 'docs', 'evidence', 'step12b-renders');
-  const renderIndex = path.join(renderDir, 'index.json');
-  const stamp = revisionOf();
-
   if (!REPO_VISIBLE) {
     record(
       'O',
@@ -1756,129 +1861,64 @@ async function main(): Promise<void> {
       'NOT_RUN',
       `O needs the render set, which is a repository fact. ${NOT_FROM_A_CHECKOUT}`,
     );
-  } else if (!fs.existsSync(renderIndex)) {
-    /*
-     * An executed check that did not hold. Not NOT_RUN: this run looked, and
-     * what it found was that the set a decision would be about does not exist.
-     */
+  } else if (design.absent) {
     record(
       'O',
       'Visual and interaction approval',
       'FAIL',
-      'No render set to decide on: docs/evidence/step12b-renders/index.json does not exist, so ' +
-        'there is nothing a person could have approved and nothing for this to evaluate. ' +
-        'Produce the renders and run `npm run design:manifest`.',
+      `There is nothing for a person to have decided about, and nothing here to evaluate: ` +
+        `${design.absent}. Produce the renders and run \`npm run design:manifest\`.`,
     );
-  } else if (!stamp.revision || stamp.dirty) {
+  } else if (design.unreadable) {
     record(
       'O',
       'Visual and interaction approval',
       'FAIL',
-      stamp.dirty
-        ? `The tree is dirty at ${stamp.revision?.slice(0, 8) ?? 'an unknown revision'}, so an ` +
-          'approval could only be bound to a revision that exists nowhere. Commit, re-run ' +
-          '`npm run design:manifest`, then ask for the decision.'
-        : 'This run cannot name its revision, and an approval has to be bound to one.',
+      `The render set digests to ${design.digest?.slice(0, 12)}…, and the decisions table could ` +
+        `not be read (${design.unreadable}) — so whether it was approved is unknown rather than ` +
+        'unapproved.',
     );
   } else {
-    let declared: { screen: string; width: number; file: string }[] = [];
-    let readable = true;
-    try {
-      declared = JSON.parse(fs.readFileSync(renderIndex, 'utf8')) as typeof declared;
-    } catch {
-      readable = false;
-    }
-    const missing = declared.filter((entry) => !fs.existsSync(path.join(renderDir, entry.file)));
-
-    if (!readable || declared.length === 0 || missing.length > 0) {
+    const covers =
+      `${design.count} render(s) covering ${design.screens.length} screen(s) ` +
+      `(${design.screens.join(', ')}) at ${design.widths.join(' / ')}px`;
+    const decision = design.decision;
+    if (!decision) {
+      record(
+        'O',
+        'Visual and interaction approval',
+        'BLOCKED',
+        `${covers}, digesting to ${design.digest?.slice(0, 12)}…. **No decision is recorded for ` +
+          'this exact revision and render set.** Read from the configured Brain, not from this ' +
+          'run\u2019s scratch database. One remedy, and it is not this reporter\u2019s: a person ' +
+          'records it in Russell or runs `npm run admin -- design approve`. Nothing in scripts/ ' +
+          'can write that row, deliberately \u2014 a reporter that could record the approval it ' +
+          'is waiting for would be approving its own work.',
+      );
+    } else if (decision.decision !== 'APPROVED') {
       record(
         'O',
         'Visual and interaction approval',
         'FAIL',
-        !readable
-          ? 'The render index is not readable JSON, so the set a decision would cover cannot be ' +
-            'determined — and a digest over a set nobody can enumerate is not a binding.'
-          : declared.length === 0
-            ? 'The render index declares no renders.'
-            : `The index declares ${missing.length} render(s) that are not on disk ` +
-              `(${missing.slice(0, 3).map((entry) => entry.file).join(', ')}). A decision bound to ` +
-              'this set would name bytes that do not exist.',
+        `The standing decision for this render set is **${decision.decision}**, recorded by ` +
+          `${decision.approvedByUserId} at ${decision.createdAt}` +
+          (decision.note ? ` \u2014 "${decision.note}"` : '') +
+          '. A withdrawal or a rejection is as much a recorded decision as an approval, and is ' +
+          'reported as the answer rather than as a missing one.',
       );
     } else {
-      const { digest, count } = digestRenderSet(
-        declared.map((entry) => ({
-          path: entry.file,
-          width: entry.width,
-          screen: entry.screen,
-          bytes: fs.readFileSync(path.join(renderDir, entry.file)),
-        })),
+      record(
+        'O',
+        'Visual and interaction approval',
+        'PASS',
+        `Approved by ${decision.approvedByUserId} at ${decision.createdAt}` +
+          (decision.note ? ` \u2014 "${decision.note}"` : '') +
+          `, bound to revision ${decision.revision.slice(0, 8)} and to render-set digest ` +
+          `${decision.renderSetDigest.slice(0, 12)}… (${covers}). The digest was recomputed from ` +
+          'the bytes on disk in this run and the decision was read from the configured Brain, so ' +
+          'the approval stops applying the moment either the tree or a render changes. This ' +
+          'reporter evaluated that decision and cannot record one.',
       );
-      const screens = [...new Set(declared.map((entry) => entry.screen))].sort();
-      const widths = [...new Set(declared.map((entry) => entry.width))].sort((a, b) => a - b);
-      const covers =
-        `${count} render(s) covering ${screens.length} screen(s) ` +
-        `(${screens.join(', ')}) at ${widths.join(' / ')}px`;
-
-      /*
-       * The decision is read from the **configured** Brain rather than from the
-       * scratch database, because an approval a person gave lives where their
-       * other decisions live. Read-only, in the same phase and with the same
-       * honesty as the fleet reading: a database that cannot be read is reported
-       * as not read rather than as an absent approval.
-       */
-      let decision: Awaited<ReturnType<typeof standingDecision>> = null;
-      let decisionReadable = true;
-      try {
-        decision = await standingDecision(stamp.revision, digest);
-      } catch {
-        decisionReadable = false;
-      }
-
-      if (!decisionReadable) {
-        record(
-          'O',
-          'Visual and interaction approval',
-          'FAIL',
-          `The render set digests to ${digest.slice(0, 12)}… (${covers}), and the decisions table ` +
-            'could not be read, so whether it was approved is unknown rather than unapproved.',
-        );
-      } else if (!decision) {
-        record(
-          'O',
-          'Visual and interaction approval',
-          'BLOCKED',
-          `${covers}, digesting to ${digest.slice(0, 12)}… at revision ` +
-            `${stamp.revision.slice(0, 8)}. **No decision is recorded for this exact revision and ` +
-            'render set.** This is an operational fact with one remedy and it is not this ' +
-            'reporter\u2019s: a person signs in and records it, or runs `npm run admin -- design ' +
-            'approve`. Nothing in scripts/ can write that row, deliberately \u2014 a reporter that ' +
-            'could record the approval it is waiting for would be approving its own work.',
-        );
-      } else if (decision.decision !== 'APPROVED') {
-        record(
-          'O',
-          'Visual and interaction approval',
-          'FAIL',
-          `The standing decision for this render set is **${decision.decision}**, recorded by ` +
-            `${decision.approvedByUserId} at ${decision.createdAt}` +
-            (decision.note ? ` — "${decision.note}"` : '') +
-            '. A withdrawal or a rejection is as much a recorded decision as an approval, and it ' +
-            'is reported as the answer rather than as a missing one.',
-        );
-      } else {
-        record(
-          'O',
-          'Visual and interaction approval',
-          'PASS',
-          `Approved by ${decision.approvedByUserId} at ${decision.createdAt}` +
-            (decision.note ? ` — "${decision.note}"` : '') +
-            `, bound to revision ${stamp.revision.slice(0, 8)} and to render-set digest ` +
-            `${digest.slice(0, 12)}… (${covers}). The digest is recomputed from the bytes on disk ` +
-            'in this run, so an approval stops applying the moment either the tree or a render ' +
-            'changes, rather than being carried forward. This reporter evaluated that decision ' +
-            'and cannot record one.',
-        );
-      }
     }
   }
 
