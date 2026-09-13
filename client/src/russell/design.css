@@ -1804,6 +1804,117 @@ button.rs-card:hover {
   color: var(--ink);
 }
 
+/* ------------------------------------------------------- software decisions
+ *
+ * The card a person authorizes a change to their own code on, and the trail the
+ * conversation shows afterwards. Both sit inside surfaces that already reflow
+ * by container, so there is no width query here and no `min-width` at all: the
+ * one rule `tests/step12bResponsive.test.tsx` enforces is that nothing declares
+ * itself wider than a phone.
+ */
+.rs-repo-boundary {
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--ink);
+}
+
+.rs-repo-scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.rs-repo-scope-choice {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-2);
+  font-size: var(--step--1);
+}
+
+.rs-repo-scope textarea {
+  width: 100%;
+  font: inherit;
+  font-size: var(--step--1);
+}
+
+.rs-build-scope {
+  margin: 0;
+  color: var(--ink);
+}
+
+.rs-software {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+}
+
+/* The reach, in the server's own sentence, immediately above the button that
+ * grants it. Not soft: it is the part of this card a person is actually
+ * deciding about. */
+.rs-software-scope {
+  margin: 0;
+  color: var(--ink);
+}
+
+.rs-software-where {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  font-size: var(--step--1);
+}
+
+.rs-software-where select {
+  font: inherit;
+  max-width: 100%;
+}
+
+.rs-software-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+}
+
+.rs-software-progress {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.rs-software-pr {
+  margin: 0;
+  font-size: var(--step--1);
+}
+
+.rs-thread-software {
+  border-top: 1px solid var(--rule);
+  padding-block: var(--gap-3);
+}
+
+.rs-thread-software ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.rs-thread-software-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--gap-2);
+  font-size: var(--step--1);
+}
+
+.rs-thread-software-line {
+  color: var(--ink-soft);
+}
+
+.rs-thread-software-needs {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 /* ------------------------------------------------- the living constellation
  *
  * A real spatial diagram (§20), not a nested list renamed "map". The list

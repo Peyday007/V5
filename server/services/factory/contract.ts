@@ -39,6 +39,7 @@ import { inspectRepository } from './git.ts';
 import { FACTORY_DEFAULT_REPO_ROOT } from '../../env.ts';
 import { checkReadable, readFile, resolveBranch } from './forge.ts';
 import { REPOSITORY_ENVELOPE_ID, decideRepository } from './repositoryEnvelope.ts';
+import { ScopeError, resolveProjectScope } from './projectScope.ts';
 
 /** A contract field nothing but a person may change. */
 export const IMMUTABLE_FIELDS = [
@@ -396,6 +397,44 @@ export async function submitObjective(
   const derived = submission.repositoryRemote
     ? await deriveFromForge({ ...submission, repositoryRemote: submission.repositoryRemote })
     : await deriveDefaults(submission);
+
+  /*
+   * The project's own authorization, and the scope this campaign will run under.
+   *
+   * **Asked of a remote submission and not of a local one, and the line is the
+   * same one `execution_mode` is already derived from.** A submission naming a
+   * repository the forge can read is the one that becomes a hosted campaign: a
+   * worker somewhere else will be handed it, and where that worker may write is
+   * a question about an authorization somebody granted rather than about a
+   * checkout somebody has. A submission with no remote is pinned from a
+   * checkout on the machine running this code — `npm run factory`, §26's
+   * "reaching the shell is the authentication" — and is how the bootstrap
+   * campaign ran, in the one repository the envelope deliberately does not
+   * grant. Requiring a boundary there would refuse the only path that has ever
+   * legitimately used it.
+   *
+   * What this adds to the remote path is two things `deriveFromForge` does not
+   * do. It refuses a repository the *project* was never given, which the
+   * envelope alone cannot decide — the envelope says what the factory may be
+   * pointed at, not which project may point it. And it replaces the `['**']`
+   * default with the boundary a person declared, which is the whole correction:
+   * see `projectScope.ts` for why an optional field defaulting to the widest
+   * value was never a boundary.
+   *
+   * It is asked *here* rather than inside the deriver so there is one reader.
+   */
+  const scope = submission.repositoryRemote
+    ? await resolveProjectScope({
+        projectId: submission.projectId,
+        repository: derived.repository,
+        requested: submission.mutationScope,
+      }).catch((error: unknown) => {
+        if (error instanceof ScopeError) throw new ContractError(error.message, error.detail);
+        throw error;
+      })
+    : null;
+  const mutationScope = scope ? scope.effective : derived.mutationScope;
+
   const conditions = validateConditions(submission.acceptanceConditions ?? []);
   const submissionKey =
     submission.submissionKey ?? submissionKeyFor(submission.projectId, objective);
@@ -413,7 +452,7 @@ export async function submitObjective(
     baseSha: derived.baseSha,
     environment: submission.environment ?? 'LOCAL',
     riskClass: derived.riskClass,
-    mutationScope: derived.mutationScope,
+    mutationScope,
     deploymentPolicy: submission.deploymentPolicy ?? 'NONE',
     rollbackRequirement: derived.rollbackRequirement,
     verificationCommands: derived.verificationCommands,
@@ -430,7 +469,14 @@ export async function submitObjective(
     },
   });
 
-  return { changeRequest, created, derived };
+  /*
+   * The scope in the answer is the scope that was *stored*, not the one the
+   * deriver guessed before the boundary was applied. Build renders this before a
+   * person approves, and a card that showed `**` while the row said
+   * `sites/v4/**` would be a screen disagreeing with the contract it is asking
+   * about.
+   */
+  return { changeRequest, created, derived: { ...derived, mutationScope } };
 }
 
 /**

@@ -197,7 +197,10 @@ export function RussellShell({
   }, [onSignedOut]);
 
   const needsYou = useAsync(
-    () => (projectId ? RussellApi.needsYou(projectId) : Promise.resolve({ requests: [] })),
+    () =>
+      projectId
+        ? RussellApi.needsYou(projectId)
+        : Promise.resolve({ requests: [], software: [], repositories: [] }),
     [projectId],
   );
   /*
@@ -214,6 +217,10 @@ export function RussellShell({
   );
   const openCount =
     (needsYou.data?.requests.length ?? 0) +
+    // A software change waiting to be authorized, and a campaign stopped at a
+    // blocker or a release, are decisions too. Counted from the same read the
+    // panel renders, for the reason the approval above is.
+    (needsYou.data?.software.length ?? 0) +
     (authority.data && authority.data.grant === null ? 1 : 0);
 
   /* Bumped after the command bar posts, so the open thread re-reads itself. */

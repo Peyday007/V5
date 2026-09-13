@@ -49,6 +49,7 @@ import {
 import { decideProjectAccess } from '../identity/policy.ts';
 import { getProject } from '../../repos/projects.ts';
 import { capture, shouldCapture } from './judgment.ts';
+import { captureSoftwareChange } from './software.ts';
 import { routeMessage } from './routing.ts';
 import {
   EXECUTABLE_ACTIONS,
@@ -353,6 +354,28 @@ async function createTurnBin(input: {
          */
         `optional "priority", from exactly this set: ${CANDIDATE_PRIORITIES.join(', ')}`,
         'for CAPTURE_CANDIDATE: a "candidate" object with "title" and "statement"',
+        /*
+         * The distinction the software entrance turns on, stated to the worker
+         * rather than left to be inferred — the same lesson `priority` and
+         * `duplicateOf` each cost a real turn to learn.
+         *
+         * It says what the two actions *are*, and deliberately does not say
+         * which repository or which files: those are an authorization a person
+         * holds, and a manifest that invited a guess at them would be inviting
+         * exactly the model-chosen scope this design refuses. It also says
+         * plainly that nothing runs — a worker that thought it was starting
+         * work would write the objective differently.
+         */
+        'REQUEST_SOFTWARE_CHANGE is for a change to this project’s code that the person ' +
+          'is asking to have made — "change the checkout page so the total updates without ' +
+          'a reload". Weighing one, or wondering aloud about one, is CAPTURE_CANDIDATE ' +
+          'instead. Nothing is submitted or run by either: this writes it down for the ' +
+          'person to authorize, and they choose the repository.',
+        'for REQUEST_SOFTWARE_CHANGE: a "software" object with "title" (short), ' +
+          '"objective" (what should become true in the code) and "expectedOutcome" ' +
+          '(what a person would see differently afterwards). Do not name a repository, ' +
+          'a branch, a file or a directory — Brain supplies those from what this project ' +
+          'is authorized to change.',
         /*
          * The one comparison a model is better at than the server, offered as
          * a claim the server then checks.
@@ -1058,6 +1081,54 @@ async function applyValidated(input: {
           captureOutcome: outcome.reason,
         },
         candidateId: outcome.candidate?.id ?? null,
+      };
+    }
+
+    case 'REQUEST_SOFTWARE_CHANGE': {
+      if (!proposal.software) break;
+      /*
+       * A software change belongs to a project, because the project is what a
+       * repository was authorized for. A thread with none attached cannot have
+       * one, and saying so is better than capturing a request nobody could
+       * ever authorize.
+       */
+      if (!conversation.projectId) {
+        return {
+          produced: { softwareDeclined: true, gateReason: 'NO_PROJECT_ATTACHED' },
+          candidateId: null,
+        };
+      }
+      /*
+       * The deterministic gate, on the person's own message rather than the
+       * worker's restatement of it — `shouldCapture`'s correction applied to
+       * the harder question. Discussing a change is not asking for one, and a
+       * model that decided otherwise would put an authorization card in front
+       * of somebody who was thinking out loud.
+       */
+      const outcome = await captureSoftwareChange({
+        projectId: conversation.projectId,
+        conversationId,
+        messageId: input.askedMessageId ?? null,
+        askedText: input.askedText,
+        title: proposal.software.title,
+        objective: proposal.software.objective,
+        expectedOutcome: proposal.software.expectedOutcome,
+      });
+      if (!outcome.request) {
+        return {
+          produced: { softwareDeclined: true, gateReason: outcome.reason },
+          candidateId: null,
+        };
+      }
+      return {
+        produced: {
+          softwareRequestId: outcome.request.id,
+          softwareCreated: outcome.created,
+          // Said out loud, because "written down for you to authorize" and
+          // "you already have this waiting" are different answers.
+          softwareOutcome: outcome.reason,
+        },
+        candidateId: null,
       };
     }
 

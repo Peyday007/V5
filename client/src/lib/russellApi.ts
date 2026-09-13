@@ -38,6 +38,10 @@ import type { FleetView as FleetReading, SlownessExplanation } from '../../../se
 import type { LabExperiment, LabMode, TestEnvelope } from '../../../server/services/fleet/lab.ts';
 import type { MapType, MapView } from '../../../server/services/russell/maps.ts';
 import type { WhyThisMatters } from '../../../server/services/russell/whyThisMatters.ts';
+import type {
+  SoftwareRepositoryChoice,
+  SoftwareRequestView,
+} from '../../../server/services/russell/software.ts';
 import type { LensFinding, LensInquiry } from '../../../server/services/russell/inquiry.ts';
 import type { Preferences, PreferenceKey } from '../../../server/services/russell/preferences.ts';
 import type {
@@ -97,6 +101,14 @@ export interface BriefingResponse {
 export interface ThreadResponse {
   conversation: RussellConversation;
   turns: RussellMessage[];
+  /**
+   * What this conversation asked to have built, and where each one got to.
+   *
+   * A projection: the server derives it on the read path and the campaign half
+   * is `campaignBriefing`'s, so the thread and Build cannot report different
+   * states for one campaign.
+   */
+  software: SoftwareRequestView[];
 }
 
 export interface TurnResponse {
@@ -511,8 +523,59 @@ export const RussellApi = {
   ): Promise<{ knowledge: RussellKnowledge[]; knows: KnowsSurface }> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/knowledge`),
 
-  needsYou: (projectId: string): Promise<{ requests: RussellHumanRequest[] }> =>
-    api(`/api/russell/projects/${encodeURIComponent(projectId)}/needs-you`),
+  /**
+   * Every kind of decision this project is waiting on, from one read.
+   *
+   * Three tables, one answer, because a person does not have three inboxes: a
+   * parked packet, a software change waiting to be authorized and a campaign
+   * stopped at a release are the same thing to them. Composing them server-side
+   * is also what stops the briefing and this panel disagreeing, which is the
+   * defect §29 records.
+   */
+  needsYou: (
+    projectId: string,
+  ): Promise<{
+    requests: RussellHumanRequest[];
+    software: SoftwareRequestView[];
+    repositories: SoftwareRepositoryChoice[];
+  }> => api(`/api/russell/projects/${encodeURIComponent(projectId)}/needs-you`),
+
+  /** Everything this project has asked to have built, in any state. */
+  software: (projectId: string): Promise<{ software: SoftwareRequestView[] }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/software`),
+
+  /**
+   * Authorize one software change. The only call in this path that spends
+   * anything, and the server re-checks every part of it: the person, the
+   * project, the repository this project was given, and the boundary any
+   * narrowing has to fit inside.
+   */
+  authorizeSoftware: (
+    requestId: string,
+    input: {
+      grantId: string;
+      baseBranch?: string | null;
+      mutationScope?: string[] | null;
+      acceptanceConditions?: { statement: string; verification: string }[];
+    },
+  ): Promise<{
+    ok: true;
+    request: unknown;
+    campaignId: string;
+    changeRequestId: string;
+    scope: string[];
+    execution: string;
+  }> =>
+    api(`/api/russell/software/${encodeURIComponent(requestId)}/authorize`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  declineSoftware: (requestId: string, reason: string): Promise<{ ok: true }> =>
+    api(`/api/russell/software/${encodeURIComponent(requestId)}/decline`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
 
   answer: (requestId: string, choice: string, reason?: string): Promise<RussellHumanRequest> =>
     api(`/api/russell/needs-you/${encodeURIComponent(requestId)}/answer`, {

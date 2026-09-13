@@ -43,15 +43,13 @@ import {
   listSessions,
   listWorkers,
 } from '../repos/factoryFleet.ts';
-import { ContractError, approveObjective, submitObjective } from '../services/factory/contract.ts';
-import { ensureCampaign } from '../repos/factory.ts';
-import { INITIAL_LANE_TARGET } from '../services/factory/scheduler.ts';
+import { ContractError, submitObjective } from '../services/factory/contract.ts';
 import { campaignMetrics } from '../services/factory/metrics.ts';
 import { capacity, readiness } from '../services/factory/registry.ts';
 import { campaignBriefing } from '../services/factory/projections.ts';
 import { throughputReport } from '../services/factory/throughput.ts';
 import { pullRequestFor } from '../services/factory/pullRequest.ts';
-import { campaignSpecFor } from '../services/factory/remote.ts';
+import { approveAndStartCampaign } from '../services/factory/start.ts';
 import { onboardRepository, repositoryOnboarding } from '../services/factory/onboard.ts';
 import { getUser } from '../repos/identity.ts';
 import {
@@ -289,9 +287,35 @@ factoryRouter.post(
     const actor = await getUser(principal.id);
     if (!actor || actor.disabledAt) throw notFound('No such route.');
 
+    /*
+     * The one thing here a person actually decides, and it has no default.
+     *
+     * `scope` is `WHOLE_REPOSITORY`, or `DIRECTORIES` with the folders this
+     * project owns. A request that omits it is refused rather than given the
+     * whole repository — which is the entire point of the boundary, and the
+     * reason it is validated here instead of being coerced. See
+     * `services/factory/projectScope.ts`.
+     */
+    const body = bodyOf(req);
+    const scopeKind = requiredString(body['scopeKind'], 'scopeKind');
+    if (scopeKind !== 'WHOLE_REPOSITORY' && scopeKind !== 'DIRECTORIES') {
+      throw badRequest(
+        '`scopeKind` is "WHOLE_REPOSITORY" or "DIRECTORIES". A project owning its whole ' +
+          'repository is an ordinary answer and has to be given rather than defaulted to.',
+      );
+    }
+    const scope =
+      scopeKind === 'WHOLE_REPOSITORY'
+        ? ({ kind: 'WHOLE_REPOSITORY' } as const)
+        : ({
+            kind: 'DIRECTORIES' as const,
+            directories: optionalStringArray(body['directories'], 'directories') ?? [],
+          });
+
     const outcome = await onboardRepository({
       projectId,
       grantId: pathId(req, 'grantId'),
+      scope,
       actor,
       origin: originOf(req),
     });
@@ -327,39 +351,22 @@ factoryRouter.post(
     if (!changeRequest) throw notFound('No such change request.');
     await authorizeOrDeny(changeRequest.projectId, 'write', 'No such change request.');
 
-    const result = await approveObjective({
+    /*
+     * Approving the objective is what starts the campaign, and both entrances —
+     * this one and a person authorizing a software change in Russell — go
+     * through one function so they cannot diverge. See
+     * `services/factory/start.ts`.
+     */
+    const outcome = await approveAndStartCampaign({
       changeRequestId,
-      via: 'PERSON',
       userId: principal.id,
     });
-    if (!result.ok) throw badRequest(result.reason ?? 'The objective could not be approved.');
-
-    // Approving the objective is what starts the campaign. One campaign per
-    // change request, decided by the database, so a second approval — or a
-    // retried request — joins the campaign that exists instead of forking it.
-    const approved = result.changeRequest;
-    /*
-     * How this campaign runs, and whether it continues a pull request somebody is
-     * already reading — both derived from the contract and the forge rather than
-     * chosen here, so this route and the operator command cannot disagree about
-     * the same campaign.
-     */
-    const spec = await campaignSpecFor(approved);
-    const { campaign, created } = await ensureCampaign({
-      changeRequestId: approved.id,
-      projectId: approved.projectId,
-      baseSha: approved.baseSha,
-      laneTarget: INITIAL_LANE_TARGET,
-      laneTargetReason: 'initial',
-      executionMode: spec.executionMode,
-      integrationBranch: spec.integrationBranch,
-      pullRequest: spec.pullRequest,
-    });
+    if (!outcome.ok) throw badRequest(outcome.reason);
     res.json({
-      changeRequest: approved,
-      campaign,
-      campaignCreated: created,
-      execution: { mode: spec.executionMode, note: spec.note },
+      changeRequest: outcome.changeRequest,
+      campaign: outcome.campaign,
+      campaignCreated: outcome.campaignCreated,
+      execution: outcome.execution,
     });
   }),
 );

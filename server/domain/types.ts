@@ -5275,3 +5275,66 @@ export interface StorageReadingRow {
   object_bytes_raw: number | null;
   categories: string;
 }
+
+/* ------------------------------------------------------------------------- */
+/* A software change asked for in a conversation                             */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * PROPOSED is the only state a worker can cause, and it spends nothing.
+ *
+ * The two terminal states are a person's: AUTHORIZED means somebody submitted
+ * and approved the objective through the existing factory path, and DECLINED
+ * means they said no and the reason is kept. There is no state a model can move
+ * this row into, which is what makes "a model proposes, the server decides" true
+ * at this seam rather than merely intended.
+ */
+export const SOFTWARE_REQUEST_STATES = ['PROPOSED', 'AUTHORIZED', 'DECLINED'] as const;
+export type SoftwareRequestState = (typeof SOFTWARE_REQUEST_STATES)[number];
+
+export interface RussellSoftwareRequest {
+  id: string;
+  projectId: string;
+  conversationId: string;
+  /** The person's own message, so a card quotes what was asked. */
+  messageId: string | null;
+  title: string;
+  objective: string;
+  expectedOutcome: string;
+  /** Chosen by the person at authorization, never proposed by a worker. */
+  grantId: string | null;
+  repositoryId: string | null;
+  baseBranch: string | null;
+  /** The scope it ran under, as shown before approval. */
+  requestedScope: string[] | null;
+  submissionKey: string;
+  state: SoftwareRequestState;
+  changeRequestId: string | null;
+  campaignId: string | null;
+  authorizedByUserId: string | null;
+  declineReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RussellSoftwareRequestRow {
+  id: string;
+  project_id: string;
+  conversation_id: string;
+  message_id: string | null;
+  title: string;
+  objective: string;
+  expected_outcome: string;
+  grant_id: string | null;
+  repository_id: string | null;
+  base_branch: string | null;
+  requested_scope: string | null;
+  submission_key: string;
+  state: string;
+  change_request_id: string | null;
+  campaign_id: string | null;
+  authorized_by_user_id: string | null;
+  decline_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}

@@ -211,6 +211,7 @@ async function onboard(grantId: string) {
   const outcome = await onboardRepository({
     projectId: fixture.project.id,
     grantId,
+    scope: { kind: 'WHOLE_REPOSITORY' },
     actor,
     origin: 'https://brain.example',
   });
@@ -539,6 +540,7 @@ describe('a temporary fleet condition is a wait, and a permanent refusal is not'
     const refused = await onboardRepository({
       projectId: fixture.project.id,
       grantId: 'not-a-grant',
+      scope: { kind: 'WHOLE_REPOSITORY' },
       actor,
       origin: 'https://brain.example',
     });

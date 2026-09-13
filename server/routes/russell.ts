@@ -47,6 +47,15 @@ import { getCycle } from '../repos/russellCycle.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
 import { beginTurn, conversationIsReadable, retryTurn } from '../services/russell/turn.ts';
 import { withPendingDetail } from '../services/russell/pending.ts';
+import {
+  authorizeSoftwareRequest,
+  declineSoftware,
+  repositoryChoicesFor,
+  softwareForConversation,
+  softwareForProject,
+  softwareNeedingPerson,
+} from '../services/russell/software.ts';
+import { getSoftwareRequest } from '../repos/russellSoftware.ts';
 import { briefing, focusLayer } from '../services/russell/projections.ts';
 import { homeFor } from '../services/russell/home.ts';
 import { collectionsFor } from '../services/russell/collections.ts';
@@ -123,6 +132,8 @@ import {
   requireLayerOfProject,
   requireProject,
   requiredString,
+  optionalStringArray,
+  unprocessable,
 } from './helpers.ts';
 import { getProjectBySlug } from '../repos/projects.ts';
 import type {
@@ -243,6 +254,17 @@ russellRouter.get(
     return {
       conversation,
       turns: await withPendingDetail(await listTurns(conversation.id, limit)),
+      /*
+       * What this conversation asked to have built, and where each one got to.
+       *
+       * A projection, exactly like the pending detail above and for the same
+       * reason: it writes nothing, and the campaign half of it is
+       * `campaignBriefing`'s — the derivation Build already renders — rather
+       * than a second opinion composed here. Two surfaces inferring their own
+       * status from the same rows is how a person reads two different answers
+       * about one piece of work.
+       */
+      software: await softwareForConversation(conversation.id),
     };
   }),
 );
@@ -1274,7 +1296,117 @@ russellRouter.get(
   '/projects/:projectId/needs-you',
   handler(async (req) => {
     const project = await requireProject(pathId(req, 'projectId'));
-    return { requests: await listOpenRequests(project.id) };
+    /*
+     * Three kinds of decision, from three different tables, and they are all
+     * the same thing to the person reading the page: something that will not
+     * proceed until they answer.
+     *
+     * `software` is both halves — a change waiting to be authorized, and a
+     * campaign that has reached a blocker or a release only a person can
+     * answer. Keeping the second out would recreate §29's defect exactly: a
+     * page saying nobody is needed above work that has stopped for want of a
+     * decision.
+     */
+    const [requests, software, repositories] = await Promise.all([
+      listOpenRequests(project.id),
+      softwareNeedingPerson(project.id),
+      repositoryChoicesFor(project.id),
+    ]);
+    return { requests, software, repositories };
+  }),
+);
+
+/**
+ * Everything this project has asked to have built, whatever state it is in.
+ *
+ * Read access, because it is a reading. The detailed work view is still Build:
+ * this is the list a person scans, and each row carries the campaign id that
+ * opens the detail.
+ */
+russellRouter.get(
+  '/projects/:projectId/software',
+  handler(async (req) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { software: await softwareForProject(project.id) };
+  }),
+);
+
+/**
+ * Authorize one software change: the one action in this whole path that spends
+ * anything.
+ *
+ * `requirePerson` plus `requireProject`, which is `decideProjectAccess` at the
+ * level this route's own method requires — the same pair every other write on
+ * this router goes through, and the same pair the Build submission goes
+ * through. A worker principal is refused by type: no membership configuration
+ * turns a machine into the person who authorizes work, which is §22's split at
+ * the seam a conversation could otherwise have crossed.
+ *
+ * The repository comes from the body because it is the person's choice from the
+ * list this project was given; the *scope* does not, and cannot be widened by
+ * one — `resolveProjectScope` holds anything sent here to the boundary a person
+ * declared at onboarding.
+ */
+russellRouter.post(
+  '/software/:requestId/authorize',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const request = await getSoftwareRequest(pathId(req, 'requestId'));
+    if (!request) throw notFound('No such software request.');
+    await requireProject(request.projectId);
+
+    const body = bodyOf(req);
+    const rawConditions = body['acceptanceConditions'];
+    if (rawConditions !== undefined && !Array.isArray(rawConditions)) {
+      throw badRequest('`acceptanceConditions` is a list.');
+    }
+    const conditions = ((rawConditions ?? []) as unknown[]).map((entry, index) => {
+      if (typeof entry !== 'object' || entry === null) {
+        throw badRequest(`Acceptance condition ${index + 1} is not an object.`);
+      }
+      const record = entry as Record<string, unknown>;
+      return {
+        statement: requiredString(record['statement'], `acceptanceConditions[${index}].statement`),
+        verification: requiredString(
+          record['verification'],
+          `acceptanceConditions[${index}].verification`,
+        ),
+        mandatory: record['mandatory'] !== false,
+      };
+    });
+
+    const outcome = await authorizeSoftwareRequest({
+      requestId: request.id,
+      grantId: requiredString(body['grantId'], 'grantId'),
+      userId: principal.id,
+      baseBranch: optionalString(body['baseBranch'], 'baseBranch') ?? null,
+      mutationScope: optionalStringArray(body['mutationScope'], 'mutationScope') ?? null,
+      acceptanceConditions: conditions,
+    });
+    // A refusal here is an answer about this request — a scope outside the
+    // boundary, an objective the contract will not freeze, a request somebody
+    // else already answered. Every one of them is a 422 rather than a 500,
+    // because retrying unchanged will not help and the message names what will.
+    if (!outcome.ok) throw unprocessable(outcome.reason, outcome.detail);
+    return outcome;
+  }),
+);
+
+/** A person saying no, with the reason kept on the row. */
+russellRouter.post(
+  '/software/:requestId/decline',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const request = await getSoftwareRequest(pathId(req, 'requestId'));
+    if (!request) throw notFound('No such software request.');
+    await requireProject(request.projectId);
+    const outcome = await declineSoftware({
+      requestId: request.id,
+      reason: requiredString(bodyOf(req)['reason'], 'reason'),
+      userId: principal.id,
+    });
+    if (!outcome.ok) throw badRequest(outcome.reason);
+    return { ok: true };
   }),
 );
 

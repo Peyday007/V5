@@ -2495,6 +2495,57 @@ remote.
   perfect configured block over an empty observed one refuses rather than passing
   — `evidence_class` at an operator's command.
 
+- **The factory had no entrance from a conversation, and Build was not the
+  gap — a second pipeline would have been.** A person could describe a change to
+  a site in Russell and get a conversation back, because `PROPOSAL_ACTIONS` held
+  eight actions and none of them reached the factory. `REQUEST_SOFTWARE_CHANGE`
+  is the ninth, and everything about it is arranged so it adds a way in without
+  adding a way around: `services/factory/start.ts` is the one approve-and-start
+  both entrances call, the contract, the evidence gate, the independent review
+  and the two person-only decisions are untouched, and the whole effect a *turn*
+  can have is an unauthorized row. **Discussing a change is not asking for one**,
+  and that is drawn twice — deterministically on the person's own message, where
+  deliberation and past-tense reports lose to any number of execution verbs, and
+  structurally by the fact that a capture spends nothing and submits nothing. A
+  model never names the repository: an extra field refuses the whole proposal,
+  because which repository a project may change is an authorization in rows a
+  person wrote, and the reach travels down with the choice they make from the
+  list their project was actually given.
+
+- **An optional field defaulting to the widest value is not a boundary, and
+  narrowing afterwards cannot correct one.** `mutationScope` was optional and
+  defaulted to `['**']`, so the safe answer was the one somebody had to remember
+  and the unsafe one was free — and `amendContract` may only *narrow*, so an
+  over-broad initial scope is the widest reach that campaign will ever be judged
+  against, with the units already planned against it. The boundary is a fact
+  recorded before any objective exists, in the action that authorizes the
+  repository for that project at all, with **no default**: `scope_kind` records
+  whether a person chose the whole repository or named directories, because
+  `['**']` has to be a choice and *somebody said so* is a different fact from
+  *nobody said anything*. A person names directories and the server writes the
+  globs — a glob is a small language and a boundary written in one is a boundary
+  somebody widens by accident.
+
+  It is checked **at submission**, which is a strictly stronger question than
+  the one routing already asks and is asked when it is cheap. `bins/routing.ts`
+  refuses to hand a repository bin to a worker not registered for it, correctly
+  and *late* — after a change request, a campaign, a plan and bins exist. This
+  asks whether *this project* may change this repository and inside which paths,
+  before a row is written. On the remote path only, on the line `execution_mode`
+  is already derived from: a local pin is a person at a terminal with the
+  checkout in front of them, which is how the bootstrap campaign ran in the one
+  repository the envelope deliberately does not grant.
+
+  **Separate repositories and folders in a shared one both work, and choosing
+  is not a prerequisite for the first campaign.** Separate: one grant, one
+  worker, one surface each, separated by `worker_routing.repositories`. Shared:
+  one grant, one worker, one surface, one boundary row per project — and two
+  projects holding `sites/v4/**` and `sites/v2/**` cannot reach each other's
+  files. The properties are proved against a **fixture** repository the envelope
+  refuses, because a routing boundary needs a routing row and a manifest and no
+  grant at all, and a test's convenience is never a reason to widen a production
+  authorization.
+
 A worktree is the one factory path that is deliberately *not* authoritative
 state in either mode: it is execution scratch, the evidence is the commits, the
 rows and the artifacts, and retiring one destroys nothing that mattered. It
