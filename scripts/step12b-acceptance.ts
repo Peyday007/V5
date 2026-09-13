@@ -25,6 +25,10 @@
  *             read. Never "the code looks like it would".
  *   PARTIAL   the mechanism is exercised and one named condition of the
  *             scenario is not. The condition is printed.
+ *   FAIL      a check this run actually executed did not hold. It names what
+ *             failed. Deliberately not NOT_RUN: something *did* run, and
+ *             reporting an executed failure as "nothing happened yet" is the
+ *             one substitution that would let a defect read as a gap.
  *   BLOCKED   an operational fact stops it, named, with whose action clears it.
  *   FAIL      a check this run **executed** did not hold. A defect, printed
  *             with what was asked and what the rows said. Never NOT_RUN: a
@@ -140,6 +144,28 @@ import { fileResearchPacket } from '../server/services/research/filing.ts';
 import { currentLinksFor, driftOf } from '../server/services/russell/completionLinks.ts';
 import { collectionsFor } from '../server/services/russell/collections.ts';
 
+import {
+  DEFAULT_INVITED_ROLE,
+  INVITATION_NOT_FOUND,
+  INVITATION_REFUSAL,
+  acceptInvitation,
+  invitationsForProject,
+  inviteToProject,
+  previewInvitation,
+  withdrawInvitation,
+} from '../server/services/identity/invitations.ts';
+import { getProjectInvitation } from '../server/repos/projectInvitations.ts';
+import {
+  getMembership,
+  getUserByEmail,
+  listIdentityEvents,
+  listMembershipsForPrincipal,
+  setBrainAdmin,
+} from '../server/repos/identity.ts';
+import { listEvents } from '../server/repos/events.ts';
+import { WORKER_SCOPES } from '../server/domain/types.ts';
+import type { Principal, Project } from '../server/domain/types.ts';
+
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 
 /**
@@ -250,6 +276,31 @@ const GATE_EVIDENCE: Record<string, Environment> = {
 };
 
 const gates: Gate[] = [];
+
+/**
+ * Evidence a scenario cites, which is not itself a scenario.
+ *
+ * The mission chain below is a real exercise with two dozen asserted
+ * conditions, and it was briefly emitted as an eighteenth gate. It is not one.
+ * §30's acceptance conditions are **seventeen**, A to Q, frozen before
+ * implementation started — and a reporter that grows an extra row is a reporter
+ * whose denominator moved, which is the one thing `step12b-combine.ts` refuses
+ * outright. Widening the contract is not this file's to do, and an exercise
+ * that earns its own letter would be marking its own homework.
+ *
+ * So it prints after the matrix, under its own heading, and the scenarios it
+ * serves cite it by name. Nothing about the evidence is lost; what it stops
+ * being is a scenario.
+ */
+interface EvidenceBlock {
+  key: string;
+  title: string;
+  detail: string;
+}
+const evidence: EvidenceBlock[] = [];
+function recordEvidence(key: string, title: string, detail: string): void {
+  evidence.push({ key, title, detail });
+}
 function record(id: string, title: string, verdict: Verdict, detail: string): void {
   gates.push({ id, title, verdict, detail });
 }
@@ -1392,6 +1443,497 @@ async function runMissionChain(): Promise<ChainResult> {
   }
 }
 
+/**
+ * The human invitation and acceptance journey, driven end to end.
+ *
+ * The owner named this as missing, and it was: a person was *granted* a
+ * membership by somebody who already held their user id, and nobody was ever
+ * invited. So this is not a reading of the code — it issues real invitations
+ * against the temporary database, spends them, and asserts every property from
+ * the rows that came out, including the refusals, which is where the safety
+ * actually lives.
+ *
+ * **Every identity below is a test identity**, at `example.invalid`, created by
+ * this script. Nothing here is, or may be read as, the owner approving,
+ * granting or accepting anything.
+ *
+ * Each condition is a `[name, held]` pair so a failure names itself. A condition
+ * that ran and did not hold makes the gate `FAIL`, never `NOT_RUN`: something
+ * did run, and reporting an executed failure as "nothing has happened yet" is
+ * the one substitution that lets a defect read as a gap.
+ */
+async function inviteJourney(
+  project: Project,
+): Promise<{ conditions: (readonly [string, boolean])[]; notes: string[] }> {
+  const notes: string[] = [];
+  const at = (local: string): string => `acceptance-${local}@example.invalid`;
+
+  /*
+   * Three test identities with three different authorities, because the
+   * journey's rules are all about which of them may do what.
+   *
+   *   admin      administers the project and is a Brain administrator, so it
+   *              can authorize an account that does not exist yet;
+   *   projectAdmin  administers the project and is *not* a Brain administrator;
+   *   plainMember   is on the project and administers nothing.
+   */
+  const admin = await createUser({
+    email: at('invite-admin'),
+    displayName: 'Test identity — Brain administrator',
+    password: `acc-${randomUUID()}`,
+    isBrainAdmin: true,
+  });
+  const projectAdmin = await createUser({
+    email: at('invite-project-admin'),
+    displayName: 'Test identity — project administrator',
+    password: `acc-${randomUUID()}`,
+    isBrainAdmin: false,
+  });
+  const plainMember = await createUser({
+    email: at('invite-member'),
+    displayName: 'Test identity — ordinary member',
+    password: `acc-${randomUUID()}`,
+    isBrainAdmin: false,
+  });
+  for (const [user, role] of [
+    [admin, 'ADMIN'],
+    [projectAdmin, 'ADMIN'],
+    [plainMember, 'MEMBER'],
+  ] as const) {
+    await grantMembership({
+      projectId: project.id,
+      principalType: 'HUMAN',
+      principalId: user.id,
+      role,
+      grantedByType: 'SYSTEM',
+      grantedById: user.id,
+    });
+  }
+  const adminPrincipal = (await ownerPrincipal(admin.id))!;
+  const projectAdminPrincipal = (await ownerPrincipal(projectAdmin.id))!;
+  const memberPrincipal = (await ownerPrincipal(plainMember.id))!;
+
+  /*
+   * A worker with every scope this Brain has, and membership on the project.
+   *
+   * Built deliberately generous, because the claim being tested is that the
+   * refusal is by **principal type** rather than by configuration: a worker that
+   * was refused for lacking a scope would prove nothing about a worker that had
+   * one.
+   */
+  const worker = await createWorker({
+    name: 'acceptance-invite-worker',
+    displayName: 'Test identity — a machine',
+    createdByType: 'SYSTEM',
+    createdById: admin.id,
+  });
+  await grantMembership({
+    projectId: project.id,
+    principalType: 'WORKER',
+    principalId: worker.id,
+    role: null,
+    scopes: [...WORKER_SCOPES],
+    grantedByType: 'SYSTEM',
+    grantedById: admin.id,
+  });
+  const workerPrincipal: Principal = {
+    type: 'WORKER',
+    id: worker.id,
+    handle: worker.name,
+    displayName: worker.displayName,
+    isBrainAdmin: false,
+    mustChangePassword: false,
+    credentialId: 'acceptance:worker',
+    authMethod: 'WORKER_BEARER',
+    memberships: (await listMembershipsForPrincipal('WORKER', worker.id)).filter((m) => m.active),
+    requestId: 'acceptance:worker',
+  };
+
+  const origin = 'https://brain.invalid';
+  const before = (await invitationsForProject(project.id)).length;
+
+  // -- the refusals, first, because each must cost nothing ------------------
+
+  const byMachine = await inviteToProject({
+    principal: workerPrincipal,
+    projectId: project.id,
+    email: at('never-invited-by-a-machine'),
+    role: 'ADMIN',
+    origin,
+  });
+  const byMember = await inviteToProject({
+    principal: memberPrincipal,
+    projectId: project.id,
+    email: at('never-invited-by-a-member'),
+    role: 'MEMBER',
+    origin,
+  });
+  const byNobody = await inviteToProject({
+    principal: null,
+    projectId: project.id,
+    email: at('never-invited-by-nobody'),
+    role: 'MEMBER',
+    origin,
+  });
+  const afterRefusals = (await invitationsForProject(project.id)).length;
+
+  /*
+   * An id somebody guesses, and an id that is real but belongs to a project this
+   * caller cannot administer, must be the same refusal — the *same body*, not
+   * merely the same status, which is what invariant 23 actually says.
+   */
+  const elsewhere = await createProject({
+    name: `Acceptance — a project this caller does not administer ${randomUUID().slice(0, 8)}`,
+    description: 'Test project, created by the Step 12B acceptance reporter.',
+  });
+  const elsewhereInvite = await inviteToProject({
+    principal: adminPrincipal,
+    projectId: elsewhere.id,
+    email: at('invited-somewhere-else'),
+    role: 'VIEWER',
+    origin,
+  });
+  const realIdElsewhere = elsewhereInvite.ok ? elsewhereInvite.issued.invitation.id : 'none';
+  const guessed = await withdrawInvitation({
+    principal: projectAdminPrincipal,
+    projectId: project.id,
+    invitationId: `pinv_${randomUUID().replace(/-/g, '').slice(0, 20)}`,
+  });
+  const realButNotYours = await withdrawInvitation({
+    principal: projectAdminPrincipal,
+    projectId: project.id,
+    invitationId: realIdElsewhere,
+  });
+  const guessedBody = guessed.ok ? 'ALLOWED — defect' : guessed.reason;
+  const notYoursBody = realButNotYours.ok ? 'ALLOWED — defect' : realButNotYours.reason;
+
+  // -- the happy path -------------------------------------------------------
+
+  const invitedEmail = at('invited-collaborator');
+  const issued = await inviteToProject({
+    principal: adminPrincipal,
+    projectId: project.id,
+    email: invitedEmail,
+    // Left unsaid on purpose, so the prefilled default is what is exercised.
+    role: undefined,
+    origin,
+  });
+  if (!issued.ok) {
+    return {
+      conditions: [['an invitation can be issued at all', false] as const],
+      notes: [`Issuing refused: ${issued.reason}`],
+    };
+  }
+  const token = issued.issued.invitationUrl.split('#')[1] ?? '';
+  const row = (await getProjectInvitation(issued.issued.invitation.id))!;
+
+  /*
+   * The secret is not recoverable from anything Brain kept.
+   *
+   * Three places are checked rather than one: the row, the identity audit, and
+   * the project's own history. A digest in the row is the design; a token in an
+   * audit row would be the design defeated.
+   */
+  const rowHoldsNoToken = !JSON.stringify(row).includes(token);
+  const identityEvents = await listIdentityEvents({ projectId: project.id, limit: 200 });
+  const projectEvents = await listEvents(project.id, 200);
+  const auditHoldsNoToken =
+    !JSON.stringify(identityEvents).includes(token) &&
+    !JSON.stringify(projectEvents).includes(token);
+  const issueAudited = identityEvents.some(
+    (event) =>
+      event.action === 'INVITE_PERSON' &&
+      event.targetId === issued.issued.invitation.id &&
+      event.result === 'SUCCESS',
+  );
+  const invitedOnProjectHistory = projectEvents.some(
+    (event) => event.eventType === 'ACCESS_INVITED',
+  );
+  // The link carries the token in the fragment, so nothing before the `#` — the
+  // part a server logs — contains it.
+  const tokenOnlyInFragment =
+    issued.issued.invitationUrl.includes('#') &&
+    !(issued.issued.invitationUrl.split('#')[0] ?? '').includes(token);
+
+  const preview = await previewInvitation(token);
+  const previewLeavesItLive =
+    preview.ok && (await getProjectInvitation(row.id))!.acceptedAt === null;
+
+  /*
+   * Accepting, with a role in the body that nothing reads.
+   *
+   * The input type has no `role`, so this is cast in deliberately: the claim is
+   * that the membership comes from the invitation, and the way to drive it is to
+   * try to choose one and find it changed nothing.
+   */
+  const acceptedRaw = {
+    token,
+    password: `acc-${randomUUID()}`,
+    displayName: 'Test identity — an invited collaborator',
+    role: 'OWNER',
+    isBrainAdmin: true,
+    projectId: 'some-other-project',
+  } as unknown;
+  const accepted = await acceptInvitation(acceptedRaw as { token: string });
+  const membership = await getMembership(project.id, 'HUMAN', accepted.ok ? accepted.userId : 'x');
+  const invitedUser = await getUserByEmail(invitedEmail);
+  const invitedPrincipal = invitedUser ? await ownerPrincipal(invitedUser.id) : null;
+
+  const roleFromInvitation =
+    membership !== null &&
+    membership.role === DEFAULT_INVITED_ROLE &&
+    row.role === DEFAULT_INVITED_ROLE;
+  const acceptorGainedNoAdmin = invitedUser !== null && !invitedUser.isBrainAdmin;
+  const readsWhatTheRolePermits =
+    invitedPrincipal !== null &&
+    decideProjectAccess(invitedPrincipal, project.id, 'READ').allowed &&
+    decideProjectAccess(invitedPrincipal, project.id, 'WRITE').allowed &&
+    !decideProjectAccess(invitedPrincipal, project.id, 'ADMIN').allowed;
+  const andNoMore =
+    invitedPrincipal !== null && !decideProjectAccess(invitedPrincipal, elsewhere.id, 'READ').allowed;
+  const acceptAudited = (await listIdentityEvents({ projectId: project.id, limit: 200 })).some(
+    (event) =>
+      event.action === 'ACCEPT_PROJECT_INVITATION' &&
+      event.targetId === row.id &&
+      event.result === 'SUCCESS',
+  );
+
+  // -- spending it twice ----------------------------------------------------
+
+  const second = await acceptInvitation({ token });
+  const secondBody = second.ok ? 'ACCEPTED TWICE — defect' : second.reason;
+
+  /*
+   * And two at once, which is the case the guarded UPDATE exists for. A second
+   * invitation, because the first is spent — and both requests are issued
+   * before either is awaited, so they are genuinely racing rather than ordered.
+   */
+  const raceEmail = at('invited-twice-at-once');
+  const raced = await inviteToProject({
+    principal: adminPrincipal,
+    projectId: project.id,
+    email: raceEmail,
+    role: 'VIEWER',
+    origin,
+  });
+  const raceToken = raced.ok ? (raced.issued.invitationUrl.split('#')[1] ?? '') : '';
+  const [raceA, raceB] = await Promise.all([
+    acceptInvitation({ token: raceToken, password: `acc-${randomUUID()}` }),
+    acceptInvitation({ token: raceToken, password: `acc-${randomUUID()}` }),
+  ]);
+  const exactlyOneWon = [raceA.ok, raceB.ok].filter(Boolean).length === 1;
+
+  // -- an expired one -------------------------------------------------------
+
+  const expired = await inviteToProject({
+    principal: adminPrincipal,
+    projectId: project.id,
+    email: at('invited-too-long-ago'),
+    role: 'MEMBER',
+    origin,
+    // Already past when it is written, so this exercises the guard rather than
+    // a sleep — the condition is a comparison, and waiting would only make the
+    // reporter slower without making it truer.
+    ttlMs: -1000,
+  });
+  const expiredToken = expired.ok ? (expired.issued.invitationUrl.split('#')[1] ?? '') : '';
+  const expiredAccept = await acceptInvitation({ token: expiredToken });
+  const expiredBody = expiredAccept.ok ? 'ACCEPTED AN EXPIRED ONE — defect' : expiredAccept.reason;
+  const expiredShownWithRemedy = (await invitationsForProject(project.id)).some(
+    (entry) => entry.state === 'EXPIRED' && (entry.remedy ?? '').toLowerCase().includes('again'),
+  );
+
+  // -- an unknown token, which must read exactly like the three above --------
+
+  const unknownAccept = await acceptInvitation({
+    token: `brnv_${randomUUID().replace(/-/g, '').slice(0, 16)}.${randomUUID()}${randomUUID()}`,
+  });
+  const unknownBody = unknownAccept.ok ? 'ACCEPTED AN UNKNOWN ONE — defect' : unknownAccept.reason;
+
+  // -- an account that does not exist yet, both ways ------------------------
+
+  /*
+   * Creating an account is `decideBrainAdmin`'s to authorize, and the authority
+   * is re-read at the moment the effect happens rather than stored on the
+   * invitation. Both branches are driven: the one that may, and the one that
+   * may not — which must refuse *without spending the invitation*, because the
+   * remedy is a Brain administrator creating the account and the link has to
+   * keep working afterwards.
+   */
+  const newcomerEmail = at('invited-with-no-account');
+  const newcomer = await inviteToProject({
+    principal: adminPrincipal,
+    projectId: project.id,
+    email: newcomerEmail,
+    role: 'VIEWER',
+    origin,
+  });
+  const newcomerToken = newcomer.ok ? (newcomer.issued.invitationUrl.split('#')[1] ?? '') : '';
+  const newcomerAccepted = await acceptInvitation({
+    token: newcomerToken,
+    password: `acc-${randomUUID()}`,
+    displayName: 'Test identity — a new collaborator',
+  });
+  const newcomerUser = await getUserByEmail(newcomerEmail);
+  const accountCreatedAtTheRightAddress =
+    newcomerAccepted.ok &&
+    newcomerAccepted.createdAccount &&
+    newcomerUser !== null &&
+    newcomerUser.email === newcomerEmail &&
+    !newcomerUser.isBrainAdmin;
+
+  const unauthorizedEmail = at('invited-with-no-account-by-a-project-admin');
+  const unauthorized = await inviteToProject({
+    principal: projectAdminPrincipal,
+    projectId: project.id,
+    email: unauthorizedEmail,
+    role: 'MEMBER',
+    origin,
+  });
+  const unauthorizedToken = unauthorized.ok
+    ? (unauthorized.issued.invitationUrl.split('#')[1] ?? '')
+    : '';
+  const unauthorizedAccept = await acceptInvitation({
+    token: unauthorizedToken,
+    password: `acc-${randomUUID()}`,
+  });
+  const unauthorizedStillLive =
+    unauthorized.ok &&
+    (await getProjectInvitation(unauthorized.issued.invitation.id))!.acceptedAt === null &&
+    (await getProjectInvitation(unauthorized.issued.invitation.id))!.revokedAt === null;
+  const unauthorizedNamesRemedy =
+    !unauthorizedAccept.ok && /Brain administrator/.test(unauthorizedAccept.reason);
+  const noAccountWasMade = (await getUserByEmail(unauthorizedEmail)) === null;
+  // And the remedy actually works: the same link, once the account exists.
+  const rescuer = await createUser({
+    email: unauthorizedEmail,
+    displayName: 'Test identity — account made by an administrator',
+    password: `acc-${randomUUID()}`,
+    isBrainAdmin: false,
+  });
+  const afterRemedy = await acceptInvitation({ token: unauthorizedToken });
+  const remedyWorks =
+    afterRemedy.ok &&
+    afterRemedy.userId === rescuer.id &&
+    (await getMembership(project.id, 'HUMAN', rescuer.id))?.role === 'MEMBER';
+
+  // -- an inviter who has since lost the authority they invited with --------
+
+  /*
+   * Authority is read now rather than stored, so a link left behind by somebody
+   * who has lost `ADMIN` lets nobody in. Driven by demoting the inviter between
+   * issue and acceptance.
+   */
+  const strandedEmail = at('invited-by-someone-since-demoted');
+  await setBrainAdmin(projectAdmin.id, false);
+  const stranded = await inviteToProject({
+    principal: (await ownerPrincipal(projectAdmin.id))!,
+    projectId: project.id,
+    email: strandedEmail,
+    role: 'MEMBER',
+    origin,
+  });
+  const strandedToken = stranded.ok ? (stranded.issued.invitationUrl.split('#')[1] ?? '') : '';
+  await grantMembership({
+    projectId: project.id,
+    principalType: 'HUMAN',
+    principalId: projectAdmin.id,
+    role: 'VIEWER',
+    grantedByType: 'SYSTEM',
+    grantedById: admin.id,
+  });
+  await createUser({
+    email: strandedEmail,
+    displayName: 'Test identity — invited by a demoted administrator',
+    password: `acc-${randomUUID()}`,
+    isBrainAdmin: false,
+  });
+  const strandedAccept = await acceptInvitation({ token: strandedToken });
+  const demotionLandsImmediately =
+    !strandedAccept.ok && strandedAccept.reason === INVITATION_REFUSAL;
+
+  // -- withdrawing, and re-inviting ----------------------------------------
+
+  const withdrawEmail = at('invited-then-withdrawn');
+  const toWithdraw = await inviteToProject({
+    principal: adminPrincipal,
+    projectId: project.id,
+    email: withdrawEmail,
+    role: 'MEMBER',
+    origin,
+  });
+  const withdrawToken = toWithdraw.ok
+    ? (toWithdraw.issued.invitationUrl.split('#')[1] ?? '')
+    : '';
+  const withdrawn = await withdrawInvitation({
+    principal: adminPrincipal,
+    projectId: project.id,
+    invitationId: toWithdraw.ok ? toWithdraw.issued.invitation.id : 'none',
+  });
+  const withdrawnAccept = await acceptInvitation({ token: withdrawToken });
+  const reinvited = await inviteToProject({
+    principal: adminPrincipal,
+    projectId: project.id,
+    email: invitedEmail,
+    role: 'MEMBER',
+    origin,
+  });
+  const reinviteReplaces = reinvited.ok && reinvited.issued.replaced >= 0;
+
+  const denialsRecordCategories = (await listIdentityEvents({ limit: 400 }))
+    .filter((event) => event.action === 'ACCEPT_PROJECT_INVITATION' && event.result === 'DENIED')
+    .every(
+      (event) =>
+        event.reason !== null &&
+        !JSON.stringify(event.metadata).includes('@') &&
+        !JSON.stringify(event.metadata).includes('brnv_'),
+    );
+
+  notes.push(
+    `${(await invitationsForProject(project.id)).length} invitation(s) on the project afterwards`,
+  );
+
+  return {
+    notes,
+    conditions: [
+      ['a machine is refused by principal type, holding every scope', !byMachine.ok],
+      ['a member who does not administer the project is refused', !byMember.ok],
+      ['and is refused in the words a missing project gets', !byMember.ok && byMember.reason === 'No project with that id.'],
+      ['an unauthenticated caller is refused', !byNobody.ok],
+      ['none of those three wrote an invitation', afterRefusals === before],
+      ['a guessed invitation id is refused', !guessed.ok],
+      ["another project's real invitation id is refused identically", guessedBody === notYoursBody],
+      ['the invitation link carries its token only in the fragment', tokenOnlyInFragment],
+      ['the stored row cannot yield the token', rowHoldsNoToken],
+      ['no audit row and no project event contains it', auditHoldsNoToken],
+      ['issuing is audited against the invitation id', issueAudited],
+      ["and the project's own history records the offer", invitedOnProjectHistory],
+      ['opening the link does not consume it', previewLeavesItLive],
+      ['accepting creates the membership', membership !== null && membership.active],
+      ['at the role the invitation named, not one the acceptor asked for', roleFromInvitation],
+      ['and confers no Brain administration', acceptorGainedNoAdmin],
+      ['the invited person reads what that role permits', readsWhatTheRolePermits],
+      ['and nothing outside it', andNoMore],
+      ['accepting is audited against the invitation id', acceptAudited],
+      ['a second redemption is refused', !second.ok],
+      ['in the same words an unknown token gets', secondBody === unknownBody],
+      ['two simultaneous redemptions leave exactly one winner', exactlyOneWon],
+      ['an expired invitation is refused', !expiredAccept.ok],
+      ['identically, so the holder learns nothing', expiredBody === unknownBody],
+      ['and it is shown with its remedy rather than hidden', expiredShownWithRemedy],
+      ['a withdrawn invitation is refused identically', !withdrawnAccept.ok && withdrawnAccept.reason === unknownBody],
+      ['withdrawing works before it is used', withdrawn.ok && withdrawn.withdrawn],
+      ['re-inviting replaces rather than accumulates', reinviteReplaces],
+      ['an account is created at the invited address when the inviter may authorize it', accountCreatedAtTheRightAddress],
+      ['and refused, with the remedy named, when they may not', unauthorizedNamesRemedy && noAccountWasMade],
+      ['that refusal does not spend the invitation', unauthorizedStillLive],
+      ['and the same link works once the remedy is applied', remedyWorks],
+      ["an inviter's lost authority lands on the next acceptance", demotionLandsImmediately],
+      ['every denial records a category rather than what was tried', denialsRecordCategories],
+    ],
+  };
+}
+
 async function main(): Promise<void> {
   // Read the real fleet first, then close it. Everything after this line writes.
   const fleet = await readOperationalFleet();
@@ -2307,20 +2849,50 @@ async function main(): Promise<void> {
     ['revoking lands on the next read', revokedImmediately],
   ] as const;
   const failed = collaboration.filter(([, held]) => !held).map(([name]) => name);
+
+  /*
+   * And the half that did not exist until now: an invitation somebody received.
+   *
+   * This gate's unmet condition used to read "NOT established here: an
+   * invitation anybody received", and it could not be closed by waiting —
+   * nothing in this Brain could invite a person. It is driven end to end now,
+   * with test identities, against this same temporary database.
+   */
+  const invite = await inviteJourney(project);
+  const inviteFailed = invite.conditions.filter(([, held]) => !held).map(([name]) => name);
+  const collaborationFailed = [...failed, ...inviteFailed];
+
   record(
     'I',
     'Collaboration',
-    failed.length === 0 && workerRefused ? 'PARTIAL' : 'NOT_RUN',
-    failed.length > 0
-      ? `Exercised with two real identities and ${failed.length} condition(s) did not hold: ` +
-        `${failed.join('; ')}. That is a defect rather than a missing run.`
+    collaborationFailed.length > 0
+      ? // Executed and did not hold. Never NOT_RUN: something ran.
+        'FAIL'
+      : workerRefused
+        ? 'PARTIAL'
+        : 'FAIL',
+    collaborationFailed.length > 0
+      ? `Exercised with real identities and ${collaborationFailed.length} condition(s) did not ` +
+        `hold: ${collaborationFailed.join('; ')}. That is a defect rather than a missing run.`
       : `Two real human identities on one project: ${collaboration.length}/${collaboration.length} ` +
         'boundary conditions held — non-member refused, MEMBER reads but is not ADMIN, a role ' +
         "change is read from rows, a project ADMIN cannot read the owner's private thread but " +
         'can read the shared one, and revoking lands on the next read rather than the next ' +
         `sign-in. A worker principal is refused at these routes by type (${workerRefused ? 'requirePerson' : 'NOT FOUND — defect'}). ` +
-        'NOT established here: an invitation anybody received, and the same journey on the ' +
-        'deployed product rather than in this isolated database.',
+        `The invitation journey is driven end to end with test identities (@example.invalid, ` +
+        `created by this reporter — no real person approved, granted or accepted anything): ` +
+        `${invite.conditions.length}/${invite.conditions.length} conditions held. Issued, ` +
+        'previewed without consuming, accepted, and the membership exists at the role the ' +
+        'invitation named rather than one the acceptor asked for — an acceptance carrying ' +
+        'role: OWNER and isBrainAdmin: true changed neither. The refusals are driven too: a ' +
+        'worker holding every scope is refused by principal type, a MEMBER who does not ' +
+        'administer the project is refused in the words a missing project gets, a guessed ' +
+        "invitation id and another project's real one are refused with the identical body, a " +
+        'second redemption and an expired one are refused in the same words an unknown token ' +
+        'gets, and two simultaneous redemptions leave exactly one winner. The token is in the ' +
+        'link fragment only and is absent from the row, from identity_events and from ' +
+        `project_events. ${invite.notes.join('; ')}. NOT established here: the same journey on ` +
+        'the deployed product rather than in this isolated database.',
   );
 
   /* -- J. Mobile ----------------------------------------------------------- */
@@ -2906,14 +3478,31 @@ async function main(): Promise<void> {
   ] as const;
   const canaryFailed = canaryConditions.filter(([, held]) => !held).map(([name]) => name);
 
+  /*
+   * Q's own invitation clause, which named the same unmet condition I did.
+   *
+   * It is the *shared access* half rather than the whole journey: whether a
+   * second person can be let in at all, and whether letting them in is a
+   * decision only somebody who administers the project can take. Read from the
+   * same run rather than driven twice — two exercises of one fact is how they
+   * come to disagree.
+   */
+  const sharedAccess = invite.conditions.filter(([name]) =>
+    /refused|membership|role the invitation named|reads what that role permits|nothing outside it/.test(
+      name,
+    ),
+  );
+  const sharedAccessFailed = sharedAccess.filter(([, held]) => !held).map(([name]) => name);
+  const qFailed = [...canaryFailed, ...sharedAccessFailed];
+
   record(
     'Q',
     'Shared access and safe experiments',
-    canaryFailed.length === 0 && !prefs.ok ? 'PARTIAL' : 'NOT_RUN',
-    canaryFailed.length > 0
-      ? `The canary cycle ran and ${canaryFailed.length} of ${canaryConditions.length} ` +
-        `condition(s) did not hold: ${canaryFailed.join('; ')}. That is a defect rather than a ` +
-        'missing run.'
+    qFailed.length > 0 ? 'FAIL' : !prefs.ok ? 'PARTIAL' : 'FAIL',
+    qFailed.length > 0
+      ? `The canary cycle and the invitation journey ran, and ${qFailed.length} of ` +
+        `${canaryConditions.length + sharedAccess.length} condition(s) did not hold: ` +
+        `${qFailed.join('; ')}. That is a defect rather than a missing run.`
       : `A preference outside its declared set is refused (${prefs.ok ? 'ACCEPTED — defect' : 'refused'}); ` +
         `an unauthenticated search is scoped to nothing (${searchScoped.scopedProjects} projects, ` +
         `${searchScoped.hits.length} hits); ${Object.keys(PREFERENCES).length} preference keys are ` +
@@ -2929,8 +3518,15 @@ async function main(): Promise<void> {
         `the canary (${comparison}) and rolls back to ${operatorTarget} by name. Every version ` +
         'stays in the ' +
         'history, so the rollback is a write forward rather than a delete. Role change with two ' +
-        'real identities is exercised in I. NOT established here: an invitation anybody ' +
-        'received, and this same cycle against the deployed fleet rather than in an isolated ' +
+        'real identities is exercised in I. Shared access is no longer assumed: an invitation ' +
+        `issued by an administrator and received by somebody else is driven end to end, and ` +
+        `${sharedAccess.length}/${sharedAccess.length} of its access conditions held — a ` +
+        'machine holding every scope refused by principal type, a MEMBER who does not ' +
+        'administer the project refused, a guessed invitation id refused with the same body a ' +
+        'real one belonging to another project gets, and the accepted membership carrying the ' +
+        'role the invitation named rather than one the acceptor asked for. Every identity in ' +
+        'that run is a test identity this reporter created at @example.invalid. NOT established ' +
+        'here: this same cycle against the deployed fleet rather than in an isolated ' +
         'database — where the policy it displaced would be one a person is actually running on.',
   );
 
@@ -2969,19 +3565,25 @@ async function main(): Promise<void> {
           : []),
         `Trace: ${chain.trace.join(' · ')}`,
       ].join('\n     ');
-  record(
-    'R',
-    'The mission chain: idea → launch → decision → next',
-    chain.error !== null || chainFailed.length > 0
-      ? 'FAIL'
-      : chain.gaps.length === 0
-        ? 'PASS'
-        : 'PARTIAL',
+  /*
+   * Cited by B and F rather than counted as a scenario of its own — see
+   * `recordEvidence`. The verdict word is kept in the heading because a reader
+   * needs to know whether the exercise held, and dropped from the matrix
+   * because seventeen is the contract.
+   */
+  recordEvidence(
+    'MISSION_CHAIN',
+    'The mission chain: idea → launch → decision → next — ' +
+      (chain.error !== null || chainFailed.length > 0
+        ? 'FAILED'
+        : chain.gaps.length === 0
+          ? 'held'
+          : 'held, with named gaps'),
     chainDetail,
   );
 
   /* ------------------------------------------------------------------------ */
-  console.log('STEP 12B — acceptance, A to R');
+  console.log('STEP 12B — acceptance, A to Q');
   console.log('  (separate from the Step 12A reporter, which answers a different, closed question)');
   console.log(
     `  operational reading from ${fleet.source}: ` +
@@ -3007,9 +3609,18 @@ async function main(): Promise<void> {
     console.log(`     ${gate.detail}`);
   }
 
+  if (evidence.length > 0) {
+    console.log('');
+    console.log('EVIDENCE cited above, which is not itself a scenario');
+    for (const block of evidence) {
+      console.log(`  ${block.key}  ${block.title}`);
+      console.log(`     ${block.detail}`);
+    }
+  }
+
   const counts = gates.reduce<Record<Verdict, number>>(
     (acc, gate) => ({ ...acc, [gate.verdict]: acc[gate.verdict] + 1 }),
-    { PASS: 0, FAIL: 0, PARTIAL: 0, BLOCKED: 0, NOT_RUN: 0 },
+    { PASS: 0, PARTIAL: 0, BLOCKED: 0, FAIL: 0, NOT_RUN: 0 },
   );
   console.log('');
   console.log(
@@ -3030,6 +3641,22 @@ async function main(): Promise<void> {
           .filter((gate) => gate.verdict === 'FAIL')
           .map((gate) => `${gate.id} ${gate.title}`)
           .join('; '),
+    );
+  }
+  /*
+   * A failure is named on its own line, ahead of the completeness verdict.
+   *
+   * The autonomy track asked for this and it is right: a reader distinguishing
+   * a defect from a backlog by comparing two numbers in one sentence will
+   * eventually not bother. `FAIL` means a check ran and the product was wrong,
+   * which is somebody's bug — different in kind from the scenarios nobody has
+   * exercised yet, and it should not have to be inferred from a count.
+   */
+  const failed = gates.filter((gate) => gate.verdict === 'FAIL');
+  if (failed.length > 0) {
+    console.log(
+      `${failed.length} SCENARIO(S) FAILED — a check ran and the product did not hold: ` +
+        failed.map((gate) => `${gate.id} ${gate.title}`).join('; '),
     );
   }
   if (counts.PASS !== gates.length) {
@@ -3073,6 +3700,11 @@ async function main(): Promise<void> {
               routines: fleet.routines.length,
               accounts: fleet.accounts.length,
             },
+        evidence: evidence.map((block) => ({
+          key: block.key,
+          title: block.title,
+          detail: block.detail,
+        })),
         gates: gates.map((gate) => ({
           id: gate.id,
           title: gate.title,

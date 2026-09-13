@@ -30,6 +30,11 @@ import type { Progress } from '../../../server/services/russell/progress.ts';
 import type { GroupedWork, WorkEntry } from '../../../server/services/russell/work.ts';
 import type { IdeaEdge, IdeaMap, IdeaNode } from '../../../server/services/russell/ideas.ts';
 import type { WhoView } from '../../../server/services/russell/who.ts';
+import type {
+  InvitationPreview,
+  InvitationSummary,
+  IssuedInvitation,
+} from '../../../server/services/identity/invitations.ts';
 import type { HomeView } from '../../../server/services/russell/home.ts';
 import type { CollectionView, RankedThread, Starter } from '../../../server/services/russell/collections.ts';
 import type { FrontierView, FrontierRegionView } from '../../../server/services/russell/frontier.ts';
@@ -79,6 +84,9 @@ export type {
   IdeaNode,
   Progress,
   WhoView,
+  InvitationPreview,
+  InvitationSummary,
+  IssuedInvitation,
   WorkEntry,
   RussellCandidate,
   RussellConversation,
@@ -497,6 +505,38 @@ export const RussellApi = {
 
   who: (projectId: string): Promise<WhoView> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/who`),
+
+  /**
+   * Invite somebody onto this project.
+   *
+   * The link is in this response and in no other. Nothing stores it, nothing
+   * fetches it again, and the server never wrote it down — if it is lost, invite
+   * them again and a new invitation replaces the old one.
+   */
+  invite: (
+    projectId: string,
+    email: string,
+    role: string,
+  ): Promise<IssuedInvitation> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/invitations`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    }),
+
+  invitations: (
+    projectId: string,
+  ): Promise<{ invitations: InvitationSummary[]; roles: string[]; defaultRole: string }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/invitations`),
+
+  withdrawInvitation: (
+    projectId: string,
+    invitationId: string,
+  ): Promise<{ withdrawn: boolean; alreadyFinished: boolean }> =>
+    api(
+      `/api/russell/projects/${encodeURIComponent(projectId)}/invitations/` +
+        `${encodeURIComponent(invitationId)}/withdraw`,
+      { method: 'POST', body: JSON.stringify({ reason: null }) },
+    ),
 
   progress: (
     projectId: string,

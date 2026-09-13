@@ -1770,6 +1770,49 @@ button.rs-card:hover {
   color: var(--ink-soft);
 }
 
+/* ----------------------------------------------------------- invitations -- */
+/*
+ * Inviting somebody, inside Who.
+ *
+ * No `min-width` anywhere and no fixed column: the row wraps, so an address
+ * field and its button sit side by side where there is room and stack where
+ * there is not — the container decides, which is why nothing here asks the
+ * viewport how wide it is.
+ */
+
+.rs-invite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.rs-invite-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+}
+
+.rs-invite-form input[type='email'] {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.rs-field-label {
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+/* A control that reads as a link because it reveals rather than acts. */
+.rs-linklike {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--verdigris-ink);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .rs-node {
   display: flex;
   flex-direction: column;

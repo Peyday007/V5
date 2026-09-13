@@ -34,6 +34,12 @@ import { listAccounts, listRoutines, currentPolicy, effectiveTarget } from '../.
 import { listMembershipsForProject } from '../../repos/identity.ts';
 import { getUser, getWorker } from '../../repos/identity.ts';
 import { decideProjectAccess } from '../identity/policy.ts';
+import {
+  DEFAULT_INVITED_ROLE,
+  INVITABLE_ROLES,
+  invitationsForProject,
+} from '../identity/invitations.ts';
+import type { InvitationSummary } from '../identity/invitations.ts';
 import type { FleetState, Principal, ProjectRole } from '../../domain/types.ts';
 
 /**
@@ -95,6 +101,18 @@ export interface Surface {
 export interface WhoView {
   depth: WhoDepth;
   people: Person[];
+  /**
+   * Invitations on this project, at OPERATOR depth only.
+   *
+   * Null is "you are not told", exactly as `surfaces` is — and for a sharper
+   * reason: an invitation names an email address, which is a contact detail for
+   * somebody who is not on the project yet. A viewer does not need it, and a
+   * list filtered in the client is a list that was still sent.
+   */
+  invitations: InvitationSummary[] | null;
+  /** The roles an invitation may name, and the one a new card starts on. */
+  invitableRoles: readonly ProjectRole[] | null;
+  defaultInviteRole: ProjectRole | null;
   /** Present only at OPERATOR depth. Null is "you are not told", by design. */
   surfaces: Surface[] | null;
   /**
@@ -208,6 +226,11 @@ export async function whoForProject(input: {
     return {
       depth,
       people,
+      // Not a filtered copy of the operator's answer — a different answer, built
+      // from fewer queries. `invitationsForProject` is never called here at all.
+      invitations: null,
+      invitableRoles: null,
+      defaultInviteRole: null,
       surfaces: null,
       capacity: healthy > 0 ? 'READY' : routines.length > 0 ? 'LIMITED' : 'NONE',
       capacityExplanation:
@@ -220,10 +243,11 @@ export async function whoForProject(input: {
   }
 
   const now = new Date().toISOString();
-  const [accounts, routines, policy] = await Promise.all([
+  const [accounts, routines, policy, invitations] = await Promise.all([
     listAccounts(),
     listRoutines(),
     currentPolicy('FLEET', null),
+    invitationsForProject(input.projectId),
   ]);
   const accountName = new Map(accounts.map((account) => [account.id, account.name]));
 
@@ -256,6 +280,9 @@ export async function whoForProject(input: {
   return {
     depth,
     people,
+    invitations,
+    invitableRoles: INVITABLE_ROLES,
+    defaultInviteRole: DEFAULT_INVITED_ROLE,
     surfaces,
     capacity: healthy > 0 ? 'READY' : surfaces.length > 0 ? 'LIMITED' : 'NONE',
     capacityExplanation:
