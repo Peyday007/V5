@@ -377,6 +377,18 @@ async function createTurnBin(input: {
           'a branch, a file or a directory — Brain supplies those from what this project ' +
           'is authorized to change.',
         /*
+         * The card is read on its own, days later, by somebody deciding whether
+         * to spend a fleet on it. "Do the same for the contact page" is a
+         * perfectly clear sentence in a conversation and an unauthorizable one
+         * on a card, so the objective has to carry what the conversation was
+         * holding for it. Brain cannot supply this: only the reader of the
+         * thread knows what "that" was.
+         */
+        'when the person refers back — "do that for the contact page too", "the same ' +
+          'again" — write the objective out in full. The person authorizes it from a card ' +
+          'that shows only what you wrote, so an objective that points at an earlier ' +
+          'message is one nobody can act on.',
+        /*
          * The one comparison a model is better at than the server, offered as
          * a claim the server then checks.
          *

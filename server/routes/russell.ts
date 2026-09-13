@@ -51,6 +51,7 @@ import {
   authorizeSoftwareRequest,
   declineSoftware,
   repositoryChoicesFor,
+  softwareClarificationFor,
   softwareForConversation,
   softwareForProject,
   softwareNeedingPerson,
@@ -265,6 +266,14 @@ russellRouter.get(
        * about one piece of work.
        */
       software: await softwareForConversation(conversation.id),
+      /*
+       * The one thing Brain declined to guess, when a sentence would settle it.
+       *
+       * Null far more often than not: an ordinary refusal — a remark read as a
+       * remark — needs no answer, and prompting for one would be Brain asking a
+       * person to decide something they did not raise.
+       */
+      clarification: await softwareClarificationFor(conversation.id),
     };
   }),
 );

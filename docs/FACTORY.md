@@ -1115,3 +1115,95 @@ the **same row** becomes authorizable the moment somebody onboards a repository
 anything stored at capture time. Nothing has to be asked for again. That is the
 promise `rearmSurfaceDeferredIntents` makes one layer down, at the surface a
 person uses.
+
+### What a person can actually say, and what happens to the sentences that miss
+
+The gate on a conversational request is deterministic — no inference is bought
+for it (§24), and the model half of the turn runs on the subscription-backed
+Cowork fleet like every other Russell turn. It had been widened four times, once
+per message it had just declined. Driving fifty ordinary sentences through it in
+one pass found fifteen more misses and two inventions, which is not a short
+alphabet; it is the wrong shape.
+
+**Strong and weak verbs.** A strong verb is an instruction wherever it appears —
+`fix`, `change`, `add`, `remove`, `improve`, `rename`, `migrate`, `implement`,
+and the rest of that family. A weak one counts only in **imperative position**:
+the start of the message, the start of a sentence, or after *please* / *can you*
+/ *could you* / *let's* / *I need you to*. `set`, `move`, `handle`, `point`,
+`link`, `show`, `sort` and `apply` are all ordinary English somewhere, so
+matching them anywhere would read *"the address on the contact page is wrong"*
+and *"do you know how the form works"* as instructions.
+
+**Negation is per occurrence.** Each match is checked for a negator inside its
+own clause — back to the sentence boundary, forward past the last contrast
+marker — and the message asks for a change if **some** occurrence is un-negated.
+So *"No need to fix the footer"* declines and *"Don't touch the pricing page, but
+do fix the footer"* asks. A message-level flag gets the second one wrong, in the
+expensive direction.
+
+**Anaphora needs a row.** *"Do that for the contact page too"*, *"apply the same
+to the quotes page"*, *"same fix on the services page"* — the verb is in the
+previous sentence, and no vocabulary can reach it. These are admitted only when
+this conversation **already holds a software request**, which is a row Brain
+wrote rather than a reading of the transcript. The check runs before the verbs,
+so a weak imperative in an anaphoric sentence does not smuggle one through, and a
+referent in a different thread does not count.
+
+| Family | Example | Read as |
+| --- | --- | --- |
+| plain instruction | *Fix the quote form so it stops dropping the message.* | a request |
+| weak verb, imperative | *Turn off the newsletter popup.* | a request |
+| behaviour | *Make the sidebar collapse on phones.* | a request |
+| pointing at context | *On the page I just showed you, change the button colour.* | a request |
+| anaphora, referent present | *Do that for the contact page too.* | a request |
+| anaphora, no referent | the same sentence, first message in the thread | a question back |
+| negation | *No need to fix the footer.* | not a request |
+| mixed | *Don't touch pricing, but do fix the footer.* | a request |
+| hypothetical | *Would it be worth adding a live chat widget?* | not a request |
+| report | *We improved the gallery loading last week.* | not a request |
+| description | *The build fails on Node 20.* | not a request |
+
+**A closed list can never be complete over ordinary English**, which is why the
+failure mode is fixed at *missing*. A miss costs one more sentence from the
+person; an invention puts an authorization card in front of somebody thinking
+aloud, and teaches them to stop reading the cards. **Build never consults this
+gate at all.**
+
+### The question Brain will not guess past
+
+Two refusals mean *you did ask, and the only thing missing is a word only you
+have*: the message named a project other than the thread's, and the message
+refers back to a change nothing has been asked for yet. Both compose a sentence
+naming what is ambiguous and what would settle it.
+
+Both were composed, carried onto the message row, and **read by nothing** — the
+fifth instance of this repository's own recurring sentence. `softwareClarificationFor`
+is the reader: a projection that writes nothing, reports only the most recent
+answerable refusal, and stops reporting it the moment a request captured after it
+settles the question. It renders in the thread as one quiet sentence, in the
+server's own words.
+
+Ordinary refusals do not surface. *"It weighs a change rather than asking for
+one"* is a correct answer to a remark, and a prompt under every remark is how a
+person learns to ignore them.
+
+### A campaign in Brain, enforced rather than declared
+
+`brain`'s `forbiddenPaths` is a list, and a test asserting a list contains the
+right strings proves only that somebody typed them. Each entry is exercised
+through `validatePlan` as a unit claiming to own it, in the shape a planning
+worker submits — including a **second** deploy workflow under a new name, which
+is exactly the bypass §28 records and which a pattern naming `deploy.yml` would
+have let through. `.claude/**` is refused there too, from
+`UNIVERSAL_FORBIDDEN_PATHS`, inside a grant that adds its own list.
+
+Two things must keep working and are tested as such: ordinary product code passes
+— a factory that could not change the product is not worth having — and
+`requiredContext` may name a forbidden file, because the list refuses
+**ownership** and never reading. A reviewer of a change that has to agree with
+the authorization model has to be able to open it.
+
+Everything after that is the pipeline as it already stood: scoped work against
+the project's directory boundary, a diff rejected whole if it reached outside the
+unit's declared paths, an independent review refused to any session that
+implemented part of the campaign, and a pull request a person merges.

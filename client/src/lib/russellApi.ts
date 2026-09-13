@@ -41,6 +41,7 @@ import type { WhyThisMatters } from '../../../server/services/russell/whyThisMat
 import type {
   SoftwareRepositoryChoice,
   SoftwareRequestView,
+  SoftwareClarification,
 } from '../../../server/services/russell/software.ts';
 import type { LensFinding, LensInquiry } from '../../../server/services/russell/inquiry.ts';
 import type { Preferences, PreferenceKey } from '../../../server/services/russell/preferences.ts';
@@ -109,6 +110,14 @@ export interface ThreadResponse {
    * states for one campaign.
    */
   software: SoftwareRequestView[];
+  /**
+   * The one thing Brain will not guess, when a sentence would settle it.
+   *
+   * Server-composed, and null far more often than not. The client renders the
+   * sentence and writes none of its own — a screen that paraphrased a refusal
+   * would eventually paraphrase it wrongly.
+   */
+  clarification: SoftwareClarification | null;
 }
 
 export interface TurnResponse {

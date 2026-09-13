@@ -101,3 +101,48 @@ The Ideas constellation overlaps its own nodes at phone width. It is on
 `Constellation.tsx`, predates this branch, and is unrelated to the software
 entrance — recorded here because a harness finding that goes unmentioned is a
 harness nobody believes.
+
+---
+
+## The corpus, and what it found
+
+Added after the images above, and it is a reading rather than a picture.
+`tests/softwareRequestPhrasing.test.ts` drives ordinary sentences through the
+conversational gate. The first run of it, against the gate as it then stood,
+found **fifteen misses and two inventions out of fifty** — which is what turned a
+fifth widening of the verb list into a change of shape (§27).
+
+The fifty were thirty-one sentences that ask for a change and nineteen that do
+not, written before the gate was looked at rather than after:
+
+| | Before | After |
+| --- | --- | --- |
+| Asks, read as asks | 16 / 31 | 31 / 31 |
+| Not asks, read as not asks | 17 / 19 | 19 / 19 |
+
+The committed corpus is that run turned into a declared suite — 28 accepts, 28
+declines and the anaphora family, which the fifty could not test because the
+answer depends on a row rather than on the sentence. Two of the fifty moved into
+it: *"Same fix on the services page"* and *"Apply what we agreed above to the
+quotes page"* both name nothing on their own, so they are now correctly declined
+in a thread that has asked for nothing and accepted in one that has.
+
+The two inventions are the ones worth naming, because they are the failure
+direction that costs something: *"No need to fix the footer, we are replacing it
+anyway"* and *"Please do not add anything else to the homepage"* both produced an
+authorization card for the change the person had just said not to make.
+
+Nothing in the corpus is a mock of the gate. The anaphora cases run through the
+real `captureSoftwareChange`, against a real database, because the referent is a
+row and a pure-function test would have passed with the flag hard-coded either
+way.
+
+## The clarification sentence is driven, not photographed
+
+`tests/softwareClarification.test.tsx` renders the real `Conversation` against a
+scripted server and reads the screen, because the failure this exists to prevent
+is precisely a server that answers correctly into a browser that shows nothing.
+It is not in the committed images above: those were taken before it existed, and
+re-shooting the set for one paragraph would have replaced evidence of a real run
+with a newer one that says less. What the driving test cannot prove is the
+pixels, and that limit is the same one every jsdom test here carries.

@@ -1980,6 +1980,24 @@ button.rs-card:hover {
   font-size: var(--step--1);
 }
 
+/*
+ * The question Brain is waiting on.
+ *
+ * Deliberately quiet: it is a sentence, not an alert. A refusal a person can
+ * answer in one line does not need a box shouting at them, and the loud
+ * treatment is reserved for the authorization card, which is the decision that
+ * actually spends something.
+ */
+.rs-thread-clarify {
+  margin-block: var(--gap-3) 0;
+  padding: var(--gap-3);
+  border-inline-start: 3px solid var(--verdigris);
+  background: var(--verdigris-soft);
+  color: var(--ink);
+  border-radius: 0 var(--r-1) var(--r-1) 0;
+  max-width: 60ch;
+}
+
 .rs-thread-software {
   border-top: 1px solid var(--rule);
   padding-block: var(--gap-3);

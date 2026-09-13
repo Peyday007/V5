@@ -770,6 +770,164 @@ describe('a plan may not reach where the repository grant forbids', () => {
     expect(validation.ok).toBe(false);
     expect(validation.errors.join(' ')).toContain('out of the factory');
   });
+
+  /**
+   * Brain is a target now, and the declaration is not the control.
+   *
+   * `factoryExecutionPlane` already asserts the grant *lists* these paths, and a
+   * list nothing reads is exactly what this repository keeps finding. So each one
+   * is put through `validatePlan` as a unit that claims to own it, in the shape a
+   * planning worker would actually submit — which is the only place the list
+   * turns into a refusal.
+   */
+  describe('a campaign in Brain may not own what authorizes, bounds or deploys it', () => {
+    const BRAIN_REMOTE = 'https://github.com/Peyday007/V5';
+
+    async function planOwning(paths: string[]): Promise<ReturnType<typeof validatePlan>> {
+      const { changeRequest } = await ensureChangeRequest({
+        projectId: fixture.project.id,
+        submissionKey: `brain-${paths.join('|')}`,
+        objective: 'Improve a part of Brain.',
+        expectedOutcome: 'It is better.',
+        nonGoals: [],
+        acceptanceConditions: [
+          { id: 'A01', statement: 'it is better', verification: 'npm test', mandatory: true },
+        ],
+        repository: BRAIN_REMOTE,
+        repositoryRoot: '',
+        baseBranch: 'production',
+        baseSha: BASE,
+        environment: 'LOCAL',
+        riskClass: 'LOW',
+        mutationScope: ['**'],
+        deploymentPolicy: 'NONE',
+        rollbackRequirement: 'decline',
+        verificationCommands: ['npm test'],
+      });
+      return validatePlan(
+        {
+          units: [
+            {
+              key: 'a-unit',
+              kind: 'IMPLEMENTATION',
+              title: 'A change',
+              objective: 'Make one bounded change to Brain and prove it with a test.',
+              acceptance: ['it is better'],
+              ownedPaths: paths,
+              requiredContext: [],
+              verification: ['npm test'],
+              expectedArtifact: 'a diff',
+              risk: 'LOW',
+              criticalPath: true,
+              dependsOn: [],
+              serves: ['A01'],
+            },
+          ],
+        },
+        changeRequest,
+      );
+    }
+
+    for (const path of [
+      'server/services/identity/policy.ts',
+      'server/services/bins/routing.ts',
+      'server/services/factory/repositoryEnvelope.ts',
+      'server/services/factory/projectScope.ts',
+      'server/services/russell/probeEnvelope.ts',
+      'server/services/research/approvalEnvelope.ts',
+      '.github/workflows/deploy.yml',
+      // A *second* workflow, which is precisely the bypass §28 records: a
+      // pattern naming the old file would have let this one through.
+      '.github/workflows/ship-it-really-fast.yml',
+      '.github/CANONICAL_BRANCH',
+      'fly.toml',
+      'Dockerfile',
+      // Universal, and it must still apply inside a grant that adds its own.
+      '.claude/settings.json',
+    ]) {
+      it(`refuses a unit owning ${path}`, async () => {
+        const validation = await planOwning([path]);
+        expect(validation.ok).toBe(false);
+        expect(validation.errors.join(' ')).toContain('out of the factory');
+      });
+    }
+
+    it('refuses the whole plan when one of several paths is out of reach', async () => {
+      /*
+       * A diff that reached outside its surface is rejected whole rather than
+       * cherry-picked, and the same rule has to hold one step earlier: a unit
+       * that owns four ordinary files and one envelope is not four-fifths
+       * acceptable.
+       */
+      const validation = await planOwning([
+        'client/src/russell/Home.tsx',
+        'server/services/factory/repositoryEnvelope.ts',
+      ]);
+      expect(validation.ok).toBe(false);
+    });
+
+    it('allows ordinary product code, because a factory that could not change the product is not worth having', async () => {
+      const validation = await planOwning([
+        'client/src/russell/Home.tsx',
+        'server/services/russell/home.ts',
+        'tests/step12bProduct.test.ts',
+      ]);
+      expect(validation.errors, validation.errors.join(' ')).toEqual([]);
+      expect(validation.ok).toBe(true);
+    });
+
+    it('lets a unit read what it may not own', async () => {
+      /*
+       * `requiredContext` is how a unit says which files it needs to have read,
+       * and the forbidden list is about ownership rather than reading — a
+       * reviewer of a change to the authorization model must be able to open it.
+       */
+      const { changeRequest } = await ensureChangeRequest({
+        projectId: fixture.project.id,
+        submissionKey: 'brain-reads',
+        objective: 'Improve a part of Brain that has to agree with the policy module.',
+        expectedOutcome: 'It agrees.',
+        nonGoals: [],
+        acceptanceConditions: [
+          { id: 'A01', statement: 'it agrees', verification: 'npm test', mandatory: true },
+        ],
+        repository: BRAIN_REMOTE,
+        repositoryRoot: '',
+        baseBranch: 'production',
+        baseSha: BASE,
+        environment: 'LOCAL',
+        riskClass: 'LOW',
+        mutationScope: ['**'],
+        deploymentPolicy: 'NONE',
+        rollbackRequirement: 'decline',
+        verificationCommands: ['npm test'],
+      });
+      const validation = validatePlan(
+        {
+          units: [
+            {
+              key: 'reads-policy',
+              kind: 'IMPLEMENTATION',
+              title: 'Agree with the policy module',
+              objective: 'Make one bounded change that has to match what the policy module does.',
+              acceptance: ['it agrees'],
+              ownedPaths: ['server/routes/russell.ts'],
+              requiredContext: ['server/services/identity/policy.ts'],
+              verification: ['npm test'],
+              expectedArtifact: 'a diff',
+              risk: 'LOW',
+              criticalPath: true,
+              dependsOn: [],
+              serves: ['A01'],
+            },
+          ],
+        },
+        changeRequest,
+      );
+      expect(validation.errors, validation.errors.join(' ')).toEqual([]);
+      expect(validation.ok).toBe(true);
+    });
+  });
 });
 
 /* ========================================================================= */

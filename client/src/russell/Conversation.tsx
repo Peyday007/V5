@@ -18,7 +18,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RussellApi } from '../lib/russellApi.ts';
 import type { RussellMessage } from '../lib/russellApi.ts';
-import type { SoftwareRequestView } from '../../../server/services/russell/software.ts';
+import type {
+  SoftwareClarification,
+  SoftwareRequestView,
+} from '../../../server/services/russell/software.ts';
 import { turnLabel } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { ApiError } from '../lib/api.ts';
@@ -61,6 +64,28 @@ function SoftwareTrail({ software }: { software: SoftwareRequestView[] }): JSX.E
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * The one thing Brain declined to guess, in the server's own words.
+ *
+ * It renders a sentence and composes none of its own — the same rule the
+ * authorization card follows, for the same reason: a screen that paraphrased a
+ * refusal would eventually paraphrase it wrongly. It is absent far more often
+ * than present, because an ordinary refusal needs no answer and a prompt under
+ * every remark is how a person learns to stop reading them.
+ */
+function Clarification({
+  clarification,
+}: {
+  clarification: SoftwareClarification | null;
+}): JSX.Element | null {
+  if (!clarification) return null;
+  return (
+    <p className="rs-thread-clarify" role="status" data-kind={clarification.kind}>
+      {clarification.question}
+    </p>
   );
 }
 
@@ -177,6 +202,7 @@ export function Conversation({
         ))}
       </ol>
       <SoftwareTrail software={thread.data?.software ?? []} />
+      <Clarification clarification={thread.data?.clarification ?? null} />
       <div ref={bottom} />
 
       {problem ? (

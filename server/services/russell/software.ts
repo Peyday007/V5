@@ -55,6 +55,7 @@
  * person reads two different answers about one piece of work.
  */
 import { createHash } from 'node:crypto';
+import { listTurns } from '../../repos/russellConversations.ts';
 import {
   captureSoftwareRequest,
   claimSoftwareRequest,
@@ -87,64 +88,208 @@ import type { Principal, RussellSoftwareRequest } from '../../domain/types.ts';
 /* -------------------------------------------------------------------------- */
 
 /**
- * Verbs that mean *make this change*, asked of somebody.
+ * Did this message ask Russell to change something?
  *
- * The same construction rule as `PROPOSAL_MARKERS` in `judgment.ts`, and the
- * same failure mode on purpose: the verb has to be an instruction to change
- * something, in a form addressed to Russell rather than reporting what already
- * happened. "We fixed the header last week" matches nothing, because the word
- * boundary excludes the past tense and nobody is being asked.
+ * ---------------------------------------------------------------------------
+ * The fifth widening, and why this one is not a sixth word added to a list
+ * ---------------------------------------------------------------------------
  *
- * **`improve` was missing, which is the fourth time a list in this codebase has
- * had the rule right and the alphabet short.** §24 records the first three, all
- * in `judgment.ts`: every hedged form and not the plain one; then `check` and
- * `see` and not `establish`, the verb its own stated rule used. Here the owner's
- * own example — *"Improve this part of the site we're discussing"* — was declined
- * with "nothing here asks for a change to be made", while *"Add this feature"*
- * and *"Fix this problem"* were both accepted. Same defect, same remedy: widen
- * by the verbs that were actually missed and no further, and never reword the
- * request to fit the list.
+ * §24 records three of these in `judgment.ts` and §27 a fourth here: every time,
+ * the *rule* the list was written to express was right and its **alphabet** was
+ * short. `improve` was the fourth. Driving fifty ordinary sentences through the
+ * gate found fifteen more in one pass — *"Move the phone number into the
+ * header"*, *"Turn off the newsletter popup"*, *"Wire the booking button to the
+ * calendar page"*, *"Sort that out for me on the homepage"* — and two sentences
+ * it invented a request from, both negations: *"No need to fix the footer"* and
+ * *"Please do not add anything else to the homepage"*.
  *
- * `optimise`/`optimize` join for the reason `determine` joined `establish`: it
- * is the same ask in the word somebody else would reach for. `faster` joins the
- * make/get alternation, which already held `work`, `stop` and `load`. The
- * failure mode is unchanged and is what the tests pin: "we improved it last
- * week" matches neither, because the word boundary excludes the past tense and
- * nobody is being asked.
+ * **Fifteen misses in one pass is not a short alphabet; it is the wrong shape.**
+ * Adding fifteen words would leave the sixteenth for production to find. So what
+ * changed is the structure, in three ways, and the vocabulary only came along
+ * with it:
+ *
+ * 1. **A verb is strong or weak, and a weak one only counts in imperative
+ *    position.** `fix` is an instruction wherever it appears; `set`, `move`,
+ *    `handle` and `clean` are ordinary English until they open a sentence or
+ *    follow *please* / *could you* / *let's*. That distinction is what lets the
+ *    list hold the words people actually use without matching *"the address on
+ *    the contact page is wrong"* or *"do you know how the form works"*.
+ * 2. **Negation is scoped to the occurrence rather than to the message.** Every
+ *    match is examined for a negator in its own clause, and the message asks for
+ *    a change only if **some** occurrence is un-negated — so *"No need to fix the
+ *    footer"* declines and *"Don't touch the pricing page, but do fix the
+ *    footer"* still asks. A message-level negation flag would have got the
+ *    second one wrong in the expensive direction.
+ * 3. **Anaphora is answered by a row, never by a word.** *"Do that for the
+ *    contact page too"* has no execution verb and cannot get one, because the
+ *    verb is in the sentence before it. It is admitted only when this
+ *    conversation **already holds a software request** — a referent Brain wrote
+ *    down, in the shape §25 insists on: a row outranks prose, and *"do that"*
+ *    with no *that* is not a request.
+ *
+ * **A closed list can never be complete over ordinary English, and that is why
+ * the failure mode is fixed at *missing*.** A miss costs one more sentence from
+ * the person and Russell says which sentence would work; an invention costs an
+ * authorization card in front of somebody who was thinking aloud, which teaches
+ * them to stop reading the cards — the damage §29 records from a status that
+ * contradicts the control beside it. **Build never consults this gate at all**,
+ * so there is always an entrance that cannot mis-read a sentence.
  */
-const EXECUTION_VERBS =
-  'change|fix|add|remove|update|rename|refactor|implement|build|migrate|upgrade|delete|rewrite|replace|improve|optimise|optimize';
+
+/**
+ * Verbs that are an instruction to change something wherever they appear.
+ *
+ * Grouped by what the change *does* rather than by whichever word turned up in a
+ * bug report, because a list organised by accident is a list that grows by
+ * accident. The word boundary is what keeps the past tense out: `improve` does
+ * not match "improved", so *"we improved it last week"* reaches nothing here.
+ */
+const STRONG_VERBS = [
+  // change what is already there
+  'change', 'update', 'edit', 'adjust', 'tweak', 'improve', 'optimise', 'optimize',
+  'refactor', 'rewrite', 'revise', 'redesign', 'restyle',
+  // bring something into existence
+  'add', 'create', 'implement', 'introduce',
+  // take something away
+  'remove', 'delete', 'uninstall',
+  // put it somewhere else, or something else there
+  'rename', 'migrate', 'upgrade', 'downgrade', 'convert',
+  // make it work
+  'fix', 'repair', 'unbreak', 'debug',
+].join('|');
+
+/**
+ * Verbs and phrases that are an instruction **only in imperative position**.
+ *
+ * Every one of these is an ordinary noun, auxiliary or preposition somewhere in
+ * English — a *set* of pages, a *point* about pricing, a *link* to the terms —
+ * so matching them anywhere would invent requests out of description. In
+ * imperative position they are unambiguous, and imperative position is exactly
+ * what "an instruction addressed to Russell" means.
+ */
+const WEAK_VERBS = [
+  'take care of', 'deal with', 'sort out', 'clean up', 'tidy up', 'turn on', 'turn off',
+  'hook up', 'wire up', 'set up', 'swap out', 'roll back',
+  'move', 'swap', 'replace', 'enable', 'disable', 'connect', 'wire', 'hook', 'link',
+  'set', 'configure', 'point', 'tidy', 'sort', 'handle', 'split', 'merge', 'apply',
+  'build', 'ship', 'drop', 'strip', 'hide', 'put',
+  /*
+   * "Show me the homepage" is a request to look at something, and it opens a
+   * sentence exactly like an instruction does. The lookahead is narrower than
+   * dropping the verb, which would lose "show the discount on the cart".
+   */
+  String.raw`show(?!\s+(?:me|us)\b)`,
+].join('|');
+
+/**
+ * What puts a weak verb in imperative position.
+ *
+ * The start of the message, the start of a sentence, or a request frame that can
+ * only be addressed to somebody. `and`/`also`/`then` are here because a second
+ * instruction in one message is still an instruction.
+ */
+const IMPERATIVE_LEAD =
+  String.raw`(?:^|[.!?;\n]\s*|\b(?:please|and|also|then|now|next|go ahead and|go and|` +
+  String.raw`can you|could you|would you|will you|let'?s|let us|i need you to|i'?d like you to|` +
+  String.raw`i would like you to|i want you to)\s+)`;
 
 const EXECUTION_MARKERS = [
-  new RegExp(
-    `\\b(?:please\\s+)?(?:go\\s+(?:ahead\\s+)?(?:and\\s+)?)?(?:${EXECUTION_VERBS})\\b`,
-    'i',
-  ),
-  new RegExp(`\\b(?:can|could|would|will)\\s+you\\s+(?:please\\s+)?(?:${EXECUTION_VERBS})\\b`, 'i'),
-  /\b(?:make|get)\s+(?:it|the|this|that)\b.*\b(?:work|stop|start|show|hide|load|render|match|faster)\b/i,
-  /\bship\s+(?:a|an|the)\b/i,
+  new RegExp(`\\b(?:${STRONG_VERBS})\\b`, 'i'),
+  new RegExp(`${IMPERATIVE_LEAD}(?:${WEAK_VERBS})\\b`, 'i'),
+  /*
+   * "Make the sidebar collapse on phones", "let's get that dropdown working".
+   *
+   * The completion is a *shape* rather than a word list — a participle, a
+   * comparative, or one of the handful of bare states a page can be in — because
+   * this is the one frame where the interesting word is never a verb the list
+   * could hold. "Make it clear that we ship daily" reaches none of them and
+   * declines, which is the safe direction.
+   */
+  /\b(?:make|get)\s+(?:it|the|this|that|them|those|these)\s+\S+.*\b(?:\w+(?:ing|er|ed)|work|stop|start|show|hide|load|render|match|fit|wrap|align|responsive|faster|visible|hidden|collapse|expand|scroll|gone)\b/i,
 ];
 
 /**
  * Phrasings that are *about* a change without asking for one.
  *
- * Checked first, because "I wonder whether we should rewrite the checkout page"
- * contains an execution verb and is plainly a thought rather than an
- * instruction. Getting this wrong in the permissive direction puts an
- * authorization card in front of somebody who was thinking aloud, which teaches
- * them to dismiss the cards — the same damage §29 records from a status that
- * contradicts the control beside it.
+ * Checked before anything else, because "I wonder whether we should rewrite the
+ * checkout page" contains an execution verb and is plainly a thought.
  */
 const DELIBERATION_MARKERS = [
   /\b(?:i wonder|wondering|thinking about|thinking of|not sure whether|not sure if)\b/i,
   /\b(?:what|how) (?:would|might|could) it (?:take|look|mean)\b/i,
   /\b(?:one day|eventually|some ?day|at some point|in future|in the future)\b/i,
   /\bwould it be (?:possible|hard|worth)\b/i,
-  /\b(?:do not|don'?t|no need to) (?:change|do|build|touch)\b/i,
+  /\bis it worth\b/i,
+];
+
+/**
+ * Asking for something to be left as it is.
+ *
+ * Separate from the scoped negation below because these name no verb to negate:
+ * "leave the booking form alone" has nothing in it a per-occurrence rule could
+ * find.
+ */
+const LEAVE_ALONE_MARKERS = [
+  /\bleave\s+(?:it|them|that|this|the\s+\S+(?:\s+\S+)?)\s+(?:alone|as[- ]is|as it is|be)\b/i,
+  /\b(?:no need|nothing) to (?:do|change|fix)\b/i,
 ];
 
 /** Past-tense reports, which are neither a request nor an idea. */
-const REPORT_MARKERS = [/\b(?:i|we|they)\s+(?:already\s+)?(?:changed|fixed|added|removed|updated|shipped|built)\b/i];
+const REPORT_MARKERS = [
+  /\b(?:i|we|they)\s+(?:already\s+)?(?:changed|fixed|added|removed|updated|shipped|built|improved|moved|renamed)\b/i,
+];
+
+/**
+ * A continuation of something already asked for.
+ *
+ * Admitted only against a referent that exists as a row — see the header. The
+ * phrases are deliberately anaphoric rather than generic: "do that", not "do".
+ */
+const CONTINUATION_MARKERS = [
+  /\b(?:do|apply|repeat)\s+(?:that|this|it|the same)\b/i,
+  /\b(?:the\s+)?same\s+(?:thing|change|fix|again|goes for|for)\b/i,
+  /\bwhat we (?:agreed|discussed|said)\b/i,
+  /\b(?:as|like) (?:above|we discussed|we agreed|before)\b/i,
+  /\b(?:that|this) one too\b/i,
+];
+
+/** Negators, looked for inside one clause rather than across a message. */
+const NEGATORS =
+  /\b(?:do not|don'?t|does not|doesn'?t|did not|didn'?t|no need to|never|rather than|instead of|without|avoid|refrain from|stop)\b/i;
+
+/**
+ * The clause an occurrence sits in: back to the start of its sentence, then
+ * forward past the last contrast marker.
+ *
+ * "Don't touch the pricing page, but do fix the footer" must still ask, so the
+ * negation attached to the first clause may not reach the second. Cutting at the
+ * contrast is what draws that line, and the sentence boundary is what stops a
+ * negation two sentences ago silencing a later instruction.
+ */
+function clauseBefore(text: string, index: number): string {
+  const sentenceStart = Math.max(
+    0,
+    ...['.', '!', '?', ';', '\n'].map((mark) => text.lastIndexOf(mark, index - 1) + 1),
+  );
+  let clause = text.slice(sentenceStart, index);
+  for (const contrast of [', but ', ' but ', ', though ', ', however ', ' — ']) {
+    const at = clause.toLowerCase().lastIndexOf(contrast);
+    if (at >= 0) clause = clause.slice(at + contrast.length);
+  }
+  return clause;
+}
+
+/** Every place this message asks for something, negated or not. */
+function executionOccurrences(text: string): number[] {
+  const found: number[] = [];
+  for (const marker of EXECUTION_MARKERS) {
+    const global = new RegExp(marker.source, `${marker.flags.replace('g', '')}g`);
+    for (const match of text.matchAll(global)) {
+      if (match.index !== undefined) found.push(match.index);
+    }
+  }
+  return found.sort((a, b) => a - b);
+}
 
 export interface ExecutionDecision {
   asks: boolean;
@@ -153,14 +298,26 @@ export interface ExecutionDecision {
 }
 
 /**
+ * Context that can only come from rows.
+ *
+ * `hasPriorRequest` is whether this conversation already holds a software
+ * request. It is what makes "do that for the contact page too" a request rather
+ * than a sentence with a dangling pronoun, and it is read from the table rather
+ * than inferred from the transcript — a row outranks prose, at the one place
+ * where the prose genuinely does not contain the answer.
+ */
+export interface ExecutionContext {
+  hasPriorRequest?: boolean;
+}
+
+/**
  * Did this message ask for a change to be made?
  *
- * Deliberation and past-tense reports lose to nothing: a message that reads as
- * either is not a request however many execution verbs it contains, because the
- * cost of a false positive here is a decision card nobody asked for and the
- * cost of a false negative is one more sentence from the person.
+ * Deliberation, past-tense reports and leave-it-alone lose to everything: a
+ * message that reads as any of them is not a request however many execution
+ * verbs it contains.
  */
-export function asksForExecution(message: string): ExecutionDecision {
+export function asksForExecution(message: string, context: ExecutionContext = {}): ExecutionDecision {
   const trimmed = message.trim();
   if (trimmed.length < 15) {
     return { asks: false, reason: 'too short to be a change request on its own' };
@@ -171,10 +328,44 @@ export function asksForExecution(message: string): ExecutionDecision {
   if (DELIBERATION_MARKERS.some((pattern) => pattern.test(trimmed))) {
     return { asks: false, reason: 'it weighs a change rather than asking for one' };
   }
-  if (!EXECUTION_MARKERS.some((pattern) => pattern.test(trimmed))) {
-    return { asks: false, reason: 'nothing here asks for a change to be made' };
+  if (LEAVE_ALONE_MARKERS.some((pattern) => pattern.test(trimmed))) {
+    return { asks: false, reason: 'it asks for something to be left as it is' };
   }
-  return { asks: true, reason: 'it asks for a change to be made' };
+
+  /*
+   * The referent comes first, and that ordering is the decision.
+   *
+   * "Apply the same to the quotes page" holds a weak verb in imperative
+   * position and would otherwise be read as an instruction — but *the same as
+   * what* is not in the sentence, so a capture would file an objective nobody
+   * could act on. Anaphora is a property of the message rather than of its
+   * verbs, so it is asked before them and it applies whichever verbs are there.
+   */
+  const anaphoric = CONTINUATION_MARKERS.some((pattern) => pattern.test(trimmed));
+  if (anaphoric && !context.hasPriorRequest) {
+    return {
+      asks: false,
+      reason: 'it refers back to a change, and nothing has been asked for in this conversation yet',
+    };
+  }
+
+  const occurrences = executionOccurrences(trimmed);
+  if (occurrences.length > 0) {
+    const live = occurrences.filter((at) => !NEGATORS.test(clauseBefore(trimmed, at)));
+    if (live.length === 0) {
+      return { asks: false, reason: 'it asks for something not to be changed' };
+    }
+    return { asks: true, reason: 'it asks for a change to be made' };
+  }
+
+  if (anaphoric) {
+    if (NEGATORS.test(trimmed)) {
+      return { asks: false, reason: 'it asks for something not to be changed' };
+    }
+    return { asks: true, reason: 'it continues a change already asked for here' };
+  }
+
+  return { asks: false, reason: 'nothing here asks for a change to be made' };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -235,7 +426,19 @@ export async function captureSoftwareChange(input: {
      */
     return { request: null, created: false, reason: 'NO_SOURCE_MESSAGE' };
   }
-  const decision = asksForExecution(input.askedText);
+  /*
+   * The referent for an anaphoric ask, read from the table rather than from the
+   * transcript.
+   *
+   * "Do that for the contact page too" is a request exactly when there is a
+   * *that*, and the only trustworthy account of whether there is one is a row
+   * Brain wrote. Reading it from the conversation's own prose would be asking
+   * the sentence to vouch for itself, which is what §25 refuses one altitude up.
+   */
+  const priorRequests = await listSoftwareRequestsForConversation(input.conversationId);
+  const decision = asksForExecution(input.askedText, {
+    hasPriorRequest: priorRequests.length > 0,
+  });
   if (!decision.asks) {
     return { request: null, created: false, reason: decision.reason };
   }
@@ -579,6 +782,106 @@ export async function softwareForConversation(
 ): Promise<SoftwareRequestView[]> {
   const requests = await listSoftwareRequestsForConversation(conversationId);
   return Promise.all(requests.map(viewOf));
+}
+
+/* -------------------------------------------------------------------------- */
+/* A refusal a person can answer                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The question Brain is waiting on, when it declined to write a change down and
+ * a sentence from the person is what would settle it.
+ *
+ * **Only the answerable refusals reach here, and that is the whole design.**
+ * "It weighs a change rather than asking for one" is a correct refusal that
+ * needs no answer — the person was thinking aloud and Russell replied in prose;
+ * printing a prompt under it would be Brain nagging somebody for a decision they
+ * did not ask to make. What does reach here is the case where they *did* ask and
+ * the only thing missing is a word only they have: which project, or what "that"
+ * refers to.
+ *
+ * §24 keeps recording the same defect — *a state that says waiting which nobody
+ * can resolve is not waiting, it is stuck* — and `clarify` was one move from
+ * being the next instance: `softwareTarget.ts` composed the question, `turn.ts`
+ * carried it onto the message row, and **nothing read it**. A mechanism nothing
+ * calls is not a mechanism.
+ */
+export type SoftwareClarificationKind = 'AMBIGUOUS_PROJECT' | 'NO_PROJECT' | 'NO_REFERENT';
+
+export interface SoftwareClarification {
+  kind: SoftwareClarificationKind;
+  /** The server's own sentence. The client renders it and composes nothing. */
+  question: string;
+}
+
+/** The refusal reasons a person can act on, and what to say about each. */
+const ANSWERABLE: Record<string, { kind: SoftwareClarificationKind; fallback: string }> = {
+  AMBIGUOUS: {
+    kind: 'AMBIGUOUS_PROJECT',
+    fallback:
+      'You named more than one project, so I have not written anything down. Say which one the ' +
+      'change belongs to and I will.',
+  },
+  NO_PROJECT: {
+    kind: 'NO_PROJECT',
+    fallback:
+      'I need to know which project this belongs to before I can write it down — that is what ' +
+      'decides which repository it may change.',
+  },
+  NO_PROJECT_ATTACHED: {
+    kind: 'NO_PROJECT',
+    fallback:
+      'This conversation is not attached to a project yet, and the project is what decides which ' +
+      'repository a change may touch. Tell me which site this is about.',
+  },
+  'it refers back to a change, and nothing has been asked for in this conversation yet': {
+    kind: 'NO_REFERENT',
+    fallback:
+      'You have asked me to do the same again, and nothing has been asked for in this ' +
+      'conversation yet — so I do not know what "that" is. Say what should change and I will ' +
+      'write it down.',
+  },
+};
+
+/**
+ * What this conversation is waiting for a word about, if anything.
+ *
+ * A projection in `pending.ts`'s shape: it reads the message rows, writes
+ * nothing, and derives on the read path. It reports **only the most recent**
+ * refusal, and only while nothing has superseded it — a question the person
+ * already answered by asking properly is history, and leaving it up would be a
+ * status contradicting the control beside it (§29).
+ */
+export async function softwareClarificationFor(
+  conversationId: string,
+): Promise<SoftwareClarification | null> {
+  const [turns, requests] = await Promise.all([
+    listTurns(conversationId),
+    listSoftwareRequestsForConversation(conversationId),
+  ]);
+
+  let latest: { at: string; clarification: SoftwareClarification } | null = null;
+  for (const turn of turns) {
+    const produced = turn.produced as { softwareDeclined?: unknown; gateReason?: unknown; clarify?: unknown };
+    if (produced.softwareDeclined !== true) continue;
+    const reason = typeof produced.gateReason === 'string' ? produced.gateReason : '';
+    const answerable = ANSWERABLE[reason];
+    if (!answerable) continue;
+    const asked = typeof produced.clarify === 'string' && produced.clarify.trim().length > 0
+      ? produced.clarify.trim()
+      : answerable.fallback;
+    latest = { at: turn.createdAt, clarification: { kind: answerable.kind, question: asked } };
+  }
+  if (!latest) return null;
+  const refusal = latest;
+
+  /*
+   * A change captured after the refusal answers it. Comparing timestamps rather
+   * than counting rows, because a request captured *before* the refusal is a
+   * different ask and settles nothing about this one.
+   */
+  const superseded = requests.some((request) => request.createdAt > refusal.at);
+  return superseded ? null : refusal.clarification;
 }
 
 /** Everything in this project that a person still has to answer. */

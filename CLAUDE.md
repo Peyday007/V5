@@ -2653,6 +2653,81 @@ remote.
   asker cannot read — a check that only ever adds a refusal, so losing it loses
   a clarification rather than a control.
 
+- **Fifteen misses in one pass is not a short alphabet; it is the wrong shape.**
+  The bullet above records the fourth widening of `EXECUTION_MARKERS`, and each
+  of the four added the one word a real message had just been declined for.
+  Driving fifty ordinary sentences through the gate found **fifteen more misses
+  and two inventions** at once — *"Move the phone number into the header"*,
+  *"Turn off the newsletter popup"*, *"Wire the booking button to the calendar
+  page"*, and, in the other direction, *"No need to fix the footer"* read as a
+  request to fix the footer. Adding fifteen words would have left the sixteenth
+  for production. So the structure changed and the vocabulary only came along
+  with it, in three ways:
+
+  **A verb is strong or weak, and a weak one counts only in imperative
+  position.** `fix` is an instruction wherever it appears; `set`, `move`,
+  `handle`, `point` and `link` are ordinary English until they open a sentence or
+  follow *please* / *could you* / *let's*. That is what lets the list hold the
+  words people actually use without reading *"the address on the contact page is
+  wrong"* or *"do you know how the form works"* as instructions.
+
+  **Negation is scoped to the occurrence, not to the message.** Every match is
+  examined for a negator in its own clause — back to the sentence boundary, then
+  forward past the last contrast marker — and the message asks for a change only
+  if **some** occurrence is un-negated. A message-level flag would have declined
+  *"Don't touch the pricing page, but do fix the footer"*, which is wrong in the
+  expensive direction: the person did ask, and Russell would have looked like it
+  ignored them.
+
+  **Anaphora is answered by a row, never by a word.** *"Do that for the contact
+  page too"* has no execution verb and cannot get one, because the verb is in the
+  sentence before it. It is admitted only when **this conversation already holds
+  a software request** — a referent Brain wrote down. The check runs *before* the
+  verbs and applies whichever verbs are present, because *"apply the same to the
+  quotes page"* holds a weak imperative and still names nothing: a capture there
+  would file an objective nobody could act on. A referent from another thread
+  does not count.
+
+  **A closed list can never be complete over ordinary English, and that is why
+  the failure mode is fixed at *missing*.** A miss costs one more sentence and
+  Russell says which one would work; an invention puts an authorization card in
+  front of somebody thinking aloud, which teaches them to stop reading the cards
+  — §29's damage from a status that contradicts the control beside it. **Build
+  never consults this gate**, so there is always an entrance no sentence can be
+  mis-read at. The corpus is `tests/softwareRequestPhrasing.test.ts`, declared in
+  families with its purpose written down, and the declines are the half that
+  matters.
+
+- **The question Brain would not guess past was composed, carried and read by
+  nothing.** `softwareTarget.ts` wrote the sentence, `turn.ts` put it on the
+  message row as `produced.clarify`, and no projection, route or component ever
+  looked at it. So a person whose message named two projects got an ordinary
+  reply and no card, with nothing anywhere saying Brain had stopped on purpose or
+  what would unstop it — §24's *waiting nobody can resolve* at a new surface, and
+  the fifth time this file has had to write that **a mechanism nothing calls is
+  not a mechanism**. `softwareClarificationFor` is the reader: a projection in
+  `pending.ts`'s shape that writes nothing, reports only the most recent refusal,
+  and stops reporting it the moment a request captured *after* it settles the
+  question — answered by doing rather than by saying.
+
+  **Only the answerable refusals reach it, and that is the design rather than an
+  omission.** *"It weighs a change rather than asking for one"* is a correct
+  refusal to a remark; printing a prompt under it would be Brain asking somebody
+  to decide something they never raised. What surfaces is the case where they
+  *did* ask and the only thing missing is a word only they have — which project,
+  or what *that* refers to. The client renders the server's sentence and composes
+  none of its own, for the reason the authorization card does.
+
+- **Brain as a target is enforced by the planner, not by the list.** The grant's
+  `forbiddenPaths` is a declaration, and `factoryExecutionPlane` asserting it
+  contains the right strings proves only that somebody typed them. Each one is
+  now put through `validatePlan` as a unit claiming to own it — including a
+  *second* deploy workflow under a new name, which is the bypass §28 records and
+  which a pattern naming `deploy.yml` would have allowed. Ordinary product code
+  still passes, and `requiredContext` may name a forbidden file: the list refuses
+  **ownership**, never reading, and a reviewer of a change that has to agree with
+  the policy module must be able to open it.
+
 - **Onboarding happens when a target needs it, and the ask survives the wait.**
   A person asking for a change in a project with no repository gets it written
   down, plus the sentence naming what is missing and where to do it; the *same*
