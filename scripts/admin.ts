@@ -706,7 +706,25 @@ async function main(): Promise<void> {
             'nowhere. Commit, re-run `npm run design:manifest`, then decide.',
         );
       }
-      const decision = command.toUpperCase() as DesignDecision;
+      /*
+       * The verb a person types, mapped to the vocabulary the table stores.
+       *
+       * This was `command.toUpperCase() as DesignDecision`, and the cast is
+       * what made it wrong rather than broken: `approve` upper-cases to
+       * `APPROVE`, which is not one of `APPROVED | REJECTED | WITHDRAWN`, and
+       * the assertion told the compiler not to check. It would have written a
+       * value no reader recognises — and because gate O asks
+       * `decision !== 'APPROVED'`, a correctly-intended approval would have
+       * read back as a *rejection*. An explicit map cannot drift: adding a verb
+       * without a decision is a compile error, which is the property a cast
+       * throws away.
+       */
+      const DECISION_FOR: Record<'approve' | 'reject' | 'withdraw', DesignDecision> = {
+        approve: 'APPROVED',
+        reject: 'REJECTED',
+        withdraw: 'WITHDRAWN',
+      };
+      const decision = DECISION_FOR[command as 'approve' | 'reject' | 'withdraw'];
       const recorded = await recordDesignDecision({
         revision,
         renderSetDigest: digest,

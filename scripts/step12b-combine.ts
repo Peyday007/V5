@@ -59,6 +59,24 @@ interface Reading {
   gates: GateRecord[];
 }
 
+/**
+ * The seventeen scenarios, named once.
+ *
+ * A combiner that took whatever gates it was given would declare completion on
+ * a reading that held three of them: `counts.PASS === combined.length` is true
+ * of any set where everything present passed, including a set that is missing
+ * fourteen rows. That is the arithmetic-on-a-fiction §23 already corrected once,
+ * at a matrix — the denominator has to be the scenarios, not the rows somebody
+ * happened to emit.
+ *
+ * Declared here rather than read from the first reading, because taking the set
+ * from the input means a truncated input defines its own completeness.
+ */
+const SCENARIOS = [
+  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I',
+  'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
+] as const;
+
 function fail(message: string): never {
   console.error(`STEP 12B COMBINE: REFUSED — ${message}`);
   process.exit(1);
@@ -78,6 +96,48 @@ function read(file: string): Reading {
   if (!Array.isArray(reading.gates) || reading.gates.length === 0) {
     fail(`${file} carries no gates.`);
   }
+
+  /*
+   * A reading has to be about all seventeen scenarios, and about nothing else.
+   *
+   * Three separate refusals, because they are three different mistakes and a
+   * reader needs to know which one happened:
+   *
+   *   unknown    an id that is not a scenario — a typo, or a gate somebody
+   *              added without adding it to the contract. Silently carrying it
+   *              would put a row in the matrix that answers to nothing.
+   *   duplicate  the same id twice in one reading. `[...new Set(...)]` used to
+   *              swallow this, which meant two contradictory records for one
+   *              scenario collapsed into whichever came first.
+   *   missing    a scenario the reading does not mention at all. This is the
+   *              one that mattered: it is indistinguishable from a passing run
+   *              once the rows are counted.
+   */
+  const seen = new Map<string, number>();
+  for (const gate of reading.gates) {
+    seen.set(gate.id, (seen.get(gate.id) ?? 0) + 1);
+  }
+  const known = new Set<string>(SCENARIOS);
+  const unknown = [...seen.keys()].filter((id) => !known.has(id)).sort();
+  if (unknown.length > 0) {
+    fail(`${file} carries gate(s) that are not Step 12B scenarios: ${unknown.join(', ')}.`);
+  }
+  const duplicated = [...seen.entries()].filter(([, count]) => count > 1).map(([id]) => id).sort();
+  if (duplicated.length > 0) {
+    fail(
+      `${file} carries duplicate record(s) for gate(s) ${duplicated.join(', ')}. Two records for ` +
+        'one scenario in one run is a reporter defect, not something to pick between.',
+    );
+  }
+  const absent = SCENARIOS.filter((id) => !seen.has(id));
+  if (absent.length > 0) {
+    fail(
+      `${file} is missing gate(s) ${absent.join(', ')} of the seventeen. A partial reading cannot ` +
+        'be combined: a matrix whose denominator is the rows somebody emitted would report ' +
+        'completion for a run that never looked at most of it.',
+    );
+  }
+
   return reading;
 }
 
@@ -140,7 +200,11 @@ function main(): void {
    * that disagree are a CONFLICT — not a tie to be broken, because a scenario
    * two environments describe differently is one nobody has established.
    */
-  const ids = [...new Set(readings.flatMap((reading) => reading.gates.map((gate) => gate.id)))].sort();
+  /*
+   * Walked in contract order. Every reading has already been checked to carry
+   * exactly these, so this cannot silently shrink.
+   */
+  const ids: readonly string[] = SCENARIOS;
   const combined: {
     id: string;
     title: string;
@@ -245,8 +309,14 @@ function main(): void {
       `${counts.BLOCKED} BLOCKED · ${counts.NOT_RUN} NOT_RUN · ${counts.CONFLICT} CONFLICT ` +
       `(of ${combined.length} scenarios, at ${revision.slice(0, 8)})`,
   );
-  if (counts.PASS === combined.length) {
-    console.log('STEP 12B IS COMPLETE AT THIS REVISION.');
+  /*
+   * Completion is all seventeen, not "everything that turned up".
+   * `combined.length` is compared to the contract as well as to the count, so a
+   * future change that drops a scenario is a loud failure rather than a smaller
+   * matrix that passes.
+   */
+  if (counts.PASS === SCENARIOS.length && combined.length === SCENARIOS.length) {
+    console.log(`STEP 12B IS COMPLETE AT THIS REVISION (all ${SCENARIOS.length} scenarios).`);
     return;
   }
   console.log('STEP 12B IS NOT COMPLETE.');
