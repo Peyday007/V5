@@ -1599,6 +1599,36 @@ async function seedSomethingToDecide(cookie: string): Promise<Seeded> {
  * about the control that is supposed to produce it. It presses what a person
  * presses, and reports false if that control is not there.
  */
+/**
+ * Does this Brain already hold a standing authority, asked of the server?
+ *
+ * Read rather than remembered, because the two passes that can create one — the
+ * render capture and the journey — do not share a variable, and a flag one of
+ * them set would be exactly the second copy of a fact this file keeps being
+ * bitten by.
+ */
+async function standingGrantExists(cookie: string): Promise<boolean> {
+  try {
+    const projects = (await (
+      await fetch(`${BASE}/api/projects`, {
+        headers: { origin: BASE, cookie },
+        signal: AbortSignal.timeout(20_000),
+      })
+    ).json()) as { projects?: { id: string }[] };
+    const project = projects.projects?.[0];
+    if (!project) return false;
+    const authority = (await (
+      await fetch(`${BASE}/api/russell/projects/${project.id}/authority`, {
+        headers: { origin: BASE, cookie },
+        signal: AbortSignal.timeout(20_000),
+      })
+    ).json()) as { grant?: unknown };
+    return authority.grant !== null && authority.grant !== undefined;
+  } catch {
+    return false;
+  }
+}
+
 async function grantStandingAuthority(cdp: Cdp): Promise<boolean> {
   await cdp.send('Page.navigate', { url: `${BASE}/needs-you` });
   await waitFor(cdp, "document.querySelector('.rs-authority') !== null", 20_000);
@@ -2478,7 +2508,12 @@ async function driveJourney(
   const findings: string[] = [];
   console.log('');
   console.log('Seeding something to decide, through the product’s own doors:');
-  const seeded = await seedSomethingToDecide(cookie);
+  let seeded: Seeded = {
+    projectId: null,
+    projectName: null,
+    candidateId: null,
+    note: 'not seeded yet',
+  };
   let parked: Parked = {
     missionId: null,
     requestId: null,
@@ -2487,10 +2522,6 @@ async function driveJourney(
     packetBefore: null,
     note: 'the journey did not get that far',
   };
-  console.log(`  ${seeded.note}`);
-  if (seeded.candidateId === null) {
-    findings.push(`the journey had nothing to act on: ${seeded.note}`);
-  }
   console.log('');
   console.log(
     `One journey on a ${PHONE.width}×${PHONE.height} phone, pressing real controls:`,
@@ -2525,10 +2556,53 @@ async function driveJourney(
      * It is also what unblocks everything after it: no grant, no mission, and
      * Work has nothing to show.
      */
-    const answered = await grantStandingAuthority(cdp);
-    console.log(`  needs-you answer   ${answered ? 'approved, and the card swapped its control' : 'COULD NOT APPROVE'}`);
+    /*
+     * Already granted is a fact, not a failure — and reporting it as one cost a
+     * whole run.
+     *
+     * With `--renders`, the capture pass answers this same decision before the
+     * journey starts, because `needs-you-empty` is the settled state of one
+     * address and pressing its own Approve is how you get there. The journey
+     * then found no Approve control and called it "the one decision on Needs
+     * You could not be answered from the screen" — which is false of a build
+     * where it had just been answered twenty minutes earlier.
+     */
+    const alreadyGranted = await standingGrantExists(cookie);
+    const answered = alreadyGranted ? true : await grantStandingAuthority(cdp);
+    console.log(
+      `  needs-you answer   ${
+        alreadyGranted
+          ? 'already granted earlier in this run — the render pass pressed the same control'
+          : answered
+            ? 'approved, and the card swapped its control'
+            : 'COULD NOT APPROVE'
+      }`,
+    );
     if (!answered) {
       findings.push('the one decision on Needs You could not be answered from the screen');
+    }
+
+    /*
+     * Seeded **here**, not before the browser opened, and the ordering is the
+     * defect it fixes rather than a preference.
+     *
+     * With the standing authority already in place, an idea Brain captures is
+     * judged and launched within a tick or two. Seeding at the top of the
+     * journey left ten minutes of renders, six maps and fourteen steps between
+     * the capture and the moment a person opens Ideas — so by then Russell had
+     * quite correctly launched it, there was no backlog row to press, and the
+     * run reported two missing controls and an override that never happened.
+     * Every one of those was the harness racing the product it was measuring.
+     *
+     * Seeding immediately before the three steps that act on it leaves seconds
+     * rather than minutes, which is inside one thirty-second cycle by a wide
+     * margin — and if it ever loses that race the finding says so truthfully
+     * rather than blaming a control.
+     */
+    seeded = await seedSomethingToDecide(cookie);
+    console.log(`  the site’s request ${seeded.note}`);
+    if (seeded.candidateId === null) {
+      findings.push(`the journey had nothing to act on: ${seeded.note}`);
     }
     findings.push(...(await walk(cdp, outputDir, JOURNEY_WORK)));
     /*
