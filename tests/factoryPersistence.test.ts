@@ -62,7 +62,15 @@ const OBJECTIVE = {
   submissionKey: 'factory-persistence',
 };
 
+/**
+ * Set when the child exits, so `waitForHealthy` can tell "not up yet" from
+ * "up, and then gone". Cleared at every start, because this file boots two
+ * servers in sequence and the first one's death is not the second one's.
+ */
+let exited: { code: number | null; signal: NodeJS.Signals | null } | null = null;
+
 function startServer(): ChildProcessByStdio<null, Readable, Readable> {
+  exited = null;
   const child = spawn(
     process.execPath,
     [
@@ -86,6 +94,26 @@ function startServer(): ChildProcessByStdio<null, Readable, Readable> {
   );
   child.stdout.on('data', (chunk: Buffer) => (log += chunk.toString()));
   child.stderr.on('data', (chunk: Buffer) => (log += chunk.toString()));
+  /*
+   * Watch it die, because otherwise the harness reports the wrong fact.
+   *
+   * `waitForHealthy` polls `/healthz` and swallows every connection refusal, so
+   * a child that boots, prints its banner and *then* exits is indistinguishable
+   * from one that is merely slow — and the message after ten minutes reads
+   * "server never became healthy", which is false. It became healthy and then
+   * stopped. That sends whoever reads it to look at boot time, which is the one
+   * place the answer is not.
+   *
+   * Measured rather than assumed: this file failed twice in full runs and the
+   * obvious explanation was CPU starvation, so that was tested — eight busy
+   * loops on four cores make this suite take 14.5s against 4.6s quiet. Three
+   * times slower, not a hundred and thirty times. Starvation is refuted, and
+   * what is actually happening is unknown, which is exactly why the harness
+   * has to report the difference instead of one sentence covering both.
+   */
+  child.once('exit', (code, signal) => {
+    exited = { code, signal };
+  });
   return child;
 }
 
@@ -109,6 +137,12 @@ async function waitForHealthy(): Promise<void> {
    */
   const deadline = Date.now() + 600_000;
   for (;;) {
+    if (exited !== null) {
+      throw new Error(
+        `the server process exited before answering — code ${exited.code ?? 'none'}, ` +
+          `signal ${exited.signal ?? 'none'}${exited.signal === 'SIGKILL' ? ' (killed from outside; out of memory is the usual reason)' : ''}:\n${log}`,
+      );
+    }
     if (Date.now() > deadline) throw new Error(`server never became healthy:\n${log}`);
     try {
       if ((await fetch(`${BASE}/healthz`)).ok) return;
