@@ -2472,3 +2472,61 @@ describe('the acceptance reporter, read where the image cannot see the repositor
     }
   });
 });
+
+/**
+ * The acceptance reporter evaluates the design decision. It can never record
+ * one, and that separation is the whole point of gate O.
+ *
+ * The owner drew the distinction in those words: *"O must consume a genuine
+ * recorded owner approval; evaluating that approval is different from granting
+ * itself approval."* A reporter that could write the row it is waiting for
+ * would be approving its own work — which is exactly the defect
+ * `independenceEvidence.ts` re-checks its own guard to prevent, and exactly
+ * what `assemble.ts` refuses when it produces a pull request and stops.
+ *
+ * So the writer lives in the repository and **nothing under `scripts/` imports
+ * it**. That is checkable, and this is the check.
+ */
+describe('nothing in scripts/ can record a design decision', () => {
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+
+  it('is the acceptance reporter reading, never writing', () => {
+    const reporter = fs.readFileSync(
+      path.join(repo, 'scripts', 'step12b-acceptance.ts'),
+      'utf8',
+    );
+    // It reads the standing decision and digests the render set…
+    expect(reporter).toContain('standingDecision');
+    expect(reporter).toContain('digestRenderSet');
+    // …and imports no writer.
+    expect(reporter).not.toContain('recordDesignDecision');
+  });
+
+  it('is true of every script, not only the reporter', () => {
+    const dir = path.join(repo, 'scripts');
+    const offenders = fs
+      .readdirSync(dir)
+      .filter((name) => name.endsWith('.ts'))
+      .filter((name) => fs.readFileSync(path.join(dir, name), 'utf8').includes('recordDesignDecision'));
+    /*
+     * `admin.ts` is the one permitted writer, because reaching a shell inside
+     * the deployment is the authentication §26 already relies on and `--admin`
+     * is the attribution. Everything else is refused: a guard on one entrance
+     * is not a guard.
+     */
+    expect(offenders.filter((name) => name !== 'admin.ts')).toEqual([]);
+  });
+
+  it('keeps the decision vocabulary closed, so a rejection is a recorded answer', () => {
+    const repoModule = fs.readFileSync(
+      path.join(repo, 'server', 'repos', 'designApprovals.ts'),
+      'utf8',
+    );
+    expect(repoModule).toContain("'APPROVED'");
+    expect(repoModule).toContain("'REJECTED'");
+    expect(repoModule).toContain("'WITHDRAWN'");
+    // Append-only: no UPDATE and no DELETE anywhere in it.
+    expect(repoModule).not.toMatch(/\bUPDATE design_approvals\b/);
+    expect(repoModule).not.toMatch(/\bDELETE FROM design_approvals\b/);
+  });
+});

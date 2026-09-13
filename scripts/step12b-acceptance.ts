@@ -106,10 +106,60 @@ import { recordKnowledge } from '../server/repos/russellMissions.ts';
 import { createAudit } from '../server/repos/audits.ts';
 import { compileHat } from '../server/services/conversation/contextHat.ts';
 import { ideaMapForProject } from '../server/services/russell/ideas.ts';
+import { digestRenderSet, standingDecision } from '../server/repos/designApprovals.ts';
+
+import { execFileSync } from 'node:child_process';
+import { BRAIN_REVISION } from '../server/env.ts';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 
-type Verdict = 'PASS' | 'PARTIAL' | 'BLOCKED' | 'NOT_RUN';
+/**
+ * The revision this reading describes, and where that answer came from.
+ *
+ * Two sources, and they are not interchangeable. A **checkout** run asks git,
+ * which is authoritative about the tree it just read and refuses to answer if
+ * the tree is dirty — because a reading taken over uncommitted edits describes
+ * a revision that does not exist anywhere, and combining it with a production
+ * reading would silently compare two different trees. A **container** run has
+ * no `.git` at all and reads `BRAIN_REVISION`, stamped into the image at build
+ * time by the deploy workflow.
+ *
+ * Either way an unknown revision is reported as unknown. `step12b-combine.ts`
+ * refuses a record that cannot name one, because the whole value of joining two
+ * runs is that they describe the same code.
+ */
+function revisionOf(): { revision: string | null; attestedBy: string; dirty: boolean } {
+  if (BRAIN_REVISION) {
+    return { revision: BRAIN_REVISION, attestedBy: 'the image it was built into', dirty: false };
+  }
+  try {
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO, encoding: 'utf8' }).trim();
+    const status = execFileSync('git', ['status', '--porcelain'], {
+      cwd: REPO,
+      encoding: 'utf8',
+    }).trim();
+    return { revision: head, attestedBy: 'git in this checkout', dirty: status.length > 0 };
+  } catch {
+    return { revision: null, attestedBy: 'nothing — no stamp and no git', dirty: false };
+  }
+}
+
+/**
+ * `FAIL` exists because the owner asked for it, and the reason is precise.
+ *
+ * A check that ran and did not hold used to have nowhere to go: it became
+ * `NOT_RUN`, which means *nothing has happened yet* and is the opposite of what
+ * occurred. A reader cannot tell a scenario nobody has exercised from one that
+ * was exercised and broke, and those have completely different remedies — the
+ * first needs somebody to run it, the second needs somebody to fix something.
+ *
+ *   PASS      exercised in this run, or derived from rows and files it read.
+ *   FAIL      exercised, and a condition did not hold. What failed is printed.
+ *   PARTIAL   the mechanism holds and one named condition was not exercised.
+ *   BLOCKED   an operational fact stops it, named, with whose action clears it.
+ *   NOT_RUN   nothing has happened. Never used for a check that ran.
+ */
+type Verdict = 'PASS' | 'FAIL' | 'PARTIAL' | 'BLOCKED' | 'NOT_RUN';
 
 interface Gate {
   id: string;
@@ -117,6 +167,52 @@ interface Gate {
   verdict: Verdict;
   detail: string;
 }
+
+/**
+ * Which of the three environments each scenario's decisive evidence comes from.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is declared rather than inferred
+ * ---------------------------------------------------------------------------
+ *
+ * There are three, and they answer different questions. **CHECKOUT** is the
+ * repository tree — the console-removal suite, the committed render set, the
+ * responsive suite; facts about what was built. **PRODUCTION** is the deployed
+ * Brain's own rows — whether a fleet exists, what it has actually done; facts
+ * no scratch database has. **ISOLATED** is the temporary database this script
+ * creates and deletes, where every exercise that *writes* runs, because a
+ * reporter that wrote to a real Brain would be a mutation rather than a reading.
+ *
+ * One run can only reach two of the three: a checkout run has the tree and the
+ * scratch database but no fleet, and a container run has the fleet and the
+ * scratch database but no tree. So neither run alone can answer all seventeen,
+ * and `step12b-combine.ts` joins two runs that name the **same revision**.
+ *
+ * Declared as a map rather than passed per `record(...)` call on purpose: the
+ * per-gate blocks below are edited constantly, and a field each of them had to
+ * remember would be the field one of them forgot.
+ */
+type Environment = 'CHECKOUT' | 'PRODUCTION' | 'ISOLATED';
+
+const GATE_EVIDENCE: Record<string, Environment> = {
+  A: 'PRODUCTION',
+  B: 'PRODUCTION',
+  C: 'ISOLATED',
+  D: 'ISOLATED',
+  E: 'PRODUCTION',
+  F: 'ISOLATED',
+  G: 'ISOLATED',
+  H: 'CHECKOUT',
+  I: 'ISOLATED',
+  J: 'CHECKOUT',
+  K: 'CHECKOUT',
+  L: 'PRODUCTION',
+  M: 'ISOLATED',
+  N: 'PRODUCTION',
+  O: 'CHECKOUT',
+  P: 'ISOLATED',
+  Q: 'ISOLATED',
+};
 
 const gates: Gate[] = [];
 function record(id: string, title: string, verdict: Verdict, detail: string): void {
@@ -158,6 +254,13 @@ const NOT_FROM_A_CHECKOUT =
   'deliberately carries no tests/, docs/ or client/src \u2014 so this row is a ' +
   'repository fact this run cannot see, rather than one it checked and found absent. ' +
   'Take this row from a checkout (npm run step12b:acceptance).';
+
+/**
+ * Where this process is running, which decides which two of the three
+ * environments it can reach. `REPO_VISIBLE` is the probe because
+ * `.dockerignore` excludes `tests/` from the image and nothing generates it.
+ */
+const RUN_ENVIRONMENT: 'CHECKOUT' | 'PRODUCTION' = REPO_VISIBLE ? 'CHECKOUT' : 'PRODUCTION';
 
 /**
  * The committed visual record, read rather than assumed.
@@ -1618,37 +1721,166 @@ async function main(): Promise<void> {
 
   /* -- O. Visual and interaction approval ------------------------------------ */
   /*
-   * O has two halves and only one of them is a machine's. The evidence half is
-   * a named, dated, commit-stamped set a person can look at without re-running
-   * anything; the approval half is the owner's and cannot be derived, measured
-   * or inferred. So this reports on the first and says the second is theirs —
-   * and it stays PARTIAL however good the images are, because a reporter that
-   * could promote itself to PASS here would be approving its own work.
+   * O is the one scenario whose answer is not this reporter's to give, and the
+   * distinction the owner drew is the whole design: **evaluating an approval is
+   * a different act from granting one.**
+   *
+   * So this reads three things and judges none of them:
+   *
+   *   1. the render set on disk, digested over the *bytes* of every declared
+   *      render — because an approval names what somebody looked at, and a
+   *      directory is mutable;
+   *   2. whether a decision exists for **this revision and that digest**; and
+   *   3. what the decision says.
+   *
+   * An approval for a different revision, or for a render set that has since
+   * changed, is **stale** and is reported as such rather than carried forward —
+   * §23's reservation-bound-to-the-bytes rule, at a design gate. A `WITHDRAWN`
+   * row after an `APPROVED` one means there is no approval, because the standing
+   * decision is the newest one and the table is append-only.
+   *
+   * Nothing in this file can write one of those rows. `designApprovals.ts`
+   * exports the writer, this script does not import it, and a test asserts that
+   * no module under `scripts/` does — because a reporter that could record the
+   * approval it is waiting for would be approving its own work, which is the
+   * defect `independenceEvidence.ts` re-checks its own guard to prevent.
    */
-  const visual = visualEvidence();
-  record(
-    'O',
-    'Visual and interaction approval',
-    'PARTIAL',
-    'scripts/visual-qa.ts captures desktop, intermediate and phone, sweeps the 822-953 band ' +
-      'that the rejected build clipped in, and drives one continuous journey rather than three ' +
-      'isolated interactions. The band is clean at 822, 860, 900 and 953 across six ' +
-      'destinations. ' +
-      (!REPO_VISIBLE
-        ? `The image set is a repository fact. ${NOT_FROM_A_CHECKOUT} `
-        : visual.images > 0
-        ? `${visual.images} images are committed under docs/evidence/step12b-visual/ with an ` +
-          'index naming each one\u2019s width, journey step and subject, so the set can be ' +
-          'reviewed without running the harness. One measured defect is photographed and left ' +
-          'alone: the constellation overlaps its own nodes at 390px (9 nodes, 9 overlapping ' +
-          'pairs on a 316px canvas), which the documented 0.62 stagger cannot fix because an ' +
-          'inner node\u2019s half-width exceeds its distance from the nucleus. That needs a ' +
-          'different dense-phone layout, which is a visual decision this step reserves for you. '
-        : 'No image set is committed, so there is nothing to review without running the ' +
-          'harness. ') +
-      'NOT established here: your review of the images against the approved direction \u2014 ' +
-      'that is yours to give, and no reading in this report can stand in for it.',
-  );
+  const renderDir = path.join(REPO, 'docs', 'evidence', 'step12b-renders');
+  const renderIndex = path.join(renderDir, 'index.json');
+  const stamp = revisionOf();
+
+  if (!REPO_VISIBLE) {
+    record(
+      'O',
+      'Visual and interaction approval',
+      'NOT_RUN',
+      `O needs the render set, which is a repository fact. ${NOT_FROM_A_CHECKOUT}`,
+    );
+  } else if (!fs.existsSync(renderIndex)) {
+    /*
+     * An executed check that did not hold. Not NOT_RUN: this run looked, and
+     * what it found was that the set a decision would be about does not exist.
+     */
+    record(
+      'O',
+      'Visual and interaction approval',
+      'FAIL',
+      'No render set to decide on: docs/evidence/step12b-renders/index.json does not exist, so ' +
+        'there is nothing a person could have approved and nothing for this to evaluate. ' +
+        'Produce the renders and run `npm run design:manifest`.',
+    );
+  } else if (!stamp.revision || stamp.dirty) {
+    record(
+      'O',
+      'Visual and interaction approval',
+      'FAIL',
+      stamp.dirty
+        ? `The tree is dirty at ${stamp.revision?.slice(0, 8) ?? 'an unknown revision'}, so an ` +
+          'approval could only be bound to a revision that exists nowhere. Commit, re-run ' +
+          '`npm run design:manifest`, then ask for the decision.'
+        : 'This run cannot name its revision, and an approval has to be bound to one.',
+    );
+  } else {
+    let declared: { screen: string; width: number; file: string }[] = [];
+    let readable = true;
+    try {
+      declared = JSON.parse(fs.readFileSync(renderIndex, 'utf8')) as typeof declared;
+    } catch {
+      readable = false;
+    }
+    const missing = declared.filter((entry) => !fs.existsSync(path.join(renderDir, entry.file)));
+
+    if (!readable || declared.length === 0 || missing.length > 0) {
+      record(
+        'O',
+        'Visual and interaction approval',
+        'FAIL',
+        !readable
+          ? 'The render index is not readable JSON, so the set a decision would cover cannot be ' +
+            'determined — and a digest over a set nobody can enumerate is not a binding.'
+          : declared.length === 0
+            ? 'The render index declares no renders.'
+            : `The index declares ${missing.length} render(s) that are not on disk ` +
+              `(${missing.slice(0, 3).map((entry) => entry.file).join(', ')}). A decision bound to ` +
+              'this set would name bytes that do not exist.',
+      );
+    } else {
+      const { digest, count } = digestRenderSet(
+        declared.map((entry) => ({
+          path: entry.file,
+          width: entry.width,
+          screen: entry.screen,
+          bytes: fs.readFileSync(path.join(renderDir, entry.file)),
+        })),
+      );
+      const screens = [...new Set(declared.map((entry) => entry.screen))].sort();
+      const widths = [...new Set(declared.map((entry) => entry.width))].sort((a, b) => a - b);
+      const covers =
+        `${count} render(s) covering ${screens.length} screen(s) ` +
+        `(${screens.join(', ')}) at ${widths.join(' / ')}px`;
+
+      /*
+       * The decision is read from the **configured** Brain rather than from the
+       * scratch database, because an approval a person gave lives where their
+       * other decisions live. Read-only, in the same phase and with the same
+       * honesty as the fleet reading: a database that cannot be read is reported
+       * as not read rather than as an absent approval.
+       */
+      let decision: Awaited<ReturnType<typeof standingDecision>> = null;
+      let decisionReadable = true;
+      try {
+        decision = await standingDecision(stamp.revision, digest);
+      } catch {
+        decisionReadable = false;
+      }
+
+      if (!decisionReadable) {
+        record(
+          'O',
+          'Visual and interaction approval',
+          'FAIL',
+          `The render set digests to ${digest.slice(0, 12)}… (${covers}), and the decisions table ` +
+            'could not be read, so whether it was approved is unknown rather than unapproved.',
+        );
+      } else if (!decision) {
+        record(
+          'O',
+          'Visual and interaction approval',
+          'BLOCKED',
+          `${covers}, digesting to ${digest.slice(0, 12)}… at revision ` +
+            `${stamp.revision.slice(0, 8)}. **No decision is recorded for this exact revision and ` +
+            'render set.** This is an operational fact with one remedy and it is not this ' +
+            'reporter\u2019s: a person signs in and records it, or runs `npm run admin -- design ' +
+            'approve`. Nothing in scripts/ can write that row, deliberately \u2014 a reporter that ' +
+            'could record the approval it is waiting for would be approving its own work.',
+        );
+      } else if (decision.decision !== 'APPROVED') {
+        record(
+          'O',
+          'Visual and interaction approval',
+          'FAIL',
+          `The standing decision for this render set is **${decision.decision}**, recorded by ` +
+            `${decision.approvedByUserId} at ${decision.createdAt}` +
+            (decision.note ? ` — "${decision.note}"` : '') +
+            '. A withdrawal or a rejection is as much a recorded decision as an approval, and it ' +
+            'is reported as the answer rather than as a missing one.',
+        );
+      } else {
+        record(
+          'O',
+          'Visual and interaction approval',
+          'PASS',
+          `Approved by ${decision.approvedByUserId} at ${decision.createdAt}` +
+            (decision.note ? ` — "${decision.note}"` : '') +
+            `, bound to revision ${stamp.revision.slice(0, 8)} and to render-set digest ` +
+            `${digest.slice(0, 12)}… (${covers}). The digest is recomputed from the bytes on disk ` +
+            'in this run, so an approval stops applying the moment either the tree or a render ' +
+            'changes, rather than being carried forward. This reporter evaluated that decision ' +
+            'and cannot record one.',
+        );
+      }
+    }
+  }
 
   /* -- P. Preserved integrations, migrations, and restart --------------------- */
   const upgrade = file('scripts/upgrade-populated.ts');
@@ -1881,15 +2113,70 @@ async function main(): Promise<void> {
 
   const counts = gates.reduce<Record<Verdict, number>>(
     (acc, gate) => ({ ...acc, [gate.verdict]: acc[gate.verdict] + 1 }),
-    { PASS: 0, PARTIAL: 0, BLOCKED: 0, NOT_RUN: 0 },
+    { PASS: 0, FAIL: 0, PARTIAL: 0, BLOCKED: 0, NOT_RUN: 0 },
   );
   console.log('');
   console.log(
-    `STEP 12B — ${counts.PASS} PASS · ${counts.PARTIAL} PARTIAL · ${counts.BLOCKED} BLOCKED · ` +
-      `${counts.NOT_RUN} NOT_RUN (of ${gates.length} scenarios)`,
+    `STEP 12B — ${counts.PASS} PASS · ${counts.FAIL} FAIL · ${counts.PARTIAL} PARTIAL · ` +
+      `${counts.BLOCKED} BLOCKED · ${counts.NOT_RUN} NOT_RUN (of ${gates.length} scenarios)`,
   );
   if (counts.PASS !== gates.length) {
     console.log('STEP 12B IS NOT COMPLETE.');
+  }
+
+  /*
+   * The record, so two runs can be joined.
+   *
+   * `--emit <path>` writes what this run established, stamped with the revision
+   * it can attest and the environment it ran in. `step12b-combine.ts` reads two
+   * of these and refuses to join them unless they name the same revision — see
+   * `revisionOf` above for why an unknown or dirty revision is refused rather
+   * than guessed.
+   *
+   * Each gate carries which of the three environments its decisive evidence
+   * comes from, so the combiner can tell a row this run could not see from one
+   * it saw and judged.
+   */
+  const emitAt = process.argv.indexOf('--emit');
+  if (emitAt !== -1) {
+    const target = process.argv[emitAt + 1];
+    if (!target) {
+      console.error('--emit needs a path to write the record to.');
+      process.exitCode = 1;
+    } else {
+      const stamp = revisionOf();
+      const record = {
+        step: '12B',
+        ranIn: RUN_ENVIRONMENT,
+        revision: stamp.revision,
+        revisionAttestedBy: stamp.attestedBy,
+        treeDirty: stamp.dirty,
+        generatedAt: new Date().toISOString(),
+        repositoryVisible: REPO_VISIBLE,
+        operationalReading: fleet.unreadable
+          ? { taken: false, why: fleet.unreadable }
+          : {
+              taken: true,
+              source: fleet.source,
+              routines: fleet.routines.length,
+              accounts: fleet.accounts.length,
+            },
+        gates: gates.map((gate) => ({
+          id: gate.id,
+          title: gate.title,
+          verdict: gate.verdict,
+          evidenceFrom: GATE_EVIDENCE[gate.id] ?? 'ISOLATED',
+          detail: gate.detail,
+        })),
+      };
+      fs.mkdirSync(path.dirname(path.resolve(target)), { recursive: true });
+      fs.writeFileSync(path.resolve(target), `${JSON.stringify(record, null, 2)}\n`);
+      console.log('');
+      console.log(
+        `  record written to ${target} — revision ${stamp.revision ?? 'UNKNOWN'} ` +
+          `(${stamp.attestedBy})${stamp.dirty ? ', TREE DIRTY' : ''}`,
+      );
+    }
   }
 
   await closeDatabase();

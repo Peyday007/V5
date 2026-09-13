@@ -58,6 +58,37 @@ function readPort(raw: string | undefined, fallback: number): number {
 export const PORT = readPort(process.env.PORT, 5174);
 export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
+/**
+ * The git revision this build was made from, or null when nothing stamped it.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the deployment has to attest this itself
+ * ---------------------------------------------------------------------------
+ *
+ * The acceptance reporter takes half its evidence from the deployed Brain's own
+ * rows and half from the repository tree, and a reader can only combine the two
+ * if both name the same revision. Until this existed, the revision attached to
+ * a production reading came from the *workflow* that had just deployed it —
+ * which is a reasonable claim and is not the deployment's own. A re-run of an
+ * older dispatch, a rollback, or a machine that failed to take the new release
+ * would all still be labelled with whatever sha the workflow was holding.
+ *
+ * So the sha is baked in at image build time (`ARG BRAIN_REVISION` in the
+ * Dockerfile, passed from the deploy workflow) and read here. A process that
+ * was not stamped answers **null** rather than guessing: a local checkout, a
+ * plain `docker run`, and a test all legitimately have no revision, and
+ * inventing one would be worse than admitting there is none — the combiner
+ * refuses an unstamped production record rather than trusting it.
+ *
+ * It is deliberately **not** on `/healthz`, which is unauthenticated and says
+ * only "the process is up" without naming the project, the database or the
+ * bucket. Which commit is deployed is an operator's fact, so it travels with
+ * the rest of them on `/api/health`, behind the gate and behind the
+ * administrator check.
+ */
+export const BRAIN_REVISION: string | null =
+  (process.env['BRAIN_REVISION'] ?? '').trim() || null;
+
 /** Absolute path for a path stored relative to the data root. */
 export function resolveDataPath(relativePath: string): string {
   return path.resolve(DATA_ROOT, relativePath);
