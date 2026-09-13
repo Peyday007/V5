@@ -1029,9 +1029,19 @@ export function KnowledgeView({ projectId }: { projectId: string | null }): JSX.
      * data, arrived at from the other direction.
      */
     items: query.data?.knows?.items ?? null,
-    // The server's own sentence when it gave one, so "nothing active" is never
-    // rendered as "nothing yet".
-    noun: query.data?.knows?.explanation ?? 'findings',
+    noun: 'findings',
+    /*
+     * The server's own sentence when it gave one, so "nothing active" is never
+     * rendered as "nothing yet".
+     *
+     * It used to be passed as `noun`, which is a *slot* — "There is no ${noun}
+     * yet." — so this screen read "There is no There is nothing here yet. yet."
+     * for any project with nothing concluded, which is every project before its
+     * first filed report. The intent in this comment was right the whole time
+     * and the parameter was wrong; `explanation` replaces the sentence instead
+     * of being folded into one.
+     */
+    explanation: query.data?.knows?.explanation ?? null,
   });
   /*
    * Understanding, organized — not a prettier document library (§10).

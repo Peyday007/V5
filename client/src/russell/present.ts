@@ -44,6 +44,23 @@ export interface AsyncInput<T> {
    * exists to prevent, and the interface must never guess which one applies.
    */
   emptyReason?: EmptyReason | null;
+  /**
+   * A whole sentence the server composed, which **replaces** the empty message
+   * rather than being interpolated into one.
+   *
+   * `noun` fills a slot — *"There is no ${noun} yet."* — so a sentence passed
+   * as a noun comes out as a sentence inside a sentence. The Knows screen did
+   * exactly that, passing the server's `knows.explanation` as its noun, and a
+   * project with nothing concluded read:
+   *
+   *     There is no There is nothing here yet. yet.
+   *
+   * Its own comment stated the right intent — *"the server's own sentence when
+   * it gave one, so 'nothing active' is never rendered as 'nothing yet'"* — and
+   * then put that sentence in the one slot that would wrap it. A noun and a
+   * sentence are different things and must not share a parameter.
+   */
+  explanation?: string | null;
 }
 
 /** The six honest empties, matching the server's own vocabulary exactly. */
@@ -124,7 +141,11 @@ export function listState<T>(input: AsyncInput<T>): ViewState<T> {
     return {
       phase: 'EMPTY',
       items: [],
-      message: emptyMessage(input.emptyReason ?? 'EMPTY', input.noun),
+      // The server's sentence wins whole when it gave one; otherwise the noun
+      // fills the slot. Never both.
+      message: input.explanation?.trim()
+        ? input.explanation.trim()
+        : emptyMessage(input.emptyReason ?? 'EMPTY', input.noun),
       retryable: false,
     };
   }
