@@ -53,8 +53,18 @@ jobs:
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           set +e
+          # `--emit` as well as the printed report, because the two are for
+          # different readers. The text is what a person reads in this log; the
+          # record is what `step12b-combine.ts` joins with a checkout run, and
+          # it carries the **conditions** rather than just the verdict — which
+          # is what makes the join possible at all. A container run reports
+          # PARTIAL on nine scenarios because `.dockerignore` keeps `tests/`,
+          # `docs/` and `client/src` out of the image, and a checkout run
+          # reports PARTIAL on the same nine because it has no fleet. Joining
+          # the verdicts would make PARTIAL agree with PARTIAL; joining the
+          # conditions gives the answer.
           flyctl ssh console --app "$app" \
-            -C "npm --prefix /app run --silent step12b:acceptance" \
+            -C "npm --prefix /app run --silent step12b:acceptance -- --emit /tmp/step12b-production.json" \
             2>&1 | tee acceptance12b.txt
           set -e
           # The verdict comes from the reporter's own summary line rather than
@@ -74,9 +84,29 @@ jobs:
           fi
           echo "Every Step 12B scenario is PASS."
 
+      - name: Bring the record out of the container
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          # A second session on the same machine, so the file the first one
+          # wrote is still there. `cat` rather than `sftp get` because the
+          # record is small and a pipe is one fewer thing to go wrong; the
+          # JSON check below is what catches it if it does.
+          flyctl ssh console --app "$app" \
+            -C "cat /tmp/step12b-production.json" > step12b-production.json 2>/dev/null || true
+          if ! python3 -c "import json,sys; json.load(open('step12b-production.json'))" 2>/dev/null; then
+            echo "::warning::No machine-readable record came back; the printed reading above stands on its own."
+            rm -f step12b-production.json
+          else
+            echo "Record carries $(python3 -c "import json; print(len(json.load(open('step12b-production.json'))['gates']))") gates at revision $(python3 -c "import json; print((json.load(open('step12b-production.json'))['revision'] or 'UNKNOWN')[:8])")"
+          fi
+
       - name: Keep the reading
         uses: actions/upload-artifact@v4
         with:
           name: step12b-acceptance
-          path: acceptance12b.txt
+          path: |
+            acceptance12b.txt
+            step12b-production.json
           if-no-files-found: warn
