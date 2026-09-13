@@ -812,3 +812,43 @@ export interface FactoryReleaseRow {
   created_at: string;
   updated_at: string;
 }
+
+/* ------------------------------------------------------------------------- */
+/* A project's authorization for one repository, and its directory boundary   */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Whether a project owns its whole repository or a set of directories in it.
+ *
+ * Two values rather than a nullable path list, because `['**']` has to be a
+ * *choice*. A project that owns its whole repository is an ordinary and correct
+ * arrangement; what must never happen again is the widest scope being the value
+ * you get by saying nothing.
+ */
+export type FactoryScopeKind = 'WHOLE_REPOSITORY' | 'DIRECTORIES';
+
+export interface FactoryProjectRepository {
+  projectId: string;
+  grantId: string;
+  /** `owner/name`, lowercased — the id `worker_routing` compares on. */
+  repositoryId: string;
+  scopeKind: FactoryScopeKind;
+  /** `['**']` iff WHOLE_REPOSITORY; otherwise one `dir/**` per declared directory. */
+  pathScope: string[];
+  reason: string;
+  setBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FactoryProjectRepositoryRow {
+  project_id: string;
+  grant_id: string;
+  repository_id: string;
+  scope_kind: string;
+  path_scope: string;
+  reason: string;
+  set_by: string;
+  created_at: string;
+  updated_at: string;
+}

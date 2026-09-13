@@ -18,12 +18,51 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RussellApi } from '../lib/russellApi.ts';
 import type { RussellMessage } from '../lib/russellApi.ts';
+import type { SoftwareRequestView } from '../../../server/services/russell/software.ts';
 import { turnLabel } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { ApiError } from '../lib/api.ts';
 
 /** How often an unanswered turn asks the server whether it has been answered. */
 const PENDING_POLL_MS = 4_000;
+
+/**
+ * What this conversation asked to have built, reported back into it.
+ *
+ * The point of the whole path is that a person says what they want changed and
+ * then finds out what happened *here*, rather than having to know that a
+ * different page exists. So it is short and it links out: the sentence, whether
+ * they are needed, and the pull request when there is one. Build stays the
+ * detailed work view.
+ *
+ * Everything shown is the server's own derivation. Nothing about a campaign is
+ * re-derived in the browser, because two surfaces inferring their own status
+ * from the same rows is how a person reads two different answers.
+ */
+function SoftwareTrail({ software }: { software: SoftwareRequestView[] }): JSX.Element | null {
+  if (software.length === 0) return null;
+  return (
+    <section className="rs-thread-software" aria-label="Changes asked for in this conversation">
+      <h3>Changes you asked for here</h3>
+      <ul>
+        {software.map((entry) => (
+          <li key={entry.request.id} className="rs-thread-software-item">
+            <strong>{entry.request.title}</strong>
+            <span className="rs-thread-software-line">{entry.line}</span>
+            {entry.awaitingPerson ? (
+              <span className="rs-thread-software-needs">Needs you</span>
+            ) : null}
+            {entry.pullRequestUrl ? (
+              <a href={entry.pullRequestUrl} rel="noreferrer noopener" target="_blank">
+                Review the pull request
+              </a>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 export function Conversation({
   conversationId,
@@ -137,6 +176,7 @@ export function Conversation({
           />
         ))}
       </ol>
+      <SoftwareTrail software={thread.data?.software ?? []} />
       <div ref={bottom} />
 
       {problem ? (

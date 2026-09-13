@@ -226,6 +226,10 @@ beforeAll(async () => {
     createdIdentity: boolean;
   }>('POST', `/api/projects/${projectId}/factory/repositories/${grantId}/onboard`, {
     cookie: adminCookie,
+    // The boundary has no default: onboarding refuses a request that does not
+    // say what this project may change, and "the whole repository" is an answer
+    // rather than the absence of one.
+    body: { scopeKind: 'WHOLE_REPOSITORY' },
   });
   if (onboarded.status !== 200) throw new Error(`onboarding failed: ${onboarded.status}`);
   factoryWorkerName = onboarded.body.onboarding.workerName;
@@ -313,6 +317,7 @@ describe('after a real restart', () => {
       createdIdentity: boolean;
     }>('POST', `/api/projects/${projectId}/factory/repositories/${grantId}/onboard`, {
       cookie: adminCookie,
+      body: { scopeKind: 'WHOLE_REPOSITORY' },
     });
     expect(again.status).toBe(200);
     expect(again.body.createdIdentity).toBe(false);
@@ -322,6 +327,28 @@ describe('after a real restart', () => {
     // And the one it replaced no longer opens anything.
     const spent = await fetch(`${BASE}${new URL(firstInvitation).pathname}`, { redirect: 'manual' });
     expect(spent.status).toBe(400);
+  });
+
+  /*
+   * The boundary has no default, across a restart as well as in a fresh process.
+   *
+   * A request that says nothing about what this project may change is refused
+   * rather than given the whole repository, which is the defect the boundary
+   * closes: the widest possible reach used to be the value you got for free.
+   */
+  it('refuses an onboarding that does not say what the project may change', async () => {
+    const refused = await call(
+      'POST',
+      `/api/projects/${projectId}/factory/repositories/${grantId}/onboard`,
+      { cookie: adminCookie, body: {} },
+    );
+    expect(refused.status).toBe(400);
+    const nonsense = await call(
+      'POST',
+      `/api/projects/${projectId}/factory/repositories/${grantId}/onboard`,
+      { cookie: adminCookie, body: { scopeKind: 'EVERYTHING' } },
+    );
+    expect(nonsense.status).toBe(400);
   });
 
   /*

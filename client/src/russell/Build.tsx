@@ -161,15 +161,41 @@ function Repositories({
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [issued, setIssued] = useState<OnboardResult | null>(null);
+  /*
+   * The boundary, per repository, with **no default selected**.
+   *
+   * `null` until a person answers, and the button stays disabled while it is —
+   * because the whole point is that the widest reach must be chosen rather than
+   * arrived at. A pre-selected "whole repository" would be the old default
+   * wearing a radio button.
+   */
+  const [scope, setScope] = useState<Record<string, 'WHOLE_REPOSITORY' | 'DIRECTORIES'>>({});
+  const [directories, setDirectories] = useState<Record<string, string>>({});
 
   if (repositories.length === 0) return null;
 
   async function onboard(grantId: string): Promise<void> {
     if (!projectId) return;
+    const kind = scope[grantId];
+    if (!kind) return;
     setBusy(grantId);
     setProblem(null);
     try {
-      setIssued(await FactoryApi.onboard(projectId, grantId));
+      setIssued(
+        await FactoryApi.onboard(
+          projectId,
+          grantId,
+          kind === 'WHOLE_REPOSITORY'
+            ? { scopeKind: 'WHOLE_REPOSITORY' }
+            : {
+                scopeKind: 'DIRECTORIES',
+                directories: (directories[grantId] ?? '')
+                  .split(/[\n,]/)
+                  .map((entry) => entry.trim())
+                  .filter((entry) => entry.length > 0),
+              },
+        ),
+      );
       onChanged();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : 'That did not work.');
@@ -217,18 +243,74 @@ function Repositories({
                 submitted again.
               </p>
             ) : null}
+            {repo.boundary ? (
+              <p className="rs-repo-boundary">
+                This project may change <strong>{repo.boundary.sentence}</strong>.
+              </p>
+            ) : null}
             {repo.readiness !== 'READY' ? (
-              <button
-                type="button"
-                disabled={busy !== null || !projectId}
-                onClick={() => void onboard(repo.grantId)}
-              >
-                {busy === repo.grantId
-                  ? 'Registering…'
-                  : repo.readiness === 'NOT_ONBOARDED'
-                    ? 'Onboard this repository'
-                    : 'Issue a new invitation'}
-              </button>
+              <div className="rs-repo-scope">
+                {/*
+                  * The one question here that has a wrong answer, asked rather
+                  * than defaulted. Neither radio starts selected and the button
+                  * is disabled until one is: "the whole repository" is an
+                  * ordinary answer and it has to be given, because the defect
+                  * this closes is that the widest reach used to be what you got
+                  * by saying nothing.
+                  */}
+                <p className="rs-hint">
+                  What may this project change in it? A campaign submitted here can narrow this
+                  and can never widen it, and narrowing it afterwards would not correct an
+                  answer that was too broad — so it is asked now.
+                </p>
+                <label className="rs-repo-scope-choice">
+                  <input
+                    type="radio"
+                    name={`scope-${repo.grantId}`}
+                    checked={scope[repo.grantId] === 'WHOLE_REPOSITORY'}
+                    onChange={() =>
+                      setScope((current) => ({ ...current, [repo.grantId]: 'WHOLE_REPOSITORY' }))
+                    }
+                  />
+                  <span>The whole repository</span>
+                </label>
+                <label className="rs-repo-scope-choice">
+                  <input
+                    type="radio"
+                    name={`scope-${repo.grantId}`}
+                    checked={scope[repo.grantId] === 'DIRECTORIES'}
+                    onChange={() =>
+                      setScope((current) => ({ ...current, [repo.grantId]: 'DIRECTORIES' }))
+                    }
+                  />
+                  <span>Only these directories</span>
+                </label>
+                {scope[repo.grantId] === 'DIRECTORIES' ? (
+                  <textarea
+                    rows={2}
+                    placeholder={'sites/v4\nshared/ui'}
+                    aria-label="Directories this project may change"
+                    value={directories[repo.grantId] ?? ''}
+                    onChange={(event) =>
+                      setDirectories((current) => ({
+                        ...current,
+                        [repo.grantId]: event.target.value,
+                      }))
+                    }
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  disabled={busy !== null || !projectId || !scope[repo.grantId]}
+                  onClick={() => void onboard(repo.grantId)}
+                >
+                  {busy === repo.grantId
+                    ? 'Registering…'
+                    : repo.readiness === 'NOT_ONBOARDED'
+                      ? 'Onboard this repository'
+                      : 'Issue a new invitation'}
+                </button>
+              </div>
             ) : null}
           </li>
         ))}
@@ -446,6 +528,20 @@ function Submit({
               {pinned.derived.verificationCommands.length > 0
                 ? `Every unit will be judged by the repository's own commands: ${pinned.derived.verificationCommands.join(', ')}.`
                 : 'That commit declares no verification commands, so nothing can be run against the work yet. The factory can be given one later; it may add commands and may never remove one.'}
+            </p>
+            {/*
+              * The reach, before anybody approves it.
+              *
+              * It is the scope that was actually *stored* — the project's
+              * boundary, or the narrowing this submission asked for inside it —
+              * rather than the deriver's guess, so this card and the contract
+              * cannot say different things about the same campaign.
+              */}
+            <p className="rs-build-scope">
+              {pinned.derived.mutationScope.length === 1 &&
+              pinned.derived.mutationScope[0] === '**'
+                ? 'Units may change anything in that repository.'
+                : `Units may change only: ${pinned.derived.mutationScope.join(', ')}. A diff that reaches outside is rejected whole.`}
             </p>
             <p className="rs-hint">
               Approving freezes the objective and its conditions — nothing in the factory can

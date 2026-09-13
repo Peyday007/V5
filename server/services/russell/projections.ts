@@ -25,6 +25,7 @@
 import { listLayers } from '../../repos/layers.ts';
 import { groupOf, listMissions, listCurrentKnowledge } from '../../repos/russellMissions.ts';
 import { authorityFor } from './authority.ts';
+import { softwareNeedingPerson } from './software.ts';
 import { listOpenRequests } from '../../repos/russellMissions.ts';
 import { plainLayerName } from './dealDispatch.ts';
 import { projectProgress, type Progress } from './progress.ts';
@@ -114,6 +115,32 @@ function lowerFirst(text: string): string {
 }
 
 /**
+ * The one sentence about whether a person is needed, composed from counts.
+ *
+ * Extracted because it grew a third input and a nested ternary is where a
+ * sentence stops being checkable. The order is fixed: an outstanding approval
+ * is named first, because nothing else can proceed until it is answered.
+ */
+function needsYouSentence(input: {
+  needsApproval: boolean;
+  others: number;
+  blocking: number;
+}): string {
+  const { needsApproval, others, blocking } = input;
+  const plural = (count: number): string => (count === 1 ? 'decision is' : 'decisions are');
+  if (needsApproval) {
+    return others === 0
+      ? 'You are needed: Russell needs your permission before it can research anything here.'
+      : `You are needed: Russell needs your permission to research here, and ${others} other ${plural(others)} waiting.`;
+  }
+  if (others === 0) return 'You are not needed.';
+  if (blocking > 0) {
+    return `You are needed: ${blocking} ${plural(blocking)} holding work up.`;
+  }
+  return `${others} ${plural(others)} waiting whenever you have a moment.`;
+}
+
+/**
  * The briefing for one project.
  *
  * Four sentences in a fixed order, each from rows. The one thing it will not do
@@ -125,7 +152,7 @@ export async function briefing(input: {
   projectName: string;
   includePrivate?: boolean;
 }): Promise<Briefing> {
-  const [progress, missions, knowledge, requests, gaps] = await Promise.all([
+  const [progress, missions, knowledge, requests, gaps, software] = await Promise.all([
     projectProgress({ projectId: input.projectId, projectName: input.projectName }),
     listMissions({ projectId: input.projectId }),
     listCurrentKnowledge({
@@ -141,6 +168,18 @@ export async function briefing(input: {
       includePrivate: input.includePrivate ?? false,
       limit: 5,
     }),
+    /*
+     * Software decisions are decisions.
+     *
+     * §29 records what happens when this list is composed from one table: the
+     * briefing said "You are not needed" directly above a control that had to
+     * be answered before anything could run, because both counted
+     * `russell_human_requests` rows and the thing waiting was not one. A change
+     * waiting to be authorized, and a campaign stopped at a blocker or a
+     * release, are exactly that defect again — so they are counted here, from
+     * the same projection the panel underneath renders.
+     */
+    softwareNeedingPerson(input.projectId),
   ]);
 
   /*
@@ -172,7 +211,7 @@ export async function briefing(input: {
    * wait for the one investigation ahead of it and needs nobody.
    */
   const blocking = requests.filter((request) => request.urgency !== 'WHENEVER');
-  const decisions = requests.length + (needsApproval ? 1 : 0);
+  const decisions = requests.length + software.length + (needsApproval ? 1 : 0);
 
   return {
     focus: focusOf(input.projectName, missions),
@@ -184,15 +223,14 @@ export async function briefing(input: {
     // when nothing is blocked trains people to ignore the one time it matters
     // — and so does saying it when something *is* blocked, which is why the
     // approval is counted here rather than only rendered underneath.
-    needsYou: needsApproval
-      ? requests.length === 0
-        ? 'You are needed: Russell needs your permission before it can research anything here.'
-        : `You are needed: Russell needs your permission to research here, and ${requests.length} other ${requests.length === 1 ? 'decision is' : 'decisions are'} waiting.`
-      : requests.length === 0
-        ? 'You are not needed.'
-        : blocking.length > 0
-          ? `You are needed: ${blocking.length} ${blocking.length === 1 ? 'decision is' : 'decisions are'} holding work up.`
-          : `${requests.length} ${requests.length === 1 ? 'decision is' : 'decisions are'} waiting whenever you have a moment.`,
+    needsYou: needsYouSentence({
+      needsApproval,
+      others: requests.length + software.length,
+      // A software change nobody has authorized is holding its own work up by
+      // definition — nothing about it proceeds — so it counts as blocking
+      // rather than as something to get to whenever.
+      blocking: blocking.length + software.length,
+    }),
     openRequests: decisions,
   };
 }

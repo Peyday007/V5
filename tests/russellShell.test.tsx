@@ -336,7 +336,9 @@ function baseRoutes(overrides: Record<string, Reply | (() => Reply)> = {}): void
     },
     'GET /api/russell/projects/prj_1/home': { body: { home: HOME, project: PROJECT } },
     'GET /api/russell/collections?projectId=prj_1': { body: { collections: [COLLECTION] } },
-    'GET /api/russell/projects/prj_1/needs-you': { body: { requests: [] } },
+    'GET /api/russell/projects/prj_1/needs-you': {
+      body: { requests: [], software: [], repositories: [] },
+    },
     ...overrides,
   };
 }
@@ -849,6 +851,8 @@ describe('the thin views', () => {
               state: 'OPEN',
             },
           ],
+          software: [],
+          repositories: [],
         },
       },
     });
