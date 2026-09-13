@@ -1,6 +1,6 @@
 {
-  "takenAt": "2026-09-13T11:00:32.118Z",
-  "revision": "063e38e2fc3a2ef607d6ec955222f1c16decbbc5",
+  "takenAt": "2026-09-13T14:05:21.225Z",
+  "revision": "b5f09314072d79244580d5a9424cd173da9ba498",
   "phoneWidth": 390,
   "steps": [
     {
@@ -88,6 +88,62 @@
       "unreachable": ""
     },
     {
+      "step": "15-ideas",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "16-open-the-idea",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "17-changed-the-priority",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "18-the-parked-decision",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "19-authorized-the-plan",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "20-the-mission-resumed",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "21-knows",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
+      "step": "22-who-and-fleet",
+      "arrived": true,
+      "fits": true,
+      "clipped": false,
+      "unreachable": ""
+    },
+    {
       "step": "13-needs-you",
       "arrived": true,
       "fits": true,
@@ -102,10 +158,22 @@
       "unreachable": ""
     }
   ],
-  "stepsWalked": 14,
-  "stepsThatArrived": 14,
-  "stepsThatFit": 14,
-  "stepsWithNothingClipped": 14,
+  "effects": {
+    "standingAuthorityGranted": true,
+    "ideaOverriddenByAPerson": true,
+    "ideaPriority": "MUST_DO",
+    "russellsJudgmentKept": true,
+    "parkedMissionId": "rms_7afca7aff4a342d69180",
+    "parkedRequestId": "rhr_461060758de14f039709",
+    "parkedOrchestrationId": "orc_511ccd6f73da4a4ea2d5",
+    "missionStateBefore": "NEEDS_HUMAN",
+    "missionStateAfter": "RUNNING",
+    "requestSettled": true
+  },
+  "stepsWalked": 22,
+  "stepsThatArrived": 22,
+  "stepsThatFit": 22,
+  "stepsWithNothingClipped": 22,
   "unreachableControls": [],
   "constellation": [
     {
@@ -135,10 +203,10 @@
     {
       "width": 390,
       "layout": "spine",
-      "nodes": 9,
-      "listed": 8,
+      "nodes": 10,
+      "listed": 9,
       "overlaps": 0,
-      "canvas": "316×341"
+      "canvas": "316×434"
     },
     {
       "width": 360,

@@ -5121,14 +5121,34 @@ async function main(): Promise<void> {
        * which is L's. A gate about whether the product works with a thumb must
        * be answered by a thumb, so it is answered by the journey above and this
        * row is gone rather than kept as supporting colour.
+       *
+       * ---------------------------------------------------------------------
+       * And the coverage bound is prose, not a condition — flagged, because it
+       * is a judgement the owner may want to reverse
+       * ---------------------------------------------------------------------
+       *
+       * "Portrait only, one device pixel ratio, Chromium only, no touch
+       * gestures" was a condition here with `held: null`. That made J
+       * permanently PARTIAL, and for a reason **the frozen matrix never asked
+       * for**: P13 is *"Mobile fully functional — container reflow at 980/720,
+       * thumb bar, 44px targets, pinned by tests/step12bResponsive.test.tsx"*,
+       * and says nothing about a second engine, a second pixel ratio or a touch
+       * gesture.
+       *
+       * A condition is something that can hold or fail. A statement of how far
+       * the harness looked is neither, and scoring it as unmet **invents a
+       * requirement** — which distorts the number exactly as much as exempting
+       * a real one does, in the other direction. So it is in the row's prose
+       * below, where a reader still sees it.
+       *
+       * This is deliberately *not* the `standing: true` flag the owner had
+       * removed: that took genuine requirements out of the denominator on this
+       * reporter's own say-so. This takes out something this reporter added
+       * that the contract never contained. If the owner reads P13 as requiring
+       * it, it is one condition to put back and the harness work is real —
+       * a second engine and a touch-gesture pass — rather than a scoring
+       * change.
        */
-      {
-        name: 'portrait only, one device pixel ratio, Chromium only, no touch gestures or on-screen keyboard',
-        held: null,
-        saw:
-          'the harness drives one engine at one ratio. Saying so is the honest bound on what ' +
-          'the journey establishes; widening it is a harness change rather than a product one.',
-      },
     ],
     'One browser, one session and one scroll history: after the first address nothing ' +
       'navigates and every move is a press. It found two real defects, both fixed — the rail ' +
@@ -5138,7 +5158,11 @@ async function main(): Promise<void> {
       'standing authority, overrules Russell’s priority on one idea, waits while Russell ' +
       'launches that idea and its packet stops outside what was preauthorized, answers the ' +
       'resulting decision, and reads the same mission carrying on — every one of those read ' +
-      'back out of the rows through the product’s own routes, in that same journey.',
+      'back out of the rows through the product’s own routes, in that same journey. ' +
+      'The bound on all of it, stated rather than scored: portrait only, one device pixel ' +
+      'ratio, Chromium only, no touch gestures and no on-screen keyboard. P13 asks for ' +
+      'container reflow, the thumb bar and 44px targets and does not ask for a second engine, ' +
+      'so that is coverage rather than an unmet condition — see the note in the source.',
   );
 
   /* -- K. Legacy removal ---------------------------------------------------- */
