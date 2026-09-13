@@ -78,6 +78,41 @@ discarded the eleven rows it had already established.
 
 ---
 
+## The readings, taken 2026-09-13 against deployed revision `386356f`
+
+Both were taken, because neither is the whole answer (see the section above).
+
+| | Production — *Step 12B acceptance* workflow, run inside the container | Checkout — `npm run step12b:acceptance` |
+| --- | --- | --- |
+| Fleet | the cloud database, **6 Routines, 4 accounts** | no fleet rows |
+| Result | **1 PASS · 14 PARTIAL · 0 BLOCKED · 2 NOT_RUN** | **2 PASS · 10 PARTIAL · 0 BLOCKED · 5 NOT_RUN** |
+| Answers | A, B, E, L, N from real rows | H, J, K, O from the tree |
+| Cannot see | H, J, K, O — named as such, not reported absent | anything needing a fleet |
+
+**Each row read where it can be read: 2 PASS (G, K) · 15 PARTIAL · 0 BLOCKED ·
+0 NOT_RUN.** No scenario is blocked, and none is unrun.
+
+What the five production-only rows now say, in their own words:
+
+- **A** — 25 turns answered by a worker across 437 conversations, 210 of which
+  Brain routed to a project itself; 0 pending and 635 failed, each carrying its
+  own recorded reason rather than an optimistic placeholder.
+- **B** — 14 ideas carry a priority Russell decided; 1010 audit passes have
+  completed.
+- **E** — 74 connector events, 4 accepted commands, 14 registered records, 0
+  recorded rejections, most recently `2026-09-12T23:15:06.930Z`.
+- **L** — the durable cycle is `RUNNING`, last ran 29s before the reading, with
+  no recorded error.
+- **N** — one real dispatch traced across 61 recorded steps; the largest gap is
+  named and explicitly **not** attributed, and 0 things are reported as
+  undetermined rather than guessed.
+
+**This run is also the first time the reporter has ever been executed against
+production**, and it would not have survived the attempt a day earlier — see the
+crash described in the section above.
+
+---
+
 ## What each scenario is still waiting on, and who can supply it
 
 Every entry below is taken from the reporter's own **NOT established** clause
