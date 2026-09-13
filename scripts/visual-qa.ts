@@ -506,8 +506,9 @@ const JOURNEY_WORK: JourneyStep[] = [
     act: railPress('Ideas'),
     until: "location.pathname === '/projects'",
     read: `(() => {
-      const nodes = [...document.querySelectorAll('.rs-idea, .rs-candidate, .lim-node')];
-      return nodes.length + ' idea(s) on the page';
+      const nodes = [...document.querySelectorAll('.lim-node')];
+      const named = nodes.map((n) => (n.textContent || '').trim()).filter(Boolean);
+      return nodes.length + ' node(s): ' + named.slice(0, 4).join(' · ');
     })()`,
   },
   {
@@ -567,7 +568,10 @@ const JOURNEY_WORK: JourneyStep[] = [
     name: '19-who-and-fleet',
     what: 'Who, from the thumb bar: the people on the project and the fleet behind it — three capacity numbers that are not each other.',
     act: railPress('Who'),
-    until: "location.pathname === '/who'",
+    // `/fleet`, not `/who`. The rail's label and the address are different
+    // things, and a predicate written from the label reported a screen that had
+    // plainly arrived as never arriving.
+    until: "location.pathname === '/fleet'",
     read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 110)",
   },
 ];
@@ -1398,16 +1402,39 @@ async function seedSomethingToDecide(cookie: string): Promise<Seeded> {
     actor: 'someone at the site',
     },
   );
-  const candidateId =
-    typeof commanded?.['candidateId'] === 'string' ? (commanded['candidateId'] as string) : null;
+  if (commanded === null) {
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      candidateId: null,
+      note: 'the site could not issue its command',
+    };
+  }
+
+  /*
+   * The command answers with the **record's** projection, not with an idea —
+   * which is right: what a site is told is what Brain will do about its record,
+   * and the candidate is Brain's own business. So the idea is found where ideas
+   * are, by the title the record carried into it.
+   *
+   * The first version read `candidateId` off the command's reply and got null
+   * every time, then reported "the command was accepted and returned no idea"
+   * — true of the field it looked at and wrong about what happened.
+   */
+  const ideas = (await json(`/api/russell/projects/${project.id}/candidates`)) as {
+    candidates?: { id: string; title: string }[];
+  } | null;
+  const mine =
+    ideas?.candidates?.find((candidate) => candidate.title.includes('recording takes')) ?? null;
 
   return {
     projectId: project.id,
     projectName: project.name,
-    candidateId,
-    note: candidateId
-      ? `a site asked for research and Brain captured idea ${candidateId}`
-      : 'the command was accepted and returned no idea',
+    candidateId: mine?.id ?? null,
+    note: mine
+      ? `a site asked for research and Brain captured idea ${mine.id}`
+      : `the command was accepted and no idea carries the record's title ` +
+        `(${ideas?.candidates?.length ?? 0} idea(s) in the project)`,
   };
 }
 
@@ -2013,8 +2040,8 @@ async function persistedEffects(cookie: string, seeded: Seeded): Promise<string[
     const authority = await read(`/api/russell/projects/${seeded.projectId}/authority`);
     const granted =
       authority !== null &&
-      typeof authority['goal'] === 'object' &&
-      authority['goal'] !== null;
+      typeof authority['grant'] === 'object' &&
+      authority['grant'] !== null;
     console.log(`  standing authority   ${granted ? 'granted, and still there' : 'NOT GRANTED'}`);
     if (!granted) {
       found.push('the standing authority was approved on screen and no grant is recorded');
@@ -2091,6 +2118,25 @@ async function driveJourney(
       })),
     );
     findings.push(...(await mapsPass(cdp, outputDir)));
+    /*
+     * The Needs You answer, pressed inside the journey rather than only in the
+     * render pass.
+     *
+     * The standing authority is the one decision a project cannot proceed
+     * without, and answering it is a **journey** step: a person opens Needs
+     * You, reads what Russell may do, and approves. It used to happen only when
+     * `--renders` was passed, so a journey run reached the effects check with
+     * nothing pressed and reported "approved on screen and no grant is
+     * recorded" — a finding about the harness, not the product.
+     *
+     * It is also what unblocks everything after it: no grant, no mission, and
+     * Work has nothing to show.
+     */
+    const answered = await grantStandingAuthority(cdp);
+    console.log(`  needs-you answer   ${answered ? 'approved, and the card swapped its control' : 'COULD NOT APPROVE'}`);
+    if (!answered) {
+      findings.push('the one decision on Needs You could not be answered from the screen');
+    }
     findings.push(...(await walk(cdp, outputDir, JOURNEY_WORK)));
     /*
      * The effects, read out of the database rather than off the screen.
