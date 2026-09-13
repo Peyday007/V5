@@ -174,6 +174,8 @@ export type TargetDecision =
       answer: string;
       named: { id: string; name: string }[];
       choices: { id: string; name: string }[];
+      /** Ruled out by the request, and still ruled out by any answer to it. */
+      excluded: { id: string; name: string }[];
     }
   /** The message names a different project this person can read. */
   | {
@@ -190,6 +192,8 @@ export type TargetDecision =
        * half the honest answers.
        */
       choices: { id: string; name: string }[];
+      /** Ruled out by the request, and still ruled out by any answer to it. */
+      excluded: { id: string; name: string }[];
     };
 
 /**
@@ -245,6 +249,12 @@ export async function resolveSoftwareTarget(input: {
 
   const attachedNamed = named.find((entry) => entry.id === attachedProjectId) ?? null;
   const others = named.filter((entry) => entry.id !== attachedProjectId && !entry.excluded);
+  /*
+   * Every project this message ruled out, the attached one included. It travels
+   * with the question so that answering it cannot put one back — an exclusion
+   * belongs to the request, not to the sentence that happened to carry it.
+   */
+  const ruledOut = named.filter((entry) => entry.excluded);
 
   /*
    * ---------------------------------------------------------------------------
@@ -292,6 +302,7 @@ export async function resolveSoftwareTarget(input: {
        * project may answer, which is right when the person named none.
        */
       choices: candidates.map((entry) => ({ id: entry.id, name: entry.name })),
+      excluded: ruledOut.map((entry) => ({ id: entry.id, name: entry.name })),
       answer:
         `You have said not to change ${attachedNamed?.name ?? 'this project'}, and I have not ` +
         'written anything down. ' +
@@ -312,6 +323,7 @@ export async function resolveSoftwareTarget(input: {
       ...(attached ? [{ id: attached.id, name: attached.name }] : []),
       ...others.map((entry) => ({ id: entry.id, name: entry.name })),
     ],
+    excluded: ruledOut.map((entry) => ({ id: entry.id, name: entry.name })),
     answer:
       `This conversation is about ${attached?.name ?? 'another project'}, and you have named ` +
       `${listOf(others.map((entry) => entry.name))}. Which one should the change be made in? ` +
@@ -328,25 +340,44 @@ function listOf(names: string[]): string {
 }
 
 /**
- * Which readable project a person's short reply names, if exactly one.
+ * Which project a short reply settles on, if it settles on one.
  *
- * This is the other half of a clarification: Brain asked which project, and an
- * ordinary answer is *"V4"* or *"the Brain one"* — two words, no verb, and
- * nothing the execution gate could or should read as a request. The gate is not
- * asked, because the request was already made in the message Brain refused; all
- * that was missing was this word.
+ * ---------------------------------------------------------------------------
+ * The defect this exists in its present form to prevent
+ * ---------------------------------------------------------------------------
  *
- * It resolves only on **exactly one** match, and it matches on the same word
- * boundaries and the same readable set as everything else here, so a reply that
- * names two projects or none leaves the question standing rather than picking.
+ * Brain asked *"Brain or V4?"*, the person answered **"Not Brain"**, and Brain
+ * chose **Brain** — because the reply *mentions* Brain and the reply was read
+ * for mentions. That is the same defect the question itself was written to
+ * correct (mentioning is not choosing), one message later, and worse: here the
+ * person was answering a direct question and got the opposite of their answer.
+ *
+ * So a reply is read exactly as the original request is: every mention carries
+ * whether a negator governs it, and an exclusion only ever *removes* a
+ * candidate. Three rules, and the third is what stops the answer widening what
+ * the question narrowed:
+ *
+ * 1. **An exclusion in the reply removes that project.** *"Not Brain"* leaves
+ *    Brain out, whatever else the sentence does.
+ * 2. **Exclusions from the original request are still in force.** They travel
+ *    on the question as `excluded`, and are subtracted **before** the offered
+ *    list is consulted — including when that list is empty. An empty list means
+ *    *the question named no candidates*, never *anything goes*, and treating it
+ *    as the second is how a project somebody ruled out comes back.
+ * 3. **One remaining candidate is an answer; two are not.** A reply naming
+ *    exactly one live project resolves it. A reply that only *rules something
+ *    out* resolves only when exactly one candidate is left standing — otherwise
+ *    the question stays open, because narrowing three to two is not choosing.
  */
 export async function projectNamedInReply(input: {
   principal: Principal;
   replyText: string;
   /** When the question offered a list, only those may answer it. */
   choices?: readonly { id: string; name: string }[];
+  /** Projects the original request ruled out. Never selectable, list or none. */
+  excluded?: readonly { id: string; name: string }[];
 }): Promise<{ id: string; name: string } | null> {
-  const { principal, replyText, choices } = input;
+  const { principal, replyText, choices, excluded } = input;
   let readable: Project[];
   try {
     readable = (await listProjects()).filter(
@@ -355,9 +386,39 @@ export async function projectNamedInReply(input: {
   } catch {
     return null;
   }
+
+  const ruledOut = new Set((excluded ?? []).map((one) => one.id));
+  const named = readable
+    .map((project) => namedIn(replyText, project))
+    .filter((entry): entry is Named => entry !== null);
+  for (const entry of named) {
+    if (entry.excluded) ruledOut.add(entry.id);
+  }
+
+  /*
+   * The candidates still standing. The offered list narrows; the exclusions
+   * narrow again, and they are applied to whichever pool the question left —
+   * so an empty offer cannot hand back a project the request ruled out.
+   */
   const offered = choices && choices.length > 0 ? new Set(choices.map((one) => one.id)) : null;
-  const hits = readable
-    .filter((project) => (offered ? offered.has(project.id) : true))
-    .filter((project) => mentions(replyText, project.name) || mentions(replyText, project.slug));
-  return hits.length === 1 ? { id: hits[0]!.id, name: hits[0]!.name } : null;
+  const live = readable.filter(
+    (project) => !ruledOut.has(project.id) && (offered ? offered.has(project.id) : true),
+  );
+
+  const chosen = live.filter((project) =>
+    named.some((entry) => entry.id === project.id && !entry.excluded),
+  );
+  if (chosen.length === 1) return { id: chosen[0]!.id, name: chosen[0]!.name };
+  if (chosen.length > 1) return null;
+
+  /*
+   * Nothing was named positively. A reply that only excluded something still
+   * answers the question when one candidate is left — *"not Brain"* against
+   * *"Brain or V4?"* is V4, and asking again would be asking somebody to repeat
+   * themselves. It requires an actual exclusion: without one, a pool that
+   * happens to hold one project would make *"whichever you think"* an answer.
+   */
+  const excludedHere = named.some((entry) => entry.excluded);
+  if (excludedHere && live.length === 1) return { id: live[0]!.id, name: live[0]!.name };
+  return null;
 }

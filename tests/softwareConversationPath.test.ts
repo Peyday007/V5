@@ -43,6 +43,8 @@ let brain: Project;
 let v4: Project;
 let userId = '';
 let conversationId = '';
+/** Projects a single test adds, so the principal can read them. */
+let extra: Project[] = [];
 
 beforeEach(async () => {
   await freshProject();
@@ -83,6 +85,7 @@ beforeEach(async () => {
     visibility: 'SHARED',
   });
   conversationId = conversation.id;
+  extra = [];
 });
 
 function principal(): Principal {
@@ -95,7 +98,7 @@ function principal(): Principal {
     mustChangePassword: false,
     credentialId: 'ses_test',
     authMethod: 'SESSION_COOKIE',
-    memberships: [brain.id, v4.id].map(
+    memberships: [brain.id, v4.id, ...extra.map((project) => project.id)].map(
       (id) =>
         ({
           id: `mem-${id}`,
@@ -259,6 +262,99 @@ describe('the clarification conversation', () => {
     expect(await listSoftwareRequests({ projectId: v4.id })).toHaveLength(0);
     // Still on screen, because nothing settled it.
     expect((await softwareClarificationFor(conversationId))?.kind).toBe('AMBIGUOUS_PROJECT');
+  });
+
+  it('reads "Not Brain" as not Brain', async () => {
+    /*
+     * The reported defect, and the worst shape a clarification can fail in: the
+     * person is answering a direct question, and the answer selected the exact
+     * project they had just ruled out — because the reply was read for
+     * *mentions* and "Not Brain" mentions Brain.
+     *
+     * With two candidates offered and one ruled out, the other one is the
+     * answer. Asking again would be asking somebody to repeat themselves.
+     */
+    await personSays(
+      'Fix this problem on V4: the contact form drops the message.',
+      softwareProposal(),
+    );
+    await personSays('Not Brain.', {
+      action: 'ANSWER_ONLY',
+      answer: 'Understood — V4 then.',
+      confidence: 0.9,
+    });
+    expect(await listSoftwareRequests({ projectId: brain.id })).toHaveLength(0);
+    const filed = await listSoftwareRequests({ projectId: v4.id });
+    expect(filed).toHaveLength(1);
+    expect(filed[0]?.state).toBe('PROPOSED');
+    expect(await softwareClarificationFor(conversationId)).toBeNull();
+  });
+
+  it('keeps the question open when ruling one out still leaves two', async () => {
+    const v2 = await createProject({ name: 'V2', slug: `v2-${Date.now()}` });
+    await grantMembership({
+      projectId: v2.id,
+      principalType: 'HUMAN',
+      principalId: userId,
+      role: 'MEMBER',
+      scopes: ['project:read'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'test',
+    });
+    extra.push(v2);
+
+    await personSays(
+      'Fix the contact form in V4 or in V2 — it drops the message.',
+      softwareProposal(),
+    );
+    expect((await softwareClarificationFor(conversationId))?.kind).toBe('AMBIGUOUS_PROJECT');
+
+    await personSays('Not Brain.', {
+      action: 'ANSWER_ONLY',
+      answer: 'Which of the two, then?',
+      confidence: 0.9,
+    });
+    /*
+     * Narrowing three to two is not choosing. Nothing is filed anywhere and the
+     * question is still on screen.
+     */
+    for (const project of [brain, v4, v2]) {
+      expect(await listSoftwareRequests({ projectId: project.id })).toHaveLength(0);
+    }
+    expect((await softwareClarificationFor(conversationId))?.kind).toBe('AMBIGUOUS_PROJECT');
+  });
+
+  it('will not put back a project the request itself ruled out', async () => {
+    /*
+     * The empty-choice fallback, closed. "Do not change Brain, but please fix
+     * the broken form" names no destination, so the question offers no list —
+     * and an empty list used to mean *any readable project*, which handed Brain
+     * straight back to the next reply that mentioned it.
+     */
+    await personSays(
+      'Do not change Brain, but please fix the broken form.',
+      softwareProposal({
+        software: {
+          title: 'Broken form',
+          objective: 'Fix the broken form so it submits.',
+          expectedOutcome: 'The form submits.',
+        },
+      }),
+    );
+    expect((await softwareClarificationFor(conversationId))?.kind).toBe('EXCLUDED_PROJECT');
+
+    await personSays('Brain.', {
+      action: 'ANSWER_ONLY',
+      answer: 'You said not to change that one.',
+      confidence: 0.9,
+    });
+    expect(await listSoftwareRequests({ projectId: brain.id })).toHaveLength(0);
+    expect((await softwareClarificationFor(conversationId))?.kind).toBe('EXCLUDED_PROJECT');
+
+    // And the answer that is actually available still works.
+    await personSays('V4', { action: 'ANSWER_ONLY', answer: 'V4.', confidence: 0.9 });
+    expect(await listSoftwareRequests({ projectId: v4.id })).toHaveLength(1);
+    expect(await listSoftwareRequests({ projectId: brain.id })).toHaveLength(0);
   });
 
   it('does not file twice when the worker restates the request alongside the answer', async () => {

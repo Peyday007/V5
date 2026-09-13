@@ -1272,3 +1272,38 @@ by whichever file loads first.
 
 **The excluded project is absent from the answers the question offers**, so it
 cannot return through the clarification reply either.
+
+### The answer is read the same way the request is
+
+The rule above — a mention is not a choice — stopped at the request. One message
+later, Brain asked *"Brain or V4?"*, the person replied **"Not Brain"**, and the
+reply was still read for mentions, so it selected Brain. That is the worst shape
+this can fail in: the person was answering a direct question and got the project
+they had just ruled out.
+
+A clarification reply now goes through the same reader as the original message.
+
+- **An exclusion in the reply removes that project.** Whatever else the sentence
+  does.
+- **Exclusions from the request are still in force.** They travel on the
+  question as `clarifyExcluded`, and are subtracted **before** the offered list
+  is consulted — including when that list is empty. An empty list means *the
+  question named no candidates*, never *anything goes*; treating it as the
+  second is how *"do not change Brain, but please fix the broken form"* handed
+  Brain back to the next reply that mentioned it.
+- **One live candidate is an answer; two are not.** Naming exactly one resolves
+  it. Ruling one *out* resolves only when exactly one remains — so *"not Brain"*
+  against *"Brain or V4?"* is V4, and the same words against three candidates
+  narrow rather than choose, and the question stays open. That second path
+  requires the reply to have actually excluded something, so a pool that happens
+  to hold one project cannot make *"whichever you think"* into an answer.
+
+| Question offered | Reply | Result |
+| --- | --- | --- |
+| Brain or V4 | *V4* | V4 |
+| Brain or V4 | *the Brain one* | Brain |
+| Brain or V4 | *Not Brain.* | V4 |
+| Brain, V4 or V2 | *Not Brain.* | still asking |
+| Brain or V4 | *whichever you think* | still asking |
+| nothing (Brain ruled out by the request) | *Brain.* | still asking — never Brain |
+| nothing (Brain ruled out by the request) | *V4* | V4 |

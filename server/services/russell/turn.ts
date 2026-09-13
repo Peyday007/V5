@@ -1212,6 +1212,15 @@ async function applyValidated(input: {
             ...(outcome.clarify && 'choices' in outcome.clarify
               ? { clarifyChoices: outcome.clarify.choices }
               : {}),
+            /*
+             * And what the request ruled out, so answering the question cannot
+             * put it back. An exclusion belongs to the request rather than to
+             * the sentence that carried it, and the empty-choices case is
+             * exactly where it would otherwise be lost.
+             */
+            ...(outcome.clarify && 'excluded' in outcome.clarify
+              ? { clarifyExcluded: outcome.clarify.excluded }
+              : {}),
           },
           candidateId: null,
         };

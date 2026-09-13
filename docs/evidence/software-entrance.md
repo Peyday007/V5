@@ -166,3 +166,22 @@ displayed question and on the rows either side of it. The one worth reading is
 answer"*, because it pins why the resolution returns instead of falling through
 — a restated objective is a different submission key, and one answer would
 otherwise leave two cards for one decision.
+
+## The reply, read the same way as the request
+
+A third defect the assembled path found, after the two above and in the same
+place: Brain asked *"Brain or V4?"*, the person answered **"Not Brain"**, and
+the reply — still read for mentions — selected **Brain**.
+
+`tests/softwareConversationPath.test.ts` grew three walks for it, and the two
+that keep the question *open* are the ones worth reading:
+
+| Offered | Reply | Result |
+| --- | --- | --- |
+| Brain or V4 | *Not Brain.* | one `PROPOSED` request against V4, question closed |
+| Brain, V4 or V2 | *Not Brain.* | nothing filed anywhere, question still open |
+| nothing — Brain ruled out by the request | *Brain.* | nothing filed, question still open; *V4* then files against V4 |
+
+Each asserts the resulting project **and** that exactly one unauthorized
+proposal exists, because "it went somewhere" and "it went to one place" are
+different facts and only the second one is the fix.

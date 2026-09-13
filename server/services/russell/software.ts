@@ -927,6 +927,15 @@ export interface OutstandingClarification {
   ask: PendingAsk | null;
   /** The projects the question offered, when it offered a list. */
   choices: { id: string; name: string }[];
+  /**
+   * The projects the original request ruled out.
+   *
+   * Carried separately from `choices` because the two answer different
+   * questions, and because an empty `choices` must never read as *anything
+   * goes*: a question that named no candidates still remembers what the request
+   * excluded, and no answer to it may select one of those.
+   */
+  excluded: { id: string; name: string }[];
 }
 
 function askFrom(value: unknown): PendingAsk | null {
@@ -988,6 +997,7 @@ export async function outstandingClarification(
       question: asked,
       ask: askFrom(produced['pendingAsk']),
       choices: choicesFrom(produced['clarifyChoices']),
+      excluded: choicesFrom(produced['clarifyExcluded']),
     };
   }
   if (!latest) return null;
@@ -1062,6 +1072,7 @@ export async function answerClarification(input: {
     principal: input.principal,
     replyText: reply,
     choices: outstanding.choices,
+    excluded: outstanding.excluded,
   });
   if (!chosen) return { resolved: false, stillAsking: outstanding.question };
 

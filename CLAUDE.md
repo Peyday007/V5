@@ -2823,6 +2823,29 @@ remote.
   because a rule kept inside one of its two callers is a cycle waiting to be
   found by whichever file loads first.
 
+- **The answer was read for mentions, so "Not Brain" chose Brain.** The
+  correction above stopped a *mention* deciding the target in the request; one
+  message later the reply was still being read the old way, and the result is
+  the worst shape a clarification can fail in — the person was answering a
+  direct question and got the project they had just ruled out. A reply is now
+  read exactly as a request is: every mention carries whether a negator governs
+  it, and an exclusion only ever removes a candidate.
+
+  **Exclusions belong to the request, not to the sentence that carried them.**
+  They travel on the question as `clarifyExcluded` and are subtracted before the
+  offered list is consulted — *including when that list is empty*. An empty list
+  means the question named no candidates; it never means anything goes, and
+  treating it as the second is exactly how *"do not change Brain"* handed Brain
+  back to the next reply that mentioned it.
+
+  **One candidate left is an answer; two are not.** A reply naming exactly one
+  live project resolves it, and a reply that only rules something *out* resolves
+  only when one candidate remains — *"not Brain"* against *"Brain or V4?"* is
+  V4, while the same words against three candidates narrow rather than choose
+  and the question stays open. The bare-pool case is guarded on the reply having
+  actually excluded something, so *"whichever you think"* can never be an answer
+  just because the pool happens to hold one.
+
 - **Both of those were found by assembling the path, not by reading it.** Each
   helper was correct on its own and the product was not, which is why
   `tests/softwareConversationPath.test.ts` drives `beginTurn` → a scripted worker
