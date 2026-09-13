@@ -93,6 +93,11 @@ import {
   setPolicy,
 } from '../server/repos/fleet.ts';
 import { LENSES, frontierFor } from '../server/services/russell/frontier.ts';
+import {
+  dismissFrontierItem,
+  listFrontier,
+  resolveUnseenFrontierItems,
+} from '../server/repos/russellFrontier.ts';
 import { askableLenses, openInquiry, validateLensReply } from '../server/services/russell/inquiry.ts';
 import {
   DEFAULT_TARGET_WITH_NO_PRIOR_POLICY,
@@ -363,6 +368,36 @@ interface GateCondition {
   standing?: true;
 }
 
+/**
+ * Whether the rows this run read are the deployed Brain's.
+ *
+ * Several conditions turn on facts only a real fleet has — a worker answered a
+ * turn, a site delivered a record, a dispatch was traced, a reader answered a
+ * lens. A checkout run reads whatever local database is configured, which is
+ * usually empty, and reporting *empty* as *absent* is the exact substitution
+ * this file refuses. Set in `main` from the provider name, never from a
+ * connection string, because this output goes into a CI log.
+ */
+let READING_PRODUCTION = false;
+
+/**
+ * A condition whose evidence is a real Brain's rows.
+ *
+ * Judged where such rows exist; reported as not exercisable from anywhere else,
+ * with the environment that can exercise it named — which is what makes the
+ * combiner able to join the two runs into one answer.
+ */
+function fromProduction(name: string, held: boolean, saw: string): GateCondition {
+  return READING_PRODUCTION
+    ? { name, held, saw }
+    : {
+        name,
+        held: null,
+        saw: 'this run does not read the deployed Brain',
+        needs: 'PRODUCTION',
+      };
+}
+
 function verdictOf(conditions: GateCondition[]): Verdict {
   if (conditions.length === 0) return 'NOT_RUN';
   const judged = conditions.filter((c) => c.standing !== true);
@@ -546,6 +581,17 @@ interface FleetReading {
    * read-only phase and zero everywhere a Brain has not run.
    */
   history: {
+    /**
+     * The rows a reporter cannot manufacture without writing the thing it is
+     * checking for: a worker naming a duplicate, a reader answering an asked
+     * lens, a mission that filed a document and a conclusion.
+     */
+    semanticMerges: number;
+    frontierItems: number;
+    answeredLenses: number;
+    knowledgeRows: number;
+    missions: number;
+    filedDocuments: number;
     /** A: conversations, and turns a worker actually answered. */
     conversations: number;
     answeredTurns: number;
@@ -738,6 +784,27 @@ async function readOperationalFleet(): Promise<FleetReading> {
       "SELECT COUNT(*) AS total FROM research_passes WHERE pass_key = 'AUDIT' AND status = 'COMPLETE'",
     );
     /*
+     * The other rows only a real Brain has, counted in the same pass.
+     *
+     * Each one is the half of a scenario a reporter cannot manufacture without
+     * writing the thing it is checking for: a worker naming a duplicate, a
+     * reader answering an asked lens, a mission that filed knowledge. They are
+     * read where they exist and reported as unreachable elsewhere — never as
+     * absent, which is the substitution this file refuses.
+     */
+    const semanticMerges = await one(
+      "SELECT COUNT(*) AS total FROM russell_candidate_merges WHERE method = 'SEMANTIC'",
+    );
+    const frontierItems = await one('SELECT COUNT(*) AS total FROM russell_frontier');
+    const answeredLenses = await one(
+      "SELECT COUNT(*) AS total FROM russell_lens_inquiries WHERE state = 'ANSWERED'",
+    );
+    const knowledgeRows = await one('SELECT COUNT(*) AS total FROM russell_knowledge');
+    const missions = await one('SELECT COUNT(*) AS total FROM russell_missions');
+    const filedDocuments = await one(
+      "SELECT COUNT(*) AS total FROM russell_missions WHERE document_id IS NOT NULL",
+    );
+    /*
      * What the connected site has actually done, counted in the same read-only
      * phase — because E is a fact about a live site and no scratch database has
      * one. Keyed on the canonical vocabulary rather than a lower-cased spelling:
@@ -766,6 +833,12 @@ async function readOperationalFleet(): Promise<FleetReading> {
       last_error: string | null;
     }>('SELECT state, last_ran_at, last_error FROM russell_cycle LIMIT 1');
     const history = {
+      semanticMerges,
+      frontierItems,
+      answeredLenses,
+      knowledgeRows,
+      missions,
+      filedDocuments,
       conversations,
       answeredTurns,
       pendingTurns,
@@ -804,6 +877,12 @@ async function readOperationalFleet(): Promise<FleetReading> {
       source: 'nothing — no database was configured for this run',
       trace: null,
       history: {
+        semanticMerges: 0,
+        frontierItems: 0,
+        answeredLenses: 0,
+        knowledgeRows: 0,
+        missions: 0,
+        filedDocuments: 0,
         conversations: 0,
         answeredTurns: 0,
         pendingTurns: 0,
@@ -2464,7 +2543,7 @@ async function main(): Promise<void> {
    * refuses: "we could not look here" and "we looked and it is not there" are
    * different facts. Named by provider, never by connection string.
    */
-  const READING_PRODUCTION = fleet.source === 'the cloud database';
+  READING_PRODUCTION = fleet.source === 'the cloud database';
 
   /*
    * The temporary database, and the reason it is named explicitly.
@@ -2855,25 +2934,35 @@ async function main(): Promise<void> {
   ] as const;
   const dedupeFailed = dedupe.filter(([, held]) => !held).map(([name]) => name);
 
-  record(
+  recordConditions(
     'C',
     'Priority and backlog',
-    classified === 100 && dedupeFailed.length === 0 ? 'PARTIAL' : 'NOT_RUN',
-    dedupeFailed.length > 0 || classified !== 100
-      ? `${classified} candidates carried a class (100 expected) and ${dedupeFailed.length} of ` +
-        `${dedupe.length} deduplication condition(s) did not hold: ${dedupeFailed.join('; ')}. ` +
-        'That is a defect rather than a missing run.'
-      : `${classified} candidates in an isolated scope, every one carrying a class ` +
-        `(${ranked.map((row) => `${row.priority}=${row.total}`).join(' ')}). The semantic merge ` +
-        `is driven end to end in a second scope: ${dedupe.length}/${dedupe.length} conditions ` +
-        `held — a rewording merged (${mergeRow?.reason ?? 'no merge row'}) and is recorded as ` +
-        'SEMANTIC, and four claims were refused: below the ' +
-        `${SEMANTIC_MERGE_FLOOR} overlap floor, below the minimum shared subject words, naming ` +
-        'a candidate in another project, and naming one already folded away — the last two in ' +
-        'the same words as each other, deliberately, and each leaving both ideas standing. The merge was then undone with splitCandidate: the row returned to ' +
-        'CAPTURED, and its MERGE and SPLIT rows are both still there. NOT established here: a ' +
-        'worker naming the repeat from a live conversation, which is the one string the server ' +
-        'does not supply itself, and a person reading this backlog on the deployed product.',
+    [
+      {
+        name: 'every idea in a hundred-idea backlog carries a priority class',
+        held: classified === 100,
+        saw: `${classified}/100 classified (${ranked.map((row) => `${row.priority}=${row.total}`).join(' ')})`,
+      },
+      ...dedupe.map(([name, held]) => ({
+        name,
+        held,
+        saw: held ? 'held' : 'did not hold',
+      })),
+      fromProduction(
+        'a worker has named a repeat from a live conversation, and the floor let it merge',
+        seen.semanticMerges > 0,
+        `${seen.semanticMerges} SEMANTIC merge(s) recorded in ${fleet.source}`,
+      ),
+    ],
+    `${classified} candidates in an isolated scope, every one carrying a class. The semantic ` +
+      `merge is driven end to end in a second scope: a rewording merged ` +
+      `(${mergeRow?.reason ?? 'no merge row'}) and is recorded as SEMANTIC, four claims were ` +
+      `refused — below the ${SEMANTIC_MERGE_FLOOR} overlap floor, below the minimum shared ` +
+      'subject words, naming a candidate in another project, and naming one already folded ' +
+      'away, the last two in the same words as each other deliberately — and the merge was ' +
+      'then undone with splitCandidate, leaving both the MERGE and the SPLIT rows standing. ' +
+      'The one string the server does not supply itself is the duplicate claim, which comes ' +
+      'from a worker that read both conversations.',
   );
 
   /* -- D. Discovery Frontier v1 ------------------------------------------- */
@@ -3078,35 +3167,145 @@ async function main(): Promise<void> {
     { knowledgeIds: new Set(), layerIds: new Set(), frontierIds: new Set(), held: [] },
   );
   const discarded = invented.ok && invented.result.findings.length === 0;
-  const derivationHeld =
-    populated.length === frontier.regions.length &&
-    derivedSeen.length === derived.length &&
-    !refusedDerived.ok &&
-    discarded;
-  record(
+  /*
+   * Resolve-never-delete, and a person's dismissal — both driven rather than
+   * described.
+   *
+   * P11 names them explicitly and the reporter had only read the derivation.
+   * They are the two writes on this table that could quietly lose something: a
+   * region that stops being derived must stay readable, because a delete makes
+   * a dark spot look like progress; and a person saying an area is deliberately
+   * not required must be attributed, reasoned, and reversible.
+   */
+  const beforeResolve = await listFrontier({ projectId: snapshot.id, includePrivate: true });
+  const resolvedCount = await resolveUnseenFrontierItems({
+    projectId: snapshot.id,
+    startedAt: new Date(Date.now() + 60_000).toISOString(),
+  });
+  const liveAfterResolve = await listFrontier({ projectId: snapshot.id, includePrivate: true });
+  const allAfterResolve = await listFrontier({
+    projectId: snapshot.id,
+    includePrivate: true,
+    includeResolved: true,
+  });
+  const dismissTarget = allAfterResolve[0] ?? null;
+  const dismisser = await createUser({
+    email: 'step12b-frontier@example.invalid',
+    displayName: 'Step 12B frontier (test identity, not the owner)',
+    password: `acc-${randomUUID()}`,
+    isBrainAdmin: false,
+  });
+  const dismissed = dismissTarget
+    ? await dismissFrontierItem({
+        id: dismissTarget.id,
+        projectId: snapshot.id,
+        userId: dismisser.id,
+        reason: 'Out of scope for this project — the county handles it.',
+        dismissed: true,
+      })
+    : false;
+  const afterDismiss = dismissTarget
+    ? (
+        await listFrontier({ projectId: snapshot.id, includePrivate: true, includeResolved: true })
+      ).find((item) => item.id === dismissTarget.id) ?? null
+    : null;
+  const undismissed = dismissTarget
+    ? await dismissFrontierItem({
+        id: dismissTarget.id,
+        projectId: snapshot.id,
+        userId: dismisser.id,
+        reason: '',
+        dismissed: false,
+      })
+    : false;
+  const afterUndismiss = dismissTarget
+    ? (
+        await listFrontier({ projectId: snapshot.id, includePrivate: true, includeResolved: true })
+      ).find((item) => item.id === dismissTarget.id) ?? null
+    : null;
+
+  recordConditions(
     'D',
     'Discovery Frontier v1',
-    derivationHeld ? 'PARTIAL' : 'NOT_RUN',
-    derivationHeld
-      ? `A project snapshot built from real rows — three declared foundations, ` +
-        `${believed.length} knowledge rows, an audit with two classified gaps and one idea ` +
-        `Russell had itself — reads back through frontierFor with all ` +
-        `${frontier.regions.length} regions populated: ${regionSummary}. All ` +
-        `${derived.length} derived lenses answered something (${derivedSeen.sort().join(', ')}), ` +
-        `and ${gapNote}. ${frontier.openLenses.length} asked lenses are put, ` +
-        `${frontier.openLenses.filter((lens) => lens.about !== null).length} of them with a ` +
-        'subject attached, and none is answered. A derived lens is refused ' +
-        'as an inquiry (refused); a finding citing a row ' +
-        'this project does not hold is discarded (discarded). NOT established here: the ' +
-        `${asked.length} asked lenses, each of which needs a reader — no worker answered one in ` +
-        'this run — and the same snapshot read on the deployed product rather than in this ' +
-        'isolated database. (§29 and this module\'s own header say four are asked; LENSES ' +
-        `declares ${asked.length}. The count printed here is the one the code holds.)`
-      : `The derivation did not hold, which is a defect rather than a missing run: ` +
-        `${populated.length}/${frontier.regions.length} regions populated (${regionSummary}), ` +
-        `empty: ${emptyRegions.join(', ') || 'none'}; ` +
-        `${derivedSeen.length}/${derived.length} derived lenses answered; ` +
-        `derived lens refused as an inquiry=${!refusedDerived.ok}; invented finding discarded=${discarded}.`,
+    [
+      {
+        name: 'all five regions are populated from real rows',
+        held: populated.length === frontier.regions.length,
+        saw: regionSummary,
+      },
+      {
+        name: 'every derived lens answered something',
+        held: derivedSeen.length === derived.length,
+        saw: `${derivedSeen.length}/${derived.length}: ${derivedSeen.sort().join(', ')}`,
+      },
+      {
+        name: "an audit's own classified gap reaches the frontier as an open question",
+        held: foundationalGap?.region === 'OPEN_QUESTION',
+        saw: gapNote,
+      },
+      {
+        name: 'every asked lens is put, with the subject it is about attached',
+        held:
+          frontier.openLenses.length === asked.length &&
+          frontier.openLenses.every((lens) => lens.about !== null),
+        saw:
+          `${frontier.openLenses.length}/${asked.length} put, ` +
+          `${frontier.openLenses.filter((lens) => lens.about !== null).length} with a subject`,
+      },
+      {
+        name: 'a derived lens is refused as an inquiry, because rows answer it',
+        held: !refusedDerived.ok,
+        saw: refusedDerived.ok ? 'it was accepted' : 'refused',
+      },
+      {
+        name: 'a finding citing a row this project does not hold is discarded',
+        held: discarded,
+        saw: discarded ? 'discarded' : 'it was kept',
+      },
+      {
+        name: 'an item that stops being derived is resolved rather than deleted',
+        held:
+          resolvedCount > 0 &&
+          liveAfterResolve.length === 0 &&
+          allAfterResolve.length === beforeResolve.length,
+        saw:
+          `${resolvedCount} resolved, ${liveAfterResolve.length} still live, ` +
+          `${allAfterResolve.length}/${beforeResolve.length} rows still readable`,
+      },
+      {
+        name: "a person's dismissal is attributed, reasoned, and reversible",
+        held:
+          dismissed &&
+          afterDismiss?.dismissedByUserId === dismisser.id &&
+          (afterDismiss.dismissedReason ?? '').length > 0 &&
+          undismissed &&
+          afterUndismiss?.dismissedAt === null,
+        saw: dismissTarget
+          ? `dismissed by ${afterDismiss?.dismissedByUserId ?? 'nobody'} with a reason, then undone`
+          : 'no frontier item existed to dismiss',
+      },
+      {
+        name: 'an asked lens has been answered by a reader on real work',
+        held: null,
+        saw:
+          `${asked.length} asked lenses are put and none is answered. That is the design: ` +
+          'what adjacent possibility is absent, what lesson transfers, what the map hides — ' +
+          'a Brain that filled these in from a template would be manufacturing insight, ' +
+          'which is §8 at the altitude where breaking it is most tempting.',
+        standing: true,
+      },
+      fromProduction(
+        'the frontier is derived on the deployed Brain too, not only in a fixture',
+        seen.frontierItems > 0,
+        `${seen.frontierItems} frontier row(s) and ${seen.answeredLenses} answered inquiry(ies) in ${fleet.source}`,
+      ),
+    ],
+    `A project snapshot built from real rows — three declared foundations, ${believed.length} ` +
+      'knowledge rows, an audit with two classified gaps and one idea Russell had itself — read ' +
+      'back through frontierFor, then written to twice: once by the derivation pass retiring ' +
+      "what it no longer sees, and once by a person dismissing an area and undoing it. " +
+      "(§29 and this module's own header say four lenses are asked; LENSES declares " +
+      `${asked.length}. The count here is the one the code holds.)`,
   );
 
   /* -- E. Connected-site intelligence ------------------------------------- */
