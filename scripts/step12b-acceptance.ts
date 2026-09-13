@@ -663,9 +663,9 @@ const RUN_ENVIRONMENT: 'CHECKOUT' | 'PRODUCTION' = REPO_VISIBLE ? 'CHECKOUT' : '
  * will not answer — all `false`, because *we could not tell* must never read
  * the same as *we checked*.
  */
-function productUnchangedSince(revision: string): boolean {
+function unchangedSince(revision: string, paths: string[]): boolean {
   try {
-    execFileSync('git', ['diff', '--quiet', revision, 'HEAD', '--', 'client', 'server'], {
+    execFileSync('git', ['diff', '--quiet', revision, 'HEAD', '--', ...paths], {
       cwd: REPO,
       stdio: 'ignore',
     });
@@ -673,6 +673,11 @@ function productUnchangedSince(revision: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** The whole product: what a browser renders and what answers it. */
+function productUnchangedSince(revision: string): boolean {
+  return unchangedSince(revision, ['client', 'server']);
 }
 
 function visualEvidence(): { index: string | null; images: number; journeySteps: number } {
@@ -5389,7 +5394,90 @@ async function main(): Promise<void> {
    * inside the Deploy workflow, either side of a real restart of a real
    * machine, and a reporter cannot attest a CI run it did not observe.
    */
-  const upgrade = file('scripts/upgrade-populated.ts');
+  /*
+   * The populated upgrade, read from what it actually did.
+   *
+   * This was `file('scripts/upgrade-populated.ts')` — the script exists — which
+   * is the weakest form of "the code looks like it would", because a script
+   * that exists and fails reads exactly like one that passes. It now writes a
+   * record per dialect and this consumes both: the version it started at, the
+   * version it reached, the rows it wrote first, the tables that came through
+   * byte-identical, and the second restart that applied nothing.
+   *
+   * Two files rather than one, because the claim is that **both chains** are
+   * proved and a single file would let the second run overwrite the first.
+   * And each is checked for freshness against `server/db`, so a record taken
+   * before a migration was added is refused rather than read.
+   */
+  interface UpgradeRecord {
+    dialect: string;
+    preVersion: number;
+    postVersion: number;
+    settledVersion: number;
+    rowsBefore: number;
+    preservedTables: number;
+    addedTables: number;
+    layersAfter: number;
+    revision: string | null;
+    ranAt: string;
+  }
+  const upgradeRecord = (dialect: string): UpgradeRecord | null => {
+    const raw = file(path.join('docs', 'evidence', 'step12b-upgrade', `${dialect}.json`));
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as UpgradeRecord;
+    } catch {
+      return null;
+    }
+  };
+  const upgradeHeld = (record: UpgradeRecord | null): boolean =>
+    record !== null &&
+    record.postVersion > record.preVersion &&
+    record.settledVersion === record.postVersion &&
+    record.rowsBefore > 0 &&
+    record.preservedTables > 0 &&
+    record.addedTables > 0 &&
+    record.layersAfter === 3 &&
+    record.revision !== null &&
+    unchangedSince(record.revision, ['server/db']);
+  const upgradeSaw = (record: UpgradeRecord | null): string =>
+    record === null
+      ? 'no record — run `npm run upgrade:populated`'
+      : `schema ${record.preVersion} → ${record.postVersion}, ${record.rowsBefore} pre-existing ` +
+        `row(s) across ${record.preservedTables} table(s) byte-identical, ${record.addedTables} ` +
+        `new table(s) readable, a second restart settling at ${record.settledVersion}` +
+        (record.revision && unchangedSince(record.revision, ['server/db'])
+          ? ''
+          : ' — but server/db has moved since it was taken');
+  const sqliteUpgrade = upgradeRecord('sqlite');
+  const postgresUpgrade = upgradeRecord('postgres');
+
+  /*
+   * The hosted verification, which is the Deploy workflow's and belongs to a
+   * revision rather than to a moment.
+   *
+   * It runs against a real machine either side of a real restart, and a
+   * reporter cannot attest a CI run it did not observe — so what it reads is
+   * the record that run leaves behind, and the condition is open until one
+   * exists for this revision. Open, not exempt: R13 is a requirement.
+   */
+  interface HostedRecord {
+    revision: string;
+    ranAt: string;
+    beforeRestart: boolean;
+    afterRestart: boolean;
+    workflowRun: string;
+  }
+  const hostedRaw = file(path.join('docs', 'evidence', 'step12b-hosted', 'verification.json'));
+  let hosted: HostedRecord | null = null;
+  if (hostedRaw) {
+    try {
+      hosted = JSON.parse(hostedRaw) as HostedRecord;
+    } catch {
+      hosted = null;
+    }
+  }
+  const hostedMatches = hosted !== null && hosted.revision === revisionOf().revision;
   /*
    * Probed directly rather than gated on `REPO_VISIBLE`, and the difference is
    * not pedantry.
@@ -5493,28 +5581,29 @@ async function main(): Promise<void> {
             saw: 'the migration directory is not on this filesystem',
             needs: 'CHECKOUT',
           },
-      REPO_VISIBLE
-        ? {
-            name: 'the upgrade over populated data has its own proof, run separately',
-            held: upgrade !== null,
-            saw: upgrade
-              ? '`npm run upgrade:populated` — both chains, a per-table sha-256 census, and a ' +
-                'second restart applying nothing'
-              : 'scripts/upgrade-populated.ts is absent',
-          }
-        : {
-            name: 'the upgrade over populated data has its own proof, run separately',
-            held: null,
-            saw: 'the script is a repository fact',
-            needs: 'CHECKOUT',
-          },
+      fromCheckout(
+        'the SQLite chain upgrades populated data and preserves every pre-existing row',
+        upgradeHeld(sqliteUpgrade),
+        upgradeSaw(sqliteUpgrade),
+      ),
+      fromCheckout(
+        'and so does the Postgres chain, over the same fixture',
+        upgradeHeld(postgresUpgrade),
+        upgradeSaw(postgresUpgrade),
+      ),
       {
-        name: 'the hosted verification passes either side of a real restart',
-        held: null,
+        name: 'the hosted verification passes either side of a real restart of a real machine',
+        held: hosted === null ? null : hostedMatches && hosted.beforeRestart && hosted.afterRestart,
+        ...(hosted === null ? { awaits: 'a Deploy run at this revision' } : {}),
         saw:
-          'that runs inside the Deploy workflow, against a real machine being restarted. A ' +
-          'reporter cannot attest a CI run it did not observe, and reading the workflow file ' +
-          'would be checking that the steps are written down rather than that they passed.',
+          hosted === null
+            ? 'no hosted record exists for any revision yet. The Deploy workflow produces it; ' +
+              'a reporter cannot attest a CI run it did not observe, and reading the workflow ' +
+              'file would check that the steps are written down rather than that they passed.'
+            : hostedMatches
+              ? `run ${hosted.workflowRun} at ${hosted.revision.slice(0, 8)}: before=` +
+                `${hosted.beforeRestart}, after=${hosted.afterRestart}`
+              : `the only hosted record is for ${hosted.revision.slice(0, 8)}, not this revision`,
       },
     ],
     'Three of these are facts about what this run itself did — it migrated an empty database, ' +
