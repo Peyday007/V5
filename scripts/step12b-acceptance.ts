@@ -3254,15 +3254,52 @@ async function runConnectedSiteExercise(): Promise<{
  * database is put back afterwards so everything downstream sees what it expects.
  * Returns null rather than throwing: a second reading that could not be taken
  * is a missing measurement, never a finding about the loop.
+ *
+ * ---------------------------------------------------------------------------
+ * It waits for a window at least one tick wide, and the first version did not
+ * ---------------------------------------------------------------------------
+ *
+ * The comment above used to end "a minute or two of real elapsed time, several
+ * ticks at the loop's own interval", and that was true of a checkout run whose
+ * exercises take minutes. **In the container they do not.** The image carries no
+ * `tests/`, `docs/` or `client/src`, so the repository half of the report is
+ * skipped and the whole run takes seconds — production measured 16 of them,
+ * against `RUSSELL_TICK_MS` of 30,000. Both readings fell inside one tick, the
+ * cursor was byte-identical at `17:59:40.794Z → 17:59:40.794Z`, and L reported
+ * FAIL about a loop that was `RUNNING`, error-free and had last run 16 seconds
+ * earlier.
+ *
+ * A window narrower than the thing it measures can only ever answer "no". So
+ * this polls until the cursor moves or a deadline two ticks wide passes —
+ * **and it can still fail**: a loop that has genuinely stopped produces the same
+ * timestamp for seventy-five seconds and the condition says so. What changed is
+ * that "it did not move" now means the loop did not tick, rather than that the
+ * report was quick.
  */
-async function reReadCycle(): Promise<{ state: string; lastRanAt: string | null } | null> {
+const CURSOR_WINDOW_MS = 75_000;
+
+async function reReadCycle(
+  /** The cursor as the first reading saw it. Null means there was nothing to move. */
+  since: string | null,
+): Promise<{ state: string; lastRanAt: string | null } | null> {
+  const deadline = Date.now() + CURSOR_WINDOW_MS;
   try {
     await closeDatabase();
     await initDatabase();
-    const row = await getDb().get<{ state: string; last_ran_at: string | null }>(
-      'SELECT state, last_ran_at FROM russell_cycle LIMIT 1',
-    );
-    return row ? { state: row.state, lastRanAt: row.last_ran_at } : null;
+    let latest: { state: string; lastRanAt: string | null } | null = null;
+    for (;;) {
+      const row = await getDb().get<{ state: string; last_ran_at: string | null }>(
+        'SELECT state, last_ran_at FROM russell_cycle LIMIT 1',
+      );
+      latest = row ? { state: row.state, lastRanAt: row.last_ran_at } : null;
+      const moved =
+        latest !== null &&
+        latest.lastRanAt !== null &&
+        since !== null &&
+        Date.parse(latest.lastRanAt) > Date.parse(since);
+      if (moved || latest === null || Date.now() >= deadline) return latest;
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
+    }
   } catch {
     return null;
   } finally {
@@ -5415,7 +5452,7 @@ async function main(): Promise<void> {
    * is A's pending-turn projection.
    */
   const ranAgoMs = seen.cycleLastRanAt ? Date.now() - Date.parse(seen.cycleLastRanAt) : null;
-  const secondReading = READING_PRODUCTION ? await reReadCycle() : null;
+  const secondReading = READING_PRODUCTION ? await reReadCycle(seen.cycleLastRanAt) : null;
   const cursorMoved =
     secondReading !== null &&
     secondReading.lastRanAt !== null &&
@@ -5516,7 +5553,11 @@ async function main(): Promise<void> {
             name: 'and its cursor moved between two readings — a window, not a timestamp',
             held: cursorMoved,
             saw: secondReading
-              ? `${seen.cycleLastRanAt ?? 'none'} → ${secondReading.lastRanAt ?? 'none'}`
+              ? `${seen.cycleLastRanAt ?? 'none'} → ${secondReading.lastRanAt ?? 'none'}` +
+                (cursorMoved
+                  ? ''
+                  : ` — unchanged across a ${CURSOR_WINDOW_MS / 1000}s window, which is ` +
+                    `${Math.round(CURSOR_WINDOW_MS / 30_000)} ticks at the loop's own interval`)
               : 'the second reading could not be taken',
           }
         : {
