@@ -1207,3 +1207,68 @@ Everything after that is the pipeline as it already stood: scoped work against
 the project's directory boundary, a diff rejected whole if it reached outside the
 unit's declared paths, an independent review refused to any session that
 implemented part of the campaign, and a pull request a person merges.
+
+### Answering the question, rather than repeating the request
+
+Brain refuses to guess which project a change belongs to. The person's next
+message is then usually two words — *"V4"*, *"the Brain one"* — and that is an
+**answer**, not a request: no verb, nothing to do, shorter than the gate's own
+floor. `asksForExecution` declines it, correctly, and would go on declining it
+for ever.
+
+So the refusal keeps what it refused. `produced.pendingAsk` holds the three
+fields the proposal validator had already accepted that turn, and
+`produced.clarifyChoices` holds the projects an answer may name. A later reply
+that names exactly one of them finishes the original request, through the same
+`writeRequest` every capture goes through, into the same `PROPOSED` state, onto
+the same card, for the same person to approve. The gate is not consulted again
+because the request it judges was the earlier message.
+
+Three properties keep it narrow:
+
+- **It resolves before anything a model proposed, and returns.** A worker that
+  has read the thread will often restate the change in its own words, and a
+  reworded objective is a different submission key — so without the early return
+  one answer would produce two cards for one decision.
+- **It only fires against an outstanding question.** A bare project name in a
+  thread where Brain asked nothing is not a request and does not become one.
+- **It resolves on exactly one match.** A reply naming none, or two, leaves the
+  question exactly where it was, because choosing for somebody who has just said
+  they are choosing is the defect the question exists to avoid.
+
+The question stops being displayed the moment a request captured after it
+settles it — answered by doing rather than by saying.
+
+### A sentence can rule the row out. It can never replace it.
+
+`resolveSoftwareTarget` used to treat any mention of the conversation's project
+as agreement, so in a Brain-attached thread *"Do not change Brain, but fix the
+broken form in V4"* resolved to **Brain** — the one project the person had ruled
+out in the same sentence.
+
+Exclusion is now read per mention, using the clause-scoped negation the gate
+already uses, and it only ever *removes* a candidate:
+
+| Sentence, in a Brain-attached thread | Result |
+| --- | --- |
+| *Fix the broken form in V4.* | a question — the row stands, so naming another project is a disagreement |
+| *In Brain, not V4 — fix the quote form.* | Brain — V4 excluded, the row still stands |
+| *Do not change Brain, but fix the broken form in V4.* | V4 — the row is ruled out and one destination is named |
+| *Do not change Brain, but please fix the broken form.* | a question — nothing left to file against |
+| *Do not change Brain — fix the form in V4 and in V2.* | a question, offering V4 and V2 and **not** Brain |
+
+A destination is a project named after a preposition of place (`in`, `on`,
+`for`, `to`, `inside`, `within`). Naming one is not enough on its own: with the
+row still standing it is a disagreement. It decides only once the row has been
+ruled out and there is nothing else to defer to.
+
+The exclusion vocabulary is wider than the gate's — it adds bare `not`,
+`except`, `other than`, `apart from` — and that asymmetry is deliberate. An
+exclusion can never *choose* a project, so a false one costs a question; a
+missed one files work against something somebody said not to touch. The shared
+half lives in `services/russell/negation.ts` rather than inside either reader,
+because a rule kept inside one of its two callers is a cycle waiting to be found
+by whichever file loads first.
+
+**The excluded project is absent from the answers the question offers**, so it
+cannot return through the clarification reply either.

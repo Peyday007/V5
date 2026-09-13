@@ -1,9 +1,21 @@
 # Connecting the Factory worker
 
-Everything Brain can do by itself is done. What is left is four things inside a
-Claude account, one deployment secret, and three Fleet commands — every name,
-URL, branch and value written out, because a runbook with a value left to invent
-produces a surface Brain refuses for a reason nobody can see.
+**This runbook connects one worker, for one repository: `Peyday007/V5` — Brain
+itself.** Every name, URL, branch and value is written out, because a runbook
+with a value left to invent produces a surface Brain refuses for a reason nobody
+can see.
+
+| | |
+| --- | --- |
+| Envelope grant | `brain` |
+| Repository | `Peyday007/V5` |
+| Branch | `production` |
+| Brain worker it creates | `factory-brain` |
+| Connector name in Claude | `Factory Brain` |
+| Deployment secret | `BRAIN_ROUTINE_TOKEN_FACTORY` |
+
+A different target later is these same seven steps with a different grant, a
+different repository and a different worker name. Nothing else changes.
 
 Read once before starting:
 
@@ -12,46 +24,48 @@ Read once before starting:
 * **This connects a surface. It does not start any work.** When the steps are
   finished the fleet is ready and idle; a campaign begins only when somebody
   submits an objective and approves it.
-* **There is an authorized target you can use without choosing one:
-  Brain itself.** The envelope grants `brain` (`Peyday007/V5`), so if you would
-  rather not settle a site's repository arrangement yet, run these steps against
-  it and the first real campaign can be a change to Brain. The alternative,
-  a site, is the same seven steps with a different grant.
+* **You do not have to choose a target first.** `brain` is already in the
+  envelope, so *"improve this part of Brain"* is a campaign you can run today and
+  no site's repository arrangement has to be settled for it.
 
 ---
 
-## Read this first: connect the target, not the bootstrap, if you have one
+## `brain-worker-bootstrap` is a configuration source, not the worker
+
+It appears twice below and it is **optional both times**. It is not the target,
+it is not the worker, and it is not a step of its own.
 
 **A Brain factory worker is one repository.** Onboarding derives the worker's
-name from the grant (`factory-<grant id>`) and writes it an *exhaustive*
-`worker_routing` row naming that one repository, so a worker registered for A can
-never be handed B's bin. And a Claude connector's OAuth token authenticates as
-exactly one worker. Those two facts together mean **one connector = one worker =
-one repository**, and re-onboarding rewrites the row rather than adding to it.
+name from the grant (`factory-<grant id>`, so `factory-brain` here) and writes it
+an *exhaustive* `worker_routing` row naming that one repository, so a worker
+registered for A can never be handed B's bin. And a Claude connector's OAuth
+token authenticates as exactly one worker. Those two facts together mean **one
+connector = one worker = one repository**, and re-onboarding rewrites the row
+rather than adding to it.
 
-So the steps below, run against `brain-worker-bootstrap`, build a worker that can
-never execute your first real target. They are worth doing only if you want the
-whole chain proved *before* choosing a target. If you already know the target, or
-are ready to choose one, **do steps 1 to 7 once, against the target**, and this
-bootstrap worker never needs to exist.
+So a worker onboarded against `brain-worker-bootstrap` could never execute a
+campaign in `Peyday007/V5`. The only two things that checkout is still good for
+are:
 
-**You already have a target without choosing one.** `brain` (`Peyday007/V5`) is
-in the envelope, so *"improve this part of Brain"* is a campaign you can run
-today, and no site's repository arrangement has to be settled for it. A site is
-the same seven steps against a different grant, whenever you want one.
+1. **Supplying the tool pre-approval**, as a *second source* on the Routine, if
+   you would rather not commit one into the target (see step 5's note).
+2. **Proving the whole chain against something with no application code in it**,
+   before pointing a surface at a real repository. That is a rehearsal, and it
+   needs its own connector, its own Routine and its own worker
+   (`factory-brain-worker-bootstrap`) — none of which the target can reuse.
+
+If neither of those appeals, ignore it entirely and follow the steps as written.
 
 What the target needs on the surface is two things, and both are properties of
 the Routine's **sources**, not of the connector:
 
 1. **Tool pre-approval**, so a fired worker does not stall at a permission prompt
    with nobody there — a checked-in `.claude/settings.json` allowing
-   `mcp__factory-brain__*` in a repository the session mounts. Either commit one
-   into the target yourself (no unit may ever own `.claude/**`, so it has to be a
-   person's commit), or attach `brain-worker-bootstrap` as a **second** source
-   alongside the target, which is the only remaining job that checkout has.
+   `mcp__factory-brain__*` in a repository the session mounts.
 
-   **`V5`'s own settings file does not carry it yet, and that matters now that
-   `brain` is a target.** `.claude/settings.json` in this repository pre-approves
+   **`Peyday007/V5`'s own settings file does not carry it yet, and that is the
+   one genuine gap in this setup.** `.claude/settings.json` in that repository
+   pre-approves
    `mcp__cloud-brain__*` — the *research* connector — and nothing else, so a
    factory Routine attaching `Peyday007/V5` alone would fire a worker that stalls
    at a permission prompt with nobody there. That is the §22 defect exactly: the
@@ -63,8 +77,9 @@ the Routine's **sources**, not of the connector:
      merge it — `mcp__factory-brain`, `mcp__factory-brain__*`,
      `mcp__factory_brain`, `mcp__factory_brain__*` (both spellings, because the
      separator a connector name produces is not worth guessing at fire time); or
-   * attach `brain-worker-bootstrap` as a second source on the Routine, whose
-     settings file already allows them.
+   * attach `brain-worker-bootstrap` as a **second source** on the Routine,
+     whose settings file already allows them — the optional use of that checkout
+     described at the top, and the one that needs no commit.
 
    I have not made that commit. Editing the settings file that governs my own
    session's tool permissions is refused here as self-modification, which is the
@@ -99,7 +114,7 @@ required and is not what this buys.
 |---|---|---|
 | Connector name in Claude | `Cloud Brain` | `Factory Brain` |
 | Tool prefix it produces | `mcp__cloud-brain__*` | `mcp__factory-brain__*` |
-| Brain worker it authenticates as | the existing research worker `wkr_1cdd82cf…` | `factory-brain-worker-bootstrap` |
+| Brain worker it authenticates as | the existing research worker `wkr_1cdd82cf…` | `factory-brain` |
 | What it may be handed | research and general work | `FACTORY` work for one repository |
 
 **Nothing about the research identity changes.** Its worker, its routing, its
@@ -108,14 +123,16 @@ below.
 
 Both prefixes are pre-approved in
 [`Peyday007/brain-worker-bootstrap`](https://github.com/Peyday007/brain-worker-bootstrap)'s
-checked-in `.claude/settings.json`, which is what stops a fired worker halting at
-a permission prompt with nobody there to answer it.
+checked-in `.claude/settings.json`. That is the only reason that checkout is
+mentioned in this runbook at all — it is a place the pre-approval already exists,
+never the repository the work happens in.
 
 ---
 
-## 1. Onboard the checkout, in Russell
+## 1. Onboard `brain`, in Russell
 
-Brain → **Build** → **Repositories**. Two repositories are authorized:
+Brain → **Build** → **Repositories**. Two repositories are authorized, and the
+one to press the button on is `brain`:
 
 | Grant | Remote | What it is |
 |---|---|---|
@@ -128,16 +145,15 @@ may be *pointed* at a repository; `brain-worker-bootstrap` exists so the
 is possible. `oakwood-junk-removal` stays **retired** by your decision, and
 authorizing `brain` did not reopen it.
 
-**Which one to onboard.** If you want the first campaign to be a change to
-Brain, onboard `brain` and answer its directory question — that is the whole
-target setup, and no site's repository arrangement has to be settled first. If
-you want the chain proved before choosing anything, onboard
-`brain-worker-bootstrap`; that worker can never execute a real target, so a
-second connector will be needed later.
+**Onboard `brain`** and answer its directory question — whole repository, or
+named directories. That is the whole target setup, and no site's repository
+arrangement has to be settled first. (Onboarding `brain-worker-bootstrap`
+instead builds a worker that can never execute a real target; it is the
+rehearsal described at the top, and it needs its own connector and Routine.)
 
-Press **Onboard this repository**. Brain creates the worker
-`factory-<grant id>`, gives it the fixed factory scope set, writes an exhaustive
-routing row for that one repository, and shows **one invitation link, once**.
+Press **Onboard this repository**. Brain creates the worker **`factory-brain`**,
+gives it the fixed factory scope set, writes an exhaustive routing row naming
+`peyday007/v5`, and shows **one invitation link, once**.
 
 **Copy the link now.** If you lose it, press the button again — onboarding is a
 repair and a rotation, so the second press reuses the same worker, revokes the
@@ -153,7 +169,7 @@ worker**.
 
 Paste the link into the browser you are going to authorize the connector from,
 and open it. You should see *"You are ready to connect — this browser can now
-connect Factory · Peyday007/brain-worker-bootstrap, and nothing else."*
+connect Factory · Peyday007/V5, and nothing else."*
 
 Leave that tab open. Opening the link does **not** spend the invitation; it is
 spent when a connection is actually authorized.
@@ -180,7 +196,7 @@ connection.
 Click **Add**, then **Connect**. In the browser:
 
 1. sign in to Brain if you are not already;
-2. the consent screen names **one** worker — `Factory · Peyday007/brain-worker-bootstrap`;
+2. the consent screen names **one** worker — `Factory · Peyday007/V5`;
 3. **Approve.**
 
 The name must be that one. If you are shown a list to choose from, the
@@ -192,18 +208,17 @@ invitation cookie from step 2 is not in this browser — go back to step 2.
 
 | Setting | Value |
 |---|---|
-| Repository | `Peyday007/brain-worker-bootstrap` |
-| Branch | `main` |
-
+| Repository | `Peyday007/V5` |
+| Branch | `production` |
+| Second source (optional) | `Peyday007/brain-worker-bootstrap` on `main` — **only** if you did not add the factory prefixes to V5's own `.claude/settings.json` |
 | Connectors enabled | **`Factory Brain` only** — `Cloud Brain` off |
 | Schedule | none |
 | API trigger | on |
 | Prompt | the block below, verbatim |
 
-Doing this against a **target** instead: Repository is that target and Branch is
-its default branch, with `brain-worker-bootstrap` added as a *second* source
-unless the target carries its own `.claude/settings.json`. Everything else in the
-table is identical.
+`production` is the branch because §28 says one branch owns production and a
+campaign pins against it, opening a pull request back into it. A different
+target later takes its own default branch here.
 
 **Connectors is the setting that decides identity.** A session that could reach
 Brain as either identity is a session Brain cannot separate, and the whole
@@ -329,7 +344,7 @@ landed yet — wait for the restart and run it again.
 | Input | Value |
 |---|---|
 | `ref` | the same `trig_…` |
-| `extra` | `--worker factory-brain-worker-bootstrap` |
+| `extra` | `--worker factory-brain` |
 
 The worker **name**, which is the one onboarding gave you; you never need its id.
 
@@ -348,9 +363,9 @@ It prints two blocks and they are not the same kind of fact.
   account     primary  ENABLED
   caps        [repository,repository-write]
   secret      BRAIN_ROUTINE_TOKEN_FACTORY  present
-  worker      factory-brain-worker-bootstrap  wkr_…
+  worker      factory-brain  wkr_…
   families    [FACTORY]
-  repos       [peyday007/brain-worker-bootstrap]
+  repos       [peyday007/v5]
 ```
 
 **OBSERVED** is what has actually happened, and the first time you run this it
@@ -378,12 +393,12 @@ out of four rows Brain wrote itself:
 
 ```
     fired     2026-…            Brain sent this Routine a dispatch
-    arrived   cse_…             that session authenticated as factory-brain-worker-bootstrap
+    arrived   cse_…             that session authenticated as factory-brain
     assigned  bin_…             it was handed the bin the fire was for
     completed bin_…             the bin reached COMPLETE
 
   VERIFIED  a fire to this Routine produced a session that authenticated as
-            factory-brain-worker-bootstrap, was handed a bin and completed it.
+            factory-brain, was handed a bin and completed it.
 ```
 
 The failure that matters most is *"N session(s) on this Routine authenticated as
@@ -399,8 +414,9 @@ Fix it by editing the Routine's connector selection in Cowork and probing again.
 `services/factory/repositoryEnvelope.ts` holds two entries, and one absence.
 They are three different kinds of fact:
 
-* **`brain-worker-bootstrap`** is the proving ground: a checkout with no
-  application code, no project data and no credentials in it.
+* **`brain-worker-bootstrap`** is a configuration source and an optional
+  rehearsal ground: a checkout with no application code, no project data and no
+  credentials in it. It is never the target of this runbook.
 * **`brain` (`Peyday007/V5`) is authorized on your decision.** It was absent
   before, on my engineering judgment rather than yours — commit `7e96b5f`, with
   the reasoning that a campaign which could rewrite the machinery executing it is
@@ -422,28 +438,31 @@ A site of yours — V4, V2 — is not in the envelope yet and needs one reviewed
 entry when you want it there. That entry is the only code change; everything
 after it is rows and account setup.
 
-## What happens next
+## What happens next, and what each step has and has not proved
 
-When step 7 prints `VERIFIED`, that surface can execute exactly the repository it
-was onboarded for, and nothing else.
+When step 7 prints `VERIFIED`, three things are settled and a fourth is not.
+Keeping them apart is the whole point of running the probe separately.
 
-If you did the steps against **the target**, what remains is one decision: an
-objective — in Build, or a committed file under `objectives/`, approved by a
-person. Nothing about the surface changes.
+| Proved | By what | Not proved by it |
+| --- | --- | --- |
+| **Dispatch reaches this surface** | the `--probe` fire: Brain fired, a session arrived, it was assigned the bin, the bin completed | that the session can reach `Peyday007/V5` — the probe bin forbids every repository operation |
+| **The surface is the worker you meant** | the arrival authenticated as `factory-brain`, from Brain's own dispatch row | anything about what that worker can do outside Brain |
+| **Repository access** | the first campaign stage that clones, reads and pushes | nothing until then; if access is missing the worker reports `BLOCKED` naming the operation, which is the honest outcome rather than a failure |
+| **A campaign completes** | a plan, units, an integration, an independent review and a pull request you can open | — |
 
-If you did them against **the bootstrap checkout**, the fleet is ready and idle,
-and starting real work needs two decisions and a second setup:
+So the order is: probe (setup verified) → a first objective (repository access
+demonstrated) → its pull request (campaign completed). **A green probe is not a
+green campaign**, and reporting it as one would be the kind of comfortable
+half-truth this repository keeps recording.
 
-1. **Authorize the target, if it is not `brain`** — one entry in
-   `services/factory/repositoryEnvelope.ts`, a change somebody reviews and
-   merges, because nobody supplies the limits their own work is judged against.
-   `brain` is already there.
-2. **Say what should become true in it** — an objective, approved by a person,
-   in Build or in an ordinary Russell thread.
+What remains after `VERIFIED` is one decision: an objective — said to Russell in
+an ordinary thread, entered in Build, or committed under `objectives/` — and
+approved by a person. Nothing about the surface changes.
 
-Then onboard *that* repository in Build, and give it its own connector and
-Routine exactly as in steps 2 to 7 — a second connector, because a connector is
-an identity and this one already belongs to the bootstrap worker.
+A **second target later** — a site of yours — is: one reviewed entry in
+`services/factory/repositoryEnvelope.ts`, then steps 1 to 7 again with its grant,
+its repository, its default branch and its own connector. A connector is an
+identity, so it cannot be shared with this one.
 
 Brain will not fire the wrong surface for either: the fire router refuses a
 surface whose worker is not authorized for the repository the bin names, by

@@ -2728,6 +2728,58 @@ remote.
   **ownership**, never reading, and a reviewer of a change that has to agree with
   the policy module must be able to open it.
 
+- **A question Brain asks has to be answerable in the words a person answers
+  in.** The gate declines *"V4"* — two characters, no verb, nothing to do — and
+  it is right to: that is not a change request. But it is the correct answer to
+  the question Brain had just displayed, and nothing joined the two, so the only
+  way forward was to retype the whole instruction. **A remedy the person cannot
+  use is not a remedy**, which is §24's sentence arriving in a conversation.
+
+  The ask Brain refused is kept on the message row it refused it on —
+  `pendingAsk`, the three fields `validateProposal` had already accepted that
+  turn — with `clarifyChoices`, the projects an answer may name. A later reply
+  that names exactly one of them finishes the original request. It resolves
+  **before** anything a model proposed and returns, because a worker that has
+  read the thread will often restate the change in its own words and a reworded
+  objective is a different submission key: one answer would otherwise produce
+  two cards for one decision. Nothing else moves — same row, same `PROPOSED`
+  state, same card, same person approving it. A reply naming none, or two,
+  leaves the question standing, because choosing for somebody who has just said
+  they are choosing is the defect this whole path exists to avoid.
+
+- **Mentioning a project is not choosing it, and for a while it was.** In a
+  Brain-attached thread, *"Do not change Brain, but fix the broken form in V4"*
+  passed the gate correctly — the person did ask for a fix — and then resolved
+  to **Brain**, because `resolveSoftwareTarget` treated any mention of the
+  attached project as agreement. A card would have been produced for the one
+  project the person had ruled out in the same sentence, which is the Westbrook
+  defect with the exclusion in plain sight.
+
+  The rule that replaces it is one sentence: **a sentence can rule the row out;
+  it can never replace it.** An exclusion is read per mention, from the same
+  clause-scoped negation the gate uses, and it only ever *removes* a candidate.
+  With the row still standing, naming another project is a disagreement Brain
+  refuses rather than resolves — unchanged. With the row ruled out there is no
+  row to defer to, so the sentence's own destination decides: exactly one
+  readable project named after a preposition of place resolves, and anything
+  else is a question. The excluded project is absent from the answers that
+  question offers, so it cannot come back through the reply either.
+
+  The exclusion vocabulary is deliberately **wider** than the gate's — it adds
+  bare `not`, `except`, `other than`, `apart from` — and the asymmetry is the
+  argument: an exclusion can never choose a project, so a false one costs a
+  question, while a missed one files work against something somebody said not to
+  touch. `negation.ts` holds the half both readers share, in its own module,
+  because a rule kept inside one of its two callers is a cycle waiting to be
+  found by whichever file loads first.
+
+- **Both of those were found by assembling the path, not by reading it.** Each
+  helper was correct on its own and the product was not, which is why
+  `tests/softwareConversationPath.test.ts` drives `beginTurn` → a scripted worker
+  answering the bin → the tick, and asserts on rows and on the displayed
+  question. The helper suites stayed; what they could not see is what a person
+  types *next*.
+
 - **Onboarding happens when a target needs it, and the ask survives the wait.**
   A person asking for a change in a project with no repository gets it written
   down, plus the sentence naming what is missing and where to do it; the *same*

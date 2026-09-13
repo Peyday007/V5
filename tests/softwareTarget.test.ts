@@ -169,6 +169,74 @@ describe('the project a change is about', () => {
     expect(decision.kind).toBe('RESOLVED');
   });
 
+  it('does not make the attached project the target just for being mentioned', async () => {
+    /*
+     * The production defect, at the unit that decides it. "Do not change Brain,
+     * but fix the broken form in V4" mentioned the attached project, so the
+     * attached project won — and it is the one the person had ruled out in the
+     * same sentence. **Never produce a proposal for the project I said not to
+     * change** is the rule; mentioning is not choosing.
+     */
+    const attached = await createProject({ name: 'Brain', slug: `brain-${Date.now()}` });
+    const decision = await resolveSoftwareTarget({
+      principal: admin,
+      attachedProjectId: attached.id,
+      askedText: 'Do not change Brain, but fix the broken form in V4.',
+    });
+    expect(decision.kind).toBe('RESOLVED');
+    if (decision.kind === 'RESOLVED') expect(decision.projectId).toBe(v4.id);
+  });
+
+  it('asks when the exclusion leaves nothing named', async () => {
+    const attached = await createProject({ name: 'Brain', slug: `brain2-${Date.now()}` });
+    const decision = await resolveSoftwareTarget({
+      principal: admin,
+      attachedProjectId: attached.id,
+      askedText: 'Do not change Brain, but please fix the broken form.',
+    });
+    expect(decision.kind).toBe('EXCLUDED');
+    if (decision.kind === 'EXCLUDED') {
+      expect(decision.answer).toContain('Brain');
+      // The excluded project is not on the list of answers, because an answer
+      // must not be able to reach the project the exclusion was about.
+      expect(decision.choices.map((one) => one.id)).not.toContain(attached.id);
+    }
+  });
+
+  it('asks when the exclusion leaves more than one destination', async () => {
+    const attached = await createProject({ name: 'Brain', slug: `brain3-${Date.now()}` });
+    const v2 = await createProject({ name: 'V2', slug: `v2-${Date.now()}` });
+    const decision = await resolveSoftwareTarget({
+      principal: admin,
+      attachedProjectId: attached.id,
+      askedText: 'Do not change Brain — fix the broken form in V4 and in V2.',
+    });
+    expect(decision.kind).toBe('EXCLUDED');
+    if (decision.kind === 'EXCLUDED') {
+      expect(decision.choices.map((one) => one.id).sort()).toEqual([v4.id, v2.id].sort());
+    }
+  });
+
+  it('a destination alone still cannot replace the row', async () => {
+    /*
+     * The half of the old rule that must survive: with the thread's project
+     * standing, naming another one is a *disagreement*, refused rather than
+     * resolved. A sentence may rule the row out; it may never replace it.
+     */
+    const decision = await resolveSoftwareTarget({
+      principal: admin,
+      attachedProjectId: fixture.project.id,
+      askedText: 'Fix the broken form in V4.',
+    });
+    expect(decision.kind).toBe('AMBIGUOUS');
+    if (decision.kind === 'AMBIGUOUS') {
+      // Both are answers to the question, including the one the thread is on.
+      expect(decision.choices.map((one) => one.id).sort()).toEqual(
+        [fixture.project.id, v4.id].sort(),
+      );
+    }
+  });
+
   it('does not match a name inside a longer word', async () => {
     await createProject({ name: 'API', slug: `api-${Date.now()}` });
     const decision = await resolveSoftwareTarget({

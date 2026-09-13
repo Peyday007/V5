@@ -146,3 +146,23 @@ It is not in the committed images above: those were taken before it existed, and
 re-shooting the set for one paragraph would have replaced evidence of a real run
 with a newer one that says less. What the driving test cannot prove is the
 pixels, and that limit is the same one every jsdom test here carries.
+
+## What driving the assembled path found that the helpers could not
+
+Two defects, both in code whose own tests passed:
+
+1. **The question could not be answered.** Brain displayed *"which project?"*,
+   the person typed **"V4"**, and the execution gate declined it — correctly, as
+   two characters with no verb. Nothing joined the answer to the question, so the
+   only way forward was to retype the instruction.
+2. **A mention decided the target.** In a Brain-attached thread, *"Do not change
+   Brain, but fix the broken form in V4"* passed the gate and resolved to
+   **Brain** — the project ruled out in the same sentence.
+
+`tests/softwareConversationPath.test.ts` is the record: nine walks of
+`beginTurn` → a scripted worker answering the bin → the tick, asserting on the
+displayed question and on the rows either side of it. The one worth reading is
+*"does not file twice when the worker restates the request alongside the
+answer"*, because it pins why the resolution returns instead of falling through
+— a restated objective is a different submission key, and one answer would
+otherwise leave two cards for one decision.

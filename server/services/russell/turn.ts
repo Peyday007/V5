@@ -49,7 +49,7 @@ import {
 import { decideProjectAccess } from '../identity/policy.ts';
 import { getProject } from '../../repos/projects.ts';
 import { capture, shouldCapture } from './judgment.ts';
-import { captureSoftwareChange } from './software.ts';
+import { answerClarification, captureSoftwareChange } from './software.ts';
 import { routeMessage } from './routing.ts';
 import {
   EXECUTABLE_ACTIONS,
@@ -1009,6 +1009,48 @@ async function applyValidated(input: {
   const conversation = await getConversation(conversationId);
   if (!conversation) return { produced: {}, candidateId: null };
 
+  /*
+   * ---------------------------------------------------------------------------
+   * An answer to a question Brain asked, before anything a model proposed
+   * ---------------------------------------------------------------------------
+   *
+   * When Brain refuses to guess which project a change belongs to, the person's
+   * next message is usually two words — "V4", "the Brain one". That is an
+   * *answer*, not a request: it has no verb, names nothing to do, and is shorter
+   * than the gate's own floor, so `asksForExecution` declines it and always
+   * will. Leaving it there means the product asks somebody to retype an
+   * instruction it already understood, which is §24's stuck-not-waiting defect
+   * wearing a conversation.
+   *
+   * It runs **before** the switch and **returns**, for one reason: exactly one
+   * proposal must come out of one answer. A worker reading the thread may well
+   * restate the request as its own `REQUEST_SOFTWARE_CHANGE`, and a restatement
+   * that differs by a word is a different submission key and therefore a second
+   * card for one decision. Brain's own record of what it asked outranks a
+   * model's memory of it.
+   *
+   * It is deterministic all the way down — the ask comes from the row Brain
+   * wrote, the project from a name match against what the question offered, and
+   * the effect is the same unauthorized row a capture makes.
+   */
+  const answered = await answerClarification({
+    principal: owner,
+    conversationId,
+    replyText: input.askedText,
+    messageId: input.askedMessageId ?? null,
+  });
+  if (answered.resolved && answered.request) {
+    return {
+      produced: {
+        softwareRequestId: answered.request.id,
+        softwareCreated: answered.created === true,
+        softwareOutcome: 'captured',
+        clarificationAnsweredWith: answered.projectId,
+      },
+      candidateId: null,
+    };
+  }
+
   switch (proposal.action) {
     case 'ATTACH_PROJECT': {
       if (!proposal.projectId) break;
@@ -1151,6 +1193,25 @@ async function applyValidated(input: {
              * do its job, which is the shape §24 keeps recording.
              */
             ...(outcome.clarify ? { clarify: outcome.clarify.answer } : {}),
+            /*
+             * The ask itself, kept so the answer can finish it.
+             *
+             * Without this the person has to type the whole instruction again
+             * to say one word, because "V4" is not a change request and the
+             * gate is right to decline it for ever. These three fields are the
+             * ones `validateProposal` already accepted on this turn — nothing
+             * new is trusted, and the row they eventually make is still
+             * `PROPOSED` and still authorized by a person.
+             */
+            ...(outcome.clarify ? { pendingAsk: proposal.software } : {}),
+            /*
+             * The projects the question offered, so the answer is judged
+             * against what was actually asked rather than against every project
+             * in the Brain.
+             */
+            ...(outcome.clarify && 'choices' in outcome.clarify
+              ? { clarifyChoices: outcome.clarify.choices }
+              : {}),
           },
           candidateId: null,
         };

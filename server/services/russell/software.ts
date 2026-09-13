@@ -79,7 +79,9 @@ import {
 import { listProjectRepositories } from '../../repos/factory.ts';
 import { listRepositoryGrants } from '../factory/repositoryEnvelope.ts';
 import type { CampaignBriefing } from '../factory/projections.ts';
-import { resolveSoftwareTarget } from './softwareTarget.ts';
+import { decideProjectAccess } from '../identity/policy.ts';
+import { NEGATORS, clauseBefore } from './negation.ts';
+import { projectNamedInReply, resolveSoftwareTarget } from './softwareTarget.ts';
 import type { TargetDecision } from './softwareTarget.ts';
 import type { Principal, RussellSoftwareRequest } from '../../domain/types.ts';
 
@@ -252,32 +254,6 @@ const CONTINUATION_MARKERS = [
   /\b(?:as|like) (?:above|we discussed|we agreed|before)\b/i,
   /\b(?:that|this) one too\b/i,
 ];
-
-/** Negators, looked for inside one clause rather than across a message. */
-const NEGATORS =
-  /\b(?:do not|don'?t|does not|doesn'?t|did not|didn'?t|no need to|never|rather than|instead of|without|avoid|refrain from|stop)\b/i;
-
-/**
- * The clause an occurrence sits in: back to the start of its sentence, then
- * forward past the last contrast marker.
- *
- * "Don't touch the pricing page, but do fix the footer" must still ask, so the
- * negation attached to the first clause may not reach the second. Cutting at the
- * contrast is what draws that line, and the sentence boundary is what stops a
- * negation two sentences ago silencing a later instruction.
- */
-function clauseBefore(text: string, index: number): string {
-  const sentenceStart = Math.max(
-    0,
-    ...['.', '!', '?', ';', '\n'].map((mark) => text.lastIndexOf(mark, index - 1) + 1),
-  );
-  let clause = text.slice(sentenceStart, index);
-  for (const contrast of [', but ', ' but ', ', though ', ', however ', ' — ']) {
-    const at = clause.toLowerCase().lastIndexOf(contrast);
-    if (at >= 0) clause = clause.slice(at + contrast.length);
-  }
-  return clause;
-}
 
 /** Every place this message asks for something, negated or not. */
 function executionOccurrences(text: string): number[] {
@@ -454,6 +430,7 @@ export async function captureSoftwareChange(input: {
    * ambiguous. See `softwareTarget.ts`, and §25 for the same defect one
    * altitude away.
    */
+  let projectId = input.projectId;
   if (input.principal) {
     const target = await resolveSoftwareTarget({
       principal: input.principal,
@@ -463,8 +440,31 @@ export async function captureSoftwareChange(input: {
     if (target.kind !== 'RESOLVED') {
       return { request: null, created: false, reason: target.kind, clarify: target };
     }
+    /*
+     * The resolved project, which is usually the thread's and is not always.
+     *
+     * The one case it differs is an explicit exclusion: the person ruled the
+     * thread's project out in the same sentence and named exactly one place the
+     * work goes. Filing against `input.projectId` there would file it against
+     * the project they had just excluded — which is precisely the defect this
+     * resolution exists to prevent, so reading the answer and then ignoring it
+     * would be worse than never asking.
+     */
+    projectId = target.projectId;
   }
 
+  return writeRequest({ ...input, projectId });
+}
+
+/** The write both entrances share, so a row can only be made one way. */
+async function writeRequest(input: {
+  projectId: string;
+  conversationId: string;
+  messageId: string | null;
+  title: string;
+  objective: string;
+  expectedOutcome: string;
+}): Promise<CaptureSoftwareOutcome> {
   const objective = input.objective.trim();
   const outcome = await captureSoftwareRequest({
     projectId: input.projectId,
@@ -480,6 +480,57 @@ export async function captureSoftwareChange(input: {
     created: outcome.created,
     reason: outcome.created ? 'captured' : 'already waiting for you',
   };
+}
+
+/**
+ * Finish a request Brain refused, once the person supplies the missing word.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is not the gate again
+ * ---------------------------------------------------------------------------
+ *
+ * The gate answers *did this message ask for a change*. The message that asked
+ * was the earlier one, and Brain refused it for one reason: it would not guess
+ * which project. **"V4" is the answer to that question, and it is not a change
+ * request** — it has no verb, names nothing to do, and is two characters long,
+ * so `asksForExecution` correctly declines it and would go on declining it for
+ * ever. Making the person repeat the whole instruction is the product asking
+ * them to work around a check that has already been satisfied.
+ *
+ * So this is the *other* half of a question Brain itself asked: the ask is read
+ * back from the row Brain wrote when it refused, the person's reply supplies
+ * only the project, and the effect is the same `PROPOSED` row a capture makes.
+ * Nothing about the authorization moves — the card, the repository choice, the
+ * boundary and the person's approval are all exactly as they were.
+ *
+ * The project is re-resolved against the caller here rather than trusted from
+ * the stored question, because the stored one is a record of what was offered
+ * and access is a fact about now.
+ */
+export async function resolveClarifiedChange(input: {
+  principal: Principal;
+  conversationId: string;
+  /** The message the answer arrived in, so the row points at the person. */
+  messageId: string | null;
+  projectId: string;
+  ask: { title: string; objective: string; expectedOutcome: string };
+}): Promise<CaptureSoftwareOutcome> {
+  if (!decideProjectAccess(input.principal, input.projectId, 'READ').allowed) {
+    /*
+     * The same refusal a project that does not exist gives (invariant 23). A
+     * question Brain asked cannot become a way to file work into somewhere the
+     * asker cannot see.
+     */
+    return { request: null, created: false, reason: 'NO_SUCH_PROJECT' };
+  }
+  return writeRequest({
+    projectId: input.projectId,
+    conversationId: input.conversationId,
+    messageId: input.messageId,
+    title: input.ask.title,
+    objective: input.ask.objective,
+    expectedOutcome: input.ask.expectedOutcome,
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -806,7 +857,11 @@ export async function softwareForConversation(
  * carried it onto the message row, and **nothing read it**. A mechanism nothing
  * calls is not a mechanism.
  */
-export type SoftwareClarificationKind = 'AMBIGUOUS_PROJECT' | 'NO_PROJECT' | 'NO_REFERENT';
+export type SoftwareClarificationKind =
+  | 'AMBIGUOUS_PROJECT'
+  | 'EXCLUDED_PROJECT'
+  | 'NO_PROJECT'
+  | 'NO_REFERENT';
 
 export interface SoftwareClarification {
   kind: SoftwareClarificationKind;
@@ -821,6 +876,12 @@ const ANSWERABLE: Record<string, { kind: SoftwareClarificationKind; fallback: st
     fallback:
       'You named more than one project, so I have not written anything down. Say which one the ' +
       'change belongs to and I will.',
+  },
+  EXCLUDED: {
+    kind: 'EXCLUDED_PROJECT',
+    fallback:
+      'You said not to change this project, and I have not written anything down. Say which ' +
+      'project the change belongs in and I will.',
   },
   NO_PROJECT: {
     kind: 'NO_PROJECT',
@@ -843,34 +904,91 @@ const ANSWERABLE: Record<string, { kind: SoftwareClarificationKind; fallback: st
   },
 };
 
+/** The ask Brain refused, kept so a one-word answer can finish it. */
+export interface PendingAsk {
+  title: string;
+  objective: string;
+  expectedOutcome: string;
+}
+
+export interface OutstandingClarification {
+  /** The message the refusal was recorded on. */
+  messageId: string;
+  at: string;
+  kind: SoftwareClarificationKind;
+  question: string;
+  /**
+   * The request Brain would have written, if the person had answered first.
+   *
+   * Null for a refusal there is nothing to resume — `NO_REFERENT` is a question
+   * about *what* should change, and an ask reconstructed from a sentence that
+   * pointed at nothing would be Brain finishing somebody's thought.
+   */
+  ask: PendingAsk | null;
+  /** The projects the question offered, when it offered a list. */
+  choices: { id: string; name: string }[];
+}
+
+function askFrom(value: unknown): PendingAsk | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const title = typeof record['title'] === 'string' ? record['title'].trim() : '';
+  const objective = typeof record['objective'] === 'string' ? record['objective'].trim() : '';
+  const expectedOutcome =
+    typeof record['expectedOutcome'] === 'string' ? record['expectedOutcome'].trim() : '';
+  if (!title || !objective || !expectedOutcome) return null;
+  return { title, objective, expectedOutcome };
+}
+
+function choicesFrom(value: unknown): { id: string; name: string }[] {
+  if (!Array.isArray(value)) return [];
+  const out: { id: string; name: string }[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const record = entry as Record<string, unknown>;
+    const id = typeof record['id'] === 'string' ? record['id'] : '';
+    const name = typeof record['name'] === 'string' ? record['name'] : '';
+    if (id && name) out.push({ id, name });
+  }
+  return out;
+}
+
 /**
- * What this conversation is waiting for a word about, if anything.
+ * The question this conversation is waiting on, and everything needed to answer
+ * it — one derivation, because the two readers must not disagree.
  *
- * A projection in `pending.ts`'s shape: it reads the message rows, writes
- * nothing, and derives on the read path. It reports **only the most recent**
- * refusal, and only while nothing has superseded it — a question the person
- * already answered by asking properly is history, and leaving it up would be a
- * status contradicting the control beside it (§29).
+ * `softwareClarificationFor` shows a person the sentence; `answerClarification`
+ * finishes the request behind it. If those read the message rows separately,
+ * one would eventually show a question the other had already settled, which is
+ * the status-contradicting-the-control defect §29 records.
  */
-export async function softwareClarificationFor(
+export async function outstandingClarification(
   conversationId: string,
-): Promise<SoftwareClarification | null> {
+): Promise<OutstandingClarification | null> {
   const [turns, requests] = await Promise.all([
     listTurns(conversationId),
     listSoftwareRequestsForConversation(conversationId),
   ]);
 
-  let latest: { at: string; clarification: SoftwareClarification } | null = null;
+  let latest: OutstandingClarification | null = null;
   for (const turn of turns) {
-    const produced = turn.produced as { softwareDeclined?: unknown; gateReason?: unknown; clarify?: unknown };
-    if (produced.softwareDeclined !== true) continue;
-    const reason = typeof produced.gateReason === 'string' ? produced.gateReason : '';
+    const produced = turn.produced as Record<string, unknown>;
+    if (produced['softwareDeclined'] !== true) continue;
+    const reason = typeof produced['gateReason'] === 'string' ? produced['gateReason'] : '';
     const answerable = ANSWERABLE[reason];
     if (!answerable) continue;
-    const asked = typeof produced.clarify === 'string' && produced.clarify.trim().length > 0
-      ? produced.clarify.trim()
-      : answerable.fallback;
-    latest = { at: turn.createdAt, clarification: { kind: answerable.kind, question: asked } };
+    const asked =
+      typeof produced['clarify'] === 'string' && produced['clarify'].trim().length > 0
+        ? produced['clarify'].trim()
+        : answerable.fallback;
+    latest = {
+      messageId: turn.id,
+      at: turn.createdAt,
+      kind: answerable.kind,
+      question: asked,
+      ask: askFrom(produced['pendingAsk']),
+      choices: choicesFrom(produced['clarifyChoices']),
+    };
   }
   if (!latest) return null;
   const refusal = latest;
@@ -881,7 +999,87 @@ export async function softwareClarificationFor(
    * different ask and settles nothing about this one.
    */
   const superseded = requests.some((request) => request.createdAt > refusal.at);
-  return superseded ? null : refusal.clarification;
+  return superseded ? null : refusal;
+}
+
+/**
+ * The one thing Brain declined to guess, in the server's own words.
+ *
+ * **Only the answerable refusals reach here, and that is the whole design.**
+ * "It weighs a change rather than asking for one" is a correct refusal that
+ * needs no answer — the person was thinking aloud and Russell replied in prose;
+ * printing a prompt under it would be Brain nagging somebody for a decision they
+ * did not ask to make. What does reach here is the case where they *did* ask and
+ * the only thing missing is a word only they have: which project, or what "that"
+ * refers to.
+ *
+ * §24 keeps recording the same defect — *a state that says waiting which nobody
+ * can resolve is not waiting, it is stuck* — and `clarify` was one move from
+ * being the next instance: `softwareTarget.ts` composed the question, `turn.ts`
+ * carried it onto the message row, and **nothing read it**. A mechanism nothing
+ * calls is not a mechanism.
+ */
+export async function softwareClarificationFor(
+  conversationId: string,
+): Promise<SoftwareClarification | null> {
+  const outstanding = await outstandingClarification(conversationId);
+  return outstanding ? { kind: outstanding.kind, question: outstanding.question } : null;
+}
+
+/**
+ * Answer the question, if this message answers it.
+ *
+ * Deterministic and narrow: it fires only when a clarification is outstanding,
+ * the refusal left an ask to resume, and the reply names **exactly one**
+ * readable project. A reply that names none, or two, leaves the question exactly
+ * where it was — which is the honest outcome, because the alternative is
+ * choosing for somebody who has just told you they are choosing.
+ *
+ * It is not a second capture path: the row is written by `writeRequest`, the one
+ * function that writes them, and the person still authorizes it.
+ */
+export async function answerClarification(input: {
+  principal: Principal;
+  conversationId: string;
+  replyText: string | null;
+  messageId: string | null;
+}): Promise<{
+  resolved: boolean;
+  projectId?: string;
+  projectName?: string;
+  request?: RussellSoftwareRequest | null;
+  created?: boolean;
+  /** Present when a question is outstanding and this reply did not settle it. */
+  stillAsking?: string;
+}> {
+  const reply = (input.replyText ?? '').trim();
+  if (!reply) return { resolved: false };
+
+  const outstanding = await outstandingClarification(input.conversationId);
+  if (!outstanding || !outstanding.ask) return { resolved: false };
+
+  const chosen = await projectNamedInReply({
+    principal: input.principal,
+    replyText: reply,
+    choices: outstanding.choices,
+  });
+  if (!chosen) return { resolved: false, stillAsking: outstanding.question };
+
+  const outcome = await resolveClarifiedChange({
+    principal: input.principal,
+    conversationId: input.conversationId,
+    messageId: input.messageId,
+    projectId: chosen.id,
+    ask: outstanding.ask,
+  });
+  if (!outcome.request) return { resolved: false, stillAsking: outstanding.question };
+  return {
+    resolved: true,
+    projectId: chosen.id,
+    projectName: chosen.name,
+    request: outcome.request,
+    created: outcome.created,
+  };
 }
 
 /** Everything in this project that a person still has to answer. */
