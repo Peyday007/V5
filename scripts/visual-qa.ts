@@ -69,6 +69,96 @@ const VIEWPORTS = [
 const CLIPPING_BAND = [822, 860, 900, 953];
 
 /** Every destination in the shell, by the address that opens it. */
+/**
+ * One software change waiting for a person, so Needs You has a card to show.
+ *
+ * **A seeded row, and it says so.** Everything else this harness photographs is
+ * whatever an ordinary boot produces, which is the right default — a screenshot
+ * of a fixture is a screenshot of a fixture. This one row is the exception,
+ * because the card it renders is the one control in the new path a person
+ * actually presses, and the only other way to produce it is a worker turn
+ * against a fleet this harness deliberately does not have.
+ *
+ * It is written the way the product writes it, through `captureSoftwareChange`,
+ * so the row is a real one rather than a hand-built shape that might not be
+ * reachable. Nothing here authorizes anything: the request is `PROPOSED`, which
+ * is the only state a capture can produce, and it stays that way unless somebody
+ * presses the button in the image.
+ *
+ * A second writer against the same SQLite file is safe because the adapter opens
+ * it in WAL. It writes into the throwaway data directory this run created and
+ * touches nothing else.
+ */
+async function seedSoftwareDecision(dataDir: string): Promise<void> {
+  const script = `
+    process.env.BRAIN_DATA_DIR = ${JSON.stringify(dataDir)};
+    const { initDatabase, closeDatabase } = await import('./server/db/database.ts');
+    const { listProjects } = await import('./server/repos/projects.ts');
+    const { createConversation } = await import('./server/repos/russellConversations.ts');
+    const { captureSoftwareChange } = await import('./server/services/russell/software.ts');
+    const { listUsers } = await import('./server/repos/identity.ts');
+    const { onboardRepository } = await import('./server/services/factory/onboard.ts');
+    const { listRepositoryGrants } = await import('./server/services/factory/repositoryEnvelope.ts');
+    await initDatabase();
+    const project = (await listProjects())[0];
+    const person = (await listUsers())[0];
+    if (project && person) {
+      /*
+       * The repository the project may change, with a directory boundary on it.
+       *
+       * Without this the card is correct and shows the *other* branch — "this
+       * project has not been given a repository yet" — which is worth having and
+       * is not the control. Onboarding one photographs the reach sentence and the
+       * Authorize button, which are the two things a person actually reads before
+       * saying yes. It is the envelope's own grant, so nothing is widened.
+       */
+      const grant = listRepositoryGrants()[0];
+      if (grant) {
+        await onboardRepository({
+          projectId: project.id,
+          grantId: grant.id,
+          scope: { kind: 'DIRECTORIES', directories: ['docs'] },
+          actor: person,
+          origin: 'https://brain.example',
+        });
+      }
+      const conversation = await createConversation({
+        ownerUserId: person.id,
+        title: 'The checkout total',
+        visibility: 'SHARED',
+        projectId: project.id,
+      });
+      await captureSoftwareChange({
+        projectId: project.id,
+        conversationId: conversation.id,
+        messageId: null,
+        askedText: 'Please change the checkout page so the total updates without a reload.',
+        title: 'Live total on checkout',
+        objective: 'Change the checkout page so the total updates without a reload.',
+        expectedOutcome: 'Changing the quantity updates the total in place.',
+      });
+    }
+    await closeDatabase();
+  `;
+  await new Promise<void>((resolve) => {
+    const child = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], {
+      cwd: REPO_ROOT,
+      env: { ...process.env, BRAIN_DATA_DIR: dataDir },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let noise = '';
+    child.stdout.on('data', (chunk: Buffer) => (noise += chunk.toString()));
+    child.stderr.on('data', (chunk: Buffer) => (noise += chunk.toString()));
+    child.on('exit', (code) => {
+      // A seed that did not land is a finding about this harness rather than
+      // about the product, so it is said and the run continues: the other
+      // eighteen captures are still worth having.
+      if (code !== 0) process.stdout.write(`  seed did not land (exit ${code}): ${noise.slice(-400)}\n`);
+      resolve();
+    });
+  });
+}
+
 const DESTINATIONS = [
   { name: 'russell', path: '/' },
   { name: 'work', path: '/work' },
@@ -76,6 +166,15 @@ const DESTINATIONS = [
   { name: 'knows', path: '/knowledge' },
   { name: 'who', path: '/fleet' },
   { name: 'needs-you', path: '/needs-you' },
+  /*
+   * Build was never captured, and it is where two decisions a person makes now
+   * live: the repository boundary — a question with no default, so the card is
+   * wrong if either radio starts selected or the button is not disabled — and
+   * the objective form. It sits behind the More menu rather than on the rail,
+   * which is exactly the kind of place a layout defect survives, and §29
+   * records one that did.
+   */
+  { name: 'build', path: '/build' },
 ];
 
 /* -------------------------------------------------------------------------
@@ -545,6 +644,7 @@ async function main(): Promise<void> {
       body: JSON.stringify({ currentPassword: BOOTSTRAP, newPassword: PASSWORD }),
     });
     const cookie = await signIn(PASSWORD);
+    await seedSoftwareDecision(dataDir);
 
     await withChromium(async (cdp) => {
       for (const viewport of VIEWPORTS) {
@@ -570,12 +670,34 @@ async function main(): Promise<void> {
           // bound, because a screen that never renders is the finding.
           const rendered = await waitFor(cdp, "document.querySelector('.rs-shell') !== null");
           await sleep(900);
-          const shot = (await cdp.send('Page.captureScreenshot', {
-            format: 'png',
-            captureBeyondViewport: true,
-          })) as { data: string };
+          /*
+           * A capture that came back empty is a finding, not a crash.
+           *
+           * `captureBeyondViewport` renders the whole scroll height, and
+           * Chromium occasionally answers a tall page with no `data` at all.
+           * Passing that straight to `Buffer.from` threw `ERR_INVALID_ARG_TYPE`
+           * from inside the loop and ended the run — after fifteen captures had
+           * already been taken and before any of them was reported. **A harness
+           * that discards fifteen good readings because the sixteenth hiccuped
+           * is worse than one that says which one it missed**, and it is the
+           * same rule the journey already follows for a control that is not
+           * there. One retry, because the failure is transient; then it is
+           * named and the sweep carries on.
+           */
           const file = path.join(outputDir, `${viewport.name}-${destination.name}.png`);
-          fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
+          let captured = false;
+          for (let attempt = 0; attempt < 2 && !captured; attempt += 1) {
+            if (attempt > 0) await sleep(600);
+            const shot = (await cdp.send('Page.captureScreenshot', {
+              format: 'png',
+              captureBeyondViewport: true,
+            })) as { data?: string };
+            if (typeof shot.data === 'string' && shot.data.length > 0) {
+              fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
+              captured = true;
+            }
+          }
+          if (!captured) problems.push(`no image came back for ${destination.name}`);
           const sideways = (await evaluate(
             cdp,
             'document.documentElement.scrollWidth > document.documentElement.clientWidth',
