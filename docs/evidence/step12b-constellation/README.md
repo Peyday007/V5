@@ -62,7 +62,12 @@ and the harness now checks it rather than assuming it.
 | `superseded-ring-390.png` | **the defect the owner rejected**: nine nodes piled into each other |
 | `superseded-ring-360.png` | the same at the narrower phone |
 | `current-953.png` | the spine at the intermediate width |
+| `current-390.png` | the spine at the phone width the defect was reported at |
 | `current-360.png` | the spine at the narrowest width in scope |
+
+Each `current-` file is the matched capture of its `superseded-` neighbour: same
+command, same widths, same device scale, same typefaces, one tree apart. A
+before-and-after taken two different ways is a comparison of the two ways.
 
 The current renders at 1180, 953 and 390 are the approval set in
 `docs/evidence/step12b-renders/`, declared by its `index.json`, and are not

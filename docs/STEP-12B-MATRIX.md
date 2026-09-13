@@ -207,7 +207,8 @@ was reviewed at.
 | Renders | `docs/evidence/step12b-renders/`, declared by its own `index.json` |
 | Screens | `russell-home`, `project-constellation`, `needs-you-populated`, `needs-you-empty` |
 | Widths | 1180, 953, 390 |
-| Published for review | see the artifact link recorded with this handoff |
+| Published for review | https://claude.ai/code/artifact/6630e87d-d4c9-4356-84ed-9eb122254b29 |
+| Digest | `30a11180bc3b8047f122a70b6790d850a0057c53214901422ceca3d67e48f05e` at `d54abc4c`, from `npm run design:manifest` |
 
 `needs-you-populated` and `needs-you-empty` are one address in its two real
 states. Nothing is faked to produce either: a Brain with no standing grant has
