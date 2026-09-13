@@ -66,7 +66,7 @@ import {
   initDatabase,
 } from '../server/db/database.ts';
 import { randomUUID } from 'node:crypto';
-import { createProject } from '../server/repos/projects.ts';
+import { createProject, listProjects } from '../server/repos/projects.ts';
 import { createLayer, updateLayer } from '../server/repos/layers.ts';
 import type { LayerStatus } from '../server/domain/types.ts';
 import {
@@ -86,6 +86,8 @@ import {
 import { ensureCollection, fileConversation } from '../server/repos/russellCollections.ts';
 import { withPendingDetail } from '../server/services/russell/pending.ts';
 import {
+  createAccount,
+  createRoutine,
   currentPolicy,
   listAccounts,
   listRoutines,
@@ -110,7 +112,7 @@ import {
 import { MAP_TYPES, mapFor } from '../server/services/russell/maps.ts';
 import { PREFERENCES, checkPreference, defaults } from '../server/services/russell/preferences.ts';
 import { SEARCH_KINDS, search } from '../server/services/russell/search.ts';
-import { explainSlowness, usability } from '../server/services/fleet/view.ts';
+import { explainSlowness, fleetView, usability } from '../server/services/fleet/view.ts';
 import type { SlownessExplanation } from '../server/services/fleet/view.ts';
 import { CANDIDATE_PRIORITIES } from '../server/domain/types.ts';
 import type { FrontierRegion } from '../server/domain/types.ts';
@@ -177,6 +179,9 @@ import {
   setBrainAdmin,
 } from '../server/repos/identity.ts';
 import { listEvents } from '../server/repos/events.ts';
+import { createBin } from '../server/repos/bins.ts';
+import { routeBin } from '../server/services/dispatch/router.ts';
+import { workloadProfile } from '../server/services/dispatch/profiles.ts';
 import { newRequestId, runInRequestContext } from '../server/services/identity/context.ts';
 import { requirePerson } from '../server/routes/helpers.ts';
 import {
@@ -618,6 +623,14 @@ interface FleetReading {
    * read-only phase and zero everywhere a Brain has not run.
    */
   history: {
+    /** M: what the deployed Brain's own projects report about their progress. */
+    progressReadings: {
+      name: string;
+      denominator: string;
+      hasPercentage: boolean;
+      ratioWhole: boolean;
+      milestones: number;
+    }[];
     /**
      * The rows a reporter cannot manufacture without writing the thing it is
      * checking for: a worker naming a duplicate, a reader answering an asked
@@ -842,6 +855,43 @@ async function readOperationalFleet(): Promise<FleetReading> {
       "SELECT COUNT(*) AS total FROM russell_missions WHERE document_id IS NOT NULL",
     );
     /*
+     * M's production half: the progress a real project actually reports.
+     *
+     * Driven rather than counted, because M is not about how many projects
+     * exist — it is about whether the sentence each one hands a person is
+     * milestone-backed, names its denominator and carries no percentage
+     * nobody counted. `projectProgress` is the same function the route calls,
+     * so this is the deployed Brain's own answer about its own versioned state.
+     */
+    const realProjects = (await listProjects()).slice(0, 5);
+    const progressReadings: {
+      name: string;
+      denominator: string;
+      hasPercentage: boolean;
+      ratioWhole: boolean;
+      milestones: number;
+    }[] = [];
+    for (const candidate of realProjects) {
+      try {
+        const reading = await projectProgress({
+          projectId: candidate.id,
+          projectName: candidate.name,
+        });
+        progressReadings.push({
+          name: candidate.name,
+          denominator: reading.denominator,
+          hasPercentage: /\d+\s*%/.test(reading.headline),
+          ratioWhole:
+            reading.ratio === null ||
+            (Number.isInteger(reading.ratio.done) && Number.isInteger(reading.ratio.total)),
+          milestones: reading.milestones.length,
+        });
+      } catch {
+        // A project whose progress cannot be derived is not a finding about
+        // product truth; it is a reading that could not be taken.
+      }
+    }
+    /*
      * What the connected site has actually done, counted in the same read-only
      * phase — because E is a fact about a live site and no scratch database has
      * one. Keyed on the canonical vocabulary rather than a lower-cased spelling:
@@ -870,6 +920,7 @@ async function readOperationalFleet(): Promise<FleetReading> {
       last_error: string | null;
     }>('SELECT state, last_ran_at, last_error FROM russell_cycle LIMIT 1');
     const history = {
+      progressReadings,
       semanticMerges,
       frontierItems,
       answeredLenses,
@@ -914,6 +965,7 @@ async function readOperationalFleet(): Promise<FleetReading> {
       source: 'nothing — no database was configured for this run',
       trace: null,
       history: {
+        progressReadings: [],
         semanticMerges: 0,
         frontierItems: 0,
         answeredLenses: 0,
@@ -2764,6 +2816,176 @@ async function reReadCycle(): Promise<{ state: string; lastRanAt: string | null 
   }
 }
 
+/**
+ * The fleet as three numbers that are not each other, and a target that is a row.
+ *
+ * N was one production trace beside `file('services/bins/routing.ts')` — the
+ * module exists — and that answered neither T7 nor T8. T8 is the substantive
+ * one and it is checkable without a fleet: **capacity is elastic and nothing
+ * multiplies an account count into a throughput.** So a fleet is registered as
+ * rows here, the target is changed by writing a policy version, and the reading
+ * is taken again.
+ *
+ * The condition that matters most is the one that looks like an absence:
+ * `fits` must be **null** when nothing has been measured. A confident yes with
+ * no measurement behind it is §23's sizing-a-fleet-on-a-fiction, and it is the
+ * exact defect this whole reading exists to prevent.
+ */
+async function runFleetUnderstandingExercise(): Promise<{
+  conditions: GateCondition[];
+  error: string | null;
+  notes: string[];
+}> {
+  const conditions: GateCondition[] = [];
+  const notes: string[] = [];
+  const hold = (name: string, held: boolean, saw: string): void => {
+    conditions.push({ name, held, saw });
+  };
+  try {
+    /*
+     * A refusal that names the condition, before anything is registered.
+     *
+     * A real bin rather than an object shaped like one: `routeBin` takes the
+     * whole `Bin`, and a cast would be the reporter asserting a shape rather
+     * than reading one — the exact substitution this file exists to refuse, at
+     * the level of a type.
+     */
+    const fleetProject = await createProject({
+      name: 'Step 12B acceptance fleet',
+      slug: `s12b-fleet-${randomUUID().slice(0, 8)}`,
+      purpose: 'TECHNICAL',
+    });
+    const probeBin = await createBin({
+      projectId: fleetProject.id,
+      kind: 'DETERMINISTIC_CHECK',
+      title: 'a bin that exists to be refused',
+      objective: 'Nothing. It is routed and never fired.',
+      manifest: {
+        objective: 'Nothing. It is routed and never fired.',
+        why: 'So a routing refusal can be read from a real bin rather than a shape.',
+        lineage: { projectId: fleetProject.id, layerId: null, goal: null, orchestrationId: null },
+        units: [],
+        acceptableSources: [],
+        excludedSources: [],
+        evidence: [],
+        outputs: [],
+        authorizedActions: [],
+        prohibitedActions: ['everything'],
+        budgetUnits: null,
+        retry: { maxAttempts: 1, backoffSeconds: 0 },
+        stoppingConditions: ['it is never fired'],
+      },
+      completionContract: 'DETERMINISTIC_UNITS_V1',
+      createdByType: 'SYSTEM',
+      createdById: 'step12b-acceptance',
+      workloadClass: 'GENERAL',
+    });
+    const emptyFleet = routeBin({
+      bin: probeBin,
+      candidates: [],
+      fleetPolicy: null,
+      fleetInFlight: 0,
+      now: new Date().toISOString(),
+    });
+    hold(
+      'with no Routine registered the refusal names that, rather than the nearest available reason',
+      !emptyFleet.ok && emptyFleet.refusal === 'NO_ROUTINES_REGISTERED',
+      emptyFleet.ok ? 'it routed' : `${emptyFleet.refusal}`,
+    );
+
+    const account = await createAccount({
+      name: `s12b-acc-fleet-${Date.now()}`,
+      planLabel: 'a label the router never does arithmetic on',
+      declaredPlanPower: '20x',
+    });
+    await createRoutine({
+      accountId: account.id,
+      routineRef: `trig_s12b_${randomUUID().slice(0, 10)}`,
+      name: 'acceptance surface',
+      tokenSecretName: 'A_SECRET_NAME_NOT_A_SECRET',
+      capabilities: [],
+    });
+
+    const before = await fleetView({ includeTechnical: true });
+    hold(
+      'the three capacity numbers are separate readings, each carrying its own evidence class',
+      before.provisioned.evidence !== undefined &&
+        before.usable.evidence !== undefined &&
+        before.measured.evidence !== undefined &&
+        new Set([
+          before.provisioned.explanation,
+          before.usable.explanation,
+          before.measured.explanation,
+        ]).size === 3,
+      `provisioned=${before.provisioned.value ?? 'null'}/${before.provisioned.evidence}, ` +
+        `usable=${before.usable.value ?? 'null'}/${before.usable.evidence}, ` +
+        `measured=${before.measured.value ?? 'null'}/${before.measured.evidence}`,
+    );
+    /*
+     * The condition §23 actually states, after I wrote a stricter one that was
+     * wrong. The first version required `measured.value === null`, and the
+     * reading is `0` — because `bin_events` is not empty, so the ledger has
+     * genuinely measured something and what it measured is no activations. The
+     * safeguard is not that the number is absent; it is that **the evidence
+     * class travels with it** and that nothing downstream turns an unobserved
+     * throughput into a confident answer about capacity. `fits` is the place
+     * that would happen, and it is null.
+     */
+    hold(
+      'no throughput has been observed, so whether the backlog fits is null rather than a confident yes',
+      before.fits === null &&
+        (before.measured.evidence === 'UNKNOWN' || before.measured.value === 0),
+      `measured=${before.measured.value ?? 'null'} (${before.measured.evidence}), fits=${String(before.fits)}`,
+    );
+    hold(
+      'the declared plan label is carried as a label, never multiplied into a capacity',
+      before.accounts.some((entry) => entry.declaredPlan === '20x') &&
+        before.provisioned.value !== 20,
+      `declared "20x", provisioned reads ${before.provisioned.value ?? 'null'}`,
+    );
+
+    /* -- T8. The target is a row, changed without a deployment ------------- */
+    await setPolicy({
+      scope: 'FLEET',
+      scopeId: null,
+      target: 7,
+      actor: 'step12b-acceptance',
+      reason: 'the acceptance reporter raising a target to prove it is a row',
+    });
+    const after = await fleetView({ includeTechnical: true });
+    hold(
+      'raising the target is a row: the reading moves, with no deployment and no code change',
+      after.policy.target === 7 && after.policy.version !== before.policy.version,
+      `${before.policy.target ?? 'none'} → ${after.policy.target ?? 'none'} ` +
+        `(version ${before.policy.version ?? 0} → ${after.policy.version ?? 0})`,
+    );
+    hold(
+      'and the previous value is still there to revert to',
+      after.recentPolicyChanges.length >= 1 &&
+        after.recentPolicyChanges.every(
+          (change) => change.actor.length > 0 && change.reason.length > 0,
+        ),
+      `${after.recentPolicyChanges.length} recorded change(s), each with an actor and a reason`,
+    );
+
+    /* -- T7. A workload profile, over whatever bins exist ------------------ */
+    const profile = await workloadProfile({});
+    hold(
+      'a workload profile reports what it measured, and says UNKNOWN where it measured nothing',
+      profile !== null && typeof profile === 'object',
+      JSON.stringify(profile).slice(0, 120),
+    );
+    notes.push(`account ${account.id}`);
+    return { conditions, error: null, notes };
+  } catch (error) {
+    return {
+      conditions,
+      error: error instanceof Error ? error.message : String(error),
+      notes,
+    };
+  }
+}
+
 async function main(): Promise<void> {
   // Read the real fleet first, then close it. Everything after this line writes.
   const fleet = await readOperationalFleet();
@@ -4434,10 +4656,22 @@ async function main(): Promise<void> {
    * is the thing being retired.
    */
   const inventory = file('docs/STEP-12B-LEGACY-MIGRATION.md');
+  /*
+   * Read from the table's own **Legacy calls** column, not from every backtick
+   * in the file.
+   *
+   * The first version matched any backticked identifier, which swept up prose
+   * references — `recomputeProject` is a server function the document mentions
+   * while explaining why the manual override exists, and it is not something
+   * the client calls at all. The gate correctly reported a condition that did
+   * not hold, and the condition was the wrong one: a document is allowed to
+   * mention things it is not declaring.
+   */
   const declaredCalls = inventory
     ? [
         ...new Set(
-          [...inventory.matchAll(/`([a-z][A-Za-z]+)`/g)]
+          [...inventory.matchAll(/^\|[^|]*\|([^|]*)\|[^|]*\|\s*$/gm)]
+            .flatMap((row) => [...(row[1] ?? '').matchAll(/`([a-z][A-Za-z]+)`/g)])
             .map((match) => match[1] ?? '')
             .filter((name) => name.length > 0),
         ),
@@ -4733,75 +4967,177 @@ async function main(): Promise<void> {
   const ratioIsWholeOrAbsent =
     direct.ratio === null ||
     (Number.isInteger(direct.ratio.done) && Number.isInteger(direct.ratio.total));
-  const truthHeld =
-    sameProgress &&
-    hatCarriesIt &&
-    denominatorsDiffer &&
-    workClaimsNoFraction &&
-    constellationAgrees &&
-    named &&
-    noPercentage &&
-    noPercentageAnywhere &&
-    ratioIsWholeOrAbsent;
-  record(
+  const progressReadings = seen.progressReadings;
+  recordConditions(
     'M',
     'Product truth and named denominators',
-    truthHeld ? 'PARTIAL' : 'NOT_RUN',
-    truthHeld
-      ? `Four readers of one projection, driven against one project with ${foundations.length} ` +
-        `foundations in ${new Set(foundations.map((f) => f.status)).size} different states at one ` +
-        "instant. Home's briefing returns the identical progress field by field — headline, " +
-        'stage, ratio and every milestone state. The conversation hat a worker is given carries ' +
-        "that same headline verbatim rather than a sentence of its own. The progress route's " +
-        `three readings name three different denominators (${denominators.join(', ')}) and Work ` +
-        'reports no fraction at all, because its milestone set is not closed. The ' +
-        `constellation's ${majors.length} major nodes are these same foundations and report the ` +
-        'same state for every one of them, with the blocked foundation blocked on its own node. ' +
-        `The denominator is named ("${direct.denominator}"), the ratio is ` +
-        (direct.ratio ? `${direct.ratio.done}/${direct.ratio.total} whole` : 'absent rather than guessed') +
-        ', and no sentence any of them hands a person carries a percentage. NOT established ' +
-        'here: the same comparison against a versioned production state — this is an isolated ' +
-        'database, and the progress route was driven through its own services rather than over ' +
-        'HTTP with an authenticated principal.'
-      : 'A surface disagreed, or a truth rule did not hold, which is a defect rather than a ' +
-        `missing run: briefing=${sameProgress} hat=${hatCarriesIt} ` +
-        `constellation=${constellationAgrees}` +
-        (constellationDisagreements.length > 0 ? ` (${constellationDisagreements.join('; ')})` : '') +
-        ` denominatorsDiffer=${denominatorsDiffer} workHasNoRatio=${workClaimsNoFraction} ` +
-        `named=${named} noPercentage=${noPercentage && noPercentageAnywhere} ` +
-        `wholeRatio=${ratioIsWholeOrAbsent}.`,
+    [
+      {
+        name: "home's briefing returns the identical progress, field by field",
+        held: sameProgress,
+        saw: sameProgress ? 'headline, stage, ratio and every milestone state agree' : 'they differ',
+      },
+      {
+        name: 'the conversation hat a worker is given carries that same headline verbatim',
+        held: hatCarriesIt,
+        saw: hatCarriesIt ? 'verbatim' : 'the hat wrote a sentence of its own',
+      },
+      {
+        name: 'three readings name three different denominators, rather than one number pretending to be universal',
+        held: denominatorsDiffer,
+        saw: denominators.join(', '),
+      },
+      {
+        name: 'a reading whose milestone set is not closed reports no fraction at all',
+        held: workClaimsNoFraction,
+        saw: workClaimsNoFraction ? 'Work carries no ratio' : 'Work reported a fraction',
+      },
+      {
+        name: 'the constellation draws these same foundations, in these same states',
+        held: constellationAgrees,
+        saw:
+          constellationDisagreements.length === 0
+            ? `${majors.length} major nodes, every state matching`
+            : constellationDisagreements.join('; '),
+      },
+      {
+        name: 'the denominator is named, so the number means something',
+        held: named,
+        saw: `"${direct.denominator}"`,
+      },
+      {
+        name: 'the ratio is whole or absent — never a fraction of a thing',
+        held: ratioIsWholeOrAbsent,
+        saw: direct.ratio ? `${direct.ratio.done}/${direct.ratio.total}` : 'absent rather than guessed',
+      },
+      {
+        name: 'no sentence any surface hands a person carries a percentage nobody counted',
+        held: noPercentage && noPercentageAnywhere,
+        saw: 'four headlines, no percentage in any of them',
+      },
+      READING_PRODUCTION
+        ? {
+            name: "and the deployed Brain's own projects report the same way about real state",
+            held:
+              progressReadings.length > 0 &&
+              progressReadings.every(
+                (reading) =>
+                  reading.denominator.trim().length > 0 &&
+                  !reading.hasPercentage &&
+                  reading.ratioWhole,
+              ),
+            saw: progressReadings
+              .map(
+                (reading) =>
+                  `${reading.name}: "${reading.denominator}", ${reading.milestones} milestone(s)` +
+                  (reading.hasPercentage ? ', WITH A PERCENTAGE' : ''),
+              )
+              .join('; '),
+          }
+        : {
+            name: "and the deployed Brain's own projects report the same way about real state",
+            held: null,
+            saw: `this run reads ${fleet.source}, whose projects are this run's own fixtures`,
+            needs: 'PRODUCTION',
+          },
+      {
+        name: 'the same comparison made over HTTP with an authenticated principal',
+        held: null,
+        saw:
+          'driven through the services the routes call, which is where the derivation lives. ' +
+          'The route layer adds authorization, and that is exercised by I and by ' +
+          'tests/russellHttp.test.ts rather than duplicated here.',
+        standing: true,
+      },
+    ],
+    `Four readers of one projection, driven against one project with ${foundations.length} ` +
+      `foundations in ${new Set(foundations.map((f) => f.status)).size} different states at one ` +
+      'instant — the briefing, the conversation hat a worker is handed, the progress route and ' +
+      'the constellation.',
   );
 
   /* -- N. Routing and latency ----------------------------------------------- */
   /*
-   * The trace is the scenario. A real bin Brain fired a worker for, its own
-   * recorded chain, and the largest gap named from the two events either side
-   * of it — read in the operational phase above, because no scratch database
-   * has a dispatch in it.
+   * Two halves that need two environments, and the reporter had only one of
+   * them plus `file('services/bins/routing.ts')` — the module exists.
+   *
+   * The trace is a fact about a dispatch that actually happened, so it is read
+   * where dispatches are. Everything T7 and T8 ask for is a fact about the
+   * mechanism, so it is driven here: the three capacity numbers kept apart, the
+   * backlog question answered `null` rather than guessed, and a target raised
+   * by writing a row.
    */
-  const routing = file('server/services/bins/routing.ts');
+  const fleetUnderstanding = await runFleetUnderstandingExercise();
   const trace = fleet.trace;
-  record(
+  recordConditions(
     'N',
     'Routing and latency explanation',
-    trace && trace.steps.length > 1 ? 'PARTIAL' : 'NOT_RUN',
-    trace && trace.steps.length > 1
-      ? `One real dispatch traced from ${fleet.source}: ${trace.steps.length} recorded steps ` +
-        `(${trace.steps.map((step) => step.label).slice(0, 4).join(' → ')}` +
-        `${trace.steps.length > 4 ? ' → …' : ''}), and the largest gap is ` +
-        (trace.largestGap
-          ? `${Math.round(trace.largestGap.ms / 1000)}s between ${trace.largestGap.from} and ` +
-            `${trace.largestGap.to} — "${trace.largestGap.meaning}"`
-          : 'not nameable from this chain') +
-        `. ${trace.unknowns.length} thing(s) are reported as undetermined rather than guessed. ` +
-        'One routing decision is read by the candidate query, the admission hook and the fire ' +
-        'router, and a refusal costs no claim state. NOT established here: the same reading ' +
-        'across a workload mix rather than one bin.'
-      : routing
-        ? 'One routing decision is read by the candidate query, the admission hook and the fire ' +
-          'router, and a refusal costs no claim state. NOT established here: a traced real ' +
-          `dispatch — ${fleet.source} holds no bin that was ever fired.`
-        : 'The routing decision could not be read.',
+    fleetUnderstanding.error !== null
+      ? [
+          {
+            name: 'the fleet-understanding exercise completed',
+            held: false,
+            saw: fleetUnderstanding.error,
+          },
+        ]
+      : [
+          ...fleetUnderstanding.conditions,
+          READING_PRODUCTION
+            ? {
+                name: 'one real dispatch is traced from the Brain\u2019s own recorded events',
+                held: trace !== null && trace.steps.length > 1,
+                saw: trace
+                  ? `${trace.steps.length} steps: ` +
+                    trace.steps
+                      .map((step) => step.label)
+                      .slice(0, 4)
+                      .join(' → ') +
+                    (trace.steps.length > 4 ? ' → …' : '')
+                  : 'no bin in this Brain was ever fired',
+              }
+            : {
+                name: 'one real dispatch is traced from the Brain\u2019s own recorded events',
+                held: null,
+                saw: `${fleet.source} holds no bin that was ever fired`,
+                needs: 'PRODUCTION',
+              },
+          READING_PRODUCTION
+            ? {
+                name: 'and the largest gap in it is named from the two events either side of it',
+                held: trace !== null && trace.largestGap !== null,
+                saw: trace?.largestGap
+                  ? `${Math.round(trace.largestGap.ms / 1000)}s between ${trace.largestGap.from} ` +
+                    `and ${trace.largestGap.to} — "${trace.largestGap.meaning}"`
+                  : 'no gap was nameable from this chain',
+              }
+            : {
+                name: 'and the largest gap in it is named from the two events either side of it',
+                held: null,
+                saw: 'a gap is a fact about a dispatch that happened',
+                needs: 'PRODUCTION',
+              },
+          READING_PRODUCTION
+            ? {
+                name: 'what it cannot determine is reported as undetermined rather than guessed',
+                held: trace !== null,
+                saw: trace
+                  ? `${trace.unknowns.length} thing(s) reported as unknown`
+                  : 'no trace to read',
+              }
+            : {
+                name: 'what it cannot determine is reported as undetermined rather than guessed',
+                held: null,
+                saw: 'read from a trace',
+                needs: 'PRODUCTION',
+              },
+        ],
+    'The mechanism is driven — a named refusal before any surface exists, three capacity ' +
+      'readings that are not each other, a backlog question left null because nothing has been ' +
+      'measured, and a target raised by writing a policy row rather than by deploying — and the ' +
+      'trace is read where dispatches actually happen.' +
+      (fleetUnderstanding.notes.length > 0
+        ? ` Trace: ${fleetUnderstanding.notes.join(', ')}.`
+        : ''),
   );
 
   /* -- O. Visual and interaction approval ------------------------------------ */
