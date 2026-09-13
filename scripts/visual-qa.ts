@@ -2286,12 +2286,33 @@ async function persistedEffects(
    * happened.
    */
   if (seeded.projectId && parked.missionId) {
-    const work = await read(`/api/russell/projects/${seeded.projectId}/work`);
-    const missions = Array.isArray(work?.['missions'])
-      ? (work['missions'] as Record<string, unknown>[])
-      : [];
-    const mission = missions.find((row) => row['id'] === parked.missionId) ?? null;
-    const stateAfter = typeof mission?.['state'] === 'string' ? (mission['state'] as string) : null;
+    /*
+     * Polled, because the transition is a tick rather than a response.
+     *
+     * `answerHumanRequest` records the decision and `approvePlan` moves the
+     * fragments; the mission's own state follows on Russell's next cycle, which
+     * is thirty seconds. Reading once, ten seconds after the press, recorded
+     * `NEEDS_HUMAN → NEEDS_HUMAN` on a run where Work was already showing the
+     * assignment — a finding about how fast this file reads, not about the
+     * product. The acceptance chain settles three ticks for the same reason;
+     * this waits for the same thing from outside.
+     *
+     * It is a wait, not a weakening: the state it is waiting for is the one
+     * asserted, and a mission still parked at the deadline is still a finding.
+     */
+    let mission: Record<string, unknown> | null = null;
+    let stateAfter: string | null = null;
+    const resumeBy = Date.now() + 150_000;
+    for (;;) {
+      const work = await read(`/api/russell/projects/${seeded.projectId}/work`);
+      const missions = Array.isArray(work?.['missions'])
+        ? (work['missions'] as Record<string, unknown>[])
+        : [];
+      mission = missions.find((row) => row['id'] === parked.missionId) ?? null;
+      stateAfter = typeof mission?.['state'] === 'string' ? (mission['state'] as string) : null;
+      if (stateAfter !== 'NEEDS_HUMAN' || Date.now() >= resumeBy) break;
+      await sleep(5_000);
+    }
     const needsYou = await read(`/api/russell/projects/${seeded.projectId}/needs-you`);
     const stillOpen = Array.isArray(needsYou?.['requests'])
       ? (needsYou['requests'] as Record<string, unknown>[]).some(
