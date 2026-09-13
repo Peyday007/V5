@@ -114,12 +114,18 @@ constellation measured at every width with overlaps at none. The eighth is
 **P — a Deploy run at this revision.** Both migration chains upgrade populated
 data and preserve every pre-existing row, on both backends. The eighth condition
 is the hosted check either side of a real restart of a real machine, and it is
-the `Deploy` workflow's own record. A deploy of `dd1f9be` has produced one —
+the `Deploy` workflow's own record. A deploy of `dd1f9be` produced one —
 [run 34771692417](https://github.com/Peyday007/V5/actions/runs/34771692417),
-`beforeRestart: true`, `afterRestart: true` — but that record is necessarily
-written *after* the revision it attests to, so it is not in the tree at
-`dd1f9be` and the condition reads BLOCKED there. It is committed on the branch
-above this one.
+`beforeRestart: true`, `afterRestart: true`.
+
+**The way that record reached the reporter was wrong, twice, and the repair is
+on the branch above this reading.** I transcribed the uploaded artifact into the
+tree, which needs a commit per deploy and lands one commit *after* the revision
+it attests — so I then added `deployedUnchangedSince` to tolerate the gap, and
+its path list omitted real image inputs including `scripts/`, which the commit
+introducing it was itself changing. It is deleted. The artifact is now fetched
+from the Deploy run by the acceptance workflow and attached to the report from
+outside the worktree, and the revision comparison is exact again.
 
 ## The five PARTIAL, and what each is missing
 

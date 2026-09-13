@@ -2945,10 +2945,16 @@ describe('a verdict is derived from conditions, by both readers, identically', (
     expect(generic).toContain("'diff', '--quiet'");
     expect(generic.slice(0, generic.indexOf('\n}'))).toContain('return false;');
 
-    const product = reporter.slice(
-      reporter.indexOf('function productUnchangedSince('),
-      reporter.indexOf('function visualEvidence('),
-    );
+    /*
+     * Sliced to this function's own closing brace rather than to the next
+     * function's name. It used to end at `visualEvidence`, which was the next
+     * thing in the file when this was written and is now a hundred lines of
+     * hosted-attachment reading away — so the slice would have passed on text
+     * belonging to something else. Third time in this file, and the fix is the
+     * same each time: assert against the thing, not against its neighbourhood.
+     */
+    const productAt = reporter.indexOf('function productUnchangedSince(');
+    const product = reporter.slice(productAt, reporter.indexOf('\n}', productAt));
     expect(product).toContain('unchangedSince(revision, ');
     expect(product).toContain("'client'");
     expect(product).toContain("'server'");
@@ -3065,5 +3071,237 @@ describe('nothing removes a requirement from completion except a recorded decisi
      * defect as approving its own design.
      */
     expect(codeOf(reporter)).not.toMatch(/deferredBy:\s*\{/);
+  });
+});
+
+/* ==========================================================================
+ * P's restart evidence arrives as an attachment, never as a commit
+ *
+ * The Deploy workflow proves the live Brain refuses what it should either side
+ * of a real restart, and gate P's condition R13 is that fact. A reporter cannot
+ * attest a CI run it did not observe, so it consumes the record that run leaves
+ * behind — and *how* that record reaches it turned out to matter more than what
+ * is in it.
+ *
+ * Two defects are pinned here, both of them mine:
+ *
+ *  1. I transcribed the uploaded artifact into `docs/evidence/step12b-hosted/`
+ *     and taught P to read it from the tree. A committed record needs a commit
+ *     per deploy and lands one commit *after* the revision it attests, so an
+ *     exact revision match reads false for a record that is perfectly good.
+ *  2. My remedy was `deployedUnchangedSince`, which accepted a record while a
+ *     named list of paths had not moved. The list omitted real image inputs —
+ *     `scripts/` among them — and the commit introducing it was changing
+ *     `scripts/`. A tolerance that did not hold at the moment it was written.
+ *
+ * The replacement needs no tolerance because it removes what the tolerance was
+ * for: the artifact is *attached* from outside the worktree, so attaching a
+ * deploy's evidence costs no commit and no second deployment, and the revision
+ * comparison goes back to exact.
+ * ========================================================================== */
+describe("the hosted restart record is an input, not a file in this tree", () => {
+  const repo = REPO_ROOT;
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+  const deploy = fs.readFileSync(path.join(repo, '.github', 'workflows', 'deploy.yml'), 'utf8');
+  const acceptance = fs.readFileSync(
+    path.join(repo, '.github', 'workflows', 'step12b-acceptance.yml'),
+    'utf8',
+  );
+
+  it('keeps no hosted record in the repository, because a committed one is stale by construction', () => {
+    expect(fs.existsSync(path.join(repo, 'docs', 'evidence', 'step12b-hosted'))).toBe(false);
+    // And the reporter does not reach for one either, by any spelling.
+    expect(reporter).not.toContain("'step12b-hosted', 'verification.json'");
+    expect(reporter).not.toContain('docs/evidence/step12b-hosted');
+  });
+
+  it('has no path-list tolerance left to get wrong', () => {
+    /*
+     * `deployedUnchangedSince` is gone rather than corrected. A list of image
+     * inputs has to be maintained against a Dockerfile nobody will re-read, and
+     * getting it wrong is silent — which is exactly how it shipped omitting
+     * `scripts/`. The mention that survives is the paragraph explaining why it
+     * was deleted, which is history worth keeping; what must not exist is a
+     * function.
+     */
+    expect(reporter).not.toContain('function deployedUnchangedSince');
+    expect(reporter).toContain('remedy for that was `deployedUnchangedSince`');
+  });
+
+  it('compares the record to this run exactly, with no second chance', () => {
+    const gate = reporter.slice(
+      reporter.indexOf('const hostedAttachment = readHostedAttachment();'),
+    );
+    expect(gate).toContain('hosted.revision === thisRevision');
+    // One comparison, and no `||` offering an alternative to it.
+    const comparison = gate.slice(0, gate.indexOf('\n'));
+    expect(comparison).not.toContain('||');
+  });
+
+  it('refuses an attachment that is inside the repository', () => {
+    /*
+     * Sliced forwards from the function's own name to its last statement.
+     * `indexOf("kind: 'READ'")` looked right and matched the *type union*
+     * declared above the function, so the slice came back empty and the
+     * assertion failed against nothing. Same lesson as three tests up.
+     */
+    const readerAt = reporter.indexOf('function readHostedAttachment(');
+    const reader = reporter.slice(readerAt, reporter.indexOf('const runId = runMatch[1]', readerAt));
+    expect(reader).toContain('path.relative(REPO, resolved)');
+    expect(reader).toContain("kind: 'UNREADABLE'");
+    expect(reader).toContain('the committed record again');
+  });
+
+  it('fixes the repository whose runs may attest a deploy, in code', () => {
+    /*
+     * Any account can run a workflow that writes `beforeRestart: true`. The
+     * repository is therefore a constant nobody supplies — §24's rule, the same
+     * shape `repositoryEnvelope.ts` and `probeEnvelope.ts` already use.
+     */
+    expect(reporter).toContain("const ATTESTING_REPOSITORY = 'Peyday007/V5'");
+    expect(reporter).toContain('actions/runs/');
+  });
+
+  it('separates "nothing attached" from "we could not read it"', () => {
+    /*
+     * Four outcomes rather than two, because they have four different remedies
+     * — and because *we could not tell* must never read the same as *we
+     * checked*, which is this file's oldest rule.
+     */
+    const reader = reporter.slice(reporter.indexOf('type HostedAttachment ='));
+    expect(reader).toContain("kind: 'ABSENT'");
+    expect(reader).toContain("kind: 'UNREADABLE'");
+    const gate = reporter.slice(
+      reporter.indexOf('const hostedAttachment = readHostedAttachment();'),
+    );
+    expect(gate).toContain("hostedAttachment.kind === 'ABSENT'\n            ? null");
+    expect(gate).toContain("awaits: 'a Deploy run at this revision, attached to this report'");
+  });
+
+  it('joins the two ends: Deploy uploads the artifact and acceptance downloads it', () => {
+    /*
+     * This is the defect the owner named. Deploy had been uploading
+     * `step12b-hosted-verification` for every run since the record existed, and
+     * nothing ever fetched it — the reporter read a hand-transcribed copy
+     * instead. An artifact nobody downloads is not a pipeline.
+     */
+    expect(deploy).toContain('name: step12b-hosted-verification');
+    expect(acceptance).toContain('gh run download');
+    expect(acceptance).toContain('--name step12b-hosted-verification');
+    expect(acceptance).toContain('--hosted /tmp/step12b-hosted.json');
+  });
+
+  it('takes the artifact from a successful Deploy on the canonical branch, and checks it names that run', () => {
+    expect(acceptance).toContain('--workflow deploy.yml');
+    expect(acceptance).toContain('--status success');
+    expect(acceptance).toContain("CANONICAL_BRANCH");
+    // Provenance is where it came from: the record must be about the run it
+    // came out of, or the pipeline is broken rather than the pass being weaker.
+    expect(acceptance).toContain('"$recorded" != "$head_sha"');
+  });
+
+  it('lands the artifact outside the worktree and proves the checkout stayed clean', () => {
+    expect(acceptance).toContain('$RUNNER_TEMP/step12b-hosted');
+    expect(acceptance).toContain('The checkout is still clean');
+    expect(acceptance).toContain('git status --porcelain');
+  });
+});
+
+/* ==========================================================================
+ * J's two result conditions, and the way they may NOT be closed
+ *
+ * "The question a person typed was answered" and "its result was inspected
+ * there" both need a worker that reached the sources, which a spawned Brain
+ * never has. The obvious way to close them is to do on the deployed Brain what
+ * the local journey does on its own — seed an idea, grant a standing authority,
+ * wait. That is refused, and these tests are the refusal: a synthetic idea in a
+ * project of real research is a row somebody has to recognise as fake later,
+ * and a standing grant created to make a report come out right is a spending
+ * authorization created for a report.
+ * ========================================================================== */
+describe('the deployed phone inspection reads and never writes', () => {
+  const repo = REPO_ROOT;
+  const harness = fs.readFileSync(path.join(repo, 'scripts', 'visual-qa.ts'), 'utf8');
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+  const mode = harness.slice(
+    harness.indexOf('async function inspectDeployed('),
+    harness.indexOf('async function main('),
+  );
+
+  it('talks to the deployed Brain through one helper that cannot be given a method', () => {
+    /*
+     * `visit` takes a cookie and a route. A `method` argument would be the
+     * thing somebody passes 'POST' to one day, so there is no argument —
+     * the same reasoning `probeEnvelope.ts` uses about a host.
+     */
+    const helper = harness.slice(
+      harness.indexOf('async function visit('),
+      harness.indexOf('async function inspectDeployed('),
+    );
+    expect(helper).toContain("method: 'GET'");
+    expect(helper).not.toContain('method: method');
+    expect(helper).not.toContain('method?: string');
+  });
+
+  it('makes exactly one write, and it is the sign-in', () => {
+    const writes = [...mode.matchAll(/method:\s*'(\w+)'/g)].map((m) => m[1]);
+    expect(writes.filter((verb) => verb !== 'GET')).toEqual(['POST']);
+    expect(mode).toContain('/api/auth/login');
+  });
+
+  it('creates no idea, no authority and no mission on the Brain it is reading', () => {
+    /*
+     * Stated as the absence of each route by name. An earlier version of this
+     * built a conditional out of two `includes` calls and asserted a value
+     * derived from the same string it was checking — it passed for the wrong
+     * reason and then failed for another wrong one. A list of things that must
+     * not appear is the whole assertion.
+     */
+    for (const forbidden of [
+      '/authority',
+      '/candidates',
+      '/ideas',
+      '/needs-you',
+      '/russell/capture',
+      '/launch',
+      '/override',
+    ]) {
+      expect(mode).not.toContain(forbidden);
+    }
+    // And nothing is sent anywhere as a body except the sign-in's credentials.
+    expect(mode.match(/body: JSON.stringify/g)?.length ?? 0).toBe(1);
+  });
+
+  it('refuses to write its reading into this repository', () => {
+    expect(mode).toContain('--emit-phone must be outside the repository');
+    expect(reporter).toContain('the reading is inside this repository');
+  });
+
+  it('will not produce the approval render set from somebody else’s Brain', () => {
+    /*
+     * The renders are of *this tree*, built here. A deployed Brain is running
+     * whatever was last released, so a render set taken from it would be an
+     * approval of a different product wearing this revision's name.
+     */
+    expect(harness).toContain('--deployed is a read-only inspection');
+    expect(harness).toContain('must not produce the');
+  });
+
+  it('needs a person, and says so rather than reaching for a worker credential', () => {
+    expect(mode).toContain('BRAIN_PHONE_EMAIL');
+    expect(mode).toContain('behind requirePerson');
+    expect(mode).toContain('refused at the conversation routes by principal type');
+    // The credential never reaches the record.
+    const record = harness.slice(
+      harness.indexOf('interface DeployedPhoneRecord {'),
+      harness.indexOf('async function visit('),
+    );
+    expect(record).not.toContain('password');
+    expect(record).not.toContain('cookie');
+  });
+
+  it('reports an absent answer as a fact about that Brain, never as a finding against the product', () => {
+    expect(mode).toContain('That is a fact about the Brain, not a defect in the product');
+    expect(mode).toContain('no mission has completed and written back here yet');
   });
 });

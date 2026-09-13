@@ -49,7 +49,17 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
  * applied by one of two readers is worse than none" this file keeps recording.
  */
 const PORT = pickPort(6400, 200);
-const BASE = `http://127.0.0.1:${PORT}`;
+
+/**
+ * The Brain this harness is driving.
+ *
+ * A local one it spawned, almost always — and in `--deployed` mode, the one
+ * that is actually running. It is a `let` for exactly that one case and is
+ * assigned once, before anything opens a browser or a socket. Every helper
+ * below reads it rather than rebuilding a URL, so there is one answer to
+ * "which Brain is this" rather than two that can disagree.
+ */
+let BASE = `http://127.0.0.1:${PORT}`;
 const EMAIL = 'visual-qa@example.invalid';
 const BOOTSTRAP = 'bootstrap-password-01';
 const PASSWORD = 'visual-qa-password-01';
@@ -933,28 +943,355 @@ interface Options {
   outputDir: string;
   rendersDir: string | null;
   only: 'constellation' | null;
+  /** An https origin to inspect read-only instead of spawning a Brain. */
+  deployed: string | null;
+  /** Where the deployed inspection's record goes — outside the worktree. */
+  emitPhone: string | null;
 }
 
 function parseOptions(argv: string[]): Options {
   let positional: string | null = null;
   let rendersDir: string | null = null;
   let only: 'constellation' | null = null;
+  let deployed: string | null = null;
+  let emitPhone: string | null = null;
   for (const argument of argv) {
     if (argument.startsWith('--renders=')) rendersDir = argument.slice('--renders='.length);
     else if (argument === '--renders') rendersDir = RENDERS_DEFAULT;
     else if (argument === '--only=constellation') only = 'constellation';
+    else if (argument.startsWith('--deployed=')) deployed = argument.slice('--deployed='.length);
+    else if (argument.startsWith('--emit-phone='))
+      emitPhone = argument.slice('--emit-phone='.length);
     else if (argument.startsWith('--')) throw new Error(`unknown option ${argument}`);
     else if (positional === null) positional = argument;
+  }
+  if (deployed !== null && !/^https:\/\/[^/]+$/.test(deployed)) {
+    throw new Error(
+      `--deployed must be an https origin with no path, e.g. https://brain.example — got ${deployed}`,
+    );
+  }
+  if (deployed !== null && rendersDir !== null) {
+    throw new Error(
+      '--deployed is a read-only inspection of somebody else\'s Brain and must not produce the ' +
+        'approval render set: those images are of this tree, built here, and a deployed Brain is ' +
+        'running whatever was last released.',
+    );
   }
   return {
     outputDir: path.resolve(positional ?? path.join(os.tmpdir(), 'brain-visual-qa')),
     rendersDir: rendersDir === null ? null : path.resolve(REPO_ROOT, rendersDir),
     only,
+    deployed,
+    emitPhone,
   };
+}
+
+/* ==========================================================================
+ * Reading the deployed Brain through the phone interface, and changing nothing
+ *
+ * ---------------------------------------------------------------------------
+ * What this is for, and the two conditions it exists to answer
+ * ---------------------------------------------------------------------------
+ *
+ * Gate J's sequence — a person overrules a priority, Russell launches, the
+ * packet parks, a thumb answers it, the same mission carries on — is walked in
+ * full against a Brain this harness spawns, and every step of it resolves to
+ * ids. Two of J's conditions cannot be answered there and never will be:
+ *
+ *     the question a person typed was answered rather than left waiting
+ *     and its result was inspected there — a conclusion under Knows citing
+ *     that mission
+ *
+ * Both need a **worker that reached the sources**, and a spawned Brain fires
+ * none: no inference is bought here (§24), so Russell's turn stays `PENDING`
+ * and no packet ever files a report. The local journey records that truthfully
+ * and leaves both open.
+ *
+ * ---------------------------------------------------------------------------
+ * Why it seeds nothing, grants nothing and writes nothing
+ * ---------------------------------------------------------------------------
+ *
+ * The obvious way to close them is to do on the deployed Brain what the local
+ * journey does on its own: capture an idea, grant a standing authority, wait
+ * for a worker. **That is refused here**, and the refusal is the design rather
+ * than caution. The deployed Brain holds one project of real research; a
+ * synthetic idea in it is a row somebody has to recognise as fake later, a new
+ * standing grant is a spending authorization created to make a report come out
+ * right, and waiting for a worker to answer a question nobody asked spends the
+ * subscription on a test. §29 already refuses the smaller version of this — a
+ * Capability Lab health check reads rows rather than firing a worker to learn
+ * whether workers fire.
+ *
+ * So this mode **only reads**. `visit` is the only way it talks to the Brain
+ * after signing in, and it refuses any method but GET — not as a convention but
+ * as a thrown error, because a convention is the thing that erodes. The
+ * conditions are answered from work that was already there: a question a person
+ * genuinely typed and a worker genuinely answered, and a conclusion a real
+ * mission genuinely produced. If the deployed Brain holds neither, this reports
+ * that it holds neither. It never manufactures one.
+ *
+ * ---------------------------------------------------------------------------
+ * What it needs, which is the one thing it cannot supply itself
+ * ---------------------------------------------------------------------------
+ *
+ * A person's credential on the deployed Brain, in `BRAIN_PHONE_EMAIL` and
+ * `BRAIN_PHONE_PASSWORD`. There is no way around that and no weaker thing that
+ * would do: every route this reads is behind `requirePerson`, a worker
+ * credential is refused at the conversation routes **by principal type**, and
+ * the whole point of the two conditions is that a person can read these answers
+ * on their phone. The credential is used for one sign-in, is never printed, and
+ * never reaches the record.
+ * ========================================================================== */
+
+interface DeployedPhoneRecord {
+  /** The origin inspected. Never a credential, and never a path. */
+  brain: string;
+  inspectedAt: string;
+  /** The revision the deployed Brain reports for itself, if it reports one. */
+  deployedRevision: string | null;
+  /** Did a question a person typed get answered, rather than left waiting? */
+  answeredQuestion: {
+    found: boolean;
+    status: string | null;
+    conversationId: string | null;
+    readOnScreen: boolean;
+  };
+  /** Was a mission's result readable under Knows, citing that mission? */
+  missionLinkedResult: {
+    found: boolean;
+    missionId: string | null;
+    knowledgeId: string | null;
+    citesDocument: boolean;
+    citesAudit: boolean;
+    readOnScreen: boolean;
+  };
+  screenshots: string[];
+  findings: string[];
+}
+
+/**
+ * The only way this mode talks to the Brain, and it cannot be persuaded to
+ * write. A `method` argument would be the thing somebody passes 'POST' to one
+ * day; there is no argument.
+ */
+async function visit(cookie: string, route: string): Promise<Record<string, unknown> | null> {
+  const response = await fetch(`${BASE}${route}`, { method: 'GET', headers: { cookie } });
+  if (!response.ok) return null;
+  try {
+    return (await response.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+async function inspectDeployed(options: Options): Promise<void> {
+  const origin = options.deployed as string;
+  const email = (process.env['BRAIN_PHONE_EMAIL'] ?? '').trim();
+  const password = process.env['BRAIN_PHONE_PASSWORD'] ?? '';
+  if (email.length === 0 || password.length === 0) {
+    throw new Error(
+      'BRAIN_PHONE_EMAIL and BRAIN_PHONE_PASSWORD must both be set. This mode reads a deployed ' +
+        "Brain as a person, because every route it needs is behind requirePerson and a worker " +
+        'credential is refused at the conversation routes by principal type.',
+    );
+  }
+  if (options.emitPhone === null) {
+    throw new Error('--emit-phone=<path> is required: the reading has to go somewhere.');
+  }
+  const target = path.resolve(options.emitPhone);
+  const inside = path.relative(REPO_ROOT, target);
+  if (inside.length > 0 && !inside.startsWith('..') && !path.isAbsolute(inside)) {
+    throw new Error(
+      `--emit-phone must be outside the repository (got ${inside}). A reading of somebody else's ` +
+        'running Brain committed into this tree would need a commit per reading and would be ' +
+        'stale the moment it landed — the same defect the hosted verification record had.',
+    );
+  }
+
+  BASE = origin;
+  fs.mkdirSync(options.outputDir, { recursive: true });
+  const findings: string[] = [];
+  const screenshots: string[] = [];
+
+  const login = await fetch(`${BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: BASE },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!login.ok) throw new Error(`sign-in to ${origin} failed: ${login.status}`);
+  const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+
+  const health = await fetch(`${BASE}/healthz`);
+  const deployedRevision = health.headers.get('x-brain-revision');
+
+  /*
+   * Which project, decided by what is in it rather than by a name.
+   *
+   * Every project this person may read is considered, and the first one holding
+   * both a settled answer and a mission-linked conclusion wins. A hard-coded
+   * project id would be this harness asserting something about a Brain it has
+   * not looked at.
+   */
+  const projects = await visit(cookie, '/api/projects');
+  const rows = Array.isArray(projects?.['projects'])
+    ? (projects['projects'] as Record<string, unknown>[])
+    : [];
+
+  const answered: DeployedPhoneRecord['answeredQuestion'] = {
+    found: false,
+    status: null,
+    conversationId: null,
+    readOnScreen: false,
+  };
+  const result: DeployedPhoneRecord['missionLinkedResult'] = {
+    found: false,
+    missionId: null,
+    knowledgeId: null,
+    citesDocument: false,
+    citesAudit: false,
+    readOnScreen: false,
+  };
+
+  const conversations = await visit(cookie, '/api/russell/conversations');
+  const threads = Array.isArray(conversations?.['conversations'])
+    ? (conversations['conversations'] as Record<string, unknown>[])
+    : [];
+  for (const thread of threads) {
+    const id = thread['id'];
+    if (typeof id !== 'string') continue;
+    const detail = await visit(cookie, `/api/russell/conversations/${id}`);
+    const turns = Array.isArray(detail?.['turns'])
+      ? (detail['turns'] as Record<string, unknown>[])
+      : [];
+    // A question a *person* typed, and Russell's reply to it after it.
+    const askedAt = turns.findIndex((turn) => turn['role'] === 'PERSON');
+    if (askedAt < 0) continue;
+    const reply = turns
+      .slice(askedAt + 1)
+      .find((turn) => turn['role'] === 'RUSSELL' && typeof turn['status'] === 'string');
+    if (!reply) continue;
+    const status = reply['status'] as string;
+    if (status === 'PENDING') continue;
+    answered.found = true;
+    answered.status = status;
+    answered.conversationId = id;
+    break;
+  }
+  if (!answered.found) {
+    findings.push(
+      'no conversation on this Brain holds a question a person typed and a reply that is no ' +
+        'longer PENDING. That is a fact about the Brain, not a defect in the product: it means ' +
+        'no worker has answered a turn here yet.',
+    );
+  }
+
+  for (const project of rows) {
+    const id = project['id'];
+    if (typeof id !== 'string') continue;
+    const knowledge = await visit(cookie, `/api/russell/projects/${id}/knowledge`);
+    const conclusions = Array.isArray(knowledge?.['knowledge'])
+      ? (knowledge['knowledge'] as Record<string, unknown>[])
+      : [];
+    const cited = conclusions.find((row) => typeof row['missionId'] === 'string');
+    if (!cited) continue;
+    result.found = true;
+    result.missionId = cited['missionId'] as string;
+    result.knowledgeId = typeof cited['id'] === 'string' ? cited['id'] : null;
+    result.citesDocument = typeof cited['documentId'] === 'string';
+    result.citesAudit = typeof cited['auditId'] === 'string';
+    break;
+  }
+  if (!result.found) {
+    findings.push(
+      'no conclusion on this Brain names the mission it came from. Again a fact about the ' +
+        'Brain: no mission has completed and written back here yet.',
+    );
+  }
+
+  /*
+   * And then read both of them on the phone, which is the half the API cannot
+   * establish. A row that exists and a row a person can read are different
+   * claims, and J is about the second.
+   */
+  await withChromium(async (cdp) => {
+    await signInBrowser(cdp, cookie);
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: PHONE.width,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+
+    if (answered.conversationId) {
+      await cdp.send('Page.navigate', { url: `${BASE}/c/${answered.conversationId}` });
+      await sleep(2500);
+      answered.readOnScreen = (await evaluate(
+        cdp,
+        "!document.body.innerText.includes('Russell is working on this')",
+      )) as boolean;
+      const shot = (await cdp.send('Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: true,
+      })) as { data: string };
+      fs.writeFileSync(
+        path.join(options.outputDir, 'deployed-01-the-answer.png'),
+        Buffer.from(shot.data, 'base64'),
+      );
+      screenshots.push('deployed-01-the-answer.png');
+    }
+
+    if (result.missionId) {
+      await cdp.send('Page.navigate', { url: `${BASE}/knows` });
+      await sleep(2500);
+      result.readOnScreen = (await evaluate(
+        cdp,
+        "document.querySelectorAll('.rs-know, .rs-knowledge, article').length > 0 && " +
+          "!document.body.innerText.includes('There is nothing here yet')",
+      )) as boolean;
+      const shot = (await cdp.send('Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: true,
+      })) as { data: string };
+      fs.writeFileSync(
+        path.join(options.outputDir, 'deployed-02-the-result.png'),
+        Buffer.from(shot.data, 'base64'),
+      );
+      screenshots.push('deployed-02-the-result.png');
+    }
+  });
+
+  const record: DeployedPhoneRecord = {
+    brain: origin,
+    inspectedAt: new Date().toISOString(),
+    deployedRevision,
+    answeredQuestion: answered,
+    missionLinkedResult: result,
+    screenshots,
+    findings,
+  };
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, `${JSON.stringify(record, null, 2)}\n`);
+  console.log(`\nDeployed phone reading written to ${target}`);
+  console.log(
+    `  answered question    ${answered.found ? `${answered.status}, read on screen: ${answered.readOnScreen}` : 'none on this Brain'}`,
+  );
+  console.log(
+    `  mission result       ${result.found ? `${result.knowledgeId} citing ${result.missionId}, read on screen: ${result.readOnScreen}` : 'none on this Brain'}`,
+  );
+  for (const finding of findings) console.log(`  - ${finding}`);
 }
 
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
+  /*
+   * Before the build and before the spawn, because this mode does neither. A
+   * deployed Brain is running whatever was last released, and building a client
+   * or starting a second server to look at it would produce nothing but noise.
+   */
+  if (options.deployed !== null) {
+    await inspectDeployed(options);
+    return;
+  }
   const { outputDir } = options;
   fs.mkdirSync(outputDir, { recursive: true });
   /*
@@ -1953,6 +2290,27 @@ const JOURNEY_EFFECTS: {
   knowledgeRows: number | null;
   knowledgeCitingThisMission: number | null;
   askedTurnStatus: string | null;
+  /**
+   * Gate M's last condition, answered where a real one can be.
+   *
+   * M compares four readers of one progress projection — the briefing, the
+   * conversation hat, the progress route and the constellation — and it made
+   * that comparison **in process**, then said of the HTTP version: *"driven
+   * through the services the routes call, which is where the derivation
+   * lives."* True, and it is the substitution this repository refuses
+   * everywhere else: the route layer adds `requirePerson` and
+   * `decideProjectAccess`, a handler that resolved before it authorized would
+   * be invisible from a service call, and §29's own rule is that a mechanism
+   * nothing calls is not a mechanism.
+   *
+   * It is asked here rather than in the reporter because this harness already
+   * has the two things the question needs and the reporter has neither: a real
+   * server on a real socket, and a person signed into it. Adding a server spawn
+   * to a read-only reporter to ask one question would be the more expensive way
+   * to get a worse answer.
+   */
+  httpProgressMatchesBriefing: boolean | null;
+  httpProgressSaw: string | null;
 } = {
   standingAuthorityGranted: null,
   ideaOverriddenByAPerson: null,
@@ -1970,6 +2328,8 @@ const JOURNEY_EFFECTS: {
   knowledgeRows: null,
   knowledgeCitingThisMission: null,
   askedTurnStatus: null,
+  httpProgressMatchesBriefing: null,
+  httpProgressSaw: null,
 };
 
 /**
@@ -2683,6 +3043,76 @@ async function persistedEffects(
     const work = await read(`/api/russell/projects/${seeded.projectId}/work`);
     const groups = Array.isArray(work?.['groups']) ? (work['groups'] as unknown[]) : [];
     console.log(`  work                 ${groups.length} group(s) after the change`);
+  }
+
+  /*
+   * M's four readers of one projection, over HTTP, as the signed-in person.
+   *
+   * Two routes, two independent derivations of the same thing: `/progress`
+   * calls `projectProgress` and `/briefing` calls `briefing`, which carries its
+   * own `progress`. They must agree field for field — and the three readings
+   * the progress route returns must name three *different* denominators,
+   * because one number pretending to be universal is the defect §29 records
+   * ("0 of 8 settled" was accurate and read as failure). No headline may carry
+   * a percentage, and the ratio must be whole or absent.
+   *
+   * Failing to read either route is a missing measurement rather than a
+   * finding: `null`, with what happened written down.
+   */
+  if (seeded.projectId) {
+    const progress = await read(`/api/russell/projects/${seeded.projectId}/progress`);
+    const brief = await read(`/api/russell/projects/${seeded.projectId}/briefing`);
+    const viaRoute = (progress?.['project'] ?? null) as Record<string, unknown> | null;
+    const viaWork = (progress?.['work'] ?? null) as Record<string, unknown> | null;
+    const viaBuild = (progress?.['build'] ?? null) as Record<string, unknown> | null;
+    const viaBriefing = ((brief?.['briefing'] as Record<string, unknown> | undefined)?.[
+      'progress'
+    ] ?? null) as Record<string, unknown> | null;
+
+    if (viaRoute === null || viaBriefing === null) {
+      JOURNEY_EFFECTS.httpProgressSaw =
+        `progress route ${progress === null ? 'unreadable' : 'read'}, ` +
+        `briefing ${brief === null ? 'unreadable' : 'read'} — one of them carried no progress`;
+    } else {
+      const same = (['headline', 'stage', 'denominator'] as const).every(
+        (field) => viaRoute[field] === viaBriefing[field],
+      );
+      const ratiosAgree =
+        JSON.stringify(viaRoute['ratio']) === JSON.stringify(viaBriefing['ratio']);
+      const milestonesAgree =
+        JSON.stringify(viaRoute['milestones']) === JSON.stringify(viaBriefing['milestones']);
+      const denominators = [viaRoute, viaWork, viaBuild]
+        .map((reading) => String(reading?.['denominator'] ?? ''))
+        .filter((value) => value.length > 0);
+      const denominatorsDiffer = new Set(denominators).size === denominators.length;
+      const named = String(viaRoute['denominator'] ?? '').trim().length > 0;
+      const headlines = [viaRoute, viaWork, viaBuild, viaBriefing].map((reading) =>
+        String(reading?.['headline'] ?? ''),
+      );
+      const noPercentage = headlines.every((headline) => !/\d+\s*%/.test(headline));
+      const ratio = viaRoute['ratio'] as { done?: unknown; total?: unknown } | null;
+      const ratioWhole =
+        ratio === null ||
+        ratio === undefined ||
+        (Number.isInteger(ratio.done) && Number.isInteger(ratio.total));
+
+      JOURNEY_EFFECTS.httpProgressMatchesBriefing =
+        same && ratiosAgree && milestonesAgree && denominatorsDiffer && named && noPercentage && ratioWhole;
+      JOURNEY_EFFECTS.httpProgressSaw =
+        `two routes as a signed-in person: headline/stage/denominator ${same ? 'agree' : 'DIFFER'}` +
+        `, ratio ${ratiosAgree ? 'agrees' : 'DIFFERS'}, milestones ${milestonesAgree ? 'agree' : 'DIFFER'}` +
+        `; denominators [${denominators.join(' | ')}]${denominatorsDiffer ? '' : ' — NOT DISTINCT'}` +
+        `; ${noPercentage ? 'no percentage in any of 4 headlines' : 'A HEADLINE CARRIES A PERCENTAGE'}` +
+        `; ratio ${ratioWhole ? 'whole or absent' : 'IS A FRACTION OF A THING'}`;
+    }
+    console.log(
+      `  progress over HTTP   ${JOURNEY_EFFECTS.httpProgressSaw ?? 'not measured'}`,
+    );
+    if (JOURNEY_EFFECTS.httpProgressMatchesBriefing === false) {
+      found.push(
+        `two routes disagree about one project's progress: ${JOURNEY_EFFECTS.httpProgressSaw}`,
+      );
+    }
   }
 
   return found;

@@ -38,6 +38,14 @@ concurrency:
   group: step12b-acceptance
   cancel-in-progress: false
 
+# `actions: read` is what lets this run find the Deploy run that produced the
+# image the container is running, and download the record it left behind. It is
+# read-only and it is the whole permission set: this workflow creates nothing,
+# advances nothing and takes no decision.
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   report:
     name: Read the A-to-Q matrix from production rows
@@ -46,6 +54,90 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # -------------------------------------------------------------------
+      # The Deploy run's own record, fetched rather than committed
+      # -------------------------------------------------------------------
+      #
+      # Gate P asks whether the hosted verification passed either side of a real
+      # restart of a real machine. That is a fact about a `Deploy` run, and this
+      # workflow did not observe one — so it fetches the record that run left
+      # behind and hands it to the reporter as an input.
+      #
+      # **It is deliberately not read from the repository.** Deploy holds the
+      # deployment credential and must not push to the branch it just deployed,
+      # so it uploads an artifact and stops. Transcribing that artifact into a
+      # commit was tried and was wrong twice over: it needs a commit per deploy,
+      # and it lands one commit *after* the revision it attests, so an exact
+      # revision match reads false for a record that is perfectly good. Fetching
+      # it means attaching a deploy's evidence costs no commit and no second
+      # deployment, and the revision comparison can go back to being exact.
+      #
+      # Provenance is *where it came from*, not what it says: the run is located
+      # through the API, its conclusion must be `success`, and the record's
+      # revision must equal that run's own `head_sha`. The reporter then refuses
+      # it unless it also equals the revision the container is running. A record
+      # that names a different commit is not a weaker pass; it is a statement
+      # that what is running was never proved.
+      #
+      # `$RUNNER_TEMP` rather than the workspace, so the checkout stays clean —
+      # `unchangedSince` and the record's own `treeDirty` flag both depend on
+      # that, and the reporter refuses an attachment inside the repository for
+      # the same reason.
+      - name: Fetch the hosted verification from the deploy that produced this image
+        id: hosted
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          canonical=$(tr -d '[:space:]' < .github/CANONICAL_BRANCH)
+          dest="$RUNNER_TEMP/step12b-hosted"
+          mkdir -p "$dest"
+
+          run=$(gh run list --workflow deploy.yml --branch "$canonical" \
+                  --status success --limit 1 --json databaseId,headSha,url \
+                  --jq '.[0] // empty')
+          if [ -z "$run" ]; then
+            echo "::warning::No successful Deploy run on $canonical, so there is no hosted record to attach. P stays open."
+            echo "attached=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          run_id=$(echo "$run" | python3 -c 'import json,sys; print(json.load(sys.stdin)["databaseId"])')
+          head_sha=$(echo "$run" | python3 -c 'import json,sys; print(json.load(sys.stdin)["headSha"])')
+          echo "Deploy run $run_id at $head_sha"
+
+          if ! gh run download "$run_id" --name step12b-hosted-verification --dir "$dest"; then
+            echo "::warning::Deploy run $run_id uploaded no step12b-hosted-verification artifact. P stays open."
+            echo "attached=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # The record must be about the run it came out of. If it is not, this
+          # is a broken pipeline rather than a weaker pass, and saying so here
+          # is better than handing the reporter something to be confused by.
+          recorded=$(python3 -c "import json; print(json.load(open('$dest/verification.json'))['revision'])")
+          if [ "$recorded" != "$head_sha" ]; then
+            echo "::error::The artifact from run $run_id names $recorded but the run is at $head_sha."
+            exit 1
+          fi
+          python3 -c "import json; d=json.load(open('$dest/verification.json')); print('before', d['beforeRestart'], 'after', d['afterRestart'], 'ran', d['ranAt'])"
+          echo "attached=true" >> "$GITHUB_OUTPUT"
+          echo "path=$dest/verification.json" >> "$GITHUB_OUTPUT"
+
+      # Nothing above may have written into the workspace. The reporter refuses
+      # an attachment inside the repository, and its own record carries a
+      # `treeDirty` flag the combiner refuses to join on — so a step that left
+      # a file here would be discovered by one of them eventually. Discovering
+      # it now costs one line.
+      - name: The checkout is still clean
+        run: |
+          dirty=$(git status --porcelain)
+          if [ -n "$dirty" ]; then
+            echo "::error::This workflow wrote into the checkout:"
+            echo "$dirty"
+            exit 1
+          fi
+          echo "clean"
 
       - name: Run the Step 12B reporter in the container
         env:
@@ -63,8 +155,22 @@ jobs:
           # reports PARTIAL on the same nine because it has no fleet. Joining
           # the verdicts would make PARTIAL agree with PARTIAL; joining the
           # conditions gives the answer.
+          # The record goes in first, in its own session, because a second
+          # session on the same machine still sees /tmp — which the step below
+          # already relies on to bring the reading back out. Base64 through the
+          # command avoids one level of quoting rather than hiding anything:
+          # the file is four fields and a URL, and it is printed in the log
+          # above. `/tmp` is outside /app, so nothing lands in the image's copy
+          # of the tree either.
+          hosted_arg=""
+          if [ "${{ steps.hosted.outputs.attached }}" = "true" ]; then
+            b64=$(base64 -w0 "${{ steps.hosted.outputs.path }}")
+            flyctl ssh console --app "$app" \
+              -C "sh -c 'echo $b64 | base64 -d > /tmp/step12b-hosted.json'" >/dev/null
+            hosted_arg="--hosted /tmp/step12b-hosted.json"
+          fi
           flyctl ssh console --app "$app" \
-            -C "npm --prefix /app run --silent step12b:acceptance -- --emit /tmp/step12b-production.json" \
+            -C "npm --prefix /app run --silent step12b:acceptance -- --emit /tmp/step12b-production.json $hosted_arg" \
             2>&1 | tee acceptance12b.txt
           set -e
           # The verdict comes from the reporter's own summary line rather than

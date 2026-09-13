@@ -685,46 +685,232 @@ function productUnchangedSince(revision: string): boolean {
 }
 
 /**
- * Everything that decides what a deploy put on the machine.
+ * The repository whose Actions runs may attest a deploy of this Brain.
  *
- * **P compared the hosted record's revision to `HEAD` exactly, and that made
- * the condition unsatisfiable — then worse than unsatisfiable.** The record is
- * written by the Deploy workflow, which cannot commit to the branch it just
- * deployed (it holds the deployment credential, and the workflow says so). So
- * the record arrives as an artifact and lands in a commit *after* the deploy —
- * at which point `HEAD` is one commit past the revision named in it, the exact
- * match fails, and `held` goes to `false`: P **fails on the strength of its own
- * evidence**. Every future deploy reproduces it, one commit behind, for ever.
+ * A hosted verification record names the workflow run that produced it, and
+ * that name is only worth anything if it cannot be pointed somewhere else. A
+ * fork, a scratch repository, or any account at all can run a workflow that
+ * writes this file with `beforeRestart: true` in it — so the repository is
+ * fixed **in code**, the way `repositoryEnvelope.ts`, `probeEnvelope.ts` and
+ * `approvalEnvelope.ts` already fix theirs, for the reason §24 gives: nobody
+ * supplies the limits their own work is judged against.
  *
- * The rule that fixes it is already in this file, written for the visual
- * record, with its reasoning: *"an exact revision match is unsatisfiable by
- * construction: evidence is committed after it is taken, so a record naming
- * HEAD is stale the moment it lands. What matters is whether anything it
- * looked at moved."* This is that rule at the deploy boundary.
- *
- * It is deliberately **wider** than `productUnchangedSince`, not narrower: a
- * deploy is the client, the server, the image, the machine configuration, the
- * dependency tree and the workflow that assembled them. Any of those moving
- * means the record describes something other than what is running, and the
- * condition should read as not-this-revision again.
- *
- * **This is a loosening and I am flagging it rather than burying it.** A
- * commit-id match is stricter, and it is stricter about the wrong thing —
- * it fails for a docs commit, which changes nothing about the running Brain.
- * If the owner would rather keep the exact match, the honest consequence is
- * that P can never hold and the remedy is to stop committing the record at
- * all, not to accept a permanently failing row.
+ * It is not a security boundary and does not pretend to be one. Provenance is
+ * established by *where the artifact was fetched from* — the acceptance
+ * workflow downloads it from a named, successful `Deploy` run through the
+ * GitHub API — and this constant refuses a record that does not even claim to
+ * come from here.
  */
-function deployedUnchangedSince(revision: string): boolean {
-  return unchangedSince(revision, [
-    'client',
-    'server',
-    'Dockerfile',
-    'fly.toml',
-    'package.json',
-    'package-lock.json',
-    '.github/workflows/deploy.yml',
-  ]);
+const ATTESTING_REPOSITORY = 'Peyday007/V5';
+
+/** `https://github.com/<owner>/<repo>/actions/runs/<id>`, and nothing else. */
+const WORKFLOW_RUN_URL = new RegExp(
+  `^https://github\\.com/${ATTESTING_REPOSITORY.replace('/', '\\/')}/actions/runs/(\\d+)$`,
+);
+
+/**
+ * What the Deploy workflow proved, as an **external input** rather than a file
+ * in this tree.
+ *
+ * ---------------------------------------------------------------------------
+ * Why it may not live in the repository, and why the first version did
+ * ---------------------------------------------------------------------------
+ *
+ * The Deploy workflow already says it: *"Uploaded rather than committed: this
+ * job holds the deployment credential and must not be able to push to the
+ * branch it just deployed."* It writes `verification.json`, uploads it as the
+ * `step12b-hosted-verification` artifact, and stops.
+ *
+ * **I then transcribed that artifact into the tree by hand and taught P to read
+ * it from there, and both halves of that were wrong.** A committed record is
+ * necessarily one commit *later* than the revision it attests, so an exact
+ * revision match reads false for a record that is perfectly good — and my
+ * remedy for that was `deployedUnchangedSince`, which accepted the record while
+ * a named list of paths had not moved. That list omitted real image inputs,
+ * `scripts/` among them, which the commit carrying the record *was itself
+ * changing*. So it was a loosening that did not even hold at the moment it was
+ * introduced. It is deleted rather than extended: a list of image inputs has to
+ * be maintained against a Dockerfile nobody will re-read, and getting it wrong
+ * is silent.
+ *
+ * What replaces it needs no tolerance at all, because it removes the thing the
+ * tolerance existed for. **The artifact is attached to the report instead of
+ * committed**, so attaching this deploy's evidence takes no commit and no
+ * second deployment, and the revision it names is compared **exactly** to the
+ * revision this run is. In the container that is the sha stamped into the image
+ * at build time, which is precisely the thing the deploy proved something
+ * about.
+ *
+ * Four outcomes, and they are deliberately four rather than two:
+ *
+ *   nothing attached        `held: null` — a deploy at this revision has not
+ *                           been attached. Open, never exempt.
+ *   attached but not a record   `held: false`. Somebody attached something.
+ *                           *We could not read it* is a defect, not an absence.
+ *   attached, other revision    `held: false`, both revisions named. What is
+ *                           running was not what was proved.
+ *   attached, this revision     `held` is the run's own two verdicts.
+ */
+interface HostedRecord {
+  revision: string;
+  ranAt: string;
+  beforeRestart: boolean;
+  afterRestart: boolean;
+  workflowRun: string;
+}
+
+type HostedAttachment =
+  | { kind: 'ABSENT'; saw: string }
+  | { kind: 'UNREADABLE'; saw: string }
+  | { kind: 'READ'; record: HostedRecord; runId: string; saw: string };
+
+/**
+ * Where the attachment is, if one was attached.
+ *
+ * `--hosted <path>` or `BRAIN_STEP12B_HOSTED`, and a path **inside this
+ * repository is refused**. That refusal is the whole point rather than
+ * fastidiousness: a flag pointing at a tracked file is the committed record
+ * again wearing an argument, and it would quietly restore the defect this
+ * replaced. A checkout that stays clean is also what lets `unchangedSince`
+ * and `revisionOf().dirty` mean anything.
+ */
+/**
+ * A read-only inspection of the **deployed** Brain through the phone interface,
+ * attached the same way the hosted record is and for the same reasons.
+ *
+ * Two of J's conditions are about a *result*: a question a person typed that
+ * was answered, and a conclusion under Knows citing the mission that produced
+ * it. Neither can happen on a Brain this repository spawns — no inference is
+ * bought (§24), so a turn stays PENDING and no packet files a report — so they
+ * are open against a deployed Brain rather than awarded from navigation.
+ *
+ * `scripts/visual-qa.ts --deployed=<origin>` produces the record, reads only,
+ * seeds nothing and grants nothing: the answers it reports are work that was
+ * already there. It refuses to write its record inside this repository, and so
+ * does this reader, for the reason the hosted record taught — a reading of a
+ * running Brain committed into the tree is stale the moment it lands.
+ */
+interface DeployedPhoneRecord {
+  brain: string;
+  inspectedAt: string;
+  deployedRevision: string | null;
+  answeredQuestion: {
+    found: boolean;
+    status: string | null;
+    conversationId: string | null;
+    readOnScreen: boolean;
+  };
+  missionLinkedResult: {
+    found: boolean;
+    missionId: string | null;
+    knowledgeId: string | null;
+    citesDocument: boolean;
+    citesAudit: boolean;
+    readOnScreen: boolean;
+  };
+  screenshots: string[];
+  findings: string[];
+}
+
+function readDeployedPhone(): { record: DeployedPhoneRecord | null; saw: string } {
+  const flagAt = process.argv.indexOf('--phone');
+  const fromFlag = flagAt >= 0 ? process.argv[flagAt + 1] : undefined;
+  const raw = (fromFlag ?? process.env['BRAIN_STEP12B_PHONE'] ?? '').trim();
+  if (raw.length === 0) {
+    return {
+      record: null,
+      saw:
+        'no deployed phone reading was attached. `npx tsx scripts/visual-qa.ts ' +
+        '--deployed=<origin> --emit-phone=<path>` produces one; it reads only, seeds nothing ' +
+        'and grants nothing, and it needs a person\'s credential on that Brain because every ' +
+        'route it reads is behind requirePerson.',
+    };
+  }
+  const resolved = path.resolve(raw);
+  const inside = path.relative(REPO, resolved);
+  if (inside.length > 0 && !inside.startsWith('..') && !path.isAbsolute(inside)) {
+    return { record: null, saw: `the reading is inside this repository (${inside}), which it may not be` };
+  }
+  try {
+    return { record: JSON.parse(fs.readFileSync(resolved, 'utf8')) as DeployedPhoneRecord, saw: resolved };
+  } catch (error) {
+    return { record: null, saw: `${resolved} could not be read: ${(error as Error).message}` };
+  }
+}
+
+function hostedAttachmentPath(): string | null {
+  const flagAt = process.argv.indexOf('--hosted');
+  const fromFlag = flagAt >= 0 ? process.argv[flagAt + 1] : undefined;
+  const raw = (fromFlag ?? process.env['BRAIN_STEP12B_HOSTED'] ?? '').trim();
+  return raw.length > 0 ? raw : null;
+}
+
+function readHostedAttachment(): HostedAttachment {
+  const supplied = hostedAttachmentPath();
+  if (supplied === null) {
+    return {
+      kind: 'ABSENT',
+      saw:
+        'no hosted verification was attached to this report. The Deploy workflow uploads one ' +
+        'as the step12b-hosted-verification artifact; attach it with --hosted <path> or ' +
+        'BRAIN_STEP12B_HOSTED. A reporter cannot attest a CI run it did not observe, and ' +
+        'reading the workflow file would check that the steps are written down rather than ' +
+        'that they passed.',
+    };
+  }
+
+  const resolved = path.resolve(supplied);
+  const inside = path.relative(REPO, resolved);
+  if (inside.length > 0 && !inside.startsWith('..') && !path.isAbsolute(inside)) {
+    return {
+      kind: 'UNREADABLE',
+      saw:
+        `the attachment is inside this repository (${inside}), and a hosted record kept in the ` +
+        'tree is the committed record again: it needs a commit per deploy, and it lands one ' +
+        'commit after the revision it attests. Attach the artifact from outside the worktree.',
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+  } catch (error) {
+    return {
+      kind: 'UNREADABLE',
+      saw: `${resolved} could not be read as JSON: ${(error as Error).message}`,
+    };
+  }
+
+  const record = parsed as Partial<HostedRecord>;
+  const problems: string[] = [];
+  if (typeof record.revision !== 'string' || !/^[0-9a-f]{40}$/.test(record.revision)) {
+    problems.push('revision is not a 40-character commit id');
+  }
+  if (typeof record.ranAt !== 'string' || Number.isNaN(Date.parse(record.ranAt))) {
+    problems.push('ranAt is not a timestamp');
+  }
+  if (record.beforeRestart !== true && record.beforeRestart !== false) {
+    problems.push('beforeRestart is not a boolean');
+  }
+  if (record.afterRestart !== true && record.afterRestart !== false) {
+    problems.push('afterRestart is not a boolean');
+  }
+  const runMatch =
+    typeof record.workflowRun === 'string' ? WORKFLOW_RUN_URL.exec(record.workflowRun) : null;
+  if (runMatch === null) {
+    problems.push(`workflowRun does not name a run of ${ATTESTING_REPOSITORY}`);
+  }
+  if (problems.length > 0 || runMatch === null) {
+    return { kind: 'UNREADABLE', saw: `the attachment is not a hosted record: ${problems.join('; ')}` };
+  }
+
+  const runId = runMatch[1] as string;
+  return {
+    kind: 'READ',
+    record: record as HostedRecord,
+    runId,
+    saw: `run ${runId} at ${(record.revision as string).slice(0, 8)}`,
+  };
 }
 
 function visualEvidence(): { index: string | null; images: number; journeySteps: number } {
@@ -5051,6 +5237,8 @@ async function main(): Promise<void> {
       knowledgeRows?: number | null;
       knowledgeCitingThisMission?: number | null;
       askedTurnStatus?: string | null;
+      httpProgressMatchesBriefing?: boolean | null;
+      httpProgressSaw?: string | null;
     };
     findings: string[];
   }
@@ -5066,6 +5254,7 @@ async function main(): Promise<void> {
   }
 
   const effects = journey?.effects ?? null;
+  const deployedPhone = readDeployedPhone();
   const resumed =
     effects !== null &&
     effects.parkedMissionId !== null &&
@@ -5196,7 +5385,23 @@ async function main(): Promise<void> {
           `${effects.knowledgeCitingThisMission} conclusion(s) cite ` +
             `${effects.parkedMissionId ?? 'the mission'}, of ${effects.knowledgeRows ?? 0} in the project`,
         )
-      : {
+      : deployedPhone.record !== null
+        ? {
+            name: 'and its result was inspected there — a conclusion under Knows citing that mission',
+            held:
+              deployedPhone.record.missionLinkedResult.found &&
+              deployedPhone.record.missionLinkedResult.readOnScreen,
+            saw: deployedPhone.record.missionLinkedResult.found
+              ? `on ${deployedPhone.record.brain} at phone width: conclusion ` +
+                `${deployedPhone.record.missionLinkedResult.knowledgeId} cites mission ` +
+                `${deployedPhone.record.missionLinkedResult.missionId}` +
+                `${deployedPhone.record.missionLinkedResult.citesDocument ? ', its document' : ''}` +
+                `${deployedPhone.record.missionLinkedResult.citesAudit ? ' and the audit that judged it' : ''}` +
+                `; readable on screen: ${deployedPhone.record.missionLinkedResult.readOnScreen}`
+              : `on ${deployedPhone.record.brain}: no conclusion names the mission it came from, ` +
+                'so no mission has completed and written back there yet',
+          }
+        : {
           name: 'and its result was inspected there — a conclusion under Knows citing that mission',
           held: null,
           saw:
@@ -5205,7 +5410,8 @@ async function main(): Promise<void> {
             `${effects?.filedDocumentOnScreen ? `, though a document ${effects.filedDocumentOnScreen} is filed` : ', and no document is filed'}` +
             '. A conclusion needs a claim through gate.ts and a judge’s verdict, which needs a ' +
             'worker that reached the sources — so this Brain is correct to hold none, and ' +
-            'inventing one would be inventing a research result.',
+            'inventing one would be inventing a research result. ' +
+            deployedPhone.saw,
           needs: 'PRODUCTION',
         },
     effects?.askedTurnStatus === 'COMPLETE'
@@ -5214,13 +5420,28 @@ async function main(): Promise<void> {
           true,
           'Russell’s turn is COMPLETE',
         )
-      : {
+      : deployedPhone.record !== null
+        ? {
+            name: 'the question a person typed was answered rather than left waiting',
+            held:
+              deployedPhone.record.answeredQuestion.found &&
+              deployedPhone.record.answeredQuestion.readOnScreen,
+            saw: deployedPhone.record.answeredQuestion.found
+              ? `on ${deployedPhone.record.brain} at phone width: a person's question in ` +
+                `${deployedPhone.record.answeredQuestion.conversationId} has a reply that is ` +
+                `${deployedPhone.record.answeredQuestion.status}; readable on screen: ` +
+                `${deployedPhone.record.answeredQuestion.readOnScreen}`
+              : `on ${deployedPhone.record.brain}: no conversation holds a question a person typed ` +
+                'and a reply that is no longer PENDING',
+          }
+        : {
           name: 'the question a person typed was answered rather than left waiting',
           held: null,
           saw:
             `Russell’s turn is ${effects?.askedTurnStatus ?? 'not readable'}. §24: no inference is ` +
             'bought, so a turn persists as PENDING with its reason and a worker answers it — ' +
-            'which a Brain with no fleet cannot do.',
+            'which a Brain with no fleet cannot do. ' +
+            deployedPhone.saw,
           needs: 'PRODUCTION',
         },
     fromCheckout(
@@ -5810,14 +6031,52 @@ async function main(): Promise<void> {
             saw: `this run reads ${fleet.source}, whose projects are this run's own fixtures`,
             needs: 'PRODUCTION',
           },
-      {
-        name: 'the same comparison made over HTTP with an authenticated principal',
-        held: null,
-        saw:
-          'driven through the services the routes call, which is where the derivation lives. ' +
-          'The route layer adds authorization, and that is exercised by I and by ' +
-          'tests/russellHttp.test.ts rather than duplicated here.',
-      },
+      /*
+       * The same comparison, over a socket, as a signed-in person.
+       *
+       * This used to be `held: null` with a paragraph: *"driven through the
+       * services the routes call, which is where the derivation lives. The
+       * route layer adds authorization, and that is exercised by I and by
+       * tests/russellHttp.test.ts rather than duplicated here."* Every
+       * sentence of that is true and it is still the substitution this file
+       * refuses everywhere else — **a scenario whose unmet condition is a
+       * paragraph is a scenario nobody can finish**, which is the exact
+       * sentence `docs/STEP-12B-GATE-RECONCILIATION.md` was written around.
+       *
+       * It is answered in the phone journey rather than here, because the
+       * question needs a real server on a real socket and a real person signed
+       * into it — and that harness already has both while this reporter has
+       * neither. Spawning a Brain inside a read-only reporter to ask one
+       * question would be the more expensive way to get a worse answer, and
+       * would put a bootstrap password and a port lottery into a report.
+       *
+       * Two routes, two independent derivations: `/progress` calls
+       * `projectProgress`, `/briefing` calls `briefing`, and they must agree
+       * field for field while naming three *different* denominators.
+       */
+      /*
+       * Written out rather than through `fromCheckout`, because this condition
+       * has three outcomes and that helper has two. A checkout whose journey
+       * recorded no comparison is a **missing measurement** — `null` — and must
+       * not read as a disagreement between two routes. *We could not tell* is
+       * never *we checked*, this file's oldest rule.
+       */
+      !REPO_VISIBLE
+        ? {
+            name: 'the same comparison made over HTTP with an authenticated principal',
+            held: null,
+            saw: 'this run cannot see the repository',
+            needs: 'CHECKOUT' as const,
+          }
+        : {
+            name: 'the same comparison made over HTTP with an authenticated principal',
+            held: effects?.httpProgressMatchesBriefing ?? null,
+            saw:
+              effects?.httpProgressSaw ??
+              (journey === null
+                ? 'no journey record exists yet, so the comparison has not been made'
+                : 'this journey predates the HTTP comparison, so it recorded none'),
+          },
     ],
     `Four readers of one projection, driven against one project with ${foundations.length} ` +
       `foundations in ${new Set(foundations.map((f) => f.status)).size} different states at one ` +
@@ -6089,28 +6348,21 @@ async function main(): Promise<void> {
    *
    * It runs against a real machine either side of a real restart, and a
    * reporter cannot attest a CI run it did not observe — so what it reads is
-   * the record that run leaves behind, and the condition is open until one
-   * exists for this revision. Open, not exempt: R13 is a requirement.
+   * the record that run leaves behind, **attached to this report from outside
+   * the worktree** rather than committed into it. The reasoning is on
+   * `readHostedAttachment`; the short version is that a committed record needs
+   * a commit per deploy and lands one commit after the revision it attests, and
+   * the tolerance I built for that omitted real image inputs.
+   *
+   * The comparison is exact, and it can be exact because the record no longer
+   * has to be older than the tree. Open until one is attached for this
+   * revision. Open, not exempt: R13 is a requirement.
    */
-  interface HostedRecord {
-    revision: string;
-    ranAt: string;
-    beforeRestart: boolean;
-    afterRestart: boolean;
-    workflowRun: string;
-  }
-  const hostedRaw = file(path.join('docs', 'evidence', 'step12b-hosted', 'verification.json'));
-  let hosted: HostedRecord | null = null;
-  if (hostedRaw) {
-    try {
-      hosted = JSON.parse(hostedRaw) as HostedRecord;
-    } catch {
-      hosted = null;
-    }
-  }
-  const hostedMatches =
-    hosted !== null &&
-    (hosted.revision === revisionOf().revision || deployedUnchangedSince(hosted.revision));
+  const hostedAttachment = readHostedAttachment();
+  const thisRevision = revisionOf().revision;
+  const hosted = hostedAttachment.kind === 'READ' ? hostedAttachment.record : null;
+  const hostedIsThisRevision = hosted !== null && hosted.revision === thisRevision;
+
   /*
    * Probed directly rather than gated on `REPO_VISIBLE`, and the difference is
    * not pedantry.
@@ -6226,22 +6478,28 @@ async function main(): Promise<void> {
       ),
       {
         name: 'the hosted verification passes either side of a real restart of a real machine',
-        held: hosted === null ? null : hostedMatches && hosted.beforeRestart && hosted.afterRestart,
-        ...(hosted === null ? { awaits: 'a Deploy run at this revision' } : {}),
+        held:
+          hostedAttachment.kind === 'ABSENT'
+            ? null
+            : hostedAttachment.kind === 'UNREADABLE'
+              ? false
+              : hostedIsThisRevision &&
+                hostedAttachment.record.beforeRestart &&
+                hostedAttachment.record.afterRestart,
+        ...(hostedAttachment.kind === 'ABSENT'
+          ? { awaits: 'a Deploy run at this revision, attached to this report' }
+          : {}),
         saw:
-          hosted === null
-            ? 'no hosted record exists for any revision yet. The Deploy workflow produces it; ' +
-              'a reporter cannot attest a CI run it did not observe, and reading the workflow ' +
-              'file would check that the steps are written down rather than that they passed.'
-            : hostedMatches
-              ? `run ${hosted.workflowRun} at ${hosted.revision.slice(0, 8)}: before=` +
-                `${hosted.beforeRestart}, after=${hosted.afterRestart}` +
-                (hosted.revision === revisionOf().revision
-                  ? ' (this exact revision)'
-                  : ' — and nothing that decides what a deploy puts on the machine has moved since')
-              : `the only hosted record is for ${hosted.revision.slice(0, 8)}, and the client, ` +
-                'server, image, machine configuration, dependencies or deploy workflow have ' +
-                'moved since — so it describes something other than what is running',
+          hostedAttachment.kind !== 'READ'
+            ? hostedAttachment.saw
+            : hostedIsThisRevision
+              ? `run ${hostedAttachment.runId} at ${hostedAttachment.record.revision.slice(0, 8)}` +
+                ` — this exact revision, attested by ${revisionOf().attestedBy} — before=` +
+                `${hostedAttachment.record.beforeRestart}, after=${hostedAttachment.record.afterRestart}` +
+                `, ran at ${hostedAttachment.record.ranAt}`
+              : `run ${hostedAttachment.runId} proved ${hostedAttachment.record.revision.slice(0, 8)}` +
+                `, and this run is ${(thisRevision ?? 'an unknown revision').slice(0, 8)}` +
+                ` (${revisionOf().attestedBy}) — so what is running is not what was proved`,
       },
     ],
     'Three of these are facts about what this run itself did — it migrated an empty database, ' +
