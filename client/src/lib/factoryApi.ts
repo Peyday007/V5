@@ -101,11 +101,23 @@ export const FactoryApi = {
    *
    * The reply carries the invitation link once. Nothing reads it back.
    */
-  onboard: (projectId: string, grantId: string): Promise<OnboardResult> =>
+  /**
+   * Onboarding carries the boundary, because the boundary has no default.
+   *
+   * `scopeKind` is required by the route: a project owning the whole repository
+   * is an ordinary answer and it has to be *given*. The defect this closes is
+   * that the widest possible reach used to be what a caller got by saying
+   * nothing. See `server/services/factory/projectScope.ts`.
+   */
+  onboard: (
+    projectId: string,
+    grantId: string,
+    scope: { scopeKind: 'WHOLE_REPOSITORY' } | { scopeKind: 'DIRECTORIES'; directories: string[] },
+  ): Promise<OnboardResult> =>
     api(
       `/api/projects/${encodeURIComponent(projectId)}/factory/repositories/` +
         `${encodeURIComponent(grantId)}/onboard`,
-      { method: 'POST' },
+      { method: 'POST', body: JSON.stringify(scope) },
     ),
 
   changeRequests: (projectId: string): Promise<{ changeRequests: FactoryChangeRequest[] }> =>

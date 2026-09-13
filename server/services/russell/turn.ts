@@ -49,6 +49,7 @@ import {
 import { decideProjectAccess } from '../identity/policy.ts';
 import { getProject } from '../../repos/projects.ts';
 import { capture, shouldCapture } from './judgment.ts';
+import { answerClarification, captureSoftwareChange } from './software.ts';
 import { routeMessage } from './routing.ts';
 import {
   EXECUTABLE_ACTIONS,
@@ -353,6 +354,40 @@ async function createTurnBin(input: {
          */
         `optional "priority", from exactly this set: ${CANDIDATE_PRIORITIES.join(', ')}`,
         'for CAPTURE_CANDIDATE: a "candidate" object with "title" and "statement"',
+        /*
+         * The distinction the software entrance turns on, stated to the worker
+         * rather than left to be inferred — the same lesson `priority` and
+         * `duplicateOf` each cost a real turn to learn.
+         *
+         * It says what the two actions *are*, and deliberately does not say
+         * which repository or which files: those are an authorization a person
+         * holds, and a manifest that invited a guess at them would be inviting
+         * exactly the model-chosen scope this design refuses. It also says
+         * plainly that nothing runs — a worker that thought it was starting
+         * work would write the objective differently.
+         */
+        'REQUEST_SOFTWARE_CHANGE is for a change to this project’s code that the person ' +
+          'is asking to have made — "change the checkout page so the total updates without ' +
+          'a reload". Weighing one, or wondering aloud about one, is CAPTURE_CANDIDATE ' +
+          'instead. Nothing is submitted or run by either: this writes it down for the ' +
+          'person to authorize, and they choose the repository.',
+        'for REQUEST_SOFTWARE_CHANGE: a "software" object with "title" (short), ' +
+          '"objective" (what should become true in the code) and "expectedOutcome" ' +
+          '(what a person would see differently afterwards). Do not name a repository, ' +
+          'a branch, a file or a directory — Brain supplies those from what this project ' +
+          'is authorized to change.',
+        /*
+         * The card is read on its own, days later, by somebody deciding whether
+         * to spend a fleet on it. "Do the same for the contact page" is a
+         * perfectly clear sentence in a conversation and an unauthorizable one
+         * on a card, so the objective has to carry what the conversation was
+         * holding for it. Brain cannot supply this: only the reader of the
+         * thread knows what "that" was.
+         */
+        'when the person refers back — "do that for the contact page too", "the same ' +
+          'again" — write the objective out in full. The person authorizes it from a card ' +
+          'that shows only what you wrote, so an objective that points at an earlier ' +
+          'message is one nobody can act on.',
         /*
          * The one comparison a model is better at than the server, offered as
          * a claim the server then checks.
@@ -974,6 +1009,48 @@ async function applyValidated(input: {
   const conversation = await getConversation(conversationId);
   if (!conversation) return { produced: {}, candidateId: null };
 
+  /*
+   * ---------------------------------------------------------------------------
+   * An answer to a question Brain asked, before anything a model proposed
+   * ---------------------------------------------------------------------------
+   *
+   * When Brain refuses to guess which project a change belongs to, the person's
+   * next message is usually two words — "V4", "the Brain one". That is an
+   * *answer*, not a request: it has no verb, names nothing to do, and is shorter
+   * than the gate's own floor, so `asksForExecution` declines it and always
+   * will. Leaving it there means the product asks somebody to retype an
+   * instruction it already understood, which is §24's stuck-not-waiting defect
+   * wearing a conversation.
+   *
+   * It runs **before** the switch and **returns**, for one reason: exactly one
+   * proposal must come out of one answer. A worker reading the thread may well
+   * restate the request as its own `REQUEST_SOFTWARE_CHANGE`, and a restatement
+   * that differs by a word is a different submission key and therefore a second
+   * card for one decision. Brain's own record of what it asked outranks a
+   * model's memory of it.
+   *
+   * It is deterministic all the way down — the ask comes from the row Brain
+   * wrote, the project from a name match against what the question offered, and
+   * the effect is the same unauthorized row a capture makes.
+   */
+  const answered = await answerClarification({
+    principal: owner,
+    conversationId,
+    replyText: input.askedText,
+    messageId: input.askedMessageId ?? null,
+  });
+  if (answered.resolved && answered.request) {
+    return {
+      produced: {
+        softwareRequestId: answered.request.id,
+        softwareCreated: answered.created === true,
+        softwareOutcome: 'captured',
+        clarificationAnsweredWith: answered.projectId,
+      },
+      candidateId: null,
+    };
+  }
+
   switch (proposal.action) {
     case 'ATTACH_PROJECT': {
       if (!proposal.projectId) break;
@@ -1058,6 +1135,105 @@ async function applyValidated(input: {
           captureOutcome: outcome.reason,
         },
         candidateId: outcome.candidate?.id ?? null,
+      };
+    }
+
+    case 'REQUEST_SOFTWARE_CHANGE': {
+      if (!proposal.software) break;
+      /*
+       * A software change belongs to a project, because the project is what a
+       * repository was authorized for. A thread with none attached cannot have
+       * one, and saying so is better than capturing a request nobody could
+       * ever authorize.
+       */
+      if (!conversation.projectId) {
+        return {
+          produced: { softwareDeclined: true, gateReason: 'NO_PROJECT_ATTACHED' },
+          candidateId: null,
+        };
+      }
+      /*
+       * The deterministic gate, on the person's own message rather than the
+       * worker's restatement of it — `shouldCapture`'s correction applied to
+       * the harder question. Discussing a change is not asking for one, and a
+       * model that decided otherwise would put an authorization card in front
+       * of somebody who was thinking out loud.
+       */
+      const outcome = await captureSoftwareChange({
+        projectId: conversation.projectId,
+        conversationId,
+        messageId: input.askedMessageId ?? null,
+        askedText: input.askedText,
+        title: proposal.software.title,
+        objective: proposal.software.objective,
+        expectedOutcome: proposal.software.expectedOutcome,
+        /*
+         * The conversation **owner**, never the worker.
+         *
+         * §24's rule at this seam: a turn is validated against the owner's
+         * authority, because the effects land in their scope. A worker that
+         * could widen which projects count as "named" would be reaching past
+         * the person whose thread it is.
+         */
+        principal: owner,
+      });
+      if (!outcome.request) {
+        return {
+          produced: {
+            softwareDeclined: true,
+            gateReason: outcome.reason,
+            /*
+             * A refusal Brain will not guess past is a question, not silence.
+             *
+             * The gate's ordinary refusals ("it weighs a change rather than
+             * asking for one") need no answer — the person said something that
+             * was not a request. An *ambiguous* one is different: they did ask,
+             * and the only thing missing is a word only they have. Carrying the
+             * sentence here is what stops that reading as Russell declining to
+             * do its job, which is the shape §24 keeps recording.
+             */
+            ...(outcome.clarify ? { clarify: outcome.clarify.answer } : {}),
+            /*
+             * The ask itself, kept so the answer can finish it.
+             *
+             * Without this the person has to type the whole instruction again
+             * to say one word, because "V4" is not a change request and the
+             * gate is right to decline it for ever. These three fields are the
+             * ones `validateProposal` already accepted on this turn — nothing
+             * new is trusted, and the row they eventually make is still
+             * `PROPOSED` and still authorized by a person.
+             */
+            ...(outcome.clarify ? { pendingAsk: proposal.software } : {}),
+            /*
+             * The projects the question offered, so the answer is judged
+             * against what was actually asked rather than against every project
+             * in the Brain.
+             */
+            ...(outcome.clarify && 'choices' in outcome.clarify
+              ? { clarifyChoices: outcome.clarify.choices }
+              : {}),
+            /*
+             * And what the request ruled out, so answering the question cannot
+             * put it back. An exclusion belongs to the request rather than to
+             * the sentence that carried it, and the empty-choices case is
+             * exactly where it would otherwise be lost.
+             */
+            ...(outcome.clarify && 'excluded' in outcome.clarify
+              ? { clarifyExcluded: outcome.clarify.excluded }
+              : {}),
+          },
+          candidateId: null,
+        };
+      }
+      return {
+        produced: {
+          softwareRequestId: outcome.request.id,
+          softwareCreated: outcome.created,
+          // Said out loud, because "written down for you to authorize" and
+          // "you already have this waiting" are different answers.
+          softwareOutcome: outcome.reason,
+        },
+        candidateId: null,
       };
     }
 

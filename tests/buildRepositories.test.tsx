@@ -37,6 +37,7 @@ interface Reply {
 
 let routes: Record<string, Reply | (() => Reply)> = {};
 let calls: string[] = [];
+let bodies: Record<string, unknown> = {};
 
 const PROJECT = 'prj_1';
 const GRANT = 'brain-worker-bootstrap';
@@ -96,9 +97,13 @@ function base(over: Record<string, Reply | (() => Reply)> = {}): void {
 
 beforeEach(() => {
   calls = [];
+  bodies = {};
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const key = `${init?.method ?? 'GET'} ${typeof input === 'string' ? input : String(input)}`;
     calls.push(key);
+    // What was actually sent, so a test can assert the boundary rather than
+    // only that a request happened.
+    if (typeof init?.body === 'string') bodies[key] = JSON.parse(init.body) as unknown;
     const found = routes[key];
     const answer: Reply = !found
       ? { status: 404, body: { error: 'No such route.' } }
@@ -123,6 +128,20 @@ afterEach(() => {
 async function mount(): Promise<void> {
   await act(async () => {
     render(<BuildView projectId={PROJECT} />);
+  });
+}
+
+/**
+ * Answer the boundary question, which onboarding now refuses to default.
+ *
+ * Every one of these tests has to do it, which is the property being pinned as
+ * much as a setup step: the button does nothing until a person has said what
+ * this project may change, because the defect the boundary closes is that the
+ * widest possible reach used to be what you got by saying nothing.
+ */
+async function chooseWholeRepository(): Promise<void> {
+  await act(async () => {
+    fireEvent.click(within(card()).getByLabelText(/The whole repository/));
   });
 }
 
@@ -202,12 +221,89 @@ describe('the Build card says what is connected and what is missing', () => {
   });
 });
 
+describe('the boundary is asked, never defaulted', () => {
+  it('will not onboard until a person says what this project may change', async () => {
+    base({ [ONBOARD]: { body: ISSUED }, [REPOSITORIES]: { body: { repositories: [grant()] } } });
+    await mount();
+    await waitFor(() => expect(card()).toBeTruthy());
+
+    /*
+     * Neither radio starts selected and the button is disabled while that is
+     * true. A pre-selected "whole repository" would be the old `['**']` default
+     * wearing a control, which is exactly the thing this closes.
+     */
+    expect(
+      within(card()).getByRole('button', { name: /Onboard this repository/ }),
+    ).toHaveProperty('disabled', true);
+    expect((within(card()).getByLabelText(/The whole repository/) as HTMLInputElement).checked).toBe(
+      false,
+    );
+    expect((within(card()).getByLabelText(/Only these directories/) as HTMLInputElement).checked).toBe(
+      false,
+    );
+
+    await act(async () => {
+      fireEvent.click(within(card()).getByRole('button', { name: /Onboard this repository/ }));
+    });
+    expect(calls.filter((c) => c === ONBOARD)).toHaveLength(0);
+  });
+
+  it('sends the directories a person typed, as directories rather than patterns', async () => {
+    base({ [ONBOARD]: { body: ISSUED }, [REPOSITORIES]: { body: { repositories: [grant()] } } });
+    await mount();
+    await waitFor(() => expect(card()).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.click(within(card()).getByLabelText(/Only these directories/));
+    });
+    await act(async () => {
+      fireEvent.change(
+        within(card()).getByLabelText(/Directories this project may change/),
+        { target: { value: 'sites/v4\nshared/ui' } },
+      );
+    });
+    await act(async () => {
+      fireEvent.click(within(card()).getByRole('button', { name: /Onboard this repository/ }));
+    });
+
+    expect(bodies[ONBOARD]).toEqual({
+      scopeKind: 'DIRECTORIES',
+      directories: ['sites/v4', 'shared/ui'],
+    });
+  });
+
+  it('says what a project may change once it has been told', async () => {
+    base({
+      [REPOSITORIES]: {
+        body: {
+          repositories: [
+            {
+              ...grant(),
+              readiness: 'READY',
+              surfaces: ['V1 factory'],
+              boundary: {
+                scopeKind: 'DIRECTORIES',
+                directories: ['sites/v4'],
+                sentence: 'sites/v4/',
+              },
+            },
+          ],
+        },
+      },
+    });
+    await mount();
+    await waitFor(() => expect(card()).toBeTruthy());
+    expect(within(card()).getByText(/sites\/v4\//)).toBeTruthy();
+  });
+});
+
 describe('onboarding, pressed by a person', () => {
   it('issues exactly one invitation and shows it once', async () => {
     base({ [ONBOARD]: { body: ISSUED }, [REPOSITORIES]: { body: { repositories: [grant()] } } });
     await mount();
     await waitFor(() => expect(card()).toBeTruthy());
 
+    await chooseWholeRepository();
     await act(async () => {
       fireEvent.click(within(card()).getByRole('button', { name: /Onboard this repository/ }));
     });
@@ -241,6 +337,7 @@ describe('onboarding, pressed by a person', () => {
     await waitFor(() => expect(card()).toBeTruthy());
     expect(within(card()).getByText('No worker registered')).toBeTruthy();
 
+    await chooseWholeRepository();
     await act(async () => {
       fireEvent.click(within(card()).getByRole('button', { name: /Onboard this repository/ }));
     });
@@ -275,6 +372,7 @@ describe('onboarding, pressed by a person', () => {
 
     await mount();
     await waitFor(() => expect(card()).toBeTruthy());
+    await chooseWholeRepository();
     const button = within(card()).getByRole('button', { name: /Onboard this repository/ });
 
     await act(async () => {
@@ -314,6 +412,7 @@ describe('onboarding, pressed by a person', () => {
     await mount();
     await waitFor(() => expect(card()).toBeTruthy());
 
+    await chooseWholeRepository();
     await act(async () => {
       fireEvent.click(within(card()).getByRole('button', { name: /Onboard this repository/ }));
     });
@@ -330,6 +429,7 @@ describe('onboarding, pressed by a person', () => {
     await mount();
     await waitFor(() => expect(card()).toBeTruthy());
 
+    await chooseWholeRepository();
     await act(async () => {
       fireEvent.click(within(card()).getByRole('button', { name: /Onboard this repository/ }));
     });

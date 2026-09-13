@@ -45,6 +45,9 @@ import type {
   FactoryEnvironment,
   FactoryFailureCategory,
   FactoryModelClass,
+  FactoryProjectRepository,
+  FactoryProjectRepositoryRow,
+  FactoryScopeKind,
   FactoryRiskClass,
   FactoryRole,
   FactoryUnitKind,
@@ -1568,4 +1571,107 @@ export async function sweepExpiredUnitLeases(): Promise<number> {
     [at, at],
   );
   return result.changes;
+}
+
+/* ------------------------------------------------------------------------- */
+/* A project's authorization for one repository, and its directory boundary   */
+/* ------------------------------------------------------------------------- */
+
+function toProjectRepository(row: FactoryProjectRepositoryRow): FactoryProjectRepository {
+  return {
+    projectId: row.project_id,
+    grantId: row.grant_id,
+    repositoryId: row.repository_id,
+    scopeKind: row.scope_kind as FactoryScopeKind,
+    pathScope: parseJson<string[]>(row.path_scope, []),
+    reason: row.reason,
+    setBy: row.set_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * Write, or rewrite, one project's boundary for one repository.
+ *
+ * Rewritten rather than accumulated, for the reason onboarding is a repair
+ * rather than an accumulation: a person answering the question a second time is
+ * correcting the answer, and two rows would make "the boundary" ambiguous and
+ * `resolveProjectScope`'s choice an accident of ordering.
+ */
+export async function setProjectRepository(input: {
+  projectId: string;
+  grantId: string;
+  repositoryId: string;
+  scopeKind: FactoryScopeKind;
+  pathScope: string[];
+  reason: string;
+  setBy: string;
+}): Promise<FactoryProjectRepository> {
+  const at = factoryNow();
+  const db = getDb();
+  const existing = await db.get<FactoryProjectRepositoryRow>(
+    'SELECT * FROM factory_project_repositories WHERE project_id = ? AND grant_id = ?',
+    [input.projectId, input.grantId],
+  );
+  if (existing) {
+    await db.run(
+      `UPDATE factory_project_repositories
+          SET repository_id = ?, scope_kind = ?, path_scope = ?, reason = ?, set_by = ?,
+              updated_at = ?
+        WHERE project_id = ? AND grant_id = ?`,
+      [
+        input.repositoryId.toLowerCase(),
+        input.scopeKind,
+        toJson(input.pathScope),
+        input.reason,
+        input.setBy,
+        at,
+        input.projectId,
+        input.grantId,
+      ],
+    );
+  } else {
+    await db.run(
+      `INSERT INTO factory_project_repositories
+         (project_id, grant_id, repository_id, scope_kind, path_scope, reason, set_by,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.projectId,
+        input.grantId,
+        input.repositoryId.toLowerCase(),
+        input.scopeKind,
+        toJson(input.pathScope),
+        input.reason,
+        input.setBy,
+        at,
+        at,
+      ],
+    );
+  }
+  const fresh = await getProjectRepository(input.projectId, input.grantId);
+  if (!fresh) throw new Error('The project repository row vanished while being written.');
+  return fresh;
+}
+
+export async function getProjectRepository(
+  projectId: string,
+  grantId: string,
+): Promise<FactoryProjectRepository | null> {
+  const row = await getDb().get<FactoryProjectRepositoryRow>(
+    'SELECT * FROM factory_project_repositories WHERE project_id = ? AND grant_id = ?',
+    [projectId, grantId],
+  );
+  return row ? toProjectRepository(row) : null;
+}
+
+export async function listProjectRepositories(
+  projectId: string,
+): Promise<FactoryProjectRepository[]> {
+  const rows = await getDb().all<FactoryProjectRepositoryRow>(
+    'SELECT * FROM factory_project_repositories WHERE project_id = ? ORDER BY grant_id',
+    [projectId],
+  );
+  return rows.map(toProjectRepository);
 }
