@@ -387,12 +387,16 @@ function record(
  *                    combiner exists precisely to join a run that could look
  *                    with one that could not.
  *
- * A condition may also be permanently out of reach, and three are: a decision
- * that is the owner's, a capability this version declares and refuses, and a
- * measurement that would spend the subscription. Those carry `standing: true`
- * and are reported in the detail without holding the verdict down — the matrix
- * records them as the answer rather than as a shortfall, and a gate that could
- * never pass because of one would be a gate nobody can finish.
+ * A condition that is hard, expensive or unwelcome to prove is **still open**.
+ * There used to be a fourth state — `standing: true` — for conditions the
+ * matrix argues are the answer rather than a shortfall, and `verdictOf` skipped
+ * them. That let a gate read PASS with a required condition unproved
+ * underneath it, and two of the seven it was used on were requirements: the
+ * hosted pre/post-restart check is R13, and what a real Cowork surface holds is
+ * what T3, T4 and T5 are about. **A flag this file sets on itself cannot be
+ * what removes a requirement from completion**, so the only thing that does is
+ * `deferredBy` — a decision an owner made, with who, when and where it is
+ * recorded. Nothing here constructs one.
  */
 interface GateCondition {
   name: string;
@@ -412,7 +416,26 @@ interface GateCondition {
    * in this reporter since it was written.
    */
   awaits?: string;
-  standing?: true;
+  /**
+   * An owner-approved deferral, and the only thing that takes a required
+   * condition out of the denominator.
+   *
+   * **This was `standing?: true` and that was wrong, and the correction is
+   * recorded rather than quietly applied.** `standing` meant "recorded as the
+   * answer rather than as a shortfall", and `verdictOf` skipped those
+   * conditions entirely — so a gate could read PASS with a required condition
+   * unproved underneath it. Two of the seven it was used on were genuine
+   * requirements: the hosted pre/post-restart check is R13, and what a real
+   * Cowork surface holds is what T3, T4 and T5 are about. A flag this file
+   * sets on itself cannot be what removes a requirement from completion.
+   *
+   * So a deferral has to point at a decision somebody made: who, when, and
+   * where it is recorded. Nothing in this file constructs one — it is a shape
+   * for reading a decision out of the matrix or the database, and today
+   * nothing does, which is why every former `standing` condition is now simply
+   * open.
+   */
+  deferredBy?: { owner: string; recordedAt: string; where: string };
 }
 
 /**
@@ -466,7 +489,7 @@ function fromProduction(name: string, held: boolean, saw: string): GateCondition
 
 function verdictOf(conditions: GateCondition[]): Verdict {
   if (conditions.length === 0) return 'NOT_RUN';
-  const judged = conditions.filter((c) => c.standing !== true);
+  const judged = conditions.filter((c) => c.deferredBy === undefined);
   if (judged.some((c) => c.held === false)) return 'FAIL';
   /*
    * A scenario whose conditions are **all** standing is answered, not unrun.
@@ -478,11 +501,12 @@ function verdictOf(conditions: GateCondition[]): Verdict {
    * *as* the answer rather than as a shortfall, so a gate made only of them has
    * been answered in the only way it can be.
    *
-   * The loophole is real and is left open deliberately: marking every condition
-   * standing would pass any scenario. What stops that is that `standing: true`
-   * appears in source, once per use, with the argument for it written beside
-   * it — the same thing that keeps `PREFERENCES` and `PRESSURE_MODES` honest.
-   * No gate in this file is standing-only today.
+   */
+  /*
+   * Every condition deferred by the owner and none left to judge. Not reachable
+   * today, because nothing constructs a deferral — kept because the alternative
+   * is `[].every(...)` returning true and the gate reading NOT_RUN, which is
+   * the drift a test caught between this and the combiner once already.
    */
   if (judged.length === 0) return 'PASS';
   /*
@@ -514,12 +538,12 @@ function recordConditions(
   const verdict = verdictOf(conditions);
   const broke = conditions.filter((c) => c.held === false);
   const waiting = conditions.filter(
-    (c) => c.held === null && c.standing !== true && c.awaits !== undefined,
+    (c) => c.held === null && c.deferredBy === undefined && c.awaits !== undefined,
   );
   const unreachable = conditions.filter(
-    (c) => c.held === null && c.standing !== true && c.awaits === undefined,
+    (c) => c.held === null && c.deferredBy === undefined && c.awaits === undefined,
   );
-  const standing = conditions.filter((c) => c.standing === true);
+  const deferred = conditions.filter((c) => c.deferredBy !== undefined);
   const parts: string[] = [lede];
   if (broke.length > 0) {
     parts.push(
@@ -531,7 +555,7 @@ function recordConditions(
   const held = conditions.filter((c) => c.held === true);
   if (held.length > 0) {
     parts.push(
-      `${held.length}/${conditions.filter((c) => c.standing !== true).length} condition(s) held: ` +
+      `${held.length}/${conditions.filter((c) => c.deferredBy === undefined).length} condition(s) held: ` +
         held.map((c) => `${c.name} — ${c.saw}`).join('; ') +
         '.',
     );
@@ -548,10 +572,16 @@ function recordConditions(
         '. A run in that environment answers it, and `step12b-combine.ts` joins the two.',
     );
   }
-  if (standing.length > 0) {
+  if (deferred.length > 0) {
     parts.push(
-      'Standing and recorded as the answer rather than as a shortfall: ' +
-        standing.map((c) => `${c.name} — ${c.saw}`).join('; ') +
+      'Deferred by the owner, and out of the denominator only because of that: ' +
+        deferred
+          .map(
+            (c) =>
+              `${c.name} — ${c.deferredBy?.owner} on ${c.deferredBy?.recordedAt}, ` +
+              `recorded in ${c.deferredBy?.where}`,
+          )
+          .join('; ') +
         '.',
     );
   }
@@ -3861,7 +3891,6 @@ async function main(): Promise<void> {
           'what adjacent possibility is absent, what lesson transfers, what the map hides — ' +
           'a Brain that filled these in from a template would be manufacturing insight, ' +
           'which is §8 at the altitude where breaking it is most tempting.',
-        standing: true,
       },
       fromProduction(
         'the frontier is derived on the deployed Brain too, not only in a fixture',
@@ -4218,7 +4247,6 @@ async function main(): Promise<void> {
           'would produce figures a reader could not tell from measurements. The mechanism is ' +
           'complete and the measurement is not taken; an operator with an isolated scope can ' +
           'take it with no code change.',
-        standing: true,
       },
     ],
     `${LAB_MODES.length} modes declared, run and read back in an isolated TECHNICAL scope, ` +
@@ -4328,10 +4356,22 @@ async function main(): Promise<void> {
           : 'no measured readings are committed',
       ),
       {
-        name: 'whether the maps are any good',
-        held: null,
-        saw: "that is O's question, and it is a person's. Nothing here may answer it.",
-        standing: true,
+        /*
+         * Read from the same decision O reads, rather than left as a sentence.
+         *
+         * It was prose saying "that is O's question" — which is true, and which
+         * made it a condition nothing could ever satisfy, reintroducing the
+         * exact defect this whole reconciliation removed. Whether the maps look
+         * right is part of what a design approval covers, so it holds when that
+         * approval exists for this revision and these bytes, and waits on the
+         * owner until it does.
+         */
+        name: 'whether the maps are any good — covered by the design approval O reads',
+        held: design.decision ? design.decision.decision === 'APPROVED' : null,
+        ...(design.decision ? {} : { awaits: 'the owner, in O' }),
+        saw: design.decision
+          ? `the standing decision is ${design.decision.decision}`
+          : 'no design decision is recorded for this revision and render set',
       },
     ],
     `${MAP_TYPES.length} map types built over a project with real rows, each compared against ` +
@@ -4707,7 +4747,6 @@ async function main(): Promise<void> {
         saw:
           'the harness drives one engine at one ratio. Saying so is the honest bound on what ' +
           'the journey establishes; widening it is a harness change rather than a product one.',
-        standing: true,
       },
     ],
     'One browser, one session and one scroll history: after the first address nothing ' +
@@ -5142,7 +5181,6 @@ async function main(): Promise<void> {
           'driven through the services the routes call, which is where the derivation lives. ' +
           'The route layer adds authorization, and that is exercised by I and by ' +
           'tests/russellHttp.test.ts rather than duplicated here.',
-        standing: true,
       },
     ],
     `Four readers of one projection, driven against one project with ${foundations.length} ` +
@@ -5477,7 +5515,6 @@ async function main(): Promise<void> {
           'that runs inside the Deploy workflow, against a real machine being restarted. A ' +
           'reporter cannot attest a CI run it did not observe, and reading the workflow file ' +
           'would be checking that the steps are written down rather than that they passed.',
-        standing: true,
       },
     ],
     'Three of these are facts about what this run itself did — it migrated an empty database, ' +
@@ -5713,7 +5750,6 @@ async function main(): Promise<void> {
           'that drove one against the live fleet would be the contamination R5 forbids, ' +
           'committed by the thing checking for it. Applying a finding on the deployed fleet is ' +
           "an operator's decision, through the same `applyFinding` this exercises.",
-        standing: true,
       },
     ],
     'The canary cycle is driven end to end against real `fleet_policy` rows in an isolated ' +

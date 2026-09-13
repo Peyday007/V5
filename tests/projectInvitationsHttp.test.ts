@@ -25,6 +25,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { pickPort } from './helpers/ports.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 
@@ -51,7 +52,7 @@ function findTsxCli(): string {
   }
 }
 const TSX_CLI = findTsxCli();
-const PORT = 6700 + Math.floor(Math.random() * 100);
+const PORT = pickPort(6700, 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 let server: ChildProcessByStdio<null, Readable, Readable> | null = null;

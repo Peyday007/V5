@@ -8,6 +8,7 @@
  * already performed.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { pickPort } from './helpers/ports.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import fs from 'node:fs';
@@ -18,7 +19,7 @@ import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { createProject } from '../server/repos/projects.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 6100 + Math.floor(Math.random() * 100);
+const PORT = pickPort(6100, 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 let server: ChildProcessByStdio<null, Readable, Readable>;

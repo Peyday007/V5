@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { EXTERNAL_SOURCE_SYSTEMS } from '../server/domain/types.ts';
 import { isKnownSite, siteFor } from '../server/services/connect/sites.ts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { pickPort } from './helpers/ports.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import os from 'node:os';
@@ -34,7 +35,7 @@ import os from 'node:os';
 const REPO_ROOT_FOR_SITES = fileURLToPath(new URL('..', import.meta.url));
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 6300 + Math.floor(Math.random() * 100);
+const PORT = pickPort(6300, 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 let server: ChildProcessByStdio<null, Readable, Readable> | null = null;

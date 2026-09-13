@@ -65,7 +65,14 @@ interface ConditionRecord {
    * answer. It is `BLOCKED` — an operational fact with an operational remedy.
    */
   awaits?: string;
-  standing?: true;
+  /**
+   * An owner-approved deferral, and the only thing that takes a condition out
+   * of the denominator. It was `standing?: true` — a flag the reporter set on
+   * itself — which let a gate pass with a required condition unproved
+   * underneath it. A deferral has to name who decided, when, and where it is
+   * recorded.
+   */
+  deferredBy?: { owner: string; recordedAt: string; where: string };
 }
 
 interface GateRecord {
@@ -258,7 +265,7 @@ function main(): void {
 
   const verdictOfConditions = (conditions: ConditionRecord[]): Verdict => {
     if (conditions.length === 0) return 'NOT_RUN';
-    const judged = conditions.filter((c) => c.standing !== true);
+    const judged = conditions.filter((c) => c.deferredBy === undefined);
     if (judged.some((c) => c.held === false)) return 'FAIL';
     if (judged.length === 0) return 'PASS';
     if (judged.some((c) => c.held === null && c.awaits !== undefined)) return 'BLOCKED';
@@ -374,16 +381,16 @@ function main(): void {
     }
 
     const verdict = conflicts.length > 0 ? 'CONFLICT' : verdictOfConditions(merged);
-    const broke = merged.filter((c) => c.held === false && c.standing !== true);
+    const broke = merged.filter((c) => c.held === false && c.deferredBy === undefined);
     const waiting = merged.filter(
-      (c) => c.held === null && c.standing !== true && c.awaits !== undefined,
+      (c) => c.held === null && c.deferredBy === undefined && c.awaits !== undefined,
     );
     const unreachable = merged.filter(
-      (c) => c.held === null && c.standing !== true && c.awaits === undefined,
+      (c) => c.held === null && c.deferredBy === undefined && c.awaits === undefined,
     );
-    const standing = merged.filter((c) => c.standing === true);
+    const deferred = merged.filter((c) => c.deferredBy !== undefined);
     const held = merged.filter((c) => c.held === true);
-    const judged = merged.filter((c) => c.standing !== true).length;
+    const judged = merged.filter((c) => c.deferredBy === undefined).length;
 
     const parts: string[] = [
       `${held.length}/${judged} condition(s) held across ` +
@@ -423,11 +430,10 @@ function main(): void {
           '.',
       );
     }
-    if (standing.length > 0) {
+    if (deferred.length > 0) {
       parts.push(
-        `${standing.length} standing and recorded as the answer: ` +
-          standing.map((c) => c.name).join('; ') +
-          '.',
+        `${deferred.length} deferred by the owner, and out of the denominator only ` +
+          `because of that: ${deferred.map((c) => c.name).join('; ')}.`,
       );
     }
     combined.push({

@@ -2757,11 +2757,11 @@ describe('a verdict is derived from conditions, by both readers, identically', (
     held: boolean | null;
     saw: string;
     awaits?: string;
-    standing?: true;
+    deferredBy?: { owner: string; recordedAt: string; where: string };
   };
   const expected = (conditions: Cond[]): string => {
     if (conditions.length === 0) return 'NOT_RUN';
-    const judged = conditions.filter((c) => c.standing !== true);
+    const judged = conditions.filter((c) => c.deferredBy === undefined);
     if (judged.some((c) => c.held === false)) return 'FAIL';
     if (judged.length === 0) return 'PASS';
     if (judged.some((c) => c.held === null && c.awaits !== undefined)) return 'BLOCKED';
@@ -2826,16 +2826,24 @@ describe('a verdict is derived from conditions, by both readers, identically', (
       verdict: 'FAIL',
     },
     {
-      why: 'a standing condition is reported and never holds the verdict down',
+      why: 'a condition nobody has proved stays open, whatever the matrix argues about it',
       conditions: [
         { name: 'a', held: true, saw: 'held' },
-        { name: "the owner's decision", held: null, saw: 'theirs', standing: true },
+        { name: 'expensive to prove', held: null, saw: 'nobody has measured it' },
       ],
-      verdict: 'PASS',
+      verdict: 'PARTIAL',
     },
     {
-      why: 'and a scenario that is only standing conditions still passes rather than reading unrun',
-      conditions: [{ name: 'a', held: null, saw: 'theirs', standing: true }],
+      why: 'only an owner-recorded deferral takes a condition out of the denominator',
+      conditions: [
+        { name: 'a', held: true, saw: 'held' },
+        {
+          name: 'expensive to prove',
+          held: null,
+          saw: 'nobody has measured it',
+          deferredBy: { owner: 'the owner', recordedAt: '2026-09-13', where: 'the matrix' },
+        },
+      ],
       verdict: 'PASS',
     },
   ];
@@ -2989,5 +2997,56 @@ describe('a condition keeps its name whichever environment answered it', () => {
           'each — use fromCheckout or fromProduction, which keep the name fixed',
       ).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+/* ==========================================================================
+ * A required condition cannot leave the denominator by itself.
+ *
+ * `verdictOf` used to skip every condition carrying `standing: true` — a flag
+ * the reporter set on its own conditions — so a gate could read PASS with a
+ * required condition unproved underneath it. Two of the seven it was used on
+ * were requirements: the hosted pre/post-restart check is R13, and what a real
+ * Cowork surface holds is what T3, T4 and T5 are about.
+ *
+ * The replacement is a deferral that names a decision: who, when and where it
+ * is recorded. Nothing in the reporter constructs one, which is the property
+ * pinned here — a self-set exemption must not come back under a new name.
+ * ======================================================================== */
+describe('nothing removes a requirement from completion except a recorded decision', () => {
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+  const combiner = fs.readFileSync(path.join(repo, 'scripts', 'step12b-combine.ts'), 'utf8');
+
+  it('has no self-set exemption flag left in either reader', () => {
+    for (const [name, source] of [
+      ['the reporter', reporter],
+      ['the combiner', combiner],
+    ] as const) {
+      expect(codeOf(source), `${name} still has a standing flag`).not.toMatch(/standing\??:\s*true/);
+    }
+  });
+
+  it('exempts only on a deferral that names who decided, when, and where', () => {
+    for (const [name, source] of [
+      ['the reporter', reporter],
+      ['the combiner', combiner],
+    ] as const) {
+      expect(source, `${name} does not declare a deferral shape`).toMatch(
+        /deferredBy\?:\s*\{\s*owner:\s*string;\s*recordedAt:\s*string;\s*where:\s*string\s*\}/,
+      );
+      expect(source, `${name} judges on something other than the deferral`).toContain(
+        'c.deferredBy === undefined',
+      );
+    }
+  });
+
+  it('constructs no deferral anywhere, so every condition today is scored', () => {
+    /*
+     * The shape exists so a real decision can be read in later. A reporter that
+     * wrote one itself would be granting its own exemption, which is the same
+     * defect as approving its own design.
+     */
+    expect(codeOf(reporter)).not.toMatch(/deferredBy:\s*\{/);
   });
 });
