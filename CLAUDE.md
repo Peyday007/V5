@@ -2594,9 +2594,12 @@ remote.
   authorization.
 
 - **Brain is an authorized target now, and that is the operator's decision
-  rather than a softening of the argument against it.** `V5`'s absence was mine:
-  the envelope's own comment recorded it as a default written by the agent that
-  built this, not a standing operator decision. The owner has since named Brain
+  rather than a softening of the argument against it.** An earlier bullet in this
+  section ends *"the envelope now holds one checkout and no target at all"*; that was true
+  when it was written and is not true now, and it is corrected here rather than
+  edited there. `V5`'s absence was mine: the envelope's own comment recorded it
+  as a default written by the agent that built this, not a standing operator
+  decision. The owner has since named Brain
   as an intended target, improved *through isolated branches, independent review
   and the existing controlled integration process*, with the running Brain's
   authorization and deployment protections preserved.

@@ -35,6 +35,11 @@ whole chain proved *before* choosing a target. If you already know the target, o
 are ready to choose one, **do steps 1 to 7 once, against the target**, and this
 bootstrap worker never needs to exist.
 
+**You already have a target without choosing one.** `brain` (`Peyday007/V5`) is
+in the envelope, so *"improve this part of Brain"* is a campaign you can run
+today, and no site's repository arrangement has to be settled for it. A site is
+the same seven steps against a different grant, whenever you want one.
+
 What the target needs on the surface is two things, and both are properties of
 the Routine's **sources**, not of the connector:
 
@@ -44,6 +49,27 @@ the Routine's **sources**, not of the connector:
    into the target yourself (no unit may ever own `.claude/**`, so it has to be a
    person's commit), or attach `brain-worker-bootstrap` as a **second** source
    alongside the target, which is the only remaining job that checkout has.
+
+   **`V5`'s own settings file does not carry it yet, and that matters now that
+   `brain` is a target.** `.claude/settings.json` in this repository pre-approves
+   `mcp__cloud-brain__*` — the *research* connector — and nothing else, so a
+   factory Routine attaching `Peyday007/V5` alone would fire a worker that stalls
+   at a permission prompt with nobody there. That is the §22 defect exactly: the
+   remedy was the project-scope permission rule all along, waiting on a
+   precondition nobody had checked. Two ways to close it, and the second needs no
+   commit:
+
+   * add these four entries to `permissions.allow` in `.claude/settings.json` and
+     merge it — `mcp__factory-brain`, `mcp__factory-brain__*`,
+     `mcp__factory_brain`, `mcp__factory_brain__*` (both spellings, because the
+     separator a connector name produces is not worth guessing at fire time); or
+   * attach `brain-worker-bootstrap` as a second source on the Routine, whose
+     settings file already allows them.
+
+   I have not made that commit. Editing the settings file that governs my own
+   session's tool permissions is refused here as self-modification, which is the
+   right refusal — a pre-approval is a decision about what a machine may do
+   without being asked, and it belongs to you either way.
 2. **Git read and write access to the target**, which comes from the target being
    attached to the Routine. Brain never sends a repository credential — the
    manifest's own authorized action says *"obtain access to the repository named
@@ -89,24 +115,29 @@ a permission prompt with nobody there to answer it.
 
 ## 1. Onboard the checkout, in Russell
 
-Brain → **Build** → **Repositories**. One repository is authorized:
+Brain → **Build** → **Repositories**. Two repositories are authorized:
 
 | Grant | Remote | What it is |
 |---|---|---|
 | `brain-worker-bootstrap` | `https://github.com/Peyday007/brain-worker-bootstrap` | the **checkout** an unattended Routine attaches for its connector permissions. No application code, no project data, no credentials. |
+| `brain` | `https://github.com/Peyday007/V5` | **Brain itself** — a real target. Work lands on a branch and stops at a pull request you merge. A campaign here may read but never own the envelope, the project scope, identity, bin routing, either approval envelope, `.github/workflows/**`, `CANONICAL_BRANCH`, `fly.toml` or `Dockerfile`. |
 
-**It is a checkout, not a target.** A grant says the factory may be *pointed* at
-a repository; this one exists so the `.claude/**` floor and the routing scope
-apply to it and so a bounded self-test is possible. `oakwood-junk-removal` stays
-**retired** by your decision, and `V5` is not in the envelope — so there is
-nothing here for a campaign to work on until you say what it should be. (`V5`'s
-absence is an engineering judgment recorded in the envelope, not a decision you
-made; see *What the envelope does and does not settle* below.)
+**Only the first is a checkout rather than a target.** A grant says the factory
+may be *pointed* at a repository; `brain-worker-bootstrap` exists so the
+`.claude/**` floor and the routing scope apply to it and so a bounded self-test
+is possible. `oakwood-junk-removal` stays **retired** by your decision, and
+authorizing `brain` did not reopen it.
+
+**Which one to onboard.** If you want the first campaign to be a change to
+Brain, onboard `brain` and answer its directory question — that is the whole
+target setup, and no site's repository arrangement has to be settled first. If
+you want the chain proved before choosing anything, onboard
+`brain-worker-bootstrap`; that worker can never execute a real target, so a
+second connector will be needed later.
 
 Press **Onboard this repository**. Brain creates the worker
-`factory-brain-worker-bootstrap`, gives it the fixed factory scope set, writes an
-exhaustive routing row for that one repository, and shows **one invitation link,
-once**.
+`factory-<grant id>`, gives it the fixed factory scope set, writes an exhaustive
+routing row for that one repository, and shows **one invitation link, once**.
 
 **Copy the link now.** If you lose it, press the button again — onboarding is a
 repair and a rotation, so the second press reuses the same worker, revokes the
