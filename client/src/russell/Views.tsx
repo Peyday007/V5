@@ -20,6 +20,7 @@ import type { ConnectSiteResult, SiteConnectionState } from '../lib/russellApi.t
 import type {
   CandidatePriority,
   IdeaNode,
+  IssuedInvitation,
   KnowsEntry,
   Progress,
   RussellHumanRequest,
@@ -723,6 +724,200 @@ export function IdeaDecision({
 }
 
 /**
+ * Inviting somebody, and the invitations already out.
+ *
+ * One action, prefilled, in the shape §24 gives the authority card: an address
+ * and **Invite**, with the role starting on the server's own default and the
+ * detailed choice behind *Change role*. Nothing asks a person to configure
+ * machinery — there is no scope to pick, no user id to find, and no account to
+ * create first.
+ *
+ * The link is shown **once**, held in this component's memory and nowhere else:
+ * not in storage, not in the URL, and never fetched again. Navigating away loses
+ * it, which is correct — a secret you can come back to is a secret that is
+ * stored. If it is lost, inviting again issues a new one and withdraws the old.
+ *
+ * The list underneath shows expired and withdrawn invitations rather than hiding
+ * them, each with the server's own sentence about what happened: an invitation
+ * that quietly vanished when it aged out would leave a person unable to tell it
+ * from one that was never sent.
+ */
+function InvitePanel({
+  projectId,
+  view,
+  onChanged,
+}: {
+  projectId: string;
+  view: WhoData;
+  onChanged: () => void;
+}): JSX.Element {
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<string>(view.defaultInviteRole ?? 'MEMBER');
+  const [showRole, setShowRole] = useState(false);
+  const [issued, setIssued] = useState<IssuedInvitation | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const invitations = view.invitations ?? [];
+  const pending = invitations.filter((entry) => entry.state === 'PENDING');
+  const past = invitations.filter((entry) => entry.state !== 'PENDING');
+
+  async function invite(event: React.FormEvent): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      setIssued(await RussellApi.invite(projectId, email, role));
+      setEmail('');
+      setCopied(false);
+      onChanged();
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : 'That did not go through.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rs-invite" aria-labelledby="rs-invite-heading">
+      <h3 className="rs-group-title" id="rs-invite-heading">
+        Invite somebody
+      </h3>
+
+      {issued ? (
+        <div className="rs-site-secret" role="group" aria-labelledby="rs-invite-link-heading">
+          <h4 id="rs-invite-link-heading">Send this link to {issued.invitation.invitedEmail}</h4>
+          {/* The server's own sentence about which branch accepting will take,
+              rather than one composed here that could disagree with it. */}
+          <p className="rs-item-meta">{issued.whatHappensNext}</p>
+          <p>
+            <code className="rs-secret">{issued.invitationUrl}</code>
+          </p>
+          <div className="rs-row">
+            <button
+              type="button"
+              className="rs-primary"
+              onClick={() => {
+                void navigator.clipboard
+                  ?.writeText(issued.invitationUrl)
+                  .then(() => setCopied(true))
+                  .catch(() => setCopied(false));
+              }}
+            >
+              {copied ? 'Copied' : 'Copy the link'}
+            </button>
+            <button type="button" onClick={() => setIssued(null)}>
+              I have sent it
+            </button>
+          </div>
+          <p className="rs-item-meta">
+            Shown once. Nobody can read it back afterwards, including an administrator — if it
+            is lost, invite them again and a new link replaces this one. It expires{' '}
+            {issued.expiresAt.slice(0, 10)}.
+          </p>
+        </div>
+      ) : (
+        <form className="rs-invite-form" onSubmit={(event) => void invite(event)}>
+          <label className="rs-field-label" htmlFor="rs-invite-email">
+            Their email address
+          </label>
+          <div className="rs-row">
+            <input
+              id="rs-invite-email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="someone@example.com"
+              required
+            />
+            <button type="submit" className="rs-primary" disabled={busy || email.length === 0}>
+              {busy ? 'Inviting…' : 'Invite'}
+            </button>
+          </div>
+          {showRole ? (
+            <p className="rs-row">
+              <label htmlFor="rs-invite-role">They join as</label>
+              <select
+                id="rs-invite-role"
+                value={role}
+                onChange={(event) => setRole(event.target.value)}
+              >
+                {(view.invitableRoles ?? []).map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </p>
+          ) : (
+            <p className="rs-item-meta">
+              They join as {role.toLowerCase()}.{' '}
+              <button type="button" className="rs-linklike" onClick={() => setShowRole(true)}>
+                Change role
+              </button>
+            </p>
+          )}
+        </form>
+      )}
+
+      {error ? (
+        <p className="rs-state rs-state-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {pending.length > 0 ? (
+        <>
+          <h4 className="rs-group-title">Waiting to be accepted</h4>
+          <ul className="rs-list">
+            {pending.map((entry) => (
+              <li key={entry.id}>
+                <span className="rs-item-title">{entry.email}</span>
+                <span className="rs-item-meta">
+                  {entry.roleLabel} · invited by {entry.invitedByName} · {entry.status}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void RussellApi.withdrawInvitation(projectId, entry.id).then(
+                      onChanged,
+                      (problem: unknown) =>
+                        setError(
+                          problem instanceof Error ? problem.message : 'That did not go through.',
+                        ),
+                    );
+                  }}
+                >
+                  Withdraw
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {past.length > 0 ? (
+        <>
+          <h4 className="rs-group-title">Earlier invitations</h4>
+          <ul className="rs-list">
+            {past.map((entry) => (
+              <li key={entry.id}>
+                <span className="rs-item-title">{entry.email}</span>
+                <span className="rs-item-meta">
+                  {entry.roleLabel} · {entry.status}
+                  {entry.remedy ? ` ${entry.remedy}` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+/**
  * Who is here, and what can run.
  *
  * Two lists with different rules. People are collaborators; surfaces are
@@ -764,6 +959,12 @@ export function WhoView({ projectId }: { projectId: string | null }): JSX.Elemen
           </ul>
           {view.people.length <= 1 ? (
             <p className="rs-state rs-state-empty">Nobody else is on this project yet.</p>
+          ) : null}
+          {/* Only an administrator of this project is sent invitations at all —
+              the server returns null otherwise, so there is nothing here to
+              hide, which is the point of gating it there rather than here. */}
+          {view.invitations ? (
+            <InvitePanel projectId={projectId!} view={view} onChanged={query.reload} />
           ) : null}
           <h3 className="rs-group-title">What can run</h3>
           <p className="rs-fleet-line">{view.capacityExplanation}</p>

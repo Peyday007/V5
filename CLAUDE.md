@@ -1973,6 +1973,56 @@ deliberately *classifies* rather than bans — this file records its own
 corrections, and a sentence like "it was on the operator console, and that was
 wrong" is history worth keeping. What must not exist is somewhere to go.
 
+**"Who is on the project" said membership and had no way to *offer* one.** A
+person was **granted** access at `POST /api/projects/:id/members`, by somebody
+who already held their user id — so the only people who could ever be added were
+people a Brain administrator had already made an account for. Nobody was ever
+invited and nobody ever accepted. The one `invitations` table in this repository
+was `worker_invitations`, and a worker is not a person: it holds no threads,
+reads no project, and what it redeems is an OAuth consent screen. Two acceptance
+gates carried "an invitation anybody received" as their unmet condition, and it
+could not be closed by waiting, because the mechanism did not exist.
+
+`server/services/identity/invitations.ts` is that mechanism, and it reinvents
+none of the worker invitation's safety properties: the token is shown once and
+stored as a sha-256 digest, found by an indexed prefix and compared in constant
+time, and spent by **one guarded `UPDATE`** carrying every condition that makes
+it valid — so two requests holding one intercepted link cannot both come away
+with a membership. Issuing is `requirePerson` plus `decideProjectAccess` at
+`ADMIN`, the level `/api/projects/:id/members` already carries because inviting
+*is* a membership grant, and a worker principal is refused **by type**: a machine
+that could invite people would be creating principals nobody asked for.
+
+Three things about it are decisions rather than details.
+
+- **The acceptor chooses neither who they are nor what they get.** The email and
+  the role are read from the row; an acceptance carrying `role: OWNER` and
+  `isBrainAdmin: true` changes neither. A person who could pick their own role on
+  the way in would make the link a way to grant themselves access, which is the
+  whole of what the issuing administrator's decision is for.
+- **The token is in the URL *fragment*, never the path.** A fragment is not sent
+  to any server and is not written to any access log, which is what makes a link
+  safe to put in a message — §17's rule that a credential may not appear in a URL
+  that gets recorded, and a path segment is recorded by every proxy between here
+  and the recipient. The two routes that spend it are the third and fourth
+  entries on the guard's unauthenticated allowlist, for `/api/auth/login`'s exact
+  reason: an invited person may hold no credential but the one in their hand.
+- **Creating an account is `decideBrainAdmin`'s to authorize, and the authority
+  is re-read at the moment the effect happens** rather than stored on the
+  invitation — §17's rule that authority is read on every request rather than
+  baked into a token, applied to the one power this journey needs and does not
+  itself hold. An inviter who has since lost `ADMIN` lets nobody in through a
+  link they left behind. A refusal for want of that authority **does not spend
+  the invitation**, because the remedy is a Brain administrator making the
+  account and the link has to keep working afterwards: an escalation with no
+  answering transition is stuck rather than waiting, for the sixth time.
+
+Absent, malformed, expired, already accepted and withdrawn are **one body**, and
+it names the remedy rather than the reason — invariant 23 at a new door, where
+the thing being refused is a secret somebody may be holding legitimately. An
+invitation *id* is not an oracle either: to a caller who does not administer the
+project, a real id and an invented one are byte-identical.
+
 ## 27. The factory is an entrance to the same machinery, and its evidence is the repository.
 
 The Software Factory (`server/services/factory/`, `server/repos/factory.ts`,

@@ -260,6 +260,23 @@ const OVERRIDES: Override[] = [
   // type as well; this is the same answer said in the module that decides.
   { pattern: /^\/api\/russell\/projects\/[^/]+\/sites\/[^/]+\/(connect|disconnect)$/, method: 'POST', level: 'ADMIN' },
 
+  // Inviting a person **is** a membership grant, so it is stated at the level
+  // `/api/projects/:id/members` already carries rather than inherited from the
+  // method — and the reading is ADMIN too, because a pending invitation names
+  // somebody's email address, which is operator-depth information about who is
+  // being let into a project.
+  //
+  // No `scope` on any of them, which is what makes a worker principal unable to
+  // reach this at all: `decideProjectAccess` refuses a worker `ADMIN` outright,
+  // and the routes refuse one by type as well. A machine that could invite people
+  // would be creating principals nobody asked for.
+  //
+  // `/api/invitations/preview` and `/api/invitations/accept` are deliberately
+  // absent: they are addressed by no project, their authority is the invitation
+  // token itself, and they are the two entries on the guard's unauthenticated
+  // allowlist.
+  { pattern: /^\/api\/russell\/projects\/[^/]+\/invitations/, level: 'ADMIN' },
+
   // Onboarding a repository is a membership grant plus a routing scope plus an
   // invitation, so it is the same authority as connecting a site and carries the
   // same level. A worker principal is refused by type in the handler as well: a

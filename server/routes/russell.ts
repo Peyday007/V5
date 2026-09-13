@@ -88,6 +88,13 @@ import { groupWork, workForProject } from '../services/russell/work.ts';
 import { ideaMapForProject } from '../services/russell/ideas.ts';
 import { whoForProject } from '../services/russell/who.ts';
 import {
+  DEFAULT_INVITED_ROLE,
+  INVITABLE_ROLES,
+  invitationsForProject,
+  inviteToProject,
+  withdrawInvitation,
+} from '../services/identity/invitations.ts';
+import {
   activeWorkProgress,
   buildProgress,
   projectProgress,
@@ -1048,6 +1055,100 @@ russellRouter.get(
     const who = await whoForProject({ principal, projectId: project.id });
     if (!who) throw notFound('No project with that id.');
     return who;
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Inviting a person
+ *
+ * Who is where project membership already is (§26), so this is where inviting
+ * somebody onto it lives: a decision a person makes about their own project,
+ * on the surface they already use.
+ *
+ * `requirePerson` and the policy table's ADMIN, both. The level is what
+ * `/api/projects/:id/members` already carries, because inviting *is* a
+ * membership grant; the type refusal is what no membership configuration can
+ * undo. A machine that could invite people would be creating principals
+ * nobody asked for — §22's rule about a worker creating its own work, applied
+ * to the other kind of principal.
+ *
+ * Every decision below is made in `services/identity/invitations.ts`. These
+ * three handlers resolve the project, hand over the principal, and turn a
+ * refusal into a status.
+ * ------------------------------------------------------------------------ */
+
+russellRouter.get(
+  '/projects/:projectId/invitations',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return {
+      invitations: await invitationsForProject(project.id),
+      // The contract travels down with the view rather than being restated in
+      // the client, so what a person is offered and what the server accepts are
+      // one object — §24's manifest lesson, applied to a form.
+      roles: INVITABLE_ROLES,
+      defaultRole: DEFAULT_INVITED_ROLE,
+    };
+  }),
+);
+
+/**
+ * Invite somebody.
+ *
+ * The link is in the response and in nothing else — no log line, no identity
+ * event, no second read. Whoever issued it either sends it now or issues
+ * another, which is the same property a site's secret has and for the same
+ * reason.
+ */
+russellRouter.post(
+  '/projects/:projectId/invitations',
+  handler(async (req, res) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const outcome = await inviteToProject({
+      principal,
+      projectId: project.id,
+      email: body['email'],
+      role: body['role'],
+      note: optionalString(body['note'], 'note') ?? null,
+      // Brain's own address, from the request's own host. Never a body field: a
+      // caller that could name the origin could point an invitation link at a
+      // site it controlled and collect the token.
+      origin: `${req.protocol}://${req.get('host') ?? 'localhost'}`,
+    });
+    if (!outcome.ok) {
+      // A refusal that is about authorization reads as a missing project, in the
+      // same words; one that is about the request reads as a bad request.
+      if (outcome.reason === 'No project with that id.') throw notFound(outcome.reason);
+      throw badRequest(outcome.reason);
+    }
+    res.status(201);
+    return outcome.issued;
+  }),
+);
+
+/**
+ * Withdraw one before it is used.
+ *
+ * The answering transition for an invitation sent to the wrong address, and the
+ * other half of what makes re-inviting safe. An id that is not this project's is
+ * the same 404, with the same body, a missing one gives.
+ */
+russellRouter.post(
+  '/projects/:projectId/invitations/:invitationId/withdraw',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const outcome = await withdrawInvitation({
+      principal,
+      projectId: project.id,
+      invitationId: pathId(req, 'invitationId'),
+      reason: optionalString(bodyOf(req)['reason'], 'reason') ?? null,
+    });
+    if (!outcome.ok) throw notFound(outcome.reason);
+    return { withdrawn: outcome.withdrawn, alreadyFinished: outcome.alreadyFinished };
   }),
 );
 

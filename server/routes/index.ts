@@ -21,6 +21,7 @@ import { runsRouter } from './runs.ts';
 import { russellRouter } from './russell.ts';
 import { factoryRouter } from './factory.ts';
 import { connectRouter } from './connect.ts';
+import { invitationsRouter } from './invitations.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
@@ -35,6 +36,12 @@ export function createApiRouter(): Router {
   // (/work/:id), and the two must sit beside each other.
   router.use(workRouter);
   router.use(operationsRouter);
+
+  // An invited person's two routes. Mounted early and at the root because they
+  // are addressed by no project and no entity: the invitation's own row is where
+  // the project comes from, and a caller who could name one would be choosing
+  // which project they are being invited to.
+  router.use(invitationsRouter);
 
   router.use(healthRouter);
   // Audit routes carry their own prefixes (/runs/:id/..., /layers/:id/...),
