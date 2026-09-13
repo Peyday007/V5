@@ -2868,17 +2868,22 @@ async function reReadCycle(): Promise<{ state: string; lastRanAt: string | null 
   } catch {
     return null;
   } finally {
-    try {
-      await closeDatabase();
-      if (CONTINUITY_DB_PATH) {
-        await initDatabase({
-          dbPath: CONTINUITY_DB_PATH,
-          config: { provider: 'sqlite', connectionString: null, poolSize: 1 },
-        });
-      }
-    } catch {
-      // The scratch database is gone and nothing after this needs it. The
-      // reading above is what this function exists for.
+    /*
+     * The restore is not optional, and an earlier version of this comment said
+     * it was — "nothing after this needs it", which is false: M, N, P and Q all
+     * write to and read from the exercising database after L. A reporter that
+     * lost it would produce four more rows about a database that is not there,
+     * and they would look like findings.
+     *
+     * So a failed restore stops the run with a sentence. Six wrong rows are
+     * worse than no rows: the first is a reading somebody acts on.
+     */
+    await closeDatabase();
+    if (CONTINUITY_DB_PATH) {
+      await initDatabase({
+        dbPath: CONTINUITY_DB_PATH,
+        config: { provider: 'sqlite', connectionString: null, poolSize: 1 },
+      });
     }
   }
 }
@@ -5369,14 +5374,24 @@ async function main(): Promise<void> {
    * machine, and a reporter cannot attest a CI run it did not observe.
    */
   const upgrade = file('scripts/upgrade-populated.ts');
-  const sqliteChain = REPO_VISIBLE
-    ? fs.readdirSync(path.join(REPO, 'server', 'db', 'migrations')).filter((f) => f.endsWith('.sql'))
-    : [];
-  const pgChain = REPO_VISIBLE
-    ? fs
-        .readdirSync(path.join(REPO, 'server', 'db', 'pg-migrations'))
-        .filter((f) => f.endsWith('.sql'))
-    : [];
+  /*
+   * Probed directly rather than gated on `REPO_VISIBLE`, and the difference is
+   * not pedantry.
+   *
+   * `REPO_VISIBLE` asks whether `tests/` is there, which the image excludes —
+   * but the image **does** carry `server/db/migrations`, because it cannot boot
+   * without them. Gating this on `REPO_VISIBLE` would have made a container run
+   * say "we could not look" about two directories it can read perfectly well,
+   * which is the same substitution this file refuses, in the other direction.
+   */
+  const chainDir = (relative: string): string[] => {
+    const full = path.join(REPO, relative);
+    if (!fs.existsSync(full)) return [];
+    return fs.readdirSync(full).filter((entry) => entry.endsWith('.sql'));
+  };
+  const sqliteChain = chainDir(path.join('server', 'db', 'migrations'));
+  const pgChain = chainDir(path.join('server', 'db', 'pg-migrations'));
+  const chainsReadable = sqliteChain.length > 0 && pgChain.length > 0;
   const versionsOf = (files: string[]): number[] =>
     files.map((name) => Number(name.slice(0, 3))).sort((a, b) => a - b);
   const chainIsSound = (files: string[]): { ok: boolean; saw: string } => {
@@ -5415,10 +5430,11 @@ async function main(): Promise<void> {
     [
       {
         name: 'this run built its own database from empty, and every migration was applied',
-        held: applied.length > 0 && (!REPO_VISIBLE || applied.length === sqliteChain.length),
-        saw: REPO_VISIBLE
-          ? `${applied.length} applied of ${sqliteChain.length} on disk`
-          : `${applied.length} applied`,
+        held: applied.length > 0 && (sqliteChain.length === 0 || applied.length === sqliteChain.length),
+        saw:
+          sqliteChain.length > 0
+            ? `${applied.length} applied of ${sqliteChain.length} on disk`
+            : `${applied.length} applied`,
       },
       {
         name: 'every applied migration is checksum-locked, so editing one is a boot failure rather than a drift',
@@ -5437,7 +5453,7 @@ async function main(): Promise<void> {
           ? 'the continuity exercise re-opened it and every row read back'
           : 'the re-open did not happen in this run',
       },
-      REPO_VISIBLE
+      chainsReadable
         ? {
             name: 'the SQLite chain has no gap and no collision',
             held: sqliteSound.ok,
@@ -5446,10 +5462,10 @@ async function main(): Promise<void> {
         : {
             name: 'the SQLite chain has no gap and no collision',
             held: null,
-            saw: 'the migration files are a repository fact',
+            saw: 'the migration directory is not on this filesystem',
             needs: 'CHECKOUT',
           },
-      REPO_VISIBLE
+      chainsReadable
         ? {
             name: 'and so does the Postgres chain, which is numbered independently',
             held: pgSound.ok,
@@ -5458,7 +5474,7 @@ async function main(): Promise<void> {
         : {
             name: 'and so does the Postgres chain, which is numbered independently',
             held: null,
-            saw: 'the migration files are a repository fact',
+            saw: 'the migration directory is not on this filesystem',
             needs: 'CHECKOUT',
           },
       REPO_VISIBLE
